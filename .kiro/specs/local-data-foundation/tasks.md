@@ -70,7 +70,7 @@
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: CapacityPolicy_
 
-- [ ] 3.5 (P) Chrome Storage adapterと信頼済みアクセス制限を実装する
+- [x] 3.5 (P) Chrome Storage adapterと信頼済みアクセス制限を実装する
   - 単一キーのroot読取・書込、使用量、実行時quota、TRUSTED_CONTEXTS制限をtyped portとして提供する
   - Chrome APIのquota、アクセス、一般例外を正規化し、失敗時に成功を報告しない
   - in-memory Chrome stubで読取・書込・bytes取得・アクセス制限と既存root保持を確認できることを完了条件とする
