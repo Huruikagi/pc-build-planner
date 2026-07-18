@@ -19,6 +19,7 @@ export type FoundationErrorCode =
   | "stale-assessment"
   | "quota-exceeded"
   | "access-denied"
+  | "lock-unavailable"
   | "storage-unavailable";
 
 export type FoundationError = {

@@ -79,74 +79,142 @@
   - _Boundary: ChromeStorageAdapter_
 
 - [ ] 4. 単一root transactionと保守・置換を実装する
-- [ ] 4.1 永続generation・owner・leaseによる保守fencingを実装する
-  - acquire、renew、release、abortをrootと同じ永続単位で扱い、owner外writeとstale generationを拒否する
-  - commit直前にgeneration、owner、revisionを再検証し、期限切れownerを暗黙再利用させない
-  - coordinatorを再生成しても保守中の競合が拒否され、releaseまたはabort後に通常writeが再開するテストが成功することを完了条件とする
-  - _Depends: 3.5_
-  - _Requirements: 1.3, 7.4, 7.5, 7.6, 7.7_
+- [x] 4.1 (P) 協調writerを直列化するroot write lockを実装する
+  - 全writerが共有する固定lock名でexclusive実行し、Storage portへ排他責務を追加しない
+  - Web Locks実装と決定的なin-memory実装が同じ協調排他契約を満たすようにする
+  - 複数clientの同時要求が順番に実行され、callbackの失敗後も次の要求が進むcontract testが成功することを完了条件とする
+  - _Depends: 3.3, 3.5_
+  - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6_
+  - _Boundary: RootWriteLock_
 
-- [ ] 4.2 検証・移行付きRepository読取とquery境界を実装する
-  - 未保存時は現行版の初期rootを返し、保存値はmigrationと全体validatorを通してからsnapshotとして公開する
-  - 破損、未知の将来版、移行失敗では保存値を上書きせず、原因を識別できるtyped failureを返す
+- [ ] 4.2 (P) generation・owner・leaseによる純粋な保守policyを実装する
+  - acquire、renew、release、abort、write認可を永続rootの入力と遷移候補だけで判定する
+  - owner外write、期限切れlease、stale generation・owner・revision、破損stateをfail closedに拒否する
+  - validなreleaseまたはabort後だけ通常writeが再開可能となる純粋state transition testが成功することを完了条件とする
+  - _Depends: 2.4_
+  - _Requirements: 1.3, 7.4, 7.5, 7.6, 7.7_
+  - _Boundary: MaintenancePolicy_
+
+- [ ] 4.3 (P) 検証済みsnapshotだけを返すRepository読取境界を実装する
+  - 未保存時は現行版の初期rootを返し、保存値はmigrationと全体validationを通してから公開する
+  - 破損、未知の将来版、移行失敗ではsourceを上書きせずtyped failureを返す
   - Repository instanceを再生成しても同じrootを読み、queryが検証済みsnapshotだけを返す統合テストが成功することを完了条件とする
   - _Depends: 3.1, 3.3, 3.5_
   - _Requirements: 1.3, 3.3, 3.4, 4.2, 4.3, 4.4_
+  - _Boundary: LocalDataRepository_
 
-- [ ] 4.3 検証・参照修復・容量判定を一括するmutation commit pipelineを実装する
-  - 最新root読取、移行、CRUD適用、参照修復、全体検証、容量評価、commit前cursor再検証、revision増分、単一writeを順序実行する
-  - expected revision競合、保存失敗、容量超過、保守owner外writeでは既存rootを変更せずtyped failureを返す
-  - 有効CRUDと候補変更時の参照修復が一つのcommitで観測され、中間の不整合rootが読めない統合テストが成功することを完了条件とする
-  - _Depends: 3.2, 3.4, 4.1, 4.2_
-  - _Requirements: 3.1, 3.2, 3.3, 3.5, 3.7, 3.8, 5.1, 5.2, 5.3, 7.4_
+- [ ] 4.4 (P) mutationのcommit候補を構築する純粋pipelineを実装する
+  - 検証済みsnapshotへCRUDを適用し、候補変更時の参照修復と候補root全体の再検証を行う
+  - runnerから値で渡された現在bytesとruntime quotaから容量warningまたは拒否を判定する
+  - Storage、lock、migration、revision、request dedupeへ依存せず、有効候補と各拒否を決定的に返すテストが成功することを完了条件とする
+  - _Depends: 3.2, 3.4_
+  - _Requirements: 3.1, 3.2, 3.7, 5.1, 5.2, 5.3_
+  - _Boundary: MutationPipeline_
 
-- [ ] 4.4 副作用なし評価と原子的root置換を実装する
-  - 置換候補を移行・検証・容量評価し、source schema、target schema、内容digest、必要bytes、評価時revisionを結ぶtokenとassessmentを発行する
-  - token、候補内容、maintenance fence、current revisionをcommit直前に照合し、root全体を一回のwriteで置換する
-  - 候補差し替え、source・target schemaまたはrequired bytes不一致、stale token、容量不足、保存失敗では旧rootが保持されるテストを完了条件とする
-  - _Depends: 4.3_
-  - _Requirements: 4.2, 7.1, 7.2, 7.3, 7.5_
+- [ ] 4.5 (P) 置換候補の副作用なし評価と決定的tokenを実装する
+  - 置換候補をmigration、全体validation、容量評価し、保存値を変更せずassessmentを返す
+  - object keyを再帰的に並べたcanonical JSONをUTF-8化し、SHA-256 digestを生成する
+  - 同じ候補とcursorではtokenが安定し、候補値・schema・required bytes・revisionの変化でtokenが変わるテストが成功することを完了条件とする
+  - _Depends: 3.1, 3.4_
+  - _Requirements: 4.2, 5.1, 5.3, 7.1, 7.3_
+  - _Boundary: ReplacementCoordinator_
+
+- [ ] 4.6 lock内で単一root transactionを完了するrunnerを実装する
+  - lock取得後に最新root、現在bytes、runtime quotaを読み、migrationと全体validation後のsnapshotをoperationへ渡す
+  - operation候補へmaintenance fence、expected revision、最終root validationを適用し、revisionを一度だけ増やして一回のwriteを行う
+  - commit resultが確定するまでlockを保持し、lock・storage失敗では成功を返さず既存rootが保持されるcontract testを完了条件とする
+  - _Depends: 4.1, 4.2, 4.3_
+  - _Requirements: 1.3, 3.3, 3.4, 3.5, 3.8, 7.2, 7.4, 7.5, 7.6_
+
+- [ ] 4.7 mutation候補生成とroot transactionを統合する
+  - runnerからpipelineへ検証済みsnapshotとcapacity inputを渡し、CRUD候補を同一transactionでcommitする
+  - expected revision競合、参照修復、容量超過、storage失敗をtyped resultへ変換し、中間不整合rootを公開しない
+  - 並行mutationでlost updateがなく、候補変更とCurrentBuild参照修復が一つのcommitで観測される統合テストを完了条件とする
+  - _Depends: 4.4, 4.6_
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 5.1, 5.2, 5.3_
+
+- [ ] 4.8 保守policyとroot transactionを統合する
+  - lock内の最新rootへ保守遷移とwrite認可を適用し、同時acquireでは一件だけを成功させる
+  - ownerなしwrite、stale generation・owner・revisionを保存前に拒否し、永続rootを変更しない
+  - 新しいauthorityとlock adapterで再生成してもactive fenceが維持され、releaseまたはabort後に再開する統合テストを完了条件とする
+  - _Depends: 4.2, 4.6, 4.7_
+  - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6, 7.7_
+
+- [ ] 4.9 評価済みroot置換を単一transactionへ統合する
+  - lock内でtoken、候補digest、schema、required bytes、maintenance fence、current revisionを再照合する
+  - 一致した候補だけをrevision増分付きの一回のwriteで置換し、成功または失敗を一つの結果として返す
+  - token・候補・fence・revision不一致、容量不足、storage失敗のすべてで旧rootが保持される統合テストを完了条件とする
+  - _Depends: 4.5, 4.6, 4.8_
+  - _Requirements: 4.2, 5.1, 5.3, 7.1, 7.2, 7.3, 7.4, 7.5_
 
 - [ ] 5. 単一write authorityと公開runtime境界を統合する
-- [ ] 5.1 request ID再試行とrevision競合の永続制御を実装する
-  - 永続revisionと有界request記録により同一payload再試行を同じ結果へ、同じrequest IDの異payloadをrequest conflictへ、古いrevisionを競合へ変換する
-  - request記録の上限とevictionを固定し、保持期間外の再送はexpected revisionで判定する
-  - 制御instance再生成後も同一再試行、異payload、古いrevisionが正しく判定されるcontract testを完了条件とする
-  - _Depends: 4.4_
+- [ ] 5.1 request ID再試行とrevision競合をroot transactionへ統合する
+  - 同じrequest IDとpayloadの再試行へ保存済みreceiptを返し、異なるpayloadの再利用をrequest conflictへ変換する
+  - request記録を固定上限でevictし、保持期間外の再送はexpected revisionで判定する
+  - runnerのlock内でrequest記録とroot変更が同じcommitになり、instance再生成後も再試行結果が安定するcontract testを完了条件とする
+  - _Depends: 4.9_
   - _Requirements: 1.3, 3.1, 3.6, 3.8, 7.6_
 
-- [ ] 5.2 command dispatchと直列化を担う単一write authorityを実装する
-  - query、mutation、maintenance、replacement commandを検証済みRepositoryとpipelineへdispatchする
-  - 同一worker instance内のwriteをqueueで直列化し、各commitは永続revision・request ID・maintenance fenceを再検証する
-  - 並行要求で変更を取りこぼさず、競合要求がtyped failureになるcontract testが成功することを完了条件とする
+- [ ] 5.2 下流向けfacadeを実装する単一write authorityを統合する
+  - queryを検証済みRepositoryへ、mutation・maintenance・replacementをroot transaction runnerへdispatchする
+  - 同一worker内queueは待ち順と負荷制御だけに使い、排他はWeb Lock、再生成後の正しさは永続cursorへ委ねる
+  - 公開facadeだけで全commandを実行でき、並行writeでも変更を取りこぼさないcontract testが成功することを完了条件とする
   - _Depends: 5.1_
   - _Requirements: 1.3, 3.1, 3.6, 3.8, 7.4, 7.6_
 
 - [ ] 5.3 shell向けworker registrationとfail-closedなcaller境界を実装する
-  - unknown messageとcaller classificationを検証し、shell提供の認可を通ったcommandだけをauthorityへ渡す登録factoryを提供する
-  - access restriction成功前はhandlerを公開せず、content scriptへRepositoryまたはStorage portを返さない
-  - 不正payload、不許可caller、アクセス制限失敗が永続状態を変えず、具体service worker入口を作成しないcontract testが成功することを完了条件とする
+  - unknown messageとcaller classificationを検証し、shell提供の認可を通ったcommandだけをauthorityへ渡す
+  - trusted-context access restrictionが成功する前はhandlerを登録せず、失敗時は永続状態を変更しない
+  - 不正payload、不許可caller、access restriction失敗を拒否し、具体service worker入口を作らないcontract testを完了条件とする
   - _Depends: 5.2_
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5.4 下流feature向け公開portと境界検査を完成する
-  - domain契約、canonical Result、検証済みquery・mutation・maintenance・replacement port、worker登録factoryだけを公開する
-  - Chrome adapter内部、未検証write、Storage primitive、shell具体実装への依存を公開境界から除外する
-  - 模擬consumerが公開APIだけで型検査でき、featureからのchrome.storage直接importとdeep importを自動検査が拒否することを完了条件とする
+- [ ] 5.4 下流feature向け公開portとimport境界を完成する
+  - domain契約、canonical Result、公開facade、worker登録factoryだけを公開する
+  - Storage、root lock、Chrome adapter、未検証write、shell具体実装を公開境界から除外する
+  - 模擬consumerが公開APIだけで型検査でき、deep import、直接chrome.storage、固定lock迂回を境界検査が拒否することを完了条件とする
   - _Depends: 5.3_
-  - _Requirements: 2.1, 3.1, 6.3_
+  - _Requirements: 2.1, 3.1, 3.8, 6.3_
 
-- [ ] 6. 架空データによる基盤全体の回帰検証を完成する
-- [ ] 6.1 架空fixtureとdomain・永続化統合テストを完成する
-  - 全12カテゴリ、欠損、元表記・確認値、参照整合性、禁止payloadを表す架空builderを用意する
-  - CRUD、入力拒否、破損読取、容量不足、移行成功・失敗、アクセス拒否、参照修復、競合拒否、保守fence、root置換をpublic port経由で検証する
-  - 実サイト由来HTML、画像、商品データを使わず主要成功・失敗契約の全テストが成功することを完了条件とする
+- [ ] 6. 架空データによる回帰・性能・生成物検証を完成する
+- [ ] 6.1 架空fixtureとasset policyを完成する
+  - 全12カテゴリ、欠損値、元表記・確認値、参照整合root、各種破損rootを架空値だけで生成する
+  - 生HTML、画像、data URL、実サイト商品値をfixtureへ混入させない検査を追加する
+  - 全builderがJSON往復とvalidatorを通り、fixture policy testが成功することを完了条件とする
   - _Depends: 5.4_
-  - _Requirements: 8.1, 8.2, 8.3_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.4, 8.1, 8.3_
 
-- [ ] 6.2 MV3生成物・境界・容量近傍の最終検証を統合する
-  - manifest、権限、CSP、remote import、動的評価、inline JavaScript、公開import境界、fixture資産を一つの検証フローで検査する
-  - 10MB近傍の架空rootでread、migration、validation、repair、serialization、writeを計測し、タイムアウトせず結果をtest reportへ残す
-  - typecheck、Biome、全test、build、生成物検査が共通検証コマンドで成功することを完了条件とする
+- [ ] 6.2 公開facade経由の基盤回帰を完成する
+  - CRUD、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflictを公開facadeだけで検証する
+  - maintenance acquire・stale fence・release・abortとroot評価・置換の成功失敗を公開facadeだけで検証する
+  - 架空fixtureだけで主要な成功・失敗契約を通す回帰suiteが成功することを完了条件とする
   - _Depends: 6.1_
-  - _Requirements: 1.1, 1.2, 1.4, 5.1, 5.4, 5.5, 8.1, 8.2, 8.3_
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.2_
+
+- [ ] 6.3 (P) 10MB近傍の処理計測を統合する
+  - 架空rootでread、migration、validation、repair、canonical serialization、single writeの時間とbytesを個別計測する
+  - 実行時間を固定閾値で失敗させず、環境差を含む測定値をtest reportへ残す
+  - 10MB近傍の処理がtimeoutせず、全測定項目がreportへ記録されることを完了条件とする
+  - _Depends: 6.1_
+  - _Requirements: 5.1, 5.3, 8.1, 8.2_
+  - _Boundary: Performance Validation_
+
+- [ ] 6.4 (P) 並行要求とworker再生成の回帰を統合する
+  - 複数clientのlock待機、同時mutationのrevision単調増加、lost update不在を検証する
+  - メモリqueueを共有しない新authorityと新lock adapterでactive fenceとrequest retryを再読込する
+  - worker再生成後もowner外writeが拒否され、releaseまたはabort後だけ再開する回帰suiteが成功することを完了条件とする
+  - _Depends: 5.2, 6.1_
+  - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6, 8.2_
+  - _Boundary: Concurrency and Restart Validation_
+
+- [ ] 6.5 MV3・公開境界・生成物の最終gateを統合する
+  - manifest、Chrome 116、最小権限、CSP、remote import、動的評価、inline JavaScriptを検査する
+  - 公開import境界、直接Storage利用、固定lock迂回、fixture assetを生成物とsourceの両方で検査する
+  - typecheck、Biome、全test、build、artifact scanが共通検証commandで連続成功することを完了条件とする
+  - _Depends: 6.2, 6.3, 6.4_
+  - _Requirements: 1.1, 1.2, 1.4, 5.4, 5.5, 6.3, 8.1, 8.2, 8.3_
+
+## Implementation Notes
+
+- `chrome.storage.local` のread/writeだけではcross-worker CASを構成できず、module-level queueはMV3 worker再生成で失われる。
+- `StoragePort.runExclusive`は採用せず、固定名Web Lockを協調writerの線形化点、永続rootのgeneration・owner・lease・revisionをworker再生成後の認可根拠とする。
