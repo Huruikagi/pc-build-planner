@@ -133,7 +133,7 @@
   - _Depends: 4.4, 4.6_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 5.1, 5.2, 5.3_
 
-- [ ] 4.8 保守policyとroot transactionを統合する
+- [x] 4.8 保守policyとroot transactionを統合する
   - lock内の最新rootへ保守遷移とwrite認可を適用し、同時acquireでは一件だけを成功させる
   - ownerなしwrite、stale generation・owner・revisionを保存前に拒否し、永続rootを変更しない
   - 新しいauthorityとlock adapterで再生成してもactive fenceが維持され、releaseまたはabort後に再開する統合テストを完了条件とする
