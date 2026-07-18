@@ -155,7 +155,7 @@
   - _Depends: 4.9_
   - _Requirements: 1.3, 3.1, 3.6, 3.8, 7.6_
 
-- [ ] 5.2 下流向けfacadeを実装する単一write authorityを統合する
+- [x] 5.2 下流向けfacadeを実装する単一write authorityを統合する
   - queryを検証済みRepositoryへ、mutation・maintenance・replacementをroot transaction runnerへdispatchする
   - 同一worker内queueは待ち順と負荷制御だけに使い、排他はWeb Lock、再生成後の正しさは永続cursorへ委ねる
   - 公開facadeだけで全commandを実行でき、並行writeでも変更を取りこぼさないcontract testが成功することを完了条件とする

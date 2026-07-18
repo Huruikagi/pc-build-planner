@@ -24,7 +24,7 @@ import type { StoragePort } from "./repository.js";
 import type { RootWriteLock } from "./root-write-lock.js";
 import { REQUEST_DEDUPE_LIMIT } from "./schema.js";
 
-type RequestPayload =
+export type RequestPayload =
   | null
   | boolean
   | number
@@ -119,6 +119,9 @@ export interface RootTransactionRunner {
   runMaintenance(
     command: MaintenanceCommand,
   ): Promise<Result<MaintenanceReceipt, FoundationError>>;
+  assessReplacement(
+    candidate: unknown,
+  ): Promise<Result<ReplacementAssessment, FoundationError>>;
   replaceRoot(
     command: ReplacementCommand,
   ): Promise<Result<ReplacementReceipt, FoundationError>>;
@@ -266,6 +269,48 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     }
     if (!locked.ok) return locked;
     return locked.value as Result<ReplacementReceipt, FoundationError>;
+  }
+
+  async assessReplacement(
+    candidate: unknown,
+  ): Promise<Result<ReplacementAssessment, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#assessReplacementLocked(candidate),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<ReplacementAssessment, FoundationError>;
+  }
+
+  async #assessReplacementLocked(
+    candidate: unknown,
+  ): Promise<Result<ReplacementAssessment, FoundationError>> {
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return current;
+    const bytes = await this.#deps.storage.bytesInUse();
+    if (!bytes.ok) return bytes;
+    let quotaBytes: number;
+    try {
+      quotaBytes = this.#deps.storage.quotaBytes();
+    } catch {
+      return { ok: false, error: { code: "storage-unavailable" } };
+    }
+    const replacement = this.#deps.replacement;
+    if (replacement === undefined)
+      return { ok: false, error: { code: "validation" } };
+    const assessed = await replacement.assessReplacement(candidate, {
+      currentBytes: bytes.value,
+      quotaBytes,
+      revision: current.value.revision,
+      maintenance: current.value.maintenance,
+    });
+    return assessed.ok
+      ? assessed
+      : { ok: false, error: replacementFailure(assessed.error) };
   }
 
   async #replaceRootLocked(
