@@ -10,11 +10,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "typecheck:public-consumer": "tsc --noEmit -p tsconfig.public-consumer.json",
     "lint": "biome check .",
     "test": "node --test --test-isolation=none tests/**/*.test.mjs",
     "build": "node scripts/build.mjs",
+    "validate:boundaries": "node scripts/validate-boundaries.mjs src/features tests/tooling/public-api-consumer.ts",
     "validate:artifacts": "node scripts/validate-artifacts.mjs dist",
-    "validate": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "validate": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm test && pnpm validate:boundaries && pnpm build"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
     "@types/node": "26.1.1",
+    "chrome-types": "^0.1.435",
     "esbuild": "0.28.1",
     "typescript": "7.0.2"
   }

@@ -1,0 +1,214 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+
+// Query suffixes keep repository test resolve hooks from rewriting dependency .js files to .ts.
+const scannerModule = "../node_modules/typescript/dist/ast/scanner.js?boundary";
+const syntaxKindModule =
+  "../node_modules/typescript/dist/enums/syntaxKind.js?boundary";
+/** @type {typeof import("typescript/unstable/ast/scanner").createScanner} */
+const createScanner = (await import(scannerModule)).createScanner;
+/** @type {typeof import("typescript/unstable/ast").SyntaxKind} */
+const SyntaxKind = (await import(syntaxKindModule)).SyntaxKind;
+
+const LOCK_NAME = "pc-build-planner:local-data-root-write";
+
+/**
+ * @typedef {{ readonly path: string, readonly source: string }} SourceFile
+ * @typedef {{ readonly path: string, readonly rule: string }} BoundaryViolation
+ */
+
+/** @typedef {{ readonly kind: number, readonly text: string, readonly value: string }} Token */
+
+/** @param {string} source @returns {Token[]} */
+const tokenize = (source) => {
+  const scanner = createScanner(true, undefined, source);
+  const tokens = [];
+  for (
+    let kind = scanner.scan();
+    kind !== SyntaxKind.EndOfFile;
+    kind = scanner.scan()
+  )
+    tokens.push({
+      kind,
+      text: scanner.getTokenText(),
+      value: scanner.getTokenValue(),
+    });
+  return tokens;
+};
+
+/** @param {readonly Token[]} tokens @param {number} start */
+const foldedString = (tokens, start) => {
+  if (tokens[start]?.kind !== SyntaxKind.StringLiteral) return undefined;
+  let value = tokens[start]?.value ?? "";
+  let end = start + 1;
+  while (
+    tokens[end]?.kind === SyntaxKind.PlusToken &&
+    tokens[end + 1]?.kind === SyntaxKind.StringLiteral
+  ) {
+    value += tokens[end + 1]?.value ?? "";
+    end += 2;
+  }
+  return { value, end };
+};
+
+/** @param {readonly Token[]} tokens @param {number} start @param {Map<string, string>} aliases */
+const memberPath = (tokens, start, aliases) => {
+  const first = tokens[start];
+  if (first?.kind !== SyntaxKind.Identifier) return undefined;
+  if (first === undefined) return undefined;
+  let value = aliases.get(first.value) ?? first.value;
+  let end = start + 1;
+  while (end < tokens.length) {
+    if (
+      tokens[end]?.kind === SyntaxKind.DotToken &&
+      tokens[end + 1]?.kind === SyntaxKind.Identifier
+    ) {
+      value += `.${tokens[end + 1]?.value}`;
+      end += 2;
+      continue;
+    }
+    if (tokens[end]?.kind === SyntaxKind.OpenBracketToken) {
+      const member = foldedString(tokens, end + 1);
+      if (
+        member === undefined ||
+        tokens[member.end]?.kind !== SyntaxKind.CloseBracketToken
+      )
+        break;
+      value += `.${member.value}`;
+      end = member.end + 1;
+      continue;
+    }
+    break;
+  }
+  return { value, end };
+};
+
+/** @param {string} specifier */
+const isForbiddenImport = (specifier) => {
+  const normalized = specifier.replaceAll("\\", "/");
+  const match = normalized.match(/\/(domain|persistence|runtime)\/(.+)$/);
+  if (match === null) return false;
+  return (
+    match[1] === "runtime" || !/^public(?:\.js|\.ts)?$/.test(match[2] ?? "")
+  );
+};
+
+/** @param {string} value */
+const canonicalApiPath = (value) =>
+  value.startsWith("globalThis.") ? value.slice("globalThis.".length) : value;
+
+/** @param {readonly SourceFile[]} sources @returns {BoundaryViolation[]} */
+export const findBoundaryViolations = (sources) =>
+  sources.flatMap(({ path, source }) => {
+    const tokens = tokenize(source);
+    const aliases = new Map();
+    const rules = new Set();
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      if (token === undefined) continue;
+      const string = foldedString(tokens, index);
+      if (string?.value === LOCK_NAME) rules.add("no-root-lock-bypass");
+      if (
+        token?.kind === SyntaxKind.StringLiteral &&
+        isForbiddenImport(token.value) &&
+        tokens
+          .slice(Math.max(0, index - 4), index)
+          .some(({ kind }) =>
+            [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(kind),
+          )
+      )
+        rules.add("public-import-only");
+      const pathValue = memberPath(tokens, index, aliases);
+      if (
+        pathValue !== undefined &&
+        canonicalApiPath(pathValue.value).startsWith("chrome.storage")
+      )
+        rules.add("no-direct-storage");
+      if (
+        pathValue !== undefined &&
+        canonicalApiPath(pathValue.value).startsWith("navigator.locks")
+      )
+        rules.add("no-root-lock-bypass");
+      if (
+        token?.kind === SyntaxKind.Identifier &&
+        tokens[index + 1]?.kind === SyntaxKind.EqualsToken
+      ) {
+        const assigned = memberPath(tokens, index + 2, aliases);
+        if (assigned !== undefined)
+          aliases.set(token.value, canonicalApiPath(assigned.value));
+      }
+      if (token.kind === SyntaxKind.OpenBraceToken) {
+        const bindings = [];
+        let cursor = index + 1;
+        while (
+          tokens[cursor]?.kind === SyntaxKind.Identifier &&
+          cursor < tokens.length
+        ) {
+          const property = tokens[cursor]?.value;
+          let local = property;
+          cursor += 1;
+          if (tokens[cursor]?.kind === SyntaxKind.ColonToken) {
+            cursor += 1;
+            if (tokens[cursor]?.kind !== SyntaxKind.Identifier) break;
+            local = tokens[cursor]?.value;
+            cursor += 1;
+          }
+          if (property !== undefined && local !== undefined)
+            bindings.push({ property, local });
+          if (tokens[cursor]?.kind !== SyntaxKind.CommaToken) break;
+          cursor += 1;
+        }
+        if (
+          tokens[cursor]?.kind === SyntaxKind.CloseBraceToken &&
+          tokens[cursor + 1]?.kind === SyntaxKind.EqualsToken
+        ) {
+          const assigned = memberPath(tokens, cursor + 2, aliases);
+          if (assigned !== undefined)
+            for (const binding of bindings)
+              aliases.set(
+                binding.local,
+                `${canonicalApiPath(assigned.value)}.${binding.property}`,
+              );
+        }
+      }
+    }
+    return [...rules].map((rule) => ({ path, rule }));
+  });
+
+/** @param {string} root @returns {Promise<SourceFile[]>} */
+const collectSources = async (root) => {
+  const entry = await stat(root).catch(() => undefined);
+  if (entry === undefined)
+    throw new Error(`boundary scan root does not exist: ${root}`);
+  if (entry.isFile())
+    return /\.(?:ts|tsx|js|mjs)$/.test(root)
+      ? [{ path: root, source: await readFile(root, "utf8") }]
+      : [];
+  const sources = [];
+  for (const child of await readdir(root, { withFileTypes: true })) {
+    const childPath = `${root}/${child.name}`;
+    if (child.isDirectory()) sources.push(...(await collectSources(childPath)));
+    else if (/\.(?:ts|tsx|js|mjs)$/.test(child.name))
+      sources.push({
+        path: childPath,
+        source: await readFile(childPath, "utf8"),
+      });
+  }
+  return sources;
+};
+
+/** @param {readonly string[]} roots */
+export const validateBoundaryRoots = async (roots) =>
+  findBoundaryViolations((await Promise.all(roots.map(collectSources))).flat());
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const roots = process.argv.slice(2);
+  if (roots.length === 0)
+    throw new Error("at least one boundary scan root is required");
+  const violations = await validateBoundaryRoots(roots);
+  if (violations.length > 0) {
+    for (const violation of violations)
+      console.error(`${violation.path}: ${violation.rule}`);
+    process.exitCode = 1;
+  }
+}

@@ -169,7 +169,7 @@
   - _Depends: 5.2_
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5.4 下流feature向け公開portとimport境界を完成する
+- [x] 5.4 下流feature向け公開portとimport境界を完成する
   - domain契約、canonical Result、公開facade、worker登録factoryだけを公開する
   - Storage、root lock、Chrome adapter、未検証write、shell具体実装を公開境界から除外する
   - 模擬consumerが公開APIだけで型検査でき、deep import、直接chrome.storage、固定lock迂回を境界検査が拒否することを完了条件とする
