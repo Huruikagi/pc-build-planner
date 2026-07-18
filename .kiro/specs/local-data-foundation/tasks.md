@@ -126,7 +126,7 @@
   - _Depends: 4.1, 4.2, 4.3_
   - _Requirements: 1.3, 3.3, 3.4, 3.5, 3.8, 7.2, 7.4, 7.5, 7.6_
 
-- [ ] 4.7 mutation候補生成とroot transactionを統合する
+- [x] 4.7 mutation候補生成とroot transactionを統合する
   - runnerからpipelineへ検証済みsnapshotとcapacity inputを渡し、CRUD候補を同一transactionでcommitする
   - expected revision競合、参照修復、容量超過、storage失敗をtyped resultへ変換し、中間不整合rootを公開しない
   - 並行mutationでlost updateがなく、候補変更とCurrentBuild参照修復が一つのcommitで観測される統合テストを完了条件とする
