@@ -1,4 +1,8 @@
-import type { Revision, UtcTimestamp } from "../domain/identifiers.js";
+import type {
+  RequestId,
+  Revision,
+  UtcTimestamp,
+} from "../domain/identifiers.js";
 import type { LocalDataRoot, MaintenanceOwnerId } from "../domain/model.js";
 import type { FoundationError, Result } from "../domain/result.js";
 import type { SchemaValidator } from "../domain/validation.js";
@@ -18,6 +22,55 @@ import type {
 } from "./replacement.js";
 import type { StoragePort } from "./repository.js";
 import type { RootWriteLock } from "./root-write-lock.js";
+import { REQUEST_DEDUPE_LIMIT } from "./schema.js";
+
+type RequestPayload =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly RequestPayload[]
+  | { readonly [key: string]: RequestPayload };
+
+const compareCodePoints = (left: string, right: string): number => {
+  const leftPoints = Array.from(
+    left,
+    (value) => value.codePointAt(0) as number,
+  );
+  const rightPoints = Array.from(
+    right,
+    (value) => value.codePointAt(0) as number,
+  );
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference =
+      (leftPoints[index] as number) - (rightPoints[index] as number);
+    if (difference !== 0) return difference;
+  }
+  return leftPoints.length - rightPoints.length;
+};
+
+const canonicalizeRequest = (value: RequestPayload): RequestPayload => {
+  if (Array.isArray(value)) return value.map(canonicalizeRequest);
+  if (value !== null && typeof value === "object") {
+    const record = value as { readonly [key: string]: RequestPayload };
+    const sorted: Record<string, RequestPayload> = {};
+    for (const key of Object.keys(record).sort(compareCodePoints))
+      sorted[key] = canonicalizeRequest(record[key] as RequestPayload);
+    return sorted;
+  }
+  return value;
+};
+
+const requestPayloadDigest = async (value: RequestPayload): Promise<string> => {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify(canonicalizeRequest(value)),
+  );
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+};
 
 export interface RootTransactionContext {
   readonly snapshot: LocalDataRoot;
@@ -42,10 +95,27 @@ export interface RootTransactionOperation<T> {
     | Promise<Result<RootTransactionCandidate<T>, FoundationError>>;
 }
 
+export interface RequestRootTransactionOperation<T>
+  extends RootTransactionOperation<T> {
+  readonly requestId: RequestId;
+  /** JSON直列化可能なcommand payload。object key順はdigestへ影響しない。 */
+  readonly payload: RequestPayload;
+}
+
+export interface RequestCommitReceipt<T> {
+  readonly committedRevision: Revision;
+  readonly replayed: boolean;
+  /** 初回commit時だけ利用可能。再試行の安定したreceiptはrevisionである。 */
+  readonly value?: T;
+}
+
 export interface RootTransactionRunner {
   run<T>(
     operation: RootTransactionOperation<T>,
   ): Promise<Result<T, FoundationError>>;
+  runRequest<T>(
+    operation: RequestRootTransactionOperation<T>,
+  ): Promise<Result<RequestCommitReceipt<T>, FoundationError>>;
   runMaintenance(
     command: MaintenanceCommand,
   ): Promise<Result<MaintenanceReceipt, FoundationError>>;
@@ -151,6 +221,21 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     }
     if (!locked.ok) return locked;
     return locked.value as Result<T, FoundationError>;
+  }
+
+  async runRequest<T>(
+    operation: RequestRootTransactionOperation<T>,
+  ): Promise<Result<RequestCommitReceipt<T>, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#runRequestLocked(operation),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<RequestCommitReceipt<T>, FoundationError>;
   }
 
   async runMaintenance(
@@ -363,6 +448,97 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
 
     const committed = await this.#deps.storage.writeRoot(validated.value);
     return committed.ok ? { ok: true, value: proposed.value.value } : committed;
+  }
+
+  async #runRequestLocked<T>(
+    operation: RequestRootTransactionOperation<T>,
+  ): Promise<Result<RequestCommitReceipt<T>, FoundationError>> {
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return current;
+    const snapshot = current.value;
+    let payloadDigest: string;
+    try {
+      payloadDigest = await requestPayloadDigest(operation.payload);
+    } catch {
+      return { ok: false, error: { code: "validation" } };
+    }
+    const previous = snapshot.requestDedupe.find(
+      (record) => record.requestId === operation.requestId,
+    );
+    if (previous !== undefined) {
+      return previous.payloadDigest === payloadDigest
+        ? {
+            ok: true,
+            value: {
+              committedRevision: previous.committedRevision,
+              replayed: true,
+            },
+          }
+        : { ok: false, error: { code: "request-conflict" } };
+    }
+
+    const bytes = await this.#deps.storage.bytesInUse();
+    if (!bytes.ok) return bytes;
+    let quotaBytes: number;
+    try {
+      quotaBytes = this.#deps.storage.quotaBytes();
+    } catch {
+      return { ok: false, error: { code: "storage-unavailable" } };
+    }
+    if (
+      !Number.isSafeInteger(bytes.value) ||
+      bytes.value < 0 ||
+      !Number.isSafeInteger(quotaBytes) ||
+      quotaBytes < 0
+    )
+      return { ok: false, error: { code: "storage-unavailable" } };
+    if (operation.expectedRevision !== snapshot.revision)
+      return { ok: false, error: { code: "revision-conflict" } };
+    const authorized = this.#deps.maintenance.authorizeWrite(
+      snapshot,
+      operation.maintenance,
+      this.#deps.now(),
+    );
+    if (!authorized.ok) return authorized;
+
+    let proposed: Result<RootTransactionCandidate<T>, FoundationError>;
+    try {
+      proposed = await operation.execute({
+        snapshot,
+        currentBytes: bytes.value,
+        quotaBytes,
+      });
+    } catch {
+      return { ok: false, error: { code: "validation" } };
+    }
+    if (!proposed.ok) return proposed;
+    if (proposed.value.root.revision !== snapshot.revision)
+      return { ok: false, error: { code: "revision-conflict" } };
+    const revision = nextRevision(snapshot.revision);
+    if (revision === undefined)
+      return { ok: false, error: { code: "corrupt-data" } };
+    const requestDedupe = [
+      ...snapshot.requestDedupe,
+      {
+        requestId: operation.requestId,
+        payloadDigest,
+        committedRevision: revision,
+      },
+    ].slice(-REQUEST_DEDUPE_LIMIT);
+    const candidate = { ...proposed.value.root, revision, requestDedupe };
+    const validated = this.#deps.validator.validateRoot(candidate);
+    if (!validated.ok) return { ok: false, error: { code: "validation" } };
+    const committed = await this.#deps.storage.writeRoot(validated.value);
+    return committed.ok
+      ? {
+          ok: true,
+          value: {
+            committedRevision: revision,
+            replayed: false,
+            value: proposed.value.value,
+          },
+        }
+      : committed;
   }
 }
 

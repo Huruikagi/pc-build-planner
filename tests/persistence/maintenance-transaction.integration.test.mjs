@@ -1,6 +1,16 @@
 // @ts-nocheck Node 26のtype strippingでTypeScript sourceを直接検証する。
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import test from "node:test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(
+      specifier.endsWith(".js") ? `${specifier.slice(0, -3)}.ts` : specifier,
+      context,
+    );
+  },
+});
 
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { schemaValidator } from "../../src/domain/validation.ts";
@@ -8,12 +18,14 @@ import { schemaValidator } from "../../src/domain/validation.ts";
 import { maintenancePolicy } from "../../src/persistence/maintenance.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { createMigrationRegistry } from "../../src/persistence/migration-registry.ts";
-// @ts-expect-error Node 26の type strippingでTypeScript sourceを直接検証する。
-import { createRootTransactionRunner } from "../../src/persistence/root-transaction-runner.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { createInMemoryRootWriteLock } from "../../src/persistence/root-write-lock.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { createInitialRoot } from "../../src/persistence/schema.ts";
+
+const { createRootTransactionRunner } = await import(
+  "../../src/persistence/root-transaction-runner.ts"
+);
 
 const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const OWNER_B = "22222222-2222-4222-8222-222222222222";

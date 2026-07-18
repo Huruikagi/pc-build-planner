@@ -148,7 +148,7 @@
   - _Requirements: 4.2, 5.1, 5.3, 7.1, 7.2, 7.3, 7.4, 7.5_
 
 - [ ] 5. 単一write authorityと公開runtime境界を統合する
-- [ ] 5.1 request ID再試行とrevision競合をroot transactionへ統合する
+- [x] 5.1 request ID再試行とrevision競合をroot transactionへ統合する
   - 同じrequest IDとpayloadの再試行へ保存済みreceiptを返し、異なるpayloadの再利用をrequest conflictへ変換する
   - request記録を固定上限でevictし、保持期間外の再送はexpected revisionで判定する
   - runnerのlock内でrequest記録とroot変更が同じcommitになり、instance再生成後も再試行結果が安定するcontract testを完了条件とする

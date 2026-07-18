@@ -1,6 +1,16 @@
 // @ts-nocheck Node 26のtype strippingでTypeScript sourceを直接検証する。
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import test from "node:test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(
+      specifier.endsWith(".js") ? `${specifier.slice(0, -3)}.ts` : specifier,
+      context,
+    );
+  },
+});
 
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { schemaValidator } from "../../src/domain/validation.ts";
@@ -9,9 +19,14 @@ import { maintenancePolicy } from "../../src/persistence/maintenance.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { createMigrationRegistry } from "../../src/persistence/migration-registry.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
-import { createRootTransactionRunner } from "../../src/persistence/root-transaction-runner.ts";
-// @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
-import { createInitialRoot } from "../../src/persistence/schema.ts";
+import {
+  createInitialRoot,
+  REQUEST_DEDUPE_LIMIT,
+} from "../../src/persistence/schema.ts";
+
+const { createRootTransactionRunner } = await import(
+  "../../src/persistence/root-transaction-runner.ts"
+);
 
 const migrations = createMigrationRegistry(1, [], schemaValidator);
 const now = "2026-07-19T00:00:00Z";
@@ -310,5 +325,182 @@ test("破損または未対応snapshotをoperationへ渡さず旧rootを保持�
     );
     assert.equal(called, false);
     assert.equal(harness.getWrites(), 0);
+  }
+});
+
+test("同一request IDとcanonical payloadの再試行は保存済みreceiptを返して再実行しない", async () => {
+  const harness = createHarness();
+  const requestId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  let executions = 0;
+  const operation = {
+    requestId,
+    payload: { z: [1, { b: true, a: "same" }], a: null },
+    expectedRevision: 0,
+    async execute({ snapshot }) {
+      executions += 1;
+      return {
+        ok: true,
+        value: { root: snapshot, value: "fresh-only" },
+      };
+    },
+  };
+
+  assert.deepEqual(await harness.runner.runRequest(operation), {
+    ok: true,
+    value: { committedRevision: 1, replayed: false, value: "fresh-only" },
+  });
+  const recreated = createRootTransactionRunner({
+    storage: {
+      async readRoot() {
+        return { ok: true, value: harness.getStored() };
+      },
+      async bytesInUse() {
+        return { ok: true, value: 321 };
+      },
+      quotaBytes() {
+        return 10_000;
+      },
+      async writeRoot() {
+        assert.fail("replay must not write");
+      },
+      async restrictToTrustedContexts() {
+        return { ok: true, value: undefined };
+      },
+    },
+    lock: {
+      async runExclusive(callback) {
+        return { ok: true, value: await callback() };
+      },
+    },
+    migrations,
+    validator: schemaValidator,
+    maintenance: maintenancePolicy,
+    now: () => now,
+    initialRoot: createInitialRoot,
+  });
+  const replay = await recreated.runRequest({
+    ...operation,
+    payload: { a: null, z: [1, { a: "same", b: true }] },
+  });
+  assert.deepEqual(replay, {
+    ok: true,
+    value: { committedRevision: 1, replayed: true },
+  });
+  assert.equal(executions, 1);
+  assert.equal(harness.getStored().requestDedupe.length, 1);
+});
+
+test("同じrequest IDの異payloadをrequest conflictとして拒否する", async () => {
+  const requestId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const root = {
+    ...createInitialRoot(),
+    revision: 3,
+    requestDedupe: [
+      { requestId, payloadDigest: "not-the-new-digest", committedRevision: 3 },
+    ],
+  };
+  const harness = createHarness({ root });
+  assert.deepEqual(
+    await harness.runner.runRequest({
+      requestId,
+      payload: { changed: true },
+      expectedRevision: 3,
+      async execute() {
+        assert.fail("conflicting request must not execute");
+      },
+    }),
+    { ok: false, error: { code: "request-conflict" } },
+  );
+  assert.equal(harness.getWrites(), 0);
+});
+
+test("request記録を固定上限で古い順にevictし、保持外再送はexpected revisionで拒否する", async () => {
+  const records = Array.from({ length: REQUEST_DEDUPE_LIMIT }, (_, index) => ({
+    requestId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    payloadDigest: `digest-${index}`,
+    committedRevision: index + 1,
+  }));
+  const harness = createHarness({
+    root: { ...createInitialRoot(), revision: 100, requestDedupe: records },
+  });
+  await harness.runner.runRequest({
+    requestId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    payload: { new: true },
+    expectedRevision: 100,
+    async execute({ snapshot }) {
+      return { ok: true, value: { root: snapshot, value: null } };
+    },
+  });
+  const stored = harness.getStored();
+  assert.equal(stored.requestDedupe.length, REQUEST_DEDUPE_LIMIT);
+  assert.equal(stored.requestDedupe[0].requestId, records[1].requestId);
+  assert.equal(stored.requestDedupe.at(-1).committedRevision, 101);
+
+  assert.deepEqual(
+    await harness.runner.runRequest({
+      requestId: records[0].requestId,
+      payload: { old: true },
+      expectedRevision: 0,
+      async execute() {
+        assert.fail("stale revision must reject before execution");
+      },
+    }),
+    { ok: false, error: { code: "revision-conflict" } },
+  );
+});
+
+test("operation候補のdedupe改変を無視しsnapshot履歴と新recordだけを同じcommitへ保存する", async () => {
+  const prior = {
+    requestId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    payloadDigest: "prior-digest",
+    committedRevision: 1,
+  };
+  for (const forgedDedupe of [
+    [],
+    [
+      {
+        requestId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        payloadDigest: "forged",
+        committedRevision: 99,
+      },
+    ],
+  ]) {
+    const harness = createHarness({
+      root: {
+        ...createInitialRoot(),
+        revision: 1,
+        requestDedupe: [prior],
+      },
+    });
+    const result = await harness.runner.runRequest({
+      requestId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      payload: { operation: "safe" },
+      expectedRevision: 1,
+      async execute({ snapshot }) {
+        return {
+          ok: true,
+          value: {
+            root: { ...snapshot, requestDedupe: forgedDedupe },
+            value: null,
+          },
+        };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(
+      harness
+        .getStored()
+        .requestDedupe.map(({ requestId, committedRevision }) => ({
+          requestId,
+          committedRevision,
+        })),
+      [
+        { requestId: prior.requestId, committedRevision: 1 },
+        {
+          requestId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          committedRevision: 2,
+        },
+      ],
+    );
   }
 });
