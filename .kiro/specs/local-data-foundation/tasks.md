@@ -95,7 +95,7 @@
   - _Requirements: 1.3, 7.4, 7.5, 7.6, 7.7_
   - _Boundary: MaintenancePolicy_
 
-- [ ] 4.3 (P) 検証済みsnapshotだけを返すRepository読取境界を実装する
+- [x] 4.3 (P) 検証済みsnapshotだけを返すRepository読取境界を実装する
   - 未保存時は現行版の初期rootを返し、保存値はmigrationと全体validationを通してから公開する
   - 破損、未知の将来版、移行失敗ではsourceを上書きせずtyped failureを返す
   - Repository instanceを再生成しても同じrootを読み、queryが検証済みsnapshotだけを返す統合テストが成功することを完了条件とする
