@@ -1,0 +1,255 @@
+# Design Document
+
+## Overview
+
+本機能は、プロジェクト内の分類済み候補から現在採用するパーツと数量をサイドパネルで管理する。`project-candidate-management` の候補照会と `local-data-foundation` の `CurrentBuild` / Repository契約を利用し、カテゴリ選択ポリシー、構成更新、候補変更時の整合性調停、表示状態を追加する。
+
+設計は既存のfeature service + UI stateパターンを踏襲する。カテゴリ規則を純粋なポリシーとして一元化し、構成データには候補IDと正整数数量だけを保存する。互換性結果や候補詳細を複製しない。
+
+### Goals
+- カテゴリ別の単一・複数選択と数量を一貫して適用する
+- 候補変更・削除後も現在構成の参照整合性を保つ
+- 下流が利用できる検証済みのプロジェクト別現在構成契約を公開する
+
+### Non-Goals
+- 候補の作成・編集、互換性判定、複数構成案、購入管理
+- 保存基盤、スキーマ移行、容量管理の再実装
+- 候補属性または互換性結果の構成データへの複製
+
+## Boundary Commitments
+
+### This Spec Owns
+- カテゴリ別の`single`、`multiple`、`ineligible`選択ポリシー
+- プロジェクトごとの現在構成に含む候補参照と数量の更新規則
+- 候補の分類変更・削除時の構成参照調停
+- 現在構成UI状態、操作表示、下流向け読取契約
+
+### Out of Boundary
+- 候補パーツの内容、分類編集、候補照会の所有
+- 保存ルート、参照検証、容量、移行、Chrome Storageアクセス
+- 互換性規則、判定結果、バックアップファイル形式
+
+### Allowed Dependencies
+- `local-data-foundation` の `CurrentBuild`、`LocalDataRepository`、`Result`、カテゴリ・ID型
+- `project-candidate-management` の `CandidateQuery.listBuildEligible`
+- 既存のChrome 116+ side panel、TypeScript strict、Vitest、DOM/CSS基盤
+
+### Revalidation Triggers
+- `CurrentBuild`、構成項目、Repositoryエラー、候補照会契約の形状変更
+- カテゴリ集合またはカテゴリ別選択方式の変更
+- 候補削除・カテゴリ変更の原子性や通知統合点の変更
+- 下流への現在構成公開契約、保存責任、依存方向の変更
+
+## Architecture
+
+### Existing Architecture Analysis
+
+Foundationは単一保存ルート内の`currentBuilds`、同一プロジェクト参照、正整数数量、直列更新を提供する。Candidate managementは分類済み候補だけを返す`listBuildEligible`とside panelの管理パターンを提供する。本仕様は両契約を拡張せず組み合わせ、選択規則だけを新規所有する。
+
+### Architecture Pattern & Boundary Map
+
+```mermaid
+graph LR
+    UI[Build view] --> State[Build state]
+    State --> Service[Build service]
+    Service --> Policy[Category policy]
+    Service --> Candidates[Candidate query]
+    Service --> Repo[Foundation repository]
+    Downstream[Compatibility and backup] --> Query[Current build query]
+    Query --> Repo
+```
+
+- **Selected pattern**: feature service + UI state。業務規則、永続化連携、表示状態を分離する。
+- **Dependency direction**: `Foundation contracts → Candidate query / Build contracts → Policy → Service / Query → State → View`。右側は左側だけへ依存する。
+- **Boundary rule**: Build serviceは候補詳細を更新せず、CandidateQueryで取得したID、projectId、categoryだけを判断材料にする。
+- **Integration rule**: 候補変更はCandidate managementの成功後に整合性調停を呼び、調停保存に失敗した場合は不整合を隠さず操作停止状態を返す。
+
+### Technology Stack
+
+| Layer | Choice / Version | Role in Feature | Notes |
+|---|---|---|---|
+| Language | TypeScript 5.x strict | ポリシー、コマンド、結果型 | `any`禁止 |
+| UI | DOM API / CSS | side panel内の構成画面 | 既存ホストを拡張 |
+| Data | LocalDataRepository | CurrentBuildの検証付き保存 | Storage API直接利用なし |
+| Integration | CandidateQuery | 分類済み候補照会 | 新規依存なし |
+| Test | Vitest 3.x | ポリシー、サービス、状態、DOM統合 | 架空データのみ |
+
+## File Structure Plan
+
+```text
+src/index.ts                                  # 現在構成の下流向け公開契約を追加
+src/runtime/side-panel.ts                     # 既存side panelへ構成機能を組み立てる
+src/features/current-build/contracts.ts       # コマンド、ビュー、エラー、公開照会型
+src/features/current-build/category-policy.ts # 全カテゴリの選択方式を一元化
+src/features/current-build/service.ts         # 選択・数量・解除・整合性調停
+src/features/current-build/query.ts           # 下流向けプロジェクト別構成照会
+src/features/current-build/state.ts           # 読込、保存中、競合、エラー状態
+src/features/current-build/view.ts            # カテゴリ別候補と構成操作のDOM描画
+src/features/current-build/styles.css         # 構成画面と状態表現
+tests/features/current-build/category-policy.test.ts
+tests/features/current-build/service.test.ts
+tests/features/current-build/query.test.ts
+tests/features/current-build/state.test.ts
+tests/features/current-build/view.test.ts
+tests/features/current-build/integration.test.ts
+```
+
+### Modified Files
+- `src/index.ts` — `CurrentBuildQuery`を下流へ公開する。
+- `src/runtime/side-panel.ts` — 既存候補管理と共有する依存を組み立て、構成画面を起動する。
+
+## System Flows
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant View
+    participant State
+    participant Service
+    participant Candidates
+    participant Repo
+    User->>View: select part or quantity
+    View->>State: submit command
+    State->>Service: validated command
+    Service->>Candidates: list eligible parts
+    Candidates-->>Service: project candidates
+    Service->>Repo: put current build
+    Repo-->>Service: typed result
+    Service-->>State: saved build or error
+    State-->>View: render committed state
+```
+
+候補変更時はServiceが保存済み構成と変更後候補を照合する。未分類化・削除は参照を除去し、単一カテゴリ競合は`resolution-required`を返して利用者が保持対象を確定するまで保存しない。
+
+## Requirements Traceability
+
+| Requirement | Summary | Components | Interfaces | Flows |
+|---|---|---|---|---|
+| 1.1, 1.2, 1.3, 1.4 | プロジェクト・カテゴリ別表示 | BuildState、BuildView | BuildViewModel | 読込 |
+| 2.1, 2.2, 2.3, 2.4, 2.5 | 単一選択 | CategoryPolicy、BuildService | BuildCommand | 選択保存 |
+| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 複数選択と数量 | CategoryPolicy、BuildService | BuildCommand | 選択保存 |
+| 4.1, 4.2, 4.3, 4.4, 4.5 | 候補変更時の整合性 | BuildService、BuildState | ReconcileCandidateChange | 調停 |
+| 5.1, 5.2, 5.3, 5.4, 5.5 | 保存・復元・失敗回復 | BuildService、BuildState、BuildView | BuildError | 保存 |
+| 6.1, 6.2, 6.3, 6.4 | 下流契約 | CurrentBuildQuery | CurrentBuildSnapshot | 読取 |
+
+## Components and Interfaces
+
+| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
+|---|---|---|---|---|---|
+| CategoryPolicy | Feature | カテゴリ別選択方式 | 2.1–2.5, 3.1–3.6 | PartCategory P0 | Service |
+| BuildService | Feature | 構成更新と整合性調停 | 2.2–5.5 | Policy P0、CandidateQuery P0、Repository P0 | Service |
+| CurrentBuildQuery | Feature | 下流向け構成読取 | 6.1–6.4 | Repository P0 | Service |
+| BuildState | UI state | 読込、保存、競合、失敗回復 | 1.1–1.4, 4.2–5.5 | Service P0 | State |
+| BuildView | UI | 候補、選択、数量、案内表示 | 1.1–5.5 | State P0 | State |
+
+### Feature Layer
+
+#### CategoryPolicy
+
+| Field | Detail |
+|---|---|
+| Intent | 全カテゴリを選択方式へ網羅的に写像する |
+| Requirements | 2.1–2.5, 3.1–3.6 |
+
+**Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+
+```typescript
+type SelectionMode = "single" | "multiple" | "ineligible";
+
+interface CategoryPolicy {
+  modeFor(category: PartCategory): SelectionMode;
+}
+```
+
+`unclassified`だけを`ineligible`とする。単一カテゴリは数量1固定、複数カテゴリは正整数数量を許可する。カテゴリ追加時に未処理分岐を型検査で検出する。
+
+#### BuildService
+
+| Field | Detail |
+|---|---|
+| Intent | 有効な選択変更をCurrentBuildへ反映し候補変更を調停する |
+| Requirements | 2.2–5.5 |
+
+**Dependencies**
+- Outbound: CategoryPolicy — 選択方式 (P0)
+- Outbound: CandidateQuery — 同一プロジェクトの分類済み候補 (P0)
+- Outbound: LocalDataRepository — 検証付き構成保存 (P0)
+
+**Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+
+```typescript
+type BuildCommand =
+  | { type: "select"; projectId: ProjectId; partId: CandidatePartId }
+  | { type: "set-quantity"; projectId: ProjectId; partId: CandidatePartId; quantity: number }
+  | { type: "remove"; projectId: ProjectId; partId: CandidatePartId };
+
+type CandidateChange =
+  | { type: "category-changed"; partId: CandidatePartId; projectId: ProjectId; category: PartCategory }
+  | { type: "deleted"; partId: CandidatePartId; projectId: ProjectId };
+
+interface BuildService {
+  execute(command: BuildCommand): Promise<Result<CurrentBuild, BuildError>>;
+  reconcile(change: CandidateChange): Promise<Result<CurrentBuild, BuildError>>;
+  resolveSingleConflict(input: SingleConflictResolution): Promise<Result<CurrentBuild, BuildError>>;
+}
+```
+
+- Preconditions: projectと候補が一致し、候補が分類済みで、数量がポリシーに適合する。
+- Postconditions: プロジェクトごとに一構成、候補ID重複なし、単一カテゴリ最大一項目、数量は正整数。
+- Invariants: 失敗・競合中は直前の有効な構成を保存したままにする。
+
+#### CurrentBuildQuery
+
+| Field | Detail |
+|---|---|
+| Intent | 下流へ検証済みの現在構成スナップショットを返す |
+| Requirements | 6.1–6.4 |
+
+**Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+
+```typescript
+interface CurrentBuildQuery {
+  getByProject(projectId: ProjectId): Promise<Result<CurrentBuildSnapshot | null, BuildError>>;
+}
+
+interface CurrentBuildSnapshot {
+  readonly projectId: ProjectId;
+  readonly items: readonly Readonly<{ partId: CandidatePartId; quantity: number }>[];
+  readonly updatedAt: UtcIsoDateTime;
+}
+```
+
+返却値は候補詳細や互換性結果を含めず、Repository検証を通過した保存値の読み取り専用表現とする。
+
+### UI Layer
+
+#### BuildState
+
+永続スナップショット、選択project/category、保存中コマンド、`SingleConflictResolution`、表示エラーを保持する。成功時だけスナップショットを置換し、同一コマンドの二重送信を抑止する。
+
+#### BuildView
+
+分類済みカテゴリ、候補、選択状態、複数カテゴリの数量入力、解除操作を描画する。未分類候補は選択肢へ出さず、空状態、項目エラー、保存エラー、競合解決を識別可能に表示する。文字列はtext nodeとして扱う。
+
+## Data Models
+
+- `CurrentBuild`はFoundation契約を再利用し、`projectId`、一意な`partId`と正整数`quantity`の項目、`updatedAt`を持つ。
+- `SelectionMode`は保存しない派生規則である。
+- `BuildError`は`validation`、`not-found`、`conflict`、`resolution-required`、`corrupt-data`、`unsupported-data`、`quota`、`storage`を判別する。
+- 構成更新の整合性単位は一つの`CurrentBuild`だが、Repositoryが保存ルート全体の参照を再検証する。
+
+## Error Handling
+
+入力エラーは数量または対象候補へ関連付ける。競合は保持候補の選択肢を示す。破損・非対応・不正参照は変更操作を停止し、保存失敗は直前の構成を維持する。候補名、URL、価格をログへ出さない。
+
+## Testing Strategy
+
+- Unit: 全カテゴリのポリシー、単一置換、複数追加、数量検証、重複防止を検証する。
+- Service integration: 別プロジェクト・未分類拒否、削除・未分類化の参照除去、カテゴリ変更競合と解決、保存失敗時の不変性を検証する。
+- State: 復元、成功時だけのスナップショット更新、二重送信抑止、競合状態、操作停止を検証する。
+- DOM integration: カテゴリ切替、空状態、単一・複数操作、数量エラー、競合解決を検証する。
+- Contract/E2E: プロジェクトの候補選択から再起動復元、下流照会までを架空データで検証する。
+
+## Security & Performance
+
+候補表示は安全なDOM APIだけを使い、保存は信頼済み拡張コンテキストのRepositoryへ限定する。選択プロジェクト・カテゴリの候補だけを描画し、保存中の重複更新を抑止する。容量管理はFoundationへ委譲する。
