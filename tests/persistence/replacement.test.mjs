@@ -24,7 +24,12 @@ const root = () => ({
 const coordinator = (
   migrations = createMigrationRegistry(1, [], schemaValidator),
 ) => createReplacementCoordinator(migrations, schemaValidator);
-const cursor = { currentBytes: 80, quotaBytes: 10_000, revision: 7 };
+const cursor = {
+  currentBytes: 80,
+  quotaBytes: 10_000,
+  revision: 7,
+  maintenance: { generation: 0, active: false },
+};
 
 test("canonical JSON は object key を code point 順に再帰整列し array 順を保つ", () => {
   const highBmp = "\uE000";
@@ -68,10 +73,10 @@ test("同じ候補と cursor は安定し、候補・schema・bytes・revision �
     ...cursor,
     revision: 8,
   });
-  for (const result of [changedCandidate, changedRevision]) {
-    assert.equal(result.ok, true);
-    assert.notEqual(result.value.token, first.value.token);
-  }
+  assert.equal(changedCandidate.ok, true);
+  assert.equal(changedCandidate.value.token, first.value.token);
+  assert.equal(changedRevision.ok, true);
+  assert.notEqual(changedRevision.value.token, first.value.token);
 
   const oldRegistry = createMigrationRegistry(
     1,

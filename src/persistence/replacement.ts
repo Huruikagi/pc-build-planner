@@ -1,4 +1,4 @@
-import type { LocalDataRoot } from "../domain/model.js";
+import type { LocalDataRoot, MaintenanceState } from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 import type { SchemaValidator, ValidationError } from "../domain/validation.js";
 import type { CapacityWarning } from "./capacity-policy.js";
@@ -20,6 +20,7 @@ export interface ReplacementEvaluationInput {
   readonly currentBytes: number;
   readonly quotaBytes: number;
   readonly revision: number;
+  readonly maintenance: MaintenanceState;
 }
 
 export interface ReplacementCursor {
@@ -44,13 +45,19 @@ export type ReplacementError =
   | MigrationError
   | { readonly code: "validation"; readonly issue: ValidationError }
   | { readonly code: "invalid-capacity-input" }
-  | { readonly code: "quota-exceeded" };
+  | { readonly code: "quota-exceeded" }
+  | { readonly code: "stale-assessment" };
 
 export interface ReplacementEvaluator {
   assessReplacement(
     input: unknown,
     evaluation: ReplacementEvaluationInput,
   ): Promise<Result<ReplacementAssessment, ReplacementError>>;
+  verifyReplacement(
+    input: unknown,
+    assessment: ReplacementAssessment,
+    evaluation: ReplacementEvaluationInput,
+  ): Promise<Result<LocalDataRoot, ReplacementError>>;
 }
 
 type JsonPrimitive = null | boolean | number | string;
@@ -117,7 +124,27 @@ const validEvaluation = (input: ReplacementEvaluationInput): boolean =>
   Number.isSafeInteger(input.quotaBytes) &&
   input.quotaBytes >= 0 &&
   Number.isSafeInteger(input.revision) &&
-  input.revision >= 0;
+  input.revision >= 0 &&
+  typeof input.maintenance === "object" &&
+  input.maintenance !== null;
+
+const exactCommitCandidate = (
+  root: LocalDataRoot,
+  evaluation: ReplacementEvaluationInput,
+  validator: SchemaValidator,
+): Result<LocalDataRoot, ReplacementError> => {
+  const revision = evaluation.revision + 1;
+  if (!Number.isSafeInteger(revision))
+    return { ok: false, error: { code: "invalid-capacity-input" } };
+  const exact = validator.validateReplacement({
+    ...root,
+    revision,
+    maintenance: evaluation.maintenance,
+  });
+  return exact.ok
+    ? exact
+    : { ok: false, error: { code: "validation", issue: exact.error } };
+};
 
 export const createReplacementCoordinator = (
   migrations: MigrationRegistry,
@@ -127,11 +154,84 @@ export const createReplacementCoordinator = (
   if (!Number.isFinite(warningRatio) || warningRatio <= 0 || warningRatio > 1)
     throw new RangeError("warningRatio must be greater than 0 and at most 1");
 
+  const assessReplacement: ReplacementEvaluator["assessReplacement"] = async (
+    input,
+    evaluation,
+  ) => {
+    if (!validEvaluation(evaluation))
+      return { ok: false, error: { code: "invalid-capacity-input" } };
+    const sourceSchemaVersion = readSourceSchemaVersion(input);
+    const migrated = migrations.toCurrent(input);
+    if (!migrated.ok) return migrated;
+    const validated = validator.validateReplacement(migrated.value);
+    if (!validated.ok)
+      return {
+        ok: false,
+        error: { code: "validation", issue: validated.error },
+      };
+
+    const exact = exactCommitCandidate(validated.value, evaluation, validator);
+    if (!exact.ok) return exact;
+    const bytes = requiredBytes(exact.value);
+    if (bytes > evaluation.quotaBytes)
+      return { ok: false, error: { code: "quota-exceeded" } };
+    const cursor: ReplacementCursor = {
+      sourceSchemaVersion: sourceSchemaVersion ?? validated.value.schemaVersion,
+      targetSchemaVersion: CURRENT_SCHEMA_VERSION,
+      requiredBytes: bytes,
+      revision: evaluation.revision,
+    };
+    const candidateDigest = await sha256(
+      canonicalJson(exact.value as unknown as CanonicalValue),
+    );
+    const token = (await sha256(
+      canonicalJson({ candidateDigest, ...cursor }),
+    )) as ReplacementToken;
+    const warningThresholdBytes = evaluation.quotaBytes * warningRatio;
+    return {
+      ok: true,
+      value: {
+        token,
+        candidateDigest,
+        sourceSchemaVersion: cursor.sourceSchemaVersion,
+        targetSchemaVersion: cursor.targetSchemaVersion,
+        beforeBytes: evaluation.currentBytes,
+        requiredBytes: bytes,
+        warnings:
+          bytes >= warningThresholdBytes
+            ? [
+                {
+                  code: "capacity-warning",
+                  thresholdBytes: warningThresholdBytes,
+                },
+              ]
+            : [],
+        cursor,
+      },
+    };
+  };
+
   return {
-    async assessReplacement(input, evaluation) {
-      if (!validEvaluation(evaluation))
-        return { ok: false, error: { code: "invalid-capacity-input" } };
-      const sourceSchemaVersion = readSourceSchemaVersion(input);
+    assessReplacement,
+    async verifyReplacement(input, assessment, evaluation) {
+      const reassessed = await assessReplacement(input, evaluation);
+      if (!reassessed.ok) return reassessed;
+      const actual = reassessed.value;
+      if (
+        actual.token !== assessment.token ||
+        actual.candidateDigest !== assessment.candidateDigest ||
+        actual.sourceSchemaVersion !== assessment.sourceSchemaVersion ||
+        actual.targetSchemaVersion !== assessment.targetSchemaVersion ||
+        actual.requiredBytes !== assessment.requiredBytes ||
+        actual.cursor.sourceSchemaVersion !==
+          assessment.cursor.sourceSchemaVersion ||
+        actual.cursor.targetSchemaVersion !==
+          assessment.cursor.targetSchemaVersion ||
+        actual.cursor.requiredBytes !== assessment.cursor.requiredBytes ||
+        actual.cursor.revision !== assessment.cursor.revision
+      ) {
+        return { ok: false, error: { code: "stale-assessment" } };
+      }
       const migrated = migrations.toCurrent(input);
       if (!migrated.ok) return migrated;
       const validated = validator.validateReplacement(migrated.value);
@@ -140,45 +240,7 @@ export const createReplacementCoordinator = (
           ok: false,
           error: { code: "validation", issue: validated.error },
         };
-
-      const bytes = requiredBytes(validated.value);
-      if (bytes > evaluation.quotaBytes)
-        return { ok: false, error: { code: "quota-exceeded" } };
-      const cursor: ReplacementCursor = {
-        sourceSchemaVersion:
-          sourceSchemaVersion ?? validated.value.schemaVersion,
-        targetSchemaVersion: CURRENT_SCHEMA_VERSION,
-        requiredBytes: bytes,
-        revision: evaluation.revision,
-      };
-      const candidateDigest = await sha256(
-        canonicalJson(validated.value as unknown as CanonicalValue),
-      );
-      const token = (await sha256(
-        canonicalJson({ candidateDigest, ...cursor }),
-      )) as ReplacementToken;
-      const warningThresholdBytes = evaluation.quotaBytes * warningRatio;
-      return {
-        ok: true,
-        value: {
-          token,
-          candidateDigest,
-          sourceSchemaVersion: cursor.sourceSchemaVersion,
-          targetSchemaVersion: cursor.targetSchemaVersion,
-          beforeBytes: evaluation.currentBytes,
-          requiredBytes: bytes,
-          warnings:
-            bytes >= warningThresholdBytes
-              ? [
-                  {
-                    code: "capacity-warning",
-                    thresholdBytes: warningThresholdBytes,
-                  },
-                ]
-              : [],
-          cursor,
-        },
-      };
+      return exactCommitCandidate(validated.value, evaluation, validator);
     },
   };
 };

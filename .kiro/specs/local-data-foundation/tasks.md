@@ -140,7 +140,7 @@
   - _Depends: 4.2, 4.6, 4.7_
   - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6, 7.7_
 
-- [ ] 4.9 評価済みroot置換を単一transactionへ統合する
+- [x] 4.9 評価済みroot置換を単一transactionへ統合する
   - lock内でtoken、候補digest、schema、required bytes、maintenance fence、current revisionを再照合する
   - 一致した候補だけをrevision増分付きの一回のwriteで置換し、成功または失敗を一つの結果として返す
   - token・候補・fence・revision不一致、容量不足、storage失敗のすべてで旧rootが保持される統合テストを完了条件とする

@@ -11,6 +11,11 @@ import type {
   MigrationError,
   MigrationRegistry,
 } from "./migration-registry.js";
+import type {
+  ReplacementAssessment,
+  ReplacementError,
+  ReplacementEvaluator,
+} from "./replacement.js";
 import type { StoragePort } from "./repository.js";
 import type { RootWriteLock } from "./root-write-lock.js";
 
@@ -44,6 +49,21 @@ export interface RootTransactionRunner {
   runMaintenance(
     command: MaintenanceCommand,
   ): Promise<Result<MaintenanceReceipt, FoundationError>>;
+  replaceRoot(
+    command: ReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>>;
+}
+
+export interface ReplacementCommand {
+  readonly candidate: unknown;
+  readonly assessment: ReplacementAssessment;
+  readonly fence: MaintenanceFence;
+}
+
+export interface ReplacementReceipt {
+  readonly revision: Revision;
+  readonly beforeBytes: number;
+  readonly afterBytes: number;
 }
 
 export type MaintenanceCommand =
@@ -72,6 +92,7 @@ export interface RootTransactionRunnerDependencies {
   readonly migrations: MigrationRegistry;
   readonly validator: SchemaValidator;
   readonly maintenance: MaintenancePolicy;
+  readonly replacement?: ReplacementEvaluator;
   readonly now: () => UtcTimestamp;
   readonly initialRoot: () => LocalDataRoot;
 }
@@ -85,6 +106,23 @@ const migrationFailure = (error: MigrationError): FoundationError => {
     case "migration-path-missing":
     case "migration-failed":
       return { code: "migration-failed" };
+  }
+};
+
+const replacementFailure = (error: ReplacementError): FoundationError => {
+  switch (error.code) {
+    case "quota-exceeded":
+      return { code: "quota-exceeded" };
+    case "stale-assessment":
+      return { code: "stale-assessment" };
+    case "unsupported-version":
+      return { code: "unsupported-version" };
+    case "migration-path-missing":
+    case "migration-failed":
+      return { code: "migration-failed" };
+    case "validation":
+    case "invalid-capacity-input":
+      return { code: "validation" };
   }
 };
 
@@ -128,6 +166,79 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     }
     if (!locked.ok) return locked;
     return locked.value as Result<MaintenanceReceipt, FoundationError>;
+  }
+
+  async replaceRoot(
+    command: ReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#replaceRootLocked(command),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<ReplacementReceipt, FoundationError>;
+  }
+
+  async #replaceRootLocked(
+    command: ReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return current;
+    const snapshot = current.value;
+    const bytes = await this.#deps.storage.bytesInUse();
+    if (!bytes.ok) return bytes;
+    let quotaBytes: number;
+    try {
+      quotaBytes = this.#deps.storage.quotaBytes();
+    } catch {
+      return { ok: false, error: { code: "storage-unavailable" } };
+    }
+
+    if (command.assessment.cursor.revision !== snapshot.revision)
+      return { ok: false, error: { code: "stale-assessment" } };
+    const authorized = this.#deps.maintenance.authorizeWrite(
+      snapshot,
+      command.fence,
+      this.#deps.now(),
+    );
+    if (!authorized.ok) return authorized;
+    const replacement = this.#deps.replacement;
+    if (replacement === undefined)
+      return { ok: false, error: { code: "validation" } };
+    const verified = await replacement.verifyReplacement(
+      command.candidate,
+      command.assessment,
+      {
+        currentBytes: bytes.value,
+        quotaBytes,
+        revision: snapshot.revision,
+        maintenance: snapshot.maintenance,
+      },
+    );
+    if (!verified.ok)
+      return { ok: false, error: replacementFailure(verified.error) };
+    const revision = nextRevision(snapshot.revision);
+    if (revision === undefined)
+      return { ok: false, error: { code: "corrupt-data" } };
+    if (verified.value.revision !== revision)
+      return { ok: false, error: { code: "stale-assessment" } };
+    const validated = this.#deps.validator.validateRoot(verified.value);
+    if (!validated.ok) return { ok: false, error: { code: "validation" } };
+    const committed = await this.#deps.storage.writeRoot(validated.value);
+    return committed.ok
+      ? {
+          ok: true,
+          value: {
+            revision,
+            beforeBytes: bytes.value,
+            afterBytes: command.assessment.requiredBytes,
+          },
+        }
+      : committed;
   }
 
   async #readCurrentRoot(): Promise<Result<LocalDataRoot, FoundationError>> {
