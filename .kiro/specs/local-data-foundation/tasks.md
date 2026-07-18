@@ -87,7 +87,7 @@
   - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6_
   - _Boundary: RootWriteLock_
 
-- [ ] 4.2 (P) generation・owner・leaseによる純粋な保守policyを実装する
+- [x] 4.2 (P) generation・owner・leaseによる純粋な保守policyを実装する
   - acquire、renew、release、abort、write認可を永続rootの入力と遷移候補だけで判定する
   - owner外write、期限切れlease、stale generation・owner・revision、破損stateをfail closedに拒否する
   - validなreleaseまたはabort後だけ通常writeが再開可能となる純粋state transition testが成功することを完了条件とする
