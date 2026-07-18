@@ -103,7 +103,7 @@
   - _Requirements: 1.3, 3.3, 3.4, 4.2, 4.3, 4.4_
   - _Boundary: LocalDataRepository_
 
-- [ ] 4.4 (P) mutationのcommit候補を構築する純粋pipelineを実装する
+- [x] 4.4 (P) mutationのcommit候補を構築する純粋pipelineを実装する
   - 検証済みsnapshotへCRUDを適用し、候補変更時の参照修復と候補root全体の再検証を行う
   - runnerから値で渡された現在bytesとruntime quotaから容量warningまたは拒否を判定する
   - Storage、lock、migration、revision、request dedupeへ依存せず、有効候補と各拒否を決定的に返すテストが成功することを完了条件とする
