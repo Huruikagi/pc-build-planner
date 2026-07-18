@@ -111,7 +111,7 @@
   - _Requirements: 3.1, 3.2, 3.7, 5.1, 5.2, 5.3_
   - _Boundary: MutationPipeline_
 
-- [ ] 4.5 (P) 置換候補の副作用なし評価と決定的tokenを実装する
+- [x] 4.5 (P) 置換候補の副作用なし評価と決定的tokenを実装する
   - 置換候補をmigration、全体validation、容量評価し、保存値を変更せずassessmentを返す
   - object keyを再帰的に並べたcanonical JSONをUTF-8化し、SHA-256 digestを生成する
   - 同じ候補とcursorではtokenが安定し、候補値・schema・required bytes・revisionの変化でtokenが変わるテストが成功することを完了条件とする
