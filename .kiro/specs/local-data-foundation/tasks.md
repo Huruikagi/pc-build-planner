@@ -8,7 +8,7 @@
   - _Requirements: 1.1, 1.2, 7.1_
   - _Boundary: Build Infrastructure_
 
-- [ ] 1.2 MV3 manifestとservice worker起動骨格を構成する
+- [x] 1.2 MV3 manifestとservice worker起動骨格を構成する
   - Chrome 116以降、module service worker、storage権限、最小CSPを宣言する
   - 全サイト権限、unlimitedStorage、リモートコード、インラインJavaScriptを含めない
   - Chromeが生成物をManifest V3拡張として読み込める構造になることを完了条件とする
