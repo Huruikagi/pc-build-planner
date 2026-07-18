@@ -78,5 +78,13 @@ test("canonical Resultは成功と各foundation failureを判別できる", () =
 test("初期rootは現行schema version 1・revision 0で生成される", () => {
   assert.equal(CURRENT_SCHEMA_VERSION, 1);
   assert.equal(LOCAL_DATA_STORAGE_KEY, "localDataRoot");
-  assert.deepEqual(createInitialRoot(), { schemaVersion: 1, revision: 0 });
+  assert.deepEqual(createInitialRoot(), {
+    schemaVersion: 1,
+    revision: 0,
+    projects: [],
+    candidateParts: [],
+    currentBuilds: [],
+    requestDedupe: [],
+    maintenance: { generation: 0, active: false },
+  });
 });
