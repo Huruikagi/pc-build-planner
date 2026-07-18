@@ -2,67 +2,96 @@
 
 ## Summary
 - **Feature**: `local-data-foundation`
-- **Discovery Scope**: New Feature
+- **Discovery Scope**: New Feature（full discovery）
 - **Key Findings**:
-  - 現在の実装はNode.js設定のみで、拡張ランタイムとTypeScript基盤は未作成である。
-  - Chrome 116以降のMV3では永続状態をservice workerメモリに置かず、`chrome.storage.local` を信頼済みコンテキストに限定する必要がある。
-  - 後続specの並行実装には、ドメイン型、検証、保存ポートを先に安定させることが重要である。
+  - 現在はNode.js、pnpm、Biomeだけがあり、`src/`、manifest、型検査、build、test基盤は未作成である。
+  - `chrome.storage.local` はChrome 114以降10MBだが既定ではcontent scriptからも利用できるため、起動時に`TRUSTED_CONTEXTS`へ制限する必要がある。
+  - Storage APIは比較交換トランザクションを提供しない。全mutationを単一のservice worker write authorityへ集約し、永続revision、要求ID、保守世代、owner fencingをcommit直前に再検証する必要がある。
+  - foundationはmanifestとデータruntime登録契約を所有し、共有service worker composition入口は後続`application-shell`へ委譲する。
 
 ## Research Log
 
-### 現行コードベース
-- **Context**: 新規基盤が既存パターンを拡張するか確認した。
-- **Sources Consulted**: `package.json`、リポジトリ構造、`docs/requirements.md`、`.kiro/steering/roadmap.md`
-- **Findings**: Biomeとpnpm指定以外にビルド、型検査、テスト、拡張ファイルは存在しない。
-- **Implications**: ランタイム設定とテスト基盤を明示的な初期タスクにする。
+### 現行コードベースと所有境界
+- **Context**: greenfieldの実装範囲とroadmap更新後のcanonical ownerを確認した。
+- **Sources Consulted**: `package.json`、`.kiro/steering/{product,tech,structure,roadmap}.md`、対象specのrequirements/design/tasks
+- **Findings**: application sourceは未実装である。最新roadmapはroot runtime、side panel、feature compositionをapplication shellへ、共通`Result<T, E>`、保存primitive、write authority、参照修復をfoundationへ割り当てている。
+- **Implications**: foundationは`src/runtime/service-worker.ts`やroot `src/index.ts`を作らず、worker registration portとadapterを公開する。manifestは背景workerなしでも読み込める最小MV3骨格としてfoundationが所有し、application shellが後続でcomposition設定を追加する。
 
-### Chrome MV3とStorage制約
-- **Context**: 実行寿命、保存容量、アクセス制御を設計する必要がある。
-- **Sources Consulted**: Chrome Extensions公式ドキュメントのManifest V3、Storage API、service worker lifecycle、content security policy
-- **Findings**: service workerは停止し得る。`storage.local` は既定で約10MBで、アクセスレベルを信頼済みコンテキストへ制限できる。MV3は拡張同梱コードを前提とする。
-- **Implications**: 保存処理は呼出しごとに永続領域を読み、アクセスレベルを起動時に制限し、容量を事前評価する。
+### Chrome Storage APIと容量
+- **Context**: 容量、アクセス制御、書込失敗の契約を確定する必要がある。
+- **Sources Consulted**: Chrome Storage API公式資料（2026-05-05更新）
+- **Findings**: `storage.local.QUOTA_BYTES`は10,485,760 bytesで、キー長とJSON直列化後の値を含めて計測される。超過更新はPromiseをrejectする。`getBytesInUse()`で使用量を取得できる。既定ではcontent scriptにも公開されるが、Chrome 102以降は`setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"})`で制限できる。
+- **Implications**: 固定値だけでなく実行時`QUOTA_BYTES`を上限根拠にし、警告閾値は設定可能な比率として扱う。事前見積りと書込rejectの両方を`CapacityStatus`/`quota-exceeded`へ正規化する。
 
-### 検証と移行方式
-- **Context**: 保存済みJSONを型だけで信頼できない。
-- **Sources Consulted**: TypeScriptの型消去特性、既存依存関係、要件の将来移行制約
-- **Findings**: 実行時検証が不可欠。初期基盤では小さなスキーマのため、外部ライブラリ追加より明示的な検証関数と判別共用体が適する。
-- **Implications**: 型と検証器を同じドメイン境界に置き、移行レジストリは連続バージョンのみ許可する。
+### MV3 service workerと排他
+- **Context**: 書込直列化と保守leaseをworkerメモリだけへ置けるか確認した。
+- **Sources Consulted**: Extension service worker lifecycle、service worker migration公式資料
+- **Findings**: workerは必要時に起動・休止し、global変数は停止時に失われる。永続状態はStorage API等をsource of truthにする必要がある。
+- **Implications**: in-memory queueは同一worker instance内の順序付けだけに使用する。rootの`revision`、処理済みrequest ID、maintenance generation/owner/leaseを永続化し、各commit直前に再読込してfenceを検証する。全consumerはregistration port経由で同一authorityへルーティングする。
+
+### MV3コードとCSP
+- **Context**: 未パッケージ拡張の実行制約を確認した。
+- **Sources Consulted**: Manifest V3、extension security、manifest CSP公式資料
+- **Findings**: MV3は同梱コードを前提とし、remote hosted codeと任意文字列実行を制限する。minimum Chrome versionをmanifestで宣言できる。
+- **Implications**: `minimum_chrome_version: "116"`を設定し、remote code、`eval`、`new Function`、inline JavaScriptをbuild検査で拒否する。
+
+### 検証・移行・置換
+- **Context**: unknownな保存値とバックアップ候補を安全に扱う必要がある。
+- **Sources Consulted**: 要件、TypeScript型消去、単一root方式の制約
+- **Findings**: compile-time型だけではstorage/JSONを検証できない。10MB以内の単一rootは参照整合性の全体検証と一括`set`に適する。
+- **Implications**: boundary inputは`unknown`として検証し、`assessReplacement`は副作用なし、`replaceRoot`は評価tokenとmaintenance fenceを要求する。移行は純粋な`N -> N+1`連鎖とする。
 
 ## Architecture Pattern Evaluation
 
 | Option | Description | Strengths | Risks / Limitations | Notes |
 |---|---|---|---|---|
-| ポートとアダプター | ドメイン契約と保存APIをChromeアダプターから分離 | テスト可能、後続機能と将来移行に強い | ファイル数が増える | 採用。ただし単一保存実装に過剰な抽象層は追加しない |
-| Storage API直接利用 | 各機能がChrome APIを直接呼ぶ | 初期実装が短い | 検証・容量・移行が分散 | 不採用 |
-| 外部スキーマライブラリ | 宣言的な実行時検証 | 記述量を削減 | CSP・バンドル・依存更新面が増える | 初期版では不採用、複雑化時に再評価 |
+| Ports and adapters + single write authority | domain契約をChrome APIから分離し、mutationを一つのauthorityへ集約 | 型安全、テスト容易、整合性境界が明確 | worker message contractが必要 | 採用 |
+| 各featureからStorage API直接利用 | featureごとにread-modify-write | 初期コードが少ない | lost update、検証・排他の分散 | 不採用 |
+| エンティティ別キー | project/part/buildを分割保存 | 小さい部分更新 | Chrome Storageに複数キーtransactionがなく参照整合性が複雑 | MVPでは不採用 |
+| 外部schema library | 宣言的runtime validation | 型と検証の重複を削減可能 | 未導入toolchainへの依存追加 | 実装開始時に最新版適合性を再評価。設計はlibrary非依存 |
 
 ## Design Decisions
 
-### Decision: 単一のバージョン付き保存ルート
-- **Context**: 参照整合性と原子的な更新を保つ必要がある。
-- **Alternatives Considered**: エンティティ別キー、単一ルートドキュメント。
-- **Selected Approach**: スキーマバージョン、プロジェクト、候補、構成を一つの保存ルートで管理する。
-- **Rationale**: MVP規模と10MB制約では全体検証と一括置換が簡潔で、部分更新による参照破損を避けられる。
-- **Trade-offs**: データ増大時の全体書換コスト。容量・性能測定を継続する。
+### Decision: 単一バージョン付きrootとrevision
+- **Context**: 参照整合性、競合検出、全体置換を同じ境界で扱う。
+- **Alternatives Considered**: entity別キー、event store、単一root。
+- **Selected Approach**: `LocalDataRoot`を一つのstorage keyに保存し、`schemaVersion`と単調増加`revision`を持たせる。
+- **Rationale**: MVP容量内で全体検証、候補変更とCurrentBuild修復、置換を一つのcommitへ閉じられる。
+- **Trade-offs**: 全体再直列化コスト。10MB近傍の性能を測定し、分割時は全dependent specを再検証する。
 
-### Decision: 結果型で失敗を公開
-- **Context**: Chrome API、検証、容量、移行の失敗を利用側が区別する必要がある。
-- **Selected Approach**: 例外を境界外へ漏らさず、判別可能な`Result`とエラーコードを返す。
-- **Rationale**: 後続UIが回復可能な案内を選べ、テストも安定する。
+### Decision: 単一write authorityと永続fencing
+- **Context**: Storage APIにCASがなく、複数extension contextからのread-modify-writeはlost updateを起こし得る。
+- **Alternatives Considered**: consumer側mutex、成功後イベントによる修復、service worker authority。
+- **Selected Approach**: application shellがcompositionする単一worker authorityへ全mutationを送る。authorityはrequest ID、expected revision、maintenance generation/ownerを検証し、参照修復後のrootだけをcommitする。
+- **Rationale**: mutation ownershipを一つに保ち、中間invalid rootを公開しない。
+- **Trade-offs**: shellとのruntime integration contractがP0依存になる。foundationはregistration factoryを所有し、root workerは所有しない。
 
-### Decision: 一般化は契約に限定
-- **Context**: 将来Webアプリや同期へ移行できるが、現時点で実装しない。
-- **Selected Approach**: 保存ポートと直列化可能なドメイン契約を汎用化し、Chrome以外のアダプター、同期、エクスポートは作らない。
-- **Rationale**: 現要件を満たす最小構成で下流依存を安定させる。
+### Decision: 保守leaseはgenerationとownerでfenceする
+- **Context**: 復元中の通常write、worker再生成、stale ownerを拒否する。
+- **Selected Approach**: 永続`MaintenanceState`にgeneration、ownerId、lease期限、revisionを保存し、置換を含む全commit直前に再検証する。
+- **Rationale**: worker memoryを正とせず、古いownerのwriteを判別可能に拒否できる。
+- **Trade-offs**: lease期限切れ回復が必要。時刻だけで所有権を再利用せず、新generation取得を必須にする。
+
+### Decision: 参照修復policyをfoundationが所有する
+- **Context**: 候補削除・カテゴリ変更とCurrentBuild修復を別writeにするとinvalidな中間rootが生じる。
+- **Selected Approach**: generic `mutateRoot` pipeline内でfoundation-owned `ReferenceRepairPolicy`を適用し、全体検証後に一度だけcommitする。
+- **Rationale**: foundationは業務選択規則を持たず、保存参照の構造的不変条件だけを維持できる。
+
+### Decision: canonical Resultを自作し、実装は最小化する
+- **Context**: 全featureで同じ失敗契約が必要である。
+- **Selected Approach**: `Result<T, E>`とfoundation error unionを`src/domain/result.ts`で所有する。Chrome以外のadapter、同期、export I/Oは実装しない。
+- **Rationale**: 小さい安定契約で追加runtime依存を避ける。
 
 ## Risks & Mitigations
-- 保存ルート全体の書換競合 — リポジトリ内の直列化キューと更新時再検証で軽減する。
-- 破損データの自動上書き — 読取検証失敗時は書換せずエラーとして隔離する。
-- 容量見積りと実書込差 — `getBytesInUse`による事前確認に加え、書込エラーも容量失敗へ正規化する。
-- 下流が型を迂回 — Chrome APIを直接importしない依存方向と公開エントリポイントを定める。
+- authorityを迂回した直接write — `TRUSTED_CONTEXTS`、公開port限定、import境界test、禁止API scanで抑止する。
+- commit直前のstale maintenance owner — 永続cursor再読込とgeneration/owner/revision一致を必須にする。
+- 容量見積り差 — `getBytesInUse`と直列化見積りに加え、実write rejectを正規化し既存rootを保持する。
+- root全体書換性能 — 10MB近傍でread/validate/repair/writeを計測し、閾値超過時だけstorage設計を再検討する。
+- migration/validation失敗による上書き — source値を変更せず、current root検証成功後だけ明示mutationで保存する。
 
 ## References
-- [Chrome Extensions Manifest V3](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3) — MV3実行モデル
-- [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage) — 容量とアクセスレベル
-- [Extension service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle) — メモリ寿命制約
-- [Manifest CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy) — 実行コード制約
+- [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage/) — 10MB quota、`getBytesInUse`、access level、write failure
+- [Extension service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle) — worker停止とglobal state消失
+- [Migrate to a service worker](https://developer.chrome.com/docs/extensions/develop/migrate/to-service-workers) — persistent stateの利用
+- [Manifest V3](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3) — MV3 runtimeと同梱コード
+- [Improve extension security](https://developer.chrome.com/docs/extensions/develop/migrate/improve-security) — remote code、動的評価、CSP制約
