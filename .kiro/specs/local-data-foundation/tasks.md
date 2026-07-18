@@ -162,7 +162,7 @@
   - _Depends: 5.1_
   - _Requirements: 1.3, 3.1, 3.6, 3.8, 7.4, 7.6_
 
-- [ ] 5.3 shell向けworker registrationとfail-closedなcaller境界を実装する
+- [x] 5.3 shell向けworker registrationとfail-closedなcaller境界を実装する
   - unknown messageとcaller classificationを検証し、shell提供の認可を通ったcommandだけをauthorityへ渡す
   - trusted-context access restrictionが成功する前はhandlerを登録せず、失敗時は永続状態を変更しない
   - 不正payload、不許可caller、access restriction失敗を拒否し、具体service worker入口を作らないcontract testを完了条件とする
