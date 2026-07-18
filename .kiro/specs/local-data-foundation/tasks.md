@@ -55,7 +55,7 @@
   - _Requirements: 2.6, 3.7_
   - _Boundary: ReferenceRepairPolicy_
 
-- [ ] 3.3 保存port契約と決定的なin-memory adapterを実装する
+- [x] 3.3 保存port契約と決定的なin-memory adapterを実装する
   - 単一キーのroot読取・書込、使用量、実行時quota、信頼済みアクセス制限をplatform非依存のtyped portとして定義する
   - worker再生成を模した別instanceから同じ永続rootと制御stateを読めるin-memory adapterを提供する
   - 読取・書込・bytes・quota・アクセス制限の成功失敗を決定的に再現できるcontract testが成功することを完了条件とする
