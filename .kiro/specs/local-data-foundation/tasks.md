@@ -119,7 +119,7 @@
   - _Requirements: 4.2, 5.1, 5.3, 7.1, 7.3_
   - _Boundary: ReplacementCoordinator_
 
-- [ ] 4.6 lock内で単一root transactionを完了するrunnerを実装する
+- [x] 4.6 lock内で単一root transactionを完了するrunnerを実装する
   - lock取得後に最新root、現在bytes、runtime quotaを読み、migrationと全体validation後のsnapshotをoperationへ渡す
   - operation候補へmaintenance fence、expected revision、最終root validationを適用し、revisionを一度だけ増やして一回のwriteを行う
   - commit resultが確定するまでlockを保持し、lock・storage失敗では成功を返さず既存rootが保持されるcontract testを完了条件とする
