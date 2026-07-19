@@ -205,9 +205,9 @@
 
 - [ ] 5.8 Foundation所有の引数なしproduction factoryを公開する
   - Chrome Storage、Storage change event、Web Locks、canonical UTC clock、安全なerror reporter、`trusted-extension`固定policyをfoundation内で解決し、既存のcanonical runtime graphを一度だけ初期化する
-  - platform DI initializerとplatform契約をfoundation内部/test seamとして維持し、公開入口からは引数なしfactoryと最小contribution handleだけを利用できるようにする
+  - platform DI initializerとplatform契約は既存consumer用の互換seamとして維持し、production consumerが引数なしfactoryと最小contribution handleだけを利用できるようにする
   - global欠落またはgetter例外は`invalid-platform`へ正規化し、access restriction、購読、handler、Repository graphを部分的に開始しない
-  - 完了時、公開入口から引数なしで最小handleを取得でき、DI initializerが非公開で、欠落globalは副作用0件のtyped failureとなり、cleanupが冪等である
+  - 完了時、公開入口から引数なしで最小handleを取得でき、旧DI consumerの型互換を保ったまま、欠落globalは副作用0件のtyped failureとなり、cleanupが冪等である
   - _Depends: 5.7_
   - _Requirements: 1.1, 1.3, 3.1, 6.1, 6.3, 7.8_
   - _Boundary: ProductionRuntimeContributionFactory_
@@ -269,7 +269,7 @@
 
 - [ ] 6.8 引数なしproduction factoryの統合・公開境界回帰を完成する
   - production-shaped global stubでStorage access restriction、maintenance source、worker registration、固定caller policy、cleanupを検証し、欠落global・getter例外・access restriction失敗をfail closedで回帰する
-  - foundation公開面からplatform契約、DI initializer、Storage、lock、authorityが参照できず、模擬shell consumerが引数なしfactoryと最小handleだけで型検査できることを確認する
+  - 模擬production shell consumerが引数なしfactoryと最小handleだけで型検査でき、application-shell boundaryがplatform契約、DI initializer、Storage、lock、authorityのproduction利用を拒否することを確認する
   - 旧platform公開shapeのartifact expectationを置き換え、foundationの公開bundle・source boundary・final gateが新契約を連続検査する
   - 完了時、公開contract、production-shaped統合、typecheck、test、build、artifact/boundary scanが成功し、実application-shellの変更はapplication-shell task 4.8に留まる
   - _Depends: 5.8, 6.7_

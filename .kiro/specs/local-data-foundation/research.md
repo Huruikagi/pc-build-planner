@@ -88,7 +88,7 @@
   3. foundationが最小runtime contribution initializerを公開する — 内部graphを隠しながらshellへ必要portだけを渡せる。
 - **Selected Approach**: 公開factoryは引数を取らずChrome Storage・change event・Web Locksをfoundation内で解決する。caller classificationはshellが所有し、foundationは分類済みcallerの`trusted-extension`固定policy、canonical UTC clock、安全なerror-code reporterを所有する。解決後は非公開のplatform DI seamがcanonical persistence graphを一度だけ生成し、`MaintenanceSnapshotSource`、`DataWorkerRegistration`、冪等`dispose`だけを返す。
 - **Rationale**: Storage、Repository、lock、authorityとplatform構築をfoundation所有に維持し、application-shellはruntime sender分類、listener、UI compositionだけを所有できる。初期access restrictionによりside panelとworkerの起動順へ安全性を依存させない。
-- **Trade-offs**: production testは`globalThis`のChrome/Web Locks stubを復元可能に差し替える必要がある。一方、platform portとDI initializerを公開面から除外でき、shellへのStorage/lock所有権漏れを防げる。
+- **Trade-offs**: production testは`globalThis`のChrome/Web Locks stubを復元可能に差し替える必要がある。既存consumerの型安全な段階移行のためplatform DI initializerの互換exportは維持するが、application-shell boundary gateでproduction利用を拒否し、platform所有権の再流入を防ぐ。
 - **Follow-up**: public consumer型検査、global欠落・getter例外、同一root観測、worker再生成、access restriction失敗、cleanup所有権、shellのStorage/lock非依存をcontract testで固定する。
 
 ### Decision: 単一バージョン付きrootとrevision
