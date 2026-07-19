@@ -1,4 +1,3 @@
-export type { MaintenanceFence } from "./maintenance.js";
 export type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
@@ -16,6 +15,12 @@ export type {
   ReplacementReceipt,
   RequestCommitReceipt,
 } from "./root-transaction-runner.js";
+export type {
+  FoundationRuntimeContribution,
+  FoundationRuntimeInitializationError,
+  FoundationRuntimePlatform,
+} from "./runtime-contribution.js";
+export { initializeFoundationRuntimeContribution } from "./runtime-contribution.js";
 export type {
   CallerClassification,
   DataWorkerRegistration,

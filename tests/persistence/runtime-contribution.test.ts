@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { UtcTimestamp } from "../../src/domain/identifiers.js";
 import type { FoundationError } from "../../src/domain/result.js";
-import { initializeFoundationRuntimeContribution } from "../../src/persistence/runtime-contribution.js";
+import { initializeFoundationRuntimeContribution } from "../../src/persistence/public.js";
 import { createInitialRoot } from "../../src/persistence/schema.js";
 
 const platform = (options: { restrictFails?: boolean } = {}) => {
   let restrictions = 0;
   let handlers = 0;
+  let removedListeners = 0;
+  let removedHandlers = 0;
   const root = createInitialRoot();
   return {
     counters: {
@@ -16,6 +18,12 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
       },
       get handlers() {
         return handlers;
+      },
+      get removedListeners() {
+        return removedListeners;
+      },
+      get removedHandlers() {
+        return removedHandlers;
       },
     },
     value: {
@@ -33,7 +41,12 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
           if (options.restrictFails) throw new Error("denied");
         },
       },
-      storageChanges: { addListener() {}, removeListener() {} },
+      storageChanges: {
+        addListener() {},
+        removeListener() {
+          removedListeners += 1;
+        },
+      },
       locks: {
         async request<T>(
           _name: string,
@@ -50,7 +63,9 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
     target: {
       addHandler() {
         handlers += 1;
-        return () => undefined;
+        return () => {
+          removedHandlers += 1;
+        };
       },
     },
   };
@@ -75,8 +90,18 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   assert.equal(registered.ok, true);
   assert.equal(fixture.counters.restrictions, 1);
   assert.equal(fixture.counters.handlers, 1);
+  const unsubscribe = initialized.value.maintenanceSource.subscribe(
+    () => undefined,
+  );
   await initialized.value.dispose();
   await initialized.value.dispose();
+  assert.equal(fixture.counters.removedListeners, 0);
+  assert.equal(fixture.counters.removedHandlers, 0);
+  if (registered.ok) registered.value();
+  assert.equal(fixture.counters.removedHandlers, 1);
+  unsubscribe();
+  unsubscribe();
+  assert.equal(fixture.counters.removedListeners, 1);
 });
 
 test("不正platformは副作用前にtyped failureとなる", async () => {

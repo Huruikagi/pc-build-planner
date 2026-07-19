@@ -4,12 +4,15 @@ import type { StorageError, StoragePort } from "./repository.js";
 
 const STORAGE_KEY = "localDataRoot";
 
-export type ChromeStorageLocalApi = Pick<
-  chrome.storage.StorageArea,
-  "get" | "getBytesInUse" | "set" | "setAccessLevel"
-> & {
+export interface ChromeStorageLocalApi {
   readonly QUOTA_BYTES: number;
-};
+  get(key: string): Promise<Record<string, unknown>>;
+  set(items: Record<string, unknown>): Promise<void>;
+  getBytesInUse(key: string): Promise<number>;
+  setAccessLevel(options: {
+    readonly accessLevel: "TRUSTED_CONTEXTS";
+  }): Promise<void>;
+}
 
 const unavailable = (): StorageError => ({ code: "storage-unavailable" });
 const quotaExceeded = (): StorageError => ({ code: "quota-exceeded" });

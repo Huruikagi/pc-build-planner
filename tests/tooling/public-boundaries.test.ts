@@ -20,9 +20,12 @@ test("domain と persistence の公開入口は許可された契約だけを公
   assert.match(persistencePublic, /RootOperation/);
   assert.match(persistencePublic, /ReplacementCommand/);
   assert.match(persistencePublic, /MaintenanceCommand/);
+  assert.match(persistencePublic, /FoundationRuntimePlatform/);
+  assert.match(persistencePublic, /FoundationRuntimeContribution/);
+  assert.match(persistencePublic, /initializeFoundationRuntimeContribution/);
   assert.doesNotMatch(
     persistencePublic,
-    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|ReplacementToken|RootQuery/,
+    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|ReplacementToken|RootQuery|RootTransactionRunner|MutationPipeline|WriteAuthority|MaintenanceFence|MaintenanceOwner|MaintenanceLease/,
   );
 });
 
