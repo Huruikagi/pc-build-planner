@@ -33,7 +33,7 @@
   - _Boundary: ContractTestKit_
 
 - [ ] 2. Core registryとmaintenance制御を実装する
-- [ ] 2.1 (P) Feature registryを実装する
+- [x] 2.1 (P) Feature registryを実装する
   - 登録値を検証し、一意なfeature識別子と決定的なnavigation順序を維持する
   - 重複または不正なfeatureを隔離し、正常な登録と購読を継続する
   - availability変更をsnapshotと購読者へ同期し、解除を冪等にする
