@@ -8,7 +8,7 @@
   - _Requirements: 6.4_
   - _Boundary: TestInfrastructure_
 
-- [ ] 1.2 Manifest V3のside panel runtime fixtureを構成する
+- [x] 1.2 Manifest V3のside panel runtime fixtureを構成する
   - Chrome 116以降を対象に、同梱scriptだけを読み込むside panel documentとbootstrap入口を作る
   - inline JavaScript、remote script、dynamic evaluationを許可しないfixture検査を追加する
   - 完了時、空のshell fixtureが未パッケージ拡張として読み込め、side panel documentを開始できる

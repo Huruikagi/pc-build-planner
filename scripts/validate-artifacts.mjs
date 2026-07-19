@@ -1,18 +1,19 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 
 const requiredCsp = "script-src 'self'; object-src 'self'";
 const JavaScriptExtensions = new Set([".js", ".mjs", ".cjs"]);
 const HtmlExtensions = new Set([".html", ".htm"]);
 
-/** @param {string} message */
+/** @param {string} message @returns {never} */
 function fail(message) {
   throw new Error(`Artifact validation failed: ${message}`);
 }
 
 /**
  * @param {{ manifest_version?: unknown, minimum_chrome_version?: unknown,
- * permissions?: unknown, content_security_policy?: { extension_pages?: unknown },
+ * permissions?: unknown, side_panel?: { default_path?: unknown },
+ * content_security_policy?: { extension_pages?: unknown },
  * [key: string]: unknown }} manifest
  */
 export function validateManifest(manifest) {
@@ -33,6 +34,9 @@ export function validateManifest(manifest) {
     manifest.permissions[0] !== "storage"
   ) {
     fail("storage must be the only permission");
+  }
+  if (manifest.side_panel?.default_path !== "side-panel.html") {
+    fail("side_panel.default_path must be side-panel.html");
   }
   if (
     "host_permissions" in manifest ||
@@ -75,20 +79,64 @@ function validateJavaScript(source, path) {
   }
 }
 
-/** @param {string} source @param {string} path */
-function validateHtml(source, path) {
-  if (/<script\b[^>]*>(?!\s*<\/script>)[\s\S]*?<\/script>/i.test(source)) {
-    fail(`inline script found in ${path}`);
+/**
+ * @param {string} source
+ * @param {string} path
+ * @returns {Map<string, string>}
+ */
+function parseScriptAttributes(source, path) {
+  const attributes = new Map();
+  let remaining = source;
+  while (remaining.length > 0) {
+    const match = remaining.match(
+      /^\s+([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/,
+    );
+    if (match === null) fail(`malformed script attributes found in ${path}`);
+    const name = (match[1] ?? "").toLowerCase();
+    if (attributes.has(name)) {
+      fail(`duplicate script attribute ${name} found in ${path}`);
+    }
+    attributes.set(name, match[2] ?? match[3] ?? "");
+    remaining = remaining.slice(match[0].length);
   }
+  return attributes;
+}
+
+/** @param {string} source @param {string} path @returns {string[]} */
+function validateHtml(source, path) {
   if (
     /\son[a-z]+\s*=/i.test(source) ||
     /(?:href|src)\s*=\s*["']\s*javascript:/i.test(source)
   ) {
     fail(`inline JavaScript found in ${path}`);
   }
-  if (/<script\b[^>]+src\s*=\s*["']\s*https?:\/\//i.test(source)) {
-    fail(`remote script found in ${path}`);
+  const referencedScripts = [];
+  const scriptStart = /<script\b([^>]*)>/gi;
+  for (const match of source.matchAll(scriptStart)) {
+    const attributes = parseScriptAttributes(match[1] ?? "", path);
+    const contentStart = (match.index ?? 0) + match[0].length;
+    const closing = source
+      .slice(contentStart)
+      .match(/^([\s\S]*?)<\/script\s*>/i);
+    if (closing === null) fail(`unclosed script found in ${path}`);
+    if ((closing[1] ?? "").trim() !== "") {
+      fail(`inline script found in ${path}`);
+    }
+
+    if (attributes.get("type")?.toLowerCase() !== "module") {
+      fail(`non-module script found in ${path}`);
+    }
+
+    const sourceAttribute = attributes.get("src");
+    if (
+      !sourceAttribute ||
+      !/^\.\/[a-z0-9][a-z0-9._/-]*\.js$/i.test(sourceAttribute)
+    ) {
+      fail(`script must reference a bundled local JavaScript file in ${path}`);
+    }
+    referencedScripts.push(sourceAttribute);
   }
+  return referencedScripts;
 }
 
 /** @param {string} directory */
@@ -98,13 +146,27 @@ export async function validateArtifactDirectory(directory) {
   );
   validateManifest(manifest);
 
-  for (const path of await artifactFiles(directory)) {
+  const files = await artifactFiles(directory);
+  const sidePanelPath = join(directory, "side-panel.html");
+  if (!files.includes(sidePanelPath)) fail("side-panel.html is missing");
+  if (!files.includes(join(directory, "side-panel.js"))) {
+    fail("side-panel.js is missing");
+  }
+
+  for (const path of files) {
     const extension = extname(path).toLowerCase();
     if (!JavaScriptExtensions.has(extension) && !HtmlExtensions.has(extension))
       continue;
     const source = await readFile(path, "utf8");
     if (JavaScriptExtensions.has(extension)) validateJavaScript(source, path);
-    else validateHtml(source, path);
+    else {
+      for (const script of validateHtml(source, path)) {
+        const target = join(dirname(path), script.slice(2));
+        if (!files.includes(target)) {
+          fail(`referenced script is missing: ${script} from ${path}`);
+        }
+      }
+    }
   }
 }
 

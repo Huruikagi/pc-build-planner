@@ -12,6 +12,7 @@ const validManifest = {
   version: "1.0.0",
   minimum_chrome_version: "116",
   permissions: ["storage"],
+  side_panel: { default_path: "side-panel.html" },
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
   },
@@ -38,6 +39,14 @@ const builder =
     await mkdir(output, { recursive: true });
     await writeFile(join(output, "manifest.json"), JSON.stringify(manifest));
     await writeFile(
+      join(output, "side-panel.html"),
+      '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
+    );
+    await writeFile(
+      join(output, "side-panel.js"),
+      "export const started=true;",
+    );
+    await writeFile(
       join(output, "build-contract.js"),
       "export const ready = true;",
     );
@@ -58,6 +67,15 @@ test("source検査からclean buildとartifact検査までを一つのgateで完
     boundaryRoots: [paths.source],
     fixtureRoots: [paths.fixtures],
     build: builder(),
+  });
+});
+
+test("実際のproduction bundleをfixture商品内容として誤検出しない", async () => {
+  const paths = await workspace();
+  await runFinalGate({
+    outputDirectory: paths.output,
+    boundaryRoots: [paths.source],
+    fixtureRoots: [paths.fixtures],
   });
 });
 

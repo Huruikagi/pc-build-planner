@@ -1,10 +1,20 @@
 import { rm, stat } from "node:fs/promises";
+import { extname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildUnpackedExtension } from "./build.mjs";
 import { validateArtifactDirectory } from "./validate-artifacts.mjs";
 import { validateBoundaryRoots } from "./validate-boundaries.mjs";
 import { findFixtureAssetViolations } from "./validate-fixture-assets.mjs";
+
+const executableBundleExtensions = new Set([".js", ".mjs", ".cjs"]);
+
+/** @param {{ path: string, rule: string }} violation */
+const isArtifactFixtureViolation = ({ path, rule }) => {
+  const extension = extname(path).toLowerCase();
+  if (executableBundleExtensions.has(extension)) return false;
+  return !(extension === ".html" && rule === "raw-html");
+};
 
 /** @param {string} label @param {readonly { path: string, rule: string }[]} violations */
 const throwViolations = (label, violations) => {
@@ -66,7 +76,9 @@ export async function runFinalGate({
   );
   throwViolations(
     "artifact fixture validation",
-    await findFixtureAssetViolations(outputDirectory),
+    (await findFixtureAssetViolations(outputDirectory)).filter(
+      isArtifactFixtureViolation,
+    ),
   );
 }
 

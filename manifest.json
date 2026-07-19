@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "minimum_chrome_version": "116",
   "permissions": ["storage"],
+  "side_panel": {
+    "default_path": "side-panel.html"
+  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

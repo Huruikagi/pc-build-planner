@@ -61,4 +61,13 @@ test("dist is recognized as an error-free unpacked MV3 extension on Chrome 116+"
   expect(extensionInfo?.state).toBe("ENABLED");
   expect(extensionInfo?.manifestErrors).toEqual([]);
   expect(extensionInfo?.runtimeErrors).toEqual([]);
+
+  const sidePanel = await context.newPage();
+  await sidePanel.goto(
+    `chrome-extension://${extensionInfo?.id}/side-panel.html`,
+  );
+  await expect(sidePanel.locator("#application-shell")).toHaveAttribute(
+    "data-runtime-state",
+    "started",
+  );
 });

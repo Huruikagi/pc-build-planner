@@ -12,6 +12,7 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
       "build-contract": "src/build-contract.ts",
       foundation: "src/persistence/public.ts",
       "react-runtime": "src/application-shell/runtime-baseline.tsx",
+      "side-panel": "src/runtime/side-panel.ts",
     },
     define: { "process.env.NODE_ENV": '"production"' },
     format: "esm",
@@ -21,6 +22,7 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
     target: "chrome116",
   });
   await copyFile("manifest.json", `${outputDirectory}/manifest.json`);
+  await copyFile("side-panel.html", `${outputDirectory}/side-panel.html`);
   await writeFile(`${outputDirectory}/.build-ready`, "unpacked\n", "utf8");
   await validateArtifactDirectory(outputDirectory);
 }

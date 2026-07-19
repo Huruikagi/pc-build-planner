@@ -30,3 +30,12 @@ test("buildが検査対象となるfoundation公開bundleを生成する", async
     /createDataWorkerRegistration/,
   );
 });
+
+test("buildがside panel runtime fixtureを生成する", async () => {
+  await access("dist/side-panel.html");
+  await access("dist/side-panel.js");
+  assert.match(
+    await readFile("dist/side-panel.html", "utf8"),
+    /src=["']\.\/side-panel\.js["']/,
+  );
+});
