@@ -95,7 +95,7 @@
   - _Boundary: PublicApiRegistry_
   - _Depends: 1.3_
 
-- [ ] 3.3 Maintenance状態をhost全体へ統合する
+- [x] 3.3 Maintenance状態をhost全体へ統合する
   - projectionの変更を共通表示、operation policy、現在mount中のfeatureへ伝える
   - maintenance中もread-only navigationを保ち、終了時は現行世代に限ってmutation controlを復帰する
   - 完了時、遅延した古い通知を含む統合scenarioで全featureの操作可否が一貫する
@@ -143,3 +143,4 @@
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
 - 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。
 - 未信頼keyからroot契約を合成する辞書はnull prototypeとown property定義を使い、`__proto__`を含む予約名でも重複検出とprototype非汚染を保つ。
+- 統合start/stopはsingle-flightとepoch fenceで競合を無効化し、起動rollbackと停止cleanupはresourceごとに成功するまで所有権を保持する。
