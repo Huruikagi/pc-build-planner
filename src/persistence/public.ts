@@ -7,6 +7,7 @@ export type {
   MutationCapacityStatus,
   RootOperation,
 } from "./mutation-pipeline.js";
+export { initializeProductionFoundationRuntimeContribution } from "./production-runtime-contribution.js";
 export type { ReplacementAssessment } from "./replacement.js";
 export type {
   MaintenanceCommand,
@@ -20,7 +21,7 @@ export type {
   FoundationRuntimeInitializationError,
   FoundationRuntimePlatform,
 } from "./runtime-contribution.js";
-export { initializeFoundationRuntimeContribution } from "./runtime-contribution.js";
+export { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "./runtime-contribution.js";
 export type {
   CallerClassification,
   DataWorkerRegistration,

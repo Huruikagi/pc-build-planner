@@ -203,7 +203,7 @@
   - _Requirements: 3.1, 6.3, 7.8_
   - _Boundary: Foundation Public Runtime Contract_
 
-- [ ] 5.8 Foundation所有の引数なしproduction factoryを公開する
+- [x] 5.8 Foundation所有の引数なしproduction factoryを公開する
   - Chrome Storage、Storage change event、Web Locks、canonical UTC clock、安全なerror reporter、`trusted-extension`固定policyをfoundation内で解決し、既存のcanonical runtime graphを一度だけ初期化する
   - platform DI initializerとplatform契約は既存consumer用の互換seamとして維持し、production consumerが引数なしfactoryと最小contribution handleだけを利用できるようにする
   - global欠落またはgetter例外は`invalid-platform`へ正規化し、access restriction、購読、handler、Repository graphを部分的に開始しない

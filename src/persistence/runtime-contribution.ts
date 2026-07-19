@@ -96,7 +96,7 @@ const validPlatform = (value: unknown): value is FoundationRuntimePlatform => {
   );
 };
 
-export const initializeFoundationRuntimeContribution = async (
+export const initializeFoundationRuntimeContributionFromPlatform = async (
   platform: FoundationRuntimePlatform,
 ): Promise<
   Result<FoundationRuntimeContribution, FoundationRuntimeInitializationError>

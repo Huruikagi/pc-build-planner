@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { UtcTimestamp } from "../../src/domain/identifiers.js";
 import type { FoundationError } from "../../src/domain/result.js";
-import { initializeFoundationRuntimeContribution } from "../../src/persistence/public.js";
+import { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "../../src/persistence/runtime-contribution.js";
 import { createInitialRoot } from "../../src/persistence/schema.js";
 
 const platform = (options: { restrictFails?: boolean } = {}) => {
