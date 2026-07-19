@@ -68,7 +68,7 @@
   - _Boundary: ShellView, ShellErrorBoundary_
   - _Depends: 1.1, 1.3_
 
-- [ ] 2.5 (P) React shell root adapterを実装する
+- [x] 2.5 (P) React shell root adapterを実装する
   - shell host containerへReact rootを生成し、shell stateの購読と描画を接続する
   - 停止、起動失敗、再mount時に購読解除と`root.unmount()`を一度だけ実行できる冪等なcleanupを提供する
   - 完了時、mount、状態更新、停止、再mountのroot lifecycle testですべてのresource解放を観測できる
