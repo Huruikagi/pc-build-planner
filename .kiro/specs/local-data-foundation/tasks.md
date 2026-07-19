@@ -184,7 +184,7 @@
   - _Depends: 5.4_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.4, 8.1, 8.3_
 
-- [ ] 6.2 公開facade経由の基盤回帰を完成する
+- [x] 6.2 公開facade経由の基盤回帰を完成する
   - CRUD、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflictを公開facadeだけで検証する
   - maintenance acquire・stale fence・release・abortとroot評価・置換の成功失敗を公開facadeだけで検証する
   - 架空fixtureだけで主要な成功・失敗契約を通す回帰suiteが成功することを完了条件とする
