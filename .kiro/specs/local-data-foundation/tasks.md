@@ -177,7 +177,7 @@
   - _Requirements: 2.1, 3.1, 3.8, 6.3_
 
 - [ ] 6. 架空データによる回帰・性能・生成物検証を完成する
-- [ ] 6.1 架空fixtureとasset policyを完成する
+- [x] 6.1 架空fixtureとasset policyを完成する
   - 全12カテゴリ、欠損値、元表記・確認値、参照整合root、各種破損rootを架空値だけで生成する
   - 生HTML、画像、data URL、実サイト商品値をfixtureへ混入させない検査を追加する
   - 全builderがJSON往復とvalidatorを通り、fixture policy testが成功することを完了条件とする
