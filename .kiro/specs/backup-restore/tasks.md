@@ -56,9 +56,9 @@
   - _Boundary: RestoreService preflight_
 
 - [ ] 3.3 検証済みticketの復元commitを実装する
-  - ticketの有効性、保存ルート、容量を再確認してRepositoryの単一置換を一回だけ呼ぶ
-  - 成功時に復元件数を返し、取消・stale・検証・容量・write失敗時は既存データを保持する
-  - 各失敗点で部分データが残らず、同じまたは別ファイルで再試行できる結果になる
+  - ticketの有効性、保存ルート、容量を再確認し、Foundationの永続maintenance fenceを取得してRepositoryのfence付き単一置換を一回だけ呼ぶ
+  - 長時間処理ではleaseを更新し、成功時はrelease、取消・stale・検証・容量・write失敗時はabortして既存データを保持する
+  - acquire前の置換、owner外fence、期限切れfenceを拒否し、各失敗点で部分データとactive maintenanceが残らず再試行できる
   - _Depends: 3.2_
   - _Requirements: 4.2, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: RestoreService commit, LocalDataRepository integration_
@@ -80,20 +80,32 @@
   - _Requirements: 1.5, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 5.5, 6.4, 6.6_
   - _Boundary: BackupRestoreState_
 
-- [ ] 4.3 管理画面の操作、preview、警告、確認表示を実装する
+- [ ] 4.3 管理画面の操作、preview、警告、確認表示をReactで実装する
   - バックアップ作成と復元を分離し、拡張削除時の消失可能性、利用者の保管責任、自動・クラウド・同期なしを表示する
-  - 検証後の件数・日時・形式版と全体置換確認、成功summary、分類済みエラーを安全なtext nodeで描画する
+  - framework非依存のBackupRestoreStateをpropsとして受け、検証後の件数・日時・形式版と全体置換確認、成功summary、分類済みエラーを通常のJSX childで描画する
+  - `dangerouslySetInnerHTML`と`innerHTML`を使用せず、安全な描画をDOM testで確認できる
   - 未検証時と処理中は不適切な操作が無効で、商品名・URL・価格・本文が診断表示へ露出しない
   - _Depends: 4.2_
   - _Requirements: 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: BackupRestoreView_
 
+- [ ] 4.4 React root adapterとfeature registrationを実装する
+  - `view.tsx`をframework非依存のBackupRestoreState/Service/FileGateway portへ接続し、`public.ts`とregistration moduleをfeature内で所有する
+  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
+  - shell contract test kitで登録、operation policy、公開API、cleanupが適合することを確認できる
+  - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 4.1, 4.2, 4.3_
+  - _Requirements: 1.3, 3.1, 3.6, 4.1, 4.2, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
+  - _Boundary: BackupRestoreFeatureRegistration, ReactRootAdapter_
+
 - [ ] 5. side panel統合と全体回帰を完成する
 - [ ] 5.1 バックアップ・復元機能を既存管理画面とRepositoryへ統合する
+  - application shellがfeatureの`registration.ts`と`public.ts`をcompositionし、共有runtime入口、HTML host、root barrelをfeature側から編集しない
+  - RestoreServiceのmaintenance acquire/renew/release/abortをFoundationへ接続し、shellのread-only projectionとMutationGateが復元中の全feature mutationを抑止する
+  - 復元中もread-only navigationを維持し、成功・失敗・取消後に現行generationの終了だけでmutationを復帰する
   - service、file gateway、state、viewを信頼済みside panelで組み立て、Storage APIとcontent scriptへ直接公開しない
   - restoring中は候補・構成管理の競合操作を停止し、成功後は管理画面の照会を復元後スナップショットへ更新する
   - 管理画面からexport、ファイル選択、preview、取消または確認、完了後のデータ利用まで一連操作が完了する
-  - _Depends: 4.2, 4.3_
+  - _Depends: application-shell 3.3, 4.1; local tasks 3.3, 4.4_
   - _Requirements: 1.1, 1.3, 3.1, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.5, 6.1, 6.4, 6.6_
   - _Boundary: Side panel integration_
 
@@ -101,6 +113,7 @@
   - 架空の全カテゴリ候補と現在構成をexportし、既存変更後のimportで元の所属・確認値・参照・数量へ完全復元する
   - 不正JSON、旧・将来版、孤立参照、容量境界、保存不能、取消の各経路で復元前データが保持されることを検証する
   - 再起動後にCandidateQueryとCurrentBuildQueryが復元値を返し、通常CRUDと再バックアップが成功する
+  - maintenance acquire競合、renew、成功release、失敗abort、stale終了通知を検証し、復元中だけ全feature mutationが拒否されread-only操作は継続する
   - _Depends: 5.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: Backup restore acceptance and regression tests_

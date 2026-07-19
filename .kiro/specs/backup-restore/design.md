@@ -33,10 +33,11 @@
 - 復元時のマージ、部分選択、互換性結果の再計算
 
 ### Allowed Dependencies
-- Foundationの`LocalDataRoot`、`SchemaValidator`、`LocalDataRepository`、`Result`、容量・エラー契約
+- Foundationの`LocalDataRoot`、`SchemaValidator`、`LocalDataRepository`、`Result`、容量・エラー契約、maintenance acquire/renew/release/fence契約とread-only状態購読
 - Candidate managementとCurrent build managementが定義する保存済みデータ契約
 - 既存side panelランタイムと信頼済みextension page
-- Chrome 116以降のFile、Blob、URL、TextEncoder、DOM API
+- Chrome 116以降のFile、Blob、URL、TextEncoder、React 19系/React DOM
+- application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
 依存方向は`Domain contracts → Exchange validation and migration → Mapper → Repository → Backup and Restore services → State → View and File gateway → Runtime integration`とし、右側は左側だけへ依存する。File gatewayはRepositoryへ直接アクセスしない。
 
@@ -82,7 +83,7 @@ graph LR
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | Language | TypeScript 5.x strict | 交換形式、結果、状態契約 | `any`禁止、入力は`unknown` |
-| UI | 既存side panel / DOM | 管理操作、確認、案内 | inline JavaScriptなし |
+| UI | React 19系 / React DOM / CSS | 管理操作、確認、案内 | 既存mount契約を維持 |
 | File I/O | File、Blob、URL、TextEncoder | 読取、生成、UTF-8サイズ | Chrome 116標準、新規依存なし |
 | Data | 既存Repository / Chrome storage local | 読取、容量、単一置換 | Storage API直接利用なし |
 | Test | Vitest 3.x / DOM test環境 | 純粋契約、統合、UI検証 | 架空データのみ |
@@ -90,17 +91,17 @@ graph LR
 ## File Structure Plan
 
 ```text
-src/index.ts                                      # バックアップ・復元公開契約を追加
 src/persistence/repository.ts                     # 検証済みルートのreplaceRoot契約と実装を追加
-src/runtime/side-panel.ts                         # 管理画面へサービス・state・viewを組み立てる
 src/features/backup-restore/contracts.ts           # Envelope、preview、command、error契約
+src/features/backup-restore/public.ts              # バックアップ・復元公開契約の唯一の入口
+src/features/backup-restore/registration.ts        # shellへ渡すfeature registrationと依存組立
 src/features/backup-restore/exchange.ts            # 交換形式検証、形式移行、LocalDataRoot変換
 src/features/backup-restore/service.ts             # バックアップ生成と復元preflight・commit
 src/features/backup-restore/file-gateway.ts        # File読取とBlobダウンロード
 src/features/backup-restore/state.ts               # 選択、検証、確認、処理中、結果状態
-src/features/backup-restore/view.ts                # 管理UI、警告、preview、確認のDOM描画
+src/features/backup-restore/view.tsx                # 管理UI、警告、preview、確認のReact component
+src/features/backup-restore/react-root.tsx          # FeatureMountContextとReact rootの接続・cleanup
 src/features/backup-restore/styles.css             # 管理セクションと状態表現
-side-panel.html                                    # バックアップ・復元管理領域を追加
 tests/fixtures/backup.ts                           # 架空の現行・旧版・不正Envelope
 tests/features/backup-restore/exchange.test.ts     # 形式検証、移行、往復、参照検証
 tests/features/backup-restore/service.test.ts      # export、preflight、commit、失敗不変性
@@ -110,7 +111,7 @@ tests/features/backup-restore/view.test.ts         # 案内、preview、エラ�
 tests/features/backup-restore/integration.test.ts  # 全データ往復とRepository回帰
 ```
 
-`repository.ts`の変更は保存境界内の一回の置換だけとし、交換形式をFoundationへ持ち込まない。`side-panel.ts`と`side-panel.html`の変更は既存管理機能を維持した組立・ナビゲーション追加に限定する。
+`repository.ts`の変更は保存境界内の一回の置換だけとし、交換形式をFoundationへ持ち込まない。共有side panel runtime、`side-panel.html`、root `src/index.ts`は変更せず、application shellが`registration.ts`と`public.ts`をcompositionする。
 
 ## System Flows
 
@@ -144,6 +145,7 @@ sequenceDiagram
     participant State
     participant Restore
     participant Exchange
+    participant Maintenance
     participant Repo
     User->>File: select JSON
     File-->>State: text and byte size
@@ -156,12 +158,15 @@ sequenceDiagram
     State-->>User: replacement confirmation
     User->>State: confirm
     State->>Restore: commit ticket
-    Restore->>Repo: replace validated root
+    Restore->>Maintenance: acquire persistent fence
+    Maintenance-->>Restore: fence and active projection
+    Restore->>Repo: replace validated root with fence
     Repo-->>Restore: saved root
+    Restore->>Maintenance: release fence
     Restore-->>State: success summary
 ```
 
-`RestoreTicket`は検証済みルートとその内容ハッシュ相当の不変tokenをstate内だけに保持する。ファイルを変更・再選択した場合はticketを破棄し、commit時にもSchemaValidatorと容量を再確認する。
+`RestoreTicket`は検証済みルートとその内容ハッシュ相当の不変tokenをstate内だけに保持する。ファイルを変更・再選択した場合はticketを破棄し、commit時にもSchemaValidatorと容量を再確認する。commitはFoundationの永続maintenance fenceを取得してから置換し、成功・失敗・取消の全経路でreleaseまたはabortする。application shellは同じFoundationのread-only maintenance購読を投影するため、復元featureが他featureのUIを直接操作せず全mutationを共通抑止できる。
 
 ## Requirements Traceability
 
@@ -175,8 +180,8 @@ sequenceDiagram
 | 3.1, 3.2, 3.3, 3.5 | 事前検証 | RestoreService、ExchangeValidator | preflight | 復元 |
 | 3.4 | 容量拒否 | RestoreService、LocalDataRepository | assessRestore | 復元 |
 | 3.6 | preview | RestoreService、BackupRestoreView | RestorePreview | 復元 |
-| 4.1, 4.2, 4.5 | 確認と操作ロック | BackupRestoreState、BackupRestoreView | RestoreTicket | 復元 |
-| 4.3, 4.6 | 全体置換 | RestoreService、LocalDataRepository | replaceRoot | 復元 |
+| 4.1, 4.2 | 確認 | BackupRestoreState、BackupRestoreView | RestoreTicket | 復元 |
+| 4.3, 4.5, 4.6 | 全体置換と共通操作ロック | RestoreService、MaintenanceSessionPort、LocalDataRepository、application shell | maintenance fence、replaceRoot | 復元 |
 | 4.4 | 成功反映 | BackupRestoreState、RuntimeIntegration | RestoreSummary | 復元 |
 | 5.1, 5.2, 5.3, 5.4 | 原子的失敗回復 | RestoreService、LocalDataRepository | replaceRoot、RestoreError | 復元 |
 | 5.5 | 再試行 | BackupRestoreState | resetSelection | 復元 |
@@ -192,11 +197,13 @@ sequenceDiagram
 | ExchangeMigration | Exchange | 対応旧形式を現行へ変換 | 2.4, 2.5, 5.3 | ExchangeValidator P0 | Service |
 | ExchangeMapper | Exchange | Envelopeと保存ルートを相互変換 | 1.1–2.3 | DomainModel P0 | Service |
 | BackupService | Feature | 検証済みデータをfile artifact化 | 1.1–1.6 | Repository P0、Mapper P0 | Service |
-| RestoreService | Feature | preflightとcommitを調整 | 3.1–5.5 | Exchange P0、Repository P0 | Service |
+| RestoreService | Feature | preflightとfence付きcommitを調整 | 3.1–5.5 | Exchange P0、Repository P0、MaintenanceSessionPort P0 | Service |
+| MaintenanceSessionPort | Foundation port | 永続maintenance fenceの取得・更新・解放 | 4.3, 4.5, 5.1–5.5 | write authority P0 | Service, State |
 | LocalDataRepository | Persistence | 容量確認付き単一置換 | 3.4, 4.3, 5.1–5.4 | Validator P0、Storage P0 | Service |
 | FileGateway | UI adapter | extension pageのファイルI/O | 1.3, 3.1 | Web API P0 | Service |
 | BackupRestoreState | UI state | 処理状態、ticket、再試行 | 1.5, 3.5–6.6 | Services P0 | State |
 | BackupRestoreView | UI | 操作、案内、preview、確認 | 3.2, 3.6, 4.1–6.5 | State P0 | State |
+| BackupRestoreFeatureRegistration | UI adapter | state/view/public APIをshell登録契約へ接続 | 1.1–6.6 | ApplicationFeatureRegistration P0、BackupRestoreView P0 | Service |
 
 ### Exchange Layer
 
@@ -254,13 +261,20 @@ interface RestoreService {
   commit(ticket: RestoreTicket): Promise<Result<RestoreSummary, RestoreError>>;
 }
 
+interface MaintenanceSessionPort {
+  acquire(ownerId: MaintenanceOwnerId, leaseMs: number): Promise<Result<MaintenanceFence, RestoreError>>;
+  renew(fence: MaintenanceFence, leaseMs: number): Promise<Result<MaintenanceFence, RestoreError>>;
+  release(fence: MaintenanceFence): Promise<Result<void, RestoreError>>;
+  abort(fence: MaintenanceFence): Promise<Result<void, RestoreError>>;
+}
+
 interface RestoreInput {
   readonly text: string;
   readonly byteLength: number;
 }
 ```
 
-`preflight`はサイズ上限、JSON解析、形式移行、交換検証、保存ルート変換、SchemaValidator、容量見積りの順に実行する。`commit`はticketの検証済みルートをRepositoryへ渡し、再検証と再容量判定後の成功だけを返す。ticketはUI state外へ永続化しない。
+`preflight`はサイズ上限、JSON解析、形式移行、交換検証、保存ルート変換、SchemaValidator、容量見積りの順に実行する。`commit`は永続maintenance fenceを取得し、必要ならleaseを更新しながらticketの検証済みルートとfenceをRepositoryへ渡し、再検証と再容量判定後の成功だけを返す。成功・失敗・取消の全経路でfenceをreleaseまたはabortし、解放失敗を成功として隠さない。ticketはUI state外へ永続化しない。
 
 ### Persistence Layer
 
@@ -271,7 +285,7 @@ interface LocalDataRepository {
   read(): Promise<Result<LocalDataRoot, RepositoryError>>;
   capacity(): Promise<Result<CapacityStatus, RepositoryError>>;
   assessReplacement(root: LocalDataRoot): Promise<Result<ReplacementCapacity, RepositoryError>>;
-  replaceRoot(root: LocalDataRoot): Promise<Result<LocalDataRoot, RepositoryError>>;
+  replaceRoot(root: LocalDataRoot, fence: MaintenanceFence): Promise<Result<LocalDataRoot, RepositoryError>>;
 }
 ```
 
@@ -292,9 +306,9 @@ JSONファイルを一つだけ受け、サイズを読取前に確認する。�
 
 #### BackupRestoreState and View
 
-stateは`idle`、`exporting`、`validating`、`awaiting-confirmation`、`restoring`、`succeeded`、`failed`の判別共用体とし、成功時だけpreview・summaryを更新する。ファイル再選択、取消、画面再生成でticketを破棄する。`restoring`中はバックアップ、復元、候補・構成の競合操作を無効にする。
+stateは`idle`、`exporting`、`validating`、`awaiting-confirmation`、`restoring`、`succeeded`、`failed`の判別共用体とし、成功時だけpreview・summaryを更新する。ファイル再選択、取消、画面再生成でticketを破棄する。feature内の重複要求はstateで抑止し、他featureを含むmutation抑止はFoundationの永続maintenance状態をapplication shellのMutationGateへ投影して実現する。
 
-viewはバックアップと復元を別領域として表示し、消失リスク、自動保存・同期なし、置換確認、件数summary、pathベースのエラーを安全なtext nodeで描画する。
+viewはバックアップと復元をReact componentの別領域として表示し、消失リスク、自動保存・同期なし、置換確認、件数summary、pathベースのエラーを通常のJSX childとして描画する。
 
 ## Data Models
 
@@ -338,14 +352,15 @@ interface RestorePreview {
 
 - **Unit**: Envelope全フィールド、未知・旧・将来版、非JSON値、禁止内容、ID重複、孤立候補、別プロジェクト構成参照、Mapper往復同値性を検証する。
 - **Repository integration**: `replaceRoot`の再検証、容量境界、単一write、書込失敗時の保存値不変、管理更新との直列化を検証する。
+- **Maintenance integration**: acquire後だけfence付き置換を許可し、renew、成功release、失敗abort、shell全体のmutation抑止とread-only navigation維持を検証する。
 - **Service integration**: 空・全データexport、決定的ファイル名、preflight順序、preview件数、stale ticket、commit成功と全失敗点の不変性を検証する。
-- **State/UI**: 処理中抑止、取消、再選択、確認前commit不可、警告文、値を露出しないエラー、再表示時の未選択状態を検証する。
+- **State/React UI**: 処理中抑止、取消、再選択、確認前commit不可、警告文、値を露出しないエラー、再表示時の未選択状態、unmount cleanupを検証する。
 - **E2E**: 架空データでプロジェクト、候補、現在構成を作成し、export、既存変更、import確認、再起動後の完全復元を検証する。
 - **Regression**: 復元後にCandidateQueryとCurrentBuildQueryが同じ所属・候補ID・数量を返し、通常CRUDを継続できることを検証する。
 
 ## Security Considerations
 
-選択ファイルは未信頼入力として`unknown`から検証し、UIへは値でなくcodeとpathだけを出す。ファイル処理は信頼済みextension page内で行い、content scriptやページへRepository、ticket、ファイル本文を公開しない。Blob URLは直ちに破棄し、リモートコード、動的評価、インラインスクリプトを追加しない。
+選択ファイルは未信頼入力として`unknown`から検証し、UIへは値でなくcodeとpathだけを出す。React componentはframework非依存のBackupRestoreState、service、FileGateway portだけに依存し、表示値は通常のJSX childとして扱う。`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。ファイル処理は信頼済みextension page内で行い、content scriptやページへRepository、ticket、ファイル本文を公開しない。Blob URLは直ちに破棄し、Reactをproduction bundleへ同梱し、リモートコード、動的評価、インラインスクリプト、runtime JSX変換を追加しない。
 
 ## Performance & Capacity
 

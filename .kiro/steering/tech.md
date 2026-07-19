@@ -2,7 +2,7 @@
 
 ## アーキテクチャ
 
-PC版Chrome 116以降を対象とする、ローカルファーストのManifest V3拡張である。UIはside panelと標準DOM/CSSを中心に構成し、バックエンド、アカウント、同期に依存しない。
+PC版Chrome 116以降を対象とする、ローカルファーストのManifest V3拡張である。UIはside panelとReact/CSSを中心に構成し、バックエンド、アカウント、同期に依存しない。
 
 業務機能はfeature単位の垂直スライスに閉じ、共有基盤とは型付きportで接続する。local data foundationがデータ契約と永続化の整合性を、application shellが共有runtimeとUI compositionを所有する。
 
@@ -14,14 +14,16 @@ PC版Chrome 116以降を対象とする、ローカルファーストのManifest
 - **Package manager**: pnpm 11.13.1
 - **Module system**: ESM
 - **Code quality tool**: Biome 2.5.4
-- **Application source**: 未実装。`src/`、manifest、型検査、build、test設定はこれから導入する。
+- **Application source**: local data foundation、manifest、型検査、build、test基盤は実装済み。application shellと各UI featureは未実装。
 
-TypeScript、bundler、test runner、DOM test環境、Chrome typingsは実装開始時点の最新stable majorを選び、Node.js 26とChrome 116以降との互換性を確認して固定する。旧specに記載された候補バージョンを、導入済みの事実として扱わない。
+UI実装にはReact 19系とReact DOMを使用する。React、React DOM、型定義は同一の対応majorへ揃え、production buildへ同梱する。TypeScript、bundler、test runner、DOM test環境、Chrome typingsを含む未導入依存は、実装開始時点の最新stable majorを選び、Node.js 26とChrome 116以降との互換性を確認して固定する。旧specに記載された候補バージョンを、導入済みの事実として扱わない。
 
 ## 実行環境とUI
 
 - Manifest V3に準拠し、実行コードはすべて拡張へ同梱する。
-- UIは標準DOM/CSSを基本とし、外部UI runtimeは必要性が確認できるまで導入しない。
+- UIの宣言的描画、フォーム、一覧、確認フローにはReact function componentとJSXを使用し、CSSはfeature単位に所有する。
+- Reactは表示adapterに限定し、ドメインstate、service、port、永続化契約をReact hookやcomponentへ埋め込まない。
+- shellとfeatureの境界では既存の`FeatureMountContext`とmount/unmount lifecycleを維持し、React rootの生成と`root.unmount()`は各UI adapterが責任を持つ。
 - `sidePanel.open()` は有効なユーザージェスチャー内で呼び出す。
 - MV3 service workerのメモリや寿命を、永続状態、処理継続、排他制御の唯一の根拠にしない。
 - 標準Web APIを優先し、runtime依存を追加するときはMV3、CSP、容量、保守性への影響を明示する。
@@ -49,7 +51,7 @@ TypeScript、bundler、test runner、DOM test環境、Chrome typingsは実装開
 - Storageアクセスは `TRUSTED_CONTEXTS` へ限定し、content scriptへ保存APIを公開しない。
 - sender、tab、URL、request ID、payload形状を検証し、ページ由来のデータを信頼しない。
 - remote code、`eval`、動的コード評価、インラインJavaScript、恒久的host permission、`unlimitedStorage`を使用せず、CSPを弱めない。
-- 外部文字列はHTMLとして挿入せず、安全なtext nodeとして描画する。
+- 外部文字列は通常のJSX childまたは安全なDOM textとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。
 - ログやエラーへ生HTML、商品値、完全URL、保存内容などの未信頼・機微データを出さない。
 - 実サイト由来のHTML、画像、取得商品データをfixtureやサンプルとしてリポジトリへ含めない。
 
@@ -57,7 +59,8 @@ TypeScript、bundler、test runner、DOM test環境、Chrome typingsは実装開
 
 - 純粋なrule、validator、stateはunit testで検証する。
 - repository、service、composition、公開契約はintegration/contract testで検証する。
-- DOM表示と操作状態をDOM testで、manifest、権限、runtime境界をChrome 116以降相当のMV3 fixtureで検証する。
+- React componentの表示と操作状態を利用者視点のDOM testで、manifest、権限、runtime境界をChrome 116以降相当のMV3 fixtureで検証する。
+- mount/unmount、購読解除、feature切替時のReact root cleanupをcontract/integration testで検証する。
 - Chrome APIはstubまたはin-memory adapterへ置換し、決定的なテストを保つ。
 - fixtureは架空の商品、HTML、データだけで構成する。
 - 破損入力、schema移行、容量不足、競合、原子的置換、maintenance fencing、navigation、feature障害分離を回帰対象にする。
@@ -70,6 +73,7 @@ TypeScript、bundler、test runner、DOM test環境、Chrome typingsは実装開
 ## 主要な技術判断
 
 - application shellだけがside panel host、feature registration、typed navigation、service-worker composition、root公開API、共通maintenance表示を組み立てる。
+- application shellはReact runtime導入、shell root、feature mount container、共通error boundaryの統合規約を所有する。各featureは自身のReact componentとroot adapterを所有し、他featureのcomponentを直接importしない。
 - local data foundationだけが共通結果型、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencingを所有する。
 - featureは `public.ts`、登録モジュール、必要なruntime registration portを公開し、共有runtime入口を直接編集しない。
 - ライブラリの固定より、境界契約、最小権限、データ整合性、決定的テストを優先する。

@@ -61,19 +61,29 @@
   - _Depends: 2.1, 2.2, 2.3, 3.2_
   - _Requirements: 1.1, 1.2, 1.4, 4.2, 4.5, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 4.2 カテゴリ別候補と現在構成の表示を実装する
-  - CandidateQueryの分類済み候補をプロジェクト・カテゴリで表示し、未分類を選択肢から除外する
+- [ ] 4.2 カテゴリ別候補と現在構成をReactで表示する
+  - framework非依存のBuildStateをpropsとして受け、CandidateQueryの分類済み候補をプロジェクト・カテゴリで表示し、未分類を選択肢から除外する
   - 単一カテゴリには選択・解除、複数カテゴリには選択・数量・解除操作を表示する
   - 空状態、数量エラー、保存エラー、参照エラー、競合解決を識別可能に表示し、異なるプロジェクトの候補を混在させない
+  - 外部文字列を通常のJSX childとして描画し、`dangerouslySetInnerHTML`と`innerHTML`を使用しないことをDOM testで確認できる
   - _Depends: 4.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 2.4, 2.5, 3.2, 3.3, 3.4, 3.5, 4.2, 4.5, 5.3, 5.4_
 
+- [ ] 4.3 React root adapterとfeature registrationを実装する
+  - `view.tsx`をframework非依存のBuildState/Service portへ接続し、`public.ts`とregistration moduleをfeature内で所有する
+  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
+  - shell contract test kitで登録、operation policy、公開API、cleanupが適合することを確認できる
+  - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 4.1, 4.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.2, 4.5, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
+  - _Boundary: CurrentBuildFeatureRegistration, ReactRootAdapter_
+
 - [ ] 5. side panel統合と受け入れフローを完成する
 - [ ] 5.1 現在構成機能を既存side panelとRepositoryへ統合する
+  - application shellがfeatureの`registration.ts`と`public.ts`をcompositionし、共有runtime入口とroot barrelをfeature側から編集しない
   - CandidateQuery、BuildService、CurrentBuildQuery、State、Viewを既存ランタイムで組み立て、Storage API直接利用を避ける
   - 候補の分類変更・削除後に整合性調停が実行され、失敗時は構成画面が操作停止理由を示す
   - プロジェクト選択から単一・複数候補の採用、数量変更、解除、再起動復元まで画面上で完了する
-  - _Depends: 4.1, 4.2_
+  - _Depends: application-shell 4.1; local task 4.3_
   - _Requirements: 1.1, 1.2, 2.2, 2.3, 2.4, 3.2, 3.3, 3.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: Side panel integration_
 

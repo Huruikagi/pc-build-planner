@@ -32,7 +32,8 @@
 ### Allowed Dependencies
 - `local-data-foundation` の `CurrentBuild`、`LocalDataRepository`、`Result`、カテゴリ・ID型
 - `project-candidate-management` の `CandidateQuery.listBuildEligible`
-- 既存のChrome 116+ side panel、TypeScript strict、Vitest、DOM/CSS基盤
+- 既存のChrome 116+ side panel、TypeScript strict、React 19系/React DOM/CSS基盤
+- application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
 ### Revalidation Triggers
 - `CurrentBuild`、構成項目、Repositoryエラー、候補照会契約の形状変更
@@ -69,7 +70,7 @@ graph LR
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | Language | TypeScript 5.x strict | ポリシー、コマンド、結果型 | `any`禁止 |
-| UI | DOM API / CSS | side panel内の構成画面 | 既存ホストを拡張 |
+| UI | React 19系 / React DOM / CSS | side panel内の構成画面 | 既存mount契約を維持 |
 | Data | LocalDataRepository | CurrentBuildの検証付き保存 | Storage API直接利用なし |
 | Integration | CandidateQuery | 分類済み候補照会 | 新規依存なし |
 | Test | Vitest 3.x | ポリシー、サービス、状態、DOM統合 | 架空データのみ |
@@ -77,14 +78,15 @@ graph LR
 ## File Structure Plan
 
 ```text
-src/index.ts                                  # 現在構成の下流向け公開契約を追加
-src/runtime/side-panel.ts                     # 既存side panelへ構成機能を組み立てる
 src/features/current-build/contracts.ts       # コマンド、ビュー、エラー、公開照会型
+src/features/current-build/public.ts          # CurrentBuildQueryの唯一の公開入口
+src/features/current-build/registration.ts    # shellへ渡すfeature registrationと依存組立
 src/features/current-build/category-policy.ts # 全カテゴリの選択方式を一元化
 src/features/current-build/service.ts         # 選択・数量・解除・整合性調停
 src/features/current-build/query.ts           # 下流向けプロジェクト別構成照会
 src/features/current-build/state.ts           # 読込、保存中、競合、エラー状態
-src/features/current-build/view.ts            # カテゴリ別候補と構成操作のDOM描画
+src/features/current-build/view.tsx            # カテゴリ別候補と構成操作のReact component
+src/features/current-build/react-root.tsx      # FeatureMountContextとReact rootの接続・cleanup
 src/features/current-build/styles.css         # 構成画面と状態表現
 tests/features/current-build/category-policy.test.ts
 tests/features/current-build/service.test.ts
@@ -95,8 +97,7 @@ tests/features/current-build/integration.test.ts
 ```
 
 ### Modified Files
-- `src/index.ts` — `CurrentBuildQuery`を下流へ公開する。
-- `src/runtime/side-panel.ts` — 既存候補管理と共有する依存を組み立て、構成画面を起動する。
+- 共有side panel runtimeとroot `src/index.ts`は変更しない。application shellが`registration.ts`と`public.ts`をcompositionする。
 
 ## System Flows
 
@@ -141,6 +142,7 @@ sequenceDiagram
 | CurrentBuildQuery | Feature | 下流向け構成読取 | 6.1–6.4 | Repository P0 | Service |
 | BuildState | UI state | 読込、保存、競合、失敗回復 | 1.1–1.4, 4.2–5.5 | Service P0 | State |
 | BuildView | UI | 候補、選択、数量、案内表示 | 1.1–5.5 | State P0 | State |
+| CurrentBuildFeatureRegistration | UI adapter | state/view/public APIをshell登録契約へ接続 | 1.1–6.4 | ApplicationFeatureRegistration P0、BuildView P0 | Service |
 
 ### Feature Layer
 
@@ -229,7 +231,7 @@ interface CurrentBuildSnapshot {
 
 #### BuildView
 
-分類済みカテゴリ、候補、選択状態、複数カテゴリの数量入力、解除操作を描画する。未分類候補は選択肢へ出さず、空状態、項目エラー、保存エラー、競合解決を識別可能に表示する。文字列はtext nodeとして扱う。
+分類済みカテゴリ、候補、選択状態、複数カテゴリの数量入力、解除操作をReact componentで描画する。未分類候補は選択肢へ出さず、空状態、項目エラー、保存エラー、競合解決を識別可能に表示する。文字列は通常のJSX childとして扱う。
 
 ## Data Models
 
@@ -247,9 +249,9 @@ interface CurrentBuildSnapshot {
 - Unit: 全カテゴリのポリシー、単一置換、複数追加、数量検証、重複防止を検証する。
 - Service integration: 別プロジェクト・未分類拒否、削除・未分類化の参照除去、カテゴリ変更競合と解決、保存失敗時の不変性を検証する。
 - State: 復元、成功時だけのスナップショット更新、二重送信抑止、競合状態、操作停止を検証する。
-- DOM integration: カテゴリ切替、空状態、単一・複数操作、数量エラー、競合解決を検証する。
+- React DOM integration: カテゴリ切替、空状態、単一・複数操作、数量エラー、競合解決、unmount cleanupを検証する。
 - Contract/E2E: プロジェクトの候補選択から再起動復元、下流照会までを架空データで検証する。
 
 ## Security & Performance
 
-候補表示は安全なDOM APIだけを使い、保存は信頼済み拡張コンテキストのRepositoryへ限定する。選択プロジェクト・カテゴリの候補だけを描画し、保存中の重複更新を抑止する。容量管理はFoundationへ委譲する。
+候補表示は通常のJSX childを使い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。React componentはframework非依存のBuildStateとService portだけに依存し、保存は信頼済み拡張コンテキストのRepositoryへ限定する。選択プロジェクト・カテゴリの候補だけを描画し、保存中の重複更新を抑止する。容量管理はFoundationへ委譲する。

@@ -41,3 +41,11 @@
 - 上流型の変更 — 公開エントリポイントだけに依存し、形状変更を再検証トリガーにする。
 - 編集途中の保存失敗 — フォーム状態を永続状態と分離し、成功時のみ一覧を更新する。
 - 未分類の下流利用 — 参照契約で分類済み候補だけを返す。
+
+### 2026-07-19 React UI方針更新
+- **背景**: 一覧、カテゴリ切替、複数フォーム、削除確認、失敗時ドラフト保持を標準DOMで管理すると描画とcleanupの見通しが悪化する。
+- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **境界**: ManagementState、service、port、CSS所有権は維持し、React固有型をdomain契約へ漏らさない。外部文字列は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
+- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtime、HTML host、root barrelを編集しない。
+- **検証**: 利用者視点のReact DOM testとmount/unmount cleanup testを追加する。
+- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)

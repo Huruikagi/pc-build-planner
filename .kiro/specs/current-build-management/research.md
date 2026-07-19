@@ -57,3 +57,11 @@
 - `.kiro/steering/roadmap.md` — 依存順、カテゴリ・参照整合性の共有シーム。
 - `.kiro/specs/local-data-foundation/design.md` — 保存ルート、Repository、CurrentBuild契約。
 - `.kiro/specs/project-candidate-management/design.md` — BuildCandidateQueryと候補所有境界。
+
+### 2026-07-19 React UI方針更新
+- **背景**: カテゴリ別候補、単一・複数選択、数量、競合、保存失敗を同一画面で一貫して表示する必要がある。
+- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **境界**: BuildState、service、query、category policyはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
+- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
+- **検証**: React DOM操作とroot cleanupを統合testで確認する。
+- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)

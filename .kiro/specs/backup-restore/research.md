@@ -74,3 +74,11 @@
 - `.kiro/specs/local-data-foundation/design.md` — 保存ルート、Validator、Repository、StoragePort契約。
 - `.kiro/specs/project-candidate-management/design.md` — プロジェクト・候補所有境界。
 - `.kiro/specs/current-build-management/design.md` — 現在構成と候補参照契約。
+
+### 2026-07-19 React UI方針更新
+- **背景**: export、file選択、preview、置換確認、処理中lock、結果表示を一貫した画面状態として扱う必要がある。
+- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **境界**: BackupRestoreState、service、交換契約、FileGatewayはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
+- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtime、HTML host、root barrelを編集しない。復元時はFoundationの永続maintenance fenceを取得し、shellは同じ状態のread-only projectionから全feature mutationを抑止する。
+- **検証**: React DOM表示、確認操作、Blob URLとReact rootのcleanupを統合testで確認する。
+- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)

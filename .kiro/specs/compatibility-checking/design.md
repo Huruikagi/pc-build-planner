@@ -33,7 +33,8 @@
 - `current-build-management` の `CurrentBuildQuery` と読取専用スナップショット
 - `project-candidate-management` の `CandidateQuery.listBuildEligible`
 - `local-data-foundation` のID、カテゴリ、CandidatePart、確認状態、Result型
-- 既存のTypeScript strict、Vitest、side panel DOM/CSS基盤
+- 既存のTypeScript strict、React 19系/React DOM、side panel CSS基盤
+- application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
 ### Revalidation Triggers
 - CurrentBuildQuery、CandidateQuery、CandidatePart、NormalizedAttributes、確認状態の形状変更
@@ -70,22 +71,23 @@ graph LR
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | Language | TypeScript 5.x strict | 判定契約、純粋規則、状態 | `any`禁止 |
-| UI | DOM API / CSS | side panelの結果表示 | text nodeで描画 |
+| UI | React 19系 / React DOM / CSS | side panelの結果表示 | 通常のJSX childで描画 |
 | Integration | CurrentBuildQuery / CandidateQuery | 検証済み上流スナップショット | Storage API直接利用なし |
 | Test | Vitest 3.x | 規則、service、状態、DOM統合 | 架空データのみ |
 
 ## File Structure Plan
 
 ```text
-src/index.ts                                      # CompatibilityQuery公開を追加
-src/runtime/side-panel.ts                         # 互換性画面の依存組立を追加
 src/features/compatibility/contracts.ts           # 入力、個別・集約結果、エラー型
+src/features/compatibility/public.ts              # CompatibilityQueryの唯一の公開入口
+src/features/compatibility/registration.ts        # shellへ渡すfeature registrationと依存組立
 src/features/compatibility/rules.ts               # Rule契約と固定5規則
 src/features/compatibility/target-expander.ts     # 構成候補の検証とペア展開
 src/features/compatibility/aggregator.ts           # 4区分の集約優先規則
 src/features/compatibility/service.ts              # 上流照会、評価、公開Query
 src/features/compatibility/state.ts                # 読込、最新性、成功、失敗状態
-src/features/compatibility/view.ts                 # 集約結果と根拠のDOM描画
+src/features/compatibility/view.tsx                 # 集約結果と根拠のReact component
+src/features/compatibility/react-root.tsx           # FeatureMountContextとReact rootの接続・cleanup
 src/features/compatibility/styles.css              # 状態区分と詳細表示
 tests/features/compatibility/rules.test.ts
 tests/features/compatibility/target-expander.test.ts
@@ -97,8 +99,7 @@ tests/features/compatibility/integration.test.ts
 ```
 
 ### Modified Files
-- `src/index.ts` — 下流またはランタイムから利用できる互換性照会契約を公開する。
-- `src/runtime/side-panel.ts` — 既存CurrentBuildQueryとCandidateQueryを注入して互換性画面を起動する。
+- 共有side panel runtimeとroot `src/index.ts`は変更しない。application shellが`registration.ts`と`public.ts`をcompositionする。
 
 ## System Flows
 
@@ -143,6 +144,7 @@ Stateは評価要求ごとに世代番号を付け、遅れて完了した旧要
 | CompatibilityService | Feature | 上流読取と評価オーケストレーション | 1.1–1.5, 5.5–6.3 | upstream queries P0、domain P0 | Service |
 | CompatibilityState | UI state | 最新評価と失敗状態 | 1.4, 6.1–6.4 | Service P0 | State |
 | CompatibilityView | UI | 集約・根拠・不足表示 | 5.5, 5.6, 6.1–6.5 | State P0 | State |
+| CompatibilityFeatureRegistration | UI adapter | state/view/public APIをshell登録契約へ接続 | 1.1–6.5 | ApplicationFeatureRegistration P0、CompatibilityView P0 | Service |
 
 ### Domain Layer
 
@@ -225,7 +227,7 @@ interface CompatibilityReport {
 
 #### CompatibilityView
 
-集約status、ルール名、対象パーツ名、比較値、不足項目、理由を表示する。`loading`では以前のreportを最新結果として操作可能にせず、`empty`と`failed`を結果区分から分離する。すべてtext nodeで描画する。
+集約status、ルール名、対象パーツ名、比較値、不足項目、理由をReact componentで表示する。`loading`では以前のreportを最新結果として操作可能にせず、`empty`と`failed`を結果区分から分離する。すべて通常のJSX childとして描画する。
 
 ## Data Models
 
@@ -244,12 +246,12 @@ interface CompatibilityReport {
 - **Unit**: 複数メモリ候補の全ペア、数量重複抑止、カテゴリ欠如、不正参照をTargetExpanderで検証する。
 - **Unit**: incompatible優先、compatible+unknownのcaution、全compatible、全unknownをAggregatorで検証する。
 - **Integration**: CurrentBuildQueryとCandidateQueryの架空スナップショットから全5規則のreportを生成し、上流データが変更されないことを検証する。
-- **State/DOM**: 再評価、旧要求破棄、empty、read failure、安全な文字列描画、集約と個別根拠の同時表示を検証する。
+- **State/React DOM**: 再評価、旧要求破棄、empty、read failure、安全な文字列描画、集約と個別根拠の同時表示、unmount cleanupを検証する。
 - **E2E**: 現在構成の選択後に互換性画面を開き、不一致、部分不足の注意、全不足の判定不能を確認する。
 
 ## Security Considerations
 
-入力は信頼済み拡張コンテキストの公開Queryだけから取得し、Storage APIを直接呼ばない。ページ由来文字列は規則の断定根拠にせず、表示時はHTMLとして解釈しない。
+入力は信頼済み拡張コンテキストの公開Queryだけから取得し、Storage APIを直接呼ばない。React componentはframework非依存のCompatibilityStateとQuery portだけに依存する。ページ由来文字列は規則の断定根拠にせず、通常のJSX childとして表示し、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。
 
 ## Performance & Scalability
 

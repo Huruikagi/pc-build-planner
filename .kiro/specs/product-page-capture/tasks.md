@@ -46,10 +46,11 @@
   - _Requirements: 3.5, 3.6, 4.3, 4.4, 4.5, 5.1, 5.2, 5.6, 5.7, 6.3, 6.4_
   - _Boundary: CaptureState_
 
-- [ ] 4.2 (P) 簡易確認と回復可能な案内を表示する
+- [ ] 4.2 (P) 簡易確認と回復可能な案内をReactで表示する
   - 商品名、カテゴリ、価格、メーカー、型番、URL、欠損、取得元、元表記を安全なtext表示で描画する
   - 権限、制限ページ、抽出なし、タブ遷移、保存失敗ごとに再実行または手入力の導線を示す
-  - 抽出値がHTMLとして実行されず、利用者が根拠を見て修正できる画面を確認できる
+  - framework非依存のCaptureStateをpropsとして受け、抽出値を通常のJSX childとして描画し、`dangerouslySetInnerHTML`と`innerHTML`を使用しない
+  - 完了時、利用者が根拠を見て修正でき、安全な描画をDOM testで確認できる
   - _Depends: 2.3, 3_
   - _Requirements: 2.3, 2.4, 3.3, 4.1, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3, 6.5_
   - _Boundary: CaptureView_
@@ -59,6 +60,14 @@
   - 商品候補がない場合も手入力用の詳細編集へ進めるようにする
   - 簡易確認と詳細編集の往復後も同じ修正値とproject選択が表示される
   - _Requirements: 4.2, 4.3, 4.6_
+
+- [ ] 4.4 React root adapterとfeature registrationを実装する
+  - `view.tsx`をframework非依存のCaptureState/portへ接続し、`public.ts`、side panel registration、worker registrationをfeature内で所有する
+  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
+  - shell contract test kitでUI登録、action handler登録、operation policy、cleanupが適合することを確認できる
+  - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 3, 4.1, 4.2, 4.3_
+  - _Requirements: 1.1, 1.2, 1.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Boundary: CaptureFeatureRegistration, CaptureWorkerRegistration, ReactRootAdapter_
 
 - [ ] 5. 確認済みドラフトを候補作成契約へ統合する
 - [ ] 5.1 確認セッションを上流の候補ドラフトへ変換する
@@ -75,9 +84,11 @@
 
 - [ ] 6. 取り込み全体の受け入れフローと回帰を検証する
 - [ ] 6.1 actionから候補保存までを統合する
+  - application shellがside panel registration、worker registration、`public.ts`をcompositionし、feature側から共有runtime入口とroot barrelを編集しない
   - action、抽出、順位付け、確認、修正、project選択、候補作成を既存runtimeとサイドパネルへ接続する
   - 情報が十分な架空ページと欠損のある架空ページの両方で、保存完了まで一連の操作が成立する
   - すべての読取・更新が責任境界を守り、content scriptから保存領域を直接操作できない
+  - _Depends: application-shell 4.1; local tasks 4.4, 5.2_
   - _Requirements: 1.1, 2.1, 2.2, 2.4, 3.5, 4.1, 4.2, 5.1, 5.3, 5.4, 5.5_
 
 - [ ] 6.2 失敗・安全性・fixture制約の回帰テストを完成する

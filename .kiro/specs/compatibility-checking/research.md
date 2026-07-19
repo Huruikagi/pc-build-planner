@@ -58,3 +58,11 @@
 - `.kiro/specs/current-build-management/design.md`
 - `docs/requirements.md`
 - `docs/project-overview.md`
+
+### 2026-07-19 React UI方針更新
+- **背景**: 集約区分、個別根拠、不足項目、loading/empty/errorを同じ画面で安全に切り替える必要がある。
+- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **境界**: CompatibilityState、rule、aggregator、queryはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
+- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
+- **検証**: React DOM表示、旧評価破棄、unmount cleanupを統合testで確認する。
+- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)

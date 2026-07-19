@@ -20,7 +20,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 
 ### このspecが所有するもの
 - `ApplicationFeatureRegistration`とshell lifecycle契約。
-- side panel host、ナビゲーション、共通loading/error/maintenance presentation。
+- side panel host、ナビゲーション、共通loading/error/maintenance React viewとroot adapter。
 - `ApplicationCompositionRoot`とroot公開APIの合成。
 - 世代付きmaintenance状態のread-only projectionとUI mutation gate。
 - 共有runtime入口、HTML host、shell統合test kit。
@@ -34,8 +34,8 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 ### 許可する依存
 - `local-data-foundation`の公開型、maintenance state購読、write authorityの公開契約。
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
-- Chrome 116以降のManifest V3 Side Panel API、標準DOM/CSS。
-- dependency direction: `contracts → registry/state → host/presentation → composition → runtime/root entry`。逆向きimportは禁止する。
+- Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
+- dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
 
 ### 再検証トリガー
 - registration、mount context、availability、public API registryの型変更。
@@ -72,7 +72,7 @@ graph TB
 | Layer | 選択 / Version | 役割 | 注記 |
 |---|---|---|---|
 | 言語 | TypeScript 最新stable major | 型付き契約とruntime実装 | `any`禁止、strict mode |
-| UI | 標準DOM/CSS | side panel hostと共通表示 | 外部UI runtimeなし |
+| UI | React 19系 / React DOM / CSS | side panel host、共通表示、feature viewの宣言的描画 | production bundleへ同梱、JSXを使用 |
 | Runtime | Chrome 116+ Manifest V3 | Side Panel APIとgesture entry | 実行コードを同梱 |
 | Test | 実装開始時点の最新stable test runner + DOM環境 | unit/integration | Node互換性を導入時検証 |
 
@@ -87,7 +87,10 @@ src/
 │   ├── maintenance-projection.ts      # 世代付き状態の単調projection
 │   ├── mutation-gate.ts               # UI操作種別とmaintenance抑止判定
 │   ├── side-panel-host.ts             # navigationとfeature lifecycle調停
-│   ├── shell-presentation.ts           # loading/error/maintenanceの安全なDOM表示
+│   ├── worker-composition.ts          # feature提供worker registrationの一回限り合成
+│   ├── shell-view.tsx                  # loading/error/maintenance/navigationのReact表示
+│   ├── react-shell-root.tsx            # shell用React rootとcleanup adapter
+│   ├── error-boundary.tsx              # component描画失敗のfeature単位隔離
 │   ├── composition-root.ts            # foundation、feature、hostの一回限り合成
 │   └── public-api-registry.ts          # feature public contractの型付き合成
 ├── runtime/
@@ -126,10 +129,10 @@ sequenceDiagram
 
 | 要件 | 概要 | Components | Interfaces / Flows |
 |---|---|---|---|
-| 1.1–1.5 | hostとnavigation | SidePanelHost, ShellPresentation | RegistrySnapshot, FeatureMount |
+| 1.1–1.5 | hostとnavigation | SidePanelHost, ShellView, ReactShellRoot | RegistrySnapshot, FeatureMount |
 | 2.1–2.5 | feature登録 | FeatureRegistry | ApplicationFeatureRegistration |
 | 3.1–3.4 | compositionと公開API | CompositionRoot, PublicApiRegistry | start, composePublicApi |
-| 4.1–4.4 | 共通状態と障害分離 | ShellPresentation, SidePanelHost | ShellViewState |
+| 4.1–4.4 | 共通状態と障害分離 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState |
 | 5.1–5.6 | maintenance抑止 | MaintenanceProjection, MutationGate | MaintenancePresentationPort |
 | 6.1–6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
 
@@ -140,8 +143,11 @@ sequenceDiagram
 | FeatureRegistry | Core | 登録の検証・一意性・変更通知 | 2.1–2.5 | contracts P0 | Service, State |
 | MaintenanceProjection | Core | 世代付き状態を単調に投影 | 5.1, 5.4–5.6 | foundation P0 | Service, State |
 | MutationGate | Core | 操作分類から可否を判定 | 5.2–5.3 | projection P0 | Service |
-| SidePanelHost | UI orchestration | navigationとmount lifecycle | 1.1–1.5, 2.4, 4.2–4.3 | registry P0, presentation P0 | Service, State |
-| ShellPresentation | UI | 共通状態を安全に描画 | 4.1–4.4, 5.1–5.3 | DOM P0 | Service |
+| SidePanelHost | UI orchestration | navigationとmount lifecycle | 1.1–1.5, 2.4, 4.2–4.3 | registry P0, ReactShellRoot P0 | Service, State |
+| WorkerComposition | Runtime composition | feature worker registrationを共有service workerへ合成 | 3.1, 3.3, 3.4, 6.1–6.4 | worker registrations P0 | Service |
+| ShellView | UI | 共通状態をReactで安全に描画 | 4.1–4.4, 5.1–5.3 | React P0 | State |
+| ReactShellRoot | UI adapter | shell stateをReact rootへ接続しcleanupする | 1.1–1.5, 4.1–4.4 | React DOM P0, Host P0 | Service |
+| ShellErrorBoundary | UI | component描画失敗をfeature単位で隔離する | 4.2–4.4 | React P0 | State |
 | CompositionRoot | Composition | 一度だけ全依存を合成 | 3.1, 3.3–3.4 | 全component P0 | Service |
 | PublicApiRegistry | Composition | feature公開契約をrootへ合成 | 3.2, 3.4 | feature public P0 | Service |
 | RuntimeAdapters | Runtime | bootstrapとgesture APIを分離 | 6.1–6.3 | Chrome P0 | Service |
@@ -170,6 +176,16 @@ interface ApplicationFeatureRegistration<TPublic extends object = object> {
   mount(context: FeatureMountContext): Promise<{ unmount(): Promise<void> }>;
 }
 
+interface ApplicationWorkerRegistration {
+  readonly id: FeatureId;
+  register(context: WorkerRegistrationContext): Result<() => void, RegistrationError>;
+}
+
+interface WorkerRegistrationContext {
+  readonly addActionHandler: (id: FeatureId, handler: () => Promise<void>) => () => void;
+  readonly reportError: (message: string) => void;
+}
+
 type RegistrationError =
   | { readonly kind: "invalid_registration"; readonly detail: string }
   | { readonly kind: "duplicate_feature_id"; readonly id: FeatureId };
@@ -181,7 +197,9 @@ interface FeatureRegistry {
 }
 ```
 
-`Result<T, E>`はプロジェクト共通の型付き成功・失敗unionとしてshell contracts内に定義する。登録順序は`navigation.order`、同値時は`id`で決定的に並べる。listener解除とview unmountは複数回呼んでも安全である。
+`Result<T, E>`はlocal data foundationが所有するcanonical型を利用し、shell内で再定義しない。登録順序は`navigation.order`、同値時は`id`で決定的に並べる。listener解除とview unmountは複数回呼んでも安全である。
+
+worker registrationは同じfeature idで一意にし、共有`src/runtime/service-worker.ts`をfeatureから編集させずcomposition rootだけが登録する。登録解除は冪等で、途中失敗時は登録済みhandlerを逆順に解除する。
 
 ### MaintenanceProjection and MutationGate
 
@@ -229,7 +247,7 @@ interface SidePanelHost {
 }
 ```
 
-Presentationは`textContent`とDOM node生成だけを使用し、外部由来文字列をHTMLとして挿入しない。選択中featureが不可になった場合はunmountし、次の利用可能featureを決定順で選ぶ。該当がなければ理由付きempty stateを表示する。
+ShellViewと各feature viewは外部由来文字列を通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。ReactShellRootはside panel host containerへ`createRoot`し、停止時に`root.unmount()`を一度だけ呼ぶ。`FeatureMountContext`と`ApplicationFeatureRegistration.mount/unmount`の公開契約は変更せず、各feature registrationのUI adapterが受け取ったcontainerへReact rootを作成・破棄する。選択中featureが不可になった場合はunmountし、次の利用可能featureを決定順で選ぶ。該当がなければ理由付きempty stateを表示する。
 
 ### CompositionRoot and PublicApiRegistry
 
@@ -259,7 +277,8 @@ CompositionRootだけが具体的なfoundation adapterとfeature registrationを
 - FeatureRegistryの不正値、重複、決定的順序、購読解除（2.1–2.4）。
 - MaintenanceProjectionの世代前進・stale拒否・終了反映（5.1, 5.4–5.5）。
 - MutationGateのread維持とmutation抑止（5.2–5.3）。
-- ShellPresentationが外部文字列をtext nodeとして描画すること（4.4）。
+- ShellViewが外部文字列を通常のJSX textとして描画し、危険なHTML APIを使用しないこと（4.4）。
+- ReactShellRootとfeature adapterが再mount、切替、停止時にReact rootと購読を確実にcleanupすること（1.2–1.5, 6.4）。
 
 ### Integration Tests
 - compositionが一回だけ実行され、root APIがfeature単位で合成される（3.1–3.4）。
@@ -271,10 +290,12 @@ CompositionRootだけが具体的なfoundation adapterとfeature registrationを
 - Chrome 116+相当のMV3 fixtureでside panel bootstrapとnavigationを検証する（6.1）。
 - user gesture handler内でSide Panel APIが同期呼出しされることをadapter spyで検証する（6.2）。
 - package outputにremote script、inline script、dynamic evaluationがないことを検査する（6.3）。
+- production bundleへReact/React DOMが同梱され、MV3の`script-src 'self'`でside panelが起動することを検査する（6.1, 6.3）。
 - contract test kitで模擬featureの登録、availability変更、失敗、cleanupを決定的に観測する（6.4）。
 
 ## セキュリティ考慮事項
 
 - shellはStorage APIやページDOMを直接読まない。
-- 表示文字列は常にテキストとして挿入し、inline handlerを使用しない。
+- 表示文字列は通常のJSX childとして扱い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。
+- React、React DOMと全UI codeはproduction bundleへ同梱し、CDN、remote module、runtime JSX変換、動的評価を使用しない。
 - feature registrationは信頼済み同梱moduleのみからcomposition rootが受け付け、runtime messageから任意登録しない。

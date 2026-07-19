@@ -58,7 +58,7 @@
 
 ## Risks & Mitigations
 - ページ遷移後に古い結果が返る — tabId、URL、requestIdを照合して破棄する。
-- 悪意ある巨大・実行可能値 — 長さ制限、制御文字除去、URL/価格検証、text node描画を行う。
+- 悪意ある巨大・実行可能値 — 長さ制限、制御文字除去、URL/価格検証、通常のJSX childによる描画を行う。
 - JSON-LD形状の多様性 — 再帰走査を有界化し、未知形状は欠損として扱う。
 - 上流契約変更 — `CandidateDraft`、カテゴリ、source contract変更を再検証トリガーにする。
 
@@ -67,3 +67,11 @@
 - `.kiro/steering/roadmap.md`
 - `.kiro/specs/local-data-foundation/design.md`
 - `.kiro/specs/project-candidate-management/design.md`
+
+### 2026-07-19 React UI方針更新
+- **背景**: 抽出確認、根拠表示、補正、project選択、失敗回復の状態分岐を宣言的に扱う必要がある。
+- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **境界**: CaptureState、抽出器、runtime coordinator、portはframework非依存を維持する。ページ由来値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
+- **統合**: featureはside panel registration、worker registration、`public.ts`を所有し、共有side panel/service worker入口とroot barrelを編集しない。
+- **検証**: React DOMで安全な描画と往復編集を検証し、unmount時の購読解除を確認する。
+- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)

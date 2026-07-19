@@ -48,7 +48,7 @@ application shellだけが共有runtime入口、ナビゲーション、公開AP
 
 ## Constraints
 
-- Chrome 116以降のManifest V3と標準DOM/CSSを対象とする。
+- Chrome 116以降のManifest V3とproduction bundleへ同梱するReact 19系/React DOM/CSSを対象とする。
 - `sidePanel.open()` はユーザージェスチャー要件を維持する。
 - shellはStorage APIやRepositoryを直接操作せず、公開portだけを利用する。
 - maintenance排他をprocess-local memoryだけに依存させない。

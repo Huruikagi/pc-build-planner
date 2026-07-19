@@ -1,11 +1,12 @@
 # Implementation Plan
 
-- [ ] 1. サイドパネル管理機能の実行入口を整える
-  - `local-data-foundation` の公開ドメイン契約、Repository、ビルド・テスト基盤が利用可能であることを前提条件として確認する
-  - manifestへサイドパネル文書を追加し、既存の最小権限と同梱コード制約を維持する
-  - 管理画面の起動時にFoundation Repositoryを組み立て、読込結果を画面状態へ渡す
-  - ビルド後にサイドパネル入口とスタイルが生成物へ含まれる
+- [ ] 1. application shellへの管理feature参加境界を整える
+  - `local-data-foundation` の公開ドメイン契約と、application shellのside panel host、React基盤、registration contract、contract test kitが利用可能であることを前提確認する
+  - feature内に`public.ts`、`registration.ts`、style入口の骨格を作り、共有manifest、side panel document、runtime入口、root barrelを変更しない
+  - 模擬registrationがshell contract test kitへ適合し、production buildにfeature-local moduleとstyleだけが取り込まれることを確認する
+  - _Depends: application-shell 1.1, 1.2, 1.3, 1.4, 4.1_
   - _Requirements: 6.1, 6.2_
+  - _Boundary: CandidateFeatureEntry_
 
 - [ ] 2. 管理ドメイン契約と業務サービスを実装する
 - [ ] 2.1 プロジェクト管理コマンドを実装する
@@ -40,22 +41,23 @@
   - _Requirements: 1.5, 2.5, 4.2, 4.5, 5.4, 6.1, 6.2_
   - _Boundary: ManagementState_
 
-- [ ] 3.2 (P) プロジェクト・カテゴリ別一覧を実装する
-  - プロジェクト選択、全カテゴリタブ、候補一覧、未分類一覧を描画する
+- [ ] 3.2 (P) プロジェクト・カテゴリ別React一覧を実装する
+  - framework非依存のManagementStateをpropsとして受け、プロジェクト選択、全カテゴリタブ、候補一覧、未分類一覧をReact componentで描画する
+  - 表示文字列は通常のJSX childとして扱い、`dangerouslySetInnerHTML`と`innerHTML`を使用しない
   - 欠損項目を「未入力」として表示し、異なるプロジェクトの候補を混在させない
   - 利用者がプロジェクトとカテゴリを切り替えると該当候補だけが画面に残る
   - _Depends: 2.3_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: ManagementView_
 
-- [ ] 3.3 プロジェクト編集フォームを実装する
+- [ ] 3.3 プロジェクト編集Reactフォームを実装する
   - プロジェクトの作成と名前変更を同じ名前規則で扱い、空名エラーを対象入力へ関連付ける
   - 作成・変更成功時はプロジェクト一覧へ反映し、失敗時は入力内容を保持する
   - 新規プロジェクト作成と既存名変更が画面から完了する
   - _Depends: 3.1, 3.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
-- [ ] 3.4 候補編集フォームを実装する
+- [ ] 3.4 候補編集Reactフォームを実装する
   - 共通項目、カテゴリ属性、読み取り専用の元表記を区別して表示する
   - カテゴリ変更で適切な属性入力へ切り替え、項目エラーを対象入力へ関連付ける
   - 作成・更新成功時は一覧へ反映し、失敗時は入力内容を保持する
@@ -68,12 +70,21 @@
   - プロジェクト削除と候補削除の両方で誤操作防止が確認できる
   - _Requirements: 1.4, 5.1, 5.2, 5.3, 5.4_
 
+- [ ] 3.6 React root adapterとfeature registrationを実装する
+  - `view.tsx`をframework非依存のManagementState/Service portへ接続し、`public.ts`とregistration moduleをfeature内で所有する
+  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
+  - shell contract test kitで登録、mount、operation policy、cleanupが適合することを確認できる
+  - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 3.1, 3.2, 3.3, 3.4, 3.5_
+  - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Boundary: CandidateFeatureRegistration, ReactRootAdapter_
+
 - [ ] 4. 境界統合と受け入れフローを検証する
 - [ ] 4.1 管理UIとFoundation Repositoryを統合する
+  - application shellがfeatureの`registration.ts`と`public.ts`をcompositionし、共有runtime入口、HTML host、root barrelをfeature側から編集しない
   - すべての読取・更新が公開Repositoryを経由し、Storage API直接利用がないことを確認する
   - 保存成功時だけ画面スナップショットを更新し、再起動後も内容を復元する
   - プロジェクト作成から候補登録、分類補正、編集、削除まで一連の操作が完了する
-  - _Depends: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - _Depends: application-shell 4.1; local task 3.6_
   - _Requirements: 1.1, 1.2, 1.4, 2.1, 2.4, 3.1, 3.5, 4.2, 4.4, 5.2, 6.1, 6.2_
 
 - [ ] 4.2 後続機能向け公開契約と回帰テストを完成する

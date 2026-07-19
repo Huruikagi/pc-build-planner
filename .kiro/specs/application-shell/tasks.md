@@ -1,9 +1,10 @@
 # 実装計画
 
 - [ ] 1. Shell基盤と型付き契約を整備する
-- [ ] 1.1 TypeScriptとruntime test基盤を構成する
-  - strictな型検査とDOM対応test環境を設定し、導入時点の最新stable majorが対象Node/Chromeと互換であることを検証する
-  - 完了時、空のmoduleに対する型検査とbaseline testが成功する
+- [ ] 1.1 TypeScript、Reactとruntime test基盤を構成する
+  - React 19系、React DOM、対応する型定義、JSX変換、strictな型検査とDOM対応test環境を設定し、対象Node/Chromeとの互換性を検証する
+  - production conditionでReactをbundleへ同梱し、CDN、runtime JSX変換、dynamic evaluationを必要としない構成にする
+  - 完了時、最小React componentの型検査、production build、baseline DOM testが成功する
   - _Requirements: 6.4_
   - _Boundary: TestInfrastructure_
 
@@ -16,13 +17,15 @@
 
 - [ ] 1.3 Feature registrationと共通shell stateの契約を定義する
   - feature識別子、navigation metadata、availability、mount/unmount、operation policy、型付きerrorを表現する
+  - featureが共有service worker入口を編集せずaction handler等を提供できるworker registration契約を表現する
   - maintenanceの世代付き状態と購読契約、root public contract合成の型制約を表現する
   - 完了時、模擬featureとfoundation adapterが`any`なしで契約適合を型検査できる
   - _Requirements: 2.1, 2.5, 3.2, 5.6_
   - _Boundary: CoreContracts_
 
 - [ ] 1.4 下流feature向けcontract test kitを作る
-  - 登録、mount/unmount、availability通知、購読解除の共通適合testを提供する
+  - 登録、React rootのmount/unmount、availability通知、購読解除の共通適合testを提供する
+  - worker registrationの一意性、登録解除、途中失敗cleanupを同じtest kitで検証できるようにする
   - feature固有データをshellへ渡さなくてもfixtureを検証できるようにする
   - 完了時、適合fixtureは成功し、不正fixtureは契約違反箇所を決定的に報告する
   - _Requirements: 2.1, 2.3, 2.5, 6.4_
@@ -54,12 +57,13 @@
   - _Boundary: MutationGate_
   - _Depends: 1.3_
 
-- [ ] 2.4 (P) 共通shell presentationを実装する
-  - loading、error、maintenance、empty stateを標準DOM/CSSで描画する
-  - 外部由来messageを実行可能なmarkupにせずtext nodeとして扱う
-  - 完了時、各共通状態と安全なテキスト表示をDOM unit testで観測できる
+- [ ] 2.4 (P) 共通shell React viewとroot adapterを実装する
+  - loading、error、maintenance、empty state、navigationをReact function componentとCSSで描画する
+  - shell host containerへReact rootを生成し、停止・失敗時に購読とrootを冪等にcleanupするadapterを実装する
+  - 外部由来messageを通常のJSX childとして扱い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない
+  - 完了時、各共通状態、安全なテキスト表示、root cleanupを利用者視点のDOM testで観測できる
   - _Requirements: 4.1, 4.4, 5.1_
-  - _Boundary: ShellPresentation_
+  - _Boundary: ShellView, ReactShellRoot, ShellErrorBoundary_
   - _Depends: 1.2, 1.3_
 
 - [ ] 3. Hostとcompositionを統合する
@@ -67,6 +71,7 @@
   - 利用可能featureを表示し、選択変更時に旧viewをunmountしてから新viewをmountする
   - 同時に一つだけを表示し、選択featureが利用不可になった場合は理由と安全な遷移先を示す
   - mount失敗をfeature単位で隔離し、再試行と他featureへの移動を維持する
+  - 公開`FeatureMountContext`とmount/unmount契約を変えず、feature側のReact root lifecycleを調停する
   - 完了時、切替順序、単一表示、利用不可遷移、障害分離がhost integration testで確認できる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.4, 4.2, 4.3_
   - _Boundary: SidePanelHost_
@@ -89,7 +94,7 @@
   - _Depends: 2.2, 2.3, 2.4, 3.1_
 
 - [ ] 3.4 Composition rootを実装する
-  - foundation adapter、feature registry、maintenance統合、host、public APIを一回だけ合成する
+  - foundation adapter、feature registry、worker registration、maintenance統合、host、public APIを一回だけ合成する
   - 必須依存の初期化失敗時はfeatureをmountせず、途中生成した購読とviewを逆順に解放する
   - 完了時、二重起動を防ぎ、root API、host開始、startup failure cleanupをintegration testで観測できる
   - _Requirements: 3.1, 3.3, 3.4_
@@ -99,7 +104,8 @@
 - [ ] 4. Runtime入口とend-to-end境界を検証する
 - [ ] 4.1 Side panel bootstrapとroot公開入口を接続する
   - shellだけが共有side panel runtime、HTML host、root barrelを所有する構成にする
-  - feature registrationとpublic contractをcomposition root経由で取り込み、feature側から共有入口を編集しない
+  - side panel registration、worker registration、public contractをcomposition root経由で取り込み、feature側から共有入口を編集しない
+  - shell rootとfeature rootをproduction bundleへ同梱し、componentをfeature境界越しに直接importしない
   - 完了時、複数の模擬featureが共有ファイルへの変更なしでnavigationとroot APIへ参加できる
   - _Requirements: 3.1, 3.2, 3.4, 6.1_
   - _Boundary: RuntimeAdapters, RootPublicApi_
@@ -113,9 +119,9 @@
   - _Boundary: RuntimeAdapters_
 
 - [ ] 4.3 Shell runtime統合回帰testを完成させる
-  - 起動loading、navigation、切替、availability変化、mount失敗、maintenance開始・終了・stale通知を一連のscenarioで検証する
+  - 起動loading、navigation、切替、availability変化、mount失敗、worker registration、maintenance開始・終了・stale通知を一連のscenarioで検証する
   - 外部文字列の安全な表示と他feature継続、全resourceのcleanupを検証する
-  - build artifactにremote code、inline JavaScript、dynamic evaluationがないことを検査する
+  - build artifactにproduction版React/React DOMが同梱され、remote code、inline JavaScript、dynamic evaluation、runtime JSX変換、`dangerouslySetInnerHTML`がないことを検査する
   - 完了時、要件横断のruntime suiteが決定的に成功し、失敗時に境界componentを特定できる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.3, 6.4_
   - _Boundary: ApplicationShellIntegrationTests_

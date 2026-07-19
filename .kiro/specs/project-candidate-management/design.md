@@ -28,7 +28,8 @@
 ### Allowed Dependencies
 - `local-data-foundation` のDomainModel、Result、LocalDataRepository
 - Chrome 116以降のsidePanel実行ホストと既存ビルド基盤
-- 新規ランタイム依存は追加しない
+- application shellが提供するReact 19系/React DOM基盤を利用し、このfeature独自のUI runtime依存は追加しない
+- application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
 ### Revalidation Triggers
 - `Project`、`CandidatePart`、カテゴリ、正規化属性、Repositoryエラーの形状変更
@@ -58,31 +59,29 @@ graph LR
 | Layer | Choice / Version | Role |
 |---|---|---|
 | Language | TypeScript 5.x strict | コマンド・状態・属性の型安全性 |
-| UI | DOM API / CSS | MV3サイドパネル管理画面 |
+| UI | React 19系 / React DOM / CSS | MV3サイドパネル管理画面 |
 | Data | LocalDataRepository | 検証済みローカル更新と照会 |
 | Test | Vitest 3.x | サービス、状態、DOM統合検証 |
 
 ## File Structure Plan
 
 ```text
-manifest.json                                  # side_panel宣言を追加
-src/index.ts                                   # 管理契約を公開
-src/runtime/side-panel.ts                      # サイドパネル起動と依存組立
 src/features/candidate-management/contracts.ts # コマンド、表示用モデル、公開照会契約
+src/features/candidate-management/public.ts    # 後続feature向け作成・照会契約の唯一の公開入口
+src/features/candidate-management/registration.ts # shellへ渡すfeature registrationと依存組立
 src/features/candidate-management/service.ts   # CRUD、分類変更、下流照会
 src/features/candidate-management/state.ts     # 読込、フォーム、保存、エラー状態
-src/features/candidate-management/view.ts      # DOM描画と操作イベント
+src/features/candidate-management/view.tsx     # 一覧、フォーム、確認のReact component
+src/features/candidate-management/react-root.tsx # FeatureMountContextとReact rootの接続・cleanup
 src/features/candidate-management/styles.css   # 管理画面レイアウトと状態表現
-side-panel.html                                # サイドパネル文書入口
 tests/features/candidate-management/service.test.ts
 tests/features/candidate-management/state.test.ts
 tests/features/candidate-management/view.test.ts
-tests/runtime/side-panel.test.ts
+tests/features/candidate-management/registration.test.ts
 ```
 
 ### Modified Files
-- `manifest.json` — side panel入口を宣言する。
-- `src/index.ts` — 後続spec向け作成・照会契約を公開する。
+- 共有runtime入口、`side-panel.html`、root `src/index.ts`は変更しない。application shellが`registration.ts`と`public.ts`をcompositionする。
 
 ## System Flows
 
@@ -123,6 +122,7 @@ sequenceDiagram
 | CandidateQuery | Feature | 絞込済み候補参照 | 3.1–3.5, 6.3–6.5 | Repository P0 | Service |
 | ManagementState | UI state | 編集と失敗回復 | 1.3–1.5, 2.3–2.5, 4.5, 5.1–5.4, 6.1–6.2 | Service P0 | State |
 | ManagementView | UI | 一覧、フォーム、確認 | 1.1–5.4 | State P0 | State |
+| CandidateFeatureRegistration | UI adapter | state/view/public APIをshell登録契約へ接続 | 1.1–6.5 | ApplicationFeatureRegistration P0、ManagementView P0 | Service |
 
 ### Feature Layer
 
@@ -184,9 +184,9 @@ interface CaptureCandidatePort {
 
 - Service unit: 空名拒否、欠損許容、単一所属、カテゴリ変更の共通値保持、元表記分離、未分類除外を検証する。
 - State unit: 読込復元、二重送信抑止、保存失敗時のドラフト・一覧保持、削除取消を検証する。
-- DOM integration: プロジェクト・カテゴリ切替、欠損表示、編集、削除確認、項目エラーを架空データで検証する。
+- React DOM integration: プロジェクト・カテゴリ切替、欠損表示、編集、削除確認、項目エラー、unmount cleanupを架空データで検証する。
 - Runtime integration: manifestとside panel起動、公開契約がFoundation Repositoryを経由することを検証する。
 
 ## Security & Performance
 
-表示文字列はtext nodeとして扱い、ページ由来のHTMLを挿入しない。画面は選択プロジェクトの候補だけを描画し、保存操作中の重複更新を抑止する。10MB容量管理と信頼済みコンテキスト限定はFoundationへ委譲する。
+表示文字列は通常のJSX childとして扱い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。React componentはframework非依存のManagementStateとService portだけを受け、domain stateをhook固有形へ置き換えない。画面は選択プロジェクトの候補だけを描画し、保存操作中の重複更新を抑止する。10MB容量管理と信頼済みコンテキスト限定はFoundationへ委譲する。

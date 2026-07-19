@@ -55,19 +55,28 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Boundary: CompatibilityState_
 
-- [ ] 4.2 集約結果と個別根拠を安全に表示する
-  - 4区分の集約結果と、各ルールの対象名、比較値または不足項目、理由を同じ画面で確認可能にする
+- [ ] 4.2 集約結果と個別根拠をReactで安全に表示する
+  - framework非依存のCompatibilityStateをpropsとして受け、4区分の集約結果と、各ルールの対象名、比較値または不足項目、理由を同じ画面で確認可能にする
   - 注意事項ありでは互換と判定不能の個別行を隠さず、利用者が補う情報を特定できるようにする
-  - マークアップを含む架空パーツ名を実行せず文字列として表示し、空・失敗・loadingを結果区分と区別する
+  - マークアップを含む架空パーツ名を通常のJSX childとして表示し、`dangerouslySetInnerHTML`と`innerHTML`を使用しない。空・失敗・loadingを結果区分と区別する
   - _Requirements: 5.5, 5.6, 6.1, 6.2, 6.4, 6.5_
   - _Boundary: CompatibilityView_
 
+- [ ] 4.3 React root adapterとfeature registrationを実装する
+  - `view.tsx`をframework非依存のCompatibilityState/Query portへ接続し、`public.ts`とregistration moduleをfeature内で所有する
+  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
+  - shell contract test kitで登録、read-only operation policy、公開API、cleanupが適合することを確認できる
+  - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 4.1, 4.2_
+  - _Requirements: 1.1, 1.4, 1.5, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
+
 - [ ] 5. side panel統合と受け入れ検証を完成する
 - [ ] 5.1 互換性機能を既存side panelと公開入口へ統合する
+  - application shellがfeatureの`registration.ts`と`public.ts`をcompositionし、共有runtime入口とroot barrelをfeature側から編集しない
   - 既存のCurrentBuildQueryとCandidateQueryをserviceへ注入し、RepositoryやStorage APIを直接利用せず画面を起動する
   - 現在構成を変更して互換性画面を再表示すると、新しい候補と確認済み属性の結果が表示される
   - 選択済み候補だけの全5規則を、同じside panel内で根拠付き確認できる
-  - _Depends: 4.1, 4.2_
+  - _Depends: application-shell 4.1; local task 4.3_
   - _Requirements: 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.3, 5.5, 5.6_
   - _Boundary: Side panel integration_
 
@@ -96,7 +105,7 @@
   - _Boundary: ResultAggregator tests_
 
 - [ ] 5.5 service、状態、画面の統合・受け入れテストを完成する
-  - 構成なし、不正参照、読取失敗、遅延した旧評価、安全なDOM描画で誤った最新結果を示さないことを検証する
+  - 構成なし、不正参照、読取失敗、遅延した旧評価、安全なReact DOM描画とunmount cleanupで誤った最新結果を示さないことを検証する
   - 読取失敗や評価失敗時のログへパーツ名、URL、属性値が出力されないことを架空の機密値で検証する
   - 現在構成の選択から不一致、部分不足の注意、全不足の判定不能までの受け入れフローが通り、上流保存値が不変である
   - _Depends: 5.1_

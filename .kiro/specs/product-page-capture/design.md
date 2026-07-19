@@ -34,7 +34,8 @@
 - Chrome 116以降の`action`、`activeTab`、`scripting`、`sidePanel`
 - FoundationのDomainModel、Resultおよび信頼境界
 - Candidate managementの`CaptureCandidatePort`、`CandidateDraft`、プロジェクト照会・詳細編集入口
-- TypeScript strict、標準DOM API、既存Vitest基盤。新規ランタイム依存は追加しない
+- TypeScript strict、React 19系/React DOM、既存test基盤。UI以外のruntime依存は追加しない
+- application shellのfeature registration、worker registration、`FeatureMountContext`、operation policy、contract test kit
 
 ### Revalidation Triggers
 - `CandidateDraft`、`CaptureCandidatePort`、カテゴリ、正規化属性、取得元契約の変更
@@ -46,7 +47,7 @@
 
 ### Existing Architecture Analysis
 
-本仕様はFoundationのMV3骨格とCandidate managementのサイドパネル・候補作成契約を拡張する。保存済みモデルは増やさず、ページコンテキストから返る値を未信頼入力としてruntime境界で再検証する。既存の`Result`判別共用体とDOM APIベースUIを維持する。
+本仕様はFoundationのMV3骨格とCandidate managementのサイドパネル・候補作成契約を拡張する。保存済みモデルは増やさず、ページコンテキストから返る値を未信頼入力としてruntime境界で再検証する。既存の`Result`判別共用体とframework非依存stateを維持し、表示adapterだけをReact componentとする。
 
 ### Architecture Pattern & Boundary Map
 
@@ -73,7 +74,7 @@ graph LR
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | Language | TypeScript 5.x strict | 抽出・メッセージ・状態契約 | `any`禁止、未信頼値は`unknown`から検証 |
-| UI | DOM API / CSS | サイドパネル確認・編集 | ページ値はtext node表示 |
+| UI | React 19系 / React DOM / CSS | サイドパネル確認・編集 | ページ値は通常のJSX childとして表示 |
 | Runtime | Chrome MV3 116+ | action、注入、side panel | `activeTab`、`scripting`、同梱コードのみ |
 | Integration | CaptureCandidatePort | 候補作成 | 保存実装を再利用 |
 | Test | Vitest 3.x / synthetic DOM | unit・runtime・UI統合 | 架空データのみ |
@@ -82,17 +83,18 @@ graph LR
 
 ```text
 manifest.json                                  # action、activeTab、scripting権限を追加
-src/index.ts                                   # 取り込み公開契約を追加
-src/runtime/service-worker.ts                  # actionイベントと依存組立を追加
-src/runtime/side-panel.ts                      # 取り込み状態・表示を既存パネルへ組み込む
 src/features/product-capture/contracts.ts      # 未信頼payload、候補、根拠、結果、エラー型
+src/features/product-capture/public.ts         # 取り込み公開契約の唯一の公開入口
+src/features/product-capture/registration.ts   # side panel feature registrationと依存組立
+src/features/product-capture/worker-registration.ts # action handlerをshellへ提供するworker registration port
 src/features/product-capture/extractor.ts      # JSON-LD、meta、文書構造の候補収集
 src/features/product-capture/normalizer.ts     # 文字列、URL、価格、属性の検証・正規化
 src/features/product-capture/ranker.ts         # 固定優先順位と候補選択
 src/features/product-capture/coordinator.ts    # tab検証、注入、request照合、エラー正規化
 src/features/product-capture/draft-mapper.ts   # 確認セッションからCandidateDraftへの変換
 src/features/product-capture/state.ts          # 一時ドラフト、編集、project選択、保存状態
-src/features/product-capture/view.ts           # 簡易確認、根拠、失敗、詳細編集導線
+src/features/product-capture/view.tsx           # 簡易確認、根拠、失敗、詳細編集のReact component
+src/features/product-capture/react-root.tsx     # FeatureMountContextとReact rootの接続・cleanup
 src/features/product-capture/styles.css        # 取り込み状態の表示規則
 tests/features/product-capture/extractor.test.ts
 tests/features/product-capture/normalizer.test.ts
@@ -106,9 +108,7 @@ tests/fixtures/product-capture/*.html           # 架空ページfixtureのみ
 
 ### Modified Files
 - `manifest.json` — action、`activeTab`、`scripting`を最小権限で宣言する。
-- `src/index.ts` — 必要な取り込み契約だけを公開する。
-- `src/runtime/service-worker.ts` — actionクリックの調停を追加する。
-- `src/runtime/side-panel.ts` — 既存管理UIへ取り込み状態を組み立てる。
+- 共有service worker、side panel runtime、root `src/index.ts`は変更しない。application shellが`registration.ts`、`worker-registration.ts`、`public.ts`をcompositionする。
 
 ## System Flows
 
@@ -155,6 +155,7 @@ sequenceDiagram
 | CaptureDraftMapper | Integration | 確認値を上流draftへ変換 | 3.5–3.6, 5.3–5.4 | Candidate contracts P0 | Service |
 | CaptureState | UI state | セッションと保存状態を管理 | 4.1–5.7, 6.3–6.4 | Port P0 | State |
 | CaptureView | UI | 確認、根拠、編集、案内を表示 | 4.1–4.6, 5.1–5.6, 6.1–6.5 | State P0 | State |
+| CaptureFeatureRegistration | UI/runtime adapter | view、public API、action handlerをshell登録契約へ接続 | 1.1–1.5, 4.1–6.5 | shell registration P0、CaptureCoordinator P0 | Service |
 
 ### Page Extraction Layer
 
@@ -254,7 +255,7 @@ type CaptureSessionState =
 
 ## Security Considerations
 
-`activeTab`による一時権限だけで抽出し、メッセージ送信者、tabId、URL、requestId、payload形状を検証する。ページ入力をHTMLとして描画せず、保存APIをcontent scriptへ公開しない。注入コードはビルド成果物へ同梱し、リモートコード、`eval`、インラインJavaScriptを使用しない。
+`activeTab`による一時権限だけで抽出し、メッセージ送信者、tabId、URL、requestId、payload形状を検証する。ページ入力は通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。保存APIをcontent scriptへ公開しない。Reactを含むUI codeと注入コードはビルド成果物へ同梱し、リモートコード、`eval`、インラインJavaScript、runtime JSX変換を使用しない。
 
 ## Performance & Scalability
 
