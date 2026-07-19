@@ -140,6 +140,7 @@
   - _Depends: 4.2_
 
 - [ ] 4.4 Production application compositionを完成する
+  - _Blocked: debug attempted twice, still failing — foundation初期化のtyped failure分岐でpresentation mountが例外funnel外にあり、adapter throw時にstartがtyped startup failureではなくrejectする_
   - foundation公開initializer、registry、presentation、feature host、worker contributionを設計順序で一度だけ合成する
   - canonical maintenance sourceだけを利用し、inactive stub、Storage直接監視、foundation内部へのdeep importへfallbackしない
   - 空catalogでは正常にempty shellを開始し、途中失敗と停止ではworker、feature、maintenance購読、presentation、foundationを逆依存順で全件best-effortに解放する
@@ -158,7 +159,7 @@
   - _Boundary: RuntimeAdapters, RootPublicApi_
   - _Depends: 4.4_
 
-- [ ] 4.6 User gestureを保つside panel open adapterを実装する
+- [x] 4.6 User gestureを保つside panel open adapterを実装する
   - Side Panel API呼出しを有効なユーザー操作handler内で同期開始し、host準備との責務を分離する
   - API拒否時は安全な診断結果を返し、無関係なfeature stateを変更しない
   - 完了時、adapter spyがgesture handler内の呼出し順序と失敗分離を確認する
@@ -190,3 +191,4 @@
 - 未信頼keyからroot契約を合成する辞書はnull prototypeとown property定義を使い、`__proto__`を含む予約名でも重複検出とprototype非汚染を保つ。
 - 統合start/stopはsingle-flightとepoch fenceで競合を無効化し、起動rollbackと停止cleanupはresourceごとに成功するまで所有権を保持する。
 - Composition rootは注入factoryのthrow・null・cleanup shapeを副作用前に検証し、公開APIをregistrationから一意導出して固定診断と逆順rollbackへ正規化する。
+- Production compositionはepoch/stop gateとcleanup成功までの所有権保持が必要で、feature unmount後にmaintenance購読を解除する。foundation failure表示経路もpresentation例外をtyped startup failureへ正規化する必要がある。
