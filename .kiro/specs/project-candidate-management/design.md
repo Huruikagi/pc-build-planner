@@ -58,7 +58,7 @@ graph LR
 
 | Layer | Choice / Version | Role |
 |---|---|---|
-| Language | TypeScript 5.x strict | コマンド・状態・属性の型安全性 |
+| Language | TypeScript 7.x strict | コマンド・状態・属性の型安全性 |
 | UI | React 19系 / React DOM / CSS | MV3サイドパネル管理画面 |
 | Data | LocalDataRepository | 検証済みローカル更新と照会 |
 | Test | Vitest 3.x | サービス、状態、DOM統合検証 |

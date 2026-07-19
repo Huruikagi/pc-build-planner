@@ -82,7 +82,7 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| Language | TypeScript 5.x strict | 交換形式、結果、状態契約 | `any`禁止、入力は`unknown` |
+| Language | TypeScript 7.x strict | 交換形式、結果、状態契約 | `any`禁止、入力は`unknown` |
 | UI | React 19系 / React DOM / CSS | 管理操作、確認、案内 | 既存mount契約を維持 |
 | File I/O | File、Blob、URL、TextEncoder | 読取、生成、UTF-8サイズ | Chrome 116標準、新規依存なし |
 | Data | 既存Repository / Chrome storage local | 読取、容量、単一置換 | Storage API直接利用なし |

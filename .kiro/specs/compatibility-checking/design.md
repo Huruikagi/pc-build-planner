@@ -70,7 +70,7 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| Language | TypeScript 5.x strict | 判定契約、純粋規則、状態 | `any`禁止 |
+| Language | TypeScript 7.x strict | 判定契約、純粋規則、状態 | `any`禁止 |
 | UI | React 19系 / React DOM / CSS | side panelの結果表示 | 通常のJSX childで描画 |
 | Integration | CurrentBuildQuery / CandidateQuery | 検証済み上流スナップショット | Storage API直接利用なし |
 | Test | Vitest 3.x | 規則、service、状態、DOM統合 | 架空データのみ |

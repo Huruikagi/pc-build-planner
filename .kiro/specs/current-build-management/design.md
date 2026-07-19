@@ -69,7 +69,7 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| Language | TypeScript 5.x strict | ポリシー、コマンド、結果型 | `any`禁止 |
+| Language | TypeScript 7.x strict | ポリシー、コマンド、結果型 | `any`禁止 |
 | UI | React 19系 / React DOM / CSS | side panel内の構成画面 | 既存mount契約を維持 |
 | Data | LocalDataRepository | CurrentBuildの検証付き保存 | Storage API直接利用なし |
 | Integration | CandidateQuery | 分類済み候補照会 | 新規依存なし |

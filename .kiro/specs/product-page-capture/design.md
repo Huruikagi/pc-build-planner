@@ -73,7 +73,7 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| Language | TypeScript 5.x strict | 抽出・メッセージ・状態契約 | `any`禁止、未信頼値は`unknown`から検証 |
+| Language | TypeScript 7.x strict | 抽出・メッセージ・状態契約 | `any`禁止、未信頼値は`unknown`から検証 |
 | UI | React 19系 / React DOM / CSS | サイドパネル確認・編集 | ページ値は通常のJSX childとして表示 |
 | Runtime | Chrome MV3 116+ | action、注入、side panel | `activeTab`、`scripting`、同梱コードのみ |
 | Integration | CaptureCandidatePort | 候補作成 | 保存実装を再利用 |
