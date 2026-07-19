@@ -8,11 +8,14 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
   await rm(outputDirectory, { recursive: true, force: true });
   await build({
     bundle: true,
-    entryPoints: ["src/build-contract.ts"],
+    entryPoints: {
+      "build-contract": "src/build-contract.ts",
+      foundation: "src/persistence/public.ts",
+    },
     format: "esm",
     outdir: outputDirectory,
     platform: "browser",
-    sourcemap: true,
+    sourcemap: false,
     target: "chrome116",
   });
   await copyFile("manifest.json", `${outputDirectory}/manifest.json`);

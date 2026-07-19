@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import { buildUnpackedExtension } from "./build.mjs";
@@ -14,15 +14,40 @@ const throwViolations = (label, violations) => {
   );
 };
 
+/** @param {string} outputDirectory @param {string} name */
+const requireNonemptyArtifact = async (outputDirectory, name) => {
+  const path = `${outputDirectory}/${name}`;
+  const artifact = await stat(path).catch(() => undefined);
+  if (artifact === undefined || !artifact.isFile() || artifact.size === 0)
+    throw new Error(`required nonempty artifact is missing: ${name}`);
+};
+
+/**
+ * @param {{ outputDirectory?: string, boundaryRoots?: string[], fixtureRoots?: string[], build?: (outputDirectory?: string) => Promise<void> }} [options]
+ */
 export async function runFinalGate({
   outputDirectory = "dist",
-  boundaryRoots = ["src/features", "tests/tooling/public-api-consumer.ts"],
+  boundaryRoots,
   fixtureRoots = ["tests/fixtures"],
   build = buildUnpackedExtension,
 } = {}) {
+  const sourceBoundaryRoots =
+    boundaryRoots ??
+    (
+      await Promise.all(
+        [
+          "src/features",
+          "src/runtime",
+          "src/content-scripts",
+          "tests/tooling/public-api-consumer.ts",
+        ].map(async (root) =>
+          (await stat(root).catch(() => undefined)) ? root : undefined,
+        ),
+      )
+    ).filter((root) => root !== undefined);
   throwViolations(
     "source boundary validation",
-    await validateBoundaryRoots(boundaryRoots),
+    await validateBoundaryRoots(sourceBoundaryRoots),
   );
   for (const root of fixtureRoots)
     throwViolations(
@@ -32,6 +57,8 @@ export async function runFinalGate({
 
   await rm(outputDirectory, { recursive: true, force: true });
   await build(outputDirectory);
+  await requireNonemptyArtifact(outputDirectory, "build-contract.js");
+  await requireNonemptyArtifact(outputDirectory, "foundation.js");
   await validateArtifactDirectory(outputDirectory);
   throwViolations(
     "artifact boundary validation",

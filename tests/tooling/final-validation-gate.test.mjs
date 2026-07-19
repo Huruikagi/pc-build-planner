@@ -35,7 +35,14 @@ const builder =
     await assert.rejects(access(join(output, "stale.js")));
     await mkdir(output, { recursive: true });
     await writeFile(join(output, "manifest.json"), JSON.stringify(manifest));
-    await writeFile(join(output, "safe.js"), "export const ready = true;");
+    await writeFile(
+      join(output, "build-contract.js"),
+      "export const ready = true;",
+    );
+    await writeFile(
+      join(output, "foundation.js"),
+      "export const foundation = true;",
+    );
     for (const [name, content] of Object.entries(extra))
       await writeFile(join(output, name), content);
   };
@@ -50,6 +57,29 @@ test("source検査からclean buildとartifact検査までを一つのgateで完
     fixtureRoots: [paths.fixtures],
     build: builder(),
   });
+});
+
+test("foundation公開bundleを生成しないbuildをfail closedに拒否する", async () => {
+  const paths = await workspace();
+  await assert.rejects(
+    runFinalGate({
+      outputDirectory: paths.output,
+      boundaryRoots: [paths.source],
+      fixtureRoots: [paths.fixtures],
+      build: async (output = "") => {
+        await mkdir(output, { recursive: true });
+        await writeFile(
+          join(output, "manifest.json"),
+          JSON.stringify(validManifest),
+        );
+        await writeFile(
+          join(output, "build-contract.js"),
+          "export const ready=true;",
+        );
+      },
+    }),
+    /foundation\.js/,
+  );
 });
 
 test("source境界・fixture違反とmissing rootをfail closedに伝播する", async () => {

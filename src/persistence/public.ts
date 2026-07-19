@@ -1,35 +1,35 @@
-import type { Result } from "../domain/result.js";
-import type {
-  DataAuthorityDependencies,
+export type { MaintenanceFence } from "./maintenance.js";
+export type {
+  MutationCapacityStatus,
+  RootOperation,
+} from "./mutation-pipeline.js";
+export type { ReplacementAssessment } from "./replacement.js";
+export type {
+  MaintenanceCommand,
+  MaintenanceReceipt,
+  ReplacementCommand,
+  ReplacementReceipt,
+  RequestCommitReceipt,
+} from "./root-transaction-runner.js";
+export type {
+  CallerClassification,
   DataWorkerRegistration,
+  DataWorkerRegistrationDependencies,
+  FoundationCommand,
+  FoundationCommandDecoder,
+  FoundationCommandReceipt,
+  RegistrationDisposer,
   RegistrationError,
-} from "../runtime/worker-registration.js";
-import { createDataWorkerRegistration as createInternalDataWorkerRegistration } from "../runtime/worker-registration.js";
-
-export type { DataWorkerRegistration } from "../runtime/worker-registration.js";
+  WorkerMessageHandler,
+  WorkerMessageTarget,
+} from "./worker-registration.js";
+export {
+  createDataWorkerRegistration,
+  createFoundationCommandRouter,
+} from "./worker-registration.js";
 export type {
   FoundationDataPort,
   MutationReceipt,
+  MutationValue,
   RootMutationCommand,
 } from "./write-authority.js";
-
-type AccessRestrictionError = Extract<
-  RegistrationError,
-  { readonly code: "access-denied" | "quota-exceeded" | "storage-unavailable" }
->;
-
-/** shellが具体Storage adapterを受け取らずにruntime登録をcompositionする公開依存。 */
-export interface DataWorkerRegistrationDependencies
-  extends Omit<DataAuthorityDependencies, "storage"> {
-  readonly restrictAccess: () => Promise<Result<void, AccessRestrictionError>>;
-}
-
-export const createDataWorkerRegistration = (
-  dependencies: DataWorkerRegistrationDependencies,
-): DataWorkerRegistration =>
-  createInternalDataWorkerRegistration({
-    validator: dependencies.validator,
-    authorize: dependencies.authorize,
-    authority: dependencies.authority,
-    storage: { restrictToTrustedContexts: dependencies.restrictAccess },
-  });

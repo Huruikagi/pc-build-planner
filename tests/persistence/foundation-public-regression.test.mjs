@@ -87,6 +87,43 @@ const createHarness = ({
   };
 };
 
+test("公開composition factoryが実authorityへcommandをrouteしunknownを境界で拒否する", async () => {
+  const { port } = createHarness({ stored: buildFoundationRoot() });
+  const listeners = [];
+  const registration = createDataWorkerRegistration({
+    data: port,
+    restrictAccess: async () => ({ ok: true, value: undefined }),
+    decoder: {
+      decode(input) {
+        return input?.kind === "query-root" && Object.keys(input).length === 1
+          ? { ok: true, value: input }
+          : { ok: false, error: { code: "unexpected-field", path: "$" } };
+      },
+    },
+    authorize: (caller) => caller.kind === "trusted-extension",
+  });
+  const registered = await registration.register({
+    addHandler(handler) {
+      listeners.push(handler);
+      return () => {};
+    },
+  });
+  assert.equal(registered.ok, true);
+  const result = await listeners[0](
+    { kind: "query-root" },
+    { kind: "trusted-extension" },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.value.revision, 1);
+  assert.deepEqual(
+    await listeners[0]({ kind: "unknown" }, { kind: "trusted-extension" }),
+    {
+      ok: false,
+      error: { code: "invalid-message" },
+    },
+  );
+});
+
 test("公開facadeでproject CRUDとcandidate削除時の参照修復を一貫して観測できる", async () => {
   const { port } = createHarness({ stored: buildFoundationRoot() });
   const project = {
@@ -329,22 +366,34 @@ test("公開worker registrationはaccess restriction失敗とunauthorized caller
       return () => {};
     },
   };
-  const authority = {
-    async handle() {
+  const data = {
+    async query() {
+      assert.fail("拒否commandを処理してはならない");
+    },
+    async mutate() {
+      assert.fail("拒否commandを処理してはならない");
+    },
+    async assessReplacement() {
+      assert.fail("拒否commandを処理してはならない");
+    },
+    async replaceRoot() {
+      assert.fail("拒否commandを処理してはならない");
+    },
+    async runMaintenance() {
       assert.fail("拒否commandを処理してはならない");
     },
   };
-  const validator = {
-    validateCommand: (input) => ({ ok: true, value: input }),
+  const decoder = {
+    decode: (input) => ({ ok: true, value: input }),
   };
   const denied = createDataWorkerRegistration({
     restrictAccess: async () => ({
       ok: false,
       error: { code: "access-denied" },
     }),
-    validator,
+    decoder,
     authorize: () => true,
-    authority,
+    data,
   });
   assert.deepEqual(await denied.register(target), {
     ok: false,
@@ -353,9 +402,9 @@ test("公開worker registrationはaccess restriction失敗とunauthorized caller
   assert.equal(handlers.length, 0);
   const registered = createDataWorkerRegistration({
     restrictAccess: async () => ({ ok: true, value: undefined }),
-    validator,
+    decoder,
     authorize: () => false,
-    authority,
+    data,
   });
   assert.equal((await registered.register(target)).ok, true);
   assert.deepEqual(

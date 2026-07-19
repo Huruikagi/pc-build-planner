@@ -12,7 +12,7 @@ registerHooks({
   },
 });
 
-import { createDataWorkerRegistration } from "../../src/runtime/worker-registration.ts";
+import { createDataWorkerRegistration } from "../../src/persistence/public.ts";
 
 const query = { kind: "query-root" };
 const trustedCaller = { kind: "trusted-extension" };
@@ -28,9 +28,9 @@ const harness = ({ restriction = { ok: true, value: undefined } } = {}) => {
     },
   };
   const registration = createDataWorkerRegistration({
-    storage: { restrictToTrustedContexts: async () => restriction },
-    validator: {
-      validateCommand(input) {
+    restrictAccess: async () => restriction,
+    decoder: {
+      decode(input) {
         return input?.kind === "query-root" && Object.keys(input).length === 1
           ? { ok: true, value: input }
           : { ok: false, error: { code: "validation", path: "$" } };
@@ -40,10 +40,23 @@ const harness = ({ restriction = { ok: true, value: undefined } } = {}) => {
       authorized.push([caller, command]);
       return caller.kind === "trusted-extension";
     },
-    authority: {
-      async handle(command) {
+    data: {
+      async query() {
+        const command = query;
         handled.push(command);
         return { ok: true, value: "handled" };
+      },
+      async mutate() {
+        throw new Error("unexpected");
+      },
+      async assessReplacement() {
+        throw new Error("unexpected");
+      },
+      async replaceRoot() {
+        throw new Error("unexpected");
+      },
+      async runMaintenance() {
+        throw new Error("unexpected");
       },
     },
   });

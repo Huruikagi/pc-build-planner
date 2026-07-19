@@ -13,4 +13,13 @@ test("開発基盤が共通検証と未パッケージbuild契約を公開する
   await access("biome.json");
   await access("scripts/build.mjs");
   await access("src/build-contract.ts");
+  await access("src/persistence/public.ts");
+});
+
+test("buildが検査対象となるfoundation公開bundleを生成する", async () => {
+  await access("dist/foundation.js");
+  assert.match(
+    await readFile("dist/foundation.js", "utf8"),
+    /createDataWorkerRegistration/,
+  );
 });

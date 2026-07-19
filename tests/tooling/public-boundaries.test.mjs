@@ -16,9 +16,12 @@ test("domain と persistence の公開入口は許可された契約だけを公
   assert.match(domainPublic, /model\.js/);
   assert.match(persistencePublic, /FoundationDataPort/);
   assert.match(persistencePublic, /createDataWorkerRegistration/);
+  assert.match(persistencePublic, /RootOperation/);
+  assert.match(persistencePublic, /ReplacementCommand/);
+  assert.match(persistencePublic, /MaintenanceCommand/);
   assert.doesNotMatch(
     persistencePublic,
-    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|RootOperation|MutationCapacityStatus|MaintenanceFence|ReplacementToken|RootQuery|ReplacementCommand|MaintenanceCommand/,
+    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|ReplacementToken|RootQuery/,
   );
 });
 
