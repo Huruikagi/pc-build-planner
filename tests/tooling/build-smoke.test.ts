@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 test("開発基盤が共通検証と未パッケージbuild契約を公開する", async () => {
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
@@ -38,4 +39,19 @@ test("buildがside panel runtime fixtureを生成する", async () => {
     await readFile("dist/side-panel.html", "utf8"),
     /src=["']\.\/side-panel\.js["']/,
   );
+});
+
+test("buildがroot公開bundleと共有service workerを生成する", async () => {
+  await access("dist/index.js");
+  await access("dist/service-worker.js");
+  const rootBundle = await readFile("dist/index.js", "utf8");
+  assert.doesNotMatch(rootBundle, /createCompositionRoot/);
+  const artifactUrl = pathToFileURL("dist/index.js");
+  artifactUrl.searchParams.set("test", `${Date.now()}-${Math.random()}`);
+  const artifact = (await import(artifactUrl.href)) as {
+    readonly applicationApi: object;
+  };
+  assert.deepEqual(Object.keys(artifact.applicationApi), []);
+  assert.equal(Object.getPrototypeOf(artifact.applicationApi), null);
+  assert.equal(Object.isFrozen(artifact.applicationApi), true);
 });

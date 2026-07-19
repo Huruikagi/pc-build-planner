@@ -149,7 +149,7 @@
   - _Boundary: ProductionApplicationComposition_
   - _Depends: 3.4, 4.1, 4.3_
 
-- [ ] 4.5 Side panel・service worker・root公開入口を接続する
+- [x] 4.5 Side panel・service worker・root公開入口を接続する
   - side panel入口をDOM host解決とproduction factoryのbootstrapだけに限定し、具体featureやfoundation内部を直接組み立てない
   - service worker入口はcatalogのworker contributionだけをcompositionし、root公開入口はcatalogから推論したreadonly APIだけを提供する
   - dummy maintenance source、noop state observer、下流feature deep importを共有入口から除去する

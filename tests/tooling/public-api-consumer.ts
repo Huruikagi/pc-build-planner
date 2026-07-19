@@ -1,4 +1,5 @@
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
+import { applicationApi } from "../../src/index.js";
 import type {
   DataWorkerRegistration,
   FoundationCommandDecoder,
@@ -44,3 +45,5 @@ export const composeFoundationRuntime = (
   platform: FoundationRuntimePlatform,
 ): Promise<Result<FoundationRuntimeContribution, { readonly code: string }>> =>
   initializeFoundationRuntimeContribution(platform);
+
+export const shellRootApi = applicationApi;

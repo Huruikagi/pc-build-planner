@@ -1,4 +1,5 @@
-import { err, ok, type Result } from "../domain/public.js";
+import { createUtcTimestamp, err, ok, type Result } from "../domain/public.js";
+import { initializeFoundationRuntimeContribution } from "../persistence/public.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -17,12 +18,17 @@ import type {
   ShellViewState,
   WorkerRegistrationContext,
 } from "./contracts.js";
+import {
+  featureContributionCatalog,
+  getSidePanelContributions,
+} from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
 import { createPublicApiRegistry } from "./public-api-registry.js";
 import type {
   ShellPresentationAdapter,
   ShellPresentationHandle,
 } from "./shell-presentation.js";
+import { createShellPresentation } from "./shell-presentation.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export interface ProductionFoundationHandle {
@@ -52,6 +58,44 @@ export interface ProductionApplicationCompositionOptions<
 }
 
 const STARTUP_ERROR = "アプリケーションを開始できませんでした";
+
+export function createProductionSidePanelComposition(
+  shellContainer: HTMLElement,
+): ApplicationCompositionRoot<
+  CompositionRootApi<typeof featureContributionCatalog>
+> {
+  return createProductionApplicationComposition({
+    shellContainer,
+    initializeFoundation: async () => {
+      const initialized = await initializeFoundationRuntimeContribution({
+        storageLocal: chrome.storage.local,
+        storageChanges: chrome.storage.onChanged,
+        locks: navigator.locks,
+        authorize: (caller) => caller.kind === "trusted-extension",
+        now: () => createUtcTimestamp(),
+        reportError: () => undefined,
+      });
+      if (!initialized.ok) return initialized;
+      return ok({
+        maintenanceSource: initialized.value.maintenanceSource,
+        workerRegistrations: [],
+        dispose: () => initialized.value.dispose(),
+      });
+    },
+    contributions: {
+      features: getSidePanelContributions(featureContributionCatalog),
+      workerRegistrations: [],
+    },
+    presentation: createShellPresentation(),
+    workerContext: {
+      addActionHandler() {
+        throw new Error("Side panel does not own worker handlers.");
+      },
+      reportError: () => undefined,
+    },
+    reportError: () => undefined,
+  });
+}
 
 function validateFoundationHandle(
   value: unknown,
