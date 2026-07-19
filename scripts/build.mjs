@@ -11,7 +11,9 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
     entryPoints: {
       "build-contract": "src/build-contract.ts",
       foundation: "src/persistence/public.ts",
+      index: "src/index.ts",
       "react-runtime": "src/application-shell/runtime-baseline.tsx",
+      "service-worker": "src/runtime/service-worker.ts",
       "side-panel": "src/runtime/side-panel.ts",
     },
     define: { "process.env.NODE_ENV": '"production"' },

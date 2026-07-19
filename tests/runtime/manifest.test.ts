@@ -15,6 +15,7 @@ const validManifest = {
   version: "1.0.0",
   minimum_chrome_version: "116",
   permissions: ["storage"],
+  background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
@@ -26,7 +27,10 @@ test("manifestはChrome 116以降向けの最小MV3契約である", async () =>
 
   assert.deepEqual(manifest, validManifest);
   assert.doesNotThrow(() => validateManifest(manifest));
-  assert.equal("background" in manifest, false);
+  assert.deepEqual(manifest.background, {
+    service_worker: "service-worker.js",
+    type: "module",
+  });
   assert.equal(manifest.side_panel.default_path, "side-panel.html");
 });
 
@@ -51,7 +55,11 @@ test("remote code、動的評価、inline JavaScriptを生成物から拒否す�
       join(directory, "side-panel.html"),
       '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
     );
-    await writeFile(join(directory, "side-panel.js"), "export {};\n");
+    await writeFile(
+      join(directory, "side-panel.js"),
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
+    );
+    await writeFile(join(directory, "service-worker.js"), "export {};\n");
 
     for (const fixture of [
       {

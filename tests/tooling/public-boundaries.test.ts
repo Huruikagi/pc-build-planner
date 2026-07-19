@@ -126,6 +126,61 @@ test("deep import、直接Storage、固定lock迂回を拒否する", () => {
   );
 });
 
+test("application shell固有のsecurity・ownership境界違反をowner付きで拒否する", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "src/application-shell/storage.ts",
+      source: "chrome.storage.local.get();",
+    },
+    {
+      path: "src/application-shell/redefined-maintenance.ts",
+      source: "interface MaintenanceSnapshotSource { getSnapshot(): unknown }",
+    },
+    {
+      path: "src/application-shell/unsafe-view.tsx",
+      source:
+        "element.innerHTML = external; return <div dangerouslySetInnerHTML={{__html: external}} />;",
+    },
+    {
+      path: "src/runtime/dummy-maintenance.ts",
+      source:
+        'const maintenanceSource = { getSnapshot: async () => ({ status: "inactive" }), subscribe: () => () => {} };',
+    },
+    {
+      path: "src/runtime/noop-observer.ts",
+      source: "start({ onStateChange: () => {} });",
+    },
+    {
+      path: "src/features/mock/self-register.ts",
+      source:
+        'import { featureContributionCatalog } from "../../application-shell/feature-contribution-catalog.js";',
+    },
+    {
+      path: "src/application-shell/runtime-jsx.ts",
+      source:
+        'import Babel from "@babel/standalone"; Babel.transform(source, { presets: ["react"] });',
+    },
+    {
+      path: "src/application-shell/feature-loader.ts",
+      source: 'import { secret } from "../features/foo/internal.js";',
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/application-shell/storage.ts: application-shell-no-direct-storage",
+      "src/application-shell/redefined-maintenance.ts: application-shell-no-maintenance-contract-redefinition",
+      "src/application-shell/unsafe-view.tsx: no-dangerous-html-rendering",
+      "src/runtime/dummy-maintenance.ts: no-dummy-maintenance-source",
+      "src/runtime/noop-observer.ts: no-noop-shell-state-observer",
+      "src/features/mock/self-register.ts: no-shared-entry-self-registration",
+      "src/application-shell/runtime-jsx.ts: no-runtime-jsx-transform",
+      "src/application-shell/feature-loader.ts: application-shell-feature-public-import-only",
+    ],
+  );
+});
+
 test("存在しないscan rootをfail closedに拒否する", async () => {
   await assert.rejects(
     validateBoundaryRoots(["src/features/__missing__"]),

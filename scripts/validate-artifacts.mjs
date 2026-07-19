@@ -13,6 +13,7 @@ function fail(message) {
 /**
  * @param {{ manifest_version?: unknown, minimum_chrome_version?: unknown,
  * permissions?: unknown, side_panel?: { default_path?: unknown },
+ * background?: { service_worker?: unknown, type?: unknown },
  * content_security_policy?: { extension_pages?: unknown },
  * [key: string]: unknown }} manifest
  */
@@ -37,6 +38,12 @@ export function validateManifest(manifest) {
   }
   if (manifest.side_panel?.default_path !== "side-panel.html") {
     fail("side_panel.default_path must be side-panel.html");
+  }
+  if (
+    manifest.background?.service_worker !== "service-worker.js" ||
+    manifest.background?.type !== "module"
+  ) {
+    fail("background service worker must be the bundled module");
   }
   if (
     "host_permissions" in manifest ||
@@ -73,6 +80,26 @@ function validateJavaScript(source, path) {
     [/\bimportScripts\s*\(\s*["']https?:\/\//i, "remote importScripts"],
     [/\beval\s*\(/, "eval"],
     [/\bnew\s+Function\s*\(/, "new Function"],
+    [
+      /@babel\/standalone|\bBabel\s*\.\s*transform\s*\(|\bjsxDEV\s*\(/,
+      "runtime JSX transform",
+    ],
+    [
+      /\bdangerouslySetInnerHTML\s*:|(?:\.|\[\s*["']innerHTML["']\s*\])\s*=/,
+      "dangerous HTML rendering API",
+    ],
+    [
+      /\bfeatureContributionCatalog\s*(?:\.\s*(?:push|unshift|splice)\s*\(|\[\s*["'](?:push|unshift|splice)["']\s*\]\s*\()|\b(?:Object\.assign|Reflect\.set)\s*\(\s*featureContributionCatalog\b/,
+      "shared entry self-registration",
+    ],
+    [
+      /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]*?status\s*:\s*["']inactive["'][\s\S]*?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/,
+      "dummy maintenance source",
+    ],
+    [
+      /\b(?:onStateChange|observeShellState|subscribeShellState)\s*:\s*\(?.*?=>\s*\{\s*\}/,
+      "noop shell state observer",
+    ],
   ];
   for (const [pattern, label] of checks) {
     if (pattern.test(source)) fail(`${label} found in ${path}`);
@@ -210,6 +237,30 @@ export async function validateArtifactDirectory(directory) {
   if (!files.includes(sidePanelPath)) fail("side-panel.html is missing");
   if (!files.includes(join(directory, "side-panel.js"))) {
     fail("side-panel.js is missing");
+  }
+  if (!files.includes(join(directory, "service-worker.js"))) {
+    fail("service-worker.js is missing");
+  }
+  const sidePanelBundle = await readFile(
+    join(directory, "side-panel.js"),
+    "utf8",
+  );
+  if (
+    !/node_modules[\\/].*react[\\/]/.test(sidePanelBundle) ||
+    !/node_modules[\\/].*react-dom[\\/]/.test(sidePanelBundle)
+  ) {
+    fail("side-panel.js must bundle React and React DOM");
+  }
+  const workerBundle = await readFile(
+    join(directory, "service-worker.js"),
+    "utf8",
+  );
+  if (
+    /node_modules[\\/].*react(?:-dom)?[\\/]|\b(?:document|window|HTMLElement)\b|\.createElement\s*\(/.test(
+      workerBundle,
+    )
+  ) {
+    fail("service-worker.js crosses the worker DOM/React owner boundary");
   }
   const foundationPath = join(directory, "foundation.js");
   if (files.includes(foundationPath))

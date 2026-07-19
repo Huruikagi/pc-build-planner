@@ -19,21 +19,41 @@ const syntheticValue = /(?:架空|synthetic|^SYN(?:-|$))/i;
 
 /** @typedef {{ readonly path: string, readonly content: string }} FixtureFile */
 
-/** @param {string} directory @returns {Promise<FixtureFile[]>} */
-const collect = async (directory) => {
+/**
+ * @param {string} directory
+ * @param {(path: string) => boolean} shouldInspectPath
+ * @returns {Promise<FixtureFile[]>}
+ */
+const collect = async (directory, shouldInspectPath) => {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await collect(path)));
-    else if (entry.isFile() && !/\.test\.[cm]?[jt]s$/i.test(entry.name))
+    if (entry.isDirectory())
+      files.push(...(await collect(path, shouldInspectPath)));
+    else if (
+      entry.isFile() &&
+      !/\.test\.[cm]?[jt]s$/i.test(entry.name) &&
+      shouldInspectPath(path)
+    )
       files.push({ path, content: await readFile(path, "utf8") });
   }
   return files;
 };
 
-/** @param {string | undefined} directory @param {readonly FixtureFile[]} supplied */
-export async function findFixtureAssetViolations(directory, supplied = []) {
-  const files = directory === undefined ? supplied : await collect(directory);
+/**
+ * @param {string | undefined} directory
+ * @param {readonly FixtureFile[]} supplied
+ * @param {(path: string) => boolean} shouldInspectPath
+ */
+export async function findFixtureAssetViolations(
+  directory,
+  supplied = [],
+  shouldInspectPath = () => true,
+) {
+  const files =
+    directory === undefined
+      ? supplied.filter(({ path }) => shouldInspectPath(path))
+      : await collect(directory, shouldInspectPath);
   return files.flatMap(({ path, content }) => {
     const rules = [];
     const extension = extname(path).toLowerCase();

@@ -93,6 +93,16 @@ const isForbiddenImport = (specifier) => {
   );
 };
 
+/** @param {string} specifier */
+const isForbiddenApplicationShellFeatureImport = (specifier) => {
+  const normalized = specifier.replaceAll("\\", "/");
+  const match = normalized.match(/(?:^|\/)features\/[^/]+\/(.+)$/);
+  if (match === null) return false;
+  return !/^(?:public|feature-contribution)(?:\.js|\.ts)?$/.test(
+    match[1] ?? "",
+  );
+};
+
 /** @param {string} value */
 const canonicalApiPath = (value) =>
   value.startsWith("globalThis.") ? value.slice("globalThis.".length) : value;
@@ -100,6 +110,12 @@ const canonicalApiPath = (value) =>
 /** @param {readonly SourceFile[]} sources @returns {BoundaryViolation[]} */
 export const findBoundaryViolations = (sources) =>
   sources.flatMap(({ path, source }) => {
+    const normalizedPath = path.replaceAll("\\", "/");
+    const isApplicationShell =
+      normalizedPath.includes("/application-shell/") ||
+      normalizedPath.includes("/runtime/") ||
+      /\/src\/index\.(?:ts|js)$/.test(`/${normalizedPath}`);
+    const isDownstreamFeature = normalizedPath.includes("/features/");
     const tokens = tokenize(source);
     const aliases = new Map();
     const rules = new Set();
@@ -118,12 +134,27 @@ export const findBoundaryViolations = (sources) =>
           )
       )
         rules.add("public-import-only");
+      if (
+        isApplicationShell &&
+        token.kind === SyntaxKind.StringLiteral &&
+        isForbiddenApplicationShellFeatureImport(token.value) &&
+        tokens
+          .slice(Math.max(0, index - 4), index)
+          .some(({ kind }) =>
+            [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(kind),
+          )
+      )
+        rules.add("application-shell-feature-public-import-only");
       const pathValue = memberPath(tokens, index, aliases);
       if (
         pathValue !== undefined &&
         canonicalApiPath(pathValue.value).startsWith("chrome.storage")
       )
-        rules.add("no-direct-storage");
+        rules.add(
+          isApplicationShell
+            ? "application-shell-no-direct-storage"
+            : "no-direct-storage",
+        );
       if (
         pathValue !== undefined &&
         canonicalApiPath(pathValue.value).startsWith("navigator.locks")
@@ -172,6 +203,43 @@ export const findBoundaryViolations = (sources) =>
         }
       }
     }
+    if (
+      isApplicationShell &&
+      /\b(?:interface|type|class)\s+MaintenanceSnapshotSource\b/.test(source)
+    )
+      rules.add("application-shell-no-maintenance-contract-redefinition");
+    if (
+      /(?:^|\/)src\//.test(normalizedPath) &&
+      /\bdangerouslySetInnerHTML\b|(?:\.|\[\s*["']innerHTML["']\s*\])\s*=/.test(
+        source,
+      )
+    )
+      rules.add("no-dangerous-html-rendering");
+    if (
+      /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]*?status\s*:\s*["']inactive["'][\s\S]*?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/.test(
+        source,
+      )
+    )
+      rules.add("no-dummy-maintenance-source");
+    if (
+      /\b(?:onStateChange|observeShellState|subscribeShellState)\s*:\s*\(?.*?=>\s*\{\s*\}/.test(
+        source,
+      )
+    )
+      rules.add("no-noop-shell-state-observer");
+    if (
+      isDownstreamFeature &&
+      /["'][^"']*(?:application-shell\/(?:feature-contribution-catalog|application-composition|runtime-bootstrap)|src\/index)[^"']*["']/.test(
+        source.replaceAll("\\", "/"),
+      )
+    )
+      rules.add("no-shared-entry-self-registration");
+    if (
+      /@babel\/standalone|\bBabel\s*\.\s*transform\s*\(|\bjsxDEV\s*\(/.test(
+        source,
+      )
+    )
+      rules.add("no-runtime-jsx-transform");
     return [...rules].map((rule) => ({ path, rule }));
   });
 

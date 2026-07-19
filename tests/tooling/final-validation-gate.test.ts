@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { runFinalGate } from "../../scripts/validate-final-gate.mjs";
+import { findFixtureAssetViolations } from "../../scripts/validate-fixture-assets.mjs";
 
 const validManifest = {
   manifest_version: 3,
@@ -12,6 +13,7 @@ const validManifest = {
   version: "1.0.0",
   minimum_chrome_version: "116",
   permissions: ["storage"],
+  background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'",
@@ -44,7 +46,11 @@ const builder =
     );
     await writeFile(
       join(output, "side-panel.js"),
-      "export const started=true;",
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export const started=true;",
+    );
+    await writeFile(
+      join(output, "service-worker.js"),
+      "export const registered=true;",
     );
     await writeFile(
       join(output, "build-contract.js"),
@@ -77,6 +83,22 @@ test("実際のproduction bundleをfixture商品内容として誤検出しな�
     boundaryRoots: [paths.source],
     fixtureRoots: [paths.fixtures],
   });
+});
+
+test("artifact fixture検査は除外対象の実行bundleを解析前に省く", async () => {
+  const paths = await workspace();
+  const executable = join(paths.fixtures, "large.js");
+  const image = join(paths.fixtures, "photo.png");
+  await writeFile(executable, `"${"x".repeat(700_000)}`);
+  await writeFile(image, "synthetic bytes");
+
+  const violations = await findFixtureAssetViolations(
+    paths.fixtures,
+    [],
+    (path) => !/\.[cm]?js$/i.test(path),
+  );
+
+  assert.deepEqual(violations, [{ path: image, rule: "image-file" }]);
 });
 
 test("foundation公開bundleを生成しないbuildをfail closedに拒否する", async () => {
@@ -153,6 +175,36 @@ test("manifest・code・公開境界・fixtureのartifact違反をすべて伝�
       "remote.js": 'import "https://example.invalid/x.js";',
     }),
     builder(validManifest, { "eval.js": "eval('x')" }),
+    builder(validManifest, {
+      "runtime-jsx.js":
+        'import "@babel/standalone"; Babel.transform(source, {presets:["react"]});',
+    }),
+    builder(validManifest, {
+      "unsafe-html.js":
+        "const props={dangerouslySetInnerHTML:{__html:external}};",
+    }),
+    builder(validManifest, {
+      "unsafe-inner-html.js":
+        "node.innerHTML=external; other['innerHTML'] = external;",
+    }),
+    builder(validManifest, {
+      "service-worker.js":
+        'import React from "react"; document.createElement("div");',
+    }),
+    builder(validManifest, {
+      "side-panel.js": "export const started=true;",
+    }),
+    builder(validManifest, {
+      "dummy.js":
+        'const maintenanceSource={getSnapshot:async()=>({status:"inactive"}),subscribe:()=>()=>{}};',
+    }),
+    builder(validManifest, {
+      "noop.js": "start({onStateChange:()=>{}});",
+    }),
+    builder(validManifest, {
+      "self-register.js":
+        "featureContributionCatalog.push({key:'mock',registration:mockRegistration});",
+    }),
     builder(validManifest, { "inline.html": "<script>alert(1)</script>" }),
     builder(validManifest, {
       "deep.js": 'import "./persistence/internal/storage.js";',

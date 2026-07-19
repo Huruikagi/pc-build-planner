@@ -9,10 +9,13 @@ import { findFixtureAssetViolations } from "./validate-fixture-assets.mjs";
 
 const executableBundleExtensions = new Set([".js", ".mjs", ".cjs"]);
 
+/** @param {string} path */
+const isArtifactFixturePath = (path) =>
+  !executableBundleExtensions.has(extname(path).toLowerCase());
+
 /** @param {{ path: string, rule: string }} violation */
 const isArtifactFixtureViolation = ({ path, rule }) => {
   const extension = extname(path).toLowerCase();
-  if (executableBundleExtensions.has(extension)) return false;
   return !(extension === ".html" && rule === "raw-html");
 };
 
@@ -46,8 +49,10 @@ export async function runFinalGate({
     (
       await Promise.all(
         [
+          "src/application-shell",
           "src/features",
           "src/runtime",
+          "src/index.ts",
           "src/content-scripts",
           "tests/tooling/public-api-consumer.ts",
         ].map(async (root) =>
@@ -76,9 +81,13 @@ export async function runFinalGate({
   );
   throwViolations(
     "artifact fixture validation",
-    (await findFixtureAssetViolations(outputDirectory)).filter(
-      isArtifactFixtureViolation,
-    ),
+    (
+      await findFixtureAssetViolations(
+        outputDirectory,
+        [],
+        isArtifactFixturePath,
+      )
+    ).filter(isArtifactFixtureViolation),
   );
 }
 

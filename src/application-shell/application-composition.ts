@@ -1,5 +1,5 @@
-import { createUtcTimestamp, err, ok, type Result } from "../domain/public.js";
-import { initializeFoundationRuntimeContribution } from "../persistence/public.js";
+import { err, ok, type Result } from "../domain/public.js";
+import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -67,14 +67,8 @@ export function createProductionSidePanelComposition(
   return createProductionApplicationComposition({
     shellContainer,
     initializeFoundation: async () => {
-      const initialized = await initializeFoundationRuntimeContribution({
-        storageLocal: chrome.storage.local,
-        storageChanges: chrome.storage.onChanged,
-        locks: navigator.locks,
-        authorize: (caller) => caller.kind === "trusted-extension",
-        now: () => createUtcTimestamp(),
-        reportError: () => undefined,
-      });
+      const initialized =
+        await initializeProductionFoundationRuntimeContribution();
       if (!initialized.ok) return initialized;
       return ok({
         maintenanceSource: initialized.value.maintenanceSource,

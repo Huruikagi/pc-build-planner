@@ -174,7 +174,7 @@
   - _Boundary: ApplicationShellIntegrationTests_
   - _Depends: 4.5, 4.6_
 
-- [ ] 4.8 生成物・security・import境界の最終gateを完成する
+- [x] 4.8 生成物・security・import境界の最終gateを完成する
   - production bundleへReactとReact DOMが同梱され、remote code、inline JavaScript、dynamic evaluation、runtime JSX変換、危険なHTML描画APIがないことを検査する
   - worker bundleにDOM・React依存がなく、shellがStorage API、foundation maintenance契約の再定義、foundation内部や下流feature内部へのdeep importを持たないことを検査する
   - dummy maintenance source、noop shell state observer、共有入口への下流feature自己登録をartifactとsourceの両方で拒否する
@@ -191,3 +191,4 @@
 - 統合start/stopはsingle-flightとepoch fenceで競合を無効化し、起動rollbackと停止cleanupはresourceごとに成功するまで所有権を保持する。
 - Composition rootは注入factoryのthrow・null・cleanup shapeを副作用前に検証し、公開APIをregistrationから一意導出して固定診断と逆順rollbackへ正規化する。
 - Production compositionはepoch/stop gateとcleanup成功までの所有権保持が必要で、feature unmount後にmaintenance購読を解除する。foundation failure表示経路もpresentation例外をtyped startup failureへ正規化する必要がある。
+- Task 4.8の境界gateで検出したcross-spec矛盾は、foundation所有のno-arg production factoryとshellのStorage/Web Locks非依存へ移行して解消した。
