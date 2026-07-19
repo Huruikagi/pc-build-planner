@@ -1,7 +1,7 @@
 # 実装計画
 
 - [ ] 1. Shell基盤と型付き契約を整備する
-- [ ] 1.1 TypeScript、Reactとruntime test基盤を構成する
+- [x] 1.1 TypeScript、Reactとruntime test基盤を構成する
   - React 19系、React DOM、対応する型定義、JSX変換、strictな型検査とDOM対応test環境を設定し、対象Node/Chromeとの互換性を検証する
   - production conditionでReactをbundleへ同梱し、CDN、runtime JSX変換、dynamic evaluationを必要としない構成にする
   - 完了時、最小React componentの型検査、production build、baseline DOM testが成功する

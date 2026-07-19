@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:public-consumer": "tsc --noEmit -p tsconfig.public-consumer.json",
     "lint": "biome check .",
-    "test": "node --test --test-isolation=none tests/**/*.test.ts",
+    "test": "node --import tsx --import ./tests/setup-dom.ts --test --test-isolation=none tests/**/*.test.ts tests/**/*.test.tsx",
     "install:e2e-browser": "playwright install chromium",
     "test:e2e": "pnpm build && playwright test",
     "build": "node scripts/build.mjs",
@@ -30,8 +30,17 @@
     "@biomejs/biome": "2.5.4",
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "chrome-types": "^0.1.435",
     "esbuild": "0.28.1",
+    "global-jsdom": "29.0.0",
+    "jsdom": "29.1.1",
+    "tsx": "4.23.1",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   }
 }

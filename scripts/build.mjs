@@ -11,7 +11,9 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
     entryPoints: {
       "build-contract": "src/build-contract.ts",
       foundation: "src/persistence/public.ts",
+      "react-runtime": "src/application-shell/runtime-baseline.tsx",
     },
+    define: { "process.env.NODE_ENV": '"production"' },
     format: "esm",
     outdir: outputDirectory,
     platform: "browser",
