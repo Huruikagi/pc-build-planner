@@ -3,12 +3,15 @@ import type {
   DataWorkerRegistration,
   FoundationCommandDecoder,
   FoundationDataPort,
+  FoundationRuntimeContribution,
+  FoundationRuntimePlatform,
   MaintenanceSnapshotSource,
   RootMutationCommand,
 } from "../../src/persistence/public.js";
 import {
   createDataWorkerRegistration,
   createMaintenanceSnapshotSource,
+  initializeFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
 
 export interface MockFoundationConsumer {
@@ -36,3 +39,8 @@ export const composeMaintenanceSource = (
   ...dependencies: Parameters<typeof createMaintenanceSnapshotSource>
 ): MaintenanceSnapshotSource =>
   createMaintenanceSnapshotSource(...dependencies);
+
+export const composeFoundationRuntime = (
+  platform: FoundationRuntimePlatform,
+): Promise<Result<FoundationRuntimeContribution, { readonly code: string }>> =>
+  initializeFoundationRuntimeContribution(platform);
