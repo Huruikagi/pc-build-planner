@@ -42,7 +42,7 @@
   - _Boundary: FeatureRegistry_
   - _Depends: 1.3_
 
-- [ ] 2.2 (P) 世代付きmaintenance projectionを実装する
+- [x] 2.2 (P) 世代付きmaintenance projectionを実装する
   - 完了済み`local-data-foundation` task 5.5の公開contract testとconsumer型検査を確認し、そのread-only portだけを利用する
   - foundationのread-only通知から現在のgeneration・revision cursorとactive状態を投影する
   - cursorを辞書順で比較し、古い世代・同一世代の古いrevision・重複通知を無視して状態後退を防ぐ
