@@ -52,7 +52,7 @@ const builder =
     );
     await writeFile(
       join(output, "foundation.js"),
-      "export const foundation = true;",
+      "const initializeFoundationRuntimeContribution=()=>{}; export { initializeFoundationRuntimeContribution };",
     );
     for (const [name, content] of Object.entries(extra))
       await writeFile(join(output, name), content);
@@ -163,6 +163,22 @@ test("manifest・code・公開境界・fixtureのartifact違反をすべて伝�
         'navigator.locks.request("pc-build-planner:local-data-root-write",()=>{});',
     }),
     builder(validManifest, { "photo.png": "synthetic bytes" }),
+    builder(validManifest, {
+      "foundation.js":
+        "const initializeFoundationRuntimeContribution=()=>{}; const createWriteAuthority=()=>{}; export { initializeFoundationRuntimeContribution, createWriteAuthority };",
+    }),
+    builder(validManifest, {
+      "foundation.js":
+        "const createCompositionRoot=()=>{}; export { createCompositionRoot };",
+    }),
+    builder(validManifest, {
+      "foundation.js":
+        "const initializeFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};export{initializeFoundationRuntimeContribution,createWriteAuthority as x};",
+    }),
+    builder(validManifest, {
+      "foundation.js":
+        "export const initializeFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};",
+    }),
   ];
   for (const build of cases) {
     const paths = await workspace();

@@ -29,6 +29,28 @@ test("domain と persistence の公開入口は許可された契約だけを公
   );
 });
 
+test("production contribution はshellがcomposeする最小handleだけを公開する", async () => {
+  const runtimeContribution = await readFile(
+    "src/persistence/runtime-contribution.ts",
+    "utf8",
+  );
+  const publicHandle = runtimeContribution.match(
+    /export interface FoundationRuntimeContribution\s*\{([\s\S]*?)\n\}/,
+  )?.[1];
+  assert.ok(publicHandle);
+  assert.match(publicHandle, /maintenanceSource:\s*MaintenanceSnapshotSource/);
+  assert.match(publicHandle, /workerRegistration:\s*DataWorkerRegistration/);
+  assert.match(publicHandle, /dispose\(\)/);
+  assert.doesNotMatch(
+    publicHandle,
+    /storage|repository|lock|runner|pipeline|authority|serviceWorker|compositionRoot/i,
+  );
+  assert.doesNotMatch(
+    await readFile("src/persistence/public.ts", "utf8"),
+    /createCompositionRoot|startApplicationShell|startServiceWorker/,
+  );
+});
+
 test("専用consumer型検査と境界検査が共通validateに組み込まれる", async () => {
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   assert.match(

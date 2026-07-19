@@ -79,6 +79,65 @@ function validateJavaScript(source, path) {
   }
 }
 
+const forbiddenFoundationExports = new Set([
+  "createChromeStorageAdapter",
+  "createCompositionRoot",
+  "createLocalDataRepository",
+  "createMutationPipeline",
+  "createRootTransactionRunner",
+  "createWebLocksAdapter",
+  "createWriteAuthority",
+  "startApplicationShell",
+  "startServiceWorker",
+]);
+
+/** @param {string} source @param {string} path */
+function validateFoundationPublicContract(source, path) {
+  const exportedNames = new Set();
+  const exportedBindings = new Set();
+  for (const match of source.matchAll(/\bexport\s*\{([\s\S]*?)\}/g)) {
+    for (const binding of (match[1] ?? "").split(",")) {
+      const names = binding.trim().split(/\s+as\s+/);
+      const sourceName = names[0]?.trim();
+      const exportedName = names.at(-1)?.trim();
+      if (sourceName) exportedBindings.add(sourceName);
+      if (exportedName) exportedNames.add(exportedName);
+    }
+  }
+  for (const match of source.matchAll(
+    /\bexport\s+(?:(?:async\s+)?function|class)\s+([A-Za-z_$][\w$]*)/g,
+  )) {
+    const name = match[1];
+    if (name) {
+      exportedBindings.add(name);
+      exportedNames.add(name);
+    }
+  }
+  for (const declaration of source.matchAll(
+    /\bexport\s+(?:const|let|var)\s+([^;]+)/g,
+  )) {
+    for (const binding of (declaration[1] ?? "").matchAll(
+      /(?:^|,)\s*([A-Za-z_$][\w$]*)\s*=/g,
+    )) {
+      const name = binding[1];
+      if (name) {
+        exportedBindings.add(name);
+        exportedNames.add(name);
+      }
+    }
+  }
+  if (!exportedNames.has("initializeFoundationRuntimeContribution")) {
+    fail(`foundation contribution initializer is not exported from ${path}`);
+  }
+  for (const name of forbiddenFoundationExports) {
+    if (exportedBindings.has(name) || exportedNames.has(name)) {
+      fail(
+        `foundation bundle exposes non-public capability ${name} from ${path}`,
+      );
+    }
+  }
+}
+
 /**
  * @param {string} source
  * @param {string} path
@@ -152,6 +211,12 @@ export async function validateArtifactDirectory(directory) {
   if (!files.includes(join(directory, "side-panel.js"))) {
     fail("side-panel.js is missing");
   }
+  const foundationPath = join(directory, "foundation.js");
+  if (files.includes(foundationPath))
+    validateFoundationPublicContract(
+      await readFile(foundationPath, "utf8"),
+      foundationPath,
+    );
 
   for (const path of files) {
     const extension = extname(path).toLowerCase();
