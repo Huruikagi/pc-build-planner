@@ -11,6 +11,7 @@ interface RegisteredFeature {
   registration: ApplicationFeatureRegistration;
   readonly availabilityListeners: Set<(value: Availability) => void>;
   availability: Availability;
+  readonly unsubscribeAvailability: () => void;
 }
 
 export function createFeatureRegistry(): FeatureRegistry {
@@ -55,6 +56,7 @@ export function createFeatureRegistry(): FeatureRegistry {
         availability: initialAvailability,
         availabilityListeners: new Set(),
         registration: feature,
+        unsubscribeAvailability: () => {},
       };
       let registered = false;
       let unsubscribeCandidate: unknown;
@@ -80,6 +82,10 @@ export function createFeatureRegistry(): FeatureRegistry {
         );
       }
 
+      Object.defineProperty(entry, "unsubscribeAvailability", {
+        value: unsubscribeCandidate,
+      });
+
       entry.registration = createSnapshotRegistration(entry);
       entries.set(entry.registration.id, entry);
       registered = true;
@@ -101,6 +107,22 @@ export function createFeatureRegistry(): FeatureRegistry {
         removed = true;
         listeners.delete(listener);
       };
+    },
+
+    dispose() {
+      const failures: unknown[] = [];
+      for (const entry of [...entries.values()].reverse()) {
+        try {
+          entry.unsubscribeAvailability();
+          entries.delete(entry.registration.id);
+        } catch (error: unknown) {
+          failures.push(error);
+        }
+      }
+      if (entries.size === 0) listeners.clear();
+      if (failures.length > 0) {
+        throw new AggregateError(failures, "Feature registry cleanup failed");
+      }
     },
   };
 }

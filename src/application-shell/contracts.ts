@@ -65,6 +65,7 @@ export interface FeatureRegistry {
   ): Result<void, RegistrationError>;
   snapshot(): readonly ApplicationFeatureRegistration[];
   subscribe(listener: () => void): () => void;
+  dispose?(): void;
 }
 
 export type MaintenanceCursor = {
@@ -128,6 +129,7 @@ export type CompositionError = {
 
 export interface ApplicationCompositionRoot<TRootApi extends object> {
   start(): Promise<Result<{ readonly api: TRootApi }, CompositionError>>;
+  stop(): Promise<void>;
 }
 
 export interface PublicApiEntry<

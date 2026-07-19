@@ -103,7 +103,7 @@
   - _Boundary: ApplicationShellIntegration_
   - _Depends: 2.2, 2.3, 2.4, 2.5, 3.1_
 
-- [ ] 3.4 Composition rootを実装する
+- [x] 3.4 Composition rootを実装する
   - foundation adapter、feature registry、worker registration、maintenance統合、host、public APIを一回だけ合成する
   - 必須依存の初期化失敗時はfeatureをmountせず、途中生成した購読とviewを逆順に解放する
   - 完了時、二重起動を防ぎ、root API、host開始、startup failure cleanupをintegration testで観測できる
@@ -144,3 +144,4 @@
 - 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。
 - 未信頼keyからroot契約を合成する辞書はnull prototypeとown property定義を使い、`__proto__`を含む予約名でも重複検出とprototype非汚染を保つ。
 - 統合start/stopはsingle-flightとepoch fenceで競合を無効化し、起動rollbackと停止cleanupはresourceごとに成功するまで所有権を保持する。
+- Composition rootは注入factoryのthrow・null・cleanup shapeを副作用前に検証し、公開APIをregistrationから一意導出して固定診断と逆順rollbackへ正規化する。
