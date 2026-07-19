@@ -183,6 +183,25 @@
   - _Boundary: ApplicationShellArtifactValidation_
   - _Depends: 4.7_
 
+- [x] 4.9 Chrome message targetとfoundation caller分類adapterを実装する
+  - `chrome.runtime.onMessage`をfoundation公開の`WorkerMessageTarget`へ変換し、messageとfail-closedに分類したcallerを非同期handlerへ渡す
+  - 既知foundation command kindだけをhandlerへroutingし、catalog actionを含む非foundation messageはhandler・`sendResponse`を呼ばず、応答channelを保持しない
+  - handler完了Resultを`sendResponse`へ一度だけ返してlistenerから`true`を返し、rejectionを安定失敗へ正規化し、解除を冪等にする
+  - runtime id・extension URL・tabを検査し、同一extension pageだけを`trusted-extension`、同一extension idでtabありを`content-script`、欠落・getter/URL例外・外部senderを`web-page`へ分類する
+  - 完了時、trusted/content/web分類、async応答、handler失敗、listener解除、catalog actionとの応答非競合をChrome adapter spyが決定的に検証する
+  - _Depends: local-data-foundation 6.8_
+  - _Requirements: 3.1, 3.3, 6.1, 6.3, 6.4_
+  - _Boundary: RuntimeAdapters_
+
+- [ ] 4.10 Foundation worker registrationをproduction service workerへ接続する
+  - service worker contextでfoundationの引数なしproduction factoryを初期化し、非同期foundation registrationと同期catalog registrationsを異なる契約のまま順序どおり合成する
+  - 各typed failureをworker startup failureへ正規化し、catalog登録失敗と停止でcatalog、foundation handler、foundation handleを逆順・best-effort・冪等に解放する
+  - concurrent startをsingle-flight化し、遅延したfoundation registration中のstopで後続catalogを開始せず、完了済みresourceを解放する
+  - 完了時、実service worker入口でfoundation query/mutation handlerが登録され、空catalog、途中rollback、start/stop競合、二重停止、worker bundleのDOM/React/Storage非依存がproduction-shaped runtime testとartifact gateで成功する
+  - _Depends: 4.9, local-data-foundation 6.8_
+  - _Requirements: 3.1, 3.3, 3.4, 6.1, 6.3, 6.4_
+  - _Boundary: ProductionWorkerComposition, RuntimeAdapters_
+
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
@@ -192,3 +211,4 @@
 - Composition rootは注入factoryのthrow・null・cleanup shapeを副作用前に検証し、公開APIをregistrationから一意導出して固定診断と逆順rollbackへ正規化する。
 - Production compositionはepoch/stop gateとcleanup成功までの所有権保持が必要で、feature unmount後にmaintenance購読を解除する。foundation failure表示経路もpresentation例外をtyped startup failureへ正規化する必要がある。
 - Task 4.8の境界gateで検出したcross-spec矛盾は、foundation所有のno-arg production factoryとshellのStorage/Web Locks非依存へ移行して解消した。
+- MV3 context間でfoundation handleを共有せず、side panelはmaintenance source、service workerはcommand registrationを各contextのno-arg factory handleから所有する。
