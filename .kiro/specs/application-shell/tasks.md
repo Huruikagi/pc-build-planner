@@ -24,7 +24,7 @@
   - _Requirements: 2.1, 2.5, 3.2, 5.6_
   - _Boundary: CoreContracts_
 
-- [ ] 1.4 下流feature向けcontract test kitを作る
+- [x] 1.4 下流feature向けcontract test kitを作る
   - 登録、React rootのmount/unmount、availability通知、購読解除の共通適合testを提供する
   - worker registrationの一意性、登録解除、途中失敗cleanupを同じtest kitで検証できるようにする
   - feature固有データをshellへ渡さなくてもfixtureを検証できるようにする
@@ -137,3 +137,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.3, 6.4_
   - _Boundary: ApplicationShellIntegrationTests_
   - _Depends: 4.1, 4.2_
+
+## Implementation Notes
+
+- Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
