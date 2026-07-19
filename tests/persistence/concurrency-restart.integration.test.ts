@@ -53,8 +53,8 @@ const createLockService = () => {
     async request(name, _options, callback) {
       const previous = tails.get(name) ?? Promise.resolve();
       if (tails.has(name)) waitedRequests += 1;
-      let release;
-      const current = new Promise((resolve) => {
+      let release: () => void;
+      const current = new Promise<void>((resolve) => {
         release = resolve;
       });
       tails.set(name, current);

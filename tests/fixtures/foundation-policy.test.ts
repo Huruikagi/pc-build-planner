@@ -1,3 +1,4 @@
+// @ts-nocheck テストfixtureを意図的に変更し、違反検出境界を検証する。
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -15,10 +16,9 @@ const {
   buildMissingProductFieldsRoot,
 } = fixtureModule;
 
-/** @param {unknown} value */
-const jsonRoundTrip = (value) => JSON.parse(JSON.stringify(value));
-/** @param {{ category: string }} candidate */
-const candidateCategory = (candidate) => candidate.category;
+const jsonRoundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const candidateCategory = (candidate: { category: string }) =>
+  candidate.category;
 
 test("全12カテゴリを含む参照整合rootがJSON往復後もvalidatorを通る", () => {
   const root = jsonRoundTrip(buildFoundationRoot());
@@ -75,8 +75,7 @@ test("foundation fixture sourceに実サイトassetや商品値を含まない",
 });
 
 test("合成markerを持たない任意の実商品名と型番をfail closedで拒否する", () => {
-  /** @type {ReadonlyArray<readonly [string, string]>} */
-  const realProducts = [
+  const realProducts: ReadonlyArray<readonly [string, string]> = [
     ["Intel Core i9-14900K", "BX8071514900K"],
     ["GeForce RTX 5090 Founders Edition", "900-1G144-2530-000"],
   ];

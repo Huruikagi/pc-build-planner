@@ -20,8 +20,8 @@ const createFakeWebLocks = () => {
     async request(name, options, callback) {
       requests.push({ name, mode: options.mode });
       const previous = tails.get(name) ?? Promise.resolve();
-      let release;
-      const current = new Promise((resolve) => {
+      let release: () => void;
+      const current = new Promise<void>((resolve) => {
         release = resolve;
       });
       tails.set(name, current);
@@ -53,8 +53,8 @@ for (const [name, createClients] of Object.entries(implementations)) {
   test(`${name}: 複数clientを順番に実行しcallback失敗後も次へ進む`, async () => {
     const [first, second] = createClients();
     const events = [];
-    let releaseFirst;
-    const firstMayFinish = new Promise((resolve) => {
+    let releaseFirst: () => void;
+    const firstMayFinish = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
 

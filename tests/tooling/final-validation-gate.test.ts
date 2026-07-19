@@ -28,10 +28,12 @@ async function workspace() {
   return { source, fixtures, output };
 }
 
-/** @param {typeof validManifest} manifest @param {Record<string, string>} extra */
 const builder =
-  (manifest = validManifest, extra = {}) =>
-  async (/** @type {string} */ output = "") => {
+  (
+    manifest: typeof validManifest = validManifest,
+    extra: Record<string, string> = {},
+  ) =>
+  async (output = "") => {
     await assert.rejects(access(join(output, "stale.js")));
     await mkdir(output, { recursive: true });
     await writeFile(join(output, "manifest.json"), JSON.stringify(manifest));
