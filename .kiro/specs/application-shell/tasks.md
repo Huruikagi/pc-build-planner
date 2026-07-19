@@ -59,7 +59,7 @@
   - _Boundary: MutationGate_
   - _Depends: 1.3_
 
-- [ ] 2.4 (P) 共通shell React viewとerror boundaryを実装する
+- [x] 2.4 (P) 共通shell React viewとerror boundaryを実装する
   - loading、error、maintenance、empty state、navigationをReact function componentとCSSで描画する
   - 外部由来messageを通常のJSX childとして扱い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない
   - featureのrender failureを安全なfallbackへ隔離し、他featureのnavigationを維持する
