@@ -52,7 +52,7 @@
   - _Boundary: MaintenanceProjection_
   - _Depends: 1.3_
 
-- [ ] 2.3 (P) Mutation gateを実装する
+- [x] 2.3 (P) Mutation gateを実装する
   - readとmutationの操作分類をmaintenance snapshotへ写像する
   - 完了時、active中はmutationだけを拒否し、inactive中とread操作を許可することをunit testで確認できる
   - _Requirements: 5.2, 5.3_
