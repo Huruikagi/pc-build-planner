@@ -26,18 +26,20 @@
 - 単一write authorityのcommand contract、worker registration factory、revision/request-id競合制御
 - foundation不変条件としてのCurrentBuild参照修復、root評価・置換、maintenance generation/owner fencing
 - 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
+- Chrome platform portからcanonical Repository、write authority、maintenance source、worker registrationを一度だけ組み立てるproduction runtime contribution factory
 
 ### Out of Boundary
 - `src/index.ts`、`src/runtime/service-worker.ts`、side panel host、feature registryのcomposition（`application-shell`所有）
 - runtime sender/tab/URLの業務別認可、ページDOM・content script payloadの意味解釈
 - 候補の選択数、編集権限、互換性、表示文言などfeature固有規則
 - backup JSON envelopeとファイル選択・download/upload（`backup-restore`所有）
+- `chrome.runtime.onMessage` adapter、sender metadataのplatform判定、listener登録・解除、side panel/service workerのstart/stop（`application-shell`所有）
 
 ### Allowed Dependencies
 - Chrome 116以降のManifest V3、`chrome.storage.local`、`crypto.randomUUID()`、標準JSON/Web API
 - Chrome 116以降のWeb Locks API。root writeの協調排他にだけ使用し、maintenance ownershipの永続根拠には使用しない
 - Node.js 26、pnpm 11、Biome 2、および実装開始時に互換性確認して固定するTypeScript/build/test/Chrome typings
-- `application-shell`はfoundationの`createDataWorkerRegistration`をcompositionできるが、foundationからshellへimportしない
+- `application-shell`はfoundationのproduction runtime contribution factoryだけを公開入口から利用し、返されたworker registrationとmaintenance sourceをcompositionする。foundationからshellへimportしない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
 
 ### Revalidation Triggers
@@ -46,6 +48,7 @@
 - maintenance generation/owner/lease、commit前fence、write authority routingの変更
 - root write lock名、`RootWriteLock`契約、またはWeb Locks APIを使わない排他方式への変更
 - storage key分割、quota前提、Storage API以外への移行、runtime registration契約の変更
+- production runtime contributionのplatform input、公開handle、初期access restriction、cleanup責務の変更
 
 ## Architecture
 
@@ -59,6 +62,11 @@
 graph LR
     Feature[Feature consumers] --> Ports[Foundation public ports]
     Shell[Application shell] --> Registration[Worker registration]
+    Shell --> Factory[Runtime contribution factory]
+    Factory --> Registration
+    Factory --> Snapshot[Maintenance snapshot]
+    Factory --> Adapter
+    Factory --> Lock
     Registration --> Authority[Write authority]
     Ports --> Authority
     Authority --> Runner[Root transaction runner]
@@ -113,6 +121,7 @@ src/persistence/root-write-lock.ts                  # RootWriteLock portと固�
 src/persistence/web-locks-adapter.ts                # navigator.locksのexclusive adapter
 src/persistence/maintenance.ts                     # 純粋なgeneration、owner、lease、fence policy
 src/persistence/maintenance-snapshot-source.ts     # 検証済みmaintenance snapshotと変更通知
+src/persistence/runtime-contribution.ts            # canonical production graphと最小公開handleの生成
 src/persistence/root-transaction-runner.ts          # lock内のread-check-write実行境界
 src/persistence/replacement.ts                     # canonical digest、assessment、replacement候補
 src/persistence/chrome-storage-adapter.ts           # Storage API、quota、access level adapter
@@ -214,9 +223,9 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1 | Chrome 116でMV3起動 | ManifestContract、BuildPipeline | manifest | build smoke |
+| 1.1 | Chrome 116でMV3起動 | ManifestContract、BuildPipeline、RuntimeContributionFactory | manifest、production contribution | build smoke |
 | 1.2 | remote・動的・inline code禁止 | BuildPipeline | validate script | artifact scan |
-| 1.3 | worker memory非依存 | RootTransactionRunner、MaintenancePolicy | Web Lock、durable cursor | 両flow |
+| 1.3 | worker memory非依存 | RootTransactionRunner、MaintenancePolicy、RuntimeContributionFactory | Web Lock、durable cursor、再初期化 | 両flow |
 | 1.4 | 最小権限 | ManifestContract | storage permission | manifest test |
 | 2.1 | version付き共有契約 | DomainModel | domain public | root validation |
 | 2.2 | 全category | NormalizedAttributeModel | category union | validation |
@@ -224,7 +233,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 2.4 | 欠損とcategory属性 | DomainModel、SchemaValidator | optional fields、attribute union | validation |
 | 2.5 | IDと日時規約 | IdentifierPolicy | branded ID、UtcTimestamp | validation |
 | 2.6 | 参照関係 | DomainModel、ReferenceRepairPolicy | root invariants | mutation flow |
-| 3.1 | CRUD結果と永続化 | MutationPipeline、RootTransactionRunner、WriteAuthority | FoundationDataPort | mutation flow |
+| 3.1 | CRUD結果と永続化 | MutationPipeline、RootTransactionRunner、WriteAuthority、RuntimeContributionFactory | FoundationDataPort、worker registration | mutation flow |
 | 3.2 | 保存前検証 | MutationPipeline、SchemaValidator | mutateRoot | mutation flow |
 | 3.3 | 読取時検証 | LocalDataRepository、MigrationRegistry | readRoot | read flow |
 | 3.4 | 破損をtyped failure化 | SchemaValidator | RepositoryError | read flow |
@@ -242,7 +251,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 5.3 | quota超過拒否 | CapacityPolicy、StorageAdapter | quota-exceeded | mutation flow |
 | 5.4 | HTML・画像拒否 | SchemaValidator | validation issue | validation |
 | 5.5 | unlimitedStorage非依存 | ManifestContract | manifest | manifest test |
-| 6.1 | trusted context限定 | StorageAdapter | restrictAccess | startup registration |
+| 6.1 | trusted context限定 | StorageAdapter、RuntimeContributionFactory | restrictAccess | production initialization |
 | 6.2 | 未信頼入力検証 | WorkerRegistration、SchemaValidator | unknown command decoder | mutation flow |
 | 6.3 | content scriptへ直接APIなし | WorkerRegistration、import boundary | public ports | contract test |
 | 6.4 | 不許可caller拒否 | WorkerRegistration | authorization result | contract test |
@@ -253,7 +262,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 7.5 | stale owner・generation拒否 | MaintenancePolicy、RootTransactionRunner | MaintenanceCursor | replacement flow |
 | 7.6 | worker再生成耐性 | MaintenancePolicy、RootTransactionRunner | persisted state、new lock request | restart test |
 | 7.7 | 終了・中止後の再開 | MaintenancePolicy、RootTransactionRunner | release/abort transition | replacement flow |
-| 7.8 | 検証済み保守状態のread-only通知 | MaintenanceSnapshotSource、LocalDataRepository | getSnapshot、subscribe | maintenance observation |
+| 7.8 | 検証済み保守状態のread-only通知 | MaintenanceSnapshotSource、LocalDataRepository、RuntimeContributionFactory | getSnapshot、subscribe、production contribution | maintenance observation |
 | 8.1 | 架空dataのみ | FoundationFixtures | fixture builders | all tests |
 | 8.2 | 主要失敗・成功の自動検証 | FoundationFixtures | in-memory ports | all tests |
 | 8.3 | 実サイトasset不要 | FoundationFixtures | synthetic values | artifact scan |
@@ -273,6 +282,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
 | MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
 | MaintenanceSnapshotSource | Persistence adapter | 検証済みmaintenance cursorをread-onlyで公開 | 7.8 | LocalDataRepository P0、Storage change P1 | Service、State |
+| RuntimeContributionFactory | Composition adapter | platform portからcanonical foundation graphを一度だけ生成 | 1.1, 1.3, 3.1, 6.1, 7.8 | ChromeStorageAdapter P0、RootWriteLock P0、WriteAuthority P0 | Service |
 | RootWriteLock | Persistence port | 協調writerのread-check-writeを線形化 | 1.3, 3.8, 7.4–7.7 | Web Locks API P0 | Service |
 | RootTransactionRunner | Persistence | lock内で最新rootを読み単一setまで実行 | 1.3, 3.1–3.8, 7.2–7.7 | RootWriteLock P0、StoragePort P0 | Service |
 | ReplacementCoordinator | Persistence | 評価済みrootのcommit候補を構築 | 7.1–7.3 | Validator P0、MaintenancePolicy P0 | Service |
@@ -433,6 +443,37 @@ interface ReplacementAssessment {
 
 ### Runtime and Adapter Layer
 
+#### RuntimeContributionFactory
+
+```typescript
+interface FoundationRuntimePlatform {
+  readonly storageLocal: ChromeStorageLocalApi;
+  readonly storageChanges: StorageChangeEvent;
+  readonly locks: WebLocksApi;
+  readonly authorize: DataWorkerRegistrationDependencies["authorize"];
+  readonly now: () => UtcTimestamp;
+  readonly reportError: (error: FoundationError) => void;
+}
+
+interface FoundationRuntimeContribution {
+  readonly maintenanceSource: MaintenanceSnapshotSource;
+  readonly workerRegistration: DataWorkerRegistration;
+  dispose(): void | Promise<void>;
+}
+
+function initializeFoundationRuntimeContribution(
+  platform: FoundationRuntimePlatform,
+): Promise<Result<FoundationRuntimeContribution, FoundationRuntimeInitializationError>>;
+```
+
+initializerはChrome Storage adapter、canonical migration registry、Repository、Web Locks adapter、transaction runner、mutation pipeline、write authority、maintenance snapshot source、worker registrationを同じ依存graphへ一度だけ組み立てる。schema、migration step、validator、reference repair、maintenance、replacement、command decoderはfoundation所有のcanonical実装を使用し、application-shellから差し替えさせない。
+
+初期化時にStorage accessを`TRUSTED_CONTEXTS`へ制限し、失敗時はtyped failureを返してcontributionを公開しない。worker registrationへは同じ成功結果を再利用するfail-closedなrestrict callbackを渡し、side panel起動とworker登録の順序へ安全性を依存させない。
+
+公開handleはread-only maintenance sourceと未登録のworker registrationだけを返す。Repository、StoragePort、RootWriteLock、runner、pipeline、authority、owner/lease capabilityは返さない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
+
+initializerは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。platform portの必須shapeは副作用前に検証し、不正または不足した依存では部分的なgraphを作らない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
+
 #### WriteAuthority and WorkerRegistration
 
 ```typescript
@@ -500,6 +541,9 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去と、無関係参照の保持を検証する（3.7）。
 - `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。
 - `MaintenanceSnapshotSource`で検証済み初期snapshot、開始・終了通知、購読解除、破損変更値の拒否を検証する（7.8）。
+- `RuntimeContributionFactory`が一つのcanonical graphからmaintenance sourceとworker registrationを生成し、両者が同じroot revisionとmaintenance stateを観測することを検証する（1.3, 3.1, 7.8）。
+- 不正platform portを副作用前に拒否し、初期access restriction失敗時にcontributionとworker handlerを公開せず、handleがRepository、Storage、lock、authorityを露出しないことを検証する（6.1–6.4）。
+- 同じStorageへfactory graphを再生成し、active maintenance fenceとrevisionを再読込してowner外writeを拒否することを検証する（1.3, 7.4–7.8）。
 
 ### Contract and Integration Tests
 - `MutationPipeline`でCRUD候補、reference repair、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 5.1–5.3）。
@@ -545,4 +589,4 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 
 初期rootは`schemaVersion: 1`、`revision: 0`で生成する。migrationは純粋な`N -> N+1`stepとして順序適用し、各stepと最終rootを検証する。通常readは移行済みsnapshotを返すが、永続化は明示mutation pipeline内だけで行う。失敗、未知の将来版、容量不足ではsource rootを上書きしない。
 
-application shell導入時は、foundationの`createDataWorkerRegistration`をshell-owned `src/runtime/service-worker.ts`へcompositionする。foundationが一時的な共有runtime入口を作成して移管するmigrationは行わない。
+application shell導入時は、foundationの`initializeFoundationRuntimeContribution`をshell-owned production compositionから呼び、返されたworker registrationを`src/runtime/service-worker.ts`へ、maintenance sourceをside panel compositionへ接続する。foundationが一時的な共有runtime入口を作成して移管するmigrationは行わない。

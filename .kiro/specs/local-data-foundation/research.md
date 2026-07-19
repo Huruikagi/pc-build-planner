@@ -80,6 +80,17 @@
 
 ## Design Decisions
 
+### Decision: production runtime contributionをfoundation公開initializerへ集約する
+- **Context**: application-shellがcanonical maintenance sourceとworker registrationを必要とする一方、現行公開面だけではRepository、Storage adapter、runner、authorityをdeep importせずproduction graphを構築できない。
+- **Alternatives Considered**:
+  1. application-shellがpersistence内部constructorを直接組み立てる — foundation所有権と公開import境界を破る。
+  2. foundationが共有service worker入口を所有する — application-shellの単一composition ownerと競合する。
+  3. foundationが最小runtime contribution initializerを公開する — 内部graphを隠しながらshellへ必要portだけを渡せる。
+- **Selected Approach**: typed Chrome platform portを受け、Storage access restriction後にcanonical persistence graphを一度だけ生成し、`MaintenanceSnapshotSource`、`DataWorkerRegistration`、冪等`dispose`だけを返すinitializerをfoundationが所有する。
+- **Rationale**: Storage、Repository、lock、authorityを非公開のまま維持し、application-shellはruntime listenerとUI compositionだけを所有できる。初期access restrictionによりside panelとworkerの起動順へ安全性を依存させない。
+- **Trade-offs**: platform portのshapeは新しい公開契約になるが、Chrome global丸ごとの注入やshell型への逆依存を避けられる。
+- **Follow-up**: public consumer型検査、同一root観測、worker再生成、access restriction失敗、cleanup所有権をcontract testで固定する。
+
 ### Decision: 単一バージョン付きrootとrevision
 - **Context**: 参照整合性、競合検出、全体置換を同じ境界で扱う。
 - **Alternatives Considered**: entity別キー、event store、単一root。
