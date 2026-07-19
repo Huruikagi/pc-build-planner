@@ -130,7 +130,7 @@
   - _Boundary: FeatureContributionCatalog_
   - _Depends: 1.3, 3.2_
 
-- [ ] 4.3 Worker contributionを一度だけcompositionする
+- [x] 4.3 Worker contributionを一度だけcompositionする
   - catalogのworker項目だけを共有workerへ登録し、DOM、HTMLElement、Reactへの依存をworker lifecycleへ持ち込まない
   - feature識別子の一意性を検証し、途中失敗時は取得済みhandlerを逆順かつ全件best-effortで解除する
   - 停止と再停止で重複handlerや二重解除を生じない冪等なcleanupを提供する
