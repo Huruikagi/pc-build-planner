@@ -110,19 +110,19 @@ export function createApplicationShellIntegration(
 
   const cleanupOwned = async (): Promise<void> => {
     const failures: unknown[] = [];
+    if (hostOwned) {
+      try {
+        await host.stop();
+        hostOwned = false;
+      } catch (error: unknown) {
+        failures.push(error);
+      }
+    }
     const unsubscribe = unsubscribeSource;
     if (unsubscribe !== undefined) {
       try {
         unsubscribe();
         if (unsubscribeSource === unsubscribe) unsubscribeSource = undefined;
-      } catch (error: unknown) {
-        failures.push(error);
-      }
-    }
-    if (hostOwned) {
-      try {
-        await host.stop();
-        hostOwned = false;
       } catch (error: unknown) {
         failures.push(error);
       }
