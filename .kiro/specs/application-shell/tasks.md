@@ -15,7 +15,7 @@
   - _Requirements: 6.1, 6.3_
   - _Boundary: RuntimeAdapters_
 
-- [ ] 1.3 Feature registrationと共通shell stateの契約を定義する
+- [x] 1.3 Feature registrationと共通shell stateの契約を定義する
   - feature識別子、navigation metadata、availability、mount/unmount、operation policy、型付きerrorを表現する
   - featureが共有service worker入口を編集せずaction handler等を提供できるworker registration契約を表現する
   - foundation公開の`MaintenanceSnapshot`と`MaintenanceSnapshotSource`をcanonical契約として利用し、shell内で同等portを再定義しない
