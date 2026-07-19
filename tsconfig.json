@@ -13,7 +13,7 @@
     "noUncheckedIndexedAccess": true,
     "strict": true,
     "target": "ES2024",
-    "types": ["node"]
+    "types": ["node", "chrome-types"]
   },
   "include": [
     "e2e/**/*.ts",

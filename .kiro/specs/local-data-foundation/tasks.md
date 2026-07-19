@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. TypeScript拡張プロジェクトと検証基盤を整える
+- [x] 1. TypeScript拡張プロジェクトと検証基盤を整える
 - [x] 1.1 厳密な型検査、ビルド、テストを実行できる開発環境を構成する
   - Node.js 26とpnpm 11で再現可能なTypeScript、ESMバンドル、テスト、Biomeの設定と共通検証コマンドを追加する
   - `any`を許さないstrict型検査と、未パッケージ拡張成果物を生成するbuild契約を確立する
@@ -13,7 +13,7 @@
   - 生成物がChromeで読み込み可能な最小MV3拡張となり、禁止権限・禁止コード検査に合格することを完了条件とする
   - _Requirements: 1.1, 1.2, 1.4, 5.5_
 
-- [ ] 2. 共有ドメイン契約と信頼境界の検証を実装する
+- [x] 2. 共有ドメイン契約と信頼境界の検証を実装する
 - [x] 2.1 識別子、日時、schema、結果型の基礎契約を実装する
   - UUID、UTC ISO 8601日時、現行schema version、revision、request IDの生成・検証規約を提供する
   - 検証、破損、移行、修復、競合、保守、容量、アクセス、保存失敗を判別できるcanonical Result契約を定義する
@@ -38,7 +38,7 @@
   - 入力を変更せず、架空の有効値だけを受理し、破損値を正常値として返さないテストが成功することを完了条件とする
   - _Requirements: 2.1, 2.4, 2.5, 2.6, 3.2, 3.3, 3.4, 5.4, 6.2, 7.1_
 
-- [ ] 3. 永続化の純粋な方針とChrome adapterを実装する
+- [x] 3. 永続化の純粋な方針とChrome adapterを実装する
 - [x] 3.1 (P) 連続schema移行レジストリを実装する
   - NからN+1だけを許す移行stepと、現行版まで順序適用する契約を提供する
   - 各stepと最終rootを検証し、将来版、経路欠落、検証失敗を区別してsourceを変更しない
@@ -78,7 +78,7 @@
   - _Requirements: 1.3, 3.5, 5.1, 5.3, 6.1_
   - _Boundary: ChromeStorageAdapter_
 
-- [ ] 4. 単一root transactionと保守・置換を実装する
+- [x] 4. 単一root transactionと保守・置換を実装する
 - [x] 4.1 (P) 協調writerを直列化するroot write lockを実装する
   - 全writerが共有する固定lock名でexclusive実行し、Storage portへ排他責務を追加しない
   - Web Locks実装と決定的なin-memory実装が同じ協調排他契約を満たすようにする
@@ -147,7 +147,7 @@
   - _Depends: 4.5, 4.6, 4.8_
   - _Requirements: 4.2, 5.1, 5.3, 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 5. 単一write authorityと公開runtime境界を統合する
+- [x] 5. 単一write authorityと公開runtime境界を統合する
 - [x] 5.1 request ID再試行とrevision競合をroot transactionへ統合する
   - 同じrequest IDとpayloadの再試行へ保存済みreceiptを返し、異なるpayloadの再利用をrequest conflictへ変換する
   - request記録を固定上限でevictし、保持期間外の再送はexpected revisionで判定する
@@ -176,7 +176,7 @@
   - _Depends: 5.3_
   - _Requirements: 2.1, 3.1, 3.8, 6.3_
 
-- [ ] 6. 架空データによる回帰・性能・生成物検証を完成する
+- [x] 6. 架空データによる回帰・性能・生成物検証を完成する
 - [x] 6.1 架空fixtureとasset policyを完成する
   - 全12カテゴリ、欠損値、元表記・確認値、参照整合root、各種破損rootを架空値だけで生成する
   - 生HTML、画像、data URL、実サイト商品値をfixtureへ混入させない検査を追加する
