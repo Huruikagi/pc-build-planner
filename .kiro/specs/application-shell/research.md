@@ -2,9 +2,10 @@
 
 ## サマリー
 - **Feature**: `application-shell`
-- **Discovery Scope**: New Feature（greenfield、統合境界中心）
+- **Discovery Scope**: Extension（実装済みlocal data foundationへの統合境界中心）
 - **主な所見**:
-  - 実装済みコードや既存extension pointはなく、roadmapとbriefが契約の正本である。
+  - local data foundation、MV3 manifest、build/test基盤は実装済みで、application shellとUI runtimeが未実装である。
+  - foundationは永続`MaintenanceState`に加え、完了済みtask 5.5で検証済みread-only `MaintenanceSnapshotSource`を公開している。
   - shellは永続化やmaintenance leaseを所有せず、foundationの世代付きread-only状態だけを投影する必要がある。
   - 一覧、フォーム、確認、失敗回復を横断するUI規模を踏まえ、React 19系を宣言的な表示adapterとして採用する。
   - React DOMの`createRoot`と`root.unmount()`は既存のcontainerベースmount/unmount契約を変更せず統合できる。
@@ -15,8 +16,14 @@
 ### 既存構造と統合点
 - **背景**: 共有runtime入口の所有権競合を解消する必要がある。
 - **参照元**: `brief.md`、`.kiro/steering/roadmap.md`、リポジトリのファイル構造。
-- **所見**: `src/` と `tests/` は未作成。下流featureはregistration moduleと`public.ts`を供給し、shellだけが`side-panel.html`、`src/runtime/side-panel.ts`、`src/index.ts`を所有する。
-- **影響**: contract-firstでファイル境界を新設し、統合fixtureで下流featureを模擬する。
+- **所見**: `src/domain/`、`src/persistence/`と対応testは実装済みである。下流featureはregistration moduleと`public.ts`を供給し、shellだけが`side-panel.html`、`src/runtime/side-panel.ts`、`src/index.ts`を所有する。
+- **影響**: canonical `Result<T, E>`とfoundation公開型を再利用し、既存foundation build/testを壊さずshell entryを追加する。統合fixtureでは下流featureを模擬する。
+
+### Foundation maintenance公開境界
+- **背景**: shellはmaintenance開始・終了と順序を観測する必要がある一方、Storageやleaseを所有してはならない。
+- **参照元**: `src/domain/model.ts`、`src/persistence/write-authority.ts`、`src/persistence/maintenance.ts`、`src/persistence/public.ts`。
+- **所見**: `local-data-foundation` task 5.5は完了済みで、`src/persistence/public.ts`から`MaintenanceSnapshot`、`MaintenanceSnapshotSource`、factoryを公開している。sourceは検証済みrootからgeneration・revision・activeだけを返し、Storage変更をRepository経由で再検証する。
+- **影響**: shellはcanonical sourceをcomposition rootへ注入し、`chrome.storage.onChanged`、owner、lease APIへ直接依存しない。shell側の重複portは作成しない。
 
 ### Platform適合性
 - **背景**: Chrome 116以降のManifest V3 side panelを対象とする。
@@ -46,6 +53,7 @@
 - **背景**: 通知の遅延やworker再生成で古い状態が到着し得る。
 - **選択**: shellは`(generation, revision)`の最大cursorを保持し、それ以下の通知を無視するread-only projectionとする。
 - **理由**: lease所有をfoundationに残しながらUIの状態後退を防ぐ。
+- **Follow-up**: `local-data-foundation` task 5.5と公開境界contract testの成功をapplication-shell実装開始時の前提確認とする。
 
 ### 判断: Reactを表示adapterとして採用
 - **背景**: shell自体は薄いが、下流featureは一覧、複数フォーム、確認、非同期失敗回復を持ち、標準DOMの手動更新では見通しが悪化する。
@@ -70,10 +78,16 @@
 - gesture消失 — `sidePanel.open()`を同期的なユーザー操作adapter内で呼ぶ統合試験を設ける。
 - React rootまたは購読の残存 — feature切替、mount失敗、shell停止のcontract/integration testでcleanupを検証する。
 - React開発buildやremote codeの混入 — production conditionでbundleし、artifact検査でremote script、eval、runtime JSX変換を拒否する。
+- foundation通知契約のdrift — task 5.5の公開consumer型検査をapplication-shell統合前に実行し、shell側の重複定義とStorage直接購読を境界検査で禁止する。
 
 ## 参照
 - `.kiro/steering/roadmap.md`
 - `.kiro/specs/application-shell/brief.md`
+- `src/persistence/public.ts`
+- `src/persistence/write-authority.ts`
+- `src/persistence/maintenance.ts`
+- `src/persistence/maintenance-snapshot-source.ts`
+- `.kiro/specs/local-data-foundation/tasks.md` task 5.5
 - [React `createRoot`](https://react.dev/reference/react-dom/client/createRoot)
 - [ReactでTypeScriptを使用する](https://react.dev/learn/typescript)
 - [Chrome Extensions Content Security Policy](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)

@@ -32,7 +32,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - feature公開契約の内容そのもの。
 
 ### 許可する依存
-- `local-data-foundation`の公開型、maintenance state購読、write authorityの公開契約。
+- local data foundationの公開型、canonical `Result<T, E>`、query契約、および完了済み`local-data-foundation` task 5.5が公開するread-only `MaintenanceSnapshotSource`。
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
 - Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
 - dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
@@ -42,8 +42,16 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - foundationのmaintenance世代・購読契約の変更。
 - root entry、side panel起動順序、`sidePanel.open()` gesture入口の変更。
 - shellとfeature間のファイル所有権または依存方向の変更。
+- foundationの`MaintenanceSnapshot`または`MaintenanceSnapshotSource`公開契約、`local-data-foundation` task 5.5の完了状態が変更された場合。
 
 ## アーキテクチャ
+
+### 既存アーキテクチャ分析
+
+- `src/domain/`と`src/persistence/`にはstrict TypeScriptのlocal data foundation、canonical `Result<T, E>`、永続maintenance state、query/mutation portが実装済みである。
+- `manifest.json`、esbuildによるChrome 116 target、Node test、Playwright、artifact/boundary検査は既存基盤として維持する。
+- application shell、React runtime、side panel document、feature registrationは未実装である。
+- foundationは`src/persistence/maintenance-snapshot-source.ts`と`src/persistence/public.ts`から検証済みread-only `MaintenanceSnapshotSource`を公開済みである。application-shellはこの契約をcomposition rootへ注入し、Storage APIを直接監視しない。
 
 ### Architecture Pattern & Boundary Map
 
@@ -71,10 +79,10 @@ graph TB
 
 | Layer | 選択 / Version | 役割 | 注記 |
 |---|---|---|---|
-| 言語 | TypeScript 最新stable major | 型付き契約とruntime実装 | `any`禁止、strict mode |
+| 言語 | TypeScript 7.0.2 | 型付き契約とruntime実装 | 既存固定version、`any`禁止、strict mode |
 | UI | React 19系 / React DOM / CSS | side panel host、共通表示、feature viewの宣言的描画 | production bundleへ同梱、JSXを使用 |
 | Runtime | Chrome 116+ Manifest V3 | Side Panel APIとgesture entry | 実行コードを同梱 |
-| Test | 実装開始時点の最新stable test runner + DOM環境 | unit/integration | Node互換性を導入時検証 |
+| Build/Test | esbuild 0.28.1、Node 26.5.0 test、Playwright 1.61.1 | bundle、unit/integration、MV3 E2E | DOM test環境はReact導入時に互換性確認して固定 |
 
 ## ファイル構造計画
 
@@ -103,7 +111,7 @@ tests/
 └── integration/application-shell.test.ts # bootstrap、遷移、障害、maintenance統合
 ```
 
-新規greenfieldのため、上記はすべて新規作成対象である。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。
+上記はすべて新規作成対象である。既存`manifest.json`、`scripts/build.mjs`、`package.json`、`tsconfig.json`、`playwright.config.ts`はside panel entry、React/DOM test、bundle entryを追加するため変更する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。
 
 ## システムフロー
 
@@ -129,12 +137,12 @@ sequenceDiagram
 
 | 要件 | 概要 | Components | Interfaces / Flows |
 |---|---|---|---|
-| 1.1–1.5 | hostとnavigation | SidePanelHost, ShellView, ReactShellRoot | RegistrySnapshot, FeatureMount |
-| 2.1–2.5 | feature登録 | FeatureRegistry | ApplicationFeatureRegistration |
-| 3.1–3.4 | compositionと公開API | CompositionRoot, PublicApiRegistry | start, composePublicApi |
-| 4.1–4.4 | 共通状態と障害分離 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState |
-| 5.1–5.6 | maintenance抑止 | MaintenanceProjection, MutationGate | MaintenancePresentationPort |
-| 6.1–6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
+| 1.1, 1.2, 1.3, 1.4, 1.5 | hostとnavigation | SidePanelHost, ShellView, ReactShellRoot | RegistrySnapshot, FeatureMount |
+| 2.1, 2.2, 2.3, 2.4, 2.5 | feature登録 | FeatureRegistry | ApplicationFeatureRegistration |
+| 3.1, 3.2, 3.3, 3.4 | compositionと公開API | CompositionRoot, PublicApiRegistry | start, composePublicApi |
+| 4.1, 4.2, 4.3, 4.4 | 共通状態と障害分離 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | maintenance抑止 | MaintenanceProjection, MutationGate | MaintenanceSnapshotSource |
+| 6.1, 6.2, 6.3, 6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
 
 ## Components and Interfaces
 
@@ -204,23 +212,28 @@ worker registrationは同じfeature idで一意にし、共有`src/runtime/servi
 ### MaintenanceProjection and MutationGate
 
 ```typescript
+import type {
+  MaintenanceSnapshot as FoundationMaintenanceSnapshot,
+  MaintenanceSnapshotSource,
+} from "../persistence/public.js";
+
 type MaintenanceCursor = {
   readonly generation: number;
   readonly revision: number;
 };
-type MaintenanceState =
+type ShellMaintenanceState =
   | { readonly status: "inactive"; readonly cursor: MaintenanceCursor }
   | { readonly status: "active"; readonly cursor: MaintenanceCursor; readonly message: string };
 
 interface MaintenancePresentationPort {
-  getSnapshot(): MaintenanceState;
-  subscribe(listener: (state: MaintenanceState) => void): () => void;
+  getSnapshot(): ShellMaintenanceState;
+  subscribe(listener: (state: ShellMaintenanceState) => void): () => void;
 }
 
 interface MaintenanceProjection {
-  accept(next: MaintenanceState): "applied" | "stale_ignored";
-  getSnapshot(): MaintenanceState;
-  subscribe(listener: (state: MaintenanceState) => void): () => void;
+  accept(next: FoundationMaintenanceSnapshot): "applied" | "stale_ignored";
+  getSnapshot(): ShellMaintenanceState;
+  subscribe(listener: (state: ShellMaintenanceState) => void): () => void;
 }
 
 interface MutationGate {
@@ -230,6 +243,8 @@ interface MutationGate {
 
 - `(generation, revision)`を辞書順の単調cursorとして比較し、現在cursor以下の通知を無視する。foundationはmaintenance開始・更新・終了ごとにrevisionを増加させるため、同一generationの正当な終了と遅延した開始通知を決定的に区別できる。generationまたはrevisionが負、あるいは有限整数でない通知は契約違反として拒否する。
 - gateは`read`を常に許可し、`mutation`をactive中だけ拒否する。shellはdomain側の最終的なwrite拒否を代替しない。
+- `FoundationMaintenanceSnapshot`はfoundationのcanonical `MaintenanceSnapshot`をalias importした型であり、`MaintenanceSnapshotSource`とともにshell内で再定義しない。sourceは`generation`、root `revision`、`active`だけを通知する。
+- shellはsourceの初期snapshot取得失敗をstartup failureへ変換し、成功snapshotを単調projectionへ渡す。active表示文言はshell所有の固定安全文字列から生成し、foundationへmessage責務を追加しない。
 
 ### SidePanelHost and Presentation
 
@@ -285,6 +300,7 @@ CompositionRootだけが具体的なfoundation adapterとfeature registrationを
 - feature切替でunmount→mount順序となり同時表示が発生しない（1.2–1.5）。
 - mount失敗後も別featureへ遷移できる（4.2–4.3）。
 - maintenance通知が全navigationへ反映され、readは維持されmutationが無効になる（5.1–5.5）。
+- foundation通知portの初期snapshot、順序逆転、購読解除を模擬し、shellがStorage APIを直接参照しないことをcontract/boundary testで確認する（5.1, 5.4, 5.5, 5.6）。
 
 ### E2E / Runtime
 - Chrome 116+相当のMV3 fixtureでside panel bootstrapとnavigationを検証する（6.1）。

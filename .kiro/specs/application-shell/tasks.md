@@ -18,8 +18,9 @@
 - [ ] 1.3 Feature registrationと共通shell stateの契約を定義する
   - feature識別子、navigation metadata、availability、mount/unmount、operation policy、型付きerrorを表現する
   - featureが共有service worker入口を編集せずaction handler等を提供できるworker registration契約を表現する
-  - maintenanceの世代付き状態と購読契約、root public contract合成の型制約を表現する
-  - 完了時、模擬featureとfoundation adapterが`any`なしで契約適合を型検査できる
+  - foundation公開の`MaintenanceSnapshot`と`MaintenanceSnapshotSource`をcanonical契約として利用し、shell内で同等portを再定義しない
+  - maintenanceの表示用stateとroot public contract合成の型制約を表現する
+  - 完了時、模擬featureとfoundation公開portが`any`や重複maintenance契約なしで型検査できる
   - _Requirements: 2.1, 2.5, 3.2, 5.6_
   - _Boundary: CoreContracts_
 
@@ -42,6 +43,7 @@
   - _Depends: 1.3_
 
 - [ ] 2.2 (P) 世代付きmaintenance projectionを実装する
+  - 完了済み`local-data-foundation` task 5.5の公開contract testとconsumer型検査を確認し、そのread-only portだけを利用する
   - foundationのread-only通知から現在のgeneration・revision cursorとactive状態を投影する
   - cursorを辞書順で比較し、古い世代・同一世代の古いrevision・重複通知を無視して状態後退を防ぐ
   - shell側ではlease取得・更新・解放を一切行わない
@@ -57,14 +59,22 @@
   - _Boundary: MutationGate_
   - _Depends: 1.3_
 
-- [ ] 2.4 (P) 共通shell React viewとroot adapterを実装する
+- [ ] 2.4 (P) 共通shell React viewとerror boundaryを実装する
   - loading、error、maintenance、empty state、navigationをReact function componentとCSSで描画する
-  - shell host containerへReact rootを生成し、停止・失敗時に購読とrootを冪等にcleanupするadapterを実装する
   - 外部由来messageを通常のJSX childとして扱い、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない
-  - 完了時、各共通状態、安全なテキスト表示、root cleanupを利用者視点のDOM testで観測できる
-  - _Requirements: 4.1, 4.4, 5.1_
-  - _Boundary: ShellView, ReactShellRoot, ShellErrorBoundary_
-  - _Depends: 1.2, 1.3_
+  - featureのrender failureを安全なfallbackへ隔離し、他featureのnavigationを維持する
+  - 完了時、各共通状態、安全なテキスト表示、render failure隔離を利用者視点のDOM testで観測できる
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1_
+  - _Boundary: ShellView, ShellErrorBoundary_
+  - _Depends: 1.1, 1.3_
+
+- [ ] 2.5 (P) React shell root adapterを実装する
+  - shell host containerへReact rootを生成し、shell stateの購読と描画を接続する
+  - 停止、起動失敗、再mount時に購読解除と`root.unmount()`を一度だけ実行できる冪等なcleanupを提供する
+  - 完了時、mount、状態更新、停止、再mountのroot lifecycle testですべてのresource解放を観測できる
+  - _Requirements: 1.1, 1.2, 1.3, 1.5, 4.1, 6.4_
+  - _Boundary: ReactShellRoot_
+  - _Depends: 1.1, 1.3_
 
 - [ ] 3. Hostとcompositionを統合する
 - [ ] 3.1 Side panel hostのnavigationとfeature lifecycleを実装する
@@ -75,7 +85,7 @@
   - 完了時、切替順序、単一表示、利用不可遷移、障害分離がhost integration testで確認できる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.4, 4.2, 4.3_
   - _Boundary: SidePanelHost_
-  - _Depends: 2.1, 2.3, 2.4_
+  - _Depends: 2.1, 2.3, 2.4, 2.5_
 
 - [ ] 3.2 Public API registryを実装する
   - feature単位の公開契約をreadonlyなroot契約としてまとめる
@@ -91,7 +101,7 @@
   - 完了時、遅延した古い通知を含む統合scenarioで全featureの操作可否が一貫する
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: ApplicationShellIntegration_
-  - _Depends: 2.2, 2.3, 2.4, 3.1_
+  - _Depends: 2.2, 2.3, 2.4, 2.5, 3.1_
 
 - [ ] 3.4 Composition rootを実装する
   - foundation adapter、feature registry、worker registration、maintenance統合、host、public APIを一回だけ合成する
@@ -122,6 +132,7 @@
   - 起動loading、navigation、切替、availability変化、mount失敗、worker registration、maintenance開始・終了・stale通知を一連のscenarioで検証する
   - 外部文字列の安全な表示と他feature継続、全resourceのcleanupを検証する
   - build artifactにproduction版React/React DOMが同梱され、remote code、inline JavaScript、dynamic evaluation、runtime JSX変換、`dangerouslySetInnerHTML`がないことを検査する
+  - shellによるStorage API直接参照とfoundation maintenance portの重複定義をboundary検査で拒否する
   - 完了時、要件横断のruntime suiteが決定的に成功し、失敗時に境界componentを特定できる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.3, 6.4_
   - _Boundary: ApplicationShellIntegrationTests_
