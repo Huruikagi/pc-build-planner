@@ -24,18 +24,26 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `ApplicationCompositionRoot`とroot公開APIの合成。
 - 世代付きmaintenance状態のread-only projectionとUI mutation gate。
 - 共有runtime入口、HTML host、shell統合test kit。
+- shell containerとfeature mount containerを分離するpresentation lifecycle契約。
+- foundationと下流registrationを一度だけ合成するproduction application composition module。
+- MV3 service worker contextでfoundation worker registrationとfeature catalogのworker contributionを一度だけ合成するproduction worker composition。
 
 ### 境界外
 - feature固有のDOM、state、domain error、保存可否判断。
 - maintenance leaseの取得・更新・owner fencing・commit直前検証。
 - Storage API、Repository、復元、商品抽出、互換性判定。
 - feature公開契約の内容そのもの。
+- Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleだけを利用する。
 
 ### 許可する依存
 - local data foundationの公開型、canonical `Result<T, E>`、query契約、および完了済み`local-data-foundation` task 5.5が公開するread-only `MaintenanceSnapshotSource`。
+- local data foundationが公開済みの`initializeProductionFoundationRuntimeContribution()`。このfactoryは`MaintenanceSnapshotSource`、foundation worker registration、disposeを一つのhandleとして返し、shellへRepositoryやStorage adapterを露出しない。
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
 - Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
 - dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
+- `src/runtime/side-panel.ts`はapplication-shellのproduction composition factoryだけをimportし、foundation factory、具体feature registration、worker registrationを直接importしない。
+- `src/runtime/service-worker.ts`はproduction worker compositionとChrome message target adapterだけを所有し、Storage、Repository、foundation内部、DOM、Reactをimportしない。
+- production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 
 ### 再検証トリガー
 - registration、mount context、availability、public API registryの型変更。
@@ -43,6 +51,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - root entry、side panel起動順序、`sidePanel.open()` gesture入口の変更。
 - shellとfeature間のファイル所有権または依存方向の変更。
 - foundationの`MaintenanceSnapshot`または`MaintenanceSnapshotSource`公開契約、`local-data-foundation` task 5.5の完了状態が変更された場合。
+- shell presentation handle、feature slot生成時点、navigation command、production contribution一覧の変更。
 
 ## アーキテクチャ
 
@@ -50,8 +59,10 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 
 - `src/domain/`と`src/persistence/`にはstrict TypeScriptのlocal data foundation、canonical `Result<T, E>`、永続maintenance state、query/mutation portが実装済みである。
 - `manifest.json`、esbuildによるChrome 116 target、Node test、Playwright、artifact/boundary検査は既存基盤として維持する。
-- application shell、React runtime、side panel document、feature registrationは未実装である。
-- foundationは`src/persistence/maintenance-snapshot-source.ts`と`src/persistence/public.ts`から検証済みread-only `MaintenanceSnapshotSource`を公開済みである。application-shellはこの契約をcomposition rootへ注入し、Storage APIを直接監視しない。
+- application shell task 3.4までにcontracts、registry、maintenance projection、mutation gate、ShellView、ReactShellRoot、SidePanelHost、composition root、runtime bootstrapと対応testが実装済みである。
+- `src/runtime/side-panel.ts`はproduction side panel compositionとbootstrapへ接続済みであり、仮maintenance sourceやnoop observerを持たない。残るproduction gapはfoundation worker registrationのservice worker接続である。
+- 現行composition rootとSidePanelHostは一つのcontainerをfeature mountへ渡す。shell React rootも同じcontainerを所有するため、task 4.1ではshell専用rootとfeature専用outletを分離する必要がある。
+- foundationは`src/persistence/public.ts`から引数なしproduction factoryを公開済みであり、検証済みread-only `MaintenanceSnapshotSource`、単数の`DataWorkerRegistration`、冪等`dispose`を返す。application-shellはStorage実装へdeep importせず、各MV3 contextからこの公開factoryを利用する。
 
 ### Architecture Pattern & Boundary Map
 
@@ -61,12 +72,17 @@ graph TB
     Runtime --> Root[Application composition root]
     Root --> Registry[Feature registry]
     Root --> Maintenance[Maintenance projection]
+    Root --> Presentation[Shell presentation]
+    Presentation --> FeatureSlot[Feature mount slot]
     Root --> Host[Side panel host]
+    Host --> FeatureSlot
     Registry --> Host
     Maintenance --> Host
     Foundation[Local data foundation] --> Maintenance
+    Foundation --> WorkerRuntime[Service worker composition]
+    Features --> WorkerRuntime
     Features[Feature registrations] --> Registry
-    Host --> FeatureViews[Feature views]
+    FeatureSlot --> FeatureViews[Feature views]
     PublicContracts[Feature public contracts] --> RootApi[Root public API]
     Root --> RootApi
 ```
@@ -100,9 +116,14 @@ src/
 │   ├── react-shell-root.tsx            # shell用React rootとcleanup adapter
 │   ├── error-boundary.tsx              # component描画失敗のfeature単位隔離
 │   ├── composition-root.ts            # foundation、feature、hostの一回限り合成
+│   ├── shell-presentation.tsx          # shell root、navigation command、feature専用slotの接続
+│   ├── application-composition.ts      # canonical foundationと公開registrationのproduction合成
+│   ├── production-worker-composition.ts # foundation message registrationとcatalog workerのcontext別合成
+│   ├── feature-contribution-catalog.ts # side panelとworkerで共有するreadonly registration catalog
 │   └── public-api-registry.ts          # feature public contractの型付き合成
 ├── runtime/
 │   ├── side-panel.ts                  # side panel bootstrap入口
+│   ├── service-worker.ts              # Chrome message targetとproduction worker bootstrap入口
 │   └── open-side-panel.ts             # user gesture内のSide Panel API adapter
 └── index.ts                           # root公開APIの唯一のbarrel
 tests/
@@ -111,7 +132,7 @@ tests/
 └── integration/application-shell.test.ts # bootstrap、遷移、障害、maintenance統合
 ```
 
-上記はすべて新規作成対象である。既存`manifest.json`、`scripts/build.mjs`、`package.json`、`tsconfig.json`、`playwright.config.ts`はside panel entry、React/DOM test、bundle entryを追加するため変更する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。
+既存の`react-shell-root.tsx`、`shell-view.tsx`、`composition-root.ts`、`runtime/side-panel.ts`、`runtime/service-worker.ts`はproduction接続のため変更し、`shell-presentation.tsx`、`application-composition.ts`、`feature-contribution-catalog.ts`を追加する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。下流feature未実装時の空catalogは正規のproduction状態として許可し、shellは利用可能featureなしのempty stateを表示する。仮のmaintenance sourceへのfallbackは許可しない。
 
 ## システムフロー
 
@@ -120,14 +141,17 @@ sequenceDiagram
     participant F as Foundation
     participant R as CompositionRoot
     participant G as FeatureRegistry
+    participant P as ShellPresentation
     participant H as SidePanelHost
     participant V as FeatureView
     F->>R: maintenance subscription
     R->>G: register features
-    R->>H: start registry and projection
+    R->>P: mount shell and obtain feature slot
+    R->>H: start with feature slot
     H->>V: mount selected feature
     F-->>R: generation state
     R-->>H: maintenance projection
+    H-->>P: state and navigation update
     H-->>V: mutation availability update
 ```
 
@@ -159,6 +183,9 @@ sequenceDiagram
 | CompositionRoot | Composition | 一度だけ全依存を合成 | 3.1, 3.3–3.4 | 全component P0 | Service |
 | PublicApiRegistry | Composition | feature公開契約をrootへ合成 | 3.2, 3.4 | feature public P0 | Service |
 | RuntimeAdapters | Runtime | bootstrapとgesture APIを分離 | 6.1–6.3 | Chrome P0 | Service |
+| ShellPresentation | UI adapter | shell stateとnavigationを描画しfeature専用slotを公開 | 1.1–1.5, 4.1–4.4, 5.1 | ReactShellRoot P0 | Service, State |
+| ApplicationComposition | Composition | canonical foundationと公開registrationをproduction runtimeへ一度だけ接続 | 2.1, 3.1–3.4, 5.6, 6.1 | Foundation/feature public P0 | Service |
+| ProductionWorkerComposition | Runtime composition | worker contextでfoundation command handlerとcatalog worker contributionを一度だけ接続 | 3.1, 3.3, 3.4, 6.1–6.4 | Foundation public P0, catalog P0, Chrome message target P0 | Service |
 
 ### Core contracts
 
@@ -278,6 +305,84 @@ interface PublicApiRegistry<TEntries extends Record<string, object>> {
 
 CompositionRootだけが具体的なfoundation adapterとfeature registrationをimportする。起動途中に失敗した場合、購読解除とmount済みviewのunmountを逆順に行う。root `src/index.ts`は合成済み型付き契約だけをexportする。
 
+### ShellPresentation and production runtime composition
+
+```typescript
+interface ShellPresentationHandle {
+  readonly featureContainer: HTMLElement;
+  publish(state: ShellViewState, navigation: readonly ShellNavigationItem[]): void;
+  stop(): void;
+}
+
+interface ShellPresentationAdapter {
+  mount(input: {
+    readonly shellContainer: HTMLElement;
+    readonly onNavigate: (id: FeatureId) => void;
+    readonly onRetry: () => void;
+  }): Result<ShellPresentationHandle, { readonly kind: "presentation_failed" }>;
+}
+
+interface ApplicationRuntimeContributions<
+  TFeatures extends readonly CompositionFeature[],
+> {
+  readonly features: TFeatures;
+  readonly workerRegistrations: readonly ApplicationWorkerRegistration[];
+}
+
+interface ProductionApplicationCompositionOptions<
+  TFeatures extends readonly CompositionFeature[],
+> {
+  readonly shellContainer: HTMLElement;
+  readonly initializeFoundation: () => Promise<Result<FoundationCompositionHandle, FoundationStartupError>>;
+  readonly contributions: ApplicationRuntimeContributions<TFeatures>;
+  readonly presentation: ShellPresentationAdapter;
+}
+
+interface FoundationRuntimeContribution {
+  readonly maintenanceSource: MaintenanceSnapshotSource;
+  readonly workerRegistration: DataWorkerRegistration;
+  dispose(): void | Promise<void>;
+}
+
+interface FoundationWorkerMessageTarget {
+  addHandler(handler: FoundationWorkerMessageHandler): () => void;
+}
+
+interface DataWorkerRegistration {
+  register(target: FoundationWorkerMessageTarget): Promise<
+    Result<() => void, FoundationWorkerRegistrationError>
+  >;
+}
+
+function initializeProductionFoundationRuntimeContribution(): Promise<
+  Result<FoundationRuntimeContribution, FoundationStartupError>
+>;
+
+interface ChromeFoundationMessageTargetAdapter {
+  readonly target: FoundationWorkerMessageTarget;
+}
+
+interface ProductionWorkerComposition {
+  start(): Promise<Result<void, ProductionWorkerStartupError>>;
+  stop(): Promise<void>;
+}
+```
+
+`DataWorkerRegistration`はfoundation command用の非同期契約であり、feature catalogの同期`ApplicationWorkerRegistration`とは別々に合成する。`ChromeFoundationMessageTargetAdapter` は`chrome.runtime.onMessage`のlistenerを追加し、`query-root`、`mutate-root`、`assess-replacement`、`replace-root`、`run-maintenance`の既知foundation command kindだけをroutingする。対象messageはmessageと分類済みcallerをfoundation handlerへ渡し、handlerのPromise完了Resultを`sendResponse`へ一度だけ渡してlistenerから`true`を返す。非foundation messageはhandlerも`sendResponse`も呼ばず`undefined`を返し、catalog action listenerへ委ねる。handler rejectionは未信頼値を露出しない安定したfailure responseへ正規化し、disposerは対応listenerだけを一度解除する。
+
+- `ShellPresentationAdapter.mount`はshell React rootを先にmountし、そのrootが所有する専用slotだけを`featureContainer`として返す。`featureContainer !== shellContainer`を起動時に検証する。
+- `SidePanelHost`へ渡すcontainerは常に`featureContainer`であり、feature registrationはshell navigationやstatus DOMを変更しない。公開`FeatureMountContext`は変更しない。
+- navigation commandはpresentationからcomposition/integrationの`select`へ型付きで渡す。stateとregistry snapshotは逆方向に`publish`され、React componentがhost serviceを直接importしない。
+- production composition modulesだけがfoundationの公開factoryと、存在する下流featureの公開registration・worker registrationを合成する。`src/runtime/side-panel.ts`はDOM hostを解決してproduction factoryとbootstrapを開始するだけであり、仮maintenance sourceや下流feature deep importを持たない。
+- MV3のside panelとservice workerはobject lifecycleを共有できないため、各contextがfoundationのno-arg production factoryから独立handleを初期化する。side panel compositionはmaintenance sourceとdisposeを所有し、production worker compositionはfoundation worker registration、catalog worker contribution、disposeを所有する。
+- `feature-contribution-catalog.ts`はside panel registration、worker registration、public API keyをreadonly tupleとして公開する唯一のcatalogである。catalogは下流feature実装前には空でよく、登録済みfeatureだけを決定的に合成する。side panel compositionはUI/public API項目だけを、service worker compositionはworker項目だけを選択し、worker側へHTMLElementまたはReact依存を持ち込まない。
+- 空catalogでの起動は成功し、navigationを表示せず安全なempty stateを提示する。後続feature specは自身の公開registrationをcatalogへ追加する統合だけを要求され、application-shellのhost、runtime entry、root公開機構を変更しない。
+- 起動順序はfoundation初期化、registry登録、shell presentation mount、feature host start、worker registrationの順とする。停止とrollbackはworker解除、feature unmount、maintenance購読解除、shell presentation stop、foundation disposeの逆依存順で全件best-effortに実行する。
+- worker contextの起動順はfoundation初期化、非同期foundation message registration、同期catalog registrationsとし、それぞれのtyped failureを`ProductionWorkerStartupError`へ正規化する。失敗時と停止はcatalog解除、foundation handler解除、foundation disposeの逆順・全件best-effort・冪等とする。start中のstopはepochを無効化し、遅延したfoundation registrationの完了後にcatalog登録せず即座cleanupする。concurrent startは単一Promiseを共有する。
+- Chrome message senderのclassificationはservice worker runtime adapterが所有する。`sender.id === chrome.runtime.id`、`sender.tab` なし、`sender.url`が`chrome.runtime.getURL("")`以下の場合だけ`trusted-extension`、同一extensionでtabありは`content-script`、それ以外は`web-page`とし、分類済みcallerをfoundation handlerへ渡す。runtime API欠落、URL欠落・getter例外・parse失敗は`trusted-extension`にせず、adapter初期化失敗または`web-page`へfail closedに分類する。
+- canonical `MaintenanceSnapshotSource`は`initializeFoundation`の成功handleからだけ取得する。shellはinactive stubへのfallbackやStorage API直接購読を行わず、取得不能時はfeatureをmountせず共通startup errorを表示する。
+- `initializeProductionFoundationRuntimeContribution()`の実装と公開はlocal-data-foundation所有であり、task 5.8・6.8で公開・統合検証済みである。application-shellは公開consumer型だけを利用し、persistence内部へdeep importして回避しない。
+
 ## エラー処理
 
 - 不正・重複登録: 該当featureを隔離し型付きdiagnosticを返す。
@@ -301,6 +406,9 @@ CompositionRootだけが具体的なfoundation adapterとfeature registrationを
 - mount失敗後も別featureへ遷移できる（4.2–4.3）。
 - maintenance通知が全navigationへ反映され、readは維持されmutationが無効になる（5.1–5.5）。
 - foundation通知portの初期snapshot、順序逆転、購読解除を模擬し、shellがStorage APIを直接参照しないことをcontract/boundary testで確認する（5.1, 5.4, 5.5, 5.6）。
+- production-shaped fixtureでshell React rootとfeature outletが別DOM要素であること、2つの模擬featureが独立rootを切替時にunmountすること、navigation clickがhost selectionへ届くことを確認する（1.1–1.5, 3.1, 6.1, 6.4）。
+- side panelとservice workerが同じcontribution catalogを利用しつつ、worker bundleへDOM/React依存を含めないことを確認する（2.1, 3.1, 3.4, 6.3）。
+- 実service worker入口がno-arg foundation factoryをworker contextで初期化し、foundation command handlerとcatalog workerを順序どおり登録すること、sender classification、途中rollback、停止の逆順cleanupをproduction-shaped testで確認する（3.1, 3.3, 3.4, 6.1, 6.3, 6.4）。
 
 ### E2E / Runtime
 - Chrome 116+相当のMV3 fixtureでside panel bootstrapとnavigationを検証する（6.1）。
@@ -308,6 +416,7 @@ CompositionRootだけが具体的なfoundation adapterとfeature registrationを
 - package outputにremote script、inline script、dynamic evaluationがないことを検査する（6.3）。
 - production bundleへReact/React DOMが同梱され、MV3の`script-src 'self'`でside panelが起動することを検査する（6.1, 6.3）。
 - contract test kitで模擬featureの登録、availability変更、失敗、cleanupを決定的に観測する（6.4）。
+- artifact/boundary検査でdummy inactive maintenance source、noop shell state observer、下流featureから共有runtime/root entryへのimportを拒否する。空production catalogは許可し、empty stateと型付き空root APIが成立することを検証する（1.1, 3.1, 3.2, 3.4, 5.6, 6.3）。
 
 ## セキュリティ考慮事項
 

@@ -10,6 +10,7 @@
   - 一覧、フォーム、確認、失敗回復を横断するUI規模を踏まえ、React 19系を宣言的な表示adapterとして採用する。
   - React DOMの`createRoot`と`root.unmount()`は既存のcontainerベースmount/unmount契約を変更せず統合できる。
   - MV3のCSPを維持するため、React runtimeとUI codeはproduction bundleへ同梱し、runtime JSX変換やremote codeを使用しない。
+  - 現行runtime baselineは同じDOM containerをshell React rootとfeature mountへ割り当て、仮のinactive maintenance sourceを共有entryで生成しているためproduction compositionへ進めない。空feature catalog自体は下流feature実装前の正規状態として扱える。
 
 ## 調査ログ
 
@@ -30,6 +31,15 @@
 - **参照元**: roadmapとbriefの確定制約。
 - **所見**: `sidePanel.open()`のユーザージェスチャー制約をcomposition後の非同期処理へ移さない。実行コードはすべて同梱する。
 - **影響**: gesture entryは薄いruntime adapterとし、host初期化とは契約を分離する。
+
+### Runtime composition blocker
+- **背景**: task 4.1で、shell navigation/state、feature mount container、canonical maintenance source、下流registrationの接続責任が設計上未確定だった。
+- **参照元**: `src/runtime/side-panel.ts`、`src/application-shell/react-shell-root.tsx`、`src/application-shell/composition-root.ts`、`src/application-shell/side-panel-host.ts`、`side-panel.html`。
+- **所見**:
+  - `ReactShellRoot`はshell host全体へReact rootを作るが、feature専用containerを返す契約を持たない。
+  - `SidePanelHost`は注入されたcontainerへfeatureをmountするため、shell rootと同じcontainerを渡すとReact所有DOMとの所有権が衝突する。
+  - runtime entryは仮のinactive `MaintenanceSnapshotSource`と空feature配列を直接構築しており、foundationおよび下流featureのproduction registrationを合成していない。
+- **影響**: shell presentationのmount結果としてfeature専用containerとstate/navigation sinkを返す`ShellPresentationHandle`を設ける。具体feature、worker、public API、foundation初期化はapplication-shell所有の専用composition moduleだけで合成し、薄いruntime entryはそのfactoryだけを開始する。
 
 ## アーキテクチャパターン評価
 
@@ -71,6 +81,22 @@
 - **選択**: side panel用`ApplicationFeatureRegistration`とは別に型付きworker registrationを定義し、composition rootだけが共有workerへ登録する。
 - **理由**: UI lifecycleとworker event lifecycleを混同せず、共有runtimeの単一所有権を維持できる。
 
+### 判断: Runtime entryとproduction compositionを分離する
+- **背景**: 共有entryへ下流feature一覧、foundation生成、DOM所有権判断を直接埋め込むと、task 4.1の境界が再び曖昧になる。
+- **代替案**:
+  1. `src/runtime/side-panel.ts`で全依存を直接importする — entryが変更集中点となりtest差し替えも難しい。
+  2. 下流featureが共有entryへ自己登録する — 単一所有権と依存方向を破る。
+  3. application-shell所有のproduction composition moduleへ集約する — entryを薄く保ち、具体依存を一箇所で監査できる。
+- **選択**: `application-composition.ts`がcanonical foundation factory、feature contributions、worker contributions、shell presentationを合成し、`src/runtime/side-panel.ts`はDOM documentとlifecycle targetを渡してbootstrapするだけとする。
+- **理由**: 下流featureは自身の`public.ts`とregistration factoryだけを所有し、共有entryを編集しない。composition moduleはapplication-shellの既存責務内で具体依存を一度だけ知る。
+- **トレードオフ**: feature追加時にcomposition moduleの明示変更は必要だが、変更所有者とcontract test対象が一意になる。
+
+### 判断: Shell presentation handleがDOM所有権を分割する
+- **背景**: shell React rootとfeature React rootが同じcontainerを所有できない。
+- **選択**: presentation adapterはshell containerへrootをmountし、Reactが生成した専用feature slotを`ShellPresentationHandle.featureContainer`として公開する。hostはそのslotだけをfeatureへ渡す。
+- **理由**: navigation、共通状態、feature表示領域のDOM所有権が衝突せず、既存`FeatureMountContext`を変更しない。
+- **Follow-up**: runtime integration testでshell containerとfeature containerが別要素であること、停止時にfeature unmount後にshell rootをunmountすることを検証する。
+
 ## リスクと緩和策
 - 下流featureの契約解釈ずれ — contract test kitと型検査で検出する。
 - mount失敗によるhost停止 — feature単位のerror boundaryと確実なunmountで分離する。
@@ -79,6 +105,18 @@
 - React rootまたは購読の残存 — feature切替、mount失敗、shell停止のcontract/integration testでcleanupを検証する。
 - React開発buildやremote codeの混入 — production conditionでbundleし、artifact検査でremote script、eval、runtime JSX変換を拒否する。
 - foundation通知契約のdrift — task 5.5の公開consumer型検査をapplication-shell統合前に実行し、shell側の重複定義とStorage直接購読を境界検査で禁止する。
+- shell/feature DOM所有権の衝突 — presentation handleが返す専用slot以外へのfeature mountを禁止し、統合testで要素同一性とcleanup順序を検査する。
+- production dependencyの仮実装残存 — artifact/boundary testでinactive maintenance stubと共有entryからの下流deep importを拒否する。空feature catalogはempty stateとして検証する。
+
+### 判断: 下流feature未実装時の空shell compositionを許可する
+- **背景**: application-shellは下流featureの前提specであり、最初から非空catalogを要求すると未実装registrationを待つ循環が生じる。
+- **代替案**:
+  1. 最初の下流feature実装までproduction compositionを失敗させる — shellの独立実装と検証ができない。
+  2. placeholder featureを登録する — production契約へ仮実装が残る。
+  3. 空catalogを正規状態として起動する — shell境界を先に完成し、後続featureを公開registrationだけで追加できる。
+- **選択**: canonical foundation sourceが利用可能なら空catalogでもproduction shellを起動し、navigationなしのempty stateと型付き空root APIを提供する。
+- **理由**: 要件は登録済みfeatureの表示を求めており、未登録featureの存在を要求しない。既存のempty state設計とも一致する。
+- **トレードオフ**: application-shell単独では業務機能を提供しないが、後続specの依存循環を解消し、placeholderを不要にする。
 
 ## 参照
 - `.kiro/steering/roadmap.md`
