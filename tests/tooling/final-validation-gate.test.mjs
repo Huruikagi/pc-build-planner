@@ -1,0 +1,128 @@
+import assert from "node:assert/strict";
+import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { runFinalGate } from "../../scripts/validate-final-gate.mjs";
+
+const validManifest = {
+  manifest_version: 3,
+  name: "Synthetic extension",
+  version: "1.0.0",
+  minimum_chrome_version: "116",
+  permissions: ["storage"],
+  content_security_policy: {
+    extension_pages: "script-src 'self'; object-src 'self'",
+  },
+};
+
+async function workspace() {
+  const root = await mkdtemp(join(tmpdir(), "final-gate-"));
+  const source = join(root, "feature.ts");
+  const fixtures = join(root, "fixtures");
+  const output = join(root, "dist");
+  await mkdir(fixtures);
+  await writeFile(source, 'import type { Result } from "../domain/public.js";');
+  await writeFile(join(fixtures, "synthetic.json"), '{"name":"架空"}');
+  return { source, fixtures, output };
+}
+
+/** @param {typeof validManifest} manifest @param {Record<string, string>} extra */
+const builder =
+  (manifest = validManifest, extra = {}) =>
+  async (/** @type {string} */ output = "") => {
+    await assert.rejects(access(join(output, "stale.js")));
+    await mkdir(output, { recursive: true });
+    await writeFile(join(output, "manifest.json"), JSON.stringify(manifest));
+    await writeFile(join(output, "safe.js"), "export const ready = true;");
+    for (const [name, content] of Object.entries(extra))
+      await writeFile(join(output, name), content);
+  };
+
+test("source検査からclean buildとartifact検査までを一つのgateで完走する", async () => {
+  const paths = await workspace();
+  await mkdir(paths.output);
+  await writeFile(join(paths.output, "stale.js"), "eval('stale')");
+  await runFinalGate({
+    outputDirectory: paths.output,
+    boundaryRoots: [paths.source],
+    fixtureRoots: [paths.fixtures],
+    build: builder(),
+  });
+});
+
+test("source境界・fixture違反とmissing rootをfail closedに伝播する", async () => {
+  const violations = [
+    'import "../persistence/internal/storage.js";',
+    "chrome.storage.local.set({});",
+    'navigator.locks.request("pc-build-planner:local-data-root-write", () => {});',
+  ];
+  for (const source of violations) {
+    const paths = await workspace();
+    await writeFile(paths.source, source);
+    await assert.rejects(
+      runFinalGate({
+        outputDirectory: paths.output,
+        boundaryRoots: [paths.source],
+        fixtureRoots: [paths.fixtures],
+        build: builder(),
+      }),
+    );
+  }
+  const paths = await workspace();
+  await writeFile(join(paths.fixtures, "photo.png"), "synthetic bytes");
+  await assert.rejects(
+    runFinalGate({
+      outputDirectory: paths.output,
+      boundaryRoots: [paths.source],
+      fixtureRoots: [paths.fixtures],
+      build: builder(),
+    }),
+    /source fixture validation/,
+  );
+  await assert.rejects(
+    runFinalGate({
+      outputDirectory: paths.output,
+      boundaryRoots: [join(paths.output, "missing")],
+      fixtureRoots: [paths.fixtures],
+      build: builder(),
+    }),
+    /does not exist/,
+  );
+});
+
+test("manifest・code・公開境界・fixtureのartifact違反をすべて伝播する", async () => {
+  const cases = [
+    builder({ ...validManifest, permissions: ["storage", "tabs"] }),
+    builder({
+      ...validManifest,
+      content_security_policy: { extension_pages: "script-src *" },
+    }),
+    builder(validManifest, {
+      "remote.js": 'import "https://example.invalid/x.js";',
+    }),
+    builder(validManifest, { "eval.js": "eval('x')" }),
+    builder(validManifest, { "inline.html": "<script>alert(1)</script>" }),
+    builder(validManifest, {
+      "deep.js": 'import "./persistence/internal/storage.js";',
+    }),
+    builder(validManifest, { "storage.js": "chrome.storage.local.get();" }),
+    builder(validManifest, {
+      "lock.js":
+        'navigator.locks.request("pc-build-planner:local-data-root-write",()=>{});',
+    }),
+    builder(validManifest, { "photo.png": "synthetic bytes" }),
+  ];
+  for (const build of cases) {
+    const paths = await workspace();
+    await assert.rejects(
+      runFinalGate({
+        outputDirectory: paths.output,
+        boundaryRoots: [paths.source],
+        fixtureRoots: [paths.fixtures],
+        build,
+      }),
+    );
+  }
+});

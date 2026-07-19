@@ -207,7 +207,7 @@
   - _Requirements: 1.3, 3.8, 7.4, 7.5, 7.6, 8.2_
   - _Boundary: Concurrency and Restart Validation_
 
-- [ ] 6.5 MV3・公開境界・生成物の最終gateを統合する
+- [x] 6.5 MV3・公開境界・生成物の最終gateを統合する
   - manifest、Chrome 116、最小権限、CSP、remote import、動的評価、inline JavaScriptを検査する
   - 公開import境界、直接Storage利用、固定lock迂回、fixture assetを生成物とsourceの両方で検査する
   - typecheck、Biome、全test、build、artifact scanが共通検証commandで連続成功することを完了条件とする

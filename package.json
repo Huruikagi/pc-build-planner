@@ -15,8 +15,10 @@
     "test": "node --test --test-isolation=none tests/**/*.test.mjs",
     "build": "node scripts/build.mjs",
     "validate:boundaries": "node scripts/validate-boundaries.mjs src/features tests/tooling/public-api-consumer.ts",
-    "validate:artifacts": "node scripts/validate-artifacts.mjs dist",
-    "validate": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm test && pnpm validate:boundaries && pnpm build"
+    "validate:fixtures": "node scripts/validate-fixture-assets.mjs tests/fixtures",
+    "validate:artifacts": "node scripts/validate-artifacts.mjs dist && node scripts/validate-boundaries.mjs dist && node scripts/validate-fixture-assets.mjs dist",
+    "validate:final-build": "node scripts/validate-final-gate.mjs dist",
+    "validate": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm test && pnpm validate:boundaries && pnpm validate:fixtures && pnpm validate:final-build"
   },
   "keywords": [],
   "author": "",
