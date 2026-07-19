@@ -77,7 +77,7 @@
   - _Depends: 1.1, 1.3_
 
 - [ ] 3. Hostとcompositionを統合する
-- [ ] 3.1 Side panel hostのnavigationとfeature lifecycleを実装する
+- [x] 3.1 Side panel hostのnavigationとfeature lifecycleを実装する
   - 利用可能featureを表示し、選択変更時に旧viewをunmountしてから新viewをmountする
   - 同時に一つだけを表示し、選択featureが利用不可になった場合は理由と安全な遷移先を示す
   - mount失敗をfeature単位で隔離し、再試行と他featureへの移動を維持する
@@ -141,3 +141,4 @@
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
+- 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。
