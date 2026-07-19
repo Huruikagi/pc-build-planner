@@ -121,7 +121,7 @@
   - _Boundary: ShellPresentation_
   - _Depends: 2.5, 3.1, 3.3_
 
-- [ ] 4.2 Feature contribution catalogを実装する
+- [x] 4.2 Feature contribution catalogを実装する
   - UI registration、public contract、worker registrationを一つのreadonly catalogへ集約し、登録済みcontributionだけを決定的な順序で提供する
   - 下流feature未実装時の空catalogを正常状態として扱い、placeholder featureを要求しない
   - 下流feature内部へのdeep importや共有runtime入口への自己登録を必要としない参加境界を維持する
