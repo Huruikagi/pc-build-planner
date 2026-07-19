@@ -26,7 +26,7 @@
 - 単一write authorityのcommand contract、worker registration factory、revision/request-id競合制御
 - foundation不変条件としてのCurrentBuild参照修復、root評価・置換、maintenance generation/owner fencing
 - 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
-- Chrome platform portからcanonical Repository、write authority、maintenance source、worker registrationを一度だけ組み立てるproduction runtime contribution factory
+- Chrome Storage・Web Locksとcanonical runtime policyをfoundation内で解決し、Repository、write authority、maintenance source、worker registrationを一度だけ組み立てる引数なしproduction runtime contribution factory
 
 ### Out of Boundary
 - `src/index.ts`、`src/runtime/service-worker.ts`、side panel host、feature registryのcomposition（`application-shell`所有）
@@ -40,6 +40,7 @@
 - Chrome 116以降のWeb Locks API。root writeの協調排他にだけ使用し、maintenance ownershipの永続根拠には使用しない
 - Node.js 26、pnpm 11、Biome 2、および実装開始時に互換性確認して固定するTypeScript/build/test/Chrome typings
 - `application-shell`はfoundationのproduction runtime contribution factoryだけを公開入口から利用し、返されたworker registrationとmaintenance sourceをcompositionする。foundationからshellへimportしない
+- production factoryは`globalThis.chrome.storage.local`、`chrome.storage.onChanged`、`globalThis.navigator.locks`をfoundation所有adapter内で解決する。application-shellはこれらのplatform primitiveを構築・注入しない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
 
 ### Revalidation Triggers
@@ -48,7 +49,7 @@
 - maintenance generation/owner/lease、commit前fence、write authority routingの変更
 - root write lock名、`RootWriteLock`契約、またはWeb Locks APIを使わない排他方式への変更
 - storage key分割、quota前提、Storage API以外への移行、runtime registration契約の変更
-- production runtime contributionのplatform input、公開handle、初期access restriction、cleanup責務の変更
+- production runtime contributionのglobal platform解決、公開handle、caller policy、初期access restriction、cleanup責務の変更
 
 ## Architecture
 
@@ -461,18 +462,20 @@ interface FoundationRuntimeContribution {
   dispose(): void | Promise<void>;
 }
 
-function initializeFoundationRuntimeContribution(
-  platform: FoundationRuntimePlatform,
-): Promise<Result<FoundationRuntimeContribution, FoundationRuntimeInitializationError>>;
+function initializeProductionFoundationRuntimeContribution(): Promise<
+  Result<FoundationRuntimeContribution, FoundationRuntimeInitializationError>
+>;
 ```
 
-initializerはChrome Storage adapter、canonical migration registry、Repository、Web Locks adapter、transaction runner、mutation pipeline、write authority、maintenance snapshot source、worker registrationを同じ依存graphへ一度だけ組み立てる。schema、migration step、validator、reference repair、maintenance、replacement、command decoderはfoundation所有のcanonical実装を使用し、application-shellから差し替えさせない。
+public production factoryは引数を取らず、`globalThis`からChrome Storage・Storage change event・Web Locksを構造的に解決する。UTC clockはcanonical `createUtcTimestamp`、error reporterは機密値を含めずerror codeだけをbest-effortで報告するfoundation production adapter、command authorizationは分類済みcallerが`trusted-extension`の場合だけ許可するfoundation所有の固定policyとする。sender、tab、URLからcaller classificationへの変換は引き続きapplication-shell所有である。
+
+factoryは解決したplatformをfoundation内部の`initializeFoundationRuntimeContributionFromPlatform(platform)` DI seamへ渡し、Chrome Storage adapter、canonical migration registry、Repository、Web Locks adapter、transaction runner、mutation pipeline、write authority、maintenance snapshot source、worker registrationを同じ依存graphへ一度だけ組み立てる。DI seamと`FoundationRuntimePlatform`はtest/foundation内部用とし、`src/persistence/public.ts`からexportしない。schema、migration step、validator、reference repair、maintenance、replacement、command decoderはfoundation所有のcanonical実装を使用し、application-shellから差し替えさせない。
 
 初期化時にStorage accessを`TRUSTED_CONTEXTS`へ制限し、失敗時はtyped failureを返してcontributionを公開しない。worker registrationへは同じ成功結果を再利用するfail-closedなrestrict callbackを渡し、side panel起動とworker登録の順序へ安全性を依存させない。
 
 公開handleはread-only maintenance sourceと未登録のworker registrationだけを返す。Repository、StoragePort、RootWriteLock、runner、pipeline、authority、owner/lease capabilityは返さない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
 
-initializerは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。platform portの必須shapeは副作用前に検証し、不正または不足した依存では部分的なgraphを作らない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
+factoryは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。global property参照を含むplatform解決・shape検証を先に完了し、不足時は`invalid-platform`を返す。Storage access restriction、購読登録、handler生成、Repository生成はその後にだけ行う。解決中のglobal getter例外も`invalid-platform`へ正規化し、foundation側の観測可能な副作用を開始しない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
 
 #### WriteAuthority and WorkerRegistration
 
@@ -484,7 +487,7 @@ interface DataWorkerRegistration {
 function createDataWorkerRegistration(deps: DataAuthorityDependencies): DataWorkerRegistration;
 ```
 
-registrationは受信値、request ID、caller classificationを検証し、許可済みcommandだけをauthorityへ渡す。WriteAuthorityはqueryを検証済みRepositoryへ、すべてのmutation、maintenance、replacementを`RootTransactionRunner`へdispatchする。同一worker内queueは待ち順と負荷制御に使用できるが、正しさの排他根拠はWeb Lock、再生成後の認可根拠は永続rootである。具体sender/tab/URL policyとlistener compositionはapplication shellが提供する。content scriptへRepository、StoragePort、RootWriteLockを返さない。
+registrationは受信値、request ID、caller classificationを検証し、許可済みcommandだけをauthorityへ渡す。WriteAuthorityはqueryを検証済みRepositoryへ、すべてのmutation、maintenance、replacementを`RootTransactionRunner`へdispatchする。同一worker内queueは待ち順と負荷制御に使用できるが、正しさの排他根拠はWeb Lock、再生成後の認可根拠は永続rootである。sender/tab/URLからcaller classificationへの変換とlistener compositionはapplication shellが提供し、分類済みcallerに対するcommand許可policyはfoundationが提供する。content scriptへRepository、StoragePort、RootWriteLockを返さない。
 
 #### ChromeStorageAdapter
 
@@ -543,6 +546,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `MaintenanceSnapshotSource`で検証済み初期snapshot、開始・終了通知、購読解除、破損変更値の拒否を検証する（7.8）。
 - `RuntimeContributionFactory`が一つのcanonical graphからmaintenance sourceとworker registrationを生成し、両者が同じroot revisionとmaintenance stateを観測することを検証する（1.3, 3.1, 7.8）。
 - 不正platform portを副作用前に拒否し、初期access restriction失敗時にcontributionとworker handlerを公開せず、handleがRepository、Storage、lock、authorityを露出しないことを検証する（6.1–6.4）。
+- 公開no-arg production factoryがChrome Storage・change event・Web Locksをfoundation内で解決し、`trusted-extension`固定policyとcanonical clock/reporterでDI seamへ委譲することを検証する。global欠落・getter例外では`invalid-platform`となり、access restriction・購読・handler・graph生成が0件であることを検証する（1.1, 1.3, 6.1, 6.3）。
 - 同じStorageへfactory graphを再生成し、active maintenance fenceとrevisionを再読込してowner外writeを拒否することを検証する（1.3, 7.4–7.8）。
 
 ### Contract and Integration Tests
@@ -589,4 +593,4 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 
 初期rootは`schemaVersion: 1`、`revision: 0`で生成する。migrationは純粋な`N -> N+1`stepとして順序適用し、各stepと最終rootを検証する。通常readは移行済みsnapshotを返すが、永続化は明示mutation pipeline内だけで行う。失敗、未知の将来版、容量不足ではsource rootを上書きしない。
 
-application shell導入時は、foundationの`initializeFoundationRuntimeContribution`をshell-owned production compositionから呼び、返されたworker registrationを`src/runtime/service-worker.ts`へ、maintenance sourceをside panel compositionへ接続する。foundationが一時的な共有runtime入口を作成して移管するmigrationは行わない。
+application shell導入時は、foundationの`initializeProductionFoundationRuntimeContribution()`をshell-owned production compositionから引数なしで呼び、返されたworker registrationを`src/runtime/service-worker.ts`へ、maintenance sourceをside panel compositionへ接続する。shellはStorage、change event、Web Locks、clock、foundation command policyを注入しない。foundationが一時的な共有runtime入口を作成して移管するmigrationは行わない。
