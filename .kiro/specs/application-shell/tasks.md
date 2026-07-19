@@ -139,8 +139,7 @@
   - _Boundary: WorkerComposition_
   - _Depends: 4.2_
 
-- [ ] 4.4 Production application compositionを完成する
-  - _Blocked: debug attempted twice, still failing — foundation初期化のtyped failure分岐でpresentation mountが例外funnel外にあり、adapter throw時にstartがtyped startup failureではなくrejectする_
+- [x] 4.4 Production application compositionを完成する
   - foundation公開initializer、registry、presentation、feature host、worker contributionを設計順序で一度だけ合成する
   - canonical maintenance sourceだけを利用し、inactive stub、Storage直接監視、foundation内部へのdeep importへfallbackしない
   - 空catalogでは正常にempty shellを開始し、途中失敗と停止ではworker、feature、maintenance購読、presentation、foundationを逆依存順で全件best-effortに解放する
