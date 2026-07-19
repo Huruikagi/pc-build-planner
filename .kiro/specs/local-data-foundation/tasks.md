@@ -191,7 +191,7 @@
   - _Depends: 6.1_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.2_
 
-- [ ] 6.3 (P) 10MB近傍の処理計測を統合する
+- [x] 6.3 (P) 10MB近傍の処理計測を統合する
   - 架空rootでread、migration、validation、repair、canonical serialization、single writeの時間とbytesを個別計測する
   - 実行時間を固定閾値で失敗させず、環境差を含む測定値をtest reportへ残す
   - 10MB近傍の処理がtimeoutせず、全測定項目がreportへ記録されることを完了条件とする
