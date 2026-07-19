@@ -1,6 +1,6 @@
 # 実装計画
 
-- [ ] 1. Shell基盤と型付き契約を整備する
+- [x] 1. Shell基盤と型付き契約を整備する
 - [x] 1.1 TypeScript、Reactとruntime test基盤を構成する
   - React 19系、React DOM、対応する型定義、JSX変換、strictな型検査とDOM対応test環境を設定し、対象Node/Chromeとの互換性を検証する
   - production conditionでReactをbundleへ同梱し、CDN、runtime JSX変換、dynamic evaluationを必要としない構成にする
@@ -32,7 +32,7 @@
   - _Requirements: 2.1, 2.3, 2.5, 6.4_
   - _Boundary: ContractTestKit_
 
-- [ ] 2. Core registryとmaintenance制御を実装する
+- [x] 2. Core registryとmaintenance制御を実装する
 - [x] 2.1 (P) Feature registryを実装する
   - 登録値を検証し、一意なfeature識別子と決定的なnavigation順序を維持する
   - 重複または不正なfeatureを隔離し、正常な登録と購読を継続する
@@ -76,7 +76,7 @@
   - _Boundary: ReactShellRoot_
   - _Depends: 1.1, 1.3_
 
-- [ ] 3. Hostとcompositionを統合する
+- [x] 3. Hostとcompositionを統合する
 - [x] 3.1 Side panel hostのnavigationとfeature lifecycleを実装する
   - 利用可能featureを表示し、選択変更時に旧viewをunmountしてから新viewをmountする
   - 同時に一つだけを表示し、選択featureが利用不可になった場合は理由と安全な遷移先を示す
@@ -111,7 +111,7 @@
   - _Boundary: CompositionRoot_
   - _Depends: 3.2, 3.3_
 
-- [ ] 4. Runtime入口とend-to-end境界を検証する
+- [x] 4. Runtime入口とend-to-end境界を検証する
 - [x] 4.1 Shell presentationと専用feature表示領域を統合する
   - shell state、navigation、再試行操作をReact rootへ接続し、shell所有container内にfeature専用の安定したmount領域を提供する
   - shellとfeatureのcontainerを別要素として検証し、feature切替時もshell navigationと共通状態を維持する
@@ -193,7 +193,7 @@
   - _Requirements: 3.1, 3.3, 6.1, 6.3, 6.4_
   - _Boundary: RuntimeAdapters_
 
-- [ ] 4.10 Foundation worker registrationをproduction service workerへ接続する
+- [x] 4.10 Foundation worker registrationをproduction service workerへ接続する
   - service worker contextでfoundationの引数なしproduction factoryを初期化し、非同期foundation registrationと同期catalog registrationsを異なる契約のまま順序どおり合成する
   - 各typed failureをworker startup failureへ正規化し、catalog登録失敗と停止でcatalog、foundation handler、foundation handleを逆順・best-effort・冪等に解放する
   - concurrent startをsingle-flight化し、遅延したfoundation registration中のstopで後続catalogを開始せず、完了済みresourceを解放する

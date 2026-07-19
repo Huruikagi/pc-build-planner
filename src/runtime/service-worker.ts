@@ -1,83 +1,75 @@
-import type {
-  RegistrationError,
-  WorkerRegistrationContext,
-} from "../application-shell/contracts.js";
+import type { WorkerRegistrationContext } from "../application-shell/contracts.js";
 import type { FeatureContribution } from "../application-shell/feature-contribution-catalog.js";
+import { featureContributionCatalog } from "../application-shell/feature-contribution-catalog.js";
 import {
-  featureContributionCatalog,
-  getWorkerContributions,
-} from "../application-shell/feature-contribution-catalog.js";
-import { composeWorkerContributions } from "../application-shell/worker-composition.js";
-import type { Result } from "../domain/public.js";
+  createProductionWorkerComposition,
+  type ProductionWorkerComposition,
+  type ProductionWorkerCompositionOptions,
+} from "../application-shell/production-worker-composition.js";
+import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
+import {
+  createChromeFoundationMessageTarget,
+  type FoundationMessageRuntime,
+} from "./foundation-message-target.js";
 
-export interface CatalogWorkerBootstrap {
-  start(): Promise<Result<void, RegistrationError>>;
-  stop(): Promise<void>;
-}
+const isActionMessage = (value: unknown, actionId: string): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.hasOwn(value, "actionId") &&
+  (value as { readonly actionId?: unknown }).actionId === actionId;
 
-export function createCatalogWorkerBootstrap<
-  const TCatalog extends readonly FeatureContribution[],
->(
-  catalog: TCatalog,
-  context: WorkerRegistrationContext,
-): CatalogWorkerBootstrap {
-  let startPromise: Promise<Result<void, RegistrationError>> | undefined;
-  let stopPromise: Promise<void> | undefined;
-  let remove: (() => void) | undefined;
-
-  return {
-    start() {
-      startPromise ??= Promise.resolve().then(() => {
-        const composed = composeWorkerContributions(
-          getWorkerContributions(catalog),
-          context,
-        );
-        if (!composed.ok) return composed;
-        remove = composed.value;
-        return { ok: true, value: undefined };
-      });
-      return startPromise;
-    },
-    stop() {
-      stopPromise ??= Promise.resolve().then(() => {
-        remove?.();
-        remove = undefined;
-      });
-      return stopPromise;
-    },
-  };
-}
-
-function isActionMessage(value: unknown, actionId: string): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Object.hasOwn(value, "actionId") &&
-    (value as { readonly actionId?: unknown }).actionId === actionId
-  );
-}
-
-if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-  const bootstrap = createCatalogWorkerBootstrap(featureContributionCatalog, {
-    addActionHandler(id, handler) {
-      const listener = (
-        message: unknown,
-        _sender: chrome.runtime.MessageSender,
-        sendResponse: (response?: unknown) => void,
-      ): boolean | undefined => {
-        if (!isActionMessage(message, id)) return undefined;
-        void handler().then(
+export const createChromeWorkerRegistrationContext = (
+  runtime: FoundationMessageRuntime,
+): WorkerRegistrationContext => ({
+  addActionHandler(id, handler) {
+    const listener = (
+      message: unknown,
+      _sender: unknown,
+      sendResponse: (response: unknown) => void,
+    ) => {
+      if (!isActionMessage(message, id)) return undefined;
+      void Promise.resolve()
+        .then(handler)
+        .then(
           () => sendResponse({ ok: true }),
           () => sendResponse({ ok: false }),
         );
-        return true;
-      };
-      chrome.runtime.onMessage.addListener(listener);
-      return () => chrome.runtime.onMessage.removeListener(listener);
-    },
-    reportError(message) {
-      console.error(message);
-    },
+      return true as const;
+    };
+    runtime.onMessage.addListener(listener);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      runtime.onMessage.removeListener(listener);
+    };
+  },
+  reportError(message) {
+    console.error(message);
+  },
+});
+
+export const createProductionServiceWorkerBootstrap = (
+  runtime: FoundationMessageRuntime,
+  catalog: readonly FeatureContribution[] = featureContributionCatalog,
+  initializeFoundation: ProductionWorkerCompositionOptions["initializeFoundation"] = initializeProductionFoundationRuntimeContribution,
+): ProductionWorkerComposition =>
+  createProductionWorkerComposition({
+    initializeFoundation,
+    foundationTarget: createChromeFoundationMessageTarget(runtime),
+    catalog,
+    workerContext: createChromeWorkerRegistrationContext(runtime),
   });
-  void bootstrap.start();
+
+const runtime = typeof chrome !== "undefined" ? chrome.runtime : undefined;
+if (
+  runtime &&
+  typeof runtime.id === "string" &&
+  runtime.id.length > 0 &&
+  typeof runtime.getURL === "function" &&
+  runtime.onMessage &&
+  typeof runtime.onMessage.addListener === "function" &&
+  typeof runtime.onMessage.removeListener === "function"
+) {
+  void createProductionServiceWorkerBootstrap(runtime).start();
 }
