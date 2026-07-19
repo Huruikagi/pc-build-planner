@@ -87,7 +87,7 @@
   - _Boundary: SidePanelHost_
   - _Depends: 2.1, 2.3, 2.4, 2.5_
 
-- [ ] 3.2 Public API registryを実装する
+- [x] 3.2 Public API registryを実装する
   - feature単位の公開契約をreadonlyなroot契約としてまとめる
   - 重複keyまたは不正な公開契約を型検査または明示的な合成errorで拒否する
   - 完了時、模擬featureの公開契約が型を保ったroot contractとして取得できる
@@ -142,3 +142,4 @@
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
 - 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。
+- 未信頼keyからroot契約を合成する辞書はnull prototypeとown property定義を使い、`__proto__`を含む予約名でも重複検出とprototype非汚染を保つ。

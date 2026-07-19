@@ -130,8 +130,31 @@ export interface ApplicationCompositionRoot<TRootApi extends object> {
   start(): Promise<Result<{ readonly api: TRootApi }, CompositionError>>;
 }
 
+export interface PublicApiEntry<
+  TKey extends string = string,
+  TPublic extends object = object,
+> {
+  readonly key: TKey;
+  readonly publicApi: TPublic;
+}
+
+export type RootPublicContract<TEntries extends readonly PublicApiEntry[]> =
+  Readonly<{
+    [TEntry in TEntries[number] as TEntry["key"]]: TEntry["publicApi"];
+  }>;
+
+export type PublicApiCompositionError =
+  | { readonly kind: "duplicate_public_api_key"; readonly key: string }
+  | { readonly kind: "invalid_public_api"; readonly detail: string };
+
 export interface PublicApiRegistry<TEntries extends Record<string, object>> {
   compose(entries: TEntries): Readonly<TEntries>;
+  composeEntries<const TDynamicEntries extends readonly PublicApiEntry[]>(
+    entries: TDynamicEntries,
+  ): Result<RootPublicContract<TDynamicEntries>, PublicApiCompositionError>;
+  composeUnknown(
+    entries: unknown,
+  ): Result<Readonly<Record<string, object>>, PublicApiCompositionError>;
 }
 
 export type { FoundationMaintenanceSnapshot, MaintenanceSnapshotSource };

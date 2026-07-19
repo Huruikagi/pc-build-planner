@@ -68,6 +68,19 @@ export const composeMockApi = (
   registry: PublicApiRegistry<RootEntries>,
 ): Readonly<RootEntries> => registry.compose({ mock: mockFeature.publicApi });
 
+export const composeMockEntries = (registry: PublicApiRegistry<RootEntries>) =>
+  registry.composeEntries([
+    { key: "mock", publicApi: mockFeature.publicApi },
+    { key: "health", publicApi: { status: () => "ready" as const } },
+  ] as const);
+
+export const readTypedEntryRoot = (
+  result: ReturnType<typeof composeMockEntries>,
+): readonly [string, "ready"] | null =>
+  result.ok
+    ? [result.value.mock.inspect(), result.value.health.status()]
+    : null;
+
 export const startMockRoot = (
   root: ApplicationCompositionRoot<Readonly<RootEntries>>,
 ) => root.start();
