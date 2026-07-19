@@ -7,7 +7,14 @@ test("開発基盤が共通検証と未パッケージbuild契約を公開する
 
   assert.deepEqual(packageJson.engines, { node: "26.5.0", pnpm: "11.13.1" });
   assert.equal(packageJson.packageManager, "pnpm@11.13.1");
-  assert.match(packageJson.scripts.validate, /typecheck.*lint.*test.*build/);
+  assert.match(
+    packageJson.scripts.validate,
+    /typecheck.*lint.*validate:final-build.*test.*playwright test/,
+  );
+  assert.equal(
+    packageJson.scripts["install:e2e-browser"],
+    "playwright install chromium",
+  );
 
   await access("tsconfig.json");
   await access("biome.json");

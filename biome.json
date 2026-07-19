@@ -3,7 +3,9 @@
   "files": {
     "includes": [
       "biome.json",
+      "e2e/**",
       "package.json",
+      "playwright.config.ts",
       "pnpm-workspace.yaml",
       "scripts/**",
       "src/**",

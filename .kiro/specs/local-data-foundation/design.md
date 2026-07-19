@@ -34,6 +34,7 @@
 
 ### Allowed Dependencies
 - Chrome 116以降のManifest V3、`chrome.storage.local`、`crypto.randomUUID()`、標準JSON/Web API
+- Chrome 116以降のWeb Locks API。root writeの協調排他にだけ使用し、maintenance ownershipの永続根拠には使用しない
 - Node.js 26、pnpm 11、Biome 2、および実装開始時に互換性確認して固定するTypeScript/build/test/Chrome typings
 - `application-shell`はfoundationの`createDataWorkerRegistration`をcompositionできるが、foundationからshellへimportしない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
@@ -42,13 +43,14 @@
 - `LocalDataRoot`、category、normalized attribute、`Result`、error codeの形状変更
 - revision、request ID、参照修復、migration、replacement tokenの意味変更
 - maintenance generation/owner/lease、commit前fence、write authority routingの変更
+- root write lock名、`RootWriteLock`契約、またはWeb Locks APIを使わない排他方式への変更
 - storage key分割、quota前提、Storage API以外への移行、runtime registration契約の変更
 
 ## Architecture
 
 ### Existing Architecture Analysis
 
-現状は`package.json`、pnpm lock、Biomeのみで、application sourceと検証commandは存在しない。したがって既存コード互換ではなく、steeringとroadmapのcanonical ownershipを初期構造の基準とする。既存設計にあったfoundation所有のroot service workerと`src/index.ts`は、application shellとの共有所有を避けるため本設計から除外する。
+既存実装にはdomain contract、validator、migration、reference repair、StoragePortとChrome/in-memory adapter、capacity policyがある。`chrome.storage.local`はCASまたはtransactionを提供しないため、adapter内Promise queueやcommit直前の再読込だけではread-check-write競合を閉じられない。既存設計にあったfoundation所有のroot service workerと`src/index.ts`は、application shellとの共有所有を避けるため引き続き本設計から除外する。
 
 ### Architecture Pattern & Boundary Map
 
@@ -58,18 +60,24 @@ graph LR
     Shell[Application shell] --> Registration[Worker registration]
     Registration --> Authority[Write authority]
     Ports --> Authority
-    Authority --> Mutation[Mutation pipeline]
+    Authority --> Runner[Root transaction runner]
+    Runner --> Lock[Root write lock]
+    Runner --> Mutation[Mutation pipeline]
     Mutation --> Repair[Reference repair]
     Mutation --> Validator[Root validator]
-    Mutation --> Migration[Migration registry]
-    Mutation --> Adapter[Chrome storage adapter]
+    Runner --> Migration[Migration registry]
+    Runner --> Validator
+    Runner --> Adapter[Chrome storage adapter]
+    Lock --> WebLocks[Web Locks API]
     Adapter --> Storage[Chrome storage local]
 ```
 
-- **Selected pattern**: ports and adapters + single write authority。Chrome APIをdomainから隔離し、全mutationを一つのcommit pipelineへ通す。
-- **Dependency direction**: `Domain types → Validation/Migration/Repair → Repository ports → Write authority → Chrome adapter → Shell composition`。各層は左側だけをimportする。
+- **Selected pattern**: ports and adapters + single write authority + cooperative root lock。Chrome APIをdomainから隔離し、全mutationを一つのlock付きcommit pipelineへ通す。
+- **Dependency direction**: `Domain types → Validation/Migration/Repair/MaintenancePolicy → Repository and lock ports → Transaction runner → Write authority → Chrome adapters → Shell composition`。各層は左側だけをimportする。
 - **Root ownership**: foundationは登録factoryを公開し、application shellだけが具体service workerへ登録する。
-- **Atomicity boundary**: 一つのstorage keyに一つのrootを保存する。候補変更、参照修復、検証、revision更新、maintenance state更新を一回の`set`へまとめる。
+- **Linearization boundary**: 全writerは同一名のexclusive Web Lockを取得してからrootを再読込し、検証、変更、一回の`set`を完了する。`StoragePort`は排他を所有せず、lockを迂回するwriterを公開しない。
+- **Restart boundary**: Web Lockはworker終了時に失われる一時的な排他である。generation、owner、lease、revisionを含む永続rootだけを再生成後の認可根拠とし、新workerはlock取得後に必ずrootを再読込する。
+- **Atomicity boundary**: 一つのstorage keyに一つのrootを保存し、候補変更、参照修復、検証、revision更新、maintenance state更新を一回の`set`へまとめる。これは協調writer間の論理的一括commitであり、Chrome crash時のdurable transaction保証は主張しない。
 
 ### Technology Stack
 
@@ -79,6 +87,7 @@ graph LR
 | Build | lightweight ESM bundler latest stable major | MV3同梱artifact生成 | remote codeとinline scriptなし |
 | Test | test runner + DOM不要のin-memory adapter | unit/contract/integration | versionsは導入時に固定 |
 | Data | `chrome.storage.local` Chrome 116+ | 単一root永続化、bytes取得 | 10MB、`unlimitedStorage`なし |
+| Concurrency | Web Locks API Chrome 116+ | 協調writerのroot read-check-write排他 | 永続ownershipには使用しない |
 | Runtime | Manifest V3 | 最小unpacked extension骨格 | shared worker compositionはshell所有 |
 
 ## File Structure Plan
@@ -96,24 +105,34 @@ src/domain/validation.ts                           # unknownから現行domain�
 src/persistence/schema.ts                          # schema version、empty root、storage key
 src/persistence/migrations.ts                      # NからN+1の純粋migration registry
 src/persistence/reference-repair.ts                # candidate変更時のCurrentBuild参照修復
-src/persistence/capacity.ts                        # quota、warning閾値、保存前後bytes状態
-src/persistence/repository.ts                      # query、mutation、replacementの公開port
-src/persistence/mutation-pipeline.ts               # read migrate mutate repair validate capacity commit
-src/persistence/maintenance.ts                     # generation、owner、lease、fencing契約
-src/persistence/replacement.ts                     # assess tokenとatomic replacement契約
+src/persistence/capacity.ts                        # bytes/quota入力からwarning・拒否を判定する純粋policy
+src/persistence/repository.ts                      # 検証済みread/query内部port
+src/persistence/mutation-pipeline.ts               # snapshotからmutation commit候補を構築
+src/persistence/root-write-lock.ts                  # RootWriteLock portと固定lock名
+src/persistence/web-locks-adapter.ts                # navigator.locksのexclusive adapter
+src/persistence/maintenance.ts                     # 純粋なgeneration、owner、lease、fence policy
+src/persistence/root-transaction-runner.ts          # lock内のread-check-write実行境界
+src/persistence/replacement.ts                     # canonical digest、assessment、replacement候補
 src/persistence/chrome-storage-adapter.ts           # Storage API、quota、access level adapter
-src/persistence/write-authority.ts                  # command dispatch、queue、revision、request dedupe
+src/persistence/write-authority.ts                  # FoundationDataPort、command dispatch、request dedupe
 src/persistence/worker-registration.ts              # shell向けworker handler registration factory
 src/persistence/public.ts                           # foundation永続化公開入口
 src/domain/public.ts                                # domain契約公開入口
 tests/fixtures/foundation.ts                        # 架空の有効・不正root builders
+tests/fixtures/foundation-policy.test.ts            # fixtureへの実サイトasset混入拒否
 tests/domain/validation.test.ts                     # domain、category、禁止payload、参照検証
 tests/persistence/migrations.test.ts                # migration chainとsource preservation
-tests/persistence/mutation-pipeline.test.ts         # CRUD、repair、競合、quota、failure preservation
-tests/persistence/maintenance.test.ts                # generation、owner、restart、stale fence
+tests/persistence/mutation-pipeline.test.ts         # CRUD候補、repair、候補検証、純粋capacity判定
+tests/persistence/maintenance.test.ts                # 純粋state transition、stale fence、破損state
+tests/persistence/root-write-lock.contract.test.ts   # 複数client排他、例外後解放
+tests/persistence/worker-restart.integration.test.ts # queue非共有の再生成と永続fence
 tests/persistence/replacement.test.ts                # dry-run評価、token、全体置換、rollback
 tests/persistence/write-authority.contract.test.ts   # command、request dedupe、single authority routing
+tests/persistence/public-port-regression.test.ts     # 公開facade経由の主要成功・失敗契約
+tests/persistence/performance.test.ts                # 10MB近傍の各処理時間とbytes計測
+tests/persistence/concurrency-restart.test.ts        # lock待機、同時mutation、worker restart
 tests/runtime/manifest.test.ts                       # MV3、Chrome 116、権限、CSP、access restriction
+tests/runtime/final-validation.test.ts               # boundary、fixture、artifact、共通validate gate
 ```
 
 ### Modified Files
@@ -130,21 +149,30 @@ tests/runtime/manifest.test.ts                       # MV3、Chrome 116、権限
 sequenceDiagram
     participant Consumer
     participant Authority
+    participant Runner
+    participant Lock
     participant Pipeline
     participant Repair
     participant Store
     Consumer->>Authority: command requestId expectedRevision
-    Authority->>Store: read root and maintenance
-    Authority->>Pipeline: apply command
+    Authority->>Runner: execute root operation
+    Runner->>Lock: acquire exclusive root lock
+    Runner->>Store: read root
+    Runner->>Store: read current bytes and runtime quota
+    Runner->>Runner: migrate and validate snapshot
+    Runner->>Pipeline: build candidate with capacity input
     Pipeline->>Repair: repair affected references
     Pipeline->>Pipeline: validate and estimate capacity
-    Pipeline->>Store: reread fence cursor
-    Pipeline->>Store: set root with next revision
-    Store-->>Authority: commit result
+    Pipeline-->>Runner: candidate and receipt metadata
+    Runner->>Runner: authorize fence and validate candidate
+    Runner->>Store: set root with next revision
+    Store-->>Runner: commit result
+    Runner->>Lock: release root lock
+    Runner-->>Authority: typed result
     Authority-->>Consumer: typed result
 ```
 
-authorityは同一worker instance内をqueueで直列化し、各commit前に永続revisionとmaintenance fenceを再検証する。同じrequest IDの再試行は保存済み結果を返し、異なるpayloadでの再利用は`request-conflict`を返す。
+authorityは全write commandを`RootTransactionRunner`へ渡す。runnerだけが固定名のexclusive root lock、Storage read、migration、snapshot validation、candidateの最終validation、revision更新、単一writeを所有する。`MutationPipeline`はStorageへ依存せず、runnerから渡された現行snapshotから候補とreceipt metadataを作る。同じrequest IDの再試行は保存済み結果を返し、異なるpayloadでの再利用は`request-conflict`を返す。worker再生成後は新しいlock requestを開始し、旧メモリqueueを復元しない。
 
 ### root置換とmaintenance fencing
 
@@ -152,16 +180,28 @@ authorityは同一worker instance内をqueueで直列化し、各commit前に永
 sequenceDiagram
     participant Backup
     participant Authority
+    participant Runner
+    participant Lock
     participant Evaluator
     participant Store
     Backup->>Authority: acquire maintenance
-    Authority->>Store: persist generation owner lease
+    Authority->>Runner: execute maintenance acquire
+    Runner->>Lock: acquire exclusive root lock
+    Runner->>Store: persist generation owner lease
+    Runner->>Lock: release root lock
     Backup->>Evaluator: assess replacement unknown root
     Evaluator-->>Backup: assessment token
     Backup->>Authority: replace token generation owner
-    Authority->>Store: reread generation owner revision
-    Authority->>Store: set validated replacement
-    Store-->>Backup: replaced or typed failure
+    Authority->>Runner: execute replacement
+    Runner->>Lock: acquire exclusive root lock
+    Runner->>Store: read generation owner revision
+    Runner->>Runner: migrate validate token candidate and fence
+    Runner->>Runner: increment revision once
+    Runner->>Store: set validated replacement
+    Store-->>Runner: commit result
+    Runner->>Lock: release root lock
+    Runner-->>Authority: replaced or typed failure
+    Authority-->>Backup: replaced or typed failure
     Backup->>Authority: release maintenance
 ```
 
@@ -173,7 +213,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 |---|---|---|---|---|
 | 1.1 | Chrome 116でMV3起動 | ManifestContract、BuildPipeline | manifest | build smoke |
 | 1.2 | remote・動的・inline code禁止 | BuildPipeline | validate script | artifact scan |
-| 1.3 | worker memory非依存 | WriteAuthority、MaintenanceCoordinator | durable cursor | 両flow |
+| 1.3 | worker memory非依存 | RootTransactionRunner、MaintenancePolicy | Web Lock、durable cursor | 両flow |
 | 1.4 | 最小権限 | ManifestContract | storage permission | manifest test |
 | 2.1 | version付き共有契約 | DomainModel | domain public | root validation |
 | 2.2 | 全category | NormalizedAttributeModel | category union | validation |
@@ -181,14 +221,14 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 2.4 | 欠損とcategory属性 | DomainModel、SchemaValidator | optional fields、attribute union | validation |
 | 2.5 | IDと日時規約 | IdentifierPolicy | branded ID、UtcTimestamp | validation |
 | 2.6 | 参照関係 | DomainModel、ReferenceRepairPolicy | root invariants | mutation flow |
-| 3.1 | CRUD結果と永続化 | LocalDataRepository | query/mutate | mutation flow |
+| 3.1 | CRUD結果と永続化 | MutationPipeline、RootTransactionRunner、WriteAuthority | FoundationDataPort | mutation flow |
 | 3.2 | 保存前検証 | MutationPipeline、SchemaValidator | mutateRoot | mutation flow |
 | 3.3 | 読取時検証 | LocalDataRepository、MigrationRegistry | readRoot | read flow |
 | 3.4 | 破損をtyped failure化 | SchemaValidator | RepositoryError | read flow |
-| 3.5 | 保存失敗時に既存値保持 | MutationPipeline、StorageAdapter | commit result | mutation flow |
+| 3.5 | 保存失敗時に既存値保持 | RootTransactionRunner、ChromeStorageAdapter | commit result | mutation flow |
 | 3.6 | 安全な再試行 | WriteAuthority | requestId | mutation flow |
 | 3.7 | 同一commitで参照修復 | ReferenceRepairPolicy、MutationPipeline | root mutation | mutation flow |
-| 3.8 | 競合検出 | WriteAuthority | expectedRevision | mutation flow |
+| 3.8 | 競合検出 | RootTransactionRunner、WriteAuthority | RootWriteLock、expectedRevision | mutation flow |
 | 4.1 | root schema version | DomainModel | schemaVersion | read flow |
 | 4.2 | 旧版の順序移行 | MigrationRegistry | toCurrent | read flow |
 | 4.3 | 将来版を上書きしない | MigrationRegistry | unsupported-version | read flow |
@@ -206,10 +246,10 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 7.1 | 副作用なし置換評価 | ReplacementEvaluator | assessReplacement | replacement flow |
 | 7.2 | root全体置換 | ReplacementCoordinator | replaceRoot | replacement flow |
 | 7.3 | 置換失敗時の既存root保持 | ReplacementCoordinator | replacement error | replacement flow |
-| 7.4 | maintenance owner外write拒否 | MaintenanceCoordinator | fence | 両flow |
-| 7.5 | stale owner・generation拒否 | MaintenanceCoordinator | MaintenanceCursor | replacement flow |
-| 7.6 | worker再生成耐性 | MaintenanceCoordinator | persisted state | restart test |
-| 7.7 | 終了・中止後の再開 | MaintenanceCoordinator | release/abort | replacement flow |
+| 7.4 | maintenance owner外write拒否 | MaintenancePolicy、RootTransactionRunner | fence、RootWriteLock | 両flow |
+| 7.5 | stale owner・generation拒否 | MaintenancePolicy、RootTransactionRunner | MaintenanceCursor | replacement flow |
+| 7.6 | worker再生成耐性 | MaintenancePolicy、RootTransactionRunner | persisted state、new lock request | restart test |
+| 7.7 | 終了・中止後の再開 | MaintenancePolicy、RootTransactionRunner | release/abort transition | replacement flow |
 | 8.1 | 架空dataのみ | FoundationFixtures | fixture builders | all tests |
 | 8.2 | 主要失敗・成功の自動検証 | FoundationFixtures | in-memory ports | all tests |
 | 8.3 | 実サイトasset不要 | FoundationFixtures | synthetic values | artifact scan |
@@ -225,11 +265,13 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | SchemaValidator | Domain | unknownを現行契約へ絞る | 2.1–2.6, 3.2–3.4, 5.4, 6.2 | DomainModel P0 | Service |
 | MigrationRegistry | Persistence | 旧schemaを純粋に連続移行 | 4.1–4.5 | SchemaValidator P0 | Service |
 | ReferenceRepairPolicy | Persistence | candidate変更によるbuild参照を修復 | 3.7 | DomainModel P0 | Service |
-| CapacityPolicy | Persistence | quotaとwarning状態を判定 | 5.1–5.3 | StoragePort P0 | Service |
-| MutationPipeline | Persistence | 一つのroot transactionを実行 | 3.1–3.5, 3.7–3.8, 5.1–5.3 | Validator P0、Repair P0、Storage P0 | Service |
-| MaintenanceCoordinator | Persistence | generation/owner/leaseをfence | 7.4–7.7 | StoragePort P0 | Service、State |
-| ReplacementCoordinator | Persistence | 評価済みrootを一括置換 | 7.1–7.3 | Validator P0、Maintenance P0 | Service |
-| WriteAuthority | Application adapter | 全mutationを直列dispatch | 1.3, 3.6, 3.8, 6.2–6.4 | MutationPipeline P0 | Service |
+| CapacityPolicy | Persistence | bytesとquotaからwarning・拒否を純粋判定 | 5.1–5.3 | 直列化済みcapacity input P0 | Service |
+| MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
+| MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
+| RootWriteLock | Persistence port | 協調writerのread-check-writeを線形化 | 1.3, 3.8, 7.4–7.7 | Web Locks API P0 | Service |
+| RootTransactionRunner | Persistence | lock内で最新rootを読み単一setまで実行 | 1.3, 3.1–3.8, 7.2–7.7 | RootWriteLock P0、StoragePort P0 | Service |
+| ReplacementCoordinator | Persistence | 評価済みrootのcommit候補を構築 | 7.1–7.3 | Validator P0、MaintenancePolicy P0 | Service |
+| WriteAuthority | Application adapter | 全writeをlock付きrunnerへdispatch | 1.3, 3.6, 3.8, 6.2–6.4 | RootTransactionRunner P0 | Service |
 | ChromeStorageAdapter | Chrome adapter | root、bytes、access levelを操作 | 3.5, 5.1–5.5, 6.1 | Chrome API P0 | Service |
 | WorkerRegistration | Runtime adapter | shellへtyped handlerを提供 | 6.2–6.4 | WriteAuthority P0 | Service |
 | ManifestContract | Runtime config | 最小MV3起動条件を宣言 | 1.1–1.4, 5.5 | Chrome 116 P0 | State |
@@ -285,15 +327,20 @@ interface ReferenceRepairPolicy {
 
 candidate削除では該当build itemを除去し、category変更で現在の構成へ保持できない参照を除去する。選択数や互換性などfeature固有判断は行わない。repair済みrootは同じpipelineで全体検証される。
 
-#### LocalDataRepository and MutationPipeline
+#### LocalDataRepository, FoundationDataPort and MutationPipeline
 
 ```typescript
 interface LocalDataRepository {
   readRoot(): Promise<Result<ReadSnapshot, RepositoryError>>;
   query<T>(query: RootQuery<T>): Promise<Result<T, RepositoryError>>;
-  mutate(command: RootMutationCommand): Promise<Result<MutationReceipt, RepositoryError>>;
-  assessReplacement(input: unknown): Promise<Result<ReplacementAssessment, RepositoryError>>;
-  replaceRoot(command: ReplaceRootCommand): Promise<Result<MutationReceipt, RepositoryError>>;
+}
+
+interface FoundationDataPort {
+  query<T>(query: RootQuery<T>): Promise<Result<T, FoundationError>>;
+  mutate(command: RootMutationCommand): Promise<Result<MutationReceipt, FoundationError>>;
+  assessReplacement(input: unknown): Promise<Result<ReplacementAssessment, FoundationError>>;
+  replaceRoot(command: ReplaceRootCommand): Promise<Result<MutationReceipt, FoundationError>>;
+  runMaintenance(command: MaintenanceCommand): Promise<Result<MaintenanceReceipt, FoundationError>>;
 }
 
 interface RootMutationCommand {
@@ -304,16 +351,35 @@ interface RootMutationCommand {
 }
 ```
 
-pipelineは最新root読取、migration、command適用、reference repair、全体検証、容量評価、commit前cursor再検証、revision増分、一括保存の順で実行する。warningは成功receiptへ付加し、validation、conflict、quota、storage failureは既存rootを変更せず返す。
+`LocalDataRepository`は検証済みread/queryだけを所有し、Repository境界の実装で完成する。`FoundationDataPort`は下流向け公開facadeであり、WriteAuthority統合でquery、mutation、maintenance、replacement dispatchを完成させる。
 
-#### MaintenanceCoordinator
+pipelineは`RootTransactionRunner`から渡された現行schemaの検証済みsnapshotとcapacity inputへcommand適用、reference repair、候補root検証、純粋capacity評価を行い、commit候補とreceipt metadataを返す。runnerはlock内でStoragePortから現在bytesとruntime quotaを取得し、pipelineへ値として渡す。pipelineとCapacityPolicyはStoragePortへ依存しない。migration、storage read/write、lock、revision増分、request dedupe永続化は所有しない。warningは成功receiptへ付加し、validationまたはquota failureでは候補を返さない。
+
+#### RootWriteLock and RootTransactionRunner
 
 ```typescript
-interface MaintenanceCoordinator {
-  acquire(ownerId: MaintenanceOwnerId, leaseMs: number): Promise<Result<MaintenanceFence, MaintenanceError>>;
-  renew(fence: MaintenanceFence, leaseMs: number): Promise<Result<MaintenanceFence, MaintenanceError>>;
-  release(fence: MaintenanceFence): Promise<Result<void, MaintenanceError>>;
-  abort(fence: MaintenanceFence): Promise<Result<void, MaintenanceError>>;
+interface RootWriteLock {
+  runExclusive<T>(operation: () => Promise<T>): Promise<Result<T, LockError>>;
+}
+
+interface RootTransactionRunner {
+  run<T>(operation: RootTransactionOperation<T>): Promise<Result<T, FoundationError>>;
+}
+```
+
+Chrome adapterは固定名`pc-build-planner:local-data-root-write`を`navigator.locks.request`へ渡す。runnerはlock取得後にrootを一度読み、migrationと全体validationを通したsnapshotをoperationへ渡し、operationが返した候補へmaintenance authorization、expected revision、request dedupe、全体validationを適用してrevisionを一度だけ進め、一回だけ保存する。operationはStoragePortを受け取らず再読込できない。lock callbackの完了、失敗、worker終了でlockは解放されるが、maintenance ownershipは永続rootから消えない。
+
+Web Lockを取得できない、またはcallback完了前に実行contextが失われた要求は成功として扱わない。複数の協調writerは同じlock名を必須とし、`StoragePort`とChrome adapterはpublic portへ公開しない。複数authority、lockを迂回するtrusted extension code、Chrome crash時のdurable transactionは非対応architectureとする。
+
+#### MaintenancePolicy
+
+```typescript
+interface MaintenancePolicy {
+  acquire(root: LocalDataRoot, ownerId: MaintenanceOwnerId, leaseMs: number, now: UtcTimestamp): Result<MaintenanceTransition, MaintenanceError>;
+  renew(root: LocalDataRoot, fence: MaintenanceFence, leaseMs: number, now: UtcTimestamp): Result<MaintenanceTransition, MaintenanceError>;
+  release(root: LocalDataRoot, fence: MaintenanceFence): Result<MaintenanceTransition, MaintenanceError>;
+  abort(root: LocalDataRoot, fence: MaintenanceFence): Result<MaintenanceTransition, MaintenanceError>;
+  authorizeWrite(root: LocalDataRoot, fence?: MaintenanceFence): Result<void, MaintenanceError>;
 }
 
 interface MaintenanceFence {
@@ -323,7 +389,7 @@ interface MaintenanceFence {
 }
 ```
 
-maintenance中はowner fenceを持たない全writeを`maintenance-active`で拒否する。期限切れownerの暗黙再利用は禁止し、新generationのacquireを要求する。renew、replace、releaseはcommit直前にgeneration、owner、revisionを再検証する。
+policyはI/Oとlockを持たない純粋関数である。maintenance commandと全writeは`RootTransactionRunner`のexclusive callback内で最新rootへpolicyを適用する。maintenance中はowner fenceを持たない全writeを`maintenance-active`で拒否する。期限切れownerの暗黙再利用は禁止し、新generationのacquireを要求する。renew、replace、releaseはlock取得後の最新generation、owner、revisionへ照合する。
 
 #### ReplacementCoordinator
 
@@ -341,7 +407,9 @@ interface ReplacementAssessment {
 }
 ```
 
-tokenは評価済み内容digest、schema version、required bytes、評価時revisionを結びつける。`replaceRoot`はtokenと候補を照合し、maintenance fenceとcurrent revisionを再検証して一回のroot writeを行う。
+評価対象はmigration後・全体validation後の候補rootである。canonical serializationはJSON object keyをUnicode code point順に再帰整列し、array順序とJSON primitiveを保持し、余分な空白を含めずUTF-8へ符号化する。digestはWeb Crypto SHA-256で算出する。tokenはdigest、source schema version、target schema version、required bytes、評価時revisionを結びつけ、同じ候補と評価cursorからは同じtoken payload、候補値・schema・bytes・revisionのいずれかが変われば異なるtoken payloadを生成する。
+
+`ReplacementCoordinator`は評価時に副作用を持たず、canonical digestを含むassessmentとcommit候補構築だけを所有する。`FoundationDataPort.assessReplacement`はReplacementCoordinator境界で完成し、`replaceRoot`の公開dispatchはWriteAuthority統合で完成する。置換時は`RootTransactionRunner`がlock内でtokenと候補、maintenance fence、current revisionを再検証し、一回のroot writeを行う。
 
 ### Runtime and Adapter Layer
 
@@ -355,7 +423,7 @@ interface DataWorkerRegistration {
 function createDataWorkerRegistration(deps: DataAuthorityDependencies): DataWorkerRegistration;
 ```
 
-registrationは受信値、request ID、caller classificationを検証し、許可済みcommandだけをauthorityへ渡す。具体sender/tab/URL policyとlistener compositionはapplication shellが提供する。content scriptへRepositoryやStoragePortを返さない。
+registrationは受信値、request ID、caller classificationを検証し、許可済みcommandだけをauthorityへ渡す。WriteAuthorityはqueryを検証済みRepositoryへ、すべてのmutation、maintenance、replacementを`RootTransactionRunner`へdispatchする。同一worker内queueは待ち順と負荷制御に使用できるが、正しさの排他根拠はWeb Lock、再生成後の認可根拠は永続rootである。具体sender/tab/URL policyとlistener compositionはapplication shellが提供する。content scriptへRepository、StoragePort、RootWriteLockを返さない。
 
 #### ChromeStorageAdapter
 
@@ -370,6 +438,8 @@ interface StoragePort {
 ```
 
 adapterは`localDataRoot`だけを所有し、Chrome例外をtyped errorへ変換する。`QUOTA_BYTES`を上限根拠とし、設定済みwarning比率を適用する。access restriction失敗時はauthorityを利用可能として登録しない。
+
+`WebLocksAdapter`は`StoragePort`と分離し、固定lock名によるexclusive requestだけを提供する。in-memory test doubleも同じ`RootWriteLock` contractを実装し、Storage adapterへ本番より強い暗黙排他を持ち込まない。
 
 ## Data Models
 
@@ -394,10 +464,11 @@ erDiagram
 - array内IDの一意性と参照はvalidatorが全体検証する。10MB上限のMVPでは二次indexを永続化せず、query時に一時Mapを構築する。
 - request dedupe記録は有界で、最新requestだけを保持する。上限とevictionはschema定数として固定し、同じrequest IDが保持期間外に再送された場合はexpected revisionで競合検出する。
 - maintenance stateはrootと同じcommit単位に置き、worker memoryや`storage.session`を正としない。
+- Web Lockは保存modelへ含めない。lock消失後もactive maintenanceとgenerationはrootに残り、新workerの最初のwriteがlock内で再読込してfail-closedに判定する。
 
 ## Error Handling
 
-`FoundationError`は`validation`、`corrupt-data`、`unsupported-version`、`migration-failed`、`repair-failed`、`revision-conflict`、`request-conflict`、`maintenance-active`、`stale-fence`、`stale-assessment`、`quota-exceeded`、`access-denied`、`storage-unavailable`を判別子に持つ。quota warningは失敗ではなく成功receiptのmetadataとする。
+`FoundationError`は`validation`、`corrupt-data`、`unsupported-version`、`migration-failed`、`repair-failed`、`revision-conflict`、`request-conflict`、`maintenance-active`、`stale-fence`、`stale-assessment`、`quota-exceeded`、`access-denied`、`lock-unavailable`、`storage-unavailable`を判別子に持つ。quota warningは失敗ではなく成功receiptのmetadataとする。
 
 Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ出さない。予期しないadapter例外は`storage-unavailable`へ正規化し、commit成功を確認できない場合は成功を返さない。
 
@@ -407,24 +478,38 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `SchemaValidator`で全12category、欠損値、元表記と確認値、UUID/UTC、cross-project参照、生HTML・画像/data URL拒否を検証する（2.1–2.6, 5.4）。
 - `MigrationRegistry`で連続migration、経路欠落、将来版、step失敗、source非変更を検証する（4.1–4.5）。
 - `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去と、無関係参照の保持を検証する（3.7）。
+- `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。
 
 ### Contract and Integration Tests
-- `MutationPipeline`でCRUD、expected revision競合、同一request再試行、異payload request ID拒否、storage失敗時の既存root保持を検証する（3.1–3.8）。
+- `MutationPipeline`でCRUD候補、reference repair、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 5.1–5.3）。
+- `RootTransactionRunner`でexpected revision競合、storage失敗時の既存root保持、lock内の最新root読取、revision増分、単一writeを検証する（1.3, 3.3–3.5, 3.8）。
+- `WriteAuthority`で同一request再試行、異payload request ID拒否、query・mutation・maintenance・replacement dispatchを検証する（3.1, 3.6, 3.8, 6.2–6.4）。
 - 10MB未満、warning閾値、超過見込み、実write quota rejectについてbefore/after capacity metadataとroot保持を検証する（5.1–5.5）。
-- `MaintenanceCoordinator`でowner外write、stale generation、renew/release/abort、worker instance再作成後の拒否と再開を検証する（7.4–7.7）。
+- `RootWriteLock` contractで別clientの同時acquireを直列化し、callback throw後の解放、同一固定lock名、lock failureのtyped化を検証する（1.3, 3.8, 7.4–7.7）。
+- `RootTransactionRunner`で同時maintenance acquireの成功が一件だけであること、通常mutationとのlost updateがないこと、lock取得後に最新rootを読むことを検証する（3.8, 7.4–7.6）。
+- worker再生成testではメモリqueueを共有しない新authorityと新lock adapterを作り、永続active fenceによるowner外write拒否、期限切れ後の新generation、release/abort後の再開を検証する（1.3, 7.5–7.7）。
 - `ReplacementCoordinator`で副作用なし評価、schema migration、容量不足、stale token、単一成功/失敗置換を検証する（7.1–7.3）。
 - `WorkerRegistration`でunknown payload、unauthorized caller、content-script直接accessなし、access restriction失敗時のfail-closedを検証する（6.1–6.4）。
+
+### Fixture and Public Port Regression
+- fixture builderは全12category、欠損値、元表記・確認値、参照整合root、破損rootを架空値だけで生成し、実サイトHTML、画像、商品dataを含まないことを独立検査する（8.1, 8.3）。
+- `FoundationDataPort`だけを使う回帰suiteでCRUD、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflict、maintenance fence、replacementを検証する（3.1–3.8, 4.2–4.4, 5.1–5.3, 6.1–6.4, 7.1–7.7, 8.2）。
+
+### Performance and Concurrency Validation
+- 10MB近傍の架空rootでread、migration、validation、repair、canonical serialization、single writeの時間とbytesを個別計測する（5.1, 5.3）。
+- 複数clientのlock待機時間、同時mutationのrevision単調増加、worker再生成後のactive fence拒否を独立したintegration suiteで計測・検証する（1.3, 3.8, 7.4–7.6）。
 
 ### Runtime and Build Tests
 - 生成manifestがMV3、minimum Chrome 116、`storage`のみ、host permission/`unlimitedStorage`なしで読み込めることを検証する（1.1, 1.4, 5.5）。
 - bundleをscanし、remote import、`eval`、`new Function`、inline JavaScriptがないことを検証する（1.2）。
-- 全fixtureが架空値だけで、実サイトHTML、画像、取得商品dataをartifactへ含めないことを検証する（8.1–8.3）。
+- 公開import境界、固定lock名の迂回、直接`chrome.storage`利用、fixture assetをartifact gateで検査し、typecheck、Biome、全test、build、artifact scanを一つの最終commandで実行する（5.4, 6.3, 8.1–8.3）。
 
 ## Security Considerations
 
 - 初期化時に`storage.local`を`TRUSTED_CONTEXTS`へ制限し、成功前にwrite authorityを公開しない。
 - runtime inputは`unknown`からdecodeし、shell提供のcaller authorizationとfoundation command validationの両方を通す。
 - public portはstorage primitiveを公開せず、featureからの`chrome.storage`直接importをboundary testで拒否する。
+- Web Locksは協調排他であるため、固定lock名を迂回する`chrome.storage.local.set`、StoragePort、RootWriteLockの直接利用をboundary testで拒否する。
 - CSPを弱めず、remote hosted code、動的評価、inline JavaScriptを生成物検査で拒否する。
 
 ## Performance & Scalability
@@ -432,6 +517,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - capacity上限はruntime `chrome.storage.local.QUOTA_BYTES`を使用し、warning比率は既定80%として設定可能にする。
 - synthetic rootを用いて10MB近傍のread、migration、validation、repair、serialization、write時間を個別計測する。MVP受入では操作をタイムアウトさせず、計測値をtest reportへ残す。
 - root分割、永続index、別storage採用は現時点で行わない。全体書換が実測上問題になった場合は参照整合性・置換・migrationを含む全dependent specのrevalidationを行う。
+- lock待機時間とcallback実行時間をtest reportへ残す。Web Lock callback内にnetwork I/Oや利用者待機を持ち込まず、root readから単一setまでに限定する。
 
 ## Migration Strategy
 
