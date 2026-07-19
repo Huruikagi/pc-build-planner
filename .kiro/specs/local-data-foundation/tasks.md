@@ -199,7 +199,7 @@
   - _Requirements: 5.1, 5.3, 8.1, 8.2_
   - _Boundary: Performance Validation_
 
-- [ ] 6.4 (P) 並行要求とworker再生成の回帰を統合する
+- [x] 6.4 (P) 並行要求とworker再生成の回帰を統合する
   - 複数clientのlock待機、同時mutationのrevision単調増加、lost update不在を検証する
   - メモリqueueを共有しない新authorityと新lock adapterでactive fenceとrequest retryを再読込する
   - worker再生成後もowner外writeが拒否され、releaseまたはabort後だけ再開する回帰suiteが成功することを完了条件とする
