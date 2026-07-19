@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { act } from "react";
+
+import { createProductionApplicationComposition } from "../../src/application-shell/application-composition.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -12,6 +15,10 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
+import {
+  createShellPresentation,
+  type ShellPresentationAdapter,
+} from "../../src/application-shell/shell-presentation.js";
 import type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
@@ -300,6 +307,56 @@ test("unsubscribeとhost cleanupは成功するまで所有し、失敗分だけ
   assert.equal(unmountAttempts, 2);
 });
 
+test("stopはfeature hostを先に停止してからmaintenance購読を解除し両失敗を再試行する", async () => {
+  const events: string[] = [];
+  let unmountAttempts = 0;
+  let unsubscribeAttempts = 0;
+  const registry = createFeatureRegistry();
+  assert.equal(
+    registry.register({
+      id: featureId("ordered-cleanup"),
+      navigation: { label: "ordered", order: 0 },
+      publicApi: {},
+      getAvailability: () => ({ status: "available" }),
+      subscribeAvailability: () => () => {},
+      async mount() {
+        return {
+          async unmount() {
+            events.push("feature");
+            unmountAttempts += 1;
+            if (unmountAttempts === 1) throw new Error("feature");
+          },
+        };
+      },
+    }).ok,
+    true,
+  );
+  const integration = createApplicationShellIntegration({
+    registry,
+    container: document.createElement("div"),
+    maintenanceSource: {
+      async getSnapshot() {
+        return { ok: true, value: snapshot(1, 1, false) };
+      },
+      subscribe() {
+        return () => {
+          events.push("maintenance");
+          unsubscribeAttempts += 1;
+          if (unsubscribeAttempts === 1) throw new Error("maintenance");
+        };
+      },
+    },
+    onStateChange() {},
+    reportError() {},
+  });
+  await integration.start();
+  await assert.rejects(integration.stop(), AggregateError);
+  assert.deepEqual(events, ["feature", "maintenance"]);
+  events.length = 0;
+  await integration.stop();
+  assert.deepEqual(events, ["feature", "maintenance"]);
+});
+
 test("host start失敗時に取得済みresourceをrollbackしretryで実際にmountする", async () => {
   const registration: ApplicationFeatureRegistration = {
     id: featureId("retry-start"),
@@ -359,3 +416,292 @@ test("host start失敗時に取得済みresourceをrollbackしretryで実際にm
 // Compile-time assertion for the public integration boundary.
 const acceptsIntegration = (_value: ApplicationShellIntegration): void => {};
 void acceptsIntegration;
+
+test("production-shaped runtimeでUI、worker、maintenance、failure、cleanupを横断する", async () => {
+  const shellContainer = document.createElement("div");
+  document.body.append(shellContainer);
+  const events: string[] = [];
+  const diagnostics: string[] = [];
+  const maintenance = source(snapshot(7, 1, false));
+  const availabilityListeners = new Map<
+    string,
+    Set<
+      (
+        value:
+          | { status: "available" }
+          | { status: "unavailable"; reason: string },
+      ) => void
+    >
+  >();
+  const availability = new Map<
+    string,
+    { status: "available" } | { status: "unavailable"; reason: string }
+  >([
+    ["projects", { status: "available" }],
+    ["broken", { status: "available" }],
+    ["compatibility", { status: "available" }],
+  ]);
+  const policies = new Map<string, FeatureMountContext["operationPolicy"]>();
+
+  const feature = (
+    id: string,
+    label: string,
+    options?: { readonly mountFails?: boolean },
+  ): ApplicationFeatureRegistration<{ readonly name: string }> => ({
+    id: featureId(id),
+    navigation: {
+      label,
+      order: id === "projects" ? 0 : id === "broken" ? 1 : 2,
+    },
+    publicApi: { name: id },
+    getAvailability: () =>
+      availability.get(id) ?? { status: "unavailable", reason: "missing" },
+    subscribeAvailability(listener) {
+      const listeners = availabilityListeners.get(id) ?? new Set();
+      listeners.add(listener);
+      availabilityListeners.set(id, listeners);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    async mount(context) {
+      events.push(`${id}:mount`);
+      if (options?.mountFails)
+        throw new Error("<script>mount-secret()</script>");
+      policies.set(id, context.operationPolicy);
+      context.container.textContent = `${id}-view`;
+      return {
+        async unmount() {
+          context.container.textContent = "";
+          assert.equal(context.container.textContent, "");
+          events.push(`${id}:unmount`);
+        },
+      };
+    },
+  });
+  const setAvailability = (
+    id: string,
+    value: { status: "available" } | { status: "unavailable"; reason: string },
+  ) => {
+    availability.set(id, value);
+    for (const listener of availabilityListeners.get(id) ?? []) listener(value);
+  };
+  let foundationStops = 0;
+  let workerStops = 0;
+  const reactPresentation = createShellPresentation();
+  const observedPresentation: ShellPresentationAdapter = {
+    mount(input) {
+      const mounted = reactPresentation.mount(input);
+      if (!mounted.ok) return mounted;
+      return {
+        ok: true,
+        value: {
+          featureContainer: mounted.value.featureContainer,
+          publish: (state, navigation) =>
+            mounted.value.publish(state, navigation),
+          stop() {
+            mounted.value.stop();
+            events.push("presentation:stop");
+          },
+        },
+      };
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer,
+    initializeFoundation: async () => ({
+      ok: true,
+      value: {
+        maintenanceSource: {
+          getSnapshot: () => maintenance.maintenanceSource.getSnapshot(),
+          subscribe(listener) {
+            const unsubscribe =
+              maintenance.maintenanceSource.subscribe(listener);
+            return () => {
+              unsubscribe();
+              events.push("maintenance:stop");
+            };
+          },
+        },
+        workerRegistrations: [],
+        dispose() {
+          foundationStops += 1;
+          events.push("foundation:stop");
+        },
+      },
+    }),
+    contributions: {
+      features: [
+        {
+          key: "projects",
+          registration: feature("projects", "Projects <img src=x>"),
+        },
+        {
+          key: "broken",
+          registration: feature("broken", "Broken", { mountFails: true }),
+        },
+        {
+          key: "compatibility",
+          registration: feature("compatibility", "Compatibility"),
+        },
+      ] as const,
+      workerRegistrations: [
+        {
+          id: featureId("runtime-worker"),
+          register() {
+            events.push("worker:start");
+            return {
+              ok: true as const,
+              value: () => {
+                workerStops += 1;
+                events.push("worker:stop");
+              },
+            };
+          },
+        },
+      ],
+    },
+    presentation: observedPresentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError: (message) => diagnostics.push(message),
+  });
+
+  const started = await act(() => root.start());
+  assert.equal(started.ok, true);
+  if (!started.ok) return;
+  assert.equal(Object.getPrototypeOf(started.value.api), null);
+  assert.deepEqual(Object.keys(started.value.api), [
+    "projects",
+    "broken",
+    "compatibility",
+  ]);
+  const featureSlot = shellContainer.querySelector<HTMLElement>(
+    "[data-shell-feature-slot]",
+  );
+  assert.ok(featureSlot);
+  assert.notEqual(featureSlot, shellContainer);
+  assert.equal(featureSlot.textContent, "projects-view");
+  assert.equal(shellContainer.querySelector("img"), null);
+  assert.match(shellContainer.textContent ?? "", /Projects <img src=x>/);
+  assert.ok(events.indexOf("projects:mount") < events.indexOf("worker:start"));
+
+  const clickNavigation = async (label: string) => {
+    const button = [...shellContainer.querySelectorAll("nav button")].find(
+      (candidate) => candidate.textContent === label,
+    );
+    assert.ok(button);
+    await act(() => (button as HTMLButtonElement).click());
+  };
+  await clickNavigation("Compatibility");
+  assert.deepEqual(events.slice(0, 4), [
+    "projects:mount",
+    "worker:start",
+    "projects:unmount",
+    "compatibility:mount",
+  ]);
+  assert.equal(featureSlot.textContent, "compatibility-view");
+
+  await clickNavigation("Broken");
+  assert.equal(featureSlot.textContent, "");
+  assert.match(shellContainer.textContent ?? "", /表示開始に失敗しました/);
+  assert.equal(shellContainer.querySelector("script"), null);
+  await clickNavigation("Projects <img src=x>");
+  assert.equal(featureSlot.textContent, "projects-view");
+
+  await act(async () => {
+    setAvailability("compatibility", {
+      status: "unavailable",
+      reason: "<svg onload=secret()>互換性を確認中",
+    });
+    setAvailability("broken", {
+      status: "unavailable",
+      reason: "fixture failure",
+    });
+    setAvailability("projects", {
+      status: "unavailable",
+      reason: "<script>availability-secret()</script>",
+    });
+  });
+  assert.equal(featureSlot.textContent, "");
+  assert.match(
+    shellContainer.textContent ?? "",
+    /<script>availability-secret\(\)<\/script>/,
+  );
+  assert.equal(shellContainer.querySelector("script"), null);
+  await act(async () =>
+    setAvailability("compatibility", { status: "available" }),
+  );
+  assert.equal(featureSlot.textContent, "compatibility-view");
+
+  const policy = policies.get("compatibility");
+  assert.ok(policy);
+  await act(() => maintenance.emit(snapshot(8, 1, true)));
+  assert.equal(policy.isAllowed("read"), true);
+  assert.equal(policy.isAllowed("mutation"), false);
+  assert.match(shellContainer.textContent ?? "", /メンテナンス中/);
+  await act(() => maintenance.emit(snapshot(7, 99, false)));
+  assert.equal(policy.isAllowed("mutation"), false);
+  await act(() => maintenance.emit(snapshot(8, 2, false)));
+  assert.equal(policy.isAllowed("mutation"), true);
+  assert.ok(diagnostics.some((message) => message.includes("stale")));
+
+  events.length = 0;
+  await act(() => root.stop());
+  assert.deepEqual(events, [
+    "worker:stop",
+    "compatibility:unmount",
+    "maintenance:stop",
+    "presentation:stop",
+    "foundation:stop",
+  ]);
+  assert.equal(
+    events.filter((event) => event === "compatibility:unmount").length,
+    1,
+  );
+  const stoppedEvents = [...events];
+  await act(() => root.stop());
+  assert.deepEqual(events, stoppedEvents);
+  assert.equal(workerStops, 1);
+  assert.equal(maintenance.unsubscribeCalls(), 1);
+  assert.equal(foundationStops, 1);
+  assert.equal(availabilityListeners.get("projects")?.size, 0);
+  assert.equal(availabilityListeners.get("broken")?.size, 0);
+  assert.equal(availabilityListeners.get("compatibility")?.size, 0);
+  assert.equal(shellContainer.textContent, "");
+  shellContainer.remove();
+});
+
+test("同じproduction presentation fixtureは空catalogを安全なempty stateで起動・解放する", async () => {
+  const shellContainer = document.createElement("div");
+  document.body.append(shellContainer);
+  const maintenance = source(snapshot(1, 1, false));
+  let foundationStops = 0;
+  const root = createProductionApplicationComposition({
+    shellContainer,
+    initializeFoundation: async () => ({
+      ok: true,
+      value: {
+        maintenanceSource: maintenance.maintenanceSource,
+        workerRegistrations: [],
+        dispose() {
+          foundationStops += 1;
+        },
+      },
+    }),
+    contributions: { features: [] as const, workerRegistrations: [] },
+    presentation: createShellPresentation(),
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+  assert.equal((await act(() => root.start())).ok, true);
+  assert.equal(shellContainer.querySelectorAll("nav button").length, 0);
+  assert.match(shellContainer.textContent ?? "", /利用可能な機能がありません/);
+  const featureSlot = shellContainer.querySelector("[data-shell-feature-slot]");
+  assert.ok(featureSlot);
+  assert.notEqual(featureSlot, shellContainer);
+  await act(() => root.stop());
+  assert.equal(maintenance.unsubscribeCalls(), 1);
+  assert.equal(foundationStops, 1);
+  assert.equal(shellContainer.textContent, "");
+  shellContainer.remove();
+});

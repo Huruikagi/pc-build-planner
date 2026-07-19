@@ -165,7 +165,7 @@
   - _Requirements: 6.2_
   - _Boundary: RuntimeAdapters_
 
-- [ ] 4.7 Production runtime統合回帰を完成する
+- [x] 4.7 Production runtime統合回帰を完成する
   - 空catalogと複数の模擬featureを同じproduction-shaped fixtureで起動し、shell rootとfeature mount領域が別DOM要素であることを検証する
   - navigation、unmount後の切替、availability変化、mount失敗、worker登録、maintenance開始・終了・stale通知を一連のscenarioで検証する
   - 外部由来文字列の安全なtext表示、他featureの継続、停止時の全resource cleanupを確認する
