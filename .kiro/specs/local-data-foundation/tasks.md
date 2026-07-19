@@ -194,7 +194,7 @@
   - _Requirements: 1.1, 1.3, 3.1, 6.1, 7.8_
   - _Boundary: RuntimeContributionFactory_
 
-- [ ] 5.7 Production contributionの公開・cleanup境界を完成する
+- [x] 5.7 Production contributionの公開・cleanup境界を完成する
   - foundation公開入口へplatform契約、contribution契約、initializerだけを追加し、application shellがdeep importなしで利用できるようにする
   - Repository、Storage、root lock、runner、pipeline、authority、maintenance owner・lease capabilityを公開面から除外したまま維持する
   - initializer所有resourceだけを冪等にcleanupし、consumerが開始したmaintenance購読解除とworker登録解除の所有権を奪わない
@@ -241,7 +241,7 @@
   - _Depends: 6.2, 6.3, 6.4_
   - _Requirements: 1.1, 1.2, 1.4, 5.4, 5.5, 6.3, 8.1, 8.2, 8.3_
 
-- [ ] 6.6 Production runtime contributionの統合回帰を追加する
+- [x] 6.6 Production runtime contributionの統合回帰を追加する
   - canonical graphから生成したmaintenance sourceとworker registrationが、同じroot revisionとmaintenance stateを観測することを検証する
   - 同じ永続Storageへgraphを再生成し、active fenceとrevisionを再読込してowner外writeを拒否することを確認する
   - 不正platform、初期access restriction失敗、冪等cleanup、購読解除とworker解除の所有権を架空stubだけで検証する
@@ -250,7 +250,7 @@
   - _Requirements: 1.3, 3.1, 6.1, 6.2, 6.3, 6.4, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3_
   - _Boundary: Runtime Contribution Integration Validation_
 
-- [ ] 6.7 Runtime contributionを最終validation gateへ統合する
+- [x] 6.7 Runtime contributionを最終validation gateへ統合する
   - production contributionの公開shape、application-shell所有runtime入口の非所有、直接Storage・lock・authorityの非公開をboundaryとartifact検査へ追加する
   - remote code、動的評価、inline JavaScript、過剰権限を含まない既存MV3生成物契約を維持する
   - 完了時、typecheck、Biome、全test、build、artifact scanが共通検証commandで連続成功する
