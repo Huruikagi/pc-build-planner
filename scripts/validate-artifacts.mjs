@@ -119,7 +119,7 @@ const forbiddenFoundationExports = new Set([
 ]);
 
 /** @param {string} source @param {string} path */
-function validateFoundationPublicContract(source, path) {
+export function validateFoundationPublicContract(source, path) {
   const exportedNames = new Set();
   const exportedBindings = new Set();
   for (const match of source.matchAll(/\bexport\s*\{([\s\S]*?)\}/g)) {
@@ -153,8 +153,10 @@ function validateFoundationPublicContract(source, path) {
       }
     }
   }
-  if (!exportedNames.has("initializeFoundationRuntimeContribution")) {
-    fail(`foundation contribution initializer is not exported from ${path}`);
+  if (!exportedNames.has("initializeProductionFoundationRuntimeContribution")) {
+    fail(
+      `foundation production contribution factory is not exported from ${path}`,
+    );
   }
   for (const name of forbiddenFoundationExports) {
     if (exportedBindings.has(name) || exportedNames.has(name)) {

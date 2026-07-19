@@ -159,7 +159,11 @@ export const findBoundaryViolations = (sources) =>
         pathValue !== undefined &&
         canonicalApiPath(pathValue.value).startsWith("navigator.locks")
       )
-        rules.add("no-root-lock-bypass");
+        rules.add(
+          isApplicationShell
+            ? "application-shell-no-direct-locks"
+            : "no-root-lock-bypass",
+        );
       if (
         token?.kind === SyntaxKind.Identifier &&
         tokens[index + 1]?.kind === SyntaxKind.EqualsToken
@@ -208,6 +212,18 @@ export const findBoundaryViolations = (sources) =>
       /\b(?:interface|type|class)\s+MaintenanceSnapshotSource\b/.test(source)
     )
       rules.add("application-shell-no-maintenance-contract-redefinition");
+    if (isApplicationShell && /\bFoundationRuntimePlatform\b/.test(source))
+      rules.add("application-shell-no-foundation-platform-injection");
+    if (
+      isApplicationShell &&
+      /\binitializeFoundationRuntimeContribution\b(?!FromPlatform)/.test(source)
+    )
+      rules.add("application-shell-no-foundation-di-initializer");
+    if (
+      isApplicationShell &&
+      /\b(?:createWriteAuthority|WriteAuthority)\b/.test(source)
+    )
+      rules.add("application-shell-no-foundation-authority");
     if (
       /(?:^|\/)src\//.test(normalizedPath) &&
       /\bdangerouslySetInnerHTML\b|(?:\.|\[\s*["']innerHTML["']\s*\])\s*=/.test(

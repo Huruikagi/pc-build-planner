@@ -267,7 +267,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 5.4, 5.5, 6.3, 8.1, 8.2, 8.3_
   - _Boundary: Runtime Contribution Final Validation_
 
-- [ ] 6.8 引数なしproduction factoryの統合・公開境界回帰を完成する
+- [x] 6.8 引数なしproduction factoryの統合・公開境界回帰を完成する
   - production-shaped global stubでStorage access restriction、maintenance source、worker registration、固定caller policy、cleanupを検証し、欠落global・getter例外・access restriction失敗をfail closedで回帰する
   - 模擬production shell consumerが引数なしfactoryと最小handleだけで型検査でき、application-shell boundaryがplatform契約、DI initializer、Storage、lock、authorityのproduction利用を拒否することを確認する
   - 旧platform公開shapeのartifact expectationを置き換え、foundationの公開bundle・source boundary・final gateが新契約を連続検査する

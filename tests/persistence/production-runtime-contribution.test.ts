@@ -141,3 +141,43 @@ test("Chrome global欠落はinvalid-platformとなる", async () => {
     restoreChrome();
   }
 });
+
+test("production factoryはaccess restriction失敗時にhandleを公開しない", async () => {
+  let listeners = 0;
+  const restoreChrome = installGlobal("chrome", {
+    storage: {
+      local: {
+        QUOTA_BYTES: 10 * 1024 * 1024,
+        async get() {
+          return {};
+        },
+        async set() {},
+        async getBytesInUse() {
+          return 0;
+        },
+        async setAccessLevel() {
+          throw new Error("denied");
+        },
+      },
+      onChanged: {
+        addListener() {
+          listeners += 1;
+        },
+        removeListener() {},
+      },
+    },
+  });
+  const restoreNavigator = installGlobal("navigator", {
+    locks: { request() {} },
+  });
+  try {
+    assert.deepEqual(
+      await initializeProductionFoundationRuntimeContribution(),
+      { ok: false, error: { code: "access-denied" } },
+    );
+    assert.equal(listeners, 0);
+  } finally {
+    restoreNavigator();
+    restoreChrome();
+  }
+});

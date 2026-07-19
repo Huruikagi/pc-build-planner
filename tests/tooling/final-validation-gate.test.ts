@@ -58,7 +58,7 @@ const builder =
     );
     await writeFile(
       join(output, "foundation.js"),
-      "const initializeFoundationRuntimeContribution=()=>{}; export { initializeFoundationRuntimeContribution };",
+      "const initializeProductionFoundationRuntimeContribution=()=>{}; export { initializeProductionFoundationRuntimeContribution };",
     );
     for (const [name, content] of Object.entries(extra))
       await writeFile(join(output, name), content);
@@ -217,7 +217,7 @@ test("manifest・code・公開境界・fixtureのartifact違反をすべて伝�
     builder(validManifest, { "photo.png": "synthetic bytes" }),
     builder(validManifest, {
       "foundation.js":
-        "const initializeFoundationRuntimeContribution=()=>{}; const createWriteAuthority=()=>{}; export { initializeFoundationRuntimeContribution, createWriteAuthority };",
+        "const initializeProductionFoundationRuntimeContribution=()=>{}; const createWriteAuthority=()=>{}; export { initializeProductionFoundationRuntimeContribution, createWriteAuthority };",
     }),
     builder(validManifest, {
       "foundation.js":
@@ -225,11 +225,11 @@ test("manifest・code・公開境界・fixtureのartifact違反をすべて伝�
     }),
     builder(validManifest, {
       "foundation.js":
-        "const initializeFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};export{initializeFoundationRuntimeContribution,createWriteAuthority as x};",
+        "const initializeProductionFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};export{initializeProductionFoundationRuntimeContribution,createWriteAuthority as x};",
     }),
     builder(validManifest, {
       "foundation.js":
-        "export const initializeFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};",
+        "export const initializeProductionFoundationRuntimeContribution=()=>{},createWriteAuthority=()=>{};",
     }),
   ];
   for (const build of cases) {

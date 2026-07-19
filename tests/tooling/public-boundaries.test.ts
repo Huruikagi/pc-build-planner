@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { validateFoundationPublicContract } from "../../scripts/validate-artifacts.mjs";
 import {
   findBoundaryViolations,
   validateBoundaryRoots,
@@ -22,6 +23,10 @@ test("domain と persistence の公開入口は許可された契約だけを公
   assert.match(persistencePublic, /MaintenanceCommand/);
   assert.match(persistencePublic, /FoundationRuntimePlatform/);
   assert.match(persistencePublic, /FoundationRuntimeContribution/);
+  assert.match(
+    persistencePublic,
+    /initializeProductionFoundationRuntimeContribution/,
+  );
   assert.match(persistencePublic, /initializeFoundationRuntimeContribution/);
   assert.doesNotMatch(
     persistencePublic,
@@ -48,6 +53,23 @@ test("production contribution はshellがcomposeする最小handleだけを公�
   assert.doesNotMatch(
     await readFile("src/persistence/public.ts", "utf8"),
     /createCompositionRoot|startApplicationShell|startServiceWorker/,
+  );
+});
+
+test("foundation artifactはno-arg production factoryを必須としlegacy DI bridgeを許容する", () => {
+  assert.throws(
+    () =>
+      validateFoundationPublicContract(
+        "export { initializeFoundationRuntimeContribution };",
+        "dist/foundation.js",
+      ),
+    /foundation production contribution factory is not exported/,
+  );
+  assert.doesNotThrow(() =>
+    validateFoundationPublicContract(
+      "export { initializeProductionFoundationRuntimeContribution, initializeFoundationRuntimeContribution };",
+      "dist/foundation.js",
+    ),
   );
 });
 
@@ -133,6 +155,24 @@ test("application shell固有のsecurity・ownership境界違反をowner付き�
       source: "chrome.storage.local.get();",
     },
     {
+      path: "src/application-shell/legacy-platform.ts",
+      source:
+        'import type { FoundationRuntimePlatform } from "../persistence/public.js";',
+    },
+    {
+      path: "src/application-shell/legacy-initializer.ts",
+      source:
+        'import { initializeFoundationRuntimeContribution } from "../persistence/public.js";',
+    },
+    {
+      path: "src/application-shell/lock.ts",
+      source: "navigator.locks.request('other-lock', callback);",
+    },
+    {
+      path: "src/application-shell/authority.ts",
+      source: "const authority = createWriteAuthority(dependencies);",
+    },
+    {
       path: "src/application-shell/redefined-maintenance.ts",
       source: "interface MaintenanceSnapshotSource { getSnapshot(): unknown }",
     },
@@ -170,6 +210,10 @@ test("application shell固有のsecurity・ownership境界違反をowner付き�
     violations.map(({ path, rule }) => `${path}: ${rule}`),
     [
       "src/application-shell/storage.ts: application-shell-no-direct-storage",
+      "src/application-shell/legacy-platform.ts: application-shell-no-foundation-platform-injection",
+      "src/application-shell/legacy-initializer.ts: application-shell-no-foundation-di-initializer",
+      "src/application-shell/lock.ts: application-shell-no-direct-locks",
+      "src/application-shell/authority.ts: application-shell-no-foundation-authority",
       "src/application-shell/redefined-maintenance.ts: application-shell-no-maintenance-contract-redefinition",
       "src/application-shell/unsafe-view.tsx: no-dangerous-html-rendering",
       "src/runtime/dummy-maintenance.ts: no-dummy-maintenance-source",

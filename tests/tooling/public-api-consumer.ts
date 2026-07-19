@@ -5,14 +5,13 @@ import type {
   FoundationCommandDecoder,
   FoundationDataPort,
   FoundationRuntimeContribution,
-  FoundationRuntimePlatform,
   MaintenanceSnapshotSource,
   RootMutationCommand,
 } from "../../src/persistence/public.js";
 import {
   createDataWorkerRegistration,
   createMaintenanceSnapshotSource,
-  initializeFoundationRuntimeContribution,
+  initializeProductionFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
 
 export interface MockFoundationConsumer {
@@ -41,9 +40,8 @@ export const composeMaintenanceSource = (
 ): MaintenanceSnapshotSource =>
   createMaintenanceSnapshotSource(...dependencies);
 
-export const composeFoundationRuntime = (
-  platform: FoundationRuntimePlatform,
-): Promise<Result<FoundationRuntimeContribution, { readonly code: string }>> =>
-  initializeFoundationRuntimeContribution(platform);
+export const composeProductionFoundationRuntime = (): Promise<
+  Result<FoundationRuntimeContribution, { readonly code: string }>
+> => initializeProductionFoundationRuntimeContribution();
 
 export const shellRootApi = applicationApi;
