@@ -93,13 +93,6 @@ test("公開composition factoryが実authorityへcommandをrouteしunknownを境
   const registration = createDataWorkerRegistration({
     data: port,
     restrictAccess: async () => ({ ok: true, value: undefined }),
-    decoder: {
-      decode(input) {
-        return input?.kind === "query-root" && Object.keys(input).length === 1
-          ? { ok: true, value: input }
-          : { ok: false, error: { code: "unexpected-field", path: "$" } };
-      },
-    },
     authorize: (caller) => caller.kind === "trusted-extension",
   });
   const registered = await registration.register({
@@ -115,6 +108,33 @@ test("公開composition factoryが実authorityへcommandをrouteしunknownを境
   );
   assert.equal(result.ok, true);
   assert.equal(result.value.revision, 1);
+  const project = {
+    id: "10000000-0000-4000-8000-000000000098",
+    name: "worker経由",
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  const mutation = await listeners[0](
+    {
+      kind: "mutate-root",
+      command: {
+        requestId: requestId(98),
+        expectedRevision: 1,
+        operation: { kind: "create", entity: "project", value: project },
+      },
+    },
+    { kind: "trusted-extension" },
+  );
+  assert.equal(mutation.ok, true);
+  const queried = await listeners[0](
+    { kind: "query-root" },
+    { kind: "trusted-extension" },
+  );
+  assert.equal(queried.ok, true);
+  assert.equal(
+    queried.value.projects.some((item) => item.id === project.id),
+    true,
+  );
   assert.deepEqual(
     await listeners[0]({ kind: "unknown" }, { kind: "trusted-extension" }),
     {
@@ -592,5 +612,100 @@ test("公開facadeでreplacement評価・成功置換・stale失敗・容量失�
   assert.equal(
     errorCode(await tiny.port.assessReplacement(candidate)),
     "quota-exceeded",
+  );
+});
+
+test("既定decoderのworker境界から全command classを実portへrouteする", async () => {
+  const { port } = createHarness();
+  const listeners = [];
+  const registration = createDataWorkerRegistration({
+    data: port,
+    restrictAccess: async () => ({ ok: true, value: undefined }),
+    authorize: (caller) => caller.kind === "trusted-extension",
+  });
+  await registration.register({
+    addHandler(handler) {
+      listeners.push(handler);
+      return () => {};
+    },
+  });
+  const send = (message) =>
+    listeners[0](message, { kind: "trusted-extension" });
+  assert.equal((await send({ kind: "query-root" })).ok, true);
+  const acquired = await send({
+    kind: "run-maintenance",
+    command: { type: "acquire", ownerId: OWNER, leaseMs: 60_000 },
+  });
+  assert.equal(acquired.ok, true);
+  const renewed = await send({
+    kind: "run-maintenance",
+    command: { type: "renew", fence: acquired.value.fence, leaseMs: 60_000 },
+  });
+  assert.equal(renewed.ok, true);
+  assert.equal(
+    (
+      await send({
+        kind: "run-maintenance",
+        command: { type: "release", fence: renewed.value.fence },
+      })
+    ).ok,
+    true,
+  );
+  const abortedAcquire = await send({
+    kind: "run-maintenance",
+    command: { type: "acquire", ownerId: OWNER, leaseMs: 60_000 },
+  });
+  assert.equal(
+    (
+      await send({
+        kind: "run-maintenance",
+        command: { type: "abort", fence: abortedAcquire.value.fence },
+      })
+    ).ok,
+    true,
+  );
+  const replacementAcquire = await send({
+    kind: "run-maintenance",
+    command: { type: "acquire", ownerId: OWNER, leaseMs: 60_000 },
+  });
+  const candidate = buildFoundationRoot();
+  const assessed = await send({ kind: "assess-replacement", candidate });
+  assert.equal(assessed.ok, true);
+  const replacementResult = await send({
+    kind: "replace-root",
+    command: {
+      candidate,
+      assessment: assessed.value,
+      fence: replacementAcquire.value.fence,
+    },
+  });
+  assert.equal(replacementResult.ok, true, JSON.stringify(replacementResult));
+  assert.equal(
+    (
+      await send({
+        kind: "mutate-root",
+        command: {
+          requestId: requestId(700),
+          expectedRevision: 7,
+          maintenance: { ...replacementAcquire.value.fence, revision: 7 },
+          operation: {
+            kind: "create",
+            entity: "project",
+            value: {
+              ...candidate.projects[0],
+              id: "10000000-0000-4000-8000-000000000099",
+            },
+          },
+        },
+      })
+    ).ok,
+    true,
+  );
+  assert.deepEqual(
+    await send({
+      kind: "run-maintenance",
+      command: { type: "release", fence: { generation: "bad" } },
+    }),
+    { ok: false, error: { code: "invalid-message" } },
   );
 });

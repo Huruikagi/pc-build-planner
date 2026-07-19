@@ -15,6 +15,7 @@ test("domain と persistence の公開入口は許可された契約だけを公
   assert.match(domainPublic, /Result/);
   assert.match(domainPublic, /model\.js/);
   assert.match(persistencePublic, /FoundationDataPort/);
+  assert.doesNotMatch(domainPublic, /DataCommand/);
   assert.match(persistencePublic, /createDataWorkerRegistration/);
   assert.match(persistencePublic, /RootOperation/);
   assert.match(persistencePublic, /ReplacementCommand/);

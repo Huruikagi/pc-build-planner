@@ -12,7 +12,10 @@ registerHooks({
   },
 });
 
-import { createDataWorkerRegistration } from "../../src/persistence/public.ts";
+import {
+  createDataWorkerRegistration,
+  decodeFoundationCommand,
+} from "../../src/persistence/public.ts";
 
 const query = { kind: "query-root" };
 const trustedCaller = { kind: "trusted-extension" };
@@ -29,13 +32,6 @@ const harness = ({ restriction = { ok: true, value: undefined } } = {}) => {
   };
   const registration = createDataWorkerRegistration({
     restrictAccess: async () => restriction,
-    decoder: {
-      decode(input) {
-        return input?.kind === "query-root" && Object.keys(input).length === 1
-          ? { ok: true, value: input }
-          : { ok: false, error: { code: "validation", path: "$" } };
-      },
-    },
     authorize(caller, command) {
       authorized.push([caller, command]);
       return caller.kind === "trusted-extension";
@@ -119,4 +115,125 @@ test("register rejects malformed targets without changing persistent state", asy
     error: { code: "invalid-target" },
   });
   assert.deepEqual(h.handled, []);
+});
+
+test("canonical decoder accepts serializable CRUD and rejects callbacks and malformed nested fences", () => {
+  const command = {
+    kind: "mutate-root",
+    command: {
+      requestId: "80000000-0000-4000-8000-000000000001",
+      expectedRevision: 1,
+      operation: {
+        kind: "delete",
+        entity: "project",
+        id: "10000000-0000-4000-8000-000000000001",
+      },
+    },
+  };
+  assert.deepEqual(decodeFoundationCommand(command), {
+    ok: true,
+    value: command,
+  });
+  assert.equal(
+    decodeFoundationCommand({
+      ...command,
+      command: { ...command.command, operation: () => undefined },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    decodeFoundationCommand({
+      ...command,
+      command: {
+        ...command.command,
+        maintenance: { generation: 1, ownerId: "forged", revision: 1 },
+      },
+    }).ok,
+    false,
+  );
+});
+
+test("canonical decoder rejects malformed entity values and replacement metadata deeply", () => {
+  const mutation = (value) => ({
+    kind: "mutate-root",
+    command: {
+      requestId: "80000000-0000-4000-8000-000000000001",
+      expectedRevision: 1,
+      operation: { kind: "create", entity: "project", value },
+    },
+  });
+  assert.equal(
+    decodeFoundationCommand(
+      mutation({
+        id: "10000000-0000-4000-8000-000000000001",
+        name: 42,
+        createdAt: "bad",
+        updatedAt: "bad",
+        extra: true,
+      }),
+    ).ok,
+    false,
+  );
+  const replacement = {
+    kind: "replace-root",
+    command: {
+      candidate: {},
+      assessment: {
+        token: "",
+        candidateDigest: "bad",
+        sourceSchemaVersion: -1,
+        targetSchemaVersion: 1,
+        beforeBytes: -1,
+        requiredBytes: -1,
+        warnings: [{}],
+        cursor: { extra: true },
+      },
+      fence: {
+        generation: 1,
+        ownerId: "70000000-0000-4000-8000-000000000001",
+        revision: 1,
+      },
+    },
+  };
+  assert.equal(decodeFoundationCommand(replacement).ok, false);
+});
+
+test("candidatePart wire valueはcategoryと全nested objectをexact検証する", () => {
+  const candidate = {
+    id: "20000000-0000-4000-8000-000000000001",
+    projectId: "10000000-0000-4000-8000-000000000001",
+    category: "cpu",
+    product: {},
+    sourceInfo: {
+      pageUrl: "https://catalog.example.invalid/part-1",
+      capturedAt: "2026-07-19T00:00:00Z",
+    },
+    normalizedAttributes: { category: "cpu" },
+    createdAt: "2026-07-19T00:00:00Z",
+    updatedAt: "2026-07-19T00:00:00Z",
+  };
+  const command = (value) => ({
+    kind: "mutate-root",
+    command: {
+      requestId: "80000000-0000-4000-8000-000000000001",
+      expectedRevision: 0,
+      operation: { kind: "create", entity: "candidatePart", value },
+    },
+  });
+
+  assert.equal(decodeFoundationCommand(command(candidate)).ok, true);
+  for (const invalidCandidate of [
+    { ...candidate, category: "bogus" },
+    { ...candidate, product: { extra: 1 } },
+    { ...candidate, sourceInfo: { ...candidate.sourceInfo, extra: true } },
+    { ...candidate, sourceInfo: { pageUrl: candidate.sourceInfo.pageUrl } },
+    { ...candidate, normalizedAttributes: { category: "cpu", extra: true } },
+    { ...candidate, normalizedAttributes: { category: "gpu" } },
+    {
+      ...candidate,
+      product: { name: { original: null, confirmed: 42 } },
+    },
+  ]) {
+    assert.equal(decodeFoundationCommand(command(invalidCandidate)).ok, false);
+  }
 });

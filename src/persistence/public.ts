@@ -20,12 +20,16 @@ export type {
   FoundationCommandReceipt,
   RegistrationDisposer,
   RegistrationError,
+  WireRootMutationCommand,
+  WireRootOperation,
   WorkerMessageHandler,
   WorkerMessageTarget,
 } from "./worker-registration.js";
 export {
   createDataWorkerRegistration,
   createFoundationCommandRouter,
+  decodeFoundationCommand,
+  foundationCommandDecoder,
 } from "./worker-registration.js";
 export type {
   FoundationDataPort,

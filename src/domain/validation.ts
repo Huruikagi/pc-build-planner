@@ -1,4 +1,4 @@
-import type { LocalDataRoot } from "./model.js";
+import type { CandidatePart, LocalDataRoot } from "./model.js";
 import type { JsonValue } from "./normalized-attributes.js";
 import type { Result } from "./result.js";
 
@@ -107,6 +107,16 @@ const inspectPayload = (
     }
   }
   return undefined;
+};
+
+/** Shared untrusted-message guard for JSON-safe, non-embedded payloads. */
+export const validateSerializablePayload = (
+  input: unknown,
+  path = "$",
+): Result<unknown, ValidationError> => {
+  if (!isJsonValue(input)) return fail("forbidden-payload", path);
+  const issue = inspectPayload(input, path);
+  return issue ? err(issue) : ok(input);
 };
 
 const object = (
@@ -236,6 +246,62 @@ const attributes = (
   return undefined;
 };
 
+/**
+ * CandidatePart単体のcanonical shape validator。
+ * project参照・ID重複などaggregate文脈の検証はvalidateRootが追加で担う。
+ */
+export const validateCandidatePartValue = (
+  input: unknown,
+  path = "$",
+): Result<CandidatePart, ValidationError> => {
+  const prohibited = inspectPayload(input, path);
+  if (prohibited) return err(prohibited);
+  const candidate = object(input, path, [
+    "id",
+    "projectId",
+    "category",
+    "product",
+    "sourceInfo",
+    "normalizedAttributes",
+    "createdAt",
+    "updatedAt",
+  ]);
+  if (!candidate.ok) return candidate;
+  for (const issue of [
+    uuid(candidate.value.id, `${path}.id`),
+    uuid(candidate.value.projectId, `${path}.projectId`),
+    utc(candidate.value.createdAt, `${path}.createdAt`),
+    utc(candidate.value.updatedAt, `${path}.updatedAt`),
+  ])
+    if (issue) return err(issue);
+  if (!PART_CATEGORIES.includes(candidate.value.category as never))
+    return fail("category-mismatch", `${path}.category`);
+  let issue = product(candidate.value.product, `${path}.product`);
+  if (issue) return err(issue);
+  const source = object(
+    candidate.value.sourceInfo,
+    `${path}.sourceInfo`,
+    ["pageUrl", "capturedAt"],
+    ["siteName"],
+  );
+  if (!source.ok) return source;
+  for (const valueIssue of [
+    url(source.value.pageUrl, `${path}.sourceInfo.pageUrl`),
+    utc(source.value.capturedAt, `${path}.sourceInfo.capturedAt`),
+    "siteName" in source.value
+      ? string(source.value.siteName, `${path}.sourceInfo.siteName`)
+      : undefined,
+  ])
+    if (valueIssue) return err(valueIssue);
+  issue = attributes(
+    candidate.value.normalizedAttributes,
+    candidate.value.category as string,
+    `${path}.normalizedAttributes`,
+  );
+  if (issue) return err(issue);
+  return ok(input as CandidatePart);
+};
+
 const validateRootAt = (
   input: unknown,
   base = "$",
@@ -292,53 +358,12 @@ const validateRootAt = (
   const candidateIds = new Map<string, string>();
   for (const [i, item] of candidates.entries()) {
     const path = `${base}.candidateParts[${i}]`;
-    const candidate = object(item, path, [
-      "id",
-      "projectId",
-      "category",
-      "product",
-      "sourceInfo",
-      "normalizedAttributes",
-      "createdAt",
-      "updatedAt",
-    ]);
+    const candidate = validateCandidatePartValue(item, path);
     if (!candidate.ok) return candidate;
-    for (const issue of [
-      uuid(candidate.value.id, `${path}.id`),
-      uuid(candidate.value.projectId, `${path}.projectId`),
-      utc(candidate.value.createdAt, `${path}.createdAt`),
-      utc(candidate.value.updatedAt, `${path}.updatedAt`),
-    ])
-      if (issue) return err(issue);
     if (!projectIds.has(candidate.value.projectId as string))
       return fail("missing-reference", `${path}.projectId`);
     if (candidateIds.has(candidate.value.id as string))
       return fail("duplicate-id", `${path}.id`);
-    if (!PART_CATEGORIES.includes(candidate.value.category as never))
-      return fail("category-mismatch", `${path}.category`);
-    let issue = product(candidate.value.product, `${path}.product`);
-    if (issue) return err(issue);
-    const source = object(
-      candidate.value.sourceInfo,
-      `${path}.sourceInfo`,
-      ["pageUrl", "capturedAt"],
-      ["siteName"],
-    );
-    if (!source.ok) return source;
-    for (const valueIssue of [
-      url(source.value.pageUrl, `${path}.sourceInfo.pageUrl`),
-      utc(source.value.capturedAt, `${path}.sourceInfo.capturedAt`),
-      "siteName" in source.value
-        ? string(source.value.siteName, `${path}.sourceInfo.siteName`)
-        : undefined,
-    ])
-      if (valueIssue) return err(valueIssue);
-    issue = attributes(
-      candidate.value.normalizedAttributes,
-      candidate.value.category as string,
-      `${path}.normalizedAttributes`,
-    );
-    if (issue) return err(issue);
     candidateIds.set(
       candidate.value.id as string,
       candidate.value.projectId as string,

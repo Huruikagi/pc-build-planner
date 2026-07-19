@@ -8,7 +8,6 @@ export type {
 } from "./result.js";
 export { err, ok } from "./result.js";
 export type {
-  DataCommand,
   ReplaceableRoot,
   SchemaValidator,
   ValidationError,
