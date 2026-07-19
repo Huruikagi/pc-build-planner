@@ -112,31 +112,76 @@
   - _Depends: 3.2, 3.3_
 
 - [ ] 4. Runtime入口とend-to-end境界を検証する
-- [ ] 4.1 Side panel bootstrapとroot公開入口を接続する
-  - shellだけが共有side panel runtime、HTML host、root barrelを所有する構成にする
-  - side panel registration、worker registration、public contractをcomposition root経由で取り込み、feature側から共有入口を編集しない
-  - shell rootとfeature rootをproduction bundleへ同梱し、componentをfeature境界越しに直接importしない
-  - 完了時、複数の模擬featureが共有ファイルへの変更なしでnavigationとroot APIへ参加できる
-  - _Requirements: 3.1, 3.2, 3.4, 6.1_
-  - _Boundary: RuntimeAdapters, RootPublicApi_
-  - _Depends: 3.4_
+- [x] 4.1 Shell presentationと専用feature表示領域を統合する
+  - shell state、navigation、再試行操作をReact rootへ接続し、shell所有container内にfeature専用の安定したmount領域を提供する
+  - shellとfeatureのcontainerを別要素として検証し、feature切替時もshell navigationと共通状態を維持する
+  - 空feature catalogではnavigationなしのempty stateを表示し、停止時は購読とshell rootを冪等に解放する
+  - 完了時、state更新、navigation操作、empty state、専用feature領域、停止cleanupをDOM testで観測できる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3_
+  - _Boundary: ShellPresentation_
+  - _Depends: 2.5, 3.1, 3.3_
 
-- [ ] 4.2 User gestureを保つside panel open adapterを実装する
+- [ ] 4.2 Feature contribution catalogを実装する
+  - UI registration、public contract、worker registrationを一つのreadonly catalogへ集約し、登録済みcontributionだけを決定的な順序で提供する
+  - 下流feature未実装時の空catalogを正常状態として扱い、placeholder featureを要求しない
+  - 下流feature内部へのdeep importや共有runtime入口への自己登録を必要としない参加境界を維持する
+  - 完了時、空catalogと複数の模擬contributionが型を保ったside panel・worker・public API入力として取得できる
+  - _Requirements: 2.1, 2.3, 2.5, 3.2, 3.4_
+  - _Boundary: FeatureContributionCatalog_
+  - _Depends: 1.3, 3.2_
+
+- [ ] 4.3 Worker contributionを一度だけcompositionする
+  - catalogのworker項目だけを共有workerへ登録し、DOM、HTMLElement、Reactへの依存をworker lifecycleへ持ち込まない
+  - feature識別子の一意性を検証し、途中失敗時は取得済みhandlerを逆順かつ全件best-effortで解除する
+  - 停止と再停止で重複handlerや二重解除を生じない冪等なcleanupを提供する
+  - 完了時、複数登録、重複拒否、途中失敗rollback、停止cleanupをworker contract testで決定的に観測できる
+  - _Requirements: 2.1, 2.3, 3.1, 3.4, 4.3, 6.4_
+  - _Boundary: WorkerComposition_
+  - _Depends: 4.2_
+
+- [ ] 4.4 Production application compositionを完成する
+  - foundation公開initializer、registry、presentation、feature host、worker contributionを設計順序で一度だけ合成する
+  - canonical maintenance sourceだけを利用し、inactive stub、Storage直接監視、foundation内部へのdeep importへfallbackしない
+  - 空catalogでは正常にempty shellを開始し、途中失敗と停止ではworker、feature、maintenance購読、presentation、foundationを逆依存順で全件best-effortに解放する
+  - foundation初期化失敗時はfeatureをmountせず、失敗表示に必要なpresentationだけを安全に開始して共通startup errorを提示する
+  - 完了時、正常起動、空catalog、初期化失敗、途中rollback、二重起動、停止cleanupをproduction-shaped integration testで観測できる
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.3, 6.4_
+  - _Boundary: ProductionApplicationComposition_
+  - _Depends: 3.4, 4.1, 4.3_
+
+- [ ] 4.5 Side panel・service worker・root公開入口を接続する
+  - side panel入口をDOM host解決とproduction factoryのbootstrapだけに限定し、具体featureやfoundation内部を直接組み立てない
+  - service worker入口はcatalogのworker contributionだけをcompositionし、root公開入口はcatalogから推論したreadonly APIだけを提供する
+  - dummy maintenance source、noop state observer、下流feature deep importを共有入口から除去する
+  - 完了時、空catalogのproduction shellとworkerが起動し、後続featureが共有入口を変更せずcatalog経由で参加できる
+  - _Requirements: 3.1, 3.2, 3.4, 6.1, 6.3_
+  - _Boundary: RuntimeAdapters, RootPublicApi_
+  - _Depends: 4.4_
+
+- [ ] 4.6 User gestureを保つside panel open adapterを実装する
   - Side Panel API呼出しを有効なユーザー操作handler内で同期開始し、host準備との責務を分離する
   - API拒否時は安全な診断結果を返し、無関係なfeature stateを変更しない
   - 完了時、adapter spyがgesture handler内の呼出し順序と失敗分離を確認する
   - _Requirements: 6.2_
   - _Boundary: RuntimeAdapters_
 
-- [ ] 4.3 Shell runtime統合回帰testを完成させる
-  - 起動loading、navigation、切替、availability変化、mount失敗、worker registration、maintenance開始・終了・stale通知を一連のscenarioで検証する
-  - 外部文字列の安全な表示と他feature継続、全resourceのcleanupを検証する
-  - build artifactにproduction版React/React DOMが同梱され、remote code、inline JavaScript、dynamic evaluation、runtime JSX変換、`dangerouslySetInnerHTML`がないことを検査する
-  - shellによるStorage API直接参照とfoundation maintenance portの重複定義をboundary検査で拒否する
-  - 完了時、要件横断のruntime suiteが決定的に成功し、失敗時に境界componentを特定できる
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.3, 6.4_
+- [ ] 4.7 Production runtime統合回帰を完成する
+  - 空catalogと複数の模擬featureを同じproduction-shaped fixtureで起動し、shell rootとfeature mount領域が別DOM要素であることを検証する
+  - navigation、unmount後の切替、availability変化、mount失敗、worker登録、maintenance開始・終了・stale通知を一連のscenarioで検証する
+  - 外部由来文字列の安全なtext表示、他featureの継続、停止時の全resource cleanupを確認する
+  - 完了時、UI、worker、maintenance、failure、cleanupを横断するruntime suiteが決定的に成功する
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.4_
   - _Boundary: ApplicationShellIntegrationTests_
-  - _Depends: 4.1, 4.2_
+  - _Depends: 4.5, 4.6_
+
+- [ ] 4.8 生成物・security・import境界の最終gateを完成する
+  - production bundleへReactとReact DOMが同梱され、remote code、inline JavaScript、dynamic evaluation、runtime JSX変換、危険なHTML描画APIがないことを検査する
+  - worker bundleにDOM・React依存がなく、shellがStorage API、foundation maintenance契約の再定義、foundation内部や下流feature内部へのdeep importを持たないことを検査する
+  - dummy maintenance source、noop shell state observer、共有入口への下流feature自己登録をartifactとsourceの両方で拒否する
+  - 完了時、typecheck、test、build、CSP・artifact・boundary scanが連続成功し、違反時に所有境界を特定できる
+  - _Requirements: 3.4, 4.4, 5.6, 6.1, 6.3, 6.4_
+  - _Boundary: ApplicationShellArtifactValidation_
+  - _Depends: 4.7_
 
 ## Implementation Notes
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root as ReactDomRoot } from "react-dom/client";
 
 import type { ShellViewState } from "./contracts.js";
@@ -62,7 +63,7 @@ export function createReactShellRoot(
       let active = true;
       const renderState = (state: ShellViewState) => {
         if (active) {
-          root.render(options.render(state));
+          flushSync(() => root.render(options.render(state)));
         }
       };
       try {
