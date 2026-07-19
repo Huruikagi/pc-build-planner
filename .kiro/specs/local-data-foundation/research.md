@@ -101,6 +101,13 @@
 - **Rationale**: worker memoryを正とせず、古いownerのwriteを判別可能に拒否できる。
 - **Trade-offs**: lease期限切れ回復が必要。時刻だけで所有権を再利用せず、新generation取得を必須にする。
 
+### Decision: maintenance観測portをfoundationが所有する
+- **Context**: application shellは保守中の表示とmutation抑止に最新状態を必要とするが、Storage構造やlease操作を所有しない。
+- **Alternatives Considered**: shellがStorage変更を直接監視する、foundationがread-only snapshot/subscribe portを公開する。
+- **Selected Approach**: foundationが検証済みrootからgeneration・revision・activeだけを公開し、Storage変更値も同じ検証境界を通して通知する。
+- **Rationale**: 永続形式と変更検出の知識をfoundationへ閉じ、shellを表示projectionとoperation policyに限定できる。
+- **Trade-offs**: foundation公開契約が一つ増える。owner、lease、write capability、Storage primitiveは公開しない。
+
 ### Decision: 参照修復policyをfoundationが所有する
 - **Context**: 候補削除・カテゴリ変更とCurrentBuild修復を別writeにするとinvalidな中間rootが生じる。
 - **Selected Approach**: generic `mutateRoot` pipeline内でfoundation-owned `ReferenceRepairPolicy`を適用し、全体検証後に一度だけcommitする。

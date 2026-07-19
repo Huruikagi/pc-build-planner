@@ -25,6 +25,7 @@
 - 単一root Repository、migration、容量評価、Chrome Storage adapter
 - 単一write authorityのcommand contract、worker registration factory、revision/request-id競合制御
 - foundation不変条件としてのCurrentBuild参照修復、root評価・置換、maintenance generation/owner fencing
+- 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
 
 ### Out of Boundary
 - `src/index.ts`、`src/runtime/service-worker.ts`、side panel host、feature registryのcomposition（`application-shell`所有）
@@ -111,6 +112,7 @@ src/persistence/mutation-pipeline.ts               # snapshotからmutation comm
 src/persistence/root-write-lock.ts                  # RootWriteLock portと固定lock名
 src/persistence/web-locks-adapter.ts                # navigator.locksのexclusive adapter
 src/persistence/maintenance.ts                     # 純粋なgeneration、owner、lease、fence policy
+src/persistence/maintenance-snapshot-source.ts     # 検証済みmaintenance snapshotと変更通知
 src/persistence/root-transaction-runner.ts          # lock内のread-check-write実行境界
 src/persistence/replacement.ts                     # canonical digest、assessment、replacement候補
 src/persistence/chrome-storage-adapter.ts           # Storage API、quota、access level adapter
@@ -124,6 +126,7 @@ tests/domain/validation.test.ts                     # domain、category、禁止
 tests/persistence/migrations.test.ts                # migration chainとsource preservation
 tests/persistence/mutation-pipeline.test.ts         # CRUD候補、repair、候補検証、純粋capacity判定
 tests/persistence/maintenance.test.ts                # 純粋state transition、stale fence、破損state
+tests/persistence/maintenance-snapshot-source.test.ts # 初期snapshot、変更通知、解除、破損拒否
 tests/persistence/root-write-lock.contract.test.ts   # 複数client排他、例外後解放
 tests/persistence/worker-restart.integration.test.ts # queue非共有の再生成と永続fence
 tests/persistence/replacement.test.ts                # dry-run評価、token、全体置換、rollback
@@ -250,6 +253,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 7.5 | stale owner・generation拒否 | MaintenancePolicy、RootTransactionRunner | MaintenanceCursor | replacement flow |
 | 7.6 | worker再生成耐性 | MaintenancePolicy、RootTransactionRunner | persisted state、new lock request | restart test |
 | 7.7 | 終了・中止後の再開 | MaintenancePolicy、RootTransactionRunner | release/abort transition | replacement flow |
+| 7.8 | 検証済み保守状態のread-only通知 | MaintenanceSnapshotSource、LocalDataRepository | getSnapshot、subscribe | maintenance observation |
 | 8.1 | 架空dataのみ | FoundationFixtures | fixture builders | all tests |
 | 8.2 | 主要失敗・成功の自動検証 | FoundationFixtures | in-memory ports | all tests |
 | 8.3 | 実サイトasset不要 | FoundationFixtures | synthetic values | artifact scan |
@@ -268,6 +272,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | CapacityPolicy | Persistence | bytesとquotaからwarning・拒否を純粋判定 | 5.1–5.3 | 直列化済みcapacity input P0 | Service |
 | MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
 | MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
+| MaintenanceSnapshotSource | Persistence adapter | 検証済みmaintenance cursorをread-onlyで公開 | 7.8 | LocalDataRepository P0、Storage change P1 | Service、State |
 | RootWriteLock | Persistence port | 協調writerのread-check-writeを線形化 | 1.3, 3.8, 7.4–7.7 | Web Locks API P0 | Service |
 | RootTransactionRunner | Persistence | lock内で最新rootを読み単一setまで実行 | 1.3, 3.1–3.8, 7.2–7.7 | RootWriteLock P0、StoragePort P0 | Service |
 | ReplacementCoordinator | Persistence | 評価済みrootのcommit候補を構築 | 7.1–7.3 | Validator P0、MaintenancePolicy P0 | Service |
@@ -391,6 +396,21 @@ interface MaintenanceFence {
 
 policyはI/Oとlockを持たない純粋関数である。maintenance commandと全writeは`RootTransactionRunner`のexclusive callback内で最新rootへpolicyを適用する。maintenance中はowner fenceを持たない全writeを`maintenance-active`で拒否する。期限切れownerの暗黙再利用は禁止し、新generationのacquireを要求する。renew、replace、releaseはlock取得後の最新generation、owner、revisionへ照合する。
 
+`MaintenanceSnapshotSource`はRepositoryの検証済みrootから初期snapshotを返し、信頼済みStorage変更通知を同じ検証境界へ通してから配信する。通知値は`generation`、root `revision`、`active`だけを含み、owner、lease操作、write capability、Storage primitiveを公開しない。購読解除は冪等で、破損値は通知せずtyped diagnosticとして扱う。
+
+```typescript
+interface MaintenanceSnapshot {
+  readonly generation: MaintenanceGeneration;
+  readonly revision: Revision;
+  readonly active: boolean;
+}
+
+interface MaintenanceSnapshotSource {
+  getSnapshot(): Promise<Result<MaintenanceSnapshot, FoundationError>>;
+  subscribe(listener: (snapshot: MaintenanceSnapshot) => void): () => void;
+}
+```
+
 #### ReplacementCoordinator
 
 ```typescript
@@ -479,6 +499,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `MigrationRegistry`で連続migration、経路欠落、将来版、step失敗、source非変更を検証する（4.1–4.5）。
 - `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去と、無関係参照の保持を検証する（3.7）。
 - `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。
+- `MaintenanceSnapshotSource`で検証済み初期snapshot、開始・終了通知、購読解除、破損変更値の拒否を検証する（7.8）。
 
 ### Contract and Integration Tests
 - `MutationPipeline`でCRUD候補、reference repair、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 5.1–5.3）。
@@ -490,6 +511,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - worker再生成testではメモリqueueを共有しない新authorityと新lock adapterを作り、永続active fenceによるowner外write拒否、期限切れ後の新generation、release/abort後の再開を検証する（1.3, 7.5–7.7）。
 - `ReplacementCoordinator`で副作用なし評価、schema migration、容量不足、stale token、単一成功/失敗置換を検証する（7.1–7.3）。
 - `WorkerRegistration`でunknown payload、unauthorized caller、content-script直接accessなし、access restriction失敗時のfail-closedを検証する（6.1–6.4）。
+- 公開maintenance sourceがread-onlyであり、Storage primitiveやlease/write操作をconsumerへ公開しないことをcontract testで検証する（7.8）。
 
 ### Fixture and Public Port Regression
 - fixture builderは全12category、欠損値、元表記・確認値、参照整合root、破損rootを架空値だけで生成し、実サイトHTML、画像、商品dataを含まないことを独立検査する（8.1, 8.3）。

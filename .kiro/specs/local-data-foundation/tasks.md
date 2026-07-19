@@ -176,6 +176,15 @@
   - _Depends: 5.3_
   - _Requirements: 2.1, 3.1, 3.8, 6.3_
 
+- [x] 5.5 信頼済みconsumer向けmaintenance状態通知portを公開する
+  - Repositoryの検証済みrootからgeneration・revision・activeだけを返すread-only snapshotを提供する
+  - Storage変更通知を同じ検証境界へ通し、開始・終了を購読者へ配信し、解除を冪等にする
+  - owner、lease操作、write capability、Storage primitiveを公開せず、破損変更値を正常通知として扱わない
+  - 完了時、初期snapshot、開始・終了通知、購読解除、破損拒否のcontract testと公開境界検査が成功する
+  - _Depends: 5.4_
+  - _Requirements: 7.8_
+  - _Boundary: MaintenanceSnapshotSource_
+
 - [x] 6. 架空データによる回帰・性能・生成物検証を完成する
 - [x] 6.1 架空fixtureとasset policyを完成する
   - 全12カテゴリ、欠損値、元表記・確認値、参照整合root、各種破損rootを架空値だけで生成する

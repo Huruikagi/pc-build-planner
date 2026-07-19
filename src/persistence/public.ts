@@ -1,5 +1,10 @@
 export type { MaintenanceFence } from "./maintenance.js";
 export type {
+  MaintenanceSnapshot,
+  MaintenanceSnapshotSource,
+} from "./maintenance-snapshot-source.js";
+export { createMaintenanceSnapshotSource } from "./maintenance-snapshot-source.js";
+export type {
   MutationCapacityStatus,
   RootOperation,
 } from "./mutation-pipeline.js";
