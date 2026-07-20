@@ -289,3 +289,34 @@ Recommended action:
 5. feature公開入口の命名規約
 
 上記の境界更新後に既存6specと `application-shell` を更新し、`$kiro-spec-batch` の横断レビューを再実行する。Critical issueおよびarchitecture boundary issueが解消されるまで、`application-shell` を完了済みにしない。
+
+---
+
+# Typed Activation・Candidate Mutation更新後の再レビュー
+
+- Review date: 2026-07-20
+- Scope: `application-shell`、`project-candidate-management`、`product-page-capture`、`current-build-management`、`local-data-foundation`
+- Result: **PASS WITH REMAINING WAVES — 今回対象の境界矛盾は解消、application-shell追加taskは未実装**
+
+## 解消した事項
+
+1. application shellへfeature-neutralな`FeatureActivationIntent`、`ShellNavigator`、feature-owned validation adapterを追加した。shellは`unknown` payloadを解釈せず、対象featureがruntime検証する。
+2. candidate managementへ`CandidateEditorPrefill`と`openCandidateEditor`を追加し、`CandidateDraft.sourceInfo`と`sourceSnapshot`を別契約として明記した。
+3. product captureはshell intentを直接構築せず、candidate managementの型付き公開portだけを利用して詳細編集を開く。
+4. candidate managementのwriteを`FoundationDataPort`の原子的root mutationへ変更し、候補変更・削除後のCurrentBuild別writeを廃止した。
+5. current buildからcandidate lifecycle `reconcile`と手動single-conflict resolutionの所有を除去し、Foundationが同一commitで修復したCurrentBuildのquery・表示へ限定した。
+6. 公開候補照会名を`CandidateQuery.listBuildEligible`へ統一した。
+
+## 境界確認
+
+- shell: intent配送、mount順序、failure rollbackのみを所有し、候補payloadの意味を所有しない。
+- candidate management: prefill型、runtime validation、編集state適用、候補mutation入力を所有する。
+- product capture: 抽出sessionから候補draft/prefillへの変換だけを所有する。
+- foundation: reference repair、root validation、revision、単一commitを所有する。
+- current build: 利用者による構成編集と修復済みqueryの表示だけを所有する。
+
+## 残作業
+
+- application-shell task 5.1–5.3は新規未実装であり、実装完了までroadmapのapplication-shellを完了扱いにしない。
+- `compatibility-checking`と`backup-restore`のExisting Spec Updatesは別waveとして未完了である。
+- application-shell実装後、candidate management → product capture → current buildの順で実装・contract integrationを行う。

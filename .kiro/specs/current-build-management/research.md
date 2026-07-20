@@ -56,7 +56,7 @@
 ## References
 - `.kiro/steering/roadmap.md` — 依存順、カテゴリ・参照整合性の共有シーム。
 - `.kiro/specs/local-data-foundation/design.md` — 保存ルート、Repository、CurrentBuild契約。
-- `.kiro/specs/project-candidate-management/design.md` — BuildCandidateQueryと候補所有境界。
+- `.kiro/specs/project-candidate-management/design.md` — `CandidateQuery.listBuildEligible`と候補所有境界。
 
 ### 2026-07-19 React UI方針更新
 - **背景**: カテゴリ別候補、単一・複数選択、数量、競合、保存失敗を同一画面で一貫して表示する必要がある。
@@ -65,3 +65,10 @@
 - **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
 - **検証**: React DOM操作とroot cleanupを統合testで確認する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)
+
+### 2026-07-20 Foundation原子的参照修復への追従
+- **Sources Consulted**: `local-data-foundation/design.md`、`project-candidate-management/design.md`、`roadmap.md`、`cross-spec-review.md`
+- **Findings**: FoundationのReferenceRepairPolicyは候補削除・未分類化・保持不能なカテゴリ変更をcandidate mutationと同じtransactionで修復する。成功後のcurrent-build reconcile writeは原子性を破る。
+- **Decision**: BuildServiceからcandidate lifecycle command、`reconcile`、手動single-conflict resolutionを除去する。本featureは利用者による構成編集と修復済みqueryの表示だけを所有する。
+- **Trade-offs**: カテゴリ変更された候補を新カテゴリで採用したい場合は、修復後に利用者が現在構成画面から明示的に選び直す。
+- **Verification**: Foundation contract fixtureで単一commit、他選択維持、無効参照除去、本featureからの追加writeなしを検証する。

@@ -212,10 +212,11 @@
 
 - [ ] 5.2 Activationをhost lifecycleへ統合する
   - 対象featureをmountしてからactivationを一度配送し、既に表示中なら不要なunmountを行わない
-  - mountまたはactivation適用失敗時は新規resourceを解放し、直前featureとその状態を回復する
-  - 完了時、別feature遷移、同一feature再activation、mount失敗、適用失敗をhost testで決定的に観測できる
+  - cross-feature activation前に入力元のopaque state snapshotを取得し、target mountまたはactivation適用失敗時は新規resourceを完全に解放してsnapshot付きで入力元を復元する
+  - target cleanup失敗時はtarget handleを保持して入力元をmountせず、epoch・停止・availabilityによりstale化したmountもcleanup後にのみrollbackする
+  - 完了時、別feature遷移、同一feature再activation、mount失敗、適用失敗、source snapshot拒否、target cleanup失敗、mount中availability変更をhost testで決定的に観測できる
   - _Depends: 5.1_
-  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.6_
   - _Boundary: SidePanelHost_
 
 - [ ] 5.3 Activation contract test kitとproduction-shaped統合回帰を追加する

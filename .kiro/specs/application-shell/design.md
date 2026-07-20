@@ -20,6 +20,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 
 ### このspecが所有するもの
 - `ApplicationFeatureRegistration`とshell lifecycle契約。
+- `ShellNavigator`、feature-neutralな`FeatureActivationIntent`、activation配送順序と失敗分離。
 - side panel host、ナビゲーション、共通loading/error/maintenance React viewとroot adapter。
 - `ApplicationCompositionRoot`とroot公開APIの合成。
 - 世代付きmaintenance状態のread-only projectionとUI mutation gate。
@@ -33,6 +34,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - maintenance leaseの取得・更新・owner fencing・commit直前検証。
 - Storage API、Repository、復元、商品抽出、互換性判定。
 - feature公開契約の内容そのもの。
+- feature固有のactivation payload、targetの意味、payloadからfeature stateへの変換。
 - Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleだけを利用する。
 
 ### 許可する依存
@@ -46,7 +48,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 
 ### 再検証トリガー
-- registration、mount context、availability、public API registryの型変更。
+- registration、mount context、availability、activation、public API registryの型変更。
 - foundationのmaintenance世代・購読契約の変更。
 - root entry、side panel起動順序、`sidePanel.open()` gesture入口の変更。
 - shellとfeature間のファイル所有権または依存方向の変更。
@@ -75,6 +77,7 @@ graph TB
     Root --> Presentation[Shell presentation]
     Presentation --> FeatureSlot[Feature mount slot]
     Root --> Host[Side panel host]
+    Navigator[Shell navigator] --> Host
     Host --> FeatureSlot
     Registry --> Host
     Maintenance --> Host
@@ -110,6 +113,7 @@ src/
 │   ├── feature-registry.ts            # 登録検証、一意性、snapshotと購読
 │   ├── maintenance-projection.ts      # 世代付き状態の単調projection
 │   ├── mutation-gate.ts               # UI操作種別とmaintenance抑止判定
+│   ├── activation-router.ts            # feature-neutral intentの対象解決と一回配送
 │   ├── side-panel-host.ts             # navigationとfeature lifecycle調停
 │   ├── worker-composition.ts          # feature提供worker registrationの一回限り合成
 │   ├── shell-view.tsx                  # loading/error/maintenance/navigationのReact表示
@@ -167,6 +171,7 @@ sequenceDiagram
 | 4.1, 4.2, 4.3, 4.4 | 共通状態と障害分離 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | maintenance抑止 | MaintenanceProjection, MutationGate | MaintenanceSnapshotSource |
 | 6.1, 6.2, 6.3, 6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
+| 7.1, 7.2, 7.3, 7.4, 7.5 | feature間activation | ActivationRouter, SidePanelHost | FeatureActivationIntent, ShellNavigator, FeatureActivationAdapter |
 
 ## Components and Interfaces
 
@@ -186,6 +191,7 @@ sequenceDiagram
 | ShellPresentation | UI adapter | shell stateとnavigationを描画しfeature専用slotを公開 | 1.1–1.5, 4.1–4.4, 5.1 | ReactShellRoot P0 | Service, State |
 | ApplicationComposition | Composition | canonical foundationと公開registrationをproduction runtimeへ一度だけ接続 | 2.1, 3.1–3.4, 5.6, 6.1 | Foundation/feature public P0 | Service |
 | ProductionWorkerComposition | Runtime composition | worker contextでfoundation command handlerとcatalog worker contributionを一度だけ接続 | 3.1, 3.3, 3.4, 6.1–6.4 | Foundation public P0, catalog P0, Chrome message target P0 | Service |
+| ActivationRouter | UI orchestration | feature-neutral intentを対象registrationへ検証付きで一度配送 | 7.1–7.5 | FeatureRegistry P0, SidePanelHost P0 | Service |
 
 ### Core contracts
 
@@ -202,13 +208,39 @@ interface FeatureMountContext {
   readonly reportError: (message: string) => void;
 }
 
-interface ApplicationFeatureRegistration<TPublic extends object = object> {
+interface FeatureActivationIntent {
+  readonly featureId: FeatureId;
+  readonly target: string;
+  readonly payload: unknown;
+}
+
+type FeatureActivationError =
+  | { readonly kind: "feature_not_found"; readonly featureId: FeatureId }
+  | { readonly kind: "feature_unavailable"; readonly featureId: FeatureId }
+  | { readonly kind: "invalid_activation"; readonly detail: string }
+  | { readonly kind: "mount_failed"; readonly featureId: FeatureId }
+  | { readonly kind: "activation_failed"; readonly detail: string };
+
+interface FeatureActivationAdapter<TActivation> {
+  validate(intent: FeatureActivationIntent): Result<TActivation, FeatureActivationError>;
+  activate(input: TActivation): Promise<Result<void, FeatureActivationError>>;
+}
+
+interface ShellNavigator {
+  activate(intent: FeatureActivationIntent): Promise<Result<void, FeatureActivationError>>;
+}
+
+interface ApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> {
   readonly id: FeatureId;
   readonly navigation: { readonly label: string; readonly order: number };
   readonly publicApi: TPublic;
   getAvailability(): Availability;
   subscribeAvailability(listener: (value: Availability) => void): () => void;
   mount(context: FeatureMountContext): Promise<{ unmount(): Promise<void> }>;
+  readonly activation?: FeatureActivationAdapter<TActivation>;
 }
 
 interface ApplicationWorkerRegistration {
@@ -235,6 +267,10 @@ interface FeatureRegistry {
 `Result<T, E>`はlocal data foundationが所有するcanonical型を利用し、shell内で再定義しない。登録順序は`navigation.order`、同値時は`id`で決定的に並べる。listener解除とview unmountは複数回呼んでも安全である。
 
 worker registrationは同じfeature idで一意にし、共有`src/runtime/service-worker.ts`をfeatureから編集させずcomposition rootだけが登録する。登録解除は冪等で、途中失敗時は登録済みhandlerを逆順に解除する。
+
+`FeatureActivationIntent.payload`はshell境界では常に`unknown`である。対象registrationのadapterだけがtargetとpayloadを検証し、検証済みfeature固有型へ変換する。feature固有の型安全なintent builderは各featureの`public.ts`が所有する。
+
+別featureへのactivationでは、shellは入力元のmounted handleからopaqueなstate snapshotを取得してからunmountする。snapshotを提供できない、または取得に失敗した入力元からのactivationは表示変更前に拒否する。targetのmountまたはactivation失敗時はtargetを完全にunmountしてから、snapshotを入力元へ渡して再mountする。shellはsnapshotの形状を解釈しない。target cleanupが失敗した場合はtarget handleの所有権を保持し、入力元を再mountせずcleanup failureを返す。mount待機中はlifecycle epoch、stopped状態、availabilityを再検証し、stale handleをcleanupしてからrollbackする。同一featureへのactivationはsnapshot・unmountを行わず一回だけ配送する。
 
 ### MaintenanceProjection and MutationGate
 
@@ -285,6 +321,7 @@ type ShellViewState =
 interface SidePanelHost {
   start(): Promise<Result<void, { readonly kind: "startup_failed"; readonly message: string }>>;
   select(id: FeatureId): Promise<Result<void, { readonly kind: "unavailable" | "mount_failed"; readonly message: string }>>;
+  activate(intent: FeatureActivationIntent): Promise<Result<void, FeatureActivationError>>;
   stop(): Promise<void>;
 }
 ```

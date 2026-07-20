@@ -6,7 +6,7 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 
 ## 境界コンテキスト
 
-- **対象内**: side panel host、featureナビゲーション、登録済みfeatureのmount/unmount、利用可能状態、共通loading/error/maintenance表示、mutation操作の共通抑止、composition root、root公開API合成。
+- **対象内**: side panel host、featureナビゲーション、登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance表示、mutation操作の共通抑止、composition root、root公開API合成。
 - **対象外**: feature固有の業務ロジック・state・view、永続化、maintenance lease管理、復元、商品抽出、互換性判定。
 - **隣接する期待**: local-data-foundationは信頼できるmaintenance状態をread-only契約で提供し、各featureは登録情報・view lifecycle・公開契約を提供する。
 
@@ -69,3 +69,14 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 2. When side panelを開く操作が行われたとき, the application shell shall 有効なユーザージェスチャーの文脈を維持する
 3. The application shell shall リモートコード、動的コード評価、インラインJavaScriptを必要とせず動作する
 4. When feature登録、遷移、表示失敗、maintenance状態変更を統合検証するとき, the application shell shall 各結果を決定的に観測できる
+
+### 要件7: Feature間の型付きactivation
+**目的:** 利用者として、ある機能で開始した作業を入力内容を失わず対象機能へ引き継ぎたい。それにより同じ情報を再入力せず一貫した作業を継続できる。
+
+#### 受け入れ基準
+1. When 登録済みfeatureへのactivationが要求されたとき, the application shell shall 対象featureを表示してactivation内容をそのfeatureへ一度だけ配送する
+2. When activation先が現在表示中のfeatureであるとき, the application shell shall 不要な表示終了を行わずactivation内容を現在のfeatureへ配送する
+3. If 対象feature、遷移先またはactivation内容が受け付けられないとき, the application shell shall 現在の表示を維持して診断可能な失敗を返す
+4. If 対象featureの表示開始またはactivation適用が失敗したとき, the application shell shall 入力元featureが提供した状態を復元して表示し、回復可能な案内を提供する
+5. The application shell shall feature固有のactivation内容を解釈または変換せず対象featureの検証結果に従う
+6. If activation先featureの表示終了に失敗したとき, the application shell shall 入力元featureを同時に表示せず、失敗したfeatureの終了を再試行可能な状態として保持する

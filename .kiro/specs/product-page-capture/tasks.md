@@ -56,15 +56,17 @@
   - _Boundary: CaptureView_
 
 - [ ] 4.3 候補管理の詳細編集導線を接続する
-  - 抽出済み値、元表記、取得根拠を失わず既存の詳細編集状態へ渡す
+  - 抽出済み値、`sourceInfo`、元表記、取得根拠を候補管理の型付きprefillへ変換し、`openCandidateEditor`だけを介して詳細編集を要求する
   - 商品候補がない場合も手入力用の詳細編集へ進めるようにする
-  - 簡易確認と詳細編集の往復後も同じ修正値とproject選択が表示される
+  - shell navigation、候補側検証、mountの失敗時はcapture sessionを保持し、簡易確認と詳細編集の往復後も同じ修正値とproject選択が表示される
+  - _Depends: application-shell 5.3; project-candidate-management 2.5_
   - _Requirements: 4.2, 4.3, 4.6_
+  - _Boundary: CandidateEditorNavigation_
 
 - [ ] 4.4 React root adapterとfeature registrationを実装する
   - `view.tsx`をframework非依存のCaptureState/portへ接続し、`public.ts`、side panel registration、worker registrationをfeature内で所有する
   - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
-  - shell contract test kitでUI登録、action handler登録、operation policy、cleanupが適合することを確認できる
+  - shell contract test kitでUI登録、action handler登録、typed activation呼出、operation policy、cleanupが適合することを確認できる
   - _Depends: application-shell 1.1, 1.3, 1.4; local tasks 3, 4.1, 4.2, 4.3_
   - _Requirements: 1.1, 1.2, 1.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Boundary: CaptureFeatureRegistration, CaptureWorkerRegistration, ReactRootAdapter_
@@ -87,8 +89,9 @@
   - application shellがside panel registration、worker registration、`public.ts`をcompositionし、feature側から共有runtime入口とroot barrelを編集しない
   - action、抽出、順位付け、確認、修正、project選択、候補作成を既存runtimeとサイドパネルへ接続する
   - 情報が十分な架空ページと欠損のある架空ページの両方で、保存完了まで一連の操作が成立する
+  - 同じ架空sessionから詳細編集を選ぶと候補管理が型付きprefillで開き、戻った場合もcapture sessionが維持される
   - すべての読取・更新が責任境界を守り、content scriptから保存領域を直接操作できない
-  - _Depends: application-shell 4.1; local tasks 4.4, 5.2_
+  - _Depends: application-shell 4.1, 5.3; project-candidate-management 4.2; local tasks 4.4, 5.2_
   - _Requirements: 1.1, 2.1, 2.2, 2.4, 3.5, 4.1, 4.2, 5.1, 5.3, 5.4, 5.5_
 
 - [ ] 6.2 失敗・安全性・fixture制約の回帰テストを完成する

@@ -44,9 +44,9 @@
 ## Existing Spec Updates
 
 - [x] local-data-foundation -- canonical `Result<T, E>`、`assessReplacement`、`replaceRoot`、単一write authority、世代付きmaintenance leaseとowner fencing、候補変更とCurrentBuild参照修復を同一commitで行う原子的root mutation契約を追加する。共有service worker bootstrapの所有はapplication shellへ移し、foundationはwrite authorityのworker adapter/registration contractだけを公開する。Dependencies: none
-- [ ] project-candidate-management -- `public.ts` とfeature registration、typed activationで開く `openCandidateEditor(prefill)`、`CandidateDraft.sourceInfo`、公開query名、cross-spec boundary注記を整合する。候補変更はfoundationの原子的root mutationを利用し、成功後の別writeによるbuild修復を要求しない。Dependencies: local-data-foundation, application-shell
-- [ ] product-page-capture -- `public.ts` とregistration方式、typed candidate editor activation、maintenance中の保存拒否、Coordinator/DraftMapper境界、worker registration portを明示し、共有service workerを直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management
-- [ ] current-build-management -- `public.ts` とregistration方式を採用し、公開候補query名と依存契約を統一する。候補変更成功後のreconcile writeを削除し、foundationの同一transaction内参照修復policyとの責務境界を明示する。Dependencies: local-data-foundation, application-shell, project-candidate-management
+- [x] project-candidate-management -- `public.ts` とfeature registration、typed activationで開く `openCandidateEditor(prefill)`、`CandidateDraft.sourceInfo`、公開query名、cross-spec boundary注記を整合する。候補変更はfoundationの原子的root mutationを利用し、成功後の別writeによるbuild修復を要求しない。Dependencies: local-data-foundation, application-shell
+- [x] product-page-capture -- `public.ts` とregistration方式、typed candidate editor activation、maintenance中の保存拒否、Coordinator/DraftMapper境界、worker registration portを明示し、共有service workerを直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management
+- [x] current-build-management -- `public.ts` とregistration方式を採用し、公開候補query名と依存契約を統一する。候補変更成功後のreconcile writeを削除し、foundationの同一transaction内参照修復policyとの責務境界を明示する。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [ ] compatibility-checking -- `public.ts`、`project-candidate-management` へのdirect dependency、registration方式を明示し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 - [ ] backup-restore -- `public.ts` を採用し、Repository primitiveの所有をfoundationへ戻す。maintenance leaseとatomic replacementの利用側、shellへの状態通知側へ限定し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 
@@ -56,4 +56,4 @@
 
 ## Specs (dependency order)
 
-- [x] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。root `src/index.ts`、`src/runtime/side-panel.ts`、`src/runtime/service-worker.ts`、`side-panel.html` の単一所有者となり、各featureの `public.ts` とworker registration portをcompositionする。共通 `Result<T, E>` と原子的root mutationはfoundationから利用する。Dependencies: local-data-foundation
+- [ ] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。root `src/index.ts`、`src/runtime/side-panel.ts`、`src/runtime/service-worker.ts`、`side-panel.html` の単一所有者となり、各featureの `public.ts` とworker registration portをcompositionする。共通 `Result<T, E>` と原子的root mutationはfoundationから利用する。Typed activation task 5.1–5.3は未実装。Dependencies: local-data-foundation

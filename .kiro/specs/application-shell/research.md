@@ -108,6 +108,22 @@
 - shell/feature DOM所有権の衝突 — presentation handleが返す専用slot以外へのfeature mountを禁止し、統合testで要素同一性とcleanup順序を検査する。
 - production dependencyの仮実装残存 — artifact/boundary testでinactive maintenance stubと共有entryからの下流deep importを拒否する。空feature catalogはempty stateとして検証する。
 
+### 判断: Shellはfeature-neutralなactivation envelopeだけを配送する
+- **背景**: 商品取り込みから候補編集へ検証済みprefillを渡す必要がある一方、shellへ候補固有型を所有させると依存方向が逆転する。
+- **代替案**:
+  1. shellが全feature payloadの判別共用体を所有する — 下流追加のたびに上流shell変更が必要になる。
+  2. feature公開APIがDOMやhostを直接操作する — navigationの単一所有権を破る。
+  3. shellは`unknown` payloadの汎用intentを配送し、対象featureが検証する — shell境界とfeature型安全性を両立できる。
+- **選択**: shellはfeature ID、target、`unknown` payloadからなるintentと配送順序を所有し、各registrationが検証・適用adapterを提供する。呼出側は対象featureの`public.ts`が公開する型付きintent builderを使用する。
+- **理由**: runtime信頼境界を明示しつつ、feature固有契約をshellから分離できる。
+- **Follow-up**: 未登録feature、未知target、不正payload、mount失敗、適用失敗、同一feature再activationをcontract test kitで検証する。
+
+### 判断: 入力元stateはopaque snapshotとしてfeature自身が復元する
+- **背景**: activation先のmountまたは適用に失敗した場合、shellが入力元featureをunmount済みなら、React stateを自力で再構築できない。
+- **選択**: mounted handleが任意の`captureState`を提供し、shellはsnapshotを解釈せずrollback時の`FeatureMountContext.restoredState`として同じfeatureへ返す。snapshotを提供できないsourceからのcross-feature activationは表示変更前に拒否する。
+- **理由**: feature固有stateをshellへ漏らさず、Requirement 7.4の状態保持とsingle feature ownershipを両立できる。
+- **失敗規則**: target cleanup失敗時はtarget handleを保持してsourceをmountしない。epoch、停止、availabilityによりstale化したtargetもcleanup後にのみsourceをrestoreする。
+
 ### 判断: 下流feature未実装時の空shell compositionを許可する
 - **背景**: application-shellは下流featureの前提specであり、最初から非空catalogを要求すると未実装registrationを待つ循環が生じる。
 - **代替案**:

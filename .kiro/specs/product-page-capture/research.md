@@ -75,3 +75,9 @@
 - **統合**: featureはside panel registration、worker registration、`public.ts`を所有し、共有side panel/service worker入口とroot barrelを編集しない。
 - **検証**: React DOMで安全な描画と往復編集を検証し、unmount時の購読解除を確認する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)
+
+### 2026-07-20 Typed candidate editor activation追従
+- **Sources Consulted**: `application-shell/design.md`、`project-candidate-management/design.md`、`roadmap.md`
+- **Findings**: shellはfeature-neutral intentの配送だけを所有し、候補管理は`CandidateEditorPrefill`のruntime検証とstate適用を所有する。
+- **Decision**: captureはshell intentを直接構築せず、候補管理の`openCandidateEditor`へ型付きprefillを渡す。保存と詳細編集は同じ`CaptureDraftMapper`規則を再利用する。
+- **Implications**: navigation失敗、候補側payload拒否、mount失敗ではCaptureSessionを維持し、保存処理やFoundation mutationを呼ばない。

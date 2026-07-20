@@ -23,22 +23,25 @@
 - ページDOMからの汎用候補収集、順位付け、正規化、取得根拠
 - 取り込みセッションの簡易確認、補正、プロジェクト選択、失敗回復UI
 - 確認済みドラフトから`CaptureCandidatePort`入力への変換
+- 候補管理の型付きprefill作成と`ShellNavigator`を介した詳細編集要求
 
 ### Out of Boundary
 - `CandidatePart`、保存スキーマ、Repository、容量・移行処理
 - プロジェクト作成および登録後候補の一覧・編集・削除
 - サイト別アダプター実装、互換性属性の意味判定、バックアップ
 - 生HTML、画像、未保存セッションの永続化
+- 候補編集activation payloadの最終検証、候補管理画面のmount/state適用
 
 ### Allowed Dependencies
 - Chrome 116以降の`action`、`activeTab`、`scripting`、`sidePanel`
 - FoundationのDomainModel、Resultおよび信頼境界
-- Candidate managementの`CaptureCandidatePort`、`CandidateDraft`、プロジェクト照会・詳細編集入口
+- Candidate managementの`CaptureCandidatePort`、`CandidateDraft`、`CandidateEditorPrefill`、`openCandidateEditor`
 - TypeScript strict、React 19系/React DOM、既存test基盤。UI以外のruntime依存は追加しない
-- application shellのfeature registration、worker registration、`FeatureMountContext`、operation policy、contract test kit
+- application shellのfeature registration、worker registration、`FeatureMountContext`、`ShellNavigator`、operation policy、contract test kit
 
 ### Revalidation Triggers
 - `CandidateDraft`、`CaptureCandidatePort`、カテゴリ、正規化属性、取得元契約の変更
+- `CandidateEditorPrefill`、候補管理activation target、shell navigation failureの変更
 - action・side panel入口、権限、メッセージ送信者検証、依存方向の変更
 - 抽出優先順位、URL・価格正規化、未分類保存規則の変更
 - サイト別アダプター追加または抽出セッション永続化への変更
@@ -61,11 +64,13 @@ graph LR
     State --> View[Capture view]
     State --> Mapper[Draft mapper]
     Mapper --> Port[Candidate creation port]
+    State --> Editor[Candidate editor port]
+    Editor --> Navigator[Shell navigator]
     Port --> Repo[Foundation repository]
 ```
 
 - **Selected pattern**: 注入抽出パイプラインとfeature state。DOM所有、調停、表示、保存変換を分離する。
-- **Dependency direction**: `Capture contracts → Extractor → Coordinator → State → View`、保存方向は`State → Draft mapper → CaptureCandidatePort`。右側から左側への逆依存を禁止する。
+- **Dependency direction**: `Shell/Foundation/Candidate contracts → Capture contracts → Extractor/Normalizer/Mapper → Coordinator/State → View/Registration`。保存は`CaptureCandidatePort`、詳細編集は`openCandidateEditor`だけを介する。
 - **Existing patterns preserved**: `Result`、判別共用体、信頼済み保存境界、DOM text描画、feature service/state構成。
 - **New components rationale**: `GenericExtractor`はページDOM所有、`CaptureCoordinator`はChrome API所有、`CaptureState`は一時セッション所有、`CaptureDraftMapper`は上流契約変換だけを所有する。
 
@@ -92,6 +97,7 @@ src/features/product-capture/normalizer.ts     # 文字列、URL、価格、属�
 src/features/product-capture/ranker.ts         # 固定優先順位と候補選択
 src/features/product-capture/coordinator.ts    # tab検証、注入、request照合、エラー正規化
 src/features/product-capture/draft-mapper.ts   # 確認セッションからCandidateDraftへの変換
+src/features/product-capture/editor-navigation.ts # CandidateEditorPrefill作成と候補管理公開port呼出
 src/features/product-capture/state.ts          # 一時ドラフト、編集、project選択、保存状態
 src/features/product-capture/view.tsx           # 簡易確認、根拠、失敗、詳細編集のReact component
 src/features/product-capture/react-root.tsx     # FeatureMountContextとReact rootの接続・cleanup
@@ -103,6 +109,7 @@ tests/features/product-capture/coordinator.test.ts
 tests/features/product-capture/state.test.ts
 tests/features/product-capture/view.test.ts
 tests/features/product-capture/integration.test.ts
+tests/features/product-capture/editor-navigation.test.ts
 tests/fixtures/product-capture/*.html           # 架空ページfixtureのみ
 ```
 
@@ -136,13 +143,13 @@ sequenceDiagram
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1–1.5 | 明示操作と一時権限 | Coordinator、Runtime | CaptureRequest | 取り込み |
-| 2.1–2.6 | 汎用抽出と根拠 | Extractor、Ranker | ExtractionCandidate | 取り込み |
-| 3.1–3.6 | 正規化・未信頼入力 | Normalizer、Coordinator | RawCapturePayload、NormalizedField | 取り込み |
-| 4.1–4.6 | 確認・補正 | CaptureState、CaptureView | CaptureSessionState | 確認 |
-| 5.1–5.7 | project選択・保存 | State、DraftMapper | CaptureCandidatePort | 保存 |
-| 6.1–6.5 | 失敗・再試行 | Coordinator、State、View | CaptureError | 取り込み・保存 |
-| 7.1–7.3 | 架空資産による検証 | 全コンポーネント | Test fixtures | 全フロー |
+| 1.1, 1.2, 1.3, 1.4, 1.5 | 明示操作と一時権限 | Coordinator、Runtime | CaptureRequest | 取り込み |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 汎用抽出と根拠 | Extractor、Ranker | ExtractionCandidate | 取り込み |
+| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 正規化・未信頼入力 | Normalizer、Coordinator | RawCapturePayload、NormalizedField | 取り込み |
+| 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | 確認・補正 | CaptureState、CaptureView、CandidateEditorNavigation | CaptureSessionState、CandidateEditorPrefill | 確認・typed activation |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | project選択・保存 | State、DraftMapper | CaptureCandidatePort | 保存 |
+| 6.1, 6.2, 6.3, 6.4, 6.5 | 失敗・再試行 | Coordinator、State、View | CaptureError | 取り込み・保存 |
+| 7.1, 7.2, 7.3 | 架空資産による検証 | 全コンポーネント | Test fixtures | 全フロー |
 
 ## Components and Interfaces
 
@@ -153,6 +160,7 @@ sequenceDiagram
 | CandidateRanker | Feature | 候補を決定的に選択 | 2.2–2.4, 7.1 | Normalizer P0 | Service |
 | CaptureCoordinator | Runtime | action・注入・競合・失敗を調停 | 1.1–1.5, 6.1–6.4, 7.2 | Chrome P0 | Service |
 | CaptureDraftMapper | Integration | 確認値を上流draftへ変換 | 3.5–3.6, 5.3–5.4 | Candidate contracts P0 | Service |
+| CandidateEditorNavigation | Integration | 確認sessionを型付きprefillとして候補管理へ遷移 | 4.2, 4.6 | Candidate public P0、ShellNavigator P0 | Service |
 | CaptureState | UI state | セッションと保存状態を管理 | 4.1–5.7, 6.3–6.4 | Port P0 | State |
 | CaptureView | UI | 確認、根拠、編集、案内を表示 | 4.1–4.6, 5.1–5.6, 6.1–6.5 | State P0 | State |
 | CaptureFeatureRegistration | UI/runtime adapter | view、public API、action handlerをshell登録契約へ接続 | 1.1–1.5, 4.1–6.5 | shell registration P0、CaptureCoordinator P0 | Service |
@@ -204,6 +212,16 @@ interface CaptureDraftMapper {
 
 商品名とprojectIdを必須とし、カテゴリ未確認は`unclassified`へ変換する。`confirmed`、`sourceSnapshot`、`sourceInfo`を上流契約どおり分離し、ページ由来の余剰フィールドを渡さない。
 
+#### CandidateEditorNavigation
+
+```typescript
+interface CandidateEditorNavigation {
+  open(session: CaptureSession): Promise<Result<void, CaptureNavigationError>>;
+}
+```
+
+`open`は同じmapper規則で`CandidateDraft`を生成し、選択projectと組み合わせた`CandidateEditorPrefill`を候補管理の`openCandidateEditor`へ渡す。shell intentやfeature IDをcapture側で直接組み立てず、candidate managementの型付き公開portを利用する。失敗時はCaptureSession、修正値、project選択を保持する。
+
 ### Runtime and UI Layer
 
 #### CaptureCoordinator
@@ -228,7 +246,7 @@ type CaptureSessionState =
   | { readonly status: "failed"; readonly recoverable: boolean; readonly draft?: CaptureSession; readonly error: CaptureError };
 ```
 
-セッションはサイドパネルメモリだけに保持する。失敗時は利用可能なドラフトとproject選択を維持し、成功時だけsavedへ進む。詳細編集はCandidate managementへ同じドラフトを渡す。
+セッションはサイドパネルメモリだけに保持する。失敗時は利用可能なドラフトとproject選択を維持し、成功時だけsavedへ進む。詳細編集は候補管理の型付き公開portへ同じドラフトを渡し、shell navigation失敗でもsessionを破棄しない。
 
 #### CaptureView
 
@@ -243,14 +261,14 @@ type CaptureSessionState =
 
 ## Error Handling
 
-`CaptureError`は`permission-lost`、`restricted-page`、`tab-changed`、`injection-failed`、`invalid-payload`、`no-candidate`、`validation`、`project-required`、`storage`、`quota`、`unsupported-data`を区別する。取得エラーは永続化を呼ばず、保存エラーはドラフトを保持する。ログはエラー種別とrequestIdに限定し、商品値・完全URL・HTMLを記録しない。
+`CaptureError`は`permission-lost`、`restricted-page`、`tab-changed`、`injection-failed`、`invalid-payload`、`no-candidate`、`validation`、`project-required`、`navigation`、`maintenance`、`storage`、`quota`、`unsupported-data`を区別する。取得エラーは永続化を呼ばず、保存・遷移エラーはドラフトを保持する。ログはエラー種別とrequestIdに限定し、商品値・完全URL・HTMLを記録しない。
 
 ## Testing Strategy
 
 - **Unit**: 各抽出ソース、優先順位、同順位、欠損、文字列長、制御文字、URL、価格、未分類変換を検証する。
 - **Runtime integration**: action以外で抽出しないこと、権限失効、制限URL、タブ遷移、payload不正をChrome API stubで検証する。
 - **State/UI integration**: 簡易確認、根拠表示、修正分離、空商品名、projectなし、二重送信、保存失敗時保持、詳細編集遷移を検証する。
-- **Contract integration**: 架空ページから`CandidateDraft`を生成し、`CaptureCandidatePort`へ一度だけ渡して成功・quota・unsupported-dataを検証する。
+- **Contract integration**: 架空ページから`CandidateDraft`を生成し、保存では`CaptureCandidatePort`へ一度だけ渡す。詳細編集では`sourceInfo`と元表記を保持したprefillを`openCandidateEditor`へ一度だけ渡し、navigation失敗時のsession保持を検証する。
 - **Assets**: fixtureは架空の最小HTMLだけを使用し、実サイトHTML・画像・取得データの混入を検査する。
 
 ## Security Considerations

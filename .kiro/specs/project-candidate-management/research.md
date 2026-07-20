@@ -7,6 +7,7 @@
   - 上流は`LocalDataRoot`、`CandidatePart`、カテゴリ判別共用体、検証済みRepositoryを公開する。
   - 候補は単一プロジェクトへ所属し、プロジェクト削除は上流Repositoryが所属データを同一更新内で除去する。
   - 新規外部依存は不要で、業務サービスとサイドパネルUIを上流ポートへ接続する最小構成が適切である。
+  - 最新Foundationは候補変更とCurrentBuild参照修復を同一root mutationで完了し、application shellはfeature-neutralなtyped activationを配送する。
 
 ## Research Log
 
@@ -49,3 +50,10 @@
 - **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtime、HTML host、root barrelを編集しない。
 - **検証**: 利用者視点のReact DOM testとmount/unmount cleanup testを追加する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)
+
+### 2026-07-20 上流契約追従
+- **Sources Consulted**: `local-data-foundation/design.md`、`application-shell/design.md`、`roadmap.md`、`cross-spec-review.md`
+- **Findings**: Foundationは`FoundationDataPort.mutate`内で参照修復、root検証、revision更新、単一保存を行う。shellはfeature ID、target、`unknown` payloadを配送し、対象featureがpayloadを検証する。
+- **Implications**: 候補管理はRepository直接writeと成功後のbuild reconcileを要求せず、`RootMutationCommand`の利用側になる。候補編集prefillは`public.ts`の型付きAPIとregistrationのruntime validatorを対にする。
+- **Decision**: `openCandidateEditor`はDOMやhostを直接操作せず`ShellNavigator`へintentを渡す。`CandidateDraft`は`sourceInfo`と`sourceSnapshot`を別フィールドとして正式公開する。
+- **Risk Mitigation**: activation payload、project存在、targetを適用前に検証し、失敗時は入力元と候補管理双方の既存stateを保持する。
