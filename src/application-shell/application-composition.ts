@@ -12,6 +12,8 @@ import type {
   ApplicationCompositionRoot,
   ApplicationWorkerRegistration,
   CompositionError,
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureId,
   FeatureRegistry,
   MaintenanceSnapshotSource,
@@ -427,6 +429,25 @@ export function createProductionApplicationComposition<
         },
       );
       return pending;
+    },
+    activate(
+      intent: FeatureActivationIntent,
+    ): Promise<Result<void, FeatureActivationError>> {
+      if (!integration)
+        return Promise.resolve(
+          err({
+            kind: "activation_failed",
+            detail: "application shell is not started",
+          }),
+        );
+      if (!integration.activate)
+        return Promise.resolve(
+          err({
+            kind: "activation_failed",
+            detail: "activation is unavailable",
+          }),
+        );
+      return integration.activate(intent);
     },
     stop() {
       if (stopPromise) return stopPromise;

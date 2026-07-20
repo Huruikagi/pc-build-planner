@@ -7,10 +7,40 @@ import type {
 } from "../../src/application-shell/contracts.js";
 
 import {
+  collectActivationLifecycleViolations,
+  collectFeatureActivationContractViolations,
   collectFeatureContractViolations,
   composeWorkerRegistrations,
+  createActivationLifecycleFixture,
   createFeatureContractFixture,
 } from "./application-shell-contract-kit.js";
+
+test("activation対応下流featureはvalidatorと適用を各一回だけ実行できる", async () => {
+  const fixture = createFeatureContractFixture({ activation: true });
+
+  assert.deepEqual(
+    await collectFeatureActivationContractViolations(fixture.feature, {
+      featureId: fixture.feature.id,
+      target: "open-editor",
+      payload: { candidateId: "fictional-candidate" },
+    }),
+    [],
+  );
+  assert.equal(fixture.observations.activationValidationCount, 1);
+  assert.equal(fixture.observations.activationApplyCount, 1);
+});
+
+test("activation apply失敗時もtargetをcleanupしてopaque source stateを復元する", async () => {
+  const fixture = createActivationLifecycleFixture();
+
+  assert.deepEqual(await collectActivationLifecycleViolations(fixture), []);
+  assert.equal(fixture.observations.targetMountCount, 1);
+  assert.equal(fixture.observations.targetUnmountCount, 1);
+  assert.equal(fixture.observations.sourceMountCount, 2);
+  assert.deepEqual(fixture.observations.sourceRestoredState, {
+    draft: "fictional-source-state",
+  });
+});
 
 test("適合feature fixtureはmount、通知、cleanup契約を満たす", async () => {
   const fixture = createFeatureContractFixture();

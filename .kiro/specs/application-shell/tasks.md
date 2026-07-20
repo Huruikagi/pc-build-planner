@@ -219,7 +219,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.6_
   - _Boundary: SidePanelHost_
 
-- [ ] 5.3 Activation contract test kitとproduction-shaped統合回帰を追加する
+- [x] 5.3 Activation contract test kitとproduction-shaped統合回帰を追加する
   - 下流featureのvalidator、適用回数、cleanup、状態回復を共通fixtureで検証できるようにする
   - navigation、maintenance、availability、停止とactivationを同じproduction-shaped scenarioで検証する
   - 完了時、typecheck、contract test、runtime integration、artifact boundary scanがactivation追加後も連続成功する

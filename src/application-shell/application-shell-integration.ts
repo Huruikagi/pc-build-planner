@@ -1,5 +1,7 @@
 import { err, ok, type Result } from "../domain/public.js";
 import type {
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureId,
   FeatureRegistry,
   MaintenanceProjection,
@@ -22,8 +24,12 @@ export interface ApplicationShellIntegrationOptions {
   readonly reportError: (message: string) => void;
 }
 
-export interface ApplicationShellIntegration extends SidePanelHost {
+export interface ApplicationShellIntegration
+  extends Omit<SidePanelHost, "activate"> {
   readonly operationPolicy: MutationGate;
+  activate?(
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>>;
 }
 
 const STARTUP_FAILURE_MESSAGE = "メンテナンス状態を取得できませんでした";
@@ -272,6 +278,12 @@ export function createApplicationShellIntegration(
 
     select(id: FeatureId): Promise<Result<void, SelectionError>> {
       return host.select(id);
+    },
+
+    activate(
+      intent: FeatureActivationIntent,
+    ): Promise<Result<void, FeatureActivationError>> {
+      return host.activate(intent);
     },
 
     stop: stopIntegration,

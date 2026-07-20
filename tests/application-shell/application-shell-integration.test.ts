@@ -442,11 +442,13 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
     ["compatibility", { status: "available" }],
   ]);
   const policies = new Map<string, FeatureMountContext["operationPolicy"]>();
+  let activationValidationCount = 0;
+  let activationApplyCount = 0;
 
   const feature = (
     id: string,
     label: string,
-    options?: { readonly mountFails?: boolean },
+    options?: { readonly mountFails?: boolean; readonly activation?: boolean },
   ): ApplicationFeatureRegistration<{ readonly name: string }> => ({
     id: featureId(id),
     navigation: {
@@ -471,6 +473,13 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
       policies.set(id, context.operationPolicy);
       context.container.textContent = `${id}-view`;
       return {
+        ...(id === "projects"
+          ? {
+              async captureState() {
+                return { ok: true as const, value: { draft: "project-state" } };
+              },
+            }
+          : {}),
         async unmount() {
           context.container.textContent = "";
           assert.equal(context.container.textContent, "");
@@ -478,6 +487,28 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
         },
       };
     },
+    ...(options?.activation
+      ? {
+          activation: {
+            validate(intent) {
+              activationValidationCount += 1;
+              if (intent.target !== "open-editor")
+                return {
+                  ok: false as const,
+                  error: {
+                    kind: "invalid_activation" as const,
+                    detail: "target",
+                  },
+                };
+              return { ok: true as const, value: undefined as never };
+            },
+            async activate() {
+              activationApplyCount += 1;
+              return { ok: true as const, value: undefined };
+            },
+          },
+        }
+      : {}),
   });
   const setAvailability = (
     id: string,
@@ -542,7 +573,9 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
         },
         {
           key: "compatibility",
-          registration: feature("compatibility", "Compatibility"),
+          registration: feature("compatibility", "Compatibility", {
+            activation: true,
+          }),
         },
       ] as const,
       workerRegistrations: [
@@ -605,6 +638,18 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
   assert.equal(featureSlot.textContent, "");
   assert.match(shellContainer.textContent ?? "", /表示開始に失敗しました/);
   assert.equal(shellContainer.querySelector("script"), null);
+  await clickNavigation("Projects <img src=x>");
+  assert.equal(featureSlot.textContent, "projects-view");
+
+  const activated = await root.activate?.({
+    featureId: featureId("compatibility"),
+    target: "open-editor",
+    payload: { candidateId: "fictional-candidate" },
+  });
+  assert.equal(activated?.ok, true);
+  assert.equal(activationValidationCount, 1);
+  assert.equal(activationApplyCount, 1);
+  assert.equal(featureSlot.textContent, "compatibility-view");
   await clickNavigation("Projects <img src=x>");
   assert.equal(featureSlot.textContent, "projects-view");
 

@@ -176,6 +176,9 @@ export type CompositionError = {
 
 export interface ApplicationCompositionRoot<TRootApi extends object> {
   start(): Promise<Result<{ readonly api: TRootApi }, CompositionError>>;
+  activate?(
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>>;
   stop(): Promise<void>;
 }
 

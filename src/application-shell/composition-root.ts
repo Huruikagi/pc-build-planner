@@ -8,6 +8,8 @@ import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
   CompositionError,
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureRegistry,
   MaintenanceSnapshotSource,
   ShellViewState,
@@ -280,6 +282,26 @@ export function createCompositionRoot<
         },
       );
       return pending;
+    },
+
+    activate(
+      intent: FeatureActivationIntent,
+    ): Promise<Result<void, FeatureActivationError>> {
+      if (!integration)
+        return Promise.resolve(
+          err({
+            kind: "activation_failed",
+            detail: "application shell is not started",
+          }),
+        );
+      if (!integration.activate)
+        return Promise.resolve(
+          err({
+            kind: "activation_failed",
+            detail: "activation is unavailable",
+          }),
+        );
+      return integration.activate(intent);
     },
 
     stop() {

@@ -5,10 +5,13 @@ import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
   Availability,
+  FeatureActivationIntent,
   FeatureId,
   RegistrationError,
   WorkerRegistrationContext,
 } from "../../src/application-shell/contracts.js";
+import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
+import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
 import { err, ok, type Result } from "../../src/domain/public.js";
 
 export interface ContractFixtureObservations {
@@ -18,10 +21,12 @@ export interface ContractFixtureObservations {
   notificationsAfterUnsubscribe: number;
   containerAfterUnmount: string;
   activeActionHandlers: number;
+  activationValidationCount: number;
+  activationApplyCount: number;
 }
 
 export interface FeatureContractFixture {
-  readonly feature: ApplicationFeatureRegistration;
+  readonly feature: ApplicationFeatureRegistration<object, unknown>;
   readonly worker: ApplicationWorkerRegistration;
   readonly workerContext: WorkerRegistrationContext;
   readonly observations: ContractFixtureObservations;
@@ -36,6 +41,19 @@ export interface FeatureContractProbe {
 export interface FeatureContractFixtureOptions {
   readonly invalid?: boolean;
   readonly failingWorker?: boolean;
+  readonly activation?: boolean;
+}
+
+export interface ActivationLifecycleFixture {
+  readonly source: ApplicationFeatureRegistration<object, unknown>;
+  readonly target: ApplicationFeatureRegistration<object, unknown>;
+  readonly intent: FeatureActivationIntent;
+  readonly observations: {
+    sourceMountCount: number;
+    targetMountCount: number;
+    targetUnmountCount: number;
+    sourceRestoredState: unknown;
+  };
 }
 
 const fixtureId = "contract-fixture" as FeatureId;
@@ -50,13 +68,15 @@ export function createFeatureContractFixture(
     notificationsAfterUnsubscribe: 0,
     containerAfterUnmount: "not-observed",
     activeActionHandlers: 0,
+    activationValidationCount: 0,
+    activationApplyCount: 0,
   };
   const listeners = new Set<(availability: Availability) => void>();
   const notify = (availability: Availability) => {
     for (const listener of listeners) listener(availability);
   };
 
-  const feature: ApplicationFeatureRegistration = {
+  const feature: ApplicationFeatureRegistration<object, unknown> = {
     id: options.invalid ? ("" as FeatureId) : fixtureId,
     navigation: {
       label: options.invalid ? "" : "Contract fixture",
@@ -99,6 +119,25 @@ export function createFeatureContractFixture(
         },
       };
     },
+    ...(options.activation
+      ? {
+          activation: {
+            validate(intent) {
+              observations.activationValidationCount += 1;
+              if (intent.target !== "open-editor")
+                return err({
+                  kind: "invalid_activation" as const,
+                  detail: "fixture target is not supported",
+                });
+              return ok(intent.payload);
+            },
+            async activate(_input: unknown) {
+              observations.activationApplyCount += 1;
+              return ok(undefined);
+            },
+          },
+        }
+      : {}),
   };
 
   const worker: ApplicationWorkerRegistration = {
@@ -138,11 +177,148 @@ export function createFeatureContractFixture(
 }
 
 /**
+ * Exercises a downstream feature's opaque activation adapter without teaching
+ * the shell contract kit anything about the feature's payload shape.
+ */
+export async function collectFeatureActivationContractViolations(
+  feature: ApplicationFeatureRegistration<object, unknown>,
+  intent: import("../../src/application-shell/contracts.js").FeatureActivationIntent,
+): Promise<readonly string[]> {
+  const violations: string[] = [];
+  const adapter = feature.activation;
+  if (adapter === undefined) {
+    violations.push("activation.adapter: adapter is required");
+    return violations;
+  }
+
+  let validated: ReturnType<typeof adapter.validate>;
+  try {
+    validated = adapter.validate(intent);
+  } catch {
+    violations.push("activation.validate: registration rejected");
+    return violations;
+  }
+  if (!validated.ok) {
+    violations.push("activation.validate: intent was rejected");
+    return violations;
+  }
+  try {
+    const applied = await adapter.activate(validated.value);
+    if (!applied.ok)
+      violations.push("activation.apply: activation was rejected");
+  } catch {
+    violations.push("activation.apply: registration rejected");
+  }
+  return violations;
+}
+
+/** Exercises shell-owned rollback with opaque feature state and target cleanup. */
+export function createActivationLifecycleFixture(): ActivationLifecycleFixture {
+  const sourceId = "activation-source" as FeatureId;
+  const targetId = "activation-target" as FeatureId;
+  const sourceSnapshot = Object.freeze({ draft: "fictional-source-state" });
+  const observations = {
+    sourceMountCount: 0,
+    targetMountCount: 0,
+    targetUnmountCount: 0,
+    sourceRestoredState: undefined as unknown,
+  };
+  const available = () => ({ status: "available" as const });
+  const source: ApplicationFeatureRegistration<object, unknown> = {
+    id: sourceId,
+    navigation: { label: "Activation source", order: 0 },
+    publicApi: {},
+    getAvailability: available,
+    subscribeAvailability: () => () => {},
+    async mount(context) {
+      observations.sourceMountCount += 1;
+      observations.sourceRestoredState = context.restoredState;
+      context.container.textContent = "source";
+      return {
+        async captureState() {
+          return ok(sourceSnapshot);
+        },
+        async unmount() {
+          context.container.textContent = "";
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    id: targetId,
+    navigation: { label: "Activation target", order: 1 },
+    publicApi: {},
+    getAvailability: available,
+    subscribeAvailability: () => () => {},
+    async mount(context) {
+      observations.targetMountCount += 1;
+      context.container.textContent = "target";
+      return {
+        async unmount() {
+          observations.targetUnmountCount += 1;
+          context.container.textContent = "";
+        },
+      };
+    },
+    activation: {
+      validate: () => ok(undefined),
+      async activate() {
+        return err({
+          kind: "activation_failed",
+          detail: "fixture apply failure",
+        });
+      },
+    },
+  };
+  return {
+    source,
+    target,
+    intent: { featureId: targetId, target: "fixture-target", payload: {} },
+    observations,
+  };
+}
+
+export async function collectActivationLifecycleViolations(
+  fixture: ActivationLifecycleFixture,
+): Promise<readonly string[]> {
+  const violations: string[] = [];
+  const registry = createFeatureRegistry();
+  registry.register(fixture.source);
+  registry.register(fixture.target);
+  const host = createSidePanelHost({
+    registry,
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true },
+    onStateChange() {},
+    reportError() {},
+  });
+  try {
+    const started = await host.start();
+    if (!started.ok)
+      violations.push("activation.lifecycle: source did not start");
+    const activated = await host.activate(fixture.intent);
+    if (activated.ok) violations.push("activation.apply: failure was accepted");
+    if (fixture.observations.targetUnmountCount !== 1)
+      violations.push(
+        "activation.cleanup: failed target was not unmounted once",
+      );
+    if (fixture.observations.sourceMountCount !== 2)
+      violations.push("activation.rollback: source was not remounted once");
+    if (fixture.observations.sourceRestoredState === undefined)
+      violations.push("activation.rollback: source state was not restored");
+  } finally {
+    await host.stop();
+    registry.dispose?.();
+  }
+  return violations;
+}
+
+/**
  * Downstream registrations can call this from their own contract suite. The
  * returned strings form a stable, field-qualified protocol suitable for CI.
  */
 export async function collectFeatureContractViolations(
-  feature: ApplicationFeatureRegistration,
+  feature: ApplicationFeatureRegistration<object, unknown>,
   probe?: FeatureContractProbe,
 ): Promise<readonly string[]> {
   const violations: string[] = [];
@@ -243,7 +419,7 @@ export async function collectFeatureContractViolations(
 }
 
 async function inspectMountContract(
-  feature: ApplicationFeatureRegistration,
+  feature: ApplicationFeatureRegistration<object, unknown>,
   violations: string[],
 ): Promise<void> {
   const container = document.createElement("div");
@@ -283,16 +459,16 @@ async function inspectMountContract(
 }
 
 const fixtureObservations = new WeakMap<
-  ApplicationFeatureRegistration,
+  ApplicationFeatureRegistration<object, unknown>,
   ContractFixtureObservations
 >();
 const fixtureNotifiers = new WeakMap<
-  ApplicationFeatureRegistration,
+  ApplicationFeatureRegistration<object, unknown>,
   (availability: Availability) => void
 >();
 
 function fixtureObservation(
-  feature: ApplicationFeatureRegistration,
+  feature: ApplicationFeatureRegistration<object, unknown>,
   key: "availabilityNotifications" | "notificationsAfterUnsubscribe",
 ) {
   const observations = fixtureObservations.get(feature);
