@@ -202,6 +202,30 @@
   - _Requirements: 3.1, 3.3, 3.4, 6.1, 6.3, 6.4_
   - _Boundary: ProductionWorkerComposition, RuntimeAdapters_
 
+- [ ] 5. Feature間の型付きactivationを追加する
+- [x] 5.1 Activation契約とroutingを実装する
+  - feature ID、target、未信頼payloadを持つ汎用intentと、対象featureが検証・適用するregistration契約を追加する
+  - 未登録、利用不可、未知target、不正payloadを表示変更前に判別し、feature固有payloadをshellが解釈しない境界を維持する
+  - 完了時、適合する模擬featureだけが検証済みactivationを一度受け取り、不正intentは現在表示を変えずtyped failureになる
+  - _Requirements: 2.1, 2.5, 7.1, 7.3, 7.5_
+  - _Boundary: CoreContracts, ActivationRouter_
+
+- [ ] 5.2 Activationをhost lifecycleへ統合する
+  - 対象featureをmountしてからactivationを一度配送し、既に表示中なら不要なunmountを行わない
+  - mountまたはactivation適用失敗時は新規resourceを解放し、直前featureとその状態を回復する
+  - 完了時、別feature遷移、同一feature再activation、mount失敗、適用失敗をhost testで決定的に観測できる
+  - _Depends: 5.1_
+  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - _Boundary: SidePanelHost_
+
+- [ ] 5.3 Activation contract test kitとproduction-shaped統合回帰を追加する
+  - 下流featureのvalidator、適用回数、cleanup、状態回復を共通fixtureで検証できるようにする
+  - navigation、maintenance、availability、停止とactivationを同じproduction-shaped scenarioで検証する
+  - 完了時、typecheck、contract test、runtime integration、artifact boundary scanがactivation追加後も連続成功する
+  - _Depends: 5.1, 5.2_
+  - _Requirements: 6.4, 7.1, 7.2, 7.3, 7.4, 7.5_
+  - _Boundary: ContractTestKit, ApplicationShellIntegrationTests_
+
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。

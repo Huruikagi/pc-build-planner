@@ -29,13 +29,13 @@ export function createFeatureRegistry(): FeatureRegistry {
   };
 
   return {
-    register<TPublic extends object>(
-      candidate: ApplicationFeatureRegistration<TPublic>,
+    register<TPublic extends object, TActivation>(
+      candidate: ApplicationFeatureRegistration<TPublic, TActivation>,
     ) {
       const shapeError = validateRegistrationShape(candidate);
       if (shapeError) return err(shapeError);
 
-      const feature = candidate as ApplicationFeatureRegistration;
+      const feature = candidate as unknown as ApplicationFeatureRegistration;
       if (entries.has(feature.id)) {
         return err({ kind: "duplicate_feature_id", id: feature.id });
       }
@@ -162,6 +162,15 @@ function validateRegistrationShape(value: unknown): RegistrationError | null {
     );
   if (typeof value.mount !== "function")
     return invalidRegistration("registration.mount: function is required");
+  if (
+    value.activation !== undefined &&
+    (!isRecord(value.activation) ||
+      typeof value.activation.validate !== "function" ||
+      typeof value.activation.activate !== "function")
+  )
+    return invalidRegistration(
+      "registration.activation: validate and activate functions are required",
+    );
   return null;
 }
 
@@ -208,6 +217,7 @@ function createSnapshotRegistration(
       };
     },
     mount: source.mount.bind(source),
+    ...(source.activation ? { activation: source.activation } : {}),
   });
 }
 

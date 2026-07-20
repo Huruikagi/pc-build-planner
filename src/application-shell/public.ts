@@ -1,3 +1,5 @@
+export type { ActivationRouterOptions } from "./activation-router.js";
+export { createActivationRouter } from "./activation-router.js";
 export type {
   CompositionFeature,
   CompositionRootApi,
@@ -6,16 +8,22 @@ export type {
 } from "./composition-root.js";
 export { createCompositionRoot } from "./composition-root.js";
 export type {
+  ActivationRouter,
   ApplicationCompositionRoot,
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
   Availability,
   CompositionError,
+  FeatureActivationAdapter,
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureId,
   FeatureMountContext,
   FeatureMountHandle,
   OperationKind,
   OperationPolicy,
+  PreparedFeatureActivation,
+  ShellNavigator,
   WorkerRegistrationContext,
 } from "./contracts.js";
 export type {

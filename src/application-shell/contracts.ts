@@ -26,8 +26,30 @@ export interface FeatureMountHandle {
   unmount(): Promise<void>;
 }
 
+/** A feature-neutral request whose payload remains untrusted at the shell boundary. */
+export interface FeatureActivationIntent {
+  readonly featureId: FeatureId;
+  readonly target: string;
+  readonly payload: unknown;
+}
+
+export type FeatureActivationError =
+  | { readonly kind: "feature_not_found"; readonly featureId: FeatureId }
+  | { readonly kind: "feature_unavailable"; readonly featureId: FeatureId }
+  | { readonly kind: "invalid_activation"; readonly detail: string }
+  | { readonly kind: "mount_failed"; readonly featureId: FeatureId }
+  | { readonly kind: "activation_failed"; readonly detail: string };
+
+export interface FeatureActivationAdapter<TActivation> {
+  validate(
+    intent: FeatureActivationIntent,
+  ): Result<TActivation, FeatureActivationError>;
+  activate(input: TActivation): Promise<Result<void, FeatureActivationError>>;
+}
+
 export interface ApplicationFeatureRegistration<
   TPublic extends object = object,
+  TActivation = never,
 > {
   readonly id: FeatureId;
   readonly navigation: {
@@ -38,6 +60,24 @@ export interface ApplicationFeatureRegistration<
   getAvailability(): Availability;
   subscribeAvailability(listener: (value: Availability) => void): () => void;
   mount(context: FeatureMountContext): Promise<FeatureMountHandle>;
+  readonly activation?: FeatureActivationAdapter<TActivation>;
+}
+
+export interface PreparedFeatureActivation {
+  readonly feature: ApplicationFeatureRegistration;
+  activate(): Promise<Result<void, FeatureActivationError>>;
+}
+
+export interface ActivationRouter {
+  prepare(
+    intent: FeatureActivationIntent,
+  ): Result<PreparedFeatureActivation, FeatureActivationError>;
+}
+
+export interface ShellNavigator {
+  activate(
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>>;
 }
 
 export interface WorkerRegistrationContext {
@@ -60,8 +100,8 @@ export interface ApplicationWorkerRegistration {
 }
 
 export interface FeatureRegistry {
-  register<TPublic extends object>(
-    feature: ApplicationFeatureRegistration<TPublic>,
+  register<TPublic extends object, TActivation>(
+    feature: ApplicationFeatureRegistration<TPublic, TActivation>,
   ): Result<void, RegistrationError>;
   snapshot(): readonly ApplicationFeatureRegistration[];
   subscribe(listener: () => void): () => void;
