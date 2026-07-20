@@ -4,12 +4,14 @@ import test from "node:test";
 import type {
   ApplicationFeatureRegistration,
   Availability,
+  FeatureActivationIntent,
   FeatureId,
   FeatureMountHandle,
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
+import { err, ok } from "../../src/domain/public.js";
 
 const featureId = (value: string) => value as FeatureId;
 
@@ -37,6 +39,9 @@ function feature(
       marker.dataset.feature = id;
       container.append(marker);
       return {
+        async captureState() {
+          return ok(undefined);
+        },
         async unmount() {
           events.push(`unmount:${id}`);
           marker.remove();
@@ -54,7 +59,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function setup(registrations: readonly ApplicationFeatureRegistration[]) {
+function setup(
+  registrations: readonly ApplicationFeatureRegistration<object, unknown>[],
+) {
   const registry = createFeatureRegistry();
   for (const registration of registrations) {
     assert.equal(registry.register(registration).ok, true);
@@ -431,3 +438,293 @@ test("stopのunmountが常に失敗してもownershipを保持して再stopで�
     2,
   );
 });
+
+test("別featureへのactivationはmount後に一度配送し、適用失敗では直前featureを回復する", async () => {
+  const events: string[] = [];
+  const previous = feature("previous", 0, events);
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    activation: {
+      validate(intent) {
+        if (intent.target !== "editor" || !isValuePayload(intent.payload))
+          return err({ kind: "invalid_activation", detail: "invalid payload" });
+        return ok(intent.payload);
+      },
+      async activate(input) {
+        if (!isValuePayload(input))
+          return err({ kind: "activation_failed", detail: "invalid input" });
+        events.push(`activate:target:${input.value}`);
+        return err({ kind: "activation_failed", detail: "apply failed" });
+      },
+    },
+  };
+  const { container, host } = setup([previous, target]);
+  await host.start();
+
+  const result = await host.activate({
+    featureId: target.id,
+    target: "editor",
+    payload: { value: "prefill" },
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "activation_failed", detail: "apply failed" },
+  });
+  assert.deepEqual(events, [
+    "mount:previous",
+    "unmount:previous",
+    "mount:target",
+    "activate:target:prefill",
+    "unmount:target",
+    "mount:previous",
+  ]);
+  assert.equal(
+    container.querySelector("[data-feature]")?.getAttribute("data-feature"),
+    "previous",
+  );
+  await host.stop();
+});
+
+test("同一featureへのactivationは再mountせず、各intentを一度だけ配送する", async () => {
+  const events: string[] = [];
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 0, events),
+    activation: {
+      validate(intent) {
+        if (intent.target !== "editor" || !isValuePayload(intent.payload))
+          return err({ kind: "invalid_activation", detail: "invalid payload" });
+        return ok(intent.payload);
+      },
+      async activate(input) {
+        if (!isValuePayload(input))
+          return err({ kind: "activation_failed", detail: "invalid input" });
+        events.push(`activate:target:${input.value}`);
+        return ok(undefined);
+      },
+    },
+  };
+  const { host } = setup([target]);
+  await host.start();
+  const intent: FeatureActivationIntent = {
+    featureId: target.id,
+    target: "editor",
+    payload: { value: "prefill" },
+  };
+
+  assert.equal((await host.activate(intent)).ok, true);
+  assert.deepEqual(events, ["mount:target", "activate:target:prefill"]);
+  await host.stop();
+});
+
+test("activation用mount失敗は既存featureを維持する", async () => {
+  const events: string[] = [];
+  const previous = feature("previous", 0, events);
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events, { failMount: true }),
+    activation: {
+      validate: () => ok<unknown>({}),
+      activate: async () => ok(undefined),
+    },
+  };
+  const { container, host } = setup([previous, target]);
+  await host.start();
+
+  const result = await host.activate({
+    featureId: target.id,
+    target: "editor",
+    payload: {},
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "mount_failed", featureId: target.id },
+  });
+  assert.deepEqual(events, [
+    "mount:previous",
+    "unmount:previous",
+    "mount:target",
+    "mount:previous",
+  ]);
+  assert.equal(
+    container.querySelector("[data-feature]")?.getAttribute("data-feature"),
+    "previous",
+  );
+  await host.stop();
+});
+
+test("snapshotを拒否するsourceからのactivationは表示を変更しない", async () => {
+  const events: string[] = [];
+  const source: ApplicationFeatureRegistration = {
+    ...feature("source", 0, events),
+    async mount(context) {
+      const handle = await feature("source", 0, events).mount(context);
+      return {
+        ...handle,
+        async captureState() {
+          events.push("snapshot:source");
+          throw new Error("snapshot rejected");
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    activation: { validate: () => ok({}), activate: async () => ok(undefined) },
+  };
+  const { container, host } = setup([source, target]);
+  await host.start();
+
+  const result = await host.activate({
+    featureId: target.id,
+    target: "x",
+    payload: {},
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      kind: "activation_failed",
+      detail: "source feature rejected activation snapshot",
+    },
+  });
+  assert.deepEqual(events, ["mount:source", "snapshot:source"]);
+  assert.equal(
+    container.querySelector("[data-feature]")?.getAttribute("data-feature"),
+    "source",
+  );
+  await host.stop();
+});
+
+test("activation失敗後にtarget cleanupが失敗するとtarget ownershipを保持しsourceを復元しない", async () => {
+  const events: string[] = [];
+  const source = feature("source", 0, events);
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    async mount(context) {
+      const handle = await feature("target", 1, events).mount(context);
+      return {
+        ...handle,
+        async unmount() {
+          events.push("unmount:target:failed");
+          throw new Error("cleanup failed");
+        },
+      };
+    },
+    activation: {
+      validate: () => ok({}),
+      async activate() {
+        events.push("activate:target");
+        return err({ kind: "activation_failed", detail: "apply failed" });
+      },
+    },
+  };
+  const { host } = setup([source, target]);
+  await host.start();
+
+  const result = await host.activate({
+    featureId: target.id,
+    target: "x",
+    payload: {},
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "mount_failed", featureId: target.id },
+  });
+  assert.deepEqual(events, [
+    "mount:source",
+    "unmount:source",
+    "mount:target",
+    "activate:target",
+    "unmount:target:failed",
+  ]);
+  await assert.rejects(host.stop(), AggregateError);
+  assert.deepEqual(events, [
+    "mount:source",
+    "unmount:source",
+    "mount:target",
+    "activate:target",
+    "unmount:target:failed",
+    "unmount:target:failed",
+  ]);
+});
+
+test("activation中にtargetが利用不可になるとstale targetをcleanupしてsnapshot付きでsourceを復元する", async () => {
+  const events: string[] = [];
+  const targetMount = deferred<FeatureMountHandle>();
+  const targetStarted = deferred<void>();
+  let availability: Availability = { status: "available" };
+  const listeners = new Set<(value: Availability) => void>();
+  const source: ApplicationFeatureRegistration = {
+    ...feature("source", 0, events),
+    async mount(context) {
+      events.push(
+        context.restoredState === undefined
+          ? "mount:source:fresh"
+          : `mount:source:restored:${String((context.restoredState as { value: string }).value)}`,
+      );
+      return {
+        async captureState() {
+          events.push("snapshot:source");
+          return ok({ value: "draft" });
+        },
+        async unmount() {
+          events.push("unmount:source");
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    getAvailability: () => availability,
+    subscribeAvailability(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async mount() {
+      events.push("mount:target");
+      targetStarted.resolve();
+      return targetMount.promise;
+    },
+    activation: { validate: () => ok({}), activate: async () => ok(undefined) },
+  };
+  const { host } = setup([source, target]);
+  await host.start();
+  const activating = host.activate({
+    featureId: target.id,
+    target: "x",
+    payload: {},
+  });
+  await targetStarted.promise;
+  availability = { status: "unavailable", reason: "closed" };
+  for (const listener of listeners) listener(availability);
+  targetMount.resolve({
+    async unmount() {
+      events.push("unmount:target");
+    },
+  });
+
+  assert.deepEqual(await activating, {
+    ok: false,
+    error: { kind: "mount_failed", featureId: target.id },
+  });
+  assert.deepEqual(events, [
+    "mount:source:fresh",
+    "snapshot:source",
+    "unmount:source",
+    "mount:target",
+    "unmount:target",
+    "mount:source:restored:draft",
+  ]);
+  await host.stop();
+});
+
+function isValuePayload(value: unknown): value is { readonly value: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "value" in value &&
+    typeof value.value === "string"
+  );
+}

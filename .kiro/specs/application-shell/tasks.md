@@ -210,7 +210,7 @@
   - _Requirements: 2.1, 2.5, 7.1, 7.3, 7.5_
   - _Boundary: CoreContracts, ActivationRouter_
 
-- [ ] 5.2 Activationをhost lifecycleへ統合する
+- [x] 5.2 Activationをhost lifecycleへ統合する
   - 対象featureをmountしてからactivationを一度配送し、既に表示中なら不要なunmountを行わない
   - cross-feature activation前に入力元のopaque state snapshotを取得し、target mountまたはactivation適用失敗時は新規resourceを完全に解放してsnapshot付きで入力元を復元する
   - target cleanup失敗時はtarget handleを保持して入力元をmountせず、epoch・停止・availabilityによりstale化したmountもcleanup後にのみrollbackする

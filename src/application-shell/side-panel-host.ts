@@ -1,6 +1,9 @@
 import { err, ok, type Result } from "../domain/public.js";
+import { createActivationRouter } from "./activation-router.js";
 import type {
   ApplicationFeatureRegistration,
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureId,
   FeatureMountHandle,
   FeatureRegistry,
@@ -27,7 +30,7 @@ export function createSidePanelHost(
   let mounted: FeatureMountHandle | undefined;
   let unsubscribeRegistry: (() => void) | undefined;
   let lifecycleEpoch = 0;
-  let transition = Promise.resolve<Result<void, SelectionError>>(ok(undefined));
+  let transition: Promise<unknown> = Promise.resolve();
 
   const publish = (state: ShellViewState): void => {
     try {
@@ -152,6 +155,148 @@ export function createSidePanelHost(
     return next;
   };
 
+  const mountFeature = async (
+    feature: ApplicationFeatureRegistration,
+    restoredState?: unknown,
+    restoring = false,
+  ): Promise<Result<void, FeatureActivationError>> => {
+    const mountEpoch = lifecycleEpoch;
+    try {
+      const handle = await feature.mount({
+        container: options.container,
+        operationPolicy: options.operationPolicy,
+        reportError: (message) =>
+          reportDiagnostic(`feature ${feature.id}: ${message}`),
+        ...(restoring ? { restoredState } : {}),
+      });
+      const availability = feature.getAvailability();
+      if (
+        stopped ||
+        mountEpoch !== lifecycleEpoch ||
+        availability.status === "unavailable"
+      ) {
+        try {
+          await handle.unmount();
+        } catch {
+          // A stale target still owns the slot until its handle is released.
+          mounted = handle;
+          selected = feature.id;
+          const message = `stale feature ${feature.id} の表示終了に失敗しました`;
+          reportDiagnostic(message);
+          publish({ kind: "error", message, recoverable: true });
+          return err({ kind: "activation_failed", detail: message });
+        }
+        return err({
+          kind: "mount_failed",
+          featureId: feature.id,
+        });
+      }
+      mounted = handle;
+      selected = feature.id;
+      publish({ kind: "ready", selected: feature.id });
+      return ok(undefined);
+    } catch {
+      const message = `feature ${feature.id} の表示開始に失敗しました`;
+      reportDiagnostic(message);
+      publish({ kind: "error", message, recoverable: true });
+      return err({ kind: "mount_failed", featureId: feature.id });
+    }
+  };
+
+  const restorePrevious = async (
+    previous: ApplicationFeatureRegistration | undefined,
+    snapshot: unknown,
+  ): Promise<void> => {
+    if (previous === undefined) return;
+    const restored = await mountFeature(previous, snapshot, true);
+    if (!restored.ok)
+      reportDiagnostic(`feature ${previous.id} の表示復旧に失敗しました`);
+  };
+
+  const capturePreviousState = async (
+    feature: ApplicationFeatureRegistration | undefined,
+    handle: FeatureMountHandle | undefined,
+  ): Promise<Result<unknown, FeatureActivationError>> => {
+    if (feature === undefined || handle?.captureState === undefined)
+      return err({
+        kind: "activation_failed",
+        detail: "source feature does not provide an activation snapshot",
+      });
+    try {
+      const captured = await handle.captureState();
+      if (!captured || typeof captured !== "object" || !("ok" in captured))
+        return err({
+          kind: "activation_failed",
+          detail: "source feature returned an invalid activation snapshot",
+        });
+      if (!captured.ok) return err(captured.error);
+      return ok(captured.value);
+    } catch {
+      return err({
+        kind: "activation_failed",
+        detail: "source feature rejected activation snapshot",
+      });
+    }
+  };
+
+  const performActivation = async (
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>> => {
+    if (stopped)
+      return err({
+        kind: "activation_failed",
+        detail: "side panel host is stopped",
+      });
+    const prepared = createActivationRouter({
+      registry: options.registry,
+    }).prepare(intent);
+    if (!prepared.ok) return err(prepared.error);
+
+    if (selected === prepared.value.feature.id && mounted !== undefined)
+      return prepared.value.activate();
+
+    const previous = selected === null ? undefined : find(selected);
+    const snapshot =
+      previous === undefined
+        ? ok<unknown>(undefined)
+        : await capturePreviousState(previous, mounted);
+    if (!snapshot.ok) return snapshot;
+    const unmounted = await unmountCurrent();
+    if (!unmounted.ok)
+      return err({ kind: "mount_failed", featureId: intent.featureId });
+
+    const mountedTarget = await mountFeature(prepared.value.feature);
+    if (!mountedTarget.ok) {
+      // A failed stale cleanup retains the target handle; never remount source.
+      if (mounted === undefined)
+        await restorePrevious(previous, snapshot.value);
+      return mountedTarget;
+    }
+    const applied = await prepared.value.activate();
+    if (applied.ok) return applied;
+
+    const released = await unmountCurrent();
+    if (!released.ok) {
+      reportDiagnostic(
+        `activation失敗後のfeature ${intent.featureId} の表示終了に失敗しました`,
+      );
+      return err({ kind: "mount_failed", featureId: intent.featureId });
+    }
+    await restorePrevious(previous, snapshot.value);
+    return applied;
+  };
+
+  const enqueueActivation = (
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>> => {
+    const next = transition.then(
+      () => performActivation(intent),
+      () => performActivation(intent),
+    );
+    transition = next;
+    return next;
+  };
+
   const reconcileAvailability = async (): Promise<void> => {
     if (!started || stopped) return;
     if (selected === null) {
@@ -208,6 +353,9 @@ export function createSidePanelHost(
     },
     select(id) {
       return enqueueSelect(id);
+    },
+    activate(intent) {
+      return enqueueActivation(intent);
     },
     async stop() {
       if (stopped && unsubscribeRegistry === undefined && mounted === undefined)

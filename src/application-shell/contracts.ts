@@ -20,10 +20,14 @@ export interface FeatureMountContext {
   readonly container: HTMLElement;
   readonly operationPolicy: OperationPolicy;
   readonly reportError: (message: string) => void;
+  /** Opaque state captured from this same feature during activation rollback. */
+  readonly restoredState?: unknown;
 }
 
 export interface FeatureMountHandle {
   unmount(): Promise<void>;
+  /** Captures opaque feature-owned state before a cross-feature activation. */
+  captureState?(): Promise<Result<unknown, FeatureActivationError>>;
 }
 
 /** A feature-neutral request whose payload remains untrusted at the shell boundary. */
@@ -159,6 +163,9 @@ export type SelectionError = {
 export interface SidePanelHost {
   start(): Promise<Result<void, StartupError>>;
   select(id: FeatureId): Promise<Result<void, SelectionError>>;
+  activate(
+    intent: FeatureActivationIntent,
+  ): Promise<Result<void, FeatureActivationError>>;
   stop(): Promise<void>;
 }
 
