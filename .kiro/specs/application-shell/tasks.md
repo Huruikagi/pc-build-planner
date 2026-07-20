@@ -202,7 +202,7 @@
   - _Requirements: 3.1, 3.3, 3.4, 6.1, 6.3, 6.4_
   - _Boundary: ProductionWorkerComposition, RuntimeAdapters_
 
-- [ ] 5. Feature間の型付きactivationを追加する
+- [x] 5. Feature間の型付きactivationを追加する
 - [x] 5.1 Activation契約とroutingを実装する
   - feature ID、target、未信頼payloadを持つ汎用intentと、対象featureが検証・適用するregistration契約を追加する
   - 未登録、利用不可、未知target、不正payloadを表示変更前に判別し、feature固有payloadをshellが解釈しない境界を維持する

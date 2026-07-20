@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { FeatureId } from "../../src/application-shell/contracts.js";
 import type { FeatureContribution } from "../../src/application-shell/feature-contribution-catalog.js";
 import type { FoundationRuntimeContribution } from "../../src/persistence/public.js";
 import type { RuntimeMessageListener } from "../../src/runtime/foundation-message-target.js";
 import { createProductionServiceWorkerBootstrap } from "../../src/runtime/service-worker.js";
+
+test("runtime bootstrapはfoundationの具体initializerを直接importしない", async () => {
+  const source = await readFile("src/runtime/service-worker.ts", "utf8");
+
+  assert.doesNotMatch(source, /from\s+["']\.\.\/persistence\/public\.js["']/);
+  assert.doesNotMatch(
+    source,
+    /initializeProductionFoundationRuntimeContribution/,
+  );
+});
 
 test("production bootstrapでfoundation handlerとcatalog actionを順序どおり共存させ逆順cleanupする", async () => {
   const events: string[] = [];

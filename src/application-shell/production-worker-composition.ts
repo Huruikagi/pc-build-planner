@@ -4,6 +4,7 @@ import type {
   FoundationRuntimeInitializationError,
   WorkerMessageTarget,
 } from "../persistence/public.js";
+import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
 import type { WorkerRegistrationContext } from "./contracts.js";
 import type { FeatureContribution } from "./feature-contribution-catalog.js";
 import { getWorkerContributions } from "./feature-contribution-catalog.js";
@@ -32,6 +33,16 @@ export interface ProductionWorkerCompositionOptions {
   readonly catalog: readonly FeatureContribution[];
   readonly workerContext: WorkerRegistrationContext;
 }
+
+export type ProductionFoundationInitializer =
+  ProductionWorkerCompositionOptions["initializeFoundation"];
+
+export type DefaultProductionWorkerCompositionOptions = Omit<
+  ProductionWorkerCompositionOptions,
+  "initializeFoundation"
+> & {
+  readonly initializeFoundation?: ProductionFoundationInitializer;
+};
 
 const failure = (
   stage: ProductionWorkerStartupError["stage"],
@@ -172,3 +183,14 @@ export const createProductionWorkerComposition = (
     },
   };
 };
+
+/** Compose the shell-owned production defaults without exposing them to runtime entrypoints. */
+export const createDefaultProductionWorkerComposition = (
+  options: DefaultProductionWorkerCompositionOptions,
+): ProductionWorkerComposition =>
+  createProductionWorkerComposition({
+    ...options,
+    initializeFoundation:
+      options.initializeFoundation ??
+      initializeProductionFoundationRuntimeContribution,
+  });

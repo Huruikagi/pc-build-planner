@@ -2,11 +2,10 @@ import type { WorkerRegistrationContext } from "../application-shell/contracts.j
 import type { FeatureContribution } from "../application-shell/feature-contribution-catalog.js";
 import { featureContributionCatalog } from "../application-shell/feature-contribution-catalog.js";
 import {
-  createProductionWorkerComposition,
+  createDefaultProductionWorkerComposition,
+  type ProductionFoundationInitializer,
   type ProductionWorkerComposition,
-  type ProductionWorkerCompositionOptions,
 } from "../application-shell/production-worker-composition.js";
-import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
 import {
   createChromeFoundationMessageTarget,
   type FoundationMessageRuntime,
@@ -52,13 +51,13 @@ export const createChromeWorkerRegistrationContext = (
 export const createProductionServiceWorkerBootstrap = (
   runtime: FoundationMessageRuntime,
   catalog: readonly FeatureContribution[] = featureContributionCatalog,
-  initializeFoundation: ProductionWorkerCompositionOptions["initializeFoundation"] = initializeProductionFoundationRuntimeContribution,
+  initializeFoundation?: ProductionFoundationInitializer,
 ): ProductionWorkerComposition =>
-  createProductionWorkerComposition({
-    initializeFoundation,
+  createDefaultProductionWorkerComposition({
     foundationTarget: createChromeFoundationMessageTarget(runtime),
     catalog,
     workerContext: createChromeWorkerRegistrationContext(runtime),
+    ...(initializeFoundation ? { initializeFoundation } : {}),
   });
 
 const runtime = typeof chrome !== "undefined" ? chrome.runtime : undefined;
