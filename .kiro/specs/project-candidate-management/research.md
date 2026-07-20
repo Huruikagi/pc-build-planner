@@ -57,3 +57,9 @@
 - **Implications**: 候補管理はRepository直接writeと成功後のbuild reconcileを要求せず、`RootMutationCommand`の利用側になる。候補編集prefillは`public.ts`の型付きAPIとregistrationのruntime validatorを対にする。
 - **Decision**: `openCandidateEditor`はDOMやhostを直接操作せず`ShellNavigator`へintentを渡す。`CandidateDraft`は`sourceInfo`と`sourceSnapshot`を別フィールドとして正式公開する。
 - **Risk Mitigation**: activation payload、project存在、targetを適用前に検証し、失敗時は入力元と候補管理双方の既存stateを保持する。
+
+### 2026-07-20 Shell rollback snapshot契約への追従
+- **Sources Consulted**: `application-shell/requirements.md`、`application-shell/design.md`、activation lifecycle review findings
+- **Findings**: shellはfeature固有stateを復元できないため、cross-feature activationの入力元はopaque state snapshotを提供する必要がある。cleanup失敗時はshellがtarget handleを保持し、sourceを同時にmountしない。
+- **Decision**: 候補管理は選択、未保存draft、確認ダイアログ、表示エラーをfeature-local snapshotとしてcapture／restoreする。永続root、request、購読、React objectはsnapshot対象外とする。
+- **Implications**: state snapshotのruntime validationはcandidate managementが所有し、shellへ候補値やフォーム構造を漏らさない。restore不能時は保存済みデータを変えず初期表示へ退避する。

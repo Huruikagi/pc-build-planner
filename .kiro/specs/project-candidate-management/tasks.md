@@ -1,106 +1,106 @@
 # Implementation Plan
 
-- [ ] 1. application shellへの管理feature参加境界を整える
-  - `local-data-foundation` の公開ドメイン契約と、application shellのside panel host、React基盤、registration contract、contract test kitが利用可能であることを前提確認する
-  - feature内に`public.ts`、`registration.ts`、style入口の骨格を作り、共有manifest、side panel document、runtime入口、root barrelを変更しない
-  - 模擬registrationがshell contract test kitへ適合し、production buildにfeature-local moduleとstyleだけが取り込まれることを確認する
+- [ ] 1. 候補管理featureの参加境界を準備する
+- [ ] 1.1 shell登録と公開入口の骨格を実装する
+  - feature内だけに公開入口、registration、style入口を作り、共有runtime入口、HTML host、root barrelを変更しない。
+  - Foundation公開portとapplication shellのmount・operation policyを注入可能な依存として接続する。
+  - shell contract test kitで模擬registrationをmountでき、feature-local moduleだけが登録対象になることを確認する。
   - _Depends: application-shell 1.1, 1.2, 1.3, 1.4, 4.1_
   - _Requirements: 6.1, 6.2_
-  - _Boundary: CandidateFeatureEntry_
+  - _Boundary: CandidateFeatureRegistration_
 
-- [ ] 2. 管理ドメイン契約と業務サービスを実装する
-- [ ] 2.1 プロジェクト管理コマンドを実装する
-  - 作成、名前変更、削除をexpected revisionとrequest IDを持つFoundationの原子的root mutationへ接続する
-  - 空名を項目エラーとして拒否し、削除時は所属候補のカスケード結果を返す
-  - 有効な操作後に保存済みプロジェクトが返り、失敗時に既存ルートが維持される
+- [ ] 2. 管理契約と永続化連携を実装する
+- [ ] 2.1 管理コマンド・表示モデル・公開契約を定義する
+  - Project、CandidatePart、Foundationのcanonical Resultを再定義せず、管理入力、判別可能なエラー、候補照会・取り込み用作成の公開契約を整える。
+  - 後続featureはpublic入口だけから候補作成・照会へ到達でき、内部serviceへのdeep importを必要としない。
+  - _Requirements: 2.1, 2.2, 3.2, 6.3, 6.4, 6.5_
+  - _Boundary: CandidateManagementService, CandidateQuery_
+- [ ] 2.2 プロジェクトの作成・変更・削除を原子的mutationへ接続する
+  - 空名を入力エラーとして拒否し、作成、改名、削除をrequest IDとexpected revision付きの単一root mutationで実行する。
+  - 成功時は保存済みprojectを返し、競合・maintenance・保存失敗時は既存rootを維持することをサービステストで確認する。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+  - _Boundary: CandidateManagementService_
+- [ ] 2.3 候補の作成・更新・削除とカテゴリ変更規則を実装する
+  - 商品名以外の欠損と未分類を許容し、候補を単一projectへ直接所属させる。
+  - カテゴリ変更で共通項目、sourceInfo、sourceSnapshotを保持し、カテゴリ固有の確認属性だけを明示入力から再構築する。
+  - 削除・カテゴリ変更はFoundationの同一mutationへ委譲し、CurrentBuildを成功後の別writeで更新しない。
+  - 有効な候補保存、項目エラー、削除後の他候補保持をサービステストで確認する。
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.2, 4.3, 4.4, 4.5, 4.6, 5.2, 5.4_
+  - _Boundary: CandidateManagementService_
+- [ ] 2.4 プロジェクト・カテゴリ別の候補照会を公開する
+  - project一覧、指定projectとcategoryだけを返す候補一覧、未分類を除外する構成管理向け一覧を実装する。
+  - 架空データでproject一覧、全カテゴリ、未分類、project境界、構成利用可能候補を区別できることを確認する。
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.3, 6.4, 6.5_
+  - _Boundary: CandidateQuery_
 
-- [ ] 2.2 候補の作成・編集コマンドを実装する
-  - 商品名以外の欠損を許容し、候補を単一プロジェクトへ所属させる
-  - カテゴリ変更で共通項目、`sourceInfo`、元表記を保持し、新カテゴリ属性だけを明示入力から構築する
-  - カテゴリ変更時のCurrentBuild参照修復をFoundationの同一commitへ委譲し、成功後の別writeを行わない
-  - 未分類を含む有効な候補が保存され、不正項目はpath付きエラーになる
-  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.2, 4.3, 4.4, 4.5, 4.6_
-
-- [ ] 2.3 プロジェクト・カテゴリ別の候補照会契約を実装する
-  - 指定プロジェクト以外の候補を返さず、カテゴリ指定時は該当候補だけを返す
-  - 取り込み向け作成契約と、未分類を除く構成管理向け参照契約を公開する
-  - 架空データでプロジェクト別、全カテゴリ、未分類、構成利用可能一覧が確認できる
-  - _Requirements: 3.1, 3.2, 3.3, 3.5, 6.3, 6.4, 6.5_
-
-- [ ] 2.4 候補削除コマンドを実装する
-  - IDで対象候補だけを原子的root mutationへ渡し、存在しない対象、revision競合、maintenance、保存失敗を判別する
-  - 削除成功時はFoundationがCurrentBuild参照を同じcommitで修復し、同じプロジェクトの他候補が保持される
-  - _Requirements: 5.2, 5.4_
-
-- [ ] 2.5 候補編集activation契約を実装する
-  - `sourceInfo`と元表記を分離した型付きprefillを公開し、shellの汎用intentへ変換する
-  - registration側で未知target、未信頼payload、存在しないprojectを適用前に拒否し、正常時だけ編集draftをManagementStateへ設定する
-  - 完了時、商品取り込みfixtureから詳細編集を一度開け、不正activationでは既存画面とdraftが変わらない
-  - _Depends: application-shell 5.1, 5.2_
-  - _Requirements: 4.1, 4.3, 4.6, 6.3, 6.6_
-  - _Boundary: CandidateActivation, CandidateManagementPublicApi_
-
-- [ ] 3. 管理画面の状態と表示を実装する
-- [ ] 3.1 (P) 読込・選択・編集状態を実装する
-  - 永続スナップショットと編集ドラフトを分離し、操作中の二重送信を抑止する
-  - 保存失敗時は一覧と入力を維持し、破損・容量・非対応エラーを識別可能にする
-  - 再読込で保存済み選択肢と確認値が復元される
-  - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5_
-  - _Requirements: 1.5, 2.5, 4.2, 4.5, 5.4, 6.1, 6.2_
+- [ ] 3. 管理画面の状態とrollback snapshotを実装する
+- [ ] 3.1 読込・選択・編集・削除確認の状態遷移を実装する
+  - 永続rootから公開query経由でprojectと候補一覧を読み込み、編集draft、削除確認、表示エラーを永続状態と分離する。
+  - 二重送信を抑止し、保存・削除失敗時に一覧と入力を保持して再試行可能な表示へ遷移する。
+  - 破損・非対応・容量不足・利用不能の初期読込時は既存保存データを上書きせず、識別可能な案内と更新操作が無効な状態へ遷移する。
+  - 再読込時の保存済みデータ復元と読込不能時の更新停止を状態テストで確認する。
+  - _Depends: 2.2, 2.3, 2.4_
+  - _Requirements: 1.5, 2.5, 4.2, 4.5, 5.3, 5.4, 6.1, 6.2_
   - _Boundary: ManagementState_
+- [ ] 3.2 管理画面stateのopaque snapshot codecを実装する
+  - 選択、検証済みdraft、編集対象、削除確認、識別可能な表示エラーだけをversion付きJSON値としてcaptureし、永続root、保存中request、購読、React objectを除外する。
+  - unknown入力、未知version、存在しないproject/candidate、無効draftを判別可能なrestore errorとして拒否する。
+  - capture後にtarget失敗を模擬してrestoreすると同じ未保存画面stateへ戻り、不正snapshotでは保存済み候補を変更しないことをテストで確認する。
+  - _Depends: 3.1_
+  - _Requirements: 1.5, 2.5, 4.5, 5.3, 5.4, 6.1, 6.2_
+  - _Boundary: ManagementStateSnapshotCodec_
 
-- [ ] 3.2 (P) プロジェクト・カテゴリ別React一覧を実装する
-  - framework非依存のManagementStateをpropsとして受け、プロジェクト選択、全カテゴリタブ、候補一覧、未分類一覧をReact componentで描画する
-  - 表示文字列は通常のJSX childとして扱い、`dangerouslySetInnerHTML`と`innerHTML`を使用しない
-  - 欠損項目を「未入力」として表示し、異なるプロジェクトの候補を混在させない
-  - 利用者がプロジェクトとカテゴリを切り替えると該当候補だけが画面に残る
-  - _Depends: 2.3_
+- [ ] 4. 管理画面を実装する
+- [ ] 4.1 プロジェクト・カテゴリ・候補一覧を描画する
+  - framework非依存のManagementStateを受け、project選択、全カテゴリ、未分類を含む候補一覧と欠損の「未入力」表示を描画する。
+  - 利用者がprojectまたはcategoryを切り替えると該当候補だけが残り、外部文字列は通常のJSX childとして表示されることをDOM testで確認する。
+  - _Depends: 3.1_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: ManagementView_
-
-- [ ] 3.3 プロジェクト編集Reactフォームを実装する
-  - プロジェクトの作成と名前変更を同じ名前規則で扱い、空名エラーを対象入力へ関連付ける
-  - 作成・変更成功時はプロジェクト一覧へ反映し、失敗時は入力内容を保持する
-  - 新規プロジェクト作成と既存名変更が画面から完了する
-  - _Depends: 3.1, 3.2_
-  - _Requirements: 1.1, 1.2, 1.3, 1.5_
-
-- [ ] 3.4 候補編集Reactフォームを実装する
-  - 共通項目、カテゴリ属性、読み取り専用の元表記を区別して表示する
-  - カテゴリ変更で適切な属性入力へ切り替え、項目エラーを対象入力へ関連付ける
-  - 作成・更新成功時は一覧へ反映し、失敗時は入力内容を保持する
-  - _Depends: 3.1, 3.2_
-  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
-
-- [ ] 3.5 削除確認フローを実装する
-  - 対象名と影響範囲を示し、確認時だけ削除コマンドを実行する
-  - 取消時は状態が変わらず、失敗時は対象を一覧へ残す
-  - プロジェクト削除と候補削除の両方で誤操作防止が確認できる
-  - _Requirements: 1.4, 5.1, 5.2, 5.3, 5.4_
-
-- [ ] 3.6 React root adapterとfeature registrationを実装する
-  - `view.tsx`をframework非依存のManagementState/Service portへ接続し、`public.ts`とregistration moduleをfeature内で所有する
-  - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
-  - shell contract test kitで登録、mount、activation、operation policy、cleanupが適合することを確認できる
-  - _Depends: application-shell 1.1, 1.3, 1.4, 5.3; local tasks 2.5, 3.1, 3.2, 3.3, 3.4, 3.5_
-  - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
-  - _Boundary: CandidateFeatureRegistration, ReactRootAdapter_
-
-- [ ] 4. 境界統合と受け入れフローを検証する
-- [ ] 4.1 管理UIとFoundation query・mutation portを統合する
-  - application shellがfeatureの`registration.ts`と`public.ts`をcompositionし、共有runtime入口、HTML host、root barrelをfeature側から編集しない
-  - 読取は公開query、更新は原子的root mutationを経由し、Storage API直接利用がないことを確認する
-  - 候補削除・カテゴリ変更でCurrentBuild修復を成功後の別writeとして呼ばず、Foundationの同一commitに委譲する
-  - 保存成功時だけ画面スナップショットを更新し、再起動後も内容を復元する
-  - プロジェクト作成から候補登録、分類補正、編集、削除まで一連の操作が完了する
-  - _Depends: application-shell 4.1; local task 3.6_
-  - _Requirements: 1.1, 1.2, 1.4, 2.1, 2.4, 3.1, 3.5, 4.2, 4.3, 4.4, 5.2, 6.1, 6.2_
-
-- [ ] 4.2 後続機能向け公開契約と回帰テストを完成する
-  - 取り込み側が欠損を含む候補を単一プロジェクトへ作成できることを契約テストで示す
-  - 構成管理側の照会が分類済み候補だけを返し、カテゴリ変更後の値を参照できることを示す
-  - 商品取り込み側が`sourceInfo`と元表記を保持したprefillで詳細編集を開き、失敗時に入力元stateを保持できることを示す
-  - 実サイトデータを使わず全カテゴリ、欠損、保存失敗、削除取消のテストが通る
+- [ ] 4.2 プロジェクト編集フォームを実装する
+  - 作成・改名に共通の名前規則と項目エラーを表示し、成功後の一覧反映と失敗時の入力保持を行う。
+  - 空名の保存拒否と、project作成・改名が画面から完了することをDOM testで確認する。
   - _Depends: 4.1_
-  - _Requirements: 2.1, 2.2, 3.2, 3.4, 4.3, 4.6, 5.3, 6.3, 6.4, 6.5, 6.6_
+  - _Requirements: 1.1, 1.2, 1.3, 1.5_
+  - _Boundary: ManagementView_
+- [ ] 4.3 候補編集フォームを実装する
+  - 共通項目、現在カテゴリの正規化属性、読み取り専用のsourceSnapshotを分け、カテゴリ変更後に新カテゴリ属性を編集可能にする。
+  - 有効な作成・更新が一覧へ反映し、無効入力と保存失敗ではdraftが画面に残ることをDOM testで確認する。
+  - _Depends: 4.1_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - _Boundary: ManagementView_
+- [ ] 4.4 削除確認フローを実装する
+  - projectと候補の対象・影響範囲を識別できる確認を表示し、確認時だけ削除を実行する。
+  - 取消は永続状態を変更せず、失敗時は対象を一覧へ残すことをDOM testで確認する。
+  - _Depends: 4.2, 4.3_
+  - _Requirements: 1.4, 5.1, 5.2, 5.3, 5.4_
+  - _Boundary: ManagementView_
+
+- [ ] 5. activationとshell lifecycleへ統合する
+- [ ] 5.1 候補編集activationの公開APIと受信検証を実装する
+  - 型付きprefillからFeatureActivationIntentを構築し、候補管理targetのpayloadをunknownから再検証する。
+  - 未知target、不正payload、存在しないprojectでは既存画面・draftを変更せず、正常prefillでは指定projectの詳細編集を一度だけ開くことをcontract testで確認する。
+  - _Depends: 2.1, 2.4, 3.1; application-shell 5.1_
+  - _Requirements: 4.1, 4.3, 4.6, 6.6_
+  - _Boundary: CandidateActivation, CandidateManagementPublicApi_
+- [ ] 5.2 React rootとsnapshot-aware registrationを実装する
+  - FeatureMountContextへReact rootをmountし、停止・切替時にrootと購読を一度だけcleanupする。
+  - shellが渡す復元候補をfeature内codecで検証して成功時だけstateへ適用し、mounted handleはopaque JSON snapshotだけを返す。
+  - target mount・activation失敗後に未保存の候補管理画面stateがrestoreされ、restore不能時は初期表示と識別可能なエラーになることをshell contract integrationで確認する。
+  - _Depends: 3.2, 4.4, 5.1; application-shell 5.2, 5.3_
+  - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
+  - _Boundary: CandidateFeatureRegistration, ManagementStateSnapshotCodec_
+
+- [ ] 6. 境界統合と受け入れ回帰を検証する
+- [ ] 6.1 Foundation・shell・UIの管理フローを統合する
+  - feature側はStorage API、共有runtime入口、HTML host、root barrelへ直接依存せず、公開queryと原子的mutationだけを使用する。
+  - project作成から候補登録、分類補正、編集、削除、再読込までを架空データで完了できることを統合テストで確認する。
+  - _Depends: 5.2; application-shell 4.1_
+  - _Requirements: 1.1, 1.2, 1.4, 2.1, 2.4, 3.1, 3.5, 4.2, 4.3, 4.4, 5.2, 6.1, 6.2_
+  - _Boundary: CandidateFeatureRegistration, CandidateManagementService, ManagementView_
+- [ ] 6.2 下流feature向け公開契約と失敗回帰を検証する
+  - 取り込み側の欠損候補作成、構成管理側の分類済み候補照会、prefillによる詳細編集を公開入口経由で確認する。
+  - 破損・非対応・容量不足・利用不能時の更新停止、snapshot不正、保存失敗、削除取消、同一feature再activation、target cleanup失敗を架空fixtureで回帰し、実サイトデータをfixtureへ含めない。
+  - _Depends: 6.1_
+  - _Requirements: 2.1, 2.2, 3.2, 3.4, 4.3, 4.6, 5.3, 6.2, 6.3, 6.4, 6.5, 6.6_
+  - _Boundary: CandidateManagementPublicApi, CandidateFeatureRegistration_

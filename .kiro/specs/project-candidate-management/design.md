@@ -20,12 +20,14 @@
 - プロジェクト別・カテゴリ別の候補照会と分類済み候補参照契約
 - サイドパネルのプロジェクト・候補管理UI、確認、エラー表示
 - `CandidateDraft`、候補編集prefill、候補管理activationの検証とstate適用
+- feature切替rollback向けの管理画面state snapshotとrestore
 
 ### Out of Boundary
 - 永続化、スキーマ移行、容量判定の実装
 - DOM抽出、現在構成の選択・数量、互換性評価
 - 元表記から確認値を推測する処理
 - navigation lifecycle、候補変更時のCurrentBuild参照修復、root全体のcommit
+- snapshotの永続化、snapshot内容のshell側解釈、他featureのstate復元
 
 ### Allowed Dependencies
 - `local-data-foundation` のDomainModel、Result、`FoundationDataPort`、原子的root mutation契約
@@ -33,12 +35,14 @@
 - application shellが提供するReact 19系/React DOM基盤を利用し、このfeature独自のUI runtime依存は追加しない
 - application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 - application shellの`ShellNavigator`、`FeatureActivationIntent`、activation adapter契約
+- application shellのopaque state snapshot／restore lifecycle契約
 
 ### Revalidation Triggers
 - `Project`、`CandidatePart`、`SourceInfo`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
 - 未分類候補の公開規則または候補の所属規則変更
 - サイドパネル入口、保存責任、依存方向の変更
 - shell activation envelope、候補変更時の参照修復policy、revision競合規則の変更
+- FeatureMountContextの復元state、capture／restore失敗、activation rollback規則の変更
 
 ## Architecture
 
@@ -78,6 +82,7 @@ src/features/candidate-management/contracts.ts # コマンド、表示用モデ�
 src/features/candidate-management/public.ts    # 後続feature向け作成・照会契約の唯一の公開入口
 src/features/candidate-management/registration.ts # shellへ渡すfeature registrationと依存組立
 src/features/candidate-management/activation.ts # 候補編集intentの検証とManagementStateへの適用
+src/features/candidate-management/state-snapshot.ts # 管理UI stateのopaque snapshot検証・capture・restore
 src/features/candidate-management/service.ts   # CRUD、分類変更、下流照会
 src/features/candidate-management/state.ts     # 読込、フォーム、保存、エラー状態
 src/features/candidate-management/view.tsx     # 一覧、フォーム、確認のReact component
@@ -88,10 +93,12 @@ tests/features/candidate-management/state.test.ts
 tests/features/candidate-management/view.test.ts
 tests/features/candidate-management/registration.test.ts
 tests/features/candidate-management/activation.test.ts
+tests/features/candidate-management/state-snapshot.test.ts
 ```
 
 ### Modified Files
 - 共有runtime入口、`side-panel.html`、root `src/index.ts`は変更しない。application shellが`registration.ts`と`public.ts`をcompositionする。
+- `state-snapshot.ts`とregistrationのsnapshot接続は、application shellがcapture／restoreを含むmount contractを確定してから実装する。このspecの既存`tasks.md`はその前提を持たないため、設計承認後に再生成する。
 
 ## System Flows
 
@@ -132,9 +139,9 @@ sequenceDiagram
 | CandidateManagementService | Feature | 管理コマンドと規則 | 1.1–2.5, 4.2–4.6, 5.2, 6.2–6.5 | FoundationDataPort P0 | Service |
 | CandidateQuery | Feature | 絞込済み候補参照 | 3.1–3.5, 6.3–6.5 | FoundationDataPort P0 | Service |
 | CandidateActivation | Feature adapter | 候補編集prefillの検証とstate適用 | 4.1–4.6, 6.6 | ShellNavigator P0、ManagementState P0 | Service |
-| ManagementState | UI state | 編集と失敗回復 | 1.3–1.5, 2.3–2.5, 4.5, 5.1–5.4, 6.1–6.2 | Service P0 | State |
+| ManagementState | UI state | 編集、失敗回復、activation rollback state復元 | 1.3–1.5, 2.3–2.5, 4.5, 5.1–5.4, 6.1–6.2 | Service P0、FeatureMountContext P1 | State |
 | ManagementView | UI | 一覧、フォーム、確認 | 1.1–5.4 | State P0 | State |
-| CandidateFeatureRegistration | UI adapter | state/view/public APIをshell登録契約へ接続 | 1.1–6.5 | ApplicationFeatureRegistration P0、ManagementView P0 | Service |
+| CandidateFeatureRegistration | UI adapter | state/view/public APIとsnapshot codecをshell登録契約へ接続 | 1.1–6.6 | ApplicationFeatureRegistration P0、ManagementView P0、ManagementStateSnapshotCodec P1 | Service, State |
 
 ### Feature Layer
 
@@ -200,6 +207,44 @@ interface CandidateManagementPublicApi {
 
 永続スナップショット、選択project/category、編集ドラフト、確認ダイアログ、操作状態、表示エラーを保持する。同一操作の二重送信を抑止し、失敗時はドラフトを保持する。
 
+feature registrationのmounted handleは、未保存の管理画面stateをopaque snapshotとしてcaptureできる。snapshotは選択project/category、編集対象、検証済みdraft、削除確認、表示エラーを含み、永続rootや保存中request、購読handle、React objectを含まない。rollbackによる再mount時は`FeatureMountContext`から受け取った`unknown`をfeature内で検証してから復元する。不正snapshotまたはrestore失敗では既存永続状態を変更せず、読み込み可能な初期画面と識別可能なエラーを表示する。shellはsnapshotの構造・候補値を解釈しない。
+
+```typescript
+interface ManagementStateSnapshot {
+  readonly version: 1;
+  readonly selectedProjectId: ProjectId | null;
+  readonly selectedCategory: PartCategory | null;
+  readonly editor: CandidateEditorSnapshot | null;
+  readonly deletion: DeletionConfirmationSnapshot | null;
+  readonly displayError: ManagementDisplayError | null;
+}
+
+type CandidateEditorSnapshot =
+  | { readonly mode: "create"; readonly projectId: ProjectId; readonly draft: CandidateDraft }
+  | { readonly mode: "edit"; readonly projectId: ProjectId; readonly candidateId: CandidatePartId; readonly draft: CandidateDraft };
+
+type DeletionConfirmationSnapshot =
+  | { readonly kind: "project"; readonly projectId: ProjectId }
+  | { readonly kind: "candidate"; readonly candidateId: CandidatePartId };
+
+interface ManagementDisplayError {
+  readonly code: "validation" | "not-found" | "conflict" | "maintenance" | "snapshot-restore-failed";
+}
+
+type ManagementSnapshotError =
+  | { readonly kind: "invalid-shape" }
+  | { readonly kind: "unsupported-version" }
+  | { readonly kind: "invalid-reference" }
+  | { readonly kind: "invalid-draft" };
+
+interface ManagementStateSnapshotCodec {
+  capture(state: ManagementState): ManagementStateSnapshot;
+  restore(input: unknown): Result<ManagementStateSnapshot, ManagementSnapshotError>;
+}
+```
+
+`CandidateFeatureRegistration`はmount時にshellが提供する復元候補をcodecへ渡し、成功時だけ`ManagementState`へ適用する。mounted handleは同じcodecでcaptureしたJSON直列化可能な値だけをshellへ返す。snapshot versionが未知、projectまたはcandidate IDが現在の永続rootに存在しない、draftが検証不能である場合は復元を拒否し、初期表示へ退避する。保存操作・subscription・React rootは新規mountで作成し直す。
+
 #### ManagementView
 
 プロジェクトナビゲーション、カテゴリタブ、候補一覧、編集フォーム、削除確認を描画する。欠損は「未入力」、元表記は読み取り専用の別領域として表示する。
@@ -223,6 +268,7 @@ interface CandidateManagementPublicApi {
 - Runtime integration: manifestとside panel起動、公開契約がFoundationDataPortを経由することを検証する。
 - Contract integration: 候補削除・カテゴリ変更が単一mutationとなり、Foundationの参照修復後に一度だけcommitされることを検証する。
 - Activation integration: 正常prefill、未知target、不正payload、存在しないproject、同一feature再activation、失敗時の入力元状態保持を検証する。
+- State snapshot integration: 未保存draft・選択・確認ダイアログをcaptureし、target mount／activation失敗後のrestoreで同じ管理画面stateが復元されること、不正snapshotが保存や候補一覧を変更しないことを検証する。
 
 ## Security & Performance
 
