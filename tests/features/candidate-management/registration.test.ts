@@ -5,12 +5,18 @@ import type {
   Availability,
   FeatureMountHandle,
 } from "../../../src/application-shell/contracts.js";
+import type {
+  CandidateQuery,
+  CaptureCandidatePort,
+} from "../../../src/features/candidate-management/contracts.js";
+import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
 import type { FoundationDataPort } from "../../../src/persistence/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
-import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
 
 test("候補管理registrationはshell契約へmount依存とoperation policyを注入する", async () => {
   const data = {} as FoundationDataPort;
+  const query = {} as CandidateQuery;
+  const capture = {} as CaptureCandidatePort;
   const observed: {
     data?: FoundationDataPort;
     readAllowed?: boolean;
@@ -19,6 +25,8 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
   const availabilityListeners = new Set<(value: Availability) => void>();
   const registration = createCandidateFeatureRegistration({
     data,
+    query,
+    capture,
     subscribeAvailability(listener) {
       availabilityListeners.add(listener);
       return () => availabilityListeners.delete(listener);
@@ -37,7 +45,8 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
     },
   });
 
-  assert.deepEqual(registration.publicApi, {});
+  assert.equal(registration.publicApi.query, query);
+  assert.equal(registration.publicApi.capture, capture);
   const violations = await collectFeatureContractViolations(registration, {
     emitAvailability: () => {
       for (const listener of availabilityListeners)

@@ -7,9 +7,10 @@ import type {
   OperationPolicy,
 } from "../../application-shell/public.js";
 import type { FoundationDataPort } from "../../persistence/public.js";
+import type { CandidateQuery, CaptureCandidatePort } from "./contracts.js";
 import {
-  createCandidateManagementPublicApi,
   type CandidateManagementPublicApi,
+  createCandidateManagementPublicApi,
 } from "./public.js";
 
 const candidateManagementFeatureId = "candidate-management" as FeatureId;
@@ -28,6 +29,8 @@ export type CandidateManagementMount = (
 
 export interface CandidateFeatureRegistrationDependencies {
   readonly data: FoundationDataPort;
+  readonly query: CandidateQuery;
+  readonly capture: CaptureCandidatePort;
   readonly mount?: CandidateManagementMount;
   readonly getAvailability?: () => Availability;
   readonly subscribeAvailability?: (
@@ -59,8 +62,13 @@ export const createCandidateFeatureRegistration = (
   const mount = dependencies.mount ?? mountCandidateManagementShell;
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
-  const subscribeAvailability = dependencies.subscribeAvailability ?? (() => () => {});
-  const publicApi = createCandidateManagementPublicApi({ data: dependencies.data });
+  const subscribeAvailability =
+    dependencies.subscribeAvailability ?? (() => () => {});
+  const publicApi = createCandidateManagementPublicApi({
+    data: dependencies.data,
+    query: dependencies.query,
+    capture: dependencies.capture,
+  });
 
   return {
     id: candidateManagementFeatureId,

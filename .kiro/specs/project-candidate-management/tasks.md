@@ -10,7 +10,7 @@
   - _Boundary: CandidateFeatureRegistration_
 
 - [ ] 2. 管理契約と永続化連携を実装する
-- [ ] 2.1 管理コマンド・表示モデル・公開契約を定義する
+- [x] 2.1 管理コマンド・表示モデル・公開契約を定義する
   - Project、CandidatePart、Foundationのcanonical Resultを再定義せず、管理入力、判別可能なエラー、候補照会・取り込み用作成の公開契約を整える。
   - 後続featureはpublic入口だけから候補作成・照会へ到達でき、内部serviceへのdeep importを必要としない。
   - _Requirements: 2.1, 2.2, 3.2, 6.3, 6.4, 6.5_
