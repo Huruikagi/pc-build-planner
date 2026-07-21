@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 候補管理featureの参加境界を準備する
-- [ ] 1.1 shell登録と公開入口の骨格を実装する
+- [x] 1.1 shell登録と公開入口の骨格を実装する
   - feature内だけに公開入口、registration、style入口を作り、共有runtime入口、HTML host、root barrelを変更しない。
   - Foundation公開portとapplication shellのmount・operation policyを注入可能な依存として接続する。
   - shell contract test kitで模擬registrationをmountでき、feature-local moduleだけが登録対象になることを確認する。

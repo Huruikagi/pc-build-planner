@@ -1,0 +1,5 @@
+.candidate-management {
+  display: grid;
+  min-height: 100%;
+  padding: 1rem;
+}
