@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 候補管理featureの参加境界を準備する
-- [ ] 1.1 shell登録と公開入口の骨格を実装する
+- [x] 1.1 shell登録と公開入口の骨格を実装する
   - feature内だけに公開入口、registration、style入口を作り、共有runtime入口、HTML host、root barrelを変更しない。
   - Foundation公開portとapplication shellのmount・operation policyを注入可能な依存として接続する。
   - shell contract test kitで模擬registrationをmountでき、feature-local moduleだけが登録対象になることを確認する。
@@ -10,7 +10,7 @@
   - _Boundary: CandidateFeatureRegistration_
 
 - [ ] 2. 管理契約と永続化連携を実装する
-- [ ] 2.1 管理コマンド・表示モデル・公開契約を定義する
+- [x] 2.1 管理コマンド・表示モデル・公開契約を定義する
   - Project、CandidatePart、Foundationのcanonical Resultを再定義せず、管理入力、判別可能なエラー、候補照会・取り込み用作成の公開契約を整える。
   - 後続featureはpublic入口だけから候補作成・照会へ到達でき、内部serviceへのdeep importを必要としない。
   - _Requirements: 2.1, 2.2, 3.2, 6.3, 6.4, 6.5_
