@@ -15,7 +15,7 @@
   - 後続featureはpublic入口だけから候補作成・照会へ到達でき、内部serviceへのdeep importを必要としない。
   - _Requirements: 2.1, 2.2, 3.2, 6.3, 6.4, 6.5_
   - _Boundary: CandidateManagementService, CandidateQuery_
-- [ ] 2.2 プロジェクトの作成・変更・削除を原子的mutationへ接続する
+- [x] 2.2 プロジェクトの作成・変更・削除を原子的mutationへ接続する
   - 空名を入力エラーとして拒否し、作成、改名、削除をrequest IDとexpected revision付きの単一root mutationで実行する。
   - 成功時は保存済みprojectを返し、競合・maintenance・保存失敗時は既存rootを維持することをサービステストで確認する。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
@@ -104,3 +104,7 @@
   - _Depends: 6.1_
   - _Requirements: 2.1, 2.2, 3.2, 3.4, 4.3, 4.6, 5.3, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: CandidateManagementPublicApi, CandidateFeatureRegistration_
+
+## Implementation Notes
+
+- project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。
