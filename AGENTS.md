@@ -79,6 +79,10 @@ Skills with "Parallel Research" sections list independent work items that benefi
 - Keep steering current and verify alignment with `$kiro-spec-status`
 - Follow the user's instructions precisely, and within that scope act autonomously: gather the necessary context and complete the requested work end-to-end in this run, asking questions only when essential information is missing or the instructions are critically ambiguous.
 
+## Git Workflow
+- 実装変更は `main` ブランチへコミットし、完了後に `origin/main` へ push する。
+- push 前に対象ファイルとテスト結果を確認し、未関係の変更はコミットへ含めない。
+
 ## Steering Configuration
 - Load entire `.kiro/steering/` as project memory
 - Default files: `product.md`, `tech.md`, `structure.md`
