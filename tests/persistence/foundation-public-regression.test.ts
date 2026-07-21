@@ -210,6 +210,37 @@ test("公開facadeでproject CRUDとcandidate削除時の参照修復を一貫�
   );
 });
 
+test("公開facadeでproject削除時に所属データを同じrevisionで除去する", async () => {
+  const initial = buildFoundationRoot();
+  const projectId = initial.projects[0].id;
+  const { port } = createHarness({ stored: initial });
+
+  const deleted = await port.mutate({
+    requestId: requestId(90),
+    expectedRevision: initial.revision,
+    operation: { kind: "delete", entity: "project", id: projectId },
+  });
+
+  assert.equal(deleted.ok, true);
+  assert.deepEqual(
+    await port.query((root) => ({
+      projects: root.projects,
+      candidateParts: root.candidateParts,
+      currentBuilds: root.currentBuilds,
+      revision: root.revision,
+    })),
+    {
+      ok: true,
+      value: {
+        projects: [],
+        candidateParts: [],
+        currentBuilds: [],
+        revision: initial.revision + 1,
+      },
+    },
+  );
+});
+
 test("公開facadeが破損・容量不足・access拒否・request conflictをtyped failureにする", async () => {
   const corrupt = buildFoundationRoot();
   corrupt.currentBuilds[0].items[0].quantity = 0;

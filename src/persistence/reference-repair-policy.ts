@@ -1,4 +1,8 @@
-import type { CandidatePartId, LocalDataRoot } from "../domain/model.js";
+import type {
+  CandidatePartId,
+  LocalDataRoot,
+  ProjectId,
+} from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 
 export type RootChange =
@@ -9,6 +13,10 @@ export type RootChange =
   | {
       readonly kind: "candidate-category-changed";
       readonly candidatePartId: CandidatePartId;
+    }
+  | {
+      readonly kind: "project-deleted";
+      readonly projectId: ProjectId;
     }
   | { readonly kind: "unrelated" };
 
@@ -28,6 +36,18 @@ export interface ReferenceRepairPolicy {
 export const referenceRepairPolicy: ReferenceRepairPolicy = {
   repair(_before, proposed, change) {
     if (change.kind === "unrelated") return { ok: true, value: proposed };
+    if (change.kind === "project-deleted") {
+      const candidateParts = proposed.candidateParts.filter(
+        (candidate) => candidate.projectId !== change.projectId,
+      );
+      const currentBuilds = proposed.currentBuilds.filter(
+        (build) => build.projectId !== change.projectId,
+      );
+      return {
+        ok: true,
+        value: { ...proposed, candidateParts, currentBuilds },
+      };
+    }
 
     const currentBuilds = proposed.currentBuilds.map((build) => {
       const items = build.items.filter(

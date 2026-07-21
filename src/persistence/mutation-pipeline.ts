@@ -110,6 +110,8 @@ const rootChangeFor = (
   snapshot: LocalDataRoot,
   operation: RootOperation,
 ): RootChange => {
+  if (operation.entity === "project" && operation.kind === "delete")
+    return { kind: "project-deleted", projectId: operation.id };
   if (operation.entity !== "candidatePart") return { kind: "unrelated" };
   if (operation.kind === "delete")
     return { kind: "candidate-deleted", candidatePartId: operation.id };

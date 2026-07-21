@@ -276,7 +276,17 @@
   - _Requirements: 1.1, 1.2, 1.3, 3.1, 5.4, 5.5, 6.1, 6.3, 7.8, 8.1, 8.2, 8.3_
   - _Boundary: Production Runtime Public Validation_
 
+- [x] 6.9 project削除の構造的カスケードをroot mutationへ統合する
+  - project削除を参照修復changeとして識別し、同じprojectIdの候補パーツと現在構成をcommit候補から除去する
+  - 別projectのproject・候補・現在構成を保持し、削除後rootを同じpipelineで検証して一回だけcommitする
+  - pure policy、MutationPipeline、FoundationDataPort回帰でカスケード結果、既存root保持、単一revision増分を確認できることを完了条件とする
+  - _Depends: 6.2_
+  - _Requirements: 3.1, 3.2, 3.5, 3.9, 8.2_
+  - _Boundary: ReferenceRepairPolicy, MutationPipeline, FoundationDataPort Regression_
+
 ## Implementation Notes
+
+- project削除はReferenceRepairPolicyで同じprojectIdのcandidateとCurrentBuildを除去し、MutationPipelineの全体検証と単一commitへ閉じる。
 
 - production公開factoryはplatform primitiveをconsumerから受け取らず、foundation内部でglobal解決と固定policyを完了してから非公開DI seamへ委譲する。
 

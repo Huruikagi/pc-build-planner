@@ -120,6 +120,23 @@ test("candidate削除と参照修復を中間不整合なしの一回のcommit�
   assert.deepEqual(writes[0], stored);
 });
 
+test("project削除と所属データのカスケードを一回のcommitにする", async () => {
+  const { storage, writes, mutate } = await harness();
+  const result = await mutate({
+    expectedRevision: 0,
+    operation: { kind: "delete", entity: "project", id: ids.project },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.revision, 1);
+  const stored = (await storage.readRoot()).value;
+  assert.deepEqual(stored.projects, []);
+  assert.deepEqual(stored.candidateParts, []);
+  assert.deepEqual(stored.currentBuilds, []);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0], stored);
+});
+
 test("revision競合、quota超過、storage失敗をtyped failureにして旧rootを保持する", async () => {
   const operation = {
     kind: "create",

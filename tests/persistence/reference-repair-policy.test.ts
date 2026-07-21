@@ -8,9 +8,12 @@ import { referenceRepairPolicy } from "../../src/persistence/reference-repair-po
 
 const ids = {
   project: "10000000-0000-4000-8000-000000000001",
+  otherProject: "10000000-0000-4000-8000-000000000002",
   cpu: "20000000-0000-4000-8000-000000000001",
   gpu: "20000000-0000-4000-8000-000000000002",
+  otherCandidate: "20000000-0000-4000-8000-000000000003",
   build: "30000000-0000-4000-8000-000000000001",
+  otherBuild: "30000000-0000-4000-8000-000000000002",
 };
 const timestamp = "2026-07-18T00:00:00Z";
 const candidate = (id, category) => ({
@@ -89,6 +92,49 @@ test("カテゴリ変更で対象参照だけを除去し無関係な候補を�
   assert.deepEqual(result.value.currentBuilds[0].items, [
     { candidatePartId: ids.gpu, quantity: 2 },
   ]);
+  assert.equal(schemaValidator.validateRoot(result.value).ok, true);
+});
+
+test("project削除で所属candidateとCurrentBuildだけを除去する", () => {
+  const before = root();
+  before.projects.push({
+    ...before.projects[0],
+    id: ids.otherProject,
+    name: "別の架空構成",
+  });
+  before.candidateParts.push({
+    ...candidate(ids.otherCandidate, "memory"),
+    projectId: ids.otherProject,
+  });
+  before.currentBuilds.push({
+    id: ids.otherBuild,
+    projectId: ids.otherProject,
+    items: [{ candidatePartId: ids.otherCandidate, quantity: 1 }],
+    updatedAt: timestamp,
+  });
+  const proposed = {
+    ...before,
+    projects: before.projects.filter(({ id }) => id !== ids.project),
+  };
+
+  const result = referenceRepairPolicy.repair(before, proposed, {
+    kind: "project-deleted",
+    projectId: ids.project,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.value.projects.map(({ id }) => id),
+    [ids.otherProject],
+  );
+  assert.deepEqual(
+    result.value.candidateParts.map(({ id }) => id),
+    [ids.otherCandidate],
+  );
+  assert.deepEqual(
+    result.value.currentBuilds.map(({ id }) => id),
+    [ids.otherBuild],
+  );
   assert.equal(schemaValidator.validateRoot(result.value).ok, true);
 });
 

@@ -102,6 +102,19 @@ test("candidate削除とcategory変更はbuild参照修復後にroot全体を再
   }
 });
 
+test("project削除は所属candidateとCurrentBuildを同じcommit候補から除去する", () => {
+  const result = pipeline.apply(
+    root(),
+    { kind: "delete", entity: "project", id: ids.project },
+    { currentBytes: 0, quotaBytes: 10_000 },
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.root.projects, []);
+  assert.deepEqual(result.value.root.candidateParts, []);
+  assert.deepEqual(result.value.root.currentBuilds, []);
+});
+
 test("不正候補、存在済みcreate、存在しないupdate/deleteを決定的に拒否する", () => {
   const cases = [
     [

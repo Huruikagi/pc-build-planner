@@ -24,7 +24,7 @@
 - 共通ドメイン型、ID・UTC日時、schema version、canonical `Result<T, E>`、runtime validator
 - 単一root Repository、migration、容量評価、Chrome Storage adapter
 - 単一write authorityのcommand contract、worker registration factory、revision/request-id競合制御
-- foundation不変条件としてのCurrentBuild参照修復、root評価・置換、maintenance generation/owner fencing
+- foundation不変条件としてのCurrentBuild参照修復、project削除時の所属candidate・CurrentBuildカスケード削除、root評価・置換、maintenance generation/owner fencing
 - 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
 - Chrome Storage・Web Locksとcanonical runtime policyをfoundation内で解決し、Repository、write authority、maintenance source、worker registrationを一度だけ組み立てる引数なしproduction runtime contribution factory
 
@@ -87,7 +87,7 @@ graph LR
 - **Root ownership**: foundationは登録factoryを公開し、application shellだけが具体service workerへ登録する。
 - **Linearization boundary**: 全writerは同一名のexclusive Web Lockを取得してからrootを再読込し、検証、変更、一回の`set`を完了する。`StoragePort`は排他を所有せず、lockを迂回するwriterを公開しない。
 - **Restart boundary**: Web Lockはworker終了時に失われる一時的な排他である。generation、owner、lease、revisionを含む永続rootだけを再生成後の認可根拠とし、新workerはlock取得後に必ずrootを再読込する。
-- **Atomicity boundary**: 一つのstorage keyに一つのrootを保存し、候補変更、参照修復、検証、revision更新、maintenance state更新を一回の`set`へまとめる。これは協調writer間の論理的一括commitであり、Chrome crash時のdurable transaction保証は主張しない。
+- **Atomicity boundary**: 一つのstorage keyに一つのrootを保存し、候補変更、project削除カスケード、参照修復、検証、revision更新、maintenance state更新を一回の`set`へまとめる。これは協調writer間の論理的一括commitであり、Chrome crash時のdurable transaction保証は主張しない。
 
 ### Technology Stack
 
@@ -114,7 +114,7 @@ src/domain/normalized-attributes.ts                # category判別共用体と�
 src/domain/validation.ts                           # unknownから現行domain契約への検証
 src/persistence/schema.ts                          # schema version、empty root、storage key
 src/persistence/migrations.ts                      # NからN+1の純粋migration registry
-src/persistence/reference-repair.ts                # candidate変更時のCurrentBuild参照修復
+src/persistence/reference-repair.ts                # candidate変更時の参照修復とproject削除カスケード
 src/persistence/capacity.ts                        # bytes/quota入力からwarning・拒否を判定する純粋policy
 src/persistence/repository.ts                      # 検証済みread/query内部port
 src/persistence/mutation-pipeline.ts               # snapshotからmutation commit候補を構築
@@ -185,7 +185,7 @@ sequenceDiagram
     Authority-->>Consumer: typed result
 ```
 
-authorityは全write commandを`RootTransactionRunner`へ渡す。runnerだけが固定名のexclusive root lock、Storage read、migration、snapshot validation、candidateの最終validation、revision更新、単一writeを所有する。`MutationPipeline`はStorageへ依存せず、runnerから渡された現行snapshotから候補とreceipt metadataを作る。同じrequest IDの再試行は保存済み結果を返し、異なるpayloadでの再利用は`request-conflict`を返す。worker再生成後は新しいlock requestを開始し、旧メモリqueueを復元しない。
+authorityは全write commandを`RootTransactionRunner`へ渡す。runnerだけが固定名のexclusive root lock、Storage read、migration、snapshot validation、candidateの最終validation、revision更新、単一writeを所有する。`MutationPipeline`はStorageへ依存せず、runnerから渡された現行snapshotから候補とreceipt metadataを作る。project削除では`ReferenceRepairPolicy`が同じprojectIdのcandidateとCurrentBuildをcandidate rootから除去し、全体検証後のrootだけをcommit候補にする。同じrequest IDの再試行は保存済み結果を返し、異なるpayloadでの再利用は`request-conflict`を返す。worker再生成後は新しいlock requestを開始し、旧メモリqueueを復元しない。
 
 ### root置換とmaintenance fencing
 
@@ -242,6 +242,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 3.6 | 安全な再試行 | WriteAuthority | requestId | mutation flow |
 | 3.7 | 同一commitで参照修復 | ReferenceRepairPolicy、MutationPipeline | root mutation | mutation flow |
 | 3.8 | 競合検出 | RootTransactionRunner、WriteAuthority | RootWriteLock、expectedRevision | mutation flow |
+| 3.9 | project削除カスケード | ReferenceRepairPolicy、MutationPipeline | root mutation | mutation flow |
 | 4.1 | root schema version | DomainModel | schemaVersion | read flow |
 | 4.2 | 旧版の順序移行 | MigrationRegistry | toCurrent | read flow |
 | 4.3 | 将来版を上書きしない | MigrationRegistry | unsupported-version | read flow |
@@ -278,9 +279,9 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | DomainModel | Domain | 保存可能な共有modelと不変条件 | 2.1–2.6, 4.1 | なし | State |
 | SchemaValidator | Domain | unknownを現行契約へ絞る | 2.1–2.6, 3.2–3.4, 5.4, 6.2 | DomainModel P0 | Service |
 | MigrationRegistry | Persistence | 旧schemaを純粋に連続移行 | 4.1–4.5 | SchemaValidator P0 | Service |
-| ReferenceRepairPolicy | Persistence | candidate変更によるbuild参照を修復 | 3.7 | DomainModel P0 | Service |
+| ReferenceRepairPolicy | Persistence | candidate変更によるbuild参照修復とproject削除カスケード | 3.7, 3.9 | DomainModel P0 | Service |
 | CapacityPolicy | Persistence | bytesとquotaからwarning・拒否を純粋判定 | 5.1–5.3 | 直列化済みcapacity input P0 | Service |
-| MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
+| MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 3.9, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
 | MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
 | MaintenanceSnapshotSource | Persistence adapter | 検証済みmaintenance cursorをread-onlyで公開 | 7.8 | LocalDataRepository P0、Storage change P1 | Service、State |
 | RuntimeContributionFactory | Composition adapter | platform portからcanonical foundation graphを一度だけ生成 | 1.1, 1.3, 3.1, 6.1, 7.8 | ChromeStorageAdapter P0、RootWriteLock P0、WriteAuthority P0 | Service |
@@ -341,7 +342,7 @@ interface ReferenceRepairPolicy {
 }
 ```
 
-candidate削除では該当build itemを除去し、category変更で現在の構成へ保持できない参照を除去する。選択数や互換性などfeature固有判断は行わない。repair済みrootは同じpipelineで全体検証される。
+candidate削除では該当build itemを除去し、category変更で現在の構成へ保持できない参照を除去する。project削除では同じprojectIdを持つcandidateとCurrentBuildを除去し、別projectのentityと参照は保持する。選択数や互換性などfeature固有判断は行わない。repair済みrootは同じpipelineで全体検証される。
 
 #### LocalDataRepository, FoundationDataPort and MutationPipeline
 
@@ -541,7 +542,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 ### Unit Tests
 - `SchemaValidator`で全12category、欠損値、元表記と確認値、UUID/UTC、cross-project参照、生HTML・画像/data URL拒否を検証する（2.1–2.6, 5.4）。
 - `MigrationRegistry`で連続migration、経路欠落、将来版、step失敗、source非変更を検証する（4.1–4.5）。
-- `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去と、無関係参照の保持を検証する（3.7）。
+- `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去、project削除時の所属candidate・CurrentBuild除去、無関係なproject dataの保持を検証する（3.7, 3.9）。
 - `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。
 - `MaintenanceSnapshotSource`で検証済み初期snapshot、開始・終了通知、購読解除、破損変更値の拒否を検証する（7.8）。
 - `RuntimeContributionFactory`が一つのcanonical graphからmaintenance sourceとworker registrationを生成し、両者が同じroot revisionとmaintenance stateを観測することを検証する（1.3, 3.1, 7.8）。
@@ -550,7 +551,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - 同じStorageへfactory graphを再生成し、active maintenance fenceとrevisionを再読込してowner外writeを拒否することを検証する（1.3, 7.4–7.8）。
 
 ### Contract and Integration Tests
-- `MutationPipeline`でCRUD候補、reference repair、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 5.1–5.3）。
+- `MutationPipeline`でCRUD候補、reference repair、project削除カスケード、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 3.9, 5.1–5.3）。
 - `RootTransactionRunner`でexpected revision競合、storage失敗時の既存root保持、lock内の最新root読取、revision増分、単一writeを検証する（1.3, 3.3–3.5, 3.8）。
 - `WriteAuthority`で同一request再試行、異payload request ID拒否、query・mutation・maintenance・replacement dispatchを検証する（3.1, 3.6, 3.8, 6.2–6.4）。
 - 10MB未満、warning閾値、超過見込み、実write quota rejectについてbefore/after capacity metadataとroot保持を検証する（5.1–5.5）。
@@ -563,7 +564,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 
 ### Fixture and Public Port Regression
 - fixture builderは全12category、欠損値、元表記・確認値、参照整合root、破損rootを架空値だけで生成し、実サイトHTML、画像、商品dataを含まないことを独立検査する（8.1, 8.3）。
-- `FoundationDataPort`だけを使う回帰suiteでCRUD、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflict、maintenance fence、replacementを検証する（3.1–3.8, 4.2–4.4, 5.1–5.3, 6.1–6.4, 7.1–7.7, 8.2）。
+- `FoundationDataPort`だけを使う回帰suiteでCRUD、project削除カスケード、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflict、maintenance fence、replacementを検証する（3.1–3.9, 4.2–4.4, 5.1–5.3, 6.1–6.4, 7.1–7.7, 8.2）。
 
 ### Performance and Concurrency Validation
 - 10MB近傍の架空rootでread、migration、validation、repair、canonical serialization、single writeの時間とbytesを個別計測する（5.1, 5.3）。

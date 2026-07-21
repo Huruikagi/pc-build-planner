@@ -120,9 +120,10 @@
 - **Trade-offs**: foundation公開契約が一つ増える。owner、lease、write capability、Storage primitiveは公開しない。
 
 ### Decision: 参照修復policyをfoundationが所有する
-- **Context**: 候補削除・カテゴリ変更とCurrentBuild修復を別writeにするとinvalidな中間rootが生じる。
-- **Selected Approach**: generic `mutateRoot` pipeline内でfoundation-owned `ReferenceRepairPolicy`を適用し、全体検証後に一度だけcommitする。
-- **Rationale**: foundationは業務選択規則を持たず、保存参照の構造的不変条件だけを維持できる。
+- **Context**: 候補削除・カテゴリ変更とCurrentBuild修復を別writeにするとinvalidな中間rootが生じる。またprojectだけを削除すると所属candidateとCurrentBuildが孤立し、root validationに失敗する。
+- **Selected Approach**: generic `mutateRoot` pipeline内でfoundation-owned `ReferenceRepairPolicy`を適用し、candidate変更時のbuild参照修復に加えて、project削除時は同じprojectIdのcandidateとCurrentBuildをcandidate rootから除去する。全体検証後に一度だけcommitする。
+- **Rationale**: project参照の構造的不変条件をfoundationへ閉じ、下流featureによる複数writeや保存順序依存を防ぐ。別projectのentityは保持し、業務選択規則は持たない。
+- **Follow-up**: pure policy、MutationPipeline、FoundationDataPort回帰でproject削除カスケードと単一writeを固定し、`project-candidate-management` 2.2を再検証する。
 
 ### Decision: canonical Resultを自作し、実装は最小化する
 - **Context**: 全featureで同じ失敗契約が必要である。
