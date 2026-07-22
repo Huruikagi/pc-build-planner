@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 候補管理featureの参加境界を準備する
+- [x] 1. 候補管理featureの参加境界を準備する
 - [x] 1.1 shell登録と公開入口の骨格を実装する
   - feature内だけに公開入口、registration、style入口を作り、共有runtime入口、HTML host、root barrelを変更しない。
   - Foundation公開portとapplication shellのmount・operation policyを注入可能な依存として接続する。
@@ -9,7 +9,7 @@
   - _Requirements: 6.1, 6.2_
   - _Boundary: CandidateFeatureRegistration_
 
-- [ ] 2. 管理契約と永続化連携を実装する
+- [x] 2. 管理契約と永続化連携を実装する
 - [x] 2.1 管理コマンド・表示モデル・公開契約を定義する
   - Project、CandidatePart、Foundationのcanonical Resultを再定義せず、管理入力、判別可能なエラー、候補照会・取り込み用作成の公開契約を整える。
   - 後続featureはpublic入口だけから候補作成・照会へ到達でき、内部serviceへのdeep importを必要としない。
@@ -33,7 +33,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.3, 6.4, 6.5_
   - _Boundary: CandidateQuery_
 
-- [ ] 3. 管理画面の状態とrollback snapshotを実装する
+- [x] 3. 管理画面の状態とrollback snapshotを実装する
 - [x] 3.1 読込・選択・編集・削除確認の状態遷移を実装する
   - 永続rootから公開query経由でprojectと候補一覧を読み込み、編集draft、削除確認、表示エラーを永続状態と分離する。
   - 二重送信を抑止し、保存・削除失敗時に一覧と入力を保持して再試行可能な表示へ遷移する。
@@ -50,7 +50,7 @@
   - _Requirements: 1.5, 2.5, 4.5, 5.3, 5.4, 6.1, 6.2_
   - _Boundary: ManagementStateSnapshotCodec_
 
-- [ ] 4. 管理画面を実装する
+- [x] 4. 管理画面を実装する
 - [x] 4.1 プロジェクト・カテゴリ・候補一覧を描画する
   - framework非依存のManagementStateを受け、project選択、全カテゴリ、未分類を含む候補一覧と欠損の「未入力」表示を描画する。
   - 利用者がprojectまたはcategoryを切り替えると該当候補だけが残り、外部文字列は通常のJSX childとして表示されることをDOM testで確認する。
@@ -76,7 +76,7 @@
   - _Requirements: 1.4, 5.1, 5.2, 5.3, 5.4_
   - _Boundary: ManagementView_
 
-- [ ] 5. activationとshell lifecycleへ統合する
+- [x] 5. activationとshell lifecycleへ統合する
 - [x] 5.1 候補編集activationの公開APIと受信検証を実装する
   - 型付きprefillからFeatureActivationIntentを構築し、候補管理targetのpayloadをunknownから再検証する。
   - 未知target、不正payload、存在しないprojectでは既存画面・draftを変更せず、正常prefillでは指定projectの詳細編集を一度だけ開くことをcontract testで確認する。
@@ -91,7 +91,7 @@
   - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: CandidateFeatureRegistration, ManagementStateSnapshotCodec_
 
-- [ ] 6. 境界統合と受け入れ回帰を検証する
+- [x] 6. 境界統合と受け入れ回帰を検証する
 - [x] 6.1 Foundation・shell・UIの管理フローを統合する
   - feature側はStorage API、共有runtime入口、HTML host、root barrelへ直接依存せず、公開queryと原子的mutationだけを使用する。
   - project作成から候補登録、分類補正、編集、削除、再読込までを架空データで完了できることを統合テストで確認する。
