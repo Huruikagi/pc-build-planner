@@ -1,4 +1,14 @@
+import type {
+  FeatureActivationError,
+  ShellNavigator,
+} from "../../application-shell/public.js";
+import { err } from "../../domain/public.js";
 import type { FoundationDataPort } from "../../persistence/public.js";
+import {
+  type CandidateEditorPrefill,
+  candidateManagementFeatureId,
+  openCandidateEditorTarget,
+} from "./activation.js";
 import type { CandidateQuery, CaptureCandidatePort } from "./contracts.js";
 
 export type {
@@ -20,12 +30,18 @@ export type {
 export interface CandidateManagementPublicApi {
   readonly query: CandidateQuery;
   readonly capture: CaptureCandidatePort;
+  openCandidateEditor(
+    prefill: CandidateEditorPrefill,
+  ): Promise<
+    import("../../domain/public.js").Result<void, FeatureActivationError>
+  >;
 }
 
 export interface CandidateManagementPublicDependencies {
   readonly data: FoundationDataPort;
   readonly query: CandidateQuery;
   readonly capture: CaptureCandidatePort;
+  readonly navigator?: ShellNavigator;
 }
 
 export const createCandidateManagementPublicApi = (
@@ -39,5 +55,22 @@ export const createCandidateManagementPublicApi = (
   return Object.freeze({
     query: dependencies.query,
     capture: dependencies.capture,
+    openCandidateEditor(prefill: CandidateEditorPrefill) {
+      if (dependencies.navigator === undefined) {
+        return Promise.resolve(
+          err<FeatureActivationError>({
+            kind: "invalid_activation",
+            detail: "navigator unavailable",
+          }),
+        );
+      }
+      return dependencies.navigator.activate({
+        featureId: candidateManagementFeatureId,
+        target: openCandidateEditorTarget,
+        payload: prefill,
+      });
+    },
   });
 };
+
+export type { CandidateEditorPrefill } from "./activation.js";

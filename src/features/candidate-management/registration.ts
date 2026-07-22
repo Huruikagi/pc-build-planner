@@ -1,19 +1,23 @@
 import type {
   ApplicationFeatureRegistration,
   Availability,
-  FeatureId,
   FeatureMountContext,
   FeatureMountHandle,
   OperationPolicy,
+  ShellNavigator,
 } from "../../application-shell/public.js";
 import type { FoundationDataPort } from "../../persistence/public.js";
+import {
+  type CandidateEditorPrefill,
+  candidateManagementFeatureId,
+  createCandidateActivation,
+} from "./activation.js";
 import type { CandidateQuery, CaptureCandidatePort } from "./contracts.js";
 import {
   type CandidateManagementPublicApi,
   createCandidateManagementPublicApi,
 } from "./public.js";
-
-const candidateManagementFeatureId = "candidate-management" as FeatureId;
+import type { ManagementState } from "./state.js";
 
 export interface CandidateManagementMountDependencies {
   readonly container: HTMLElement;
@@ -36,6 +40,9 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly subscribeAvailability?: (
     listener: (availability: Availability) => void,
   ) => () => void;
+  readonly navigator?: ShellNavigator;
+  /** Supplied by the feature-local React/state composition when activation is enabled. */
+  readonly state?: ManagementState;
 }
 
 const mountCandidateManagementShell: CandidateManagementMount = async ({
@@ -58,7 +65,10 @@ const mountCandidateManagementShell: CandidateManagementMount = async ({
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<CandidateManagementPublicApi> => {
+): ApplicationFeatureRegistration<
+  CandidateManagementPublicApi,
+  CandidateEditorPrefill
+> => {
   const mount = dependencies.mount ?? mountCandidateManagementShell;
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
@@ -68,6 +78,9 @@ export const createCandidateFeatureRegistration = (
     data: dependencies.data,
     query: dependencies.query,
     capture: dependencies.capture,
+    ...(dependencies.navigator === undefined
+      ? {}
+      : { navigator: dependencies.navigator }),
   });
 
   return {
@@ -87,5 +100,8 @@ export const createCandidateFeatureRegistration = (
           : { restoredState: context.restoredState }),
       });
     },
+    ...(dependencies.state === undefined
+      ? {}
+      : { activation: createCandidateActivation(dependencies.state) }),
   };
 };

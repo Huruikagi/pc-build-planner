@@ -77,7 +77,7 @@
   - _Boundary: ManagementView_
 
 - [ ] 5. activationとshell lifecycleへ統合する
-- [ ] 5.1 候補編集activationの公開APIと受信検証を実装する
+- [x] 5.1 候補編集activationの公開APIと受信検証を実装する
   - 型付きprefillからFeatureActivationIntentを構築し、候補管理targetのpayloadをunknownから再検証する。
   - 未知target、不正payload、存在しないprojectでは既存画面・draftを変更せず、正常prefillでは指定projectの詳細編集を一度だけ開くことをcontract testで確認する。
   - _Depends: 2.1, 2.4, 3.1; application-shell 5.1_
