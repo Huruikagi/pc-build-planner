@@ -60,7 +60,7 @@
 
 - [x] local-data-foundation — 40/40 sub-tasks完了。共有データ契約、永続化、単一write authority、runtime contributionを実装済み。
 - [x] application-shell — 26/26 sub-tasks完了。typed activation 5.1–5.3を含むshell、runtime composition、最終gateを実装済み。
-- [ ] project-candidate-management — 5/15 sub-tasks完了。登録境界、管理契約、project/candidate mutationとqueryまで実装済み。次はtask 3.1。
+- [x] project-candidate-management — 15/15 sub-tasks完了。候補管理の参加境界、管理画面、typed candidate editor activation、snapshot-aware registration、境界統合と受け入れ回帰を実装済み。
 - [ ] current-build-management — 0/12 sub-tasks完了。tasks承認済みで実装可能。project-candidate-management完了後に着手する。
 - [ ] product-page-capture — 0/11 sub-tasks完了。tasks承認済み。project-candidate-managementの公開編集契約へ依存する。
 - [ ] compatibility-checking — 0/14 sub-tasks完了。design/tasks未承認のため実装開始不可。
@@ -70,7 +70,7 @@
 
 - [x] local-data-foundation -- 共通 `Result<T, E>`、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencingを所有する。Dependencies: none
 - [x] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。typed activationを含め実装済み。Dependencies: local-data-foundation
-- [ ] project-candidate-management -- projectと候補の管理、候補query、typed candidate editor activationを所有する。Dependencies: local-data-foundation, application-shell
+- [x] project-candidate-management -- projectと候補の管理、候補query、typed candidate editor activationを所有する。実装済み。Dependencies: local-data-foundation, application-shell
 - [ ] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [ ] product-page-capture -- ユーザー操作起点の商品抽出、確認session、候補作成連携を所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [ ] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
