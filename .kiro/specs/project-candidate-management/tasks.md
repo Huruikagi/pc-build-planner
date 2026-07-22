@@ -92,7 +92,7 @@
   - _Boundary: CandidateFeatureRegistration, ManagementStateSnapshotCodec_
 
 - [ ] 6. 境界統合と受け入れ回帰を検証する
-- [ ] 6.1 Foundation・shell・UIの管理フローを統合する
+- [x] 6.1 Foundation・shell・UIの管理フローを統合する
   - feature側はStorage API、共有runtime入口、HTML host、root barrelへ直接依存せず、公開queryと原子的mutationだけを使用する。
   - project作成から候補登録、分類補正、編集、削除、再読込までを架空データで完了できることを統合テストで確認する。
   - _Depends: 5.2; application-shell 4.1_
