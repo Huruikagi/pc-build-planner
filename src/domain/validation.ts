@@ -86,15 +86,26 @@ const RAW_HTML_PATTERN = /<(?:!doctype\s+html|!--|\/?[a-z][^>]*>)/i;
 const inspectPayload = (
   value: unknown,
   path: string,
+  ancestors: ReadonlySet<object> = new Set(),
 ): ValidationError | undefined => {
   if (
     typeof value === "string" &&
     (/^data:/i.test(value) || RAW_HTML_PATTERN.test(value))
   )
     return { code: "forbidden-payload", path };
+  const traversable = Array.isArray(value) || isRecord(value);
+  if (traversable && ancestors.has(value))
+    return { code: "forbidden-payload", path };
+  const descendantAncestors = traversable
+    ? new Set([...ancestors, value])
+    : ancestors;
   if (Array.isArray(value)) {
     for (const [index, item] of value.entries()) {
-      const issue = inspectPayload(item, `${path}[${index}]`);
+      const issue = inspectPayload(
+        item,
+        `${path}[${index}]`,
+        descendantAncestors,
+      );
       if (issue) return issue;
     }
   } else if (isRecord(value)) {
@@ -102,7 +113,7 @@ const inspectPayload = (
       const itemPath = `${path}.${key}`;
       if (forbiddenKey.test(key))
         return { code: "forbidden-payload", path: itemPath };
-      const issue = inspectPayload(item, itemPath);
+      const issue = inspectPayload(item, itemPath, descendantAncestors);
       if (issue) return issue;
     }
   }
@@ -114,9 +125,9 @@ export const validateSerializablePayload = (
   input: unknown,
   path = "$",
 ): Result<unknown, ValidationError> => {
-  if (!isJsonValue(input)) return fail("forbidden-payload", path);
   const issue = inspectPayload(input, path);
-  return issue ? err(issue) : ok(input);
+  if (issue) return err(issue);
+  return isJsonValue(input) ? ok(input) : fail("forbidden-payload", path);
 };
 
 const object = (
@@ -204,6 +215,49 @@ const product = (value: unknown, path: string): ValidationError | undefined => {
     : undefined;
 };
 
+const sourceInfo = (
+  value: unknown,
+  path: string,
+): ValidationError | undefined => {
+  const result = object(value, path, [], ["pageUrl", "capturedAt", "siteName"]);
+  if (!result.ok) return result.error;
+  for (const issue of [
+    "pageUrl" in result.value
+      ? url(result.value.pageUrl, `${path}.pageUrl`)
+      : undefined,
+    "capturedAt" in result.value
+      ? utc(result.value.capturedAt, `${path}.capturedAt`)
+      : undefined,
+    "siteName" in result.value
+      ? string(result.value.siteName, `${path}.siteName`)
+      : undefined,
+  ])
+    if (issue) return issue;
+  return undefined;
+};
+
+const sourceSnapshot = (
+  value: unknown,
+  path: string,
+): ValidationError | undefined => {
+  if (!isRecord(value)) return { code: "missing-field", path };
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null)
+    return { code: "forbidden-payload", path };
+  for (const key of Object.getOwnPropertySymbols(value)) {
+    if (Object.prototype.propertyIsEnumerable.call(value, key))
+      return { code: "forbidden-payload", path: `${path}.${String(key)}` };
+  }
+  for (const [key, snapshotValue] of Object.entries(value)) {
+    if (snapshotValue === null || typeof snapshotValue === "string") continue;
+    return {
+      code: isJsonValue(snapshotValue) ? "invalid-string" : "forbidden-payload",
+      path: `${path}.${key}`,
+    };
+  }
+  return undefined;
+};
+
 const attributeFields: Readonly<
   Record<string, Readonly<Record<string, "string" | "strings">>>
 > = {
@@ -256,16 +310,20 @@ export const validateCandidatePartValue = (
 ): Result<CandidatePart, ValidationError> => {
   const prohibited = inspectPayload(input, path);
   if (prohibited) return err(prohibited);
-  const candidate = object(input, path, [
-    "id",
-    "projectId",
-    "category",
-    "product",
-    "sourceInfo",
-    "normalizedAttributes",
-    "createdAt",
-    "updatedAt",
-  ]);
+  const candidate = object(
+    input,
+    path,
+    [
+      "id",
+      "projectId",
+      "category",
+      "product",
+      "normalizedAttributes",
+      "createdAt",
+      "updatedAt",
+    ],
+    ["sourceInfo", "sourceSnapshot"],
+  );
   if (!candidate.ok) return candidate;
   for (const issue of [
     uuid(candidate.value.id, `${path}.id`),
@@ -278,21 +336,17 @@ export const validateCandidatePartValue = (
     return fail("category-mismatch", `${path}.category`);
   let issue = product(candidate.value.product, `${path}.product`);
   if (issue) return err(issue);
-  const source = object(
-    candidate.value.sourceInfo,
-    `${path}.sourceInfo`,
-    ["pageUrl", "capturedAt"],
-    ["siteName"],
-  );
-  if (!source.ok) return source;
-  for (const valueIssue of [
-    url(source.value.pageUrl, `${path}.sourceInfo.pageUrl`),
-    utc(source.value.capturedAt, `${path}.sourceInfo.capturedAt`),
-    "siteName" in source.value
-      ? string(source.value.siteName, `${path}.sourceInfo.siteName`)
-      : undefined,
-  ])
-    if (valueIssue) return err(valueIssue);
+  if ("sourceInfo" in candidate.value) {
+    issue = sourceInfo(candidate.value.sourceInfo, `${path}.sourceInfo`);
+    if (issue) return err(issue);
+  }
+  if ("sourceSnapshot" in candidate.value) {
+    issue = sourceSnapshot(
+      candidate.value.sourceSnapshot,
+      `${path}.sourceSnapshot`,
+    );
+    if (issue) return err(issue);
+  }
   issue = attributes(
     candidate.value.normalizedAttributes,
     candidate.value.category as string,

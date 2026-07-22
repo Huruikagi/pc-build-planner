@@ -226,7 +226,7 @@ test("candidatePart wire valueはcategoryと全nested objectをexact検証する
     { ...candidate, category: "bogus" },
     { ...candidate, product: { extra: 1 } },
     { ...candidate, sourceInfo: { ...candidate.sourceInfo, extra: true } },
-    { ...candidate, sourceInfo: { pageUrl: candidate.sourceInfo.pageUrl } },
+    { ...candidate, sourceInfo: { pageUrl: "not a URL" } },
     { ...candidate, normalizedAttributes: { category: "cpu", extra: true } },
     { ...candidate, normalizedAttributes: { category: "gpu" } },
     {

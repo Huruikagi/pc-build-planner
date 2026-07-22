@@ -45,7 +45,7 @@
   - _Requirements: 2.1, 2.3, 2.4, 2.7_
   - _Boundary: DomainModel_
 
-- [ ] 2.6 取得元欠損と元表記snapshotを保存境界で検証する
+- [x] 2.6 取得元欠損と元表記snapshotを保存境界で検証する
   - optionalな取得元全体とURL・日時を検証し、存在する値だけへURL・UTC規約を適用する
   - sourceSnapshotの文字列・nullを受理し、生HTML・画像・data URLとJSON非互換値を拒否する
   - 完全欠損・部分欠損・明示的なnullが入力どおり返り、不正snapshotがpath付き失敗になることを完了条件とする

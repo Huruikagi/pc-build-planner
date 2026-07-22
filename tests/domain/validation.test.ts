@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
-import { schemaValidator } from "../../src/domain/validation.ts";
+import {
+  schemaValidator,
+  validateSerializablePayload,
+} from "../../src/domain/validation.ts";
 
 const root = () => ({
   schemaVersion: 1,
@@ -83,6 +86,135 @@ test("有効なroot、command、replacementを入力を変更せず受理する"
       proposedRoot: input,
     }).ok,
     true,
+  );
+});
+
+test("取得元の完全欠損・部分欠損・snapshotのnullを入力どおり受理する", () => {
+  const withoutSource = root();
+  delete withoutSource.candidateParts[0].sourceInfo;
+  const partialSources = [
+    { pageUrl: "https://example.invalid/products/url-only" },
+    { capturedAt: "2026-07-22T03:04:05.000Z" },
+    {},
+  ];
+
+  for (const sourceInfo of partialSources) {
+    const input = structuredClone(withoutSource);
+    input.candidateParts[0].sourceInfo = sourceInfo;
+    const result = schemaValidator.validateRoot(input);
+    assert.equal(result.ok, true);
+    assert.strictEqual(result.value, input);
+    assert.deepEqual(result.value.candidateParts[0].sourceInfo, sourceInfo);
+  }
+
+  withoutSource.candidateParts[0].sourceSnapshot = {
+    name: "架空 CPU",
+    manufacturer: null,
+  };
+  const result = schemaValidator.validateRoot(withoutSource);
+  assert.equal(result.ok, true);
+  assert.strictEqual(result.value, withoutSource);
+  assert.equal("sourceInfo" in result.value.candidateParts[0], false);
+  assert.deepEqual(result.value.candidateParts[0].sourceSnapshot, {
+    name: "架空 CPU",
+    manufacturer: null,
+  });
+
+  const nullPrototypeSnapshot = Object.assign(Object.create(null), {
+    name: "架空 null prototype CPU",
+    manufacturer: null,
+  });
+  const nullPrototypeInput = root();
+  nullPrototypeInput.candidateParts[0].sourceSnapshot = nullPrototypeSnapshot;
+  const nullPrototypeResult = schemaValidator.validateRoot(nullPrototypeInput);
+  assert.equal(nullPrototypeResult.ok, true);
+  assert.strictEqual(nullPrototypeResult.value, nullPrototypeInput);
+  assert.strictEqual(
+    nullPrototypeResult.value.candidateParts[0].sourceSnapshot,
+    nullPrototypeSnapshot,
+  );
+});
+
+test("存在する取得元値だけへURL・UTC規約を適用する", () => {
+  for (const [sourceInfo, code, path] of [
+    [
+      { pageUrl: "not a URL" },
+      "invalid-url",
+      "$.candidateParts[0].sourceInfo.pageUrl",
+    ],
+    [
+      { capturedAt: "2026-07-22T12:04:05+09:00" },
+      "invalid-utc-timestamp",
+      "$.candidateParts[0].sourceInfo.capturedAt",
+    ],
+  ]) {
+    const input = root();
+    input.candidateParts[0].sourceInfo = sourceInfo;
+    assertError(schemaValidator.validateRoot(input), code, path);
+  }
+});
+
+test("不正なsourceSnapshotを値のpath付きで拒否する", () => {
+  for (const [snapshot, code, path] of [
+    [
+      { name: 123 },
+      "invalid-string",
+      "$.candidateParts[0].sourceSnapshot.name",
+    ],
+    [
+      { name: undefined },
+      "forbidden-payload",
+      "$.candidateParts[0].sourceSnapshot.name",
+    ],
+    [
+      { name: "<article>raw</article>" },
+      "forbidden-payload",
+      "$.candidateParts[0].sourceSnapshot.name",
+    ],
+    [
+      { image: "encoded bytes" },
+      "forbidden-payload",
+      "$.candidateParts[0].sourceSnapshot.image",
+    ],
+    [
+      { name: "data:image/png;base64,AAAA" },
+      "forbidden-payload",
+      "$.candidateParts[0].sourceSnapshot.name",
+    ],
+  ]) {
+    const input = root();
+    input.candidateParts[0].sourceSnapshot = snapshot;
+    assertError(schemaValidator.validateRoot(input), code, path);
+  }
+});
+
+test("sourceSnapshotのexotic objectをsnapshot pathで拒否する", () => {
+  for (const snapshot of [new Date("2026-07-22T00:00:00.000Z"), new Map()]) {
+    const input = root();
+    input.candidateParts[0].sourceSnapshot = snapshot;
+    assertError(
+      schemaValidator.validateRoot(input),
+      "forbidden-payload",
+      "$.candidateParts[0].sourceSnapshot",
+    );
+  }
+});
+
+test("循環payloadをthrowせず循環先pathで拒否し、非循環の共有参照は受理する", () => {
+  const circularSnapshot = {};
+  circularSnapshot.self = circularSnapshot;
+  const input = root();
+  input.candidateParts[0].sourceSnapshot = circularSnapshot;
+  assertError(
+    schemaValidator.validateRoot(input),
+    "forbidden-payload",
+    "$.candidateParts[0].sourceSnapshot.self",
+  );
+
+  const shared = { label: "架空共有値" };
+  assert.deepEqual(
+    validateSerializablePayload({ left: shared, right: shared }),
+    { ok: true, value: { left: shared, right: shared } },
   );
 });
 
