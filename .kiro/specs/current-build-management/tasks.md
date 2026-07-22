@@ -83,7 +83,7 @@
   - _Requirements: 1.1, 1.2, 5.2, 5.3_
   - _Boundary: BuildStateSnapshotCodec_
 
-- [ ] 4.3 (P) カテゴリ別候補と現在構成をReactで表示する
+- [x] 4.3 (P) カテゴリ別候補と現在構成をReactで表示する
   - 選択project・カテゴリに属する候補だけを表示し、未分類候補を選択肢へ含めない。
   - 単一カテゴリの選択・置換・解除と、複数カテゴリの追加・数量・解除操作を画面状態へ接続する。
   - 候補なし・構成なし、数量error、保存error、参照error、修復後の除外を識別可能に表示する。
@@ -130,3 +130,5 @@
 - design.mdのSystem Flows図（Mermaid sequence diagram）はmutation経路だけを描いており、BuildStateがCurrentBuildQuery/CandidateQueryへ直接依存する読込経路は描かれていない。Components tableは「Service P0、Query P0」とだけ記載しCandidateQueryを明示しないが、BuildServiceの契約(execute()のみ)には一覧取得手段がないため、候補・project一覧の読込はcandidate-managementのManagementState前例（stateがqueryとserviceを両方直接持つ）に倣いBuildStateから CandidateQuery.listProjects/listBuildEligible を直接呼ぶ設計とした。
 - BuildErrorの無効化(構成変更を無効化)対象はrequirement 5.4が明示する3種類（corrupt-data・unsupported-data・storage）に限定し、quota・maintenance・conflictは再試行/再読込可能な一時的失敗として扱う。quotaを無効化対象に含めると5.4の文言（容量超過ではなく「破損・非対応・利用不能」）と食い違うため注意。
 - BuildStateはproject単位でしか候補を先読みしない（BuildService/CurrentBuildQueryと同じ設計判断）ため、snapshot codecのstale候補参照チェックは「現在選択中のcategoryで絞り込まれたvalue.candidates」ではなく、project全体のeligible候補集合に対して行う必要がある。BuildState.hasCandidateReference(candidatePartId, projectId)を追加し、category-management側のManagementState.hasCandidateReferenceと同じ役割を持たせた。
+- BuildState.value.selectedCategoryがnullのとき、value.candidatesはprojectの全classified候補（uncategorized以外の全カテゴリ）を含む。BuildViewでカテゴリ別に絞り込む前提のtestを書く場合は、対象カテゴリタブを明示的にクリックしてからassertする必要がある（category未選択=「すべて」相当のため）。
+- 単一選択カテゴリの候補には数量入力欄自体を描画しない設計とした。これによりrequirement 2.5（数量変更を許可しない）はUI操作導線を提供しないことで満たされ、reject理由の表示は不要になる。
