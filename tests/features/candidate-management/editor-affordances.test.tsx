@@ -116,10 +116,10 @@ const renderView = async (options?: {
     query: query(draftReads),
     service,
     createMutationContext: () => context,
-    ...(options?.operationPolicy === undefined
-      ? {}
-      : { operationPolicy: options.operationPolicy }),
   });
+  // Mirrors registration: the shell supplies its gate at mount time.
+  if (options?.operationPolicy !== undefined)
+    state.attachOperationPolicy(options.operationPolicy);
   await state.load();
   const container = document.createElement("div");
   document.body.append(container);
@@ -131,6 +131,7 @@ const renderView = async (options?: {
     updated,
     draftReads,
     cleanup: async () => {
+      state.releaseOperationPolicy();
       await act(() => root.unmount());
       container.remove();
     },
@@ -358,9 +359,58 @@ test("破損・非対応、容量不足、利用不能を利用者が区別で�
   assert.match(messages.get("storage") ?? "", /保存領域/);
 });
 
+test("mount後にmaintenanceが開始すると操作要素が即座に無効表示へ切り替わる", async () => {
+  let mutationAllowed = true;
+  const listeners = new Set<() => void>();
+  const harness = await renderView({
+    operationPolicy: {
+      isAllowed: (kind) => kind === "read" || mutationAllowed,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  });
+  const create = () =>
+    harness.container.querySelector(
+      "[data-create-candidate]",
+    ) as HTMLButtonElement;
+  const edit = () =>
+    harness.container.querySelector(
+      `[data-edit-candidate-id='${candidateId}']`,
+    ) as HTMLButtonElement;
+
+  assert.equal(create().disabled, false);
+
+  // The shell flips its gate without remounting the feature.
+  mutationAllowed = false;
+  await act(async () => {
+    for (const listener of listeners) listener();
+  });
+
+  assert.equal(create().disabled, true);
+  assert.equal(edit().disabled, true);
+  await click(edit());
+  assert.deepEqual(harness.draftReads, []);
+
+  // Leaving maintenance restores the entry points.
+  mutationAllowed = true;
+  await act(async () => {
+    for (const listener of listeners) listener();
+  });
+  assert.equal(create().disabled, false);
+
+  await harness.cleanup();
+  // Unmount detaches from the shell gate exactly once.
+  assert.equal(listeners.size, 0);
+});
+
 test("maintenance中は変更操作を開始できずserviceを呼ばない", async () => {
   const harness = await renderView({
-    operationPolicy: { isAllowed: (kind) => kind === "read" },
+    operationPolicy: {
+      isAllowed: (kind) => kind === "read",
+      subscribe: () => () => {},
+    },
   });
 
   const create = harness.container.querySelector(

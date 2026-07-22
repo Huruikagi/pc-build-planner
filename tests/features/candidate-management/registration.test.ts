@@ -117,7 +117,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const sourceContainer = document.createElement("div");
   const sourceHandle = await sourceRegistration.mount({
     container: sourceContainer,
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
   });
   const captured = await sourceHandle.captureState?.();
@@ -142,7 +142,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const targetContainer = document.createElement("div");
   const targetHandle = await targetRegistration.mount({
     container: targetContainer,
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
     restoredState: captured?.ok ? captured.value : undefined,
   });
@@ -169,7 +169,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     state: rejectedState,
   }).mount({
     container: document.createElement("div"),
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
     restoredState: { version: 99 },
   });
@@ -191,7 +191,7 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   await assert.rejects(
     registration.mount({
       container,
-      operationPolicy: { isAllowed: () => true },
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
       reportError: () => {},
     }),
     /no management state to mount/,

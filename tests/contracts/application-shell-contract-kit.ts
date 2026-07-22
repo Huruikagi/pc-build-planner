@@ -288,7 +288,7 @@ export async function collectActivationLifecycleViolations(
   const host = createSidePanelHost({
     registry,
     container: document.createElement("div"),
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     onStateChange() {},
     reportError() {},
   });
@@ -428,7 +428,7 @@ async function inspectMountContract(
     await act(async () => {
       handle = await feature.mount({
         container,
-        operationPolicy: { isAllowed: () => true },
+        operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
         reportError: () => {},
       });
     });

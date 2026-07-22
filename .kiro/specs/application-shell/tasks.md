@@ -237,6 +237,16 @@
   - _Requirements: 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 6.1, 6.3, 6.4_
   - _Boundary: FeatureContributionCatalog, ProductionApplicationComposition, RootPublicApi_
 
+- [x] 4.12 Mutation可否の変更をmount中のfeatureへ通知する
+  - `OperationPolicy`へ冪等な`subscribe`を追加し、`MutationGate`がprojection購読を内部に隠して可否が実際に変化したときだけ通知する。
+  - 可否が変わらない通知（同一generationのrevision前進、stale拒否）を購読者へ伝播させない。
+  - 最初の購読でprojectionへ接続し、最後の解除で切断し、二重解除を安全にする。
+  - contract test kitへ、mount中のgate遷移が購読者へ一度だけ届きunmountで解除されることの適合testを追加する。
+  - 完了時、maintenance開始・終了がfeatureの再mountなしに購読者へ届くことをshell testで観測できる。
+  - _Depends: 2.2, 2.3, 3.3_
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.7_
+  - _Boundary: MutationGate, CoreContracts, ContractTestKit_
+
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。

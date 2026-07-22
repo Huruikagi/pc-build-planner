@@ -21,7 +21,11 @@ export type ManagementDisplayError = {
 /** Draft-relative field key to failure reason, used to mark the offending input. */
 export type ManagementFieldErrors = Readonly<Record<string, string>>;
 
-const allowAllOperations: OperationPolicy = { isAllowed: () => true };
+/** Used only until the shell supplies its gate at mount time. */
+const allowAllOperations: OperationPolicy = {
+  isAllowed: () => true,
+  subscribe: () => () => {},
+};
 
 const emptyFieldErrors: ManagementFieldErrors = Object.freeze({});
 
@@ -114,6 +118,7 @@ export class ManagementState {
   ) {}
 
   #mountedPolicy: OperationPolicy | null = null;
+  #unsubscribePolicy: (() => void) | undefined;
 
   get #policy(): OperationPolicy {
     return (
@@ -123,10 +128,29 @@ export class ManagementState {
     );
   }
 
-  /** The shell owns the gate and supplies it per mount, not per construction. */
-  public useOperationPolicy(policy: OperationPolicy): void {
+  /**
+   * The shell owns the gate and supplies it per mount. The shell does not
+   * remount features on a maintenance transition, so the policy is subscribed
+   * rather than read once.
+   */
+  public attachOperationPolicy(policy: OperationPolicy): void {
+    this.releaseOperationPolicy();
     this.#mountedPolicy = policy;
+    this.#unsubscribePolicy = policy.subscribe(() => {
+      this.#set({ mutationsDisabled: this.#mutationsDisabled() });
+    });
     this.#set({ mutationsDisabled: this.#mutationsDisabled() });
+  }
+
+  /** Detaches from the shell gate exactly once when the feature unmounts. */
+  public releaseOperationPolicy(): void {
+    const owned = this.#unsubscribePolicy;
+    this.#unsubscribePolicy = undefined;
+    try {
+      owned?.();
+    } catch {
+      // Detaching from the shell gate is best-effort at unmount.
+    }
   }
 
   #mutationsDisabled(): boolean {
@@ -138,14 +162,8 @@ export class ManagementState {
     }
   }
 
-  /**
-   * Recomputes the shell-driven gate without notifying, so the snapshot stays
-   * referentially stable while still reflecting a maintenance transition.
-   */
+  /** A pure snapshot; gate transitions arrive through the policy subscription. */
   public get value(): ManagementStateValue {
-    const disabled = this.#mutationsDisabled();
-    if (disabled !== this.#value.mutationsDisabled)
-      this.#value = { ...this.#value, mutationsDisabled: disabled };
     return this.#value;
   }
 

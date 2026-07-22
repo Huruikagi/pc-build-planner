@@ -94,7 +94,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const container = document.createElement("div");
   const handle = await registration.mount({
     container,
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
   });
 
@@ -185,7 +185,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
     state: reopenedState,
   }).mount({
     container: reopenedContainer,
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
   });
   await act(async () => reopenedState.load());

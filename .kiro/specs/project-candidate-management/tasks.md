@@ -146,6 +146,14 @@
   - _Requirements: 1.1, 2.1, 3.1, 4.2, 5.2, 6.1, 6.2_
   - _Boundary: CandidateManagementService, CandidateFeatureRegistration_
 
+- [x] 7.7 mount中のmaintenance遷移をUIへ反映する
+  - mount時に`operationPolicy.subscribe`を購読して`mutationsDisabled`を再評価・通知し、unmountで一度だけ解除する。
+  - 通知を伴わずにstate snapshotを書き換える実装を除去する。
+  - mount後にpolicyがmutation拒否へ遷移したとき、操作要素が無効表示へ切り替わり、解除後に復帰することをDOM testで確認する。
+  - _Depends: 7.4; application-shell 4.12_
+  - _Requirements: 1.5, 2.5, 5.4, 6.2_
+  - _Boundary: ManagementState, CandidateFeatureRegistration_
+
 ## Implementation Notes
 
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。

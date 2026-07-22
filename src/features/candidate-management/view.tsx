@@ -55,10 +55,12 @@ const errorMessage = (code: ManagementDisplayError["code"]) =>
 
 function CandidateListItem({
   candidate,
+  disabled,
   onDelete,
   onEdit,
 }: {
   readonly candidate: CandidateSummary;
+  readonly disabled: boolean;
   readonly onDelete: (candidate: CandidateSummary) => void;
   readonly onEdit: (candidate: CandidateSummary) => void;
 }) {
@@ -88,6 +90,7 @@ function CandidateListItem({
       <button
         aria-label={`${name}を編集`}
         data-edit-candidate-id={candidate.id}
+        disabled={disabled}
         onClick={() => onEdit(candidate)}
         type="button"
       >
@@ -96,6 +99,7 @@ function CandidateListItem({
       <button
         aria-label={`${name}を削除`}
         data-delete-candidate-id={candidate.id}
+        disabled={disabled}
         onClick={() => onDelete(candidate)}
         type="button"
       >
@@ -690,6 +694,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         {value.candidates.map((candidate) => (
           <CandidateListItem
             candidate={candidate}
+            disabled={value.isSaving || value.mutationsDisabled}
             key={candidate.id}
             onDelete={() => {
               state.requestDeletion({

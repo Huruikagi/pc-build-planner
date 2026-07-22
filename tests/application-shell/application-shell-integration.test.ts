@@ -146,6 +146,30 @@ test("maintenanceを共通表示と全featureの同一live policyへ反映しsta
   assert.equal(secondPolicy?.isAllowed("mutation"), true);
 });
 
+test("mount中のfeatureはpolicy購読でmaintenance遷移を再mountなしに観測する", async () => {
+  const { contexts, fixture, integration } = setup(snapshot(1, 1, false));
+  assert.equal((await integration.start()).ok, true);
+  const policy = contexts.get("projects")?.operationPolicy;
+  assert.ok(policy);
+
+  const observed: boolean[] = [];
+  const unsubscribe = policy.subscribe(() =>
+    observed.push(policy.isAllowed("mutation")),
+  );
+
+  fixture.emit(snapshot(2, 1, true));
+  // Same generation, later revision, still active: the allowed set is unchanged.
+  fixture.emit(snapshot(2, 2, true));
+  fixture.emit(snapshot(2, 3, false));
+
+  assert.deepEqual(observed, [false, true]);
+
+  unsubscribe();
+  fixture.emit(snapshot(3, 1, true));
+  assert.deepEqual(observed, [false, true]);
+  assert.equal(policy.isAllowed("mutation"), false);
+});
+
 test("初期snapshot失敗はfeatureをmountせずstartup failureへ変換する", async () => {
   const { contexts, integration, states } = setup(new Error("storage detail"));
   const result = await integration.start();

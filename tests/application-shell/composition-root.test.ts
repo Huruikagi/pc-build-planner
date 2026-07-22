@@ -74,7 +74,7 @@ test("concurrent startと二重startは一回だけ合成し同じroot APIを返
     onStateChange() {},
     reportError() {},
     createIntegration: () => ({
-      operationPolicy: { isAllowed: () => true },
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
       async start() {
         hostStarts += 1;
         return { ok: true, value: undefined };
@@ -286,7 +286,7 @@ test("deferred start中のstop後startは停止完了後に新epochで再起動�
     onStateChange() {},
     reportError() {},
     createIntegration: () => ({
-      operationPolicy: { isAllowed: () => true },
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
       async start() {
         hostStarts += 1;
         return { ok: true, value: undefined };
@@ -333,7 +333,7 @@ test("cleanup失敗resourceは所有権を保持して次のstopで再試行す�
     onStateChange() {},
     reportError() {},
     createIntegration: () => ({
-      operationPolicy: { isAllowed: () => true },
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
       async start() {
         return { ok: true, value: undefined };
       },

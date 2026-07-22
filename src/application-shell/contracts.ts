@@ -14,6 +14,11 @@ export type Availability =
 
 export interface OperationPolicy {
   isAllowed(kind: OperationKind): boolean;
+  /**
+   * Notifies when the allowed operation set changes. Features are not remounted
+   * on a maintenance transition, so this is their only way to observe one.
+   */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface FeatureMountContext {

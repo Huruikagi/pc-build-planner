@@ -254,6 +254,8 @@ interface ManagementStateSnapshotCodec {
 
 shellがmount contextで渡す`OperationPolicy`は`ManagementState`の依存として保持し、`isAllowed("mutation")`が偽の間はプロジェクト作成・改名・削除、候補作成・更新・削除をUI上で開始不能にし、serviceを呼ばない。Foundation側のfail-closedな拒否は最終防壁として維持し、UI抑止をその代替にしない。読取とナビゲーションはmaintenance中も維持する。
 
+shellはmaintenance遷移でfeatureを再mountしないため、policyを一度読んだ値として扱わない。mount時に`operationPolicy.subscribe`で購読し、通知を受けたら`mutationsDisabled`を再評価して購読者へ伝播させ、unmountで解除する。これによりmount中にmaintenanceが開始した場合も操作要素が即座に無効表示へ切り替わる。stateのsnapshotは通知を伴わずに書き換えない。
+
 #### ManagementView
 
 プロジェクトナビゲーション、カテゴリタブ、候補一覧、編集フォーム、削除確認を描画する。欠損は「未入力」、元表記は読み取り専用の別領域として表示する。

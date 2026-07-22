@@ -322,13 +322,19 @@ interface MaintenanceProjection {
   subscribe(listener: (state: ShellMaintenanceState) => void): () => void;
 }
 
-interface MutationGate {
+interface OperationPolicy {
   isAllowed(kind: OperationKind): boolean;
+  /** Notifies when the allowed operation set changes while a feature stays mounted. */
+  subscribe(listener: () => void): () => void;
 }
+
+interface MutationGate extends OperationPolicy {}
 ```
 
 - `(generation, revision)`を辞書順の単調cursorとして比較し、現在cursor以下の通知を無視する。foundationはmaintenance開始・更新・終了ごとにrevisionを増加させるため、同一generationの正当な終了と遅延した開始通知を決定的に区別できる。generationまたはrevisionが負、あるいは有限整数でない通知は契約違反として拒否する。
 - gateは`read`を常に許可し、`mutation`をactive中だけ拒否する。shellはdomain側の最終的なwrite拒否を代替しない。
+- shellはmaintenance遷移でfeatureを再mountしないため、gateはmount中のfeatureが観測できる唯一の可否source of truthである。よってgateは値の提供だけでなく変更通知も所有する。`subscribe`はprojectionの購読を内部に隠し、`isAllowed("mutation")`の結果が実際に変化したときだけ通知する。同一generationのrevision前進などで可否が変わらない通知は購読者へ伝播させない。最初の購読でprojectionへ接続し、最後の解除で切断する冪等なlifecycleを持つ。
+- featureはmount時に`FeatureMountContext.operationPolicy`を購読し、unmountで解除する。shellはfeature側の表示更新方法を解釈しない。
 - `FoundationMaintenanceSnapshot`はfoundationのcanonical `MaintenanceSnapshot`をalias importした型であり、`MaintenanceSnapshotSource`とともにshell内で再定義しない。sourceは`generation`、root `revision`、`active`だけを通知する。
 - shellはsourceの初期snapshot取得失敗をstartup failureへ変換し、成功snapshotを単調projectionへ渡す。active表示文言はshell所有の固定安全文字列から生成し、foundationへmessage責務を追加しない。
 

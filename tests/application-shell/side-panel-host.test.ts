@@ -71,7 +71,7 @@ function setup(
   const diagnostics: string[] = [];
   const host = createSidePanelHost({
     container,
-    operationPolicy: { isAllowed: () => true },
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     registry,
     onStateChange: (state) => states.push(state),
     reportError: (message) => diagnostics.push(message),
@@ -274,6 +274,7 @@ test("mount contextへoperation policyとfeature診断をそのまま接続す�
   const diagnostics: string[] = [];
   const operationPolicy = {
     isAllowed: (kind: "read" | "mutation") => kind === "read",
+    subscribe: () => () => {},
   };
   const registration: ApplicationFeatureRegistration = {
     ...feature("context", 0, events),

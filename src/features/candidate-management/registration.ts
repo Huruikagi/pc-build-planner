@@ -50,7 +50,7 @@ export interface CandidateFeatureRegistrationDependencies {
 const mountManagementView =
   (state: ManagementState): CandidateManagementMount =>
   async ({ container, operationPolicy, restoredState }) => {
-    state.useOperationPolicy(operationPolicy);
+    state.attachOperationPolicy(operationPolicy);
     const root = mountManagementReactRoot(container, state);
     let unmounted = false;
 
@@ -69,6 +69,7 @@ const mountManagementView =
       async unmount() {
         if (unmounted) return;
         unmounted = true;
+        state.releaseOperationPolicy();
         root.unmount();
       },
     };

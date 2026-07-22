@@ -63,6 +63,7 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 4. When foundationが現行世代のmaintenance終了状態を通知したとき, the application shell shall mutation操作の共通抑止を解除する
 5. If 古い世代または順序が逆転したmaintenance通知を受け取ったとき, the application shell shall 現在の新しい状態を後退させない
 6. The application shell shall maintenance leaseの取得、更新、解放または永続化を行わない
+7. When mount中のfeatureに対してmutationの可否が変化したとき, the application shell shall その変化をfeatureが購読できる形で通知し、featureの再mountを要求せずに表示を更新できるようにする
 
 ### 要件6: Runtime互換性と検証可能性
 **目的:** 開発者として、対象Chrome環境でshell統合を再現可能に検証したい。それによりfeature追加時の共有境界の回帰を防げる。
