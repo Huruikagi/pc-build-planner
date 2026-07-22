@@ -47,7 +47,7 @@
   - _Boundary: BuildService_
 
 - [ ] 3. Foundationの原子的参照修復を統合する
-- [ ] 3.1 候補・project変更時の参照修復を契約検証する
+- [x] 3.1 候補・project変更時の参照修復を契約検証する
   - 候補削除、未分類化、カテゴリ変更、project削除で無効になる構成参照が、上流mutationと同じcommitから除去されることを確認する。
   - current-build側から成功後のreconcile writeを発行せず、無関係な候補参照と数量が維持されることを確認する。
   - 完了時、各変更の保存回数が1回で、修復後queryに無効参照がなく、既存の有効な単一選択が維持される統合testが成功する。
@@ -125,3 +125,4 @@
 ## Implementation Notes
 
 - BuildService.execute（2.2）はBuildCommandの3種を単一のswitchで扱うため、CategoryPolicyのmode分岐（single/multiple）は2.2の時点で自然に実装済みとなった。2.3は新規実装ではなく、2.2で未検証だった複数選択カテゴリ経路（追加・数量変更・解除・重複防止・不正数量拒否）へservice testを追加してcanonical構成規則を証明するタスクだった。src側の変更は不要だった。
+- 3.1はlocal-data-foundationのreferenceRepairPolicy（候補削除・カテゴリ変更で変更対象自身のBuildItemだけを無条件に除去し、無関係な参照は触れない）と、current-build-managementのCurrentBuildQuery（2.1）を実データポートで結合するintegration testのみで完結した。src側の変更は不要で、Foundation側の修復が既にrequirement 4.1-4.4を満たしていることを確認できた。
