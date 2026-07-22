@@ -163,18 +163,24 @@ test("候補削除の失敗では確認対象と一覧を維持して再試行�
   assert.deepEqual(state.value.displayError, { code: "conflict" });
 });
 
-test("初期読込が利用不能なら保存データを変更せず更新操作を停止する", async () => {
-  const state = createManagementState({
-    query: createQuery({ kind: "unsupported-data" }),
-    service: createService(),
-    createMutationContext: () => context,
+for (const error of [
+  { kind: "unsupported-data" },
+  { kind: "storage" },
+  { kind: "quota" },
+] as const satisfies readonly ManagementError[]) {
+  test(`初期読込が ${error.kind} なら保存データを変更せず更新操作を停止する`, async () => {
+    const state = createManagementState({
+      query: createQuery(error),
+      service: createService(),
+      createMutationContext: () => context,
+    });
+
+    await state.load();
+    state.beginCreate(draft);
+    await state.saveEditor();
+
+    assert.equal(state.value.mutationsDisabled, true);
+    assert.deepEqual(state.value.displayError, { code: error.kind });
+    assert.equal(state.value.editor, null);
   });
-
-  await state.load();
-  state.beginCreate(draft);
-  await state.saveEditor();
-
-  assert.equal(state.value.mutationsDisabled, true);
-  assert.deepEqual(state.value.displayError, { code: "unsupported-data" });
-  assert.equal(state.value.editor, null);
-});
+}

@@ -98,7 +98,7 @@
   - _Depends: 5.2; application-shell 4.1_
   - _Requirements: 1.1, 1.2, 1.4, 2.1, 2.4, 3.1, 3.5, 4.2, 4.3, 4.4, 5.2, 6.1, 6.2_
   - _Boundary: CandidateFeatureRegistration, CandidateManagementService, ManagementView_
-- [ ] 6.2 下流feature向け公開契約と失敗回帰を検証する
+- [x] 6.2 下流feature向け公開契約と失敗回帰を検証する
   - 取り込み側の欠損候補作成、構成管理側の分類済み候補照会、prefillによる詳細編集を公開入口経由で確認する。
   - 破損・非対応・容量不足・利用不能時の更新停止、snapshot不正、保存失敗、削除取消、同一feature再activation、target cleanup失敗を架空fixtureで回帰し、実サイトデータをfixtureへ含めない。
   - _Depends: 6.1_
