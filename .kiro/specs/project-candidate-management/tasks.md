@@ -51,7 +51,7 @@
   - _Boundary: ManagementStateSnapshotCodec_
 
 - [ ] 4. 管理画面を実装する
-- [ ] 4.1 プロジェクト・カテゴリ・候補一覧を描画する
+- [x] 4.1 プロジェクト・カテゴリ・候補一覧を描画する
   - framework非依存のManagementStateを受け、project選択、全カテゴリ、未分類を含む候補一覧と欠損の「未入力」表示を描画する。
   - 利用者がprojectまたはcategoryを切り替えると該当候補だけが残り、外部文字列は通常のJSX childとして表示されることをDOM testで確認する。
   - _Depends: 3.1_
