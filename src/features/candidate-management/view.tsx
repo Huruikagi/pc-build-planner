@@ -34,8 +34,10 @@ function displayValue(
 
 function CandidateListItem({
   candidate,
+  onDelete,
 }: {
   readonly candidate: CandidateSummary;
+  readonly onDelete: (candidate: CandidateSummary) => void;
 }) {
   return (
     <li className="candidate-management__candidate">
@@ -59,6 +61,13 @@ function CandidateListItem({
         </div>
       </dl>
       {candidate.hasMissingDetails ? <p>未入力の項目があります</p> : null}
+      <button
+        data-delete-candidate-id={candidate.id}
+        onClick={() => onDelete(candidate)}
+        type="button"
+      >
+        削除
+      </button>
     </li>
   );
 }
@@ -416,6 +425,28 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
     }
     rerender();
   };
+  const confirmDeletion = async () => {
+    await state.confirmDeletion();
+    rerender();
+  };
+  const deletionTarget = (() => {
+    const deletion = value.deletion;
+    if (deletion === null) return null;
+    if (deletion.kind === "project") {
+      const project = value.projects.find(
+        (item) => item.id === deletion.projectId,
+      );
+      return project === undefined
+        ? null
+        : { kind: "project" as const, name: project.name };
+    }
+    const candidate = value.candidates.find(
+      (item) => item.id === deletion.candidateId,
+    );
+    return candidate === undefined
+      ? null
+      : { kind: "candidate" as const, name: displayValue(candidate.name) };
+  })();
 
   return (
     <section aria-label="候補管理" className="candidate-management">
@@ -439,6 +470,20 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               type="button"
             >
               名前を変更
+            </button>
+            <button
+              data-delete-project-id={project.id}
+              disabled={value.isSaving || value.mutationsDisabled}
+              onClick={() => {
+                state.requestDeletion({
+                  kind: "project",
+                  projectId: project.id,
+                });
+                rerender();
+              }}
+              type="button"
+            >
+              削除
             </button>
           </span>
         ))}
@@ -520,9 +565,53 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       </nav>
       <ul aria-label="候補一覧">
         {value.candidates.map((candidate) => (
-          <CandidateListItem candidate={candidate} key={candidate.id} />
+          <CandidateListItem
+            candidate={candidate}
+            key={candidate.id}
+            onDelete={() => {
+              state.requestDeletion({
+                kind: "candidate",
+                candidateId: candidate.id,
+              });
+              rerender();
+            }}
+          />
         ))}
       </ul>
+      {deletionTarget === null ? null : (
+        <section aria-label="削除確認" role="dialog">
+          <h2>削除を確認</h2>
+          {deletionTarget.kind === "project" ? (
+            <p>
+              プロジェクト「{deletionTarget.name}」と所属する候補も削除します。
+            </p>
+          ) : (
+            <p>候補「{deletionTarget.name}」を削除します。</p>
+          )}
+          {value.displayError === null ? null : (
+            <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+          )}
+          <button
+            data-confirm-deletion
+            disabled={value.isSaving || value.mutationsDisabled}
+            onClick={() => void confirmDeletion()}
+            type="button"
+          >
+            削除する
+          </button>
+          <button
+            data-cancel-deletion
+            disabled={value.isSaving}
+            onClick={() => {
+              state.cancelDeletion();
+              rerender();
+            }}
+            type="button"
+          >
+            取消
+          </button>
+        </section>
+      )}
       <CandidateEditorForm state={state} />
     </section>
   );

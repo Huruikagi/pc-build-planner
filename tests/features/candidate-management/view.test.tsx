@@ -372,3 +372,78 @@ test("候補の無効入力と保存失敗では編集draftを画面に保持す
   await act(() => root.unmount());
   container.remove();
 });
+
+test("プロジェクト削除では対象と所属候補への影響を確認してから実行する", async () => {
+  let deletedProjectId: ProjectId | undefined;
+  const service = {
+    async deleteProject(id: ProjectId) {
+      deletedProjectId = id;
+      return { ok: true as const, value: undefined };
+    },
+  } as unknown as CandidateManagementService;
+  const rendered = await renderView(service);
+
+  const request = rendered.container.querySelector(
+    `[data-delete-project-id='${firstProjectId}']`,
+  ) as HTMLButtonElement;
+  const projectName = (
+    rendered.container.querySelector(
+      `[data-project-id='${firstProjectId}']`,
+    ) as HTMLButtonElement
+  ).textContent;
+  await act(async () => request.click());
+
+  const confirmation = rendered.container.querySelector(
+    "[aria-label='削除確認']",
+  );
+  assert.match(confirmation?.textContent ?? "", new RegExp(projectName ?? ""));
+  assert.match(confirmation?.textContent ?? "", /所属する候補も削除/);
+  assert.equal(deletedProjectId, undefined);
+
+  const confirm = rendered.container.querySelector(
+    "[data-confirm-deletion]",
+  ) as HTMLButtonElement;
+  await act(async () => confirm.click());
+  assert.equal(deletedProjectId, firstProjectId);
+
+  await rendered.cleanup();
+});
+
+test("候補削除の取消は保存を行わず、失敗時は候補と確認を維持する", async () => {
+  let deleteCalls = 0;
+  const service = {
+    async deleteCandidate() {
+      deleteCalls += 1;
+      return { ok: false as const, error: { kind: "storage" as const } };
+    },
+  } as unknown as CandidateManagementService;
+  const rendered = await renderView(service);
+  const candidateId = "30000000-0000-4000-8000-000000000002";
+  const request = rendered.container.querySelector(
+    `[data-delete-candidate-id='${candidateId}']`,
+  ) as HTMLButtonElement;
+
+  await act(async () => request.click());
+  const cancel = rendered.container.querySelector(
+    "[data-cancel-deletion]",
+  ) as HTMLButtonElement;
+  await act(async () => cancel.click());
+  assert.equal(deleteCalls, 0);
+  assert.match(rendered.container.textContent ?? "", /未分類の候補/);
+
+  await act(async () => request.click());
+  const confirm = rendered.container.querySelector(
+    "[data-confirm-deletion]",
+  ) as HTMLButtonElement;
+  await act(async () => confirm.click());
+
+  assert.equal(deleteCalls, 1);
+  assert.match(rendered.container.textContent ?? "", /未分類の候補/);
+  assert.match(rendered.container.textContent ?? "", /保存に失敗しました/);
+  assert.notEqual(
+    rendered.container.querySelector("[aria-label='削除確認']"),
+    null,
+  );
+
+  await rendered.cleanup();
+});
