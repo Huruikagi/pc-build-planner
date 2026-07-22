@@ -18,13 +18,5 @@
       "approved": true
     }
   },
-  "ready_for_implementation": true,
-  "amendments": [
-    {
-      "id": "validate-impl-project-candidate-management-no-go-2026-07-23",
-      "reason": "kiro-validate-impl NO-GO remediation: production composition, UI affordances, error identity, operation policy, boundary drift, cross-cutting evidence",
-      "generated": true,
-      "human_approved": false
-    }
-  ]
+  "ready_for_implementation": true
 }

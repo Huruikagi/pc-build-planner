@@ -33,6 +33,18 @@ function displayValue(
   return value?.confirmed ?? value?.original ?? "未入力";
 }
 
+/**
+ * The editing counterpart of `displayValue`: a missing value stays empty so the
+ * list placeholder never becomes a value the user would have to delete first.
+ */
+function editableValue(
+  value:
+    | { readonly original: string | null; readonly confirmed?: string }
+    | undefined,
+): string {
+  return value?.confirmed ?? value?.original ?? "";
+}
+
 /** Each failure stays distinguishable so the user can pick a recovery action. */
 const errorMessages: Readonly<Record<ManagementDisplayError["code"], string>> =
   {
@@ -149,6 +161,22 @@ const changeCategory = (
     normalizedAttributes: attributesFor(category),
   }) as CandidateDraft;
 
+/**
+ * Clears a confirmed price without inventing one. Any extracted original is
+ * kept, because a missing confirmed value is a normal state, not a zero.
+ */
+const withoutConfirmedPrice = (draft: CandidateDraft): CandidateDraft => {
+  const { price, ...withoutPrice } = draft.product;
+  const original = price?.original ?? null;
+  return {
+    ...draft,
+    product:
+      original === null
+        ? withoutPrice
+        : { ...withoutPrice, price: { original } },
+  } as CandidateDraft;
+};
+
 type EditableAttribute = {
   readonly key: string;
   readonly label: string;
@@ -223,9 +251,19 @@ function FieldError({
   );
 }
 
+const editorKey = (editor: ManagementState["value"]["editor"]): string => {
+  if (editor === null) return "closed";
+  return editor.mode === "create"
+    ? `create:${editor.projectId}`
+    : `edit:${editor.candidateId}`;
+};
+
 function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [nameError, setNameError] = useState<string | null>(null);
+  /** Raw text keeps unparsable input visible without storing it in the draft. */
+  const [priceText, setPriceText] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const editor = state.value.editor;
   const fieldErrors = state.value.fieldErrors;
   const errorFor = (key: string) => fieldErrorMessage(fieldErrors[key]);
@@ -287,6 +325,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           setNameError("商品名を入力してください");
           return;
         }
+        if (priceError !== null) return;
         await state.saveEditor();
         rerender();
       }}
@@ -308,7 +347,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           }
           name="candidate-name"
           onChange={(event) => setProductText("name", event.target.value)}
-          value={displayValue(draft.product.name)}
+          value={editableValue(draft.product.name)}
         />
       </label>
       <FieldError
@@ -322,7 +361,8 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           onChange={(event) =>
             setProductText("manufacturer", event.target.value)
           }
-          value={displayValue(draft.product.manufacturer)}
+          placeholder="未入力"
+          value={editableValue(draft.product.manufacturer)}
         />
       </label>
       <label>
@@ -332,16 +372,35 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           onChange={(event) =>
             setProductText("modelNumber", event.target.value)
           }
-          value={displayValue(draft.product.modelNumber)}
+          placeholder="未入力"
+          value={editableValue(draft.product.modelNumber)}
         />
       </label>
       <label>
         価格
         <input
+          aria-describedby={
+            priceError === null ? undefined : "candidate-price-error"
+          }
+          aria-invalid={priceError === null ? undefined : true}
           inputMode="decimal"
           name="candidate-price-amount"
           onChange={(event) => {
-            const amount = Number(event.target.value);
+            const raw = event.target.value;
+            setPriceText(raw);
+            if (raw.trim().length === 0) {
+              setPriceError(null);
+              update(withoutConfirmedPrice(draft));
+              return;
+            }
+            const amount = Number(raw);
+            if (!Number.isFinite(amount)) {
+              // Unparsable text is reported, never rounded into a stored price.
+              setPriceError("数値で入力してください");
+              update(withoutConfirmedPrice(draft));
+              return;
+            }
+            setPriceError(null);
             const previous = draft.product.price;
             update({
               ...draft,
@@ -350,16 +409,18 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
                 price: {
                   original: previous?.original ?? null,
                   confirmed: {
-                    amount: Number.isFinite(amount) ? amount : 0,
+                    amount,
                     currency: previous?.confirmed?.currency ?? "JPY",
                   },
                 },
               },
             } as CandidateDraft);
           }}
-          value={draft.product.price?.confirmed?.amount ?? ""}
+          placeholder="未入力"
+          value={priceText ?? draft.product.price?.confirmed?.amount ?? ""}
         />
       </label>
+      <FieldError id="candidate-price-error" message={priceError} />
       <label>
         カテゴリ
         <select
@@ -741,7 +802,8 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
           </button>
         </section>
       )}
-      <CandidateEditorForm state={state} />
+      {/* Remounting per target drops raw input state left over from another candidate. */}
+      <CandidateEditorForm key={editorKey(value.editor)} state={state} />
     </section>
   );
 }

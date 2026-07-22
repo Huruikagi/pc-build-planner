@@ -439,3 +439,60 @@ test("maintenance中は変更操作を開始できずserviceを呼ばない", as
 
   await harness.cleanup();
 });
+
+test("欠損した任意項目は空欄で開き、一覧の未入力表示を値として持ち込まない", async () => {
+  const harness = await renderView();
+
+  await click(harness.container.querySelector("[data-create-candidate]"));
+
+  // Requirement 3.4 / 4.1: the placeholder must not become an editable value.
+  assert.equal(input(harness, "candidate-manufacturer").value, "");
+  assert.equal(input(harness, "candidate-model-number").value, "");
+  assert.equal(
+    input(harness, "candidate-manufacturer").getAttribute("placeholder"),
+    "未入力",
+  );
+
+  setInputValue(input(harness, "candidate-name"), "架空候補");
+  setInputValue(input(harness, "candidate-manufacturer"), "架空メーカー");
+  await act(async () => undefined);
+  await submitEditor(harness);
+
+  assert.equal(
+    harness.created[0]?.product.manufacturer?.confirmed,
+    "架空メーカー",
+  );
+
+  await harness.cleanup();
+});
+
+test("価格を空にすると保存対象から外れ、数値でない入力は0へ丸めない", async () => {
+  const harness = await renderView();
+
+  await click(harness.container.querySelector("[data-create-candidate]"));
+  setInputValue(input(harness, "candidate-name"), "架空候補");
+  setInputValue(input(harness, "candidate-price-amount"), "1234");
+  await act(async () => undefined);
+  setInputValue(input(harness, "candidate-price-amount"), "");
+  await act(async () => undefined);
+  await submitEditor(harness);
+
+  // Requirement 2.2: a cleared price stays missing instead of becoming zero.
+  assert.equal(harness.created.length, 1);
+  assert.equal(harness.created[0]?.product.price, undefined);
+
+  await click(harness.container.querySelector("[data-create-candidate]"));
+  setInputValue(input(harness, "candidate-name"), "架空候補2");
+  setInputValue(input(harness, "candidate-price-amount"), "いくらか");
+  await act(async () => undefined);
+
+  const priceInput = input(harness, "candidate-price-amount");
+  assert.equal(priceInput.value, "いくらか");
+  assert.equal(priceInput.getAttribute("aria-invalid"), "true");
+  await submitEditor(harness);
+
+  // The unparsable price blocks the save rather than storing a guessed amount.
+  assert.equal(harness.created.length, 1);
+
+  await harness.cleanup();
+});

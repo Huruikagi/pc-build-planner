@@ -305,7 +305,7 @@ test("商品名が空の候補は項目エラーとしてmutation前に拒否す
   assert.equal(commands.length, 0);
 });
 
-test("カテゴリ変更は共通項目と取得元を保持し、新カテゴリ属性だけを明示入力へ置換する", async () => {
+test("カテゴリ変更は省略された共通項目と取得元を保持し、新カテゴリ属性だけを明示入力へ置換する", async () => {
   const { data, commands } = createData({
     schemaVersion: 1,
     revision: 0 as Revision,
@@ -319,17 +319,17 @@ test("カテゴリ変更は共通項目と取得元を保持し、新カテゴ�
     data,
     now: () => timestamp,
   });
+  // The editor round-trips the stored draft, so only the category and its
+  // attributes differ; omitted source metadata must survive the change.
   const input: UpdateCandidateInput = {
     id: candidateId,
     draft: draft({
       projectId: otherProjectId,
       category: "memory",
-      product: { name: { original: "上書きしてはいけない" } },
-      sourceInfo: {
-        pageUrl: "https://catalog.example.invalid/replaced",
-        capturedAt: timestamp,
+      product: {
+        ...candidate().product,
+        name: { original: "抽出名", confirmed: "確認済みCPU" },
       },
-      sourceSnapshot: { name: "上書きしてはいけない" },
       normalizedAttributes: memoryAttributes,
     }),
   };
@@ -351,6 +351,47 @@ test("カテゴリ変更は共通項目と取得元を保持し、新カテゴ�
   assert.equal(commands.length, 1);
   assert.equal(commands[0]?.operation.entity, "candidatePart");
   assert.equal(commands[0]?.operation.kind, "update");
+});
+
+test("カテゴリ変更と同時に確定した共通項目の編集を破棄しない", async () => {
+  const { data, commands } = createData({
+    schemaVersion: 1,
+    revision: 0 as Revision,
+    projects: [project()],
+    candidateParts: [candidate()],
+    currentBuilds: [],
+    requestDedupe: [],
+    maintenance: { generation: 0 as never, active: false },
+  });
+  const service = createCandidateManagementService({
+    data,
+    now: () => timestamp,
+  });
+  const editedProduct = {
+    ...candidate().product,
+    name: { original: "抽出名", confirmed: "利用者が直した名前" },
+  };
+
+  const result = await service.updateCandidate(
+    {
+      id: candidateId,
+      draft: draft({
+        category: "memory",
+        product: editedProduct,
+        normalizedAttributes: memoryAttributes,
+      }),
+    },
+    { requestId, expectedRevision: 0 as Revision },
+  );
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.value.product, editedProduct);
+    assert.equal(result.value.category, "memory");
+    // Metadata the draft omits is still carried over from storage.
+    assert.deepEqual(result.value.sourceSnapshot, candidate().sourceSnapshot);
+  }
+  assert.equal(commands.length, 1);
 });
 
 test("同一カテゴリ編集は明示値を反映し、省略された取得元情報を保持する", async () => {

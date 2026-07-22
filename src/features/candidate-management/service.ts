@@ -258,23 +258,21 @@ export const createCandidateManagementService = (
         return { ok: false, error: managementError(existing.error.code) };
       if (existing.value === undefined)
         return { ok: false, error: { kind: "not-found", entity: "candidate" } };
-      const categoryChanged = existing.value.category !== input.draft.category;
-      const preservedSourceMetadata = sourceMetadata(
-        existing.value.sourceInfo,
-        existing.value.sourceSnapshot,
-      );
-      const updatedSourceMetadata = sourceMetadata(
-        input.draft.sourceInfo ?? existing.value.sourceInfo,
-        input.draft.sourceSnapshot ?? existing.value.sourceSnapshot,
-      );
+      /**
+       * A category change must not drop the shared fields, but it must not
+       * discard edits confirmed in the same submission either: the draft is the
+       * intended state, so omitted metadata falls back to the stored value.
+       * An update never reparents a candidate.
+       */
       const updated: CandidatePart = {
         id: existing.value.id,
-        projectId: categoryChanged
-          ? existing.value.projectId
-          : input.draft.projectId,
+        projectId: existing.value.projectId,
         category: input.draft.category,
-        product: categoryChanged ? existing.value.product : input.draft.product,
-        ...(categoryChanged ? preservedSourceMetadata : updatedSourceMetadata),
+        product: input.draft.product,
+        ...sourceMetadata(
+          input.draft.sourceInfo ?? existing.value.sourceInfo,
+          input.draft.sourceSnapshot ?? existing.value.sourceSnapshot,
+        ),
         normalizedAttributes: input.draft.normalizedAttributes,
         createdAt: existing.value.createdAt,
         updatedAt: now(),
