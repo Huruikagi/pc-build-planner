@@ -9,7 +9,7 @@
   - _Requirements: 4.5, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: CurrentBuildPublicApi, CurrentBuildQuery, BuildService contracts_
 
-- [ ] 1.2 カテゴリ別の選択ポリシーを実装する
+- [x] 1.2 カテゴリ別の選択ポリシーを実装する
   - CPU、CPUクーラー、マザーボード、電源、ケースを単一選択にする。
   - メモリ、GPU、ストレージ、ケースファン、拡張カード、その他を複数選択にし、canonicalな未分類カテゴリを選択不可にする。
   - 単一カテゴリは数量1、複数カテゴリは正整数だけを受け付ける規則を一元化する。
