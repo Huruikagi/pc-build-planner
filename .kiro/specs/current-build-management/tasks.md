@@ -74,7 +74,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: BuildState_
 
-- [ ] 4.2 rollback用のopaque画面snapshotを実装する
+- [x] 4.2 rollback用のopaque画面snapshotを実装する
   - 選択project・カテゴリと未保存数量draftだけをversion付きJSON値としてcaptureし、永続root、保存中request、購読、React objectを含めない。
   - shellから渡されたunknownをfeature境界で検証し、永続データ読込後に存在するproject・candidateだけを復元する。
   - 不正shape、未知version、stale参照では永続データを変更せず初期表示へ退避して識別可能なerrorを示す。
@@ -129,3 +129,4 @@
 - Foundationのschema validator（src/domain/validation.ts）は、currentBuild.items.candidatePartIdが同一project内の実在candidateを参照することを既にroot検証で強制している。存在しない候補・別project候補への参照はrepository.readRoot()の時点でcorrupt-dataとして拒否され、CurrentBuildQueryの不変条件チェックへは到達しない。一方、build重複・item重複・未分類参照・カテゴリ別選択数はFoundationが関知しないfeature固有不変条件であり、CurrentBuildQuery（2.1）が担う。3.2はこの分担を実Foundation stackで証明するintegration testのみで完結し、src側の変更は不要だった。
 - design.mdのSystem Flows図（Mermaid sequence diagram）はmutation経路だけを描いており、BuildStateがCurrentBuildQuery/CandidateQueryへ直接依存する読込経路は描かれていない。Components tableは「Service P0、Query P0」とだけ記載しCandidateQueryを明示しないが、BuildServiceの契約(execute()のみ)には一覧取得手段がないため、候補・project一覧の読込はcandidate-managementのManagementState前例（stateがqueryとserviceを両方直接持つ）に倣いBuildStateから CandidateQuery.listProjects/listBuildEligible を直接呼ぶ設計とした。
 - BuildErrorの無効化(構成変更を無効化)対象はrequirement 5.4が明示する3種類（corrupt-data・unsupported-data・storage）に限定し、quota・maintenance・conflictは再試行/再読込可能な一時的失敗として扱う。quotaを無効化対象に含めると5.4の文言（容量超過ではなく「破損・非対応・利用不能」）と食い違うため注意。
+- BuildStateはproject単位でしか候補を先読みしない（BuildService/CurrentBuildQueryと同じ設計判断）ため、snapshot codecのstale候補参照チェックは「現在選択中のcategoryで絞り込まれたvalue.candidates」ではなく、project全体のeligible候補集合に対して行う必要がある。BuildState.hasCandidateReference(candidatePartId, projectId)を追加し、category-management側のManagementState.hasCandidateReferenceと同じ役割を持たせた。

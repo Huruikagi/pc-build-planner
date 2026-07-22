@@ -285,6 +285,21 @@ export class BuildState {
     });
   }
 
+  /**
+   * Checks against all eligible candidates for the given project, not the
+   * category-filtered `value.candidates`, so a snapshot referencing a
+   * candidate outside the currently selected category still validates.
+   */
+  public hasCandidateReference(
+    candidatePartId: CandidatePartId,
+    projectId: ProjectId,
+  ): boolean {
+    return this.#allCandidates.some(
+      (candidate) =>
+        candidate.id === candidatePartId && candidate.projectId === projectId,
+    );
+  }
+
   async #loadForProject(projectId: ProjectId): Promise<void> {
     this.#set({
       isLoading: true,
