@@ -4,7 +4,7 @@
 
 `pc-build-planner` のMVPとして、Web上で見つけたPCパーツをユーザー操作によってローカルへ取り込み、プロジェクト内の候補として整理し、現在の構成と基本的な互換性を確認できるChrome拡張を構築する。
 
-横断レビューで判明した共有ファイルの所有権競合を解消するため、機能境界による垂直分割に `application-shell` を追加する。データ基盤を先に確立し、application shellがside panel host、feature registration、typed navigation、service workerを含むcomposition root、公開API組立、共通maintenance表示を所有する。各featureは自身の `public.ts`、登録モジュール、公開契約だけを所有し、共有runtime入口を直接変更しない。
+横断レビューで判明した共有ファイルの所有権競合を解消するため、機能境界による垂直分割に `application-shell` を追加した。local data foundationとapplication shellの実装を先に確立し、application shellがside panel host、feature registration、typed navigation、service workerを含むcomposition root、公開API組立、共通maintenance表示を所有する。各featureは自身の `public.ts`、登録モジュール、公開契約だけを所有し、共有runtime入口を直接変更しない。
 
 候補変更とCurrentBuild参照修復は成功後イベントによる別writeへ分離せず、local data foundationが所有する単一write authority内の原子的root mutationとして扱う。共通 `Result<T, E>` もfoundationをcanonical ownerとし、shellと各featureは再定義せず利用する。
 
@@ -54,6 +54,24 @@
 
 - なし。横断レビューの指摘はすべてspec境界または公開契約へ影響する。
 
+## Implementation Status
+
+2026-07-22時点の `tasks.md` と実装履歴を基準とする。`spec.json.phase` は仕様生成フェーズを表すため、実装進捗は各specのtask checkboxとこの一覧で追跡する。
+
+- [x] local-data-foundation — 40/40 sub-tasks完了。共有データ契約、永続化、単一write authority、runtime contributionを実装済み。
+- [x] application-shell — 26/26 sub-tasks完了。typed activation 5.1–5.3を含むshell、runtime composition、最終gateを実装済み。
+- [ ] project-candidate-management — 5/15 sub-tasks完了。登録境界、管理契約、project/candidate mutationとqueryまで実装済み。次はtask 3.1。
+- [ ] current-build-management — 0/12 sub-tasks完了。tasks承認済みで実装可能。project-candidate-management完了後に着手する。
+- [ ] product-page-capture — 0/11 sub-tasks完了。tasks承認済み。project-candidate-managementの公開編集契約へ依存する。
+- [ ] compatibility-checking — 0/14 sub-tasks完了。design/tasks未承認のため実装開始不可。
+- [ ] backup-restore — 0/14 sub-tasks完了。design/tasks未承認のため実装開始不可。
+
 ## Specs (dependency order)
 
-- [ ] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。root `src/index.ts`、`src/runtime/side-panel.ts`、`src/runtime/service-worker.ts`、`side-panel.html` の単一所有者となり、各featureの `public.ts` とworker registration portをcompositionする。共通 `Result<T, E>` と原子的root mutationはfoundationから利用する。Typed activation task 5.1–5.3は未実装。Dependencies: local-data-foundation
+- [x] local-data-foundation -- 共通 `Result<T, E>`、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencingを所有する。Dependencies: none
+- [x] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。typed activationを含め実装済み。Dependencies: local-data-foundation
+- [ ] project-candidate-management -- projectと候補の管理、候補query、typed candidate editor activationを所有する。Dependencies: local-data-foundation, application-shell
+- [ ] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
+- [ ] product-page-capture -- ユーザー操作起点の商品抽出、確認session、候補作成連携を所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
+- [ ] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
+- [ ] backup-restore -- バージョン付きJSONのbackup/restore、preflight、maintenance下の原子的置換を提供する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management

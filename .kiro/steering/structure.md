@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-現在はgreenfieldで、`src/` と `tests/` はまだ存在しない。実装上の既成パターンではなく、承認済みの製品文書、roadmap、specで合意した境界を初期構造の基準とする。
+greenfield段階を終え、`src/` と `tests/` にlocal data foundation、application shell、runtime composition、候補管理の初期sliceが実装されている。新規実装は、承認済みの製品文書、roadmap、specに加え、既存コードで確立した公開境界とテスト配置を基準とする。
 
 仕様は `.kiro/specs/<feature-name>/` にfeature単位で配置し、feature名にはkebab-caseを使用する。ステアリングはパターンを保持し、個別ファイルの完全な一覧やspecの実装詳細を重複させない。
 
@@ -100,7 +100,7 @@ import type { CandidateQuery } from "../features/candidate-management/public.js"
 - **型、interface、class、判別共用体**: PascalCase
 - **関数、method、変数**: camelCase
 - **定数**: 既存のWeb/TypeScript慣習に従い、共有契約上の固定識別子は意図が分かる名前にする
-- **テスト**: 対象名に `.test.ts` を付ける
+- **テスト**: 対象名に `.test.ts` またはReact DOM test用の `.test.tsx` を付ける
 - **spec feature名**: kebab-case
 
 ## コード構成の原則

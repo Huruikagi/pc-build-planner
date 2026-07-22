@@ -14,9 +14,9 @@ PC版Chrome 116以降を対象とする、ローカルファーストのManifest
 - **Package manager**: pnpm 11.13.1
 - **Module system**: ESM
 - **Code quality tool**: Biome 2.5.4
-- **Application source**: local data foundation、manifest、型検査、build、test基盤は実装済み。application shellと各UI featureは未実装。
+- **Application source**: local data foundation、application shell、Manifest V3 runtime、型検査、build、test基盤は実装済み。project-candidate-managementは管理契約と永続化連携まで実装済みで、UI feature群は段階的に実装中。
 
-UI実装にはReact 19系とReact DOMを使用する。React、React DOM、型定義は同一の対応majorへ揃え、production buildへ同梱する。TypeScript、bundler、test runner、DOM test環境、Chrome typingsを含む未導入依存は、実装開始時点の最新stable majorを選び、Node.js 26とChrome 116以降との互換性を確認して固定する。旧specに記載された候補バージョンを、導入済みの事実として扱わない。
+UI実装にはReact 19系とReact DOMを使用し、production buildへ同梱する。TypeScript 7、esbuild、Node test runner、jsdom、Playwright、Chrome typingsを固定済みであり、Node.js 26とChrome 116以降を対象に共通検証scriptから実行する。依存更新時はReact、React DOM、型定義の対応majorと、MV3/CSP互換性を維持する。
 
 ## 実行環境とUI
 
@@ -68,7 +68,16 @@ UI実装にはReact 19系とReact DOMを使用する。React、React DOM、型�
 
 ## 開発コマンド
 
-現時点では `package.json` のbuild、typecheck、test、validate scriptは未整備であり、既存の `test` は失敗するplaceholderである。実装基盤を導入するときに、再現可能な共通scriptとCI契約を同時に定義する。未整備のコマンドを成功する検証手段として扱わない。
+`package.json` に再現可能な共通scriptを整備済みである。
+
+- `pnpm typecheck` / `pnpm typecheck:public-consumer`: 実装と公開consumerの型検査
+- `pnpm lint`: Biomeによる静的検査
+- `pnpm test`: Node test runnerによるunit・contract・integration・DOM test
+- `pnpm build`: MV3 production artifactの生成
+- `pnpm test:e2e`: production build後のPlaywright E2E
+- `pnpm validate`: 型、lint、境界、fixture、最終build gate、test、E2Eをまとめたcanonical validation
+
+局所タスクでは関連する軽量commandを先に実行し、feature完了時は `pnpm validate` を基準とする。
 
 ## 主要な技術判断
 
