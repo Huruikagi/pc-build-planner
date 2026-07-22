@@ -20,14 +20,14 @@
   - 成功時は保存済みprojectを返し、競合・maintenance・保存失敗時は既存rootを維持することをサービステストで確認する。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
   - _Boundary: CandidateManagementService_
-- [ ] 2.3 候補の作成・更新・削除とカテゴリ変更規則を実装する
+- [x] 2.3 候補の作成・更新・削除とカテゴリ変更規則を実装する
   - 商品名以外の欠損と未分類を許容し、候補を単一projectへ直接所属させる。
   - カテゴリ変更で共通項目、sourceInfo、sourceSnapshotを保持し、カテゴリ固有の確認属性だけを明示入力から再構築する。
   - 削除・カテゴリ変更はFoundationの同一mutationへ委譲し、CurrentBuildを成功後の別writeで更新しない。
   - 有効な候補保存、項目エラー、削除後の他候補保持をサービステストで確認する。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.2, 4.3, 4.4, 4.5, 4.6, 5.2, 5.4_
   - _Boundary: CandidateManagementService_
-- [ ] 2.4 プロジェクト・カテゴリ別の候補照会を公開する
+- [x] 2.4 プロジェクト・カテゴリ別の候補照会を公開する
   - project一覧、指定projectとcategoryだけを返す候補一覧、未分類を除外する構成管理向け一覧を実装する。
   - 架空データでproject一覧、全カテゴリ、未分類、project境界、構成利用可能候補を区別できることを確認する。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.3, 6.4, 6.5_

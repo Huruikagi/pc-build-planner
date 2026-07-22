@@ -11,6 +11,7 @@ import type {
   Result,
   SourcedValue,
   SourceInfo,
+  SourceSnapshot,
 } from "../../domain/public.js";
 
 /** Management input; optional product and source fields remain intentionally absent when unknown. */
@@ -19,8 +20,9 @@ interface CandidateDraftBase {
   readonly product: CandidateProductValues & {
     readonly name: SourcedValue<string>;
   };
-  /** Capture may not know the source URL or capture time yet; persistence mapping owns defaults. */
+  /** Capture may not know source metadata; omission remains distinct from an empty value. */
   readonly sourceInfo?: SourceInfo;
+  readonly sourceSnapshot?: SourceSnapshot;
 }
 
 /** Keeps the selected category and its normalized attributes coherent before persistence. */
@@ -65,7 +67,8 @@ export interface CandidateSummary {
   readonly id: CandidatePartId;
   readonly projectId: ProjectId;
   readonly category: PartCategory;
-  readonly name: SourcedValue<string>;
+  /** Omitted when the stored candidate predates the required-name feature rule. */
+  readonly name?: SourcedValue<string>;
   readonly price?: SourcedValue<MoneyValue>;
   readonly manufacturer?: SourcedValue<string>;
   readonly modelNumber?: SourcedValue<string>;
