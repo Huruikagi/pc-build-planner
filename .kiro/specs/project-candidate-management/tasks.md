@@ -42,7 +42,7 @@
   - _Depends: 2.2, 2.3, 2.4_
   - _Requirements: 1.5, 2.5, 4.2, 4.5, 5.3, 5.4, 6.1, 6.2_
   - _Boundary: ManagementState_
-- [ ] 3.2 管理画面stateのopaque snapshot codecを実装する
+- [x] 3.2 管理画面stateのopaque snapshot codecを実装する
   - 選択、検証済みdraft、編集対象、削除確認、識別可能な表示エラーだけをversion付きJSON値としてcaptureし、永続root、保存中request、購読、React objectを除外する。
   - unknown入力、未知version、存在しないproject/candidate、無効draftを判別可能なrestore errorとして拒否する。
   - capture後にtarget失敗を模擬してrestoreすると同じ未保存画面stateへ戻り、不正snapshotでは保存済み候補を変更しないことをテストで確認する。

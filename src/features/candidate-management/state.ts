@@ -2,7 +2,6 @@ import type {
   CandidatePartId,
   PartCategory,
   ProjectId,
-  Result,
 } from "../../domain/public.js";
 import type {
   CandidateDraft,
@@ -63,6 +62,7 @@ const displayError = (error: ManagementError): ManagementDisplayError => ({
 
 /** Framework-independent UI state; persistence is accessed only through feature ports. */
 export class ManagementState {
+  #allCandidates: readonly CandidateSummary[] = [];
   #value: ManagementStateValue = {
     projects: [],
     candidates: [],
@@ -99,17 +99,25 @@ export class ManagementState {
       )
         ? this.#value.selectedProjectId
         : (projects.value[0]?.id ?? null);
-    const candidates = await this.#loadCandidates(
-      selectedProjectId,
-      this.#value.selectedCategory,
+    const candidates = await Promise.all(
+      projects.value.map(async (project) =>
+        this.dependencies.query.listCandidates({ projectId: project.id }),
+      ),
     );
-    if (!candidates.ok) {
-      this.#readFailure(candidates.error);
+    const failedCandidates = candidates.find((candidate) => !candidate.ok);
+    if (failedCandidates !== undefined && !failedCandidates.ok) {
+      this.#readFailure(failedCandidates.error);
       return;
     }
+    this.#allCandidates = candidates.flatMap((candidate) =>
+      candidate.ok ? candidate.value : [],
+    );
     this.#set({
       projects: projects.value,
-      candidates: candidates.value,
+      candidates: this.#filterCandidates(
+        selectedProjectId,
+        this.#value.selectedCategory,
+      ),
       selectedProjectId,
       isLoading: false,
       displayError: null,
@@ -119,17 +127,12 @@ export class ManagementState {
 
   public async selectProject(projectId: ProjectId): Promise<void> {
     if (this.#value.mutationsDisabled) return;
-    const candidates = await this.#loadCandidates(
-      projectId,
-      this.#value.selectedCategory,
-    );
-    if (!candidates.ok) {
-      this.#readFailure(candidates.error);
-      return;
-    }
     this.#set({
       selectedProjectId: projectId,
-      candidates: candidates.value,
+      candidates: this.#filterCandidates(
+        projectId,
+        this.#value.selectedCategory,
+      ),
       displayError: null,
     });
   }
@@ -137,17 +140,12 @@ export class ManagementState {
   public async selectCategory(category: PartCategory | null): Promise<void> {
     if (this.#value.selectedProjectId === null || this.#value.mutationsDisabled)
       return;
-    const candidates = await this.#loadCandidates(
-      this.#value.selectedProjectId,
-      category,
-    );
-    if (!candidates.ok) {
-      this.#readFailure(candidates.error);
-      return;
-    }
     this.#set({
       selectedCategory: category,
-      candidates: candidates.value,
+      candidates: this.#filterCandidates(
+        this.#value.selectedProjectId,
+        category,
+      ),
       displayError: null,
     });
   }
@@ -230,14 +228,26 @@ export class ManagementState {
     await this.load();
   }
 
-  async #loadCandidates(
+  public hasCandidateReference(
+    candidateId: CandidatePartId,
+    projectId: ProjectId,
+  ): boolean {
+    return this.#allCandidates.some(
+      (candidate) =>
+        candidate.id === candidateId && candidate.projectId === projectId,
+    );
+  }
+
+  #filterCandidates(
     projectId: ProjectId | null,
     category: PartCategory | null,
-  ): Promise<Result<readonly CandidateSummary[], ManagementError>> {
-    if (projectId === null) return { ok: true, value: [] };
-    return category === null
-      ? this.dependencies.query.listCandidates({ projectId })
-      : this.dependencies.query.listCandidates({ projectId, category });
+  ): readonly CandidateSummary[] {
+    if (projectId === null) return [];
+    return this.#allCandidates.filter(
+      (candidate) =>
+        candidate.projectId === projectId &&
+        (category === null || candidate.category === category),
+    );
   }
 
   #readFailure(error: ManagementError): void {
