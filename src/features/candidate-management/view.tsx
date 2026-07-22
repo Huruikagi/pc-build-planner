@@ -1,4 +1,5 @@
-import { useReducer } from "react";
+import type { FormEvent } from "react";
+import { useReducer, useState } from "react";
 
 import { PART_CATEGORIES, type PartCategory } from "../../domain/public.js";
 import type { CandidateSummary } from "./contracts.js";
@@ -61,6 +62,11 @@ function CandidateListItem({
 /** Renders feature-owned state without moving domain state into React hooks. */
 export function ManagementView({ state }: { readonly state: ManagementState }) {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const [projectName, setProjectName] = useState("");
+  const [editingProjectId, setEditingProjectId] = useState<
+    (typeof state.value.projects)[number]["id"] | null
+  >(null);
+  const [projectNameError, setProjectNameError] = useState<string | null>(null);
   const value = state.value;
 
   const selectProject = async (
@@ -73,24 +79,108 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
     await state.selectCategory(category);
     rerender();
   };
+  const beginRenameProject = (project: (typeof value.projects)[number]) => {
+    setEditingProjectId(project.id);
+    setProjectName(project.name);
+    setProjectNameError(null);
+  };
+  const saveProject = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (projectName.trim().length === 0) {
+      setProjectNameError("プロジェクト名を入力してください");
+      return;
+    }
+    setProjectNameError(null);
+    if (editingProjectId === null) {
+      await state.createProject(projectName);
+    } else {
+      await state.renameProject(editingProjectId, projectName);
+    }
+    if (state.value.displayError === null) {
+      setProjectName("");
+      setEditingProjectId(null);
+    }
+    rerender();
+  };
 
   return (
     <section aria-label="候補管理" className="candidate-management">
       <nav aria-label="プロジェクト">
         {value.projects.map((project) => (
-          <button
-            aria-current={
-              project.id === value.selectedProjectId ? "page" : undefined
-            }
-            data-project-id={project.id}
-            key={project.id}
-            onClick={() => void selectProject(project.id)}
-            type="button"
-          >
-            {project.name}
-          </button>
+          <span key={project.id}>
+            <button
+              aria-current={
+                project.id === value.selectedProjectId ? "page" : undefined
+              }
+              data-project-id={project.id}
+              onClick={() => void selectProject(project.id)}
+              type="button"
+            >
+              {project.name}
+            </button>
+            <button
+              data-rename-project-id={project.id}
+              disabled={value.isSaving || value.mutationsDisabled}
+              onClick={() => beginRenameProject(project)}
+              type="button"
+            >
+              名前を変更
+            </button>
+          </span>
         ))}
       </nav>
+      <form
+        aria-label="プロジェクト編集"
+        onSubmit={(event) => void saveProject(event)}
+      >
+        <label>
+          {editingProjectId === null
+            ? "新しいプロジェクト名"
+            : "プロジェクト名"}
+          <input
+            aria-describedby={
+              projectNameError === null ? undefined : "project-name-error"
+            }
+            aria-invalid={projectNameError === null ? undefined : true}
+            disabled={value.isSaving || value.mutationsDisabled}
+            name="project-name"
+            onChange={(event) => {
+              setProjectName(event.target.value);
+              setProjectNameError(null);
+            }}
+            value={projectName}
+          />
+        </label>
+        {projectNameError === null ? null : (
+          <p id="project-name-error" role="alert">
+            {projectNameError}
+          </p>
+        )}
+        {value.displayError === null ? null : (
+          <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+        )}
+        <button
+          disabled={value.isSaving || value.mutationsDisabled}
+          type="submit"
+        >
+          {editingProjectId === null
+            ? "プロジェクトを作成"
+            : "プロジェクト名を保存"}
+        </button>
+        {editingProjectId === null ? null : (
+          <button
+            disabled={value.isSaving}
+            onClick={() => {
+              setEditingProjectId(null);
+              setProjectName("");
+              setProjectNameError(null);
+            }}
+            type="button"
+          >
+            キャンセル
+          </button>
+        )}
+      </form>
       <nav aria-label="カテゴリ">
         <button
           aria-current={value.selectedCategory === null ? "page" : undefined}

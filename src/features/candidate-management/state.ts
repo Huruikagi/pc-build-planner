@@ -150,6 +150,36 @@ export class ManagementState {
     });
   }
 
+  public async createProject(name: string): Promise<void> {
+    if (this.#value.isSaving || this.#value.mutationsDisabled) return;
+    this.#set({ isSaving: true, displayError: null });
+    const result = await this.dependencies.service.createProject(
+      { name },
+      this.dependencies.createMutationContext(),
+    );
+    if (!result.ok) {
+      this.#set({ isSaving: false, displayError: displayError(result.error) });
+      return;
+    }
+    this.#set({ isSaving: false });
+    await this.load();
+  }
+
+  public async renameProject(id: ProjectId, name: string): Promise<void> {
+    if (this.#value.isSaving || this.#value.mutationsDisabled) return;
+    this.#set({ isSaving: true, displayError: null });
+    const result = await this.dependencies.service.renameProject(
+      { id, name },
+      this.dependencies.createMutationContext(),
+    );
+    if (!result.ok) {
+      this.#set({ isSaving: false, displayError: displayError(result.error) });
+      return;
+    }
+    this.#set({ isSaving: false });
+    await this.load();
+  }
+
   public beginCreate(draft: CandidateDraft): void {
     if (this.#value.mutationsDisabled) return;
     this.#set({
