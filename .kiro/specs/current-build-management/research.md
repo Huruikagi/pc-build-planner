@@ -4,9 +4,9 @@
 - **Feature**: `current-build-management`
 - **Discovery Scope**: Extension
 - **Key Findings**:
-  - Foundationは`CurrentBuild`の同一プロジェクト参照と正整数数量だけを保証し、カテゴリ別選択規則は下流へ委ねる。
-  - CandidateQueryは未分類を除く`listBuildEligible`を公開し、候補の所有権は候補管理境界に残る。
-  - 候補カテゴリ変更時の単一選択競合は自動解決せず、既存構成を保持して利用者へ選択を求める必要がある。
+  - Foundationは参照と正整数数量を検証するが、projectごと最大一構成、item重複、カテゴリ別選択数は本featureが検証する。
+  - CandidateQueryはcanonical literal `uncategorized`を除く`listBuildEligible`を公開し、候補の所有権は候補管理境界に残る。
+  - 最新shellはopaque stateのcapture/restoreを公開するため、current-build registrationもsnapshot-aware lifecycleへ追従する。
 
 ## Research Log
 
@@ -40,7 +40,8 @@
 - **Trade-offs**: カテゴリ追加時にポリシー更新と下流再検証が必要になる。
 - **Follow-up**: 全カテゴリの網羅テストを追加する。
 
-### Decision: 候補変更の整合性を明示的調停にする
+### Superseded Decision: 候補変更の整合性を明示的調停にする
+- **Status**: 2026-07-20のFoundation原子的参照修復への追従により不採用へ変更した。以下は判断履歴として残す。
 - **Context**: 単一カテゴリ競合を暗黙に置換すると利用者の選択を失う。
 - **Alternatives Considered**: 新候補を常に優先、既存候補を常に優先、競合解決を要求。
 - **Selected Approach**: 未分類化・削除は自動除去し、単一カテゴリ競合だけは選択確定まで保存を保留する。
@@ -60,7 +61,7 @@
 
 ### 2026-07-19 React UI方針更新
 - **背景**: カテゴリ別候補、単一・複数選択、数量、競合、保存失敗を同一画面で一貫して表示する必要がある。
-- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
+- **判断**: `view.tsx`をReact function componentとし、feature registrationが既存`FeatureMountContext`とReact root lifecycleを接続する。独立`react-root.tsx`案は、実装済みcandidate registrationとの整合と単純化のため2026-07-22に統合した。
 - **境界**: BuildState、service、query、category policyはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
 - **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
 - **検証**: React DOM操作とroot cleanupを統合testで確認する。
@@ -72,3 +73,37 @@
 - **Decision**: BuildServiceからcandidate lifecycle command、`reconcile`、手動single-conflict resolutionを除去する。本featureは利用者による構成編集と修復済みqueryの表示だけを所有する。
 - **Trade-offs**: カテゴリ変更された候補を新カテゴリで採用したい場合は、修復後に利用者が現在構成画面から明示的に選び直す。
 - **Verification**: Foundation contract fixtureで単一commit、他選択維持、無効参照除去、本featureからの追加writeなしを検証する。
+
+### 2026-07-22 実装済み上流契約との再照合
+- **Context**: `local-data-foundation`、`application-shell`、`project-candidate-management`の設計・実装更新後に、既存current-build設計の実装可能性を再確認した。
+- **Sources Consulted**: 上流3 specのrequirements/design/tasks、`src/domain/public.ts`、`src/persistence/public.ts`、`src/application-shell/public.ts`、`src/features/candidate-management/public.ts`、`package.json`。
+- **Findings**:
+  - canonical保存契約は`BuildItem.candidatePartId`、`PositiveInteger`、`UtcTimestamp`、`CurrentBuildId`であり、旧設計の`partId`と`UtcIsoDateTime`は存在しない。
+  - Foundationの書込は専用putではなく、`requestId`、`expectedRevision`、`RootOperation`を持つ`RootMutationCommand`である。currentBuildの初回はcreate、既存時はIDを保持したupdateが必要である。
+  - Foundationはprojectごと一構成やカテゴリ別選択数を保証しないため、CurrentBuildQueryが同じroot内のcandidateと照合してfeature不変条件を検証する。
+  - shellの公開mount契約には`restoredState`と`captureState`が実装済みである。activation rollback時に未保存UI状態を安全に戻すにはfeature-owned snapshot codecが必要である。
+  - テスト基盤はVitestではなくNode.js test runner、tsx、jsdomであり、E2EだけPlaywrightを使用する。
+  - Foundationの最新参照修復はcandidate変更・削除だけでなくproject削除時のcandidateとCurrentBuildカスケードも同一commitで扱う。
+- **Implications**: designの型名、mutation flow、query validation、file plan、shell registration、test stackを更新する。候補・project lifecycle後の追加reconcile write禁止は維持する。
+
+### 2026-07-22 上流文書と公開実装の差異
+- **Context**: application-shell設計本文のinterface例と、同specのrequirements/tasksおよび実装済み公開契約に差異があった。
+- **Sources Consulted**: `application-shell/design.md`、`application-shell/tasks.md`、`src/application-shell/contracts.ts`。
+- **Findings**: 設計中の古いinterface例にはsnapshot fieldがない一方、requirements/tasksと実装には`FeatureMountContext.restoredState`、`FeatureMountHandle.captureState`が存在する。
+- **Implications**: 実装済みpublic contractと承認済みlifecycle要件をcurrent-buildの統合基準とする。上流契約が再変更された場合はRevalidation Triggerで再確認する。
+
+### Decision: canonical CurrentBuildをprojectionで改名せず公開する
+- **Context**: 旧設計の公開snapshotが`partId`と`number`へ再定義され、Foundation modelとの変換責任が不明だった。
+- **Alternatives Considered**: feature固有DTOへrenameする、canonical `CurrentBuild`をread-onlyで包む。
+- **Selected Approach**: `CurrentBuildSnapshot`はrootの`Revision`と`Readonly<CurrentBuild> | null`を持ち、itemは`candidatePartId`と`PositiveInteger`を維持する。
+- **Rationale**: 候補詳細や互換性結果を増やさず、下流の解釈ずれと重複型を防げる。
+- **Trade-offs**: 下流はFoundationの安定したdomain型へ依存するため、その形状変更時は再検証が必要になる。
+- **Follow-up**: public consumer typecheckでfield名とreadonly性を固定する。
+
+### Decision: snapshot-aware registrationを最小構成で採用する
+- **Context**: cross-feature activation失敗時、shellはsource featureのopaque snapshotを使ってrollback mountする。
+- **Alternatives Considered**: snapshot非対応としてactivationを拒否する、永続状態だけ再queryする、未保存UI状態だけをcodecでcaptureする。
+- **Selected Approach**: 選択project/categoryと数量draftだけをversion付きsnapshotに含め、永続root、保存中request、React objectは含めない。
+- **Rationale**: shell境界へ業務stateを漏らさず、利用者の未保存入力をactivation rollback後も維持できる。
+- **Trade-offs**: restore時に永続参照の再検証が必要になる。
+- **Follow-up**: invalid shape、unknown version、stale reference、cleanupをregistration contract testで検証する。
