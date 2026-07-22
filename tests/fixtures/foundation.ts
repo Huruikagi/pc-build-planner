@@ -157,6 +157,38 @@ export const buildMissingProductFieldsRoot = (): LocalDataRoot => {
   };
 };
 
+/** schema 1の取得元ありfixtureを保ちつつ、optional取得元の互換形状を提供する。 */
+export const buildSourceMetadataCompatibilityRoot = (): LocalDataRoot => {
+  const root = structuredClone(buildFoundationRoot());
+  return {
+    ...root,
+    candidateParts: root.candidateParts.map((candidate, index) => {
+      if (index === 0) {
+        const {
+          sourceInfo: _sourceInfo,
+          sourceSnapshot: _sourceSnapshot,
+          ...withoutSource
+        } = candidate;
+        return withoutSource;
+      }
+      if (index === 1)
+        return {
+          ...candidate,
+          sourceInfo: { siteName: "架空部分取得元" },
+        };
+      if (index === 2)
+        return {
+          ...candidate,
+          sourceSnapshot: {
+            name: "架空マザーボード 元表記",
+            manufacturer: null,
+          },
+        };
+      return candidate;
+    }),
+  };
+};
+
 export interface CorruptFoundationRoot {
   readonly name: string;
   readonly root: unknown;
@@ -219,5 +251,19 @@ export const buildCorruptFoundationRoots =
       }),
       expectedCode: "invalid-positive-integer",
       expectedPath: "$.currentBuilds[0].items[0].quantity",
+    },
+    {
+      name: "source snapshot image field",
+      root: corrupted((root) => {
+        const candidates = root.candidateParts as Array<
+          Record<string, unknown>
+        >;
+        if (candidates[0])
+          candidates[0].sourceSnapshot = {
+            image: "架空禁止値",
+          };
+      }),
+      expectedCode: "forbidden-payload",
+      expectedPath: "$.candidateParts[0].sourceSnapshot.image",
     },
   ];

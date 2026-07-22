@@ -298,7 +298,7 @@
   - _Requirements: 3.1, 3.2, 3.5, 3.9, 8.2_
   - _Boundary: ReferenceRepairPolicy, MutationPipeline, FoundationDataPort Regression_
 
-- [ ] 6.10 候補取得元の後方互換fixture回帰を追加する
+- [x] 6.10 候補取得元の後方互換fixture回帰を追加する
   - 既存の取得元付きschema 1 fixtureを受理したまま、取得元なし・部分取得元・元表記snapshot付きの架空候補を追加する
   - sourceSnapshotのkey不在と明示的なnullがJSON往復およびroot検証後も区別され、代替URL・日時が生成されないことを確認する
   - 完了時、架空fixtureだけを使うdomain回帰が新旧両方の有効候補と禁止payload拒否を確認できる

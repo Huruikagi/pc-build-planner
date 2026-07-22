@@ -14,6 +14,7 @@ const {
   buildCorruptFoundationRoots,
   buildFoundationRoot,
   buildMissingProductFieldsRoot,
+  buildSourceMetadataCompatibilityRoot,
 } = fixtureModule;
 
 const jsonRoundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -56,6 +57,34 @@ test("欠損商品値と元表記・確認値を別々に表現するbuilderが�
   assert.equal(schemaValidator.validateRoot(missing).ok, true);
 });
 
+test("新旧取得元fixtureがJSON往復とroot検証後も欠損・nullを補完しない", () => {
+  const legacy = jsonRoundTrip(buildFoundationRoot());
+  assert.equal(schemaValidator.validateRoot(legacy).ok, true);
+  assert.deepEqual(legacy.candidateParts[0].sourceInfo, {
+    pageUrl: "https://catalog.example.invalid/synthetic-part-1",
+    siteName: "架空部品カタログ",
+    capturedAt: "2026-07-19T00:00:00.000Z",
+  });
+
+  const compatible = jsonRoundTrip(buildSourceMetadataCompatibilityRoot());
+  const validated = schemaValidator.validateRoot(compatible);
+  assert.equal(validated.ok, true);
+  const [withoutSource, partialSource, withSnapshot] =
+    validated.value.candidateParts;
+
+  assert.equal("sourceInfo" in withoutSource, false);
+  assert.equal("sourceSnapshot" in withoutSource, false);
+  assert.deepEqual(partialSource.sourceInfo, { siteName: "架空部分取得元" });
+  assert.equal("pageUrl" in partialSource.sourceInfo, false);
+  assert.equal("capturedAt" in partialSource.sourceInfo, false);
+  assert.deepEqual(withSnapshot.sourceSnapshot, {
+    name: "架空マザーボード 元表記",
+    manufacturer: null,
+  });
+  assert.equal("modelNumber" in withSnapshot.sourceSnapshot, false);
+  assert.equal(withSnapshot.sourceSnapshot.manufacturer, null);
+});
+
 test("破損root builderはJSON往復可能でvalidatorが期待した理由で拒否する", () => {
   for (const fixture of buildCorruptFoundationRoots()) {
     const result = schemaValidator.validateRoot(jsonRoundTrip(fixture.root));
@@ -70,6 +99,10 @@ test("foundation fixture sourceに実サイトassetや商品値を含まない",
   assert.deepEqual(findFixtureValueViolations(buildFoundationRoot()), []);
   assert.deepEqual(
     findFixtureValueViolations(buildMissingProductFieldsRoot()),
+    [],
+  );
+  assert.deepEqual(
+    findFixtureValueViolations(buildSourceMetadataCompatibilityRoot()),
     [],
   );
 });
