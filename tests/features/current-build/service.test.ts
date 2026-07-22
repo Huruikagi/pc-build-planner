@@ -34,10 +34,19 @@ const otherCpuCandidateId =
   "30000000-0000-4000-8000-000000000002" as Uuid as CandidatePartId;
 const foreignCandidateId =
   "30000000-0000-4000-8000-000000000004" as Uuid as CandidatePartId;
+const memoryCandidateId =
+  "30000000-0000-4000-8000-000000000005" as Uuid as CandidatePartId;
+const otherMemoryCandidateId =
+  "30000000-0000-4000-8000-000000000006" as Uuid as CandidatePartId;
 
 const cpuAttributes = {
   category: "cpu",
   socket: { original: "架空ソケット", confirmed: "SYN-1" },
+} satisfies NormalizedAttributes;
+
+const memoryAttributes = {
+  category: "memory",
+  memoryStandard: { original: "架空規格", confirmed: "SYN-DDR" },
 } satisfies NormalizedAttributes;
 
 const candidate = (
@@ -365,4 +374,254 @@ test("同一候補への再選択は冪等でありrevisionが変化しない限
   if (!result.ok) return;
   assert.deepEqual(result.value.currentBuild?.items, existingBuild.items);
   assert.equal(commands.length, 0);
+});
+
+test("複数選択カテゴリで候補を追加すると他の選択を維持して数量1で追加する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+      { candidatePartId: memoryCandidateId, quantity: 1 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service, commands } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+        candidate(otherMemoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 6 as Revision,
+    }),
+  );
+
+  const result = await service.execute(
+    { type: "select", projectId, candidatePartId: otherMemoryCandidateId },
+    context(6 as Revision),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.currentBuild?.items, [
+    { candidatePartId: cpuCandidateId, quantity: 1 },
+    { candidatePartId: memoryCandidateId, quantity: 1 },
+    { candidatePartId: otherMemoryCandidateId, quantity: 1 },
+  ]);
+  assert.equal(result.value.currentBuild?.id, existingBuild.id);
+  assert.equal(commands[0]?.operation.kind, "update");
+});
+
+test("正整数の数量変更は他の選択を維持して指定数量を保存する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+      { candidatePartId: memoryCandidateId, quantity: 1 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 7 as Revision,
+    }),
+  );
+
+  const result = await service.execute(
+    {
+      type: "set-quantity",
+      projectId,
+      candidatePartId: memoryCandidateId,
+      quantity: 4,
+    },
+    context(7 as Revision),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.currentBuild?.items, [
+    { candidatePartId: cpuCandidateId, quantity: 1 },
+    { candidatePartId: memoryCandidateId, quantity: 4 },
+  ]);
+});
+
+test("複数選択カテゴリの候補を選択解除すると他の選択を維持して対象候補だけを除外する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+      { candidatePartId: memoryCandidateId, quantity: 3 as PositiveInteger },
+      {
+        candidatePartId: otherMemoryCandidateId,
+        quantity: 2 as PositiveInteger,
+      },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+        candidate(otherMemoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 8 as Revision,
+    }),
+  );
+
+  const result = await service.execute(
+    { type: "remove", projectId, candidatePartId: memoryCandidateId },
+    context(8 as Revision),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.currentBuild?.items, [
+    { candidatePartId: cpuCandidateId, quantity: 1 },
+    { candidatePartId: otherMemoryCandidateId, quantity: 2 },
+  ]);
+});
+
+test("同一候補の再追加は重複項目にせず単一の数量として保持する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: memoryCandidateId, quantity: 3 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service, commands } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 9 as Revision,
+    }),
+  );
+
+  const result = await service.execute(
+    { type: "select", projectId, candidatePartId: memoryCandidateId },
+    context(9 as Revision),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.currentBuild?.items, [
+    { candidatePartId: memoryCandidateId, quantity: 3 },
+  ]);
+  assert.equal(commands.length, 0);
+});
+
+test("不正な数量は保存前に拒否され既存の有効な構成を保持する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: memoryCandidateId, quantity: 2 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service, commands, currentRoot } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 10 as Revision,
+    }),
+  );
+
+  for (const quantity of [0, -1, 1.5]) {
+    const result = await service.execute(
+      {
+        type: "set-quantity",
+        projectId,
+        candidatePartId: memoryCandidateId,
+        quantity,
+      },
+      context(10 as Revision),
+    );
+
+    assert.equal(result.ok, false);
+    if (result.ok) continue;
+    assert.equal(result.error.kind, "validation");
+  }
+
+  assert.equal(commands.length, 0);
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
+});
+
+test("選択対象外の候補への数量変更はnot-foundとして保存前に拒否する", async () => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: memoryCandidateId, quantity: 2 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const { service, commands, currentRoot } = createHarness(
+    rootWith({
+      candidateParts: [
+        candidate(cpuCandidateId),
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      currentBuilds: [existingBuild],
+      revision: 11 as Revision,
+    }),
+  );
+
+  const result = await service.execute(
+    {
+      type: "set-quantity",
+      projectId,
+      candidatePartId: otherMemoryCandidateId,
+      quantity: 2,
+    },
+    context(11 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "not-found");
+  assert.equal(commands.length, 0);
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
 });
