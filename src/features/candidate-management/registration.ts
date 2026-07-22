@@ -51,6 +51,8 @@ const mountManagementView =
   (state: ManagementState): CandidateManagementMount =>
   async ({ container, operationPolicy, restoredState }) => {
     state.attachOperationPolicy(operationPolicy);
+    /** A mount starts from persisted data; only a snapshot may restore a screen. */
+    state.resetTransientState();
     const root = mountManagementReactRoot(container, state);
     let unmounted = false;
 

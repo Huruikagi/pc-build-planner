@@ -139,6 +139,38 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
   assert.equal((await prepared.value.activate()).ok, false);
 });
 
+test("mutation が禁止された状態の activation は編集画面を開かず失敗を返す", async () => {
+  const state = createState();
+  await state.load();
+  // Maintenance closes the editor, so activation must not report success.
+  state.attachOperationPolicy({
+    isAllowed: (operation) => operation !== "mutation",
+    subscribe: () => () => {},
+  });
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const prepared = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: {
+      projectId: prefillProjectId,
+      draft: { ...draft, projectId: prefillProjectId },
+    },
+  });
+
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: false,
+    error: {
+      kind: "activation_failed",
+      detail: "candidate editor could not be opened",
+    },
+  });
+  assert.equal(state.value.editor, null);
+  state.releaseOperationPolicy();
+});
+
 test("存在しない project を指定した activation は draft を変更しない", async () => {
   const state = createState();
   await state.load();

@@ -178,6 +178,21 @@ export class ManagementState {
     };
   }
 
+  /**
+   * Drops unsaved screen state so a fresh mount starts from the persisted data
+   * only. The state instance outlives a single mount, and the shell restores a
+   * previous screen exclusively through a validated snapshot, so carrying an
+   * editor or a deletion confirmation across mounts would bypass that path.
+   */
+  public resetTransientState(): void {
+    this.#set({
+      editor: null,
+      deletion: null,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
+  }
+
   /** Applies a previously validated feature-local snapshot without persistence. */
   public applySnapshot(snapshot: {
     readonly selectedProjectId: ProjectId | null;

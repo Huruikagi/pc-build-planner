@@ -99,7 +99,7 @@ tests/features/candidate-management/state-snapshot.test.ts
 
 ### Modified Files
 - 共有runtime入口、`side-panel.html`、root `src/index.ts`は変更しない。application shellは`feature-contribution.ts`と`public.ts`だけをcompositionし、内部moduleへdeep importしない。
-- `styles.css`はfeature viewのmodule graphからimportし、application shellのside panel bundleとして`dist/side-panel.css`へ出力される。到達不能なCSSをfeature所有ファイルとして残さない。
+- `styles.css`はfeatureが所有し、application shellのside panel stylesheet入口`src/application-shell/side-panel.css`が`@import`で集約して`dist/styles.css`へ出力する。HTML hostとbuild entry pointはshellが所有するため、featureはこれらを変更しない。到達不能なCSSをfeature所有ファイルとして残さない。
 - `react-root.tsx`は`FeatureMountContext`とReact rootの接続・cleanupだけを所有し、`registration.ts`はDOM/React生成処理を持たない。registrationは実mountを持たない場合にplaceholderで成功を装わず、mount失敗として扱う。
 - `state-snapshot.ts`とregistrationのsnapshot接続は、application shellがcapture／restoreを含むmount contractを確定してから実装する。このspecの既存`tasks.md`はその前提を持たないため、設計承認後に再生成する。
 
@@ -200,11 +200,11 @@ interface CandidateEditorPrefill {
 interface CandidateManagementPublicApi {
   readonly query: CandidateQuery;
   readonly capture: CaptureCandidatePort;
-  openCandidateEditor(prefill: CandidateEditorPrefill): Promise<Result<void, CandidateNavigationError>>;
+  openCandidateEditor(prefill: CandidateEditorPrefill): Promise<Result<void, FeatureActivationError>>;
 }
 ```
 
-`openCandidateEditor`は型付きprefillからshellの`FeatureActivationIntent`を構築して`ShellNavigator`へ渡す。registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。projectが存在しない、不正payload、未知targetでは現在の画面とドラフトを変更しない。
+`openCandidateEditor`は型付きprefillからshellの`FeatureActivationIntent`を構築して`ShellNavigator`へ渡す。失敗はshellの`FeatureActivationError`で表し、activation経路に固有のerror型を重複定義しない。registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。projectが存在しない、不正payload、未知targetでは現在の画面とドラフトを変更しない。shellがmutationを禁止していて編集画面を開けなかった場合も、成功を返さず`activation_failed`とする。
 
 payload検証はfoundation公開の`validateCandidatePartContent`へ委譲するCandidateDraft専用validatorに限定する。`LocalDataRoot`、`CurrentBuild`、`maintenance`、`requestDedupe`を偽造してroot全体検証へ通す実装は、このfeatureが所有しないaggregateへの依存を作るため採用しない。
 
@@ -251,6 +251,8 @@ interface ManagementStateSnapshotCodec {
 ```
 
 `CandidateFeatureRegistration`はmount時にshellが提供する復元候補をcodecへ渡し、成功時だけ`ManagementState`へ適用する。mounted handleは同じcodecでcaptureしたJSON直列化可能な値だけをshellへ返す。snapshot versionが未知、projectまたはcandidate IDが現在の永続rootに存在しない、draftが検証不能である場合は復元を拒否し、初期表示へ退避する。保存操作・subscription・React rootは新規mountで作成し直す。
+
+`ManagementState`は単一mountより長く生存するため、mount開始時に編集draft、削除確認、表示エラーを破棄してから永続データを読み込む。shellはrollback時だけ`restoredState`を渡すので、通常のfeature切替で前回の未保存画面が検証済みsnapshotを経ずに再表示されることはない。
 
 shellがmount contextで渡す`OperationPolicy`は`ManagementState`の依存として保持し、`isAllowed("mutation")`が偽の間はプロジェクト作成・改名・削除、候補作成・更新・削除をUI上で開始不能にし、serviceを呼ばない。Foundation側のfail-closedな拒否は最終防壁として維持し、UI抑止をその代替にしない。読取とナビゲーションはmaintenance中も維持する。
 

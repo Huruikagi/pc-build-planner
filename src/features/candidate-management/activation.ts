@@ -107,6 +107,17 @@ export const createCandidateActivation = (
     }
     await state.selectProject(prefill.projectId);
     state.beginCreate(prefill.draft);
+    /**
+     * The editor stays closed when the shell forbids mutations, so reporting
+     * success would tell an upstream capture feature that an editor it cannot
+     * see is open.
+     */
+    if (state.value.editor === null) {
+      return err<FeatureActivationError>({
+        kind: "activation_failed",
+        detail: "candidate editor could not be opened",
+      });
+    }
     return ok(undefined);
   },
 });

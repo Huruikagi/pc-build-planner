@@ -5,7 +5,12 @@ import type {
   Availability,
   FeatureMountHandle,
 } from "../../../src/application-shell/contracts.js";
-import type { ProjectId, Revision, Uuid } from "../../../src/domain/public.js";
+import type {
+  CandidatePartId,
+  ProjectId,
+  Revision,
+  Uuid,
+} from "../../../src/domain/public.js";
 import type {
   CandidateDraft,
   CandidateManagementService,
@@ -106,8 +111,6 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       expectedRevision: 0 as Revision,
     }),
   });
-  await state.load();
-  state.beginCreate(draft);
   const sourceRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
@@ -120,6 +123,8 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
   });
+  // The editor is opened on the mounted screen, which is what capture must keep.
+  state.beginCreate(draft);
   const captured = await sourceHandle.captureState?.();
   assert.equal(captured?.ok, true);
   await sourceHandle.unmount();
@@ -178,6 +183,81 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     code: "snapshot-restore-failed",
   });
   await rejectedHandle.unmount();
+});
+
+test("snapshotなしの再mountは前回の未保存draftと削除確認を持ち越さない", async () => {
+  const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
+  const candidateId =
+    "10000000-0000-4000-8000-000000000002" as Uuid as CandidatePartId;
+  const query = {
+    async listProjects() {
+      return {
+        ok: true as const,
+        value: [
+          {
+            id: projectId,
+            name: "架空プロジェクト",
+            updatedAt: "2026-07-22T00:00:00.000Z" as never,
+          },
+        ],
+      };
+    },
+    async listCandidates() {
+      return { ok: true as const, value: [] };
+    },
+    async listBuildEligible() {
+      return { ok: true as const, value: [] };
+    },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
+  } satisfies CandidateQuery;
+  // A single state instance outlives both mounts, as in production composition.
+  const state = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000001" as never,
+      expectedRevision: 0 as Revision,
+    }),
+  });
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query: {} as CandidateQuery,
+    capture: {} as CaptureCandidatePort,
+    state,
+  });
+  const policy = { isAllowed: () => true, subscribe: () => () => {} };
+
+  const first = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: policy,
+    reportError: () => {},
+  });
+  state.beginCreate({
+    projectId,
+    category: "uncategorized",
+    product: { name: { original: "未保存の架空候補" } },
+    normalizedAttributes: { category: "uncategorized" },
+  });
+  state.requestDeletion({ kind: "candidate", candidateId });
+  await first.unmount();
+
+  // Navigating back is not a rollback, so the previous screen must not reappear.
+  const second = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: policy,
+    reportError: () => {},
+  });
+
+  assert.equal(state.value.editor, null);
+  assert.equal(state.value.deletion, null);
+  assert.equal(state.value.displayError, null);
+  assert.deepEqual(state.value.projects.length, 1);
+  await second.unmount();
 });
 
 test("mountできるstateを持たないregistrationはmountを成功と偽らない", async () => {
