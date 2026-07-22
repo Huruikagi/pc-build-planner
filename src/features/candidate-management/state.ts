@@ -196,6 +196,17 @@ export class ManagementState {
     });
   }
 
+  public updateEditorDraft(draft: CandidateDraft): void {
+    const editor = this.#value.editor;
+    if (editor === null || this.#value.mutationsDisabled) return;
+    this.#set({ editor: { ...editor, projectId: draft.projectId, draft } });
+  }
+
+  public cancelEditor(): void {
+    if (this.#value.isSaving) return;
+    this.#set({ editor: null, displayError: null });
+  }
+
   public requestDeletion(deletion: DeletionConfirmation): void {
     if (this.#value.mutationsDisabled) return;
     this.#set({ deletion, displayError: null });

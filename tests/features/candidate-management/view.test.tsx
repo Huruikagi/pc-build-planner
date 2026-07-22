@@ -12,6 +12,7 @@ import type {
   Uuid,
 } from "../../../src/domain/public.js";
 import type {
+  CandidateDraft,
   CandidateManagementService,
   CandidateQuery,
   MutationContext,
@@ -262,4 +263,112 @@ test("プロジェクト保存の失敗では入力を保持して再試行で�
   assert.match(rendered.container.textContent ?? "", /保存に失敗しました/);
 
   await rendered.cleanup();
+});
+
+test("候補フォームは共通項目・カテゴリ属性・読み取り専用の元表記を分離し、カテゴリ変更後の属性を編集できる", async () => {
+  const created: CandidateDraft[] = [];
+  const service = {
+    async createCandidate(draft: CandidateDraft) {
+      created.push(draft);
+      return {
+        ok: true as const,
+        value: {} as never,
+      };
+    },
+  } as unknown as CandidateManagementService;
+  const state = createState(service);
+  await state.load();
+  state.beginCreate({
+    projectId: firstProjectId,
+    category: "cpu",
+    product: {
+      name: { original: "架空 CPU" },
+      manufacturer: { original: "架空メーカー" },
+    },
+    sourceSnapshot: { name: "取得時の CPU 名", socket: "AM5" },
+    normalizedAttributes: { category: "cpu", socket: { original: "AM5" } },
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(() => root.render(<ManagementView state={state} />));
+
+  assert.match(container.textContent ?? "", /候補を作成/);
+  assert.equal(
+    (
+      container.querySelector(
+        "[name='candidate-source-snapshot']",
+      ) as HTMLTextAreaElement
+    ).readOnly,
+    true,
+  );
+  await act(async () => {
+    (
+      container.querySelector(
+        "[name='candidate-category']",
+      ) as HTMLSelectElement
+    ).value = "gpu";
+    (
+      container.querySelector(
+        "[name='candidate-category']",
+      ) as HTMLSelectElement
+    ).dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+  assert.equal(container.querySelector("[name='attribute-socket']"), null);
+
+  await act(async () => {
+    const form = container.querySelector(
+      "[aria-label='候補編集']",
+    ) as HTMLFormElement;
+    form.requestSubmit();
+  });
+  assert.equal(created.length, 1);
+  assert.equal(created[0]?.category, "gpu");
+  assert.deepEqual(created[0]?.sourceSnapshot, {
+    name: "取得時の CPU 名",
+    socket: "AM5",
+  });
+
+  await act(() => root.unmount());
+  container.remove();
+});
+
+test("候補の無効入力と保存失敗では編集draftを画面に保持する", async () => {
+  const service = {
+    async createCandidate() {
+      return { ok: false as const, error: { kind: "storage" as const } };
+    },
+  } as unknown as CandidateManagementService;
+  const state = createState(service);
+  await state.load();
+  state.beginCreate({
+    projectId: firstProjectId,
+    category: "uncategorized",
+    product: { name: { original: "保存前の候補" } },
+    normalizedAttributes: { category: "uncategorized" },
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(() => root.render(<ManagementView state={state} />));
+  const input = container.querySelector(
+    "[name='candidate-name']",
+  ) as HTMLInputElement;
+  const form = container.querySelector(
+    "[aria-label='候補編集']",
+  ) as HTMLFormElement;
+
+  await act(async () => setInputValue(input, ""));
+  await act(async () => form.requestSubmit());
+  assert.equal(input.value, "");
+  assert.match(container.textContent ?? "", /商品名を入力してください/);
+
+  await act(async () => setInputValue(input, "保存を再試行する候補"));
+  await act(async () => form.requestSubmit());
+
+  assert.equal(input.value, "保存を再試行する候補");
+  assert.match(container.textContent ?? "", /保存に失敗しました/);
+
+  await act(() => root.unmount());
+  container.remove();
 });

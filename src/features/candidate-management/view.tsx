@@ -1,8 +1,12 @@
 import type { FormEvent } from "react";
 import { useReducer, useState } from "react";
 
-import { PART_CATEGORIES, type PartCategory } from "../../domain/public.js";
-import type { CandidateSummary } from "./contracts.js";
+import {
+  PART_CATEGORIES,
+  type PartCategory,
+  type UtcTimestamp,
+} from "../../domain/public.js";
+import type { CandidateDraft, CandidateSummary } from "./contracts.js";
 import type { ManagementState } from "./state.js";
 
 const categoryLabels: Readonly<Record<PartCategory, string>> = {
@@ -56,6 +60,316 @@ function CandidateListItem({
       </dl>
       {candidate.hasMissingDetails ? <p>未入力の項目があります</p> : null}
     </li>
+  );
+}
+
+const attributesFor = (
+  category: PartCategory,
+): CandidateDraft["normalizedAttributes"] => {
+  switch (category) {
+    case "cpu":
+      return { category, socket: { original: null } };
+    case "cpu-cooler":
+      return { category, supportedSockets: { original: null } };
+    case "motherboard":
+      return {
+        category,
+        socket: { original: null },
+        memoryStandard: { original: null },
+        formFactor: { original: null },
+      };
+    case "memory":
+      return { category, memoryStandard: { original: null } };
+    case "power-supply":
+      return { category, formFactor: { original: null } };
+    case "case":
+      return {
+        category,
+        supportedMotherboardFormFactors: { original: null },
+        supportedPowerSupplyFormFactors: { original: null },
+      };
+    default:
+      return { category };
+  }
+};
+
+const changeCategory = (
+  draft: CandidateDraft,
+  category: PartCategory,
+): CandidateDraft =>
+  ({
+    ...draft,
+    category,
+    normalizedAttributes: attributesFor(category),
+  }) as CandidateDraft;
+
+type EditableAttribute = {
+  readonly key: string;
+  readonly label: string;
+  readonly list: boolean;
+};
+
+const editableAttributes = (
+  category: PartCategory,
+): readonly EditableAttribute[] => {
+  switch (category) {
+    case "cpu":
+      return [{ key: "socket", label: "ソケット", list: false }];
+    case "cpu-cooler":
+      return [{ key: "supportedSockets", label: "対応ソケット", list: true }];
+    case "motherboard":
+      return [
+        { key: "socket", label: "ソケット", list: false },
+        { key: "memoryStandard", label: "メモリ規格", list: false },
+        { key: "formFactor", label: "フォームファクター", list: false },
+      ];
+    case "memory":
+      return [{ key: "memoryStandard", label: "メモリ規格", list: false }];
+    case "power-supply":
+      return [{ key: "formFactor", label: "フォームファクター", list: false }];
+    case "case":
+      return [
+        {
+          key: "supportedMotherboardFormFactors",
+          label: "対応マザーボード規格",
+          list: true,
+        },
+        {
+          key: "supportedPowerSupplyFormFactors",
+          label: "対応電源規格",
+          list: true,
+        },
+      ];
+    default:
+      return [];
+  }
+};
+
+function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const editor = state.value.editor;
+  if (editor === null) return null;
+  const { draft } = editor;
+  const update = (next: CandidateDraft) => {
+    state.updateEditorDraft(next);
+    rerender();
+  };
+  const setProductText = (
+    field: "name" | "manufacturer" | "modelNumber" | "notes",
+    value: string,
+  ) => {
+    const previous = draft.product[field];
+    update({
+      ...draft,
+      product: {
+        ...draft.product,
+        [field]: { original: previous?.original ?? null, confirmed: value },
+      },
+    } as CandidateDraft);
+    if (field === "name") setNameError(null);
+  };
+  const attributes = draft.normalizedAttributes;
+  const setAttribute = (field: EditableAttribute, value: string) =>
+    update({
+      ...draft,
+      normalizedAttributes: {
+        ...attributes,
+        [field.key]: {
+          original: null,
+          confirmed: field.list
+            ? value
+                .split(",")
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0)
+            : value,
+        },
+      },
+    } as CandidateDraft);
+  const attributeValues = attributes as unknown as Readonly<
+    Record<
+      string,
+      {
+        readonly original: string | null;
+        readonly confirmed?: string | readonly string[];
+      }
+    >
+  >;
+
+  return (
+    <form
+      aria-label="候補編集"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const name =
+          draft.product.name.confirmed ?? draft.product.name.original ?? "";
+        if (name.trim().length === 0) {
+          setNameError("商品名を入力してください");
+          return;
+        }
+        await state.saveEditor();
+        rerender();
+      }}
+    >
+      <h2>{editor.mode === "create" ? "候補を作成" : "候補を編集"}</h2>
+      <label>
+        商品名
+        <input
+          disabled={state.value.isSaving || state.value.mutationsDisabled}
+          aria-describedby={
+            nameError === null ? undefined : "candidate-name-error"
+          }
+          aria-invalid={nameError === null ? undefined : true}
+          name="candidate-name"
+          onChange={(event) => setProductText("name", event.target.value)}
+          value={displayValue(draft.product.name)}
+        />
+      </label>
+      {nameError === null ? null : (
+        <p id="candidate-name-error" role="alert">
+          {nameError}
+        </p>
+      )}
+      <label>
+        メーカー
+        <input
+          name="candidate-manufacturer"
+          onChange={(event) =>
+            setProductText("manufacturer", event.target.value)
+          }
+          value={displayValue(draft.product.manufacturer)}
+        />
+      </label>
+      <label>
+        型番
+        <input
+          name="candidate-model-number"
+          onChange={(event) =>
+            setProductText("modelNumber", event.target.value)
+          }
+          value={displayValue(draft.product.modelNumber)}
+        />
+      </label>
+      <label>
+        価格
+        <input
+          inputMode="decimal"
+          name="candidate-price-amount"
+          onChange={(event) => {
+            const amount = Number(event.target.value);
+            const previous = draft.product.price;
+            update({
+              ...draft,
+              product: {
+                ...draft.product,
+                price: {
+                  original: previous?.original ?? null,
+                  confirmed: {
+                    amount: Number.isFinite(amount) ? amount : 0,
+                    currency: previous?.confirmed?.currency ?? "JPY",
+                  },
+                },
+              },
+            } as CandidateDraft);
+          }}
+          value={draft.product.price?.confirmed?.amount ?? ""}
+        />
+      </label>
+      <label>
+        カテゴリ
+        <select
+          name="candidate-category"
+          onChange={(event) =>
+            update(changeCategory(draft, event.target.value as PartCategory))
+          }
+          value={draft.category}
+        >
+          {PART_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {categoryLabels[category]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {editableAttributes(draft.category).map((field) => {
+        const value = attributeValues[field.key];
+        const confirmed = value?.confirmed;
+        return (
+          <label key={field.key}>
+            {field.label}
+            <input
+              name={`attribute-${field.key}`}
+              onChange={(event) => setAttribute(field, event.target.value)}
+              value={
+                Array.isArray(confirmed)
+                  ? confirmed.join(", ")
+                  : (confirmed ?? value?.original ?? "")
+              }
+            />
+          </label>
+        );
+      })}
+      <label>
+        取得元URL
+        <input
+          name="candidate-source-url"
+          onChange={(event) =>
+            update({
+              ...draft,
+              sourceInfo: { ...draft.sourceInfo, pageUrl: event.target.value },
+            })
+          }
+          value={draft.sourceInfo?.pageUrl ?? ""}
+        />
+      </label>
+      <label>
+        取得日時
+        <input
+          name="candidate-captured-at"
+          onChange={(event) =>
+            update({
+              ...draft,
+              sourceInfo: {
+                ...draft.sourceInfo,
+                capturedAt: event.target.value as UtcTimestamp,
+              },
+            })
+          }
+          value={draft.sourceInfo?.capturedAt ?? ""}
+        />
+      </label>
+      <label>
+        取得元表記
+        <textarea
+          name="candidate-source-snapshot"
+          readOnly
+          value={JSON.stringify(draft.sourceSnapshot ?? {}, null, 2)}
+        />
+      </label>
+      {state.value.displayError?.code === "validation" ? (
+        <p role="alert">入力内容を確認してください</p>
+      ) : null}
+      {state.value.displayError === null ? null : state.value.displayError
+          .code === "validation" ? null : (
+        <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+      )}
+      <button
+        disabled={state.value.isSaving || state.value.mutationsDisabled}
+        type="submit"
+      >
+        保存
+      </button>
+      <button
+        disabled={state.value.isSaving}
+        onClick={() => {
+          state.cancelEditor();
+          rerender();
+        }}
+        type="button"
+      >
+        キャンセル
+      </button>
+    </form>
   );
 }
 
@@ -209,6 +523,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
           <CandidateListItem candidate={candidate} key={candidate.id} />
         ))}
       </ul>
+      <CandidateEditorForm state={state} />
     </section>
   );
 }
