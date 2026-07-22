@@ -5,11 +5,15 @@ import type {
   Availability,
   FeatureMountHandle,
 } from "../../../src/application-shell/contracts.js";
+import type { ProjectId, Revision, Uuid } from "../../../src/domain/public.js";
 import type {
+  CandidateDraft,
+  CandidateManagementService,
   CandidateQuery,
   CaptureCandidatePort,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
+import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import type { FoundationDataPort } from "../../../src/persistence/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
@@ -58,4 +62,114 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
   assert.equal(observed.data, data);
   assert.equal(observed.readAllowed, true);
   assert.equal(observed.mutationAllowed, true);
+});
+
+test("React rootはopaque snapshotを復元し、captureとunmountを一度だけ行う", async () => {
+  const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
+  const draft = {
+    projectId,
+    category: "uncategorized" as const,
+    product: { name: { original: "未保存の架空候補" } },
+    normalizedAttributes: { category: "uncategorized" as const },
+  } satisfies CandidateDraft;
+  const query = {
+    async listProjects() {
+      return {
+        ok: true as const,
+        value: [
+          {
+            id: projectId,
+            name: "架空プロジェクト",
+            updatedAt: "2026-07-22T00:00:00.000Z" as never,
+          },
+        ],
+      };
+    },
+    async listCandidates() {
+      return { ok: true as const, value: [] };
+    },
+    async listBuildEligible() {
+      return { ok: true as const, value: [] };
+    },
+  } satisfies CandidateQuery;
+  const state = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000001" as never,
+      expectedRevision: 0 as Revision,
+    }),
+  });
+  await state.load();
+  state.beginCreate(draft);
+  const sourceRegistration = createCandidateFeatureRegistration({
+    data: {} as FoundationDataPort,
+    query: {} as CandidateQuery,
+    capture: {} as CaptureCandidatePort,
+    state,
+  });
+  const sourceContainer = document.createElement("div");
+  const sourceHandle = await sourceRegistration.mount({
+    container: sourceContainer,
+    operationPolicy: { isAllowed: () => true },
+    reportError: () => {},
+  });
+  const captured = await sourceHandle.captureState?.();
+  assert.equal(captured?.ok, true);
+  await sourceHandle.unmount();
+  await sourceHandle.unmount();
+
+  const restoredState = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000001" as never,
+      expectedRevision: 0 as Revision,
+    }),
+  });
+  const targetRegistration = createCandidateFeatureRegistration({
+    data: {} as FoundationDataPort,
+    query: {} as CandidateQuery,
+    capture: {} as CaptureCandidatePort,
+    state: restoredState,
+  });
+  const targetContainer = document.createElement("div");
+  const targetHandle = await targetRegistration.mount({
+    container: targetContainer,
+    operationPolicy: { isAllowed: () => true },
+    reportError: () => {},
+    restoredState: captured?.ok ? captured.value : undefined,
+  });
+  assert.deepEqual(restoredState.value.editor, {
+    mode: "create",
+    projectId,
+    draft,
+  });
+  await targetHandle.unmount();
+  assert.equal(targetContainer.textContent, "");
+
+  const rejectedState = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000001" as never,
+      expectedRevision: 0 as Revision,
+    }),
+  });
+  const rejectedHandle = await createCandidateFeatureRegistration({
+    data: {} as FoundationDataPort,
+    query: {} as CandidateQuery,
+    capture: {} as CaptureCandidatePort,
+    state: rejectedState,
+  }).mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true },
+    reportError: () => {},
+    restoredState: { version: 99 },
+  });
+  assert.equal(rejectedState.value.editor, null);
+  assert.deepEqual(rejectedState.value.displayError, {
+    code: "snapshot-restore-failed",
+  });
+  await rejectedHandle.unmount();
 });

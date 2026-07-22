@@ -13,7 +13,9 @@ import type {
   ProjectSummary,
 } from "./contracts.js";
 
-export type ManagementDisplayError = { readonly code: ManagementError["kind"] };
+export type ManagementDisplayError = {
+  readonly code: ManagementError["kind"] | "snapshot-restore-failed";
+};
 
 export type CandidateEditor =
   | {
@@ -63,6 +65,7 @@ const displayError = (error: ManagementError): ManagementDisplayError => ({
 /** Framework-independent UI state; persistence is accessed only through feature ports. */
 export class ManagementState {
   #allCandidates: readonly CandidateSummary[] = [];
+  #listeners = new Set<() => void>();
   #value: ManagementStateValue = {
     projects: [],
     candidates: [],
@@ -82,6 +85,43 @@ export class ManagementState {
 
   public get value(): ManagementStateValue {
     return this.#value;
+  }
+
+  /** Lets the React adapter observe feature-owned state without owning it. */
+  public subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    let unsubscribed = false;
+    return () => {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /** Applies a previously validated feature-local snapshot without persistence. */
+  public applySnapshot(snapshot: {
+    readonly selectedProjectId: ProjectId | null;
+    readonly selectedCategory: PartCategory | null;
+    readonly editor: CandidateEditor | null;
+    readonly deletion: DeletionConfirmation | null;
+    readonly displayError: ManagementDisplayError | null;
+  }): void {
+    this.#set({
+      selectedProjectId: snapshot.selectedProjectId,
+      selectedCategory: snapshot.selectedCategory,
+      candidates: this.#filterCandidates(
+        snapshot.selectedProjectId,
+        snapshot.selectedCategory,
+      ),
+      editor: snapshot.editor,
+      deletion: snapshot.deletion,
+      displayError: snapshot.displayError,
+    });
+  }
+
+  /** Keeps persistent data untouched when a shell-provided snapshot is rejected. */
+  public rejectSnapshotRestore(): void {
+    this.#set({ displayError: { code: "snapshot-restore-failed" } });
   }
 
   public async load(): Promise<void> {
@@ -301,6 +341,7 @@ export class ManagementState {
 
   #set(update: Partial<ManagementStateValue>): void {
     this.#value = { ...this.#value, ...update };
+    for (const listener of this.#listeners) listener();
   }
 }
 

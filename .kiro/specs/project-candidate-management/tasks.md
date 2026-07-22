@@ -83,7 +83,7 @@
   - _Depends: 2.1, 2.4, 3.1; application-shell 5.1_
   - _Requirements: 4.1, 4.3, 4.6, 6.6_
   - _Boundary: CandidateActivation, CandidateManagementPublicApi_
-- [ ] 5.2 React rootとsnapshot-aware registrationを実装する
+- [x] 5.2 React rootとsnapshot-aware registrationを実装する
   - FeatureMountContextへReact rootをmountし、停止・切替時にrootと購読を一度だけcleanupする。
   - shellが渡す復元候補をfeature内codecで検証して成功時だけstateへ適用し、mounted handleはopaque JSON snapshotだけを返す。
   - target mount・activation失敗後に未保存の候補管理画面stateがrestoreされ、restore不能時は初期表示と識別可能なエラーになることをshell contract integrationで確認する。

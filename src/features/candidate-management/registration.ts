@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
 import type {
   ApplicationFeatureRegistration,
   Availability,
@@ -18,6 +20,8 @@ import {
   createCandidateManagementPublicApi,
 } from "./public.js";
 import type { ManagementState } from "./state.js";
+import { createManagementStateSnapshotCodec } from "./state-snapshot.js";
+import { ManagementView } from "./view.js";
 
 export interface CandidateManagementMountDependencies {
   readonly container: HTMLElement;
@@ -45,9 +49,7 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly state?: ManagementState;
 }
 
-const mountCandidateManagementShell: CandidateManagementMount = async ({
-  container,
-}) => {
+const mountPlaceholder: CandidateManagementMount = async ({ container }) => {
   const view = document.createElement("section");
   view.className = "candidate-management";
   view.textContent = "Candidate management";
@@ -62,6 +64,34 @@ const mountCandidateManagementShell: CandidateManagementMount = async ({
   };
 };
 
+const mountManagementView =
+  (state: ManagementState): CandidateManagementMount =>
+  async ({ container, restoredState }) => {
+    const root = createRoot(container);
+    let unmounted = false;
+    root.render(createElement(ManagementView, { state }));
+
+    await state.load();
+    if (restoredState !== undefined) {
+      const codec = createManagementStateSnapshotCodec(state);
+      const restored = codec.restore(restoredState);
+      if (restored.ok) state.applySnapshot(restored.value);
+      else state.rejectSnapshotRestore();
+    }
+
+    const codec = createManagementStateSnapshotCodec(state);
+    return {
+      async captureState() {
+        return { ok: true, value: codec.capture(state) };
+      },
+      async unmount() {
+        if (unmounted) return;
+        unmounted = true;
+        root.unmount();
+      },
+    };
+  };
+
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
@@ -69,7 +99,11 @@ export const createCandidateFeatureRegistration = (
   CandidateManagementPublicApi,
   CandidateEditorPrefill
 > => {
-  const mount = dependencies.mount ?? mountCandidateManagementShell;
+  const mount =
+    dependencies.mount ??
+    (dependencies.state === undefined
+      ? mountPlaceholder
+      : mountManagementView(dependencies.state));
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
   const subscribeAvailability =

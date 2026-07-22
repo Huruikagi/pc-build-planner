@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useReducer, useState } from "react";
+import { useReducer, useState, useSyncExternalStore } from "react";
 
 import {
   PART_CATEGORIES,
@@ -7,7 +7,7 @@ import {
   type UtcTimestamp,
 } from "../../domain/public.js";
 import type { CandidateDraft, CandidateSummary } from "./contracts.js";
-import type { ManagementState } from "./state.js";
+import type { ManagementDisplayError, ManagementState } from "./state.js";
 
 const categoryLabels: Readonly<Record<PartCategory, string>> = {
   cpu: "CPU",
@@ -31,6 +31,11 @@ function displayValue(
 ): string {
   return value?.confirmed ?? value?.original ?? "未入力";
 }
+
+const errorMessage = (code: ManagementDisplayError["code"]) =>
+  code === "snapshot-restore-failed"
+    ? "前回の画面状態を復元できませんでした。"
+    : "保存に失敗しました。もう一度お試しください。";
 
 function CandidateListItem({
   candidate,
@@ -360,7 +365,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
       ) : null}
       {state.value.displayError === null ? null : state.value.displayError
           .code === "validation" ? null : (
-        <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+        <p role="alert">{errorMessage(state.value.displayError.code)}</p>
       )}
       <button
         disabled={state.value.isSaving || state.value.mutationsDisabled}
@@ -385,6 +390,11 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
 /** Renders feature-owned state without moving domain state into React hooks. */
 export function ManagementView({ state }: { readonly state: ManagementState }) {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
+  useSyncExternalStore(
+    (listener) => state.subscribe(listener),
+    () => state.value,
+    () => state.value,
+  );
   const [projectName, setProjectName] = useState("");
   const [editingProjectId, setEditingProjectId] = useState<
     (typeof state.value.projects)[number]["id"] | null
@@ -516,7 +526,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
           </p>
         )}
         {value.displayError === null ? null : (
-          <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+          <p role="alert">{errorMessage(value.displayError.code)}</p>
         )}
         <button
           disabled={value.isSaving || value.mutationsDisabled}
@@ -589,7 +599,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             <p>候補「{deletionTarget.name}」を削除します。</p>
           )}
           {value.displayError === null ? null : (
-            <p role="alert">保存に失敗しました。もう一度お試しください。</p>
+            <p role="alert">{errorMessage(value.displayError.code)}</p>
           )}
           <button
             data-confirm-deletion
