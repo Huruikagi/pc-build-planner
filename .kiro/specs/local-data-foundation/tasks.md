@@ -38,6 +38,20 @@
   - 入力を変更せず、架空の有効値だけを受理し、破損値を正常値として返さないテストが成功することを完了条件とする
   - _Requirements: 2.1, 2.4, 2.5, 2.6, 3.2, 3.3, 3.4, 5.4, 6.2, 7.1_
 
+- [x] 2.5 候補の取得元欠損と元表記snapshotを共有モデルへ追加する
+  - 取得URL・取得日時を個別に欠損可能にし、取得元全体がない手入力候補も代替値なしで表現する
+  - 元表記snapshotをfield名から元表記または明示的な欠損（null）へのread-only mapとして、取得元・確認値と独立して保持する
+  - 既存schema 1の型利用を壊さず、完全欠損・部分欠損・key不在・明示的なnullを区別できる公開型になることを完了条件とする
+  - _Requirements: 2.1, 2.3, 2.4, 2.7_
+  - _Boundary: DomainModel_
+
+- [ ] 2.6 取得元欠損と元表記snapshotを保存境界で検証する
+  - optionalな取得元全体とURL・日時を検証し、存在する値だけへURL・UTC規約を適用する
+  - sourceSnapshotの文字列・nullを受理し、生HTML・画像・data URLとJSON非互換値を拒否する
+  - 完全欠損・部分欠損・明示的なnullが入力どおり返り、不正snapshotがpath付き失敗になることを完了条件とする
+  - _Requirements: 2.1, 2.4, 2.7, 3.2, 5.4_
+  - _Boundary: SchemaValidator_
+
 - [x] 3. 永続化の純粋な方針とChrome adapterを実装する
 - [x] 3.1 (P) 連続schema移行レジストリを実装する
   - NからN+1だけを許す移行stepと、現行版まで順序適用する契約を提供する
@@ -284,7 +298,17 @@
   - _Requirements: 3.1, 3.2, 3.5, 3.9, 8.2_
   - _Boundary: ReferenceRepairPolicy, MutationPipeline, FoundationDataPort Regression_
 
+- [ ] 6.10 候補取得元の後方互換fixture回帰を追加する
+  - 既存の取得元付きschema 1 fixtureを受理したまま、取得元なし・部分取得元・元表記snapshot付きの架空候補を追加する
+  - sourceSnapshotのkey不在と明示的なnullがJSON往復およびroot検証後も区別され、代替URL・日時が生成されないことを確認する
+  - 完了時、架空fixtureだけを使うdomain回帰が新旧両方の有効候補と禁止payload拒否を確認できる
+  - _Depends: 2.6_
+  - _Requirements: 2.7, 8.1, 8.2, 8.3_
+  - _Boundary: FoundationFixtures_
+
 ## Implementation Notes
+
+- 候補取得元の欠損や元表記snapshotは下流で補完せず、Foundationのoptional canonical契約へそのまま保存する。
 
 - project削除はReferenceRepairPolicyで同じprojectIdのcandidateとCurrentBuildを除去し、MutationPipelineの全体検証と単一commitへ閉じる。
 

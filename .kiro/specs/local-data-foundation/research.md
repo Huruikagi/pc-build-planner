@@ -12,6 +12,12 @@
 
 ## Research Log
 
+### 候補取得元契約の下流整合性
+- **Context**: `project-candidate-management` task 2.3のレビューで、取得元がない手入力候補をcanonical `CandidatePart`へ変換できず、元表記snapshotも永続化できないことが判明した。
+- **Sources Consulted**: `local-data-foundation`、`project-candidate-management`、`product-page-capture` のrequirements/designと現行domain validator。
+- **Findings**: 現行型は`sourceInfo.pageUrl`と`capturedAt`を必須にする一方、下流要求は両方の欠損を許容する。設計済みの`sourceSnapshot`も実装契約に存在せず、下流が架空URL・日時を生成するか元表記を捨てるしかない。
+- **Implications**: schema versionを変えずにoptional fieldとして契約を拡張し、欠損をそのまま保持する。`SourceSnapshot`は元表記だけのread-only mapとし、確認値・取得元とは独立して検証する。
+
 ### 現行コードベースと所有境界
 - **Context**: greenfieldの実装範囲とroadmap更新後のcanonical ownerを確認した。
 - **Sources Consulted**: `package.json`、`.kiro/steering/{product,tech,structure,roadmap}.md`、対象specのrequirements/design/tasks
@@ -79,6 +85,12 @@
 | 外部schema library | 宣言的runtime validation | 型と検証の重複を削減可能 | 未導入toolchainへの依存追加 | 実装開始時に最新版適合性を再評価。設計はlibrary非依存 |
 
 ## Design Decisions
+
+### Decision: 取得元と元表記snapshotを独立したoptional契約にする
+- **Context**: 手入力候補と部分的なページ取得結果を同じcanonical modelで表現し、存在しない値の捏造を防ぐ必要がある。
+- **Selected Approach**: `CandidatePart.sourceInfo`を任意化し、`SourceInfo`のURL・日時も個別に任意化する。`sourceSnapshot`は`Record<string, string | null>`として任意に保持する。
+- **Rationale**: 既存schema 1の有効値を壊さず、完全欠損・部分欠損・取得済みを区別できる最小の後方互換拡張になる。
+- **Follow-up**: domain型、validator、fixture回帰を更新し、候補管理task 2.3を再レビューする。
 
 ### Decision: production runtime contributionをfoundation公開no-arg factoryへ集約する
 - **Context**: application-shellがcanonical maintenance sourceとworker registrationを必要とする一方、現行公開面だけではRepository、Storage adapter、runner、authorityをdeep importせずproduction graphを構築できない。

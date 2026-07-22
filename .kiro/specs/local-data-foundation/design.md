@@ -234,6 +234,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 2.4 | 欠損とcategory属性 | DomainModel、SchemaValidator | optional fields、attribute union | validation |
 | 2.5 | IDと日時規約 | IdentifierPolicy | branded ID、UtcTimestamp | validation |
 | 2.6 | 参照関係 | DomainModel、ReferenceRepairPolicy | root invariants | mutation flow |
+| 2.7 | 取得元欠損と元表記snapshotの分離 | DomainModel、SchemaValidator | optional SourceInfo、SourceSnapshot | validation |
 | 3.1 | CRUD結果と永続化 | MutationPipeline、RootTransactionRunner、WriteAuthority、RuntimeContributionFactory | FoundationDataPort、worker registration | mutation flow |
 | 3.2 | 保存前検証 | MutationPipeline、SchemaValidator | mutateRoot | mutation flow |
 | 3.3 | 読取時検証 | LocalDataRepository、MigrationRegistry | readRoot | read flow |
@@ -276,8 +277,8 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | BuildPipeline | Tooling | MV3 artifact生成と禁止コード検査 | 1.1–1.2 | Node.js P0 | Batch |
 | IdentifierPolicy | Domain | branded IDとUTC日時を統一 | 2.5 | Web Crypto P1 | Service |
 | NormalizedAttributeModel | Domain | category別確認済み属性を表現 | 2.2–2.4 | なし | State |
-| DomainModel | Domain | 保存可能な共有modelと不変条件 | 2.1–2.6, 4.1 | なし | State |
-| SchemaValidator | Domain | unknownを現行契約へ絞る | 2.1–2.6, 3.2–3.4, 5.4, 6.2 | DomainModel P0 | Service |
+| DomainModel | Domain | 保存可能な共有modelと不変条件 | 2.1–2.7, 4.1 | なし | State |
+| SchemaValidator | Domain | unknownを現行契約へ絞る | 2.1–2.7, 3.2–3.4, 5.4, 6.2 | DomainModel P0 | Service |
 | MigrationRegistry | Persistence | 旧schemaを純粋に連続移行 | 4.1–4.5 | SchemaValidator P0 | Service |
 | ReferenceRepairPolicy | Persistence | candidate変更によるbuild参照修復とproject削除カスケード | 3.7, 3.9 | DomainModel P0 | Service |
 | CapacityPolicy | Persistence | bytesとquotaからwarning・拒否を純粋判定 | 5.1–5.3 | 直列化済みcapacity input P0 | Service |
@@ -300,7 +301,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 
 `LocalDataRoot`は`schemaVersion`、`revision`、`projects`、`candidateParts`、`currentBuilds`、request dedupe記録、maintenance stateを持つJSON直列化可能なaggregateである。ProjectはcandidateとCurrentBuildの整合性境界であり、build itemは同じprojectのcandidateだけを参照する。
 
-`CandidatePart`は`category`、欠損可能な共通商品値、`sourceInfo`、`sourceSnapshot`、`confirmedValues`、category別`normalizedAttributes`を持つ。元表記と確認済み値を別フィールドに保持し、HTML、画像binary、data URLを型契約へ含めない。
+`CandidatePart`は`category`、欠損可能な共通商品値、任意の`sourceInfo`、任意の`sourceSnapshot`、category別`normalizedAttributes`を持つ。`sourceInfo`の取得URL・取得日時も個別に任意とし、存在しない取得情報を既定値で補わない。`sourceSnapshot`はfield名から元表記または明示的な欠損（`null`）へのread-only mapとし、`SourcedValue`の確認値や`sourceInfo`の代用にしない。HTML、画像binary、data URLを型契約へ含めない。
 
 #### SchemaValidator
 
@@ -521,7 +522,7 @@ erDiagram
 ### Domain Model
 - Aggregate root: `LocalDataRoot`。全mutation、migration、置換のtransaction boundary。
 - Entity: `Project`、`CandidatePart`、`CurrentBuild`。IDはbranded UUID、日時はUTC ISO 8601。
-- Value object: `SourceInfo`、`SourcedValue<T>`、category別`NormalizedAttributes`、`MaintenanceFence`。
+- Value object: `SourceInfo`、`SourceSnapshot`、`SourcedValue<T>`、category別`NormalizedAttributes`、`MaintenanceFence`。
 - Invariants: project内参照、正整数quantity、unique ID、current schema、単調増加revision、maintenance owner一意性。
 
 ### Logical and Physical Data Model
@@ -540,7 +541,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 ## Testing Strategy
 
 ### Unit Tests
-- `SchemaValidator`で全12category、欠損値、元表記と確認値、UUID/UTC、cross-project参照、生HTML・画像/data URL拒否を検証する（2.1–2.6, 5.4）。
+- `SchemaValidator`で全12category、取得元とsnapshotを含む欠損値、元表記と確認値、UUID/UTC、cross-project参照、生HTML・画像/data URL拒否を検証する（2.1–2.7, 5.4）。
 - `MigrationRegistry`で連続migration、経路欠落、将来版、step失敗、source非変更を検証する（4.1–4.5）。
 - `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去、project削除時の所属candidate・CurrentBuild除去、無関係なproject dataの保持を検証する（3.7, 3.9）。
 - `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。

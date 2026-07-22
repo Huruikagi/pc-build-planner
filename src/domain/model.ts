@@ -4,6 +4,7 @@ import type {
   NormalizedAttributes,
   PartCategory,
   SourceInfo,
+  SourceSnapshot,
 } from "./normalized-attributes.js";
 
 declare const projectIdBrand: unique symbol;
@@ -42,7 +43,8 @@ export interface CandidatePart {
   readonly projectId: ProjectId;
   readonly category: PartCategory;
   readonly product: CandidateProductValues;
-  readonly sourceInfo: SourceInfo;
+  readonly sourceInfo?: SourceInfo;
+  readonly sourceSnapshot?: SourceSnapshot;
   readonly normalizedAttributes: NormalizedAttributes;
   readonly createdAt: UtcTimestamp;
   readonly updatedAt: UtcTimestamp;
