@@ -64,7 +64,7 @@
   - _Boundary: CurrentBuildQuery integration_
 
 - [ ] 4. 現在構成の画面状態と表示を実装する
-- [ ] 4.1 読込・保存・失敗回復の画面状態を実装する
+- [x] 4.1 読込・保存・失敗回復の画面状態を実装する
   - feature再表示・project再選択で候補と現在構成を再照会し、修復後状態を表示stateへ反映する。
   - 選択project・カテゴリ、候補、commit済み構成snapshot、数量draft、保存中操作、表示errorを分離する。
   - 読込revisionを更新contextへ渡し、成功時だけcommit後snapshotへ置換して同じ操作の二重送信を抑止する。
@@ -127,3 +127,5 @@
 - BuildService.execute（2.2）はBuildCommandの3種を単一のswitchで扱うため、CategoryPolicyのmode分岐（single/multiple）は2.2の時点で自然に実装済みとなった。2.3は新規実装ではなく、2.2で未検証だった複数選択カテゴリ経路（追加・数量変更・解除・重複防止・不正数量拒否）へservice testを追加してcanonical構成規則を証明するタスクだった。src側の変更は不要だった。
 - 3.1はlocal-data-foundationのreferenceRepairPolicy（候補削除・カテゴリ変更で変更対象自身のBuildItemだけを無条件に除去し、無関係な参照は触れない）と、current-build-managementのCurrentBuildQuery（2.1）を実データポートで結合するintegration testのみで完結した。src側の変更は不要で、Foundation側の修復が既にrequirement 4.1-4.4を満たしていることを確認できた。
 - Foundationのschema validator（src/domain/validation.ts）は、currentBuild.items.candidatePartIdが同一project内の実在candidateを参照することを既にroot検証で強制している。存在しない候補・別project候補への参照はrepository.readRoot()の時点でcorrupt-dataとして拒否され、CurrentBuildQueryの不変条件チェックへは到達しない。一方、build重複・item重複・未分類参照・カテゴリ別選択数はFoundationが関知しないfeature固有不変条件であり、CurrentBuildQuery（2.1）が担う。3.2はこの分担を実Foundation stackで証明するintegration testのみで完結し、src側の変更は不要だった。
+- design.mdのSystem Flows図（Mermaid sequence diagram）はmutation経路だけを描いており、BuildStateがCurrentBuildQuery/CandidateQueryへ直接依存する読込経路は描かれていない。Components tableは「Service P0、Query P0」とだけ記載しCandidateQueryを明示しないが、BuildServiceの契約(execute()のみ)には一覧取得手段がないため、候補・project一覧の読込はcandidate-managementのManagementState前例（stateがqueryとserviceを両方直接持つ）に倣いBuildStateから CandidateQuery.listProjects/listBuildEligible を直接呼ぶ設計とした。
+- BuildErrorの無効化(構成変更を無効化)対象はrequirement 5.4が明示する3種類（corrupt-data・unsupported-data・storage）に限定し、quota・maintenance・conflictは再試行/再読込可能な一時的失敗として扱う。quotaを無効化対象に含めると5.4の文言（容量超過ではなく「破損・非対応・利用不能」）と食い違うため注意。

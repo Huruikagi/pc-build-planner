@@ -37,7 +37,9 @@ type EligibleCandidates = ReadonlyMap<CandidatePartId, CandidatePart>;
 
 const corruptData: BuildError = { kind: "corrupt-data" };
 
-const managementErrorToBuildError = (error: ManagementError): BuildError => {
+export const managementErrorToBuildError = (
+  error: ManagementError,
+): BuildError => {
   switch (error.kind) {
     case "validation":
       return { kind: "validation", fields: error.fields };
