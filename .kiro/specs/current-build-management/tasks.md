@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 現在構成の公開契約とカテゴリポリシーを確立する
-- [ ] 1.1 現在構成の操作・読取・失敗契約を定義する
+- [x] 1.1 現在構成の操作・読取・失敗契約を定義する
   - Foundationが所有するID、CurrentBuild、BuildItem、正整数、revision、Resultを再利用し、候補詳細や互換性結果を重複させない。
   - 選択、数量変更、解除を表す操作と、request ID・expected revisionを持つ更新context、回復方針を選べる失敗分類を揃える。
   - project別のrevisionと0件または1件の現在構成を読み取り専用で返す公開契約を提供する。

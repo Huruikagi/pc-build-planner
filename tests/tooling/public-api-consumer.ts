@@ -1,4 +1,5 @@
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
+import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
 import { applicationApi } from "../../src/index.js";
 import type {
   DataWorkerRegistration,
@@ -45,3 +46,18 @@ export const composeProductionFoundationRuntime = (): Promise<
 > => initializeProductionFoundationRuntimeContribution();
 
 export const shellRootApi = applicationApi;
+
+/** Downstream consumers may reference canonical candidatePartId and quantity only. */
+export const listAdoptedCandidateQuantities = async (
+  currentBuild: CurrentBuildPublicApi,
+  projectId: Parameters<CurrentBuildPublicApi["query"]["getByProject"]>[0],
+): Promise<
+  readonly { readonly candidatePartId: string; readonly quantity: number }[]
+> => {
+  const result = await currentBuild.query.getByProject(projectId);
+  if (!result.ok || result.value.currentBuild === null) return [];
+  return result.value.currentBuild.items.map((item) => ({
+    candidatePartId: item.candidatePartId,
+    quantity: item.quantity,
+  }));
+};
