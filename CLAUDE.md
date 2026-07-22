@@ -59,3 +59,6 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - Load entire `.kiro/steering/` as project memory
 - Default files: `product.md`, `tech.md`, `structure.md`
 - Custom files are supported (managed via `/kiro-steering-custom`)
+
+## Git Workflow
+- 個人開発のため、`main` ブランチへの直接コミット・プッシュを許可する。PR作成やブランチ運用は不要。
