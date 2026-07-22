@@ -8,7 +8,7 @@ import {
   err,
   ok,
   type ProjectId,
-  schemaValidator,
+  validateCandidatePartContent,
 } from "../../domain/public.js";
 import type { CandidateDraft } from "./contracts.js";
 import type { ManagementState } from "./state.js";
@@ -61,30 +61,12 @@ const isDraft = (value: unknown): value is CandidateDraft => {
   ) {
     return false;
   }
-  const timestamp = "2026-07-22T00:00:00.000Z";
-  return schemaValidator.validateRoot({
-    schemaVersion: 1,
-    revision: 0,
-    projects: [
-      {
-        id: value.projectId,
-        name: "activation validation project",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-    ],
-    candidateParts: [
-      {
-        ...value,
-        id: "00000000-0000-4000-8000-000000000001",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-    ],
-    currentBuilds: [],
-    requestDedupe: [],
-    maintenance: { generation: 0, active: false },
-  }).ok;
+  /**
+   * Validates the draft itself. Fabricating a LocalDataRoot here would couple
+   * candidate management to CurrentBuild, maintenance and request dedupe,
+   * none of which this feature owns.
+   */
+  return validateCandidatePartContent(value).ok;
 };
 
 const isCandidateEditorPrefill = (

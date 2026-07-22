@@ -26,9 +26,10 @@ export interface FoundationCompositionHandle {
 export interface CompositionFeature<
   TKey extends string = string,
   TPublic extends object = object,
+  TActivation = unknown,
 > {
   readonly key: TKey;
-  readonly registration: ApplicationFeatureRegistration<TPublic>;
+  readonly registration: ApplicationFeatureRegistration<TPublic, TActivation>;
 }
 
 export interface CompositionFeatureRegistry extends FeatureRegistry {

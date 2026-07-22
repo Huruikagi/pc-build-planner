@@ -79,10 +79,17 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   assert.equal(initialized.ok, true);
   if (!initialized.ok) return;
   assert.deepEqual(Object.keys(initialized.value).sort(), [
+    "dataPort",
     "dispose",
     "maintenanceSource",
     "workerRegistration",
   ]);
+  // The scoped port must not carry replacement or maintenance capabilities.
+  assert.deepEqual(Object.keys(initialized.value.dataPort).sort(), [
+    "mutate",
+    "query",
+  ]);
+  assert.equal(Object.isFrozen(initialized.value.dataPort), true);
   assert.equal(fixture.counters.restrictions, 1);
   const registered = await initialized.value.workerRegistration.register(
     fixture.target,

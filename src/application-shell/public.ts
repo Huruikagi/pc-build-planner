@@ -27,6 +27,11 @@ export type {
   WorkerRegistrationContext,
 } from "./contracts.js";
 export type {
+  FeatureCompositionContext,
+  FeatureContribution,
+  FeatureContributionFactory,
+} from "./feature-contribution-catalog.js";
+export type {
   SidePanelBootstrap,
   SidePanelBootstrapError,
   SidePanelBootstrapOptions,

@@ -1,3 +1,4 @@
+import type { OperationPolicy } from "../../application-shell/public.js";
 import type {
   CandidatePartId,
   PartCategory,
@@ -16,6 +17,24 @@ import type {
 export type ManagementDisplayError = {
   readonly code: ManagementError["kind"] | "snapshot-restore-failed";
 };
+
+/** Draft-relative field key to failure reason, used to mark the offending input. */
+export type ManagementFieldErrors = Readonly<Record<string, string>>;
+
+const allowAllOperations: OperationPolicy = { isAllowed: () => true };
+
+const emptyFieldErrors: ManagementFieldErrors = Object.freeze({});
+
+/**
+ * A new candidate starts uncategorized with no confirmed values, so missing
+ * product information is never invented on the user's behalf.
+ */
+export const emptyDraft = (projectId: ProjectId): CandidateDraft => ({
+  projectId,
+  category: "uncategorized",
+  product: { name: { original: null, confirmed: "" } },
+  normalizedAttributes: { category: "uncategorized" },
+});
 
 export type CandidateEditor =
   | {
@@ -42,6 +61,7 @@ export interface ManagementStateValue {
   readonly editor: CandidateEditor | null;
   readonly deletion: DeletionConfirmation | null;
   readonly displayError: ManagementDisplayError | null;
+  readonly fieldErrors: ManagementFieldErrors;
   readonly isLoading: boolean;
   readonly isSaving: boolean;
   readonly mutationsDisabled: boolean;
@@ -50,7 +70,12 @@ export interface ManagementStateValue {
 export interface ManagementStateDependencies {
   readonly query: CandidateQuery;
   readonly service: CandidateManagementService;
-  readonly createMutationContext: () => MutationContext;
+  /** May resolve asynchronously so the expected revision is read per mutation. */
+  readonly createMutationContext: () =>
+    | MutationContext
+    | Promise<MutationContext>;
+  /** Shell-owned gate; mutations stay unavailable while the shell forbids them. */
+  readonly operationPolicy?: OperationPolicy;
 }
 
 const isTerminalReadError = (error: ManagementError): boolean =>
@@ -62,10 +87,14 @@ const displayError = (error: ManagementError): ManagementDisplayError => ({
   code: error.kind,
 });
 
+const fieldErrorsOf = (error: ManagementError): ManagementFieldErrors =>
+  error.kind === "validation" ? error.fields : emptyFieldErrors;
+
 /** Framework-independent UI state; persistence is accessed only through feature ports. */
 export class ManagementState {
   #allCandidates: readonly CandidateSummary[] = [];
   #listeners = new Set<() => void>();
+  #readBlocked = false;
   #value: ManagementStateValue = {
     projects: [],
     candidates: [],
@@ -74,6 +103,7 @@ export class ManagementState {
     editor: null,
     deletion: null,
     displayError: null,
+    fieldErrors: emptyFieldErrors,
     isLoading: false,
     isSaving: false,
     mutationsDisabled: false,
@@ -83,7 +113,39 @@ export class ManagementState {
     private readonly dependencies: ManagementStateDependencies,
   ) {}
 
+  #mountedPolicy: OperationPolicy | null = null;
+
+  get #policy(): OperationPolicy {
+    return (
+      this.#mountedPolicy ??
+      this.dependencies.operationPolicy ??
+      allowAllOperations
+    );
+  }
+
+  /** The shell owns the gate and supplies it per mount, not per construction. */
+  public useOperationPolicy(policy: OperationPolicy): void {
+    this.#mountedPolicy = policy;
+    this.#set({ mutationsDisabled: this.#mutationsDisabled() });
+  }
+
+  #mutationsDisabled(): boolean {
+    if (this.#readBlocked) return true;
+    try {
+      return !this.#policy.isAllowed("mutation");
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Recomputes the shell-driven gate without notifying, so the snapshot stays
+   * referentially stable while still reflecting a maintenance transition.
+   */
   public get value(): ManagementStateValue {
+    const disabled = this.#mutationsDisabled();
+    if (disabled !== this.#value.mutationsDisabled)
+      this.#value = { ...this.#value, mutationsDisabled: disabled };
     return this.#value;
   }
 
@@ -125,7 +187,11 @@ export class ManagementState {
   }
 
   public async load(): Promise<void> {
-    this.#set({ isLoading: true, displayError: null });
+    this.#set({
+      isLoading: true,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
     const projects = await this.dependencies.query.listProjects();
     if (!projects.ok) {
       this.#readFailure(projects.error);
@@ -152,6 +218,7 @@ export class ManagementState {
     this.#allCandidates = candidates.flatMap((candidate) =>
       candidate.ok ? candidate.value : [],
     );
+    this.#readBlocked = false;
     this.#set({
       projects: projects.value,
       candidates: this.#filterCandidates(
@@ -161,12 +228,13 @@ export class ManagementState {
       selectedProjectId,
       isLoading: false,
       displayError: null,
-      mutationsDisabled: false,
+      fieldErrors: emptyFieldErrors,
+      mutationsDisabled: this.#mutationsDisabled(),
     });
   }
 
   public async selectProject(projectId: ProjectId): Promise<void> {
-    if (this.#value.mutationsDisabled) return;
+    if (this.#readBlocked) return;
     this.#set({
       selectedProjectId: projectId,
       candidates: this.#filterCandidates(
@@ -178,8 +246,7 @@ export class ManagementState {
   }
 
   public async selectCategory(category: PartCategory | null): Promise<void> {
-    if (this.#value.selectedProjectId === null || this.#value.mutationsDisabled)
-      return;
+    if (this.#value.selectedProjectId === null || this.#readBlocked) return;
     this.#set({
       selectedCategory: category,
       candidates: this.#filterCandidates(
@@ -191,65 +258,101 @@ export class ManagementState {
   }
 
   public async createProject(name: string): Promise<void> {
-    if (this.#value.isSaving || this.#value.mutationsDisabled) return;
-    this.#set({ isSaving: true, displayError: null });
+    if (this.#value.isSaving || this.#mutationsDisabled()) return;
+    this.#set({
+      isSaving: true,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
     const result = await this.dependencies.service.createProject(
       { name },
-      this.dependencies.createMutationContext(),
+      await this.dependencies.createMutationContext(),
     );
-    if (!result.ok) {
-      this.#set({ isSaving: false, displayError: displayError(result.error) });
-      return;
-    }
+    if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ isSaving: false });
     await this.load();
   }
 
   public async renameProject(id: ProjectId, name: string): Promise<void> {
-    if (this.#value.isSaving || this.#value.mutationsDisabled) return;
-    this.#set({ isSaving: true, displayError: null });
+    if (this.#value.isSaving || this.#mutationsDisabled()) return;
+    this.#set({
+      isSaving: true,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
     const result = await this.dependencies.service.renameProject(
       { id, name },
-      this.dependencies.createMutationContext(),
+      await this.dependencies.createMutationContext(),
     );
-    if (!result.ok) {
-      this.#set({ isSaving: false, displayError: displayError(result.error) });
-      return;
-    }
+    if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ isSaving: false });
     await this.load();
   }
 
   public beginCreate(draft: CandidateDraft): void {
-    if (this.#value.mutationsDisabled) return;
+    if (this.#mutationsDisabled()) return;
     this.#set({
       editor: { mode: "create", projectId: draft.projectId, draft },
       displayError: null,
+      fieldErrors: emptyFieldErrors,
     });
   }
 
   public beginEdit(candidateId: CandidatePartId, draft: CandidateDraft): void {
-    if (this.#value.mutationsDisabled) return;
+    if (this.#mutationsDisabled()) return;
     this.#set({
       editor: { mode: "edit", projectId: draft.projectId, candidateId, draft },
       displayError: null,
+      fieldErrors: emptyFieldErrors,
     });
+  }
+
+  /** UI entry point: opens a blank draft for the currently selected project. */
+  public startCreate(): void {
+    const projectId = this.#value.selectedProjectId;
+    if (projectId === null || this.#mutationsDisabled()) return;
+    this.beginCreate(emptyDraft(projectId));
+  }
+
+  /**
+   * UI entry point: restores the full stored draft before opening the editor,
+   * because a `CandidateSummary` cannot reconstruct attributes or source data.
+   */
+  public async startEdit(candidateId: CandidatePartId): Promise<void> {
+    if (this.#mutationsDisabled()) return;
+    const draft = await this.dependencies.query.getCandidateDraft(candidateId);
+    if (!draft.ok) {
+      this.#set({
+        displayError: displayError(draft.error),
+        fieldErrors: fieldErrorsOf(draft.error),
+      });
+      return;
+    }
+    this.beginEdit(candidateId, draft.value);
   }
 
   public updateEditorDraft(draft: CandidateDraft): void {
     const editor = this.#value.editor;
-    if (editor === null || this.#value.mutationsDisabled) return;
+    if (editor === null || this.#mutationsDisabled()) return;
     this.#set({ editor: { ...editor, projectId: draft.projectId, draft } });
   }
 
   public cancelEditor(): void {
     if (this.#value.isSaving) return;
-    this.#set({ editor: null, displayError: null });
+    this.#set({
+      editor: null,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
   }
 
   public requestDeletion(deletion: DeletionConfirmation): void {
-    if (this.#value.mutationsDisabled) return;
-    this.#set({ deletion, displayError: null });
+    if (this.#mutationsDisabled()) return;
+    this.#set({
+      deletion,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
   }
 
   public cancelDeletion(): void {
@@ -258,14 +361,14 @@ export class ManagementState {
 
   public async saveEditor(): Promise<void> {
     const editor = this.#value.editor;
-    if (
-      editor === null ||
-      this.#value.isSaving ||
-      this.#value.mutationsDisabled
-    )
+    if (editor === null || this.#value.isSaving || this.#mutationsDisabled())
       return;
-    this.#set({ isSaving: true, displayError: null });
-    const context = this.dependencies.createMutationContext();
+    this.#set({
+      isSaving: true,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
+    const context = await this.dependencies.createMutationContext();
     const result =
       editor.mode === "create"
         ? await this.dependencies.service.createCandidate(editor.draft, context)
@@ -273,24 +376,21 @@ export class ManagementState {
             { id: editor.candidateId, draft: editor.draft },
             context,
           );
-    if (!result.ok) {
-      this.#set({ isSaving: false, displayError: displayError(result.error) });
-      return;
-    }
+    if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ editor: null, isSaving: false });
     await this.load();
   }
 
   public async confirmDeletion(): Promise<void> {
     const deletion = this.#value.deletion;
-    if (
-      deletion === null ||
-      this.#value.isSaving ||
-      this.#value.mutationsDisabled
-    )
+    if (deletion === null || this.#value.isSaving || this.#mutationsDisabled())
       return;
-    this.#set({ isSaving: true, displayError: null });
-    const context = this.dependencies.createMutationContext();
+    this.#set({
+      isSaving: true,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
+    const context = await this.dependencies.createMutationContext();
     const result =
       deletion.kind === "project"
         ? await this.dependencies.service.deleteProject(
@@ -301,10 +401,7 @@ export class ManagementState {
             deletion.candidateId,
             context,
           );
-    if (!result.ok) {
-      this.#set({ isSaving: false, displayError: displayError(result.error) });
-      return;
-    }
+    if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ deletion: null, isSaving: false });
     await this.load();
   }
@@ -331,11 +428,22 @@ export class ManagementState {
     );
   }
 
+  /** Keeps the draft and the previously loaded list untouched on failure. */
+  #mutationFailure(error: ManagementError): void {
+    this.#set({
+      isSaving: false,
+      displayError: displayError(error),
+      fieldErrors: fieldErrorsOf(error),
+    });
+  }
+
   #readFailure(error: ManagementError): void {
+    this.#readBlocked = isTerminalReadError(error);
     this.#set({
       isLoading: false,
       displayError: displayError(error),
-      mutationsDisabled: isTerminalReadError(error),
+      fieldErrors: fieldErrorsOf(error),
+      mutationsDisabled: this.#mutationsDisabled(),
     });
   }
 

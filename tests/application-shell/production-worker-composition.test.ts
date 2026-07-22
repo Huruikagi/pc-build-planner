@@ -34,6 +34,10 @@ const fixture = (
       }),
       subscribe: () => () => {},
     },
+    dataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
+    },
     workerRegistration: {
       async register() {
         events.push("foundation:register");
@@ -170,6 +174,10 @@ test("遅延registration中のstopはcatalogを開始せず完了resourceを解�
         value: { generation: 0, revision: 0, active: false } as never,
       }),
       subscribe: () => () => {},
+    },
+    dataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
     },
     workerRegistration: {
       async register() {

@@ -67,6 +67,12 @@ const query: CandidateQuery = {
   async listBuildEligible() {
     return { ok: true as const, value: [] };
   },
+  async getCandidateDraft() {
+    return {
+      ok: false as const,
+      error: { kind: "not-found" as const, entity: "candidate" as const },
+    };
+  },
 };
 
 const service = {} as CandidateManagementService;

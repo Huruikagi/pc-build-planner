@@ -1,6 +1,10 @@
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
 import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
-import { applicationApi } from "../../src/index.js";
+import {
+  type ApplicationApi,
+  composeApplicationApi,
+  type FeatureCompositionContext,
+} from "../../src/index.js";
 import type {
   DataWorkerRegistration,
   FoundationCommandDecoder,
@@ -45,7 +49,11 @@ export const composeProductionFoundationRuntime = (): Promise<
   Result<FoundationRuntimeContribution, { readonly code: string }>
 > => initializeProductionFoundationRuntimeContribution();
 
-export const shellRootApi = applicationApi;
+/** Downstream consumers compose the root API from the shell-provided context. */
+export const composeShellRootApi = (
+  context: FeatureCompositionContext,
+): Result<ApplicationApi, { readonly kind: string }> =>
+  composeApplicationApi(context);
 
 /** Downstream consumers may reference canonical candidatePartId and quantity only. */
 export const listAdoptedCandidateQuantities = async (

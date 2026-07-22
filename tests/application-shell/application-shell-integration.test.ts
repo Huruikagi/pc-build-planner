@@ -20,11 +20,21 @@ import {
   type ShellPresentationAdapter,
 } from "../../src/application-shell/shell-presentation.js";
 import type {
+  FoundationScopedDataPort,
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
 
 const featureId = (value: string) => value as FeatureId;
+
+const stubDataPort: FoundationScopedDataPort = {
+  async query() {
+    return { ok: true, value: {} } as never;
+  },
+  async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+};
 const snapshot = (
   generation: number,
   revision: number,
@@ -555,13 +565,14 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
           },
         },
         workerRegistrations: [],
+        dataPort: stubDataPort,
         dispose() {
           foundationStops += 1;
           events.push("foundation:stop");
         },
       },
     }),
-    contributions: {
+    createContributions: () => ({
       features: [
         {
           key: "projects",
@@ -593,7 +604,7 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
           },
         },
       ],
-    },
+    }),
     presentation: observedPresentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError: (message) => diagnostics.push(message),
@@ -728,12 +739,16 @@ test("同じproduction presentation fixtureは空catalogを安全なempty state�
       value: {
         maintenanceSource: maintenance.maintenanceSource,
         workerRegistrations: [],
+        dataPort: stubDataPort,
         dispose() {
           foundationStops += 1;
         },
       },
     }),
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: createShellPresentation(),
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},

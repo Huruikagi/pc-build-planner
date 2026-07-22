@@ -28,7 +28,11 @@ import {
   type DataWorkerRegistration,
   type FoundationCommand,
 } from "./worker-registration.js";
-import { createWriteAuthority } from "./write-authority.js";
+import {
+  createScopedDataPort,
+  createWriteAuthority,
+  type FoundationScopedDataPort,
+} from "./write-authority.js";
 
 export interface FoundationRuntimePlatform {
   readonly storageLocal: ChromeStorageLocalApi;
@@ -45,6 +49,8 @@ export interface FoundationRuntimePlatform {
 export interface FoundationRuntimeContribution {
   readonly maintenanceSource: MaintenanceSnapshotSource;
   readonly workerRegistration: DataWorkerRegistration;
+  /** 参照と原子的root mutationだけへ絞ったUI context向けport。 */
+  readonly dataPort: FoundationScopedDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -148,6 +154,7 @@ export const initializeFoundationRuntimeContributionFromPlatform = async (
     value: {
       maintenanceSource,
       workerRegistration,
+      dataPort: createScopedDataPort(authority),
       dispose() {
         if (disposed) return;
         disposed = true;

@@ -39,6 +39,10 @@ test("production bootstrapでfoundation handlerとcatalog actionを順序どお�
       getSnapshot: async () => ({ ok: true, value: {} as never }),
       subscribe: () => () => {},
     },
+    dataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
+    },
     workerRegistration: {
       async register(target) {
         events.push("foundation:register");

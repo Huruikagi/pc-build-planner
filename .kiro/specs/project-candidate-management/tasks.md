@@ -105,6 +105,47 @@
   - _Requirements: 2.1, 2.2, 3.2, 3.4, 4.3, 4.6, 5.3, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: CandidateManagementPublicApi, CandidateFeatureRegistration_
 
+- [x] 7. Production導線と利用者が識別できる失敗表示を完成する
+- [x] 7.1 production compositionへ接続するcontribution入口を実装する
+  - `feature-contribution.ts`からservice、query、state、registration、公開APIを組み立てるfactoryを公開し、shellの合成contextからdata portとnavigatorだけを受け取る。
+  - placeholder mountを廃止し、実mountを持たないregistrationがmount成功を装わないことを確認する。
+  - `styles.css`をview module graphからimportし、production側side panel bundleへ組み込む。
+  - _Depends: application-shell 4.11, local-data-foundation 6.11_
+  - _Requirements: 6.1, 6.3, 6.4_
+  - _Boundary: CandidateFeatureRegistration_
+- [x] 7.2 候補作成・編集のUI導線と詳細取得契約を実装する
+  - 選択中プロジェクトへの候補作成導線と、各候補の編集導線をアクセシブルな名前付きで追加する。
+  - `getCandidateDraft`を実装し、要約から復元できない属性・取得元・元表記を含むdraftで編集を開始する。
+  - Requirement 2.1、4.1–4.5をDOM操作だけで満たすtestを追加し、`beginCreate()`／`beginEdit()`の直接呼び出しで導線を迂回しない。
+  - _Depends: 7.1_
+  - _Requirements: 2.1, 2.2, 2.4, 4.1, 4.2, 4.3, 4.4, 4.5_
+  - _Boundary: ManagementView, CandidateQuery_
+- [x] 7.3 失敗表示を利用者が識別できる単位へ分離する
+  - 破損・非対応schema、容量不足、Storage利用不能、保守、競合、未検出、項目検証を別文言へ写像する。
+  - `validateCandidatePartContent`のpathをdraft相対のfieldキーへ正規化し、該当入力欄へ`aria-invalid`と`aria-describedby`で結び付ける。
+  - 失敗時に入力内容と既存一覧が保持されることをDOM testで確認する。
+  - _Depends: 7.2, local-data-foundation 6.12_
+  - _Requirements: 1.3, 1.5, 2.3, 2.5, 4.5, 5.4, 6.2_
+  - _Boundary: ManagementState, ManagementView_
+- [x] 7.4 shell operation policyをUIへ接続する
+  - mount contextの`OperationPolicy`を`ManagementState`へ渡し、mutation不許可時は変更操作を開始不能にしserviceを呼ばない。
+  - 読取とナビゲーションが維持され、Foundation側のfail-closedな拒否が最終防壁として残ることをtestで確認する。
+  - _Depends: 7.1_
+  - _Requirements: 1.5, 2.5, 5.4, 6.2_
+  - _Boundary: ManagementState, CandidateFeatureRegistration_
+- [x] 7.5 activation検証をCandidateDraftへ限定する
+  - `LocalDataRoot`、`CurrentBuild`、`maintenance`、`requestDedupe`の偽造を除去し、foundation公開の候補内容validatorへ委譲する。
+  - 正常prefill、不正payload、未知target、存在しないprojectの挙動が変わらないことを回帰する。
+  - _Depends: local-data-foundation 6.12_
+  - _Requirements: 4.1, 4.6, 6.6_
+  - _Boundary: CandidateActivation_
+- [x] 7.6 横断統合とproduction E2E証跡を追加する
+  - CurrentBuild参照を含むrootで、候補削除とカテゴリ変更がFoundationの単一root mutation内で参照修復され一度だけcommitされることを検証する。
+  - production artifactで候補管理navigation表示、画面到達、プロジェクト作成、候補作成、既存候補編集、再読込後の復元、boot時console/runtime error不在をE2E検証する。
+  - _Depends: 7.2, 7.3, 7.4, 7.5_
+  - _Requirements: 1.1, 2.1, 3.1, 4.2, 5.2, 6.1, 6.2_
+  - _Boundary: CandidateManagementService, CandidateFeatureRegistration_
+
 ## Implementation Notes
 
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。

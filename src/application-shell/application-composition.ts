@@ -1,5 +1,8 @@
 import { err, ok, type Result } from "../domain/public.js";
-import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
+import {
+  type FoundationScopedDataPort,
+  initializeProductionFoundationRuntimeContribution,
+} from "../persistence/public.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -17,13 +20,12 @@ import type {
   FeatureId,
   FeatureRegistry,
   MaintenanceSnapshotSource,
+  ShellNavigator,
   ShellViewState,
   WorkerRegistrationContext,
 } from "./contracts.js";
-import {
-  featureContributionCatalog,
-  getSidePanelContributions,
-} from "./feature-contribution-catalog.js";
+import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
+import { getSidePanelContributions } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
 import { createPublicApiRegistry } from "./public-api-registry.js";
 import type {
@@ -31,11 +33,17 @@ import type {
   ShellPresentationHandle,
 } from "./shell-presentation.js";
 import { createShellPresentation } from "./shell-presentation.js";
+import {
+  createSidePanelFeatureContributions,
+  type SidePanelFeatureContributions,
+} from "./side-panel-contributions.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export interface ProductionFoundationHandle {
   readonly maintenanceSource: MaintenanceSnapshotSource;
   readonly workerRegistrations: readonly ApplicationWorkerRegistration[];
+  /** Scoped query and atomic root mutation port handed to feature composition. */
+  readonly dataPort: FoundationScopedDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -53,7 +61,10 @@ export interface ProductionApplicationCompositionOptions<
   readonly initializeFoundation: () => Promise<
     Result<ProductionFoundationHandle, { readonly code: string }>
   >;
-  readonly contributions: ApplicationRuntimeContributions<TFeatures>;
+  /** Features are built after the foundation resolves, from the composed context. */
+  readonly createContributions: (
+    context: FeatureCompositionContext,
+  ) => ApplicationRuntimeContributions<TFeatures>;
   readonly presentation: ShellPresentationAdapter;
   readonly workerContext: WorkerRegistrationContext;
   readonly reportError: (message: string) => void;
@@ -64,7 +75,7 @@ const STARTUP_ERROR = "アプリケーションを開始できませんでした
 export function createProductionSidePanelComposition(
   shellContainer: HTMLElement,
 ): ApplicationCompositionRoot<
-  CompositionRootApi<typeof featureContributionCatalog>
+  CompositionRootApi<SidePanelFeatureContributions>
 > {
   return createProductionApplicationComposition({
     shellContainer,
@@ -75,13 +86,16 @@ export function createProductionSidePanelComposition(
       return ok({
         maintenanceSource: initialized.value.maintenanceSource,
         workerRegistrations: [],
+        dataPort: initialized.value.dataPort,
         dispose: () => initialized.value.dispose(),
       });
     },
-    contributions: {
-      features: getSidePanelContributions(featureContributionCatalog),
+    createContributions: (context) => ({
+      features: getSidePanelContributions(
+        createSidePanelFeatureContributions(context),
+      ) as unknown as SidePanelFeatureContributions,
       workerRegistrations: [],
-    },
+    }),
     presentation: createShellPresentation(),
     workerContext: {
       addActionHandler() {
@@ -119,6 +133,14 @@ function validateFoundationHandle(
       typeof candidate.dispose !== "function"
     )
       return undefined;
+    const dataPort = candidate.dataPort;
+    if (
+      typeof dataPort !== "object" ||
+      dataPort === null ||
+      typeof (dataPort as Record<string, unknown>).query !== "function" ||
+      typeof (dataPort as Record<string, unknown>).mutate !== "function"
+    )
+      return undefined;
     return value as ProductionFoundationHandle;
   } catch {
     return undefined;
@@ -152,6 +174,23 @@ export function createProductionApplicationComposition<
     } catch {
       // Diagnostics are best-effort at the runtime boundary.
     }
+  };
+
+  /**
+   * Features receive activation through this late-bound navigator so their
+   * public API can be composed before the shell integration exists.
+   */
+  const shellNavigator: ShellNavigator = {
+    activate(intent: FeatureActivationIntent) {
+      if (!integration?.activate)
+        return Promise.resolve(
+          err<FeatureActivationError>({
+            kind: "activation_failed",
+            detail: "application shell is not started",
+          }),
+        );
+      return integration.activate(intent);
+    },
   };
 
   const cleanup = async (): Promise<void> => {
@@ -329,9 +368,23 @@ export function createProductionApplicationComposition<
     foundation = validatedFoundation;
     if (stale()) return rollbackStaleStart();
     try {
+      const compositionContext: FeatureCompositionContext = {
+        data: validatedFoundation.dataPort,
+        navigator: shellNavigator,
+      };
+      let contributions: ApplicationRuntimeContributions<TFeatures>;
+      try {
+        contributions = options.createContributions(compositionContext);
+      } catch {
+        publishError();
+        await cleanup().catch(() =>
+          diagnose("feature composition rollback failed"),
+        );
+        return err({ kind: "startup_failed", message: STARTUP_ERROR });
+      }
       const createdRegistry = createFeatureRegistry();
       registry = createdRegistry;
-      for (const contribution of options.contributions.features) {
+      for (const contribution of contributions.features) {
         const registered = createdRegistry.register(contribution.registration);
         if (!registered.ok) {
           createdRegistry.dispose?.();
@@ -341,7 +394,7 @@ export function createProductionApplicationComposition<
         }
       }
       const composed = createPublicApiRegistry().composeEntries(
-        options.contributions.features.map(({ key, registration }) => ({
+        contributions.features.map(({ key, registration }) => ({
           key,
           publicApi: registration.publicApi,
         })),
@@ -382,7 +435,7 @@ export function createProductionApplicationComposition<
       const workers = composeWorkerContributions(
         [
           ...foundation.workerRegistrations,
-          ...options.contributions.workerRegistrations,
+          ...contributions.workerRegistrations,
         ],
         options.workerContext,
       );

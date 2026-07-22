@@ -311,11 +311,20 @@ interface SchemaValidator {
   validateCommand(input: unknown): Result<DataCommand, ValidationError>;
   validateReplacement(input: unknown): Result<ReplaceableRoot, ValidationError>;
 }
+
+/** 識別子と日時を除いた候補パーツ内容のcanonical validator。 */
+type CandidatePartContent = Omit<CandidatePart, "id" | "createdAt" | "updatedAt">;
+
+function validateCandidatePartContent(
+  input: unknown,
+  path?: string,
+): Result<CandidatePartContent, ValidationError>;
 ```
 
 - Preconditions: inputは常に`unknown`として渡す。
 - Postconditions: success値は参照整合性を満たす現行schemaである。
 - Invariants: validatorはinputを変更せず、errorはpathと機械判別可能codeを持つ。
+- `validateCandidatePartValue`は識別子・日時を検証したうえで`validateCandidatePartContent`へ委譲し、内容規則の実装を二重化しない。`validateCandidatePartContent`は保存前の候補入力（識別子と日時が未確定なdraft）を検証する唯一のcanonical入口であり、利用側がroot全体や無関係なaggregate（CurrentBuild、maintenance、requestDedupe）を偽造して検証することを不要にする。返す`ValidationError.path`は`$.product.name`のようにfield位置を示し、表示層が問題項目へ対応付けられる。
 
 ### Persistence Layer
 
@@ -458,9 +467,15 @@ interface FoundationRuntimePlatform {
   readonly reportError: (error: FoundationError) => void;
 }
 
+interface FoundationScopedDataPort {
+  query<T>(query: RootQuery<T>): Promise<Result<T, FoundationError>>;
+  mutate(command: RootMutationCommand): Promise<Result<MutationReceipt, FoundationError>>;
+}
+
 interface FoundationRuntimeContribution {
   readonly maintenanceSource: MaintenanceSnapshotSource;
   readonly workerRegistration: DataWorkerRegistration;
+  readonly dataPort: FoundationScopedDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -475,7 +490,9 @@ factoryは解決したplatformを`initializeFoundationRuntimeContributionFromPla
 
 初期化時にStorage accessを`TRUSTED_CONTEXTS`へ制限し、失敗時はtyped failureを返してcontributionを公開しない。worker registrationへは同じ成功結果を再利用するfail-closedなrestrict callbackを渡し、side panel起動とworker登録の順序へ安全性を依存させない。
 
-公開handleはread-only maintenance sourceと未登録のworker registrationだけを返す。Repository、StoragePort、RootWriteLock、runner、pipeline、authority、owner/lease capabilityは返さない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
+公開handleはread-only maintenance source、未登録のworker registration、および参照と原子的root mutationだけへ絞った`FoundationScopedDataPort`を返す。Repository、StoragePort、RootWriteLock、runner、pipeline、完全な`FoundationDataPort`、owner/lease capabilityは返さない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
+
+`FoundationScopedDataPort`は同一handle内のwrite authorityへ委譲するfrozen viewであり、`assessReplacement`、`replaceRoot`、`runMaintenance`を公開しない。root置換と保守leaseはbackup-restoreがworker registration経由で行う責務のまま維持する。信頼済み拡張UI context（side panel）はMV3 context間でhandleを共有せず、自context内でno-arg factoryを初期化してこのportを所有する。複数contextが同時にwriteしても、固定名Web Lockが線形化点、永続rootのrevisionとmaintenance fenceが認可根拠であるため、単一write authorityの不変条件とworker再生成耐性は維持される。Storage accessは初期化時の`TRUSTED_CONTEXTS`制限で担保し、失敗時はportを含むcontributionを一切公開しない。
 
 factoryは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。global property参照を含むplatform解決・shape検証を先に完了し、不足時は`invalid-platform`を返す。Storage access restriction、購読登録、handler生成、Repository生成はその後にだけ行う。解決中のglobal getter例外も`invalid-platform`へ正規化し、foundation側の観測可能な副作用を開始しない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
 

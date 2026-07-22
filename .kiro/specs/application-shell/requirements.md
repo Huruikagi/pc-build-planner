@@ -40,6 +40,9 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 2. When root公開APIが利用されたとき, the application shell shall feature単位の公開契約を一貫したroot契約として提供する
 3. If 必須の上流契約を初期化できないとき, the application shell shall feature画面を開始せず共通エラーを表示する
 4. The application shell shall 各featureによる共有runtime入口およびroot公開APIの直接変更を必要としない参加方式を提供する
+5. When production compositionがfeatureを合成するとき, the application shell shall foundationの絞り込みdata portとshell navigatorを合成contextとして各feature contributionへ注入し、feature内部実装へdeep importしない
+6. When service worker contextでcatalogを合成するとき, the application shell shall side panel専用contributionのmodule graphを取り込まず、worker bundleをDOMおよびReact非依存に保つ
+7. When root公開APIが参照されるとき, the application shell shall catalogから導出した型と合成contextを受け取る合成関数だけを提供し、data portなしの空の即時値をfeatureの公開契約として提示しない
 
 ### 要件4: 共通状態表示と障害分離
 **目的:** 利用者として、shellやfeatureの待機・失敗状態を理解したい。それにより次に取れる操作を判断できる。

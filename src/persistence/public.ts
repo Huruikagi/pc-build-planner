@@ -44,6 +44,7 @@ export {
 } from "./worker-registration.js";
 export type {
   FoundationDataPort,
+  FoundationScopedDataPort,
   MutationReceipt,
   MutationValue,
   RootMutationCommand,

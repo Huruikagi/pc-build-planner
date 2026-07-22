@@ -9,9 +9,10 @@ import {
   type SourceInfo,
   type SourceSnapshot,
   type UtcTimestamp,
+  validateCandidatePartContent,
 } from "../../domain/public.js";
 import type {
-  FoundationDataPort,
+  FoundationScopedDataPort,
   RootMutationCommand,
 } from "../../persistence/public.js";
 import type {
@@ -27,7 +28,7 @@ import type {
 } from "./contracts.js";
 
 export interface CandidateManagementServiceDependencies {
-  readonly data: FoundationDataPort;
+  readonly data: FoundationScopedDataPort;
   readonly now?: () => UtcTimestamp;
   readonly createProjectId?: () => ProjectId;
   readonly createCandidateId?: () => CandidatePartId;
@@ -71,22 +72,47 @@ const managementError = (
 };
 
 const hasProductName = (draft: CandidateDraft): boolean => {
-  const name = draft.product.name;
+  const name = draft.product?.name;
   return (
-    (typeof name.original === "string" && name.original.trim().length > 0) ||
-    (typeof name.confirmed === "string" && name.confirmed.trim().length > 0)
+    (typeof name?.original === "string" && name.original.trim().length > 0) ||
+    (typeof name?.confirmed === "string" && name.confirmed.trim().length > 0)
   );
 };
 
+/** Maps a canonical validation path onto a draft-relative field key for the UI. */
+export const draftFieldKey = (path: string): string =>
+  path.replace(/^\$\.?/, "") || "product.name";
+
+const validationFailure = (path: string, code: string): ManagementError => ({
+  kind: "validation",
+  fields: { [draftFieldKey(path)]: code },
+});
+
 const candidateValidation = (
   draft: CandidateDraft,
-): Result<CandidateDraft, ManagementError> =>
-  hasProductName(draft)
-    ? { ok: true, value: draft }
-    : {
-        ok: false,
-        error: { kind: "validation", fields: { "product.name": "required" } },
-      };
+): Result<CandidateDraft, ManagementError> => {
+  if (!hasProductName(draft))
+    return {
+      ok: false,
+      error: { kind: "validation", fields: { "product.name": "required" } },
+    };
+  const content = validateCandidatePartContent(draft);
+  if (!content.ok)
+    return {
+      ok: false,
+      error: validationFailure(content.error.path, content.error.code),
+    };
+  return { ok: true, value: draft };
+};
+
+const draftFromCandidate = (candidate: CandidatePart): CandidateDraft =>
+  ({
+    projectId: candidate.projectId,
+    category: candidate.category,
+    product: candidate.product,
+    normalizedAttributes: candidate.normalizedAttributes,
+    ...sourceMetadata(candidate.sourceInfo, candidate.sourceSnapshot),
+  }) as CandidateDraft;
 
 const commandFor = (
   operation: RootMutationCommand["operation"],
@@ -292,6 +318,16 @@ export const createCandidateManagementService = (
       return result.ok
         ? result
         : { ok: false as const, error: managementError(result.error.code) };
+    },
+    async getCandidateDraft(id) {
+      const result = await dependencies.data.query((root) =>
+        root.candidateParts.find((candidate) => candidate.id === id),
+      );
+      if (!result.ok)
+        return { ok: false, error: managementError(result.error.code) };
+      return result.value === undefined
+        ? { ok: false, error: { kind: "not-found", entity: "candidate" } }
+        : { ok: true, value: draftFromCandidate(result.value) };
     },
     async listBuildEligible(projectId) {
       const result = await dependencies.data.query((root) =>

@@ -35,11 +35,18 @@ export interface MutationValue {
 
 export type MutationReceipt = RequestCommitReceipt<MutationValue>;
 
-export interface FoundationDataPort {
+/**
+ * 信頼済み拡張UI contextへ渡す最小権限のdata port。
+ * 参照と原子的root mutationだけを転送し、置換・保守capabilityを公開しない。
+ */
+export interface FoundationScopedDataPort {
   query<T>(query: RootQuery<T>): Promise<Result<T, FoundationError>>;
   mutate(
     command: RootMutationCommand,
   ): Promise<Result<MutationReceipt, FoundationError>>;
+}
+
+export interface FoundationDataPort extends FoundationScopedDataPort {
   assessReplacement(
     input: unknown,
   ): Promise<Result<ReplacementAssessment, FoundationError>>;
@@ -158,3 +165,15 @@ class DefaultWriteAuthority implements FoundationDataPort {
 export const createWriteAuthority = (
   dependencies: WriteAuthorityDependencies,
 ): FoundationDataPort => new DefaultWriteAuthority(dependencies);
+
+/**
+ * 同一contextのauthorityへ委譲するfrozen view。
+ * 排他の根拠は固定名Web Lockと永続rootのrevisionであり、view追加では変わらない。
+ */
+export const createScopedDataPort = (
+  port: FoundationScopedDataPort,
+): FoundationScopedDataPort =>
+  Object.freeze({
+    query: <T>(query: RootQuery<T>) => port.query(query),
+    mutate: (command: RootMutationCommand) => port.mutate(command),
+  });

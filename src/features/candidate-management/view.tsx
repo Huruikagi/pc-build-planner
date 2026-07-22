@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { useReducer, useState, useSyncExternalStore } from "react";
 
 import {
+  type CandidatePartId,
   PART_CATEGORIES,
   type PartCategory,
   type UtcTimestamp,
@@ -32,21 +33,39 @@ function displayValue(
   return value?.confirmed ?? value?.original ?? "未入力";
 }
 
+/** Each failure stays distinguishable so the user can pick a recovery action. */
+const errorMessages: Readonly<Record<ManagementDisplayError["code"], string>> =
+  {
+    "unsupported-data":
+      "保存データが破損しているか、対応していない形式です。既存データは変更していません。",
+    quota:
+      "保存容量が不足しています。不要な候補を削除してからもう一度お試しください。",
+    storage:
+      "保存領域を利用できません。拡張機能を開き直してからもう一度お試しください。",
+    maintenance: "保守操作の実行中です。完了後にもう一度お試しください。",
+    conflict:
+      "他の変更と競合しました。最新の内容を読み込んでからもう一度お試しください。",
+    "not-found": "対象が見つかりませんでした。一覧を読み込み直してください。",
+    validation: "入力内容を確認してください。",
+    "snapshot-restore-failed": "前回の画面状態を復元できませんでした。",
+  };
+
 const errorMessage = (code: ManagementDisplayError["code"]) =>
-  code === "snapshot-restore-failed"
-    ? "前回の画面状態を復元できませんでした。"
-    : "保存に失敗しました。もう一度お試しください。";
+  errorMessages[code];
 
 function CandidateListItem({
   candidate,
   onDelete,
+  onEdit,
 }: {
   readonly candidate: CandidateSummary;
   readonly onDelete: (candidate: CandidateSummary) => void;
+  readonly onEdit: (candidate: CandidateSummary) => void;
 }) {
+  const name = displayValue(candidate.name);
   return (
     <li className="candidate-management__candidate">
-      <h3>{displayValue(candidate.name)}</h3>
+      <h3>{name}</h3>
       <dl>
         <div>
           <dt>カテゴリ</dt>
@@ -67,6 +86,15 @@ function CandidateListItem({
       </dl>
       {candidate.hasMissingDetails ? <p>未入力の項目があります</p> : null}
       <button
+        aria-label={`${name}を編集`}
+        data-edit-candidate-id={candidate.id}
+        onClick={() => onEdit(candidate)}
+        type="button"
+      >
+        編集
+      </button>
+      <button
+        aria-label={`${name}を削除`}
         data-delete-candidate-id={candidate.id}
         onClick={() => onDelete(candidate)}
         type="button"
@@ -159,10 +187,44 @@ const editableAttributes = (
   }
 };
 
+const fieldErrorMessages: Readonly<Record<string, string>> = {
+  required: "必須項目です",
+  "invalid-url": "http またはhttps のURLを入力してください",
+  "invalid-utc-timestamp": "UTCの日時形式で入力してください",
+  "invalid-string": "文字列として入力してください",
+  "invalid-array": "カンマ区切りの文字列で入力してください",
+  "category-mismatch": "選択したカテゴリでは受け付けられない値です",
+  "unexpected-field": "選択したカテゴリでは受け付けられない項目です",
+  "missing-field": "必須項目です",
+  "forbidden-payload": "保存できない内容が含まれています",
+};
+
+const fieldErrorMessage = (code: string | undefined): string | null =>
+  code === undefined
+    ? null
+    : (fieldErrorMessages[code] ?? "入力内容を確認してください");
+
+/** Binds a draft-relative field key to its input for assistive technology. */
+function FieldError({
+  id,
+  message,
+}: {
+  readonly id: string;
+  readonly message: string | null;
+}) {
+  return message === null ? null : (
+    <p id={id} role="alert">
+      {message}
+    </p>
+  );
+}
+
 function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [nameError, setNameError] = useState<string | null>(null);
   const editor = state.value.editor;
+  const fieldErrors = state.value.fieldErrors;
+  const errorFor = (key: string) => fieldErrorMessage(fieldErrors[key]);
   if (editor === null) return null;
   const { draft } = editor;
   const update = (next: CandidateDraft) => {
@@ -231,19 +293,24 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         <input
           disabled={state.value.isSaving || state.value.mutationsDisabled}
           aria-describedby={
-            nameError === null ? undefined : "candidate-name-error"
+            nameError === null && errorFor("product.name") === null
+              ? undefined
+              : "candidate-name-error"
           }
-          aria-invalid={nameError === null ? undefined : true}
+          aria-invalid={
+            nameError === null && errorFor("product.name") === null
+              ? undefined
+              : true
+          }
           name="candidate-name"
           onChange={(event) => setProductText("name", event.target.value)}
           value={displayValue(draft.product.name)}
         />
       </label>
-      {nameError === null ? null : (
-        <p id="candidate-name-error" role="alert">
-          {nameError}
-        </p>
-      )}
+      <FieldError
+        id="candidate-name-error"
+        message={nameError ?? errorFor("product.name")}
+      />
       <label>
         メーカー
         <input
@@ -308,24 +375,39 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
       {editableAttributes(draft.category).map((field) => {
         const value = attributeValues[field.key];
         const confirmed = value?.confirmed;
+        const key = `normalizedAttributes.${field.key}`;
+        const message = errorFor(key);
         return (
-          <label key={field.key}>
-            {field.label}
-            <input
-              name={`attribute-${field.key}`}
-              onChange={(event) => setAttribute(field, event.target.value)}
-              value={
-                Array.isArray(confirmed)
-                  ? confirmed.join(", ")
-                  : (confirmed ?? value?.original ?? "")
-              }
-            />
-          </label>
+          <div key={field.key}>
+            <label>
+              {field.label}
+              <input
+                aria-describedby={message === null ? undefined : `${key}-error`}
+                aria-invalid={message === null ? undefined : true}
+                name={`attribute-${field.key}`}
+                onChange={(event) => setAttribute(field, event.target.value)}
+                value={
+                  Array.isArray(confirmed)
+                    ? confirmed.join(", ")
+                    : (confirmed ?? value?.original ?? "")
+                }
+              />
+            </label>
+            <FieldError id={`${key}-error`} message={message} />
+          </div>
         );
       })}
       <label>
         取得元URL
         <input
+          aria-describedby={
+            errorFor("sourceInfo.pageUrl") === null
+              ? undefined
+              : "candidate-source-url-error"
+          }
+          aria-invalid={
+            errorFor("sourceInfo.pageUrl") === null ? undefined : true
+          }
           name="candidate-source-url"
           onChange={(event) =>
             update({
@@ -336,9 +418,21 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           value={draft.sourceInfo?.pageUrl ?? ""}
         />
       </label>
+      <FieldError
+        id="candidate-source-url-error"
+        message={errorFor("sourceInfo.pageUrl")}
+      />
       <label>
         取得日時
         <input
+          aria-describedby={
+            errorFor("sourceInfo.capturedAt") === null
+              ? undefined
+              : "candidate-captured-at-error"
+          }
+          aria-invalid={
+            errorFor("sourceInfo.capturedAt") === null ? undefined : true
+          }
           name="candidate-captured-at"
           onChange={(event) =>
             update({
@@ -352,6 +446,10 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           value={draft.sourceInfo?.capturedAt ?? ""}
         />
       </label>
+      <FieldError
+        id="candidate-captured-at-error"
+        message={errorFor("sourceInfo.capturedAt")}
+      />
       <label>
         取得元表記
         <textarea
@@ -360,11 +458,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           value={JSON.stringify(draft.sourceSnapshot ?? {}, null, 2)}
         />
       </label>
-      {state.value.displayError?.code === "validation" ? (
-        <p role="alert">入力内容を確認してください</p>
-      ) : null}
-      {state.value.displayError === null ? null : state.value.displayError
-          .code === "validation" ? null : (
+      {state.value.displayError === null ? null : (
         <p role="alert">{errorMessage(state.value.displayError.code)}</p>
       )}
       <button
@@ -437,6 +531,10 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
   };
   const confirmDeletion = async () => {
     await state.confirmDeletion();
+    rerender();
+  };
+  const startEdit = async (candidateId: CandidatePartId) => {
+    await state.startEdit(candidateId);
     rerender();
   };
   const deletionTarget = (() => {
@@ -573,6 +671,21 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
           </button>
         ))}
       </nav>
+      <button
+        data-create-candidate
+        disabled={
+          value.selectedProjectId === null ||
+          value.isSaving ||
+          value.mutationsDisabled
+        }
+        onClick={() => {
+          state.startCreate();
+          rerender();
+        }}
+        type="button"
+      >
+        候補を作成
+      </button>
       <ul aria-label="候補一覧">
         {value.candidates.map((candidate) => (
           <CandidateListItem
@@ -585,6 +698,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               });
               rerender();
             }}
+            onEdit={() => void startEdit(candidate.id)}
           />
         ))}
       </ul>

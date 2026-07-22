@@ -8,9 +8,14 @@ export type {
 } from "./result.js";
 export { err, ok } from "./result.js";
 export type {
+  CandidatePartContent,
   ReplaceableRoot,
   SchemaValidator,
   ValidationError,
   ValidationErrorCode,
 } from "./validation.js";
-export { isJsonValue, schemaValidator } from "./validation.js";
+export {
+  isJsonValue,
+  schemaValidator,
+  validateCandidatePartContent,
+} from "./validation.js";

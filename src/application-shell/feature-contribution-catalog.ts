@@ -1,17 +1,34 @@
+import type { FoundationScopedDataPort } from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
   PublicApiEntry,
+  ShellNavigator,
 } from "./contracts.js";
 
 export interface FeatureContribution<
   TKey extends string = string,
   TPublic extends object = object,
+  TActivation = unknown,
 > {
   readonly key: TKey;
-  readonly registration: ApplicationFeatureRegistration<TPublic>;
+  readonly registration: ApplicationFeatureRegistration<TPublic, TActivation>;
   readonly workerRegistration?: ApplicationWorkerRegistration;
 }
+
+/**
+ * Production compositionが解決した依存だけをfeatureへ渡す。
+ * featureはこのcontext以外からfoundationやshell lifecycleへ到達しない。
+ */
+export interface FeatureCompositionContext {
+  readonly data: FoundationScopedDataPort;
+  readonly navigator: ShellNavigator;
+}
+
+export type FeatureContributionFactory<
+  TKey extends string = string,
+  TPublic extends object = object,
+> = (context: FeatureCompositionContext) => FeatureContribution<TKey, TPublic>;
 
 export type FeaturePublicApiContribution<
   TContribution extends FeatureContribution,
@@ -20,6 +37,11 @@ export type FeaturePublicApiContribution<
     ? PublicApiEntry<TKey, TPublic>
     : never;
 
+/**
+ * Worker contextが参照するcatalog。
+ * side panel専用contributionは`side-panel-contributions.ts`が所有し、
+ * worker bundleのDOM/React非依存を保つためこのmodule graphへ持ち込まない。
+ */
 export const featureContributionCatalog = Object.freeze(
   [],
 ) as readonly [] satisfies readonly FeatureContribution[];

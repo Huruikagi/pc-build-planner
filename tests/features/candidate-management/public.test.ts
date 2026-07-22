@@ -41,6 +41,12 @@ test("公開入口は取り込み側の欠損候補作成と構成管理側の�
       assert.equal(receivedProjectId, projectId);
       return { ok: true as const, value: eligible };
     },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
   } satisfies CandidateQuery;
   const capture = {
     async createCandidate(input: CandidateDraft) {

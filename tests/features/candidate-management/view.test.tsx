@@ -93,6 +93,12 @@ const createState = (
       async listBuildEligible() {
         return { ok: true as const, value: [] };
       },
+      async getCandidateDraft() {
+        return {
+          ok: false as const,
+          error: { kind: "not-found" as const, entity: "candidate" as const },
+        };
+      },
     } satisfies CandidateQuery,
     service,
     createMutationContext: () => context,
@@ -260,7 +266,10 @@ test("プロジェクト保存の失敗では入力を保持して再試行で�
   await act(async () => form.requestSubmit());
 
   assert.equal(input.value, "保存を再試行する構成");
-  assert.match(rendered.container.textContent ?? "", /保存に失敗しました/);
+  assert.match(
+    rendered.container.textContent ?? "",
+    /保存領域を利用できません/,
+  );
 
   await rendered.cleanup();
 });
@@ -367,7 +376,7 @@ test("候補の無効入力と保存失敗では編集draftを画面に保持す
   await act(async () => form.requestSubmit());
 
   assert.equal(input.value, "保存を再試行する候補");
-  assert.match(container.textContent ?? "", /保存に失敗しました/);
+  assert.match(container.textContent ?? "", /保存領域を利用できません/);
 
   await act(() => root.unmount());
   container.remove();
@@ -439,7 +448,10 @@ test("候補削除の取消は保存を行わず、失敗時は候補と確認�
 
   assert.equal(deleteCalls, 1);
   assert.match(rendered.container.textContent ?? "", /未分類の候補/);
-  assert.match(rendered.container.textContent ?? "", /保存に失敗しました/);
+  assert.match(
+    rendered.container.textContent ?? "",
+    /保存領域を利用できません/,
+  );
   assert.notEqual(
     rendered.container.querySelector("[aria-label='削除確認']"),
     null,

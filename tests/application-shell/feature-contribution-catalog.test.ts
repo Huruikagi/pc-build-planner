@@ -12,6 +12,7 @@ import {
   getSidePanelContributions,
   getWorkerContributions,
 } from "../../src/application-shell/feature-contribution-catalog.js";
+import { createSidePanelFeatureContributions } from "../../src/application-shell/side-panel-contributions.js";
 
 const id = (value: string) => value as FeatureId;
 
@@ -39,11 +40,41 @@ function contribution<const TKey extends string, TPublic extends object>(
   };
 }
 
-test("production catalogはplaceholderを持たないreadonlyな空catalogである", () => {
+test("worker catalogはworker contributionだけを持つreadonly catalogである", () => {
   assert.deepEqual(featureContributionCatalog, []);
   assert.equal(Object.isFrozen(featureContributionCatalog), true);
   assert.deepEqual(getSidePanelContributions(featureContributionCatalog), []);
   assert.deepEqual(getWorkerContributions(featureContributionCatalog), []);
+});
+
+test("side panel contributionは合成contextから実featureを組み立てる", () => {
+  const contributions = createSidePanelFeatureContributions({
+    data: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    navigator: {
+      async activate() {
+        return { ok: true, value: undefined };
+      },
+    },
+  });
+
+  assert.deepEqual(
+    contributions.map(({ key }) => key),
+    ["candidateManagement"],
+  );
+  const [candidateManagement] = contributions;
+  assert.equal(candidateManagement.registration.id, "candidate-management");
+  assert.equal(candidateManagement.registration.navigation.label, "候補管理");
+  assert.equal(
+    typeof candidateManagement.registration.activation?.validate,
+    "function",
+  );
 });
 
 test("複数contributionを決定順でside panel・public API入力へ型付き提供する", () => {

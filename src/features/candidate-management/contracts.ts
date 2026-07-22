@@ -125,6 +125,14 @@ export interface CandidateQuery {
   listBuildEligible(
     projectId: ProjectId,
   ): Promise<Result<readonly CandidatePart[], ManagementError>>;
+  /**
+   * Restores a complete edit draft for a stored candidate.
+   * `CandidateSummary` intentionally omits attributes and source metadata, so
+   * editing an existing candidate must start from this contract.
+   */
+  getCandidateDraft(
+    id: CandidatePartId,
+  ): Promise<Result<CandidateDraft, ManagementError>>;
 }
 
 /** Public capture boundary for adjacent product-capture features. */

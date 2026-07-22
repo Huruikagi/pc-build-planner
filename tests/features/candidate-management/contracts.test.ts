@@ -7,13 +7,13 @@ import {
   type CaptureCandidatePort,
   createCandidateManagementPublicApi,
 } from "../../../src/features/candidate-management/public.js";
-import type { FoundationDataPort } from "../../../src/persistence/public.js";
+import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
 
 test("公開入口は照会と取り込み候補作成portを公開する", () => {
   const query = {} as CandidateQuery;
   const capture = {} as CaptureCandidatePort;
   const api = createCandidateManagementPublicApi({
-    data: {} as FoundationDataPort,
+    data: {} as FoundationScopedDataPort,
     query,
     capture,
   });
@@ -27,7 +27,7 @@ test("公開入口は照会と取り込み作成の両契約がなければ組�
   assert.throws(
     () =>
       createCandidateManagementPublicApi({
-        data: {} as FoundationDataPort,
+        data: {} as FoundationScopedDataPort,
         query: {} as CandidateQuery,
       } as CandidateManagementPublicDependencies),
     /query and capture/,
@@ -49,7 +49,7 @@ test("取り込み公開portはURLと取得日時が未確定のdraftを受け�
     },
   };
   const api = createCandidateManagementPublicApi({
-    data: {} as FoundationDataPort,
+    data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
     capture,
   });

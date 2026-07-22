@@ -1,5 +1,3 @@
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
 import type {
   ApplicationFeatureRegistration,
   Availability,
@@ -8,7 +6,7 @@ import type {
   OperationPolicy,
   ShellNavigator,
 } from "../../application-shell/public.js";
-import type { FoundationDataPort } from "../../persistence/public.js";
+import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
   type CandidateEditorPrefill,
   candidateManagementFeatureId,
@@ -19,13 +17,13 @@ import {
   type CandidateManagementPublicApi,
   createCandidateManagementPublicApi,
 } from "./public.js";
+import { mountManagementReactRoot } from "./react-root.js";
 import type { ManagementState } from "./state.js";
 import { createManagementStateSnapshotCodec } from "./state-snapshot.js";
-import { ManagementView } from "./view.js";
 
 export interface CandidateManagementMountDependencies {
   readonly container: HTMLElement;
-  readonly data: FoundationDataPort;
+  readonly data: FoundationScopedDataPort;
   readonly operationPolicy: OperationPolicy;
   readonly reportError: (message: string) => void;
   readonly restoredState?: unknown;
@@ -36,7 +34,7 @@ export type CandidateManagementMount = (
 ) => Promise<FeatureMountHandle>;
 
 export interface CandidateFeatureRegistrationDependencies {
-  readonly data: FoundationDataPort;
+  readonly data: FoundationScopedDataPort;
   readonly query: CandidateQuery;
   readonly capture: CaptureCandidatePort;
   readonly mount?: CandidateManagementMount;
@@ -49,37 +47,21 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly state?: ManagementState;
 }
 
-const mountPlaceholder: CandidateManagementMount = async ({ container }) => {
-  const view = document.createElement("section");
-  view.className = "candidate-management";
-  view.textContent = "Candidate management";
-  container.replaceChildren(view);
-  let unmounted = false;
-  return {
-    async unmount() {
-      if (unmounted) return;
-      unmounted = true;
-      container.replaceChildren();
-    },
-  };
-};
-
 const mountManagementView =
   (state: ManagementState): CandidateManagementMount =>
-  async ({ container, restoredState }) => {
-    const root = createRoot(container);
+  async ({ container, operationPolicy, restoredState }) => {
+    state.useOperationPolicy(operationPolicy);
+    const root = mountManagementReactRoot(container, state);
     let unmounted = false;
-    root.render(createElement(ManagementView, { state }));
 
     await state.load();
+    const codec = createManagementStateSnapshotCodec(state);
     if (restoredState !== undefined) {
-      const codec = createManagementStateSnapshotCodec(state);
       const restored = codec.restore(restoredState);
       if (restored.ok) state.applySnapshot(restored.value);
       else state.rejectSnapshotRestore();
     }
 
-    const codec = createManagementStateSnapshotCodec(state);
     return {
       async captureState() {
         return { ok: true, value: codec.capture(state) };
@@ -92,6 +74,16 @@ const mountManagementView =
     };
   };
 
+/**
+ * A registration without a mountable view must not report success; the shell
+ * then surfaces a mount failure instead of an apparently working feature.
+ */
+const mountUnavailable: CandidateManagementMount = async () => {
+  throw new Error(
+    "Candidate management registration has no management state to mount.",
+  );
+};
+
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
@@ -102,7 +94,7 @@ export const createCandidateFeatureRegistration = (
   const mount =
     dependencies.mount ??
     (dependencies.state === undefined
-      ? mountPlaceholder
+      ? mountUnavailable
       : mountManagementView(dependencies.state));
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));

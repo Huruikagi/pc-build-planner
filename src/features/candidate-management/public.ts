@@ -3,7 +3,7 @@ import type {
   ShellNavigator,
 } from "../../application-shell/public.js";
 import { err } from "../../domain/public.js";
-import type { FoundationDataPort } from "../../persistence/public.js";
+import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
   type CandidateEditorPrefill,
   candidateManagementFeatureId,
@@ -38,7 +38,7 @@ export interface CandidateManagementPublicApi {
 }
 
 export interface CandidateManagementPublicDependencies {
-  readonly data: FoundationDataPort;
+  readonly data: FoundationScopedDataPort;
   readonly query: CandidateQuery;
   readonly capture: CaptureCandidatePort;
   readonly navigator?: ShellNavigator;

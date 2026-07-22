@@ -306,9 +306,28 @@
   - _Requirements: 2.7, 8.1, 8.2, 8.3_
   - _Boundary: FoundationFixtures_
 
+- [x] 6.11 信頼済みUI contextへ絞り込みdata portを公開する
+  - production runtime contributionのhandleへ、queryと原子的root mutationだけを転送するfrozenな`FoundationScopedDataPort`を追加する。
+  - 同じhandleから`assessReplacement`、`replaceRoot`、`runMaintenance`、Repository、StoragePort、RootWriteLock、runner、pipelineを到達不能に保つ。
+  - 別contextで初期化した二つのcontributionが同一固定lockと永続revisionで直列化され、片方の再初期化後も既存rootとmaintenance fenceを認可根拠にすることを回帰する。
+  - access restriction失敗時にportを含む全contributionを公開しないことをfail-closedに確認する。
+  - _Depends: 6.8_
+  - _Requirements: 3.1, 3.8, 3.10, 6.1, 6.4, 7.6, 8.2_
+  - _Boundary: FoundationRuntimeContribution, FoundationScopedDataPort_
+
+- [x] 6.12 候補パーツ内容のcanonical validatorを公開する
+  - 識別子と日時を除いた候補パーツ内容を検証する`validateCandidatePartContent`をdomainへ実装し、`validateCandidatePartValue`をその委譲へ置き換える。
+  - 公開入口から利用でき、`$.product.name`のようなfield単位pathを返すことを架空データで確認する。
+  - root、CurrentBuild、maintenance、requestDedupeを偽造せずにdraftを検証できること、および既存root検証の挙動が変わらないことを回帰する。
+  - _Depends: 2.6_
+  - _Requirements: 2.1, 2.2, 2.4, 2.7, 3.2, 3.11, 8.1, 8.2_
+  - _Boundary: SchemaValidator, DomainPublicApi_
+
 ## Implementation Notes
 
 - 候補取得元の欠損や元表記snapshotは下流で補完せず、Foundationのoptional canonical契約へそのまま保存する。
+
+- 絞り込みdata portはwrite authorityのfrozen viewであり、単一write authorityの根拠はJSインスタンス数ではなく固定名Web Lockと永続rootのrevision・maintenance fenceである。
 
 - project削除はReferenceRepairPolicyで同じprojectIdのcandidateとCurrentBuildを除去し、MutationPipelineの全体検証と単一commitへ閉じる。
 

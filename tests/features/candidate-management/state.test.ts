@@ -69,6 +69,12 @@ const createQuery = (failure?: ManagementError): CandidateQuery => ({
   async listBuildEligible() {
     return { ok: true as const, value: [] };
   },
+  async getCandidateDraft() {
+    return {
+      ok: false as const,
+      error: { kind: "not-found" as const, entity: "candidate" as const },
+    };
+  },
 });
 
 const createService = (
@@ -134,6 +140,9 @@ test("候補保存の失敗では入力と一覧を保持し、同一操作の�
 
   const first = state.saveEditor();
   const second = state.saveEditor();
+  // The mutation context resolves asynchronously, so the service call lands on
+  // a later microtask; the second submit must still be suppressed.
+  await Promise.resolve();
   assert.equal(calls, 1);
   release();
   await Promise.all([first, second]);

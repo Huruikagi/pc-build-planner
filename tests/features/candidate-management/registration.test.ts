@@ -14,15 +14,15 @@ import type {
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
-import type { FoundationDataPort } from "../../../src/persistence/public.js";
+import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 test("候補管理registrationはshell契約へmount依存とoperation policyを注入する", async () => {
-  const data = {} as FoundationDataPort;
+  const data = {} as FoundationScopedDataPort;
   const query = {} as CandidateQuery;
   const capture = {} as CaptureCandidatePort;
   const observed: {
-    data?: FoundationDataPort;
+    data?: FoundationScopedDataPort;
     readAllowed?: boolean;
     mutationAllowed?: boolean;
   } = {};
@@ -91,6 +91,12 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     async listBuildEligible() {
       return { ok: true as const, value: [] };
     },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
   } satisfies CandidateQuery;
   const state = createManagementState({
     query,
@@ -103,7 +109,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   await state.load();
   state.beginCreate(draft);
   const sourceRegistration = createCandidateFeatureRegistration({
-    data: {} as FoundationDataPort,
+    data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
     capture: {} as CaptureCandidatePort,
     state,
@@ -128,7 +134,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     }),
   });
   const targetRegistration = createCandidateFeatureRegistration({
-    data: {} as FoundationDataPort,
+    data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
     capture: {} as CaptureCandidatePort,
     state: restoredState,
@@ -157,7 +163,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     }),
   });
   const rejectedHandle = await createCandidateFeatureRegistration({
-    data: {} as FoundationDataPort,
+    data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
     capture: {} as CaptureCandidatePort,
     state: rejectedState,
@@ -172,4 +178,25 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     code: "snapshot-restore-failed",
   });
   await rejectedHandle.unmount();
+});
+
+test("mountできるstateを持たないregistrationはmountを成功と偽らない", async () => {
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query: {} as CandidateQuery,
+    capture: {} as CaptureCandidatePort,
+  });
+  const container = document.createElement("div");
+
+  await assert.rejects(
+    registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true },
+      reportError: () => {},
+    }),
+    /no management state to mount/,
+  );
+  // A rejected mount must not leave placeholder content behind.
+  assert.equal(container.textContent, "");
+  assert.equal(registration.activation, undefined);
 });

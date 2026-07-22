@@ -12,9 +12,21 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import type { ShellPresentationAdapter } from "../../src/application-shell/shell-presentation.js";
-import type { MaintenanceSnapshotSource } from "../../src/persistence/public.js";
+import type {
+  FoundationScopedDataPort,
+  MaintenanceSnapshotSource,
+} from "../../src/persistence/public.js";
 
 const id = (value: string) => value as FeatureId;
+
+const stubDataPort: FoundationScopedDataPort = {
+  async query() {
+    return { ok: true, value: {} } as never;
+  },
+  async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+};
 
 const source: MaintenanceSnapshotSource = {
   async getSnapshot() {
@@ -100,6 +112,7 @@ function harness(options?: {
       value: {
         maintenanceSource: source,
         workerRegistrations: [] as const,
+        dataPort: stubDataPort,
         dispose: () => {
           events.push("foundation:stop");
         },
@@ -123,10 +136,10 @@ test("foundation→registry→presentation→feature host→workerの順で一�
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: {
+    createContributions: () => ({
       features: [{ key: "planner", registration: h.feature }] as const,
       workerRegistrations: [h.worker],
-    },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -157,7 +170,10 @@ test("空catalogを正常起動する", async () => {
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -174,10 +190,10 @@ test("foundation失敗時はpresentationだけを開始して共通errorを表�
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: {
+    createContributions: () => ({
       features: [{ key: "planner", registration: h.feature }] as const,
       workerRegistrations: [h.worker],
-    },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -203,7 +219,10 @@ test("foundation失敗時のpresentation例外をrejectせずtyped failureへ変
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: {
       mount() {
         throw new Error("presentation adapter failed");
@@ -234,7 +253,10 @@ test("foundation失敗後の逐次retryでもpresentation ownershipを一つに�
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -273,10 +295,10 @@ test("不正feature slotはpresentationを一度だけ解放してretryでも再
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: {
+    createContributions: () => ({
       features: [{ key: "planner", registration: h.feature }] as const,
       workerRegistrations: [h.worker],
-    },
+    }),
     presentation: invalidPresentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -307,7 +329,10 @@ test("不正feature slotのstop失敗は診断して所有権を保持しcleanup
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: {
       mount: () => ({
         ok: true,
@@ -340,10 +365,10 @@ test("worker途中失敗をfeature、購読、presentation、foundationまでrol
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: {
+    createContributions: () => ({
       features: [{ key: "planner", registration: h.feature }] as const,
       workerRegistrations: [h.worker],
-    },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -374,7 +399,10 @@ test("開始中のstopはepochを無効化し、cleanup後のstartだけが新�
       calls += 1;
       return calls === 1 ? firstFoundation : h.initializeFoundation();
     },
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -405,6 +433,7 @@ test("cleanup失敗中は新規startを拒否し、stop再試行成功後だけr
         value: {
           maintenanceSource: source,
           workerRegistrations: [] as const,
+          dataPort: stubDataPort,
           dispose() {
             disposeAttempts += 1;
             if (disposeAttempts === 1) throw new Error("fixture cleanup");
@@ -412,7 +441,10 @@ test("cleanup失敗中は新規startを拒否し、stop再試行成功後だけr
         },
       };
     },
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -443,10 +475,10 @@ test("malformed foundation handleを下流副作用前に拒否し取得済みdi
         },
       } as never,
     }),
-    contributions: {
+    createContributions: () => ({
       features: [{ key: "planner", registration: h.feature }] as const,
       workerRegistrations: [],
-    },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -462,7 +494,10 @@ test("presentation getter例外をrejectせずtyped failureへ変換しfoundatio
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    contributions: { features: [] as const, workerRegistrations: [] },
+    createContributions: () => ({
+      features: [] as const,
+      workerRegistrations: [],
+    }),
     presentation: {
       mount: () => ({
         ok: true,

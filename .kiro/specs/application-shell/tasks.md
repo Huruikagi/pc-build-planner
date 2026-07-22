@@ -227,6 +227,16 @@
   - _Requirements: 6.4, 7.1, 7.2, 7.3, 7.4, 7.5_
   - _Boundary: ContractTestKit, ApplicationShellIntegrationTests_
 
+- [x] 4.11 実装済みfeatureをproduction compositionへ接続する
+  - contributionをfactory化し、foundationの絞り込みdata portと遅延bindしたshell navigatorを`FeatureCompositionContext`として注入する。
+  - side panel専用contribution moduleを分離し、service worker entryがそのmodule graphへ到達しないこと、worker bundleがDOM/React非依存のままであることをartifact gateで確認する。
+  - `src/index.ts`を`ApplicationApi`型と`composeApplicationApi(context)`へ置き換え、実featureの公開契約がroot入口の型から到達できることを検証する。
+  - feature CSSをside panel bundleへ組み込み、`side-panel.html`から参照する。
+  - 完了時、production側で候補管理のnavigation表示、画面到達、公開APIの合成、worker bundle境界がproduction-shaped testとE2Eで観測できる。
+  - _Depends: 4.5, local-data-foundation 6.11_
+  - _Requirements: 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 6.1, 6.3, 6.4_
+  - _Boundary: FeatureContributionCatalog, ProductionApplicationComposition, RootPublicApi_
+
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。

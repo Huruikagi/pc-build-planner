@@ -300,6 +300,55 @@ const attributes = (
   return undefined;
 };
 
+/** 識別子と保存日時を除いた候補パーツ内容。保存前のdraft検証単位でもある。 */
+export type CandidatePartContent = Omit<
+  CandidatePart,
+  "id" | "createdAt" | "updatedAt"
+>;
+
+/**
+ * 識別子と日時を伴わない候補パーツ内容のcanonical shape validator。
+ * 保存前のdraftは、rootや無関係なaggregateを組み立てずにこの入口だけで検証する。
+ */
+export const validateCandidatePartContent = (
+  input: unknown,
+  path = "$",
+): Result<CandidatePartContent, ValidationError> => {
+  const prohibited = inspectPayload(input, path);
+  if (prohibited) return err(prohibited);
+  const content = object(
+    input,
+    path,
+    ["projectId", "category", "product", "normalizedAttributes"],
+    ["sourceInfo", "sourceSnapshot"],
+  );
+  if (!content.ok) return content;
+  const projectIdIssue = uuid(content.value.projectId, `${path}.projectId`);
+  if (projectIdIssue) return err(projectIdIssue);
+  if (!PART_CATEGORIES.includes(content.value.category as never))
+    return fail("category-mismatch", `${path}.category`);
+  let issue = product(content.value.product, `${path}.product`);
+  if (issue) return err(issue);
+  if ("sourceInfo" in content.value) {
+    issue = sourceInfo(content.value.sourceInfo, `${path}.sourceInfo`);
+    if (issue) return err(issue);
+  }
+  if ("sourceSnapshot" in content.value) {
+    issue = sourceSnapshot(
+      content.value.sourceSnapshot,
+      `${path}.sourceSnapshot`,
+    );
+    if (issue) return err(issue);
+  }
+  issue = attributes(
+    content.value.normalizedAttributes,
+    content.value.category as string,
+    `${path}.normalizedAttributes`,
+  );
+  if (issue) return err(issue);
+  return ok(input as CandidatePartContent);
+};
+
 /**
  * CandidatePart単体のcanonical shape validator。
  * project参照・ID重複などaggregate文脈の検証はvalidateRootが追加で担う。
@@ -327,32 +376,16 @@ export const validateCandidatePartValue = (
   if (!candidate.ok) return candidate;
   for (const issue of [
     uuid(candidate.value.id, `${path}.id`),
-    uuid(candidate.value.projectId, `${path}.projectId`),
     utc(candidate.value.createdAt, `${path}.createdAt`),
     utc(candidate.value.updatedAt, `${path}.updatedAt`),
   ])
     if (issue) return err(issue);
-  if (!PART_CATEGORIES.includes(candidate.value.category as never))
-    return fail("category-mismatch", `${path}.category`);
-  let issue = product(candidate.value.product, `${path}.product`);
-  if (issue) return err(issue);
-  if ("sourceInfo" in candidate.value) {
-    issue = sourceInfo(candidate.value.sourceInfo, `${path}.sourceInfo`);
-    if (issue) return err(issue);
-  }
-  if ("sourceSnapshot" in candidate.value) {
-    issue = sourceSnapshot(
-      candidate.value.sourceSnapshot,
-      `${path}.sourceSnapshot`,
-    );
-    if (issue) return err(issue);
-  }
-  issue = attributes(
-    candidate.value.normalizedAttributes,
-    candidate.value.category as string,
-    `${path}.normalizedAttributes`,
-  );
-  if (issue) return err(issue);
+  const content: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(candidate.value))
+    if (key !== "id" && key !== "createdAt" && key !== "updatedAt")
+      content[key] = value;
+  const validated = validateCandidatePartContent(content, path);
+  if (!validated.ok) return validated;
   return ok(input as CandidatePart);
 };
 

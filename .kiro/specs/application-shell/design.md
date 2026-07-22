@@ -123,7 +123,8 @@ src/
 │   ├── shell-presentation.tsx          # shell root、navigation command、feature専用slotの接続
 │   ├── application-composition.ts      # canonical foundationと公開registrationのproduction合成
 │   ├── production-worker-composition.ts # foundation message registrationとcatalog workerのcontext別合成
-│   ├── feature-contribution-catalog.ts # side panelとworkerで共有するreadonly registration catalog
+│   ├── feature-contribution-catalog.ts # contribution契約とworker安全なcatalog（DOM/React非依存）
+│   ├── side-panel-contributions.ts     # side panel専用contribution factoryの唯一の集約点
 │   └── public-api-registry.ts          # feature public contractの型付き合成
 ├── runtime/
 │   ├── side-panel.ts                  # side panel bootstrap入口
@@ -136,7 +137,29 @@ tests/
 └── integration/application-shell.test.ts # bootstrap、遷移、障害、maintenance統合
 ```
 
-既存の`react-shell-root.tsx`、`shell-view.tsx`、`composition-root.ts`、`runtime/side-panel.ts`、`runtime/service-worker.ts`はproduction接続のため変更し、`shell-presentation.tsx`、`application-composition.ts`、`feature-contribution-catalog.ts`を追加する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。下流feature未実装時の空catalogは正規のproduction状態として許可し、shellは利用可能featureなしのempty stateを表示する。仮のmaintenance sourceへのfallbackは許可しない。
+既存の`react-shell-root.tsx`、`shell-view.tsx`、`composition-root.ts`、`runtime/side-panel.ts`、`runtime/service-worker.ts`はproduction接続のため変更し、`shell-presentation.tsx`、`application-composition.ts`、`feature-contribution-catalog.ts`、`side-panel-contributions.ts`を追加する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portと task 6.11の絞り込みdata portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
+
+#### Feature contribution composition
+
+下流feature未実装時の空catalogはfeature実装前の暫定production状態であり、実装済みfeatureが存在する時点でproduction compositionへ接続されていなければならない。空catalogのままstartedになるだけのshellはfeature完成の証拠として扱わない。
+
+feature contributionは値ではなくfactoryとして登録し、production compositionが解決した合成contextを受け取る。
+
+```typescript
+interface FeatureCompositionContext {
+  readonly data: FoundationScopedDataPort;   // local-data-foundation所有
+  readonly navigator: ShellNavigator;        // application-shell所有（遅延bind）
+}
+
+type FeatureContributionFactory<TKey extends string, TPublic extends object> =
+  (context: FeatureCompositionContext) => FeatureContribution<TKey, TPublic>;
+```
+
+- `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker contributionだけを持つworker安全なcatalogを所有する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
+- `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。
+- `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
+- `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
+- feature側CSSは、side panel entryのmodule graphからimportして`dist/side-panel.css`へbundleし、shellが所有する`side-panel.html`から参照する。どのentryからも到達しないCSSはproduction artifactに含まれないため、設計上の記載と実体を一致させる。
 
 ## システムフロー
 
