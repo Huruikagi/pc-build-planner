@@ -55,7 +55,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 6.3_
   - _Boundary: Foundation reference repair contract integration_
 
-- [ ] 3.2 修復済み構成の照会と不正参照の停止動作を統合する
+- [x] 3.2 修復済み構成の照会と不正参照の停止動作を統合する
   - 候補・project変更のcommit後に現在構成を再照会し、修復された候補参照と数量だけを返す。
   - Foundationが拒否する存在しない候補・別project参照と、feature固有不変条件違反を採用品として返さず、変更停止errorへ変換する。
   - 完了時、各上流変更後のqueryが追加writeなしで修復済み構成を返し、不正rootでは識別可能なerrorとなるintegration testが成功する。
@@ -126,3 +126,4 @@
 
 - BuildService.execute（2.2）はBuildCommandの3種を単一のswitchで扱うため、CategoryPolicyのmode分岐（single/multiple）は2.2の時点で自然に実装済みとなった。2.3は新規実装ではなく、2.2で未検証だった複数選択カテゴリ経路（追加・数量変更・解除・重複防止・不正数量拒否）へservice testを追加してcanonical構成規則を証明するタスクだった。src側の変更は不要だった。
 - 3.1はlocal-data-foundationのreferenceRepairPolicy（候補削除・カテゴリ変更で変更対象自身のBuildItemだけを無条件に除去し、無関係な参照は触れない）と、current-build-managementのCurrentBuildQuery（2.1）を実データポートで結合するintegration testのみで完結した。src側の変更は不要で、Foundation側の修復が既にrequirement 4.1-4.4を満たしていることを確認できた。
+- Foundationのschema validator（src/domain/validation.ts）は、currentBuild.items.candidatePartIdが同一project内の実在candidateを参照することを既にroot検証で強制している。存在しない候補・別project候補への参照はrepository.readRoot()の時点でcorrupt-dataとして拒否され、CurrentBuildQueryの不変条件チェックへは到達しない。一方、build重複・item重複・未分類参照・カテゴリ別選択数はFoundationが関知しないfeature固有不変条件であり、CurrentBuildQuery（2.1）が担う。3.2はこの分担を実Foundation stackで証明するintegration testのみで完結し、src側の変更は不要だった。
