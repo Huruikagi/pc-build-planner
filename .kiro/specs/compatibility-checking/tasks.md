@@ -71,7 +71,7 @@
   - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
 
 - [ ] 5. side panel統合と受け入れ検証を完成する
-- [ ] 5.1 互換性機能を既存side panelと公開入口へ統合する
+- [x] 5.1 互換性機能を既存side panelと公開入口へ統合する
   - shell所有の`side-panel-contributions.ts`へ本機能のcontributionを追加し、featureが返すFeatureContributionをshellがcompositionする。共有runtime入口とroot barrelはfeature側から編集しない
   - 既存の依存順合成に倣い、CandidateQueryとCurrentBuildQueryをそれぞれの上流contributionの公開queryから取得してserviceへ注入し、RepositoryやStorage APIを直接利用せず画面を起動する
   - 現在構成を変更して互換性画面を再表示すると、新しい候補と確認済み属性の結果が表示される

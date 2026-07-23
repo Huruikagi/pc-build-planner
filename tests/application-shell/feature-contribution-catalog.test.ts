@@ -66,9 +66,9 @@ test("side panel contributionは合成contextから実featureを組み立てる"
 
   assert.deepEqual(
     contributions.map(({ key }) => key),
-    ["candidateManagement", "currentBuild", "productCapture"],
+    ["candidateManagement", "currentBuild", "productCapture", "compatibility"],
   );
-  const [candidateManagement, currentBuild] = contributions;
+  const [candidateManagement, currentBuild, , compatibility] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
   assert.equal(candidateManagement.registration.navigation.label, "候補管理");
   assert.equal(
@@ -79,6 +79,12 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   assert.equal(currentBuild.registration.navigation.label, "現在構成");
   assert.equal(
     typeof currentBuild.registration.publicApi.query.getByProject,
+    "function",
+  );
+  assert.equal(compatibility.registration.id, "compatibility");
+  assert.equal(compatibility.registration.navigation.label, "互換性確認");
+  assert.equal(
+    typeof compatibility.registration.publicApi.query.evaluate,
     "function",
   );
 });

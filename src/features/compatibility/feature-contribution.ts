@@ -23,7 +23,7 @@ export interface CompatibilityContributionDependencies {
   /** project-candidate-management's public query — never a deep import of its internals. */
   readonly candidateQuery: CandidateQuery;
   /** Resolves the project to evaluate; project selection is owned outside this spec. */
-  readonly getProjectId?: () => ProjectId | null;
+  readonly getProjectId?: () => ProjectId | null | Promise<ProjectId | null>;
 }
 
 /**

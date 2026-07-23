@@ -40,20 +40,21 @@ export interface CompatibilityFeatureRegistrationDependencies {
   /**
    * Resolves which project's compatibility to evaluate. Project selection is
    * owned outside this spec's boundary; a `null` result mounts an idle view.
+   * May resolve asynchronously (e.g. via an upstream `listProjects()` query).
    */
-  readonly getProjectId?: () => ProjectId | null;
+  readonly getProjectId?: () => ProjectId | null | Promise<ProjectId | null>;
 }
 
 const mountCompatibilityView =
   (
     state: CompatibilityState,
-    getProjectId: () => ProjectId | null,
+    getProjectId: () => ProjectId | null | Promise<ProjectId | null>,
   ): CompatibilityMount =>
   async ({ container, operationPolicy }) => {
     const root = mountCompatibilityReactRoot(container, state);
     let unmounted = false;
 
-    const projectId = getProjectId();
+    const projectId = await getProjectId();
     if (projectId !== null && operationPolicy.isAllowed("read")) {
       await state.evaluate(projectId);
     }

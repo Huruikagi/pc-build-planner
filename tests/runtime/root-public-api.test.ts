@@ -32,6 +32,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
     "candidateManagement",
     "currentBuild",
     "productCapture",
+    "compatibility",
   ]);
 });
 
@@ -47,4 +48,6 @@ test("実featureの公開契約がroot入口から到達できる", () => {
   assert.equal(typeof candidateManagement.openCandidateEditor, "function");
   const currentBuild = composed.value.currentBuild;
   assert.equal(typeof currentBuild.query.getByProject, "function");
+  const compatibility = composed.value.compatibility;
+  assert.equal(typeof compatibility.query.evaluate, "function");
 });

@@ -3,6 +3,10 @@ import {
   createCandidateManagementContribution,
 } from "../features/candidate-management/feature-contribution.js";
 import {
+  type CompatibilityContribution,
+  createCompatibilityContribution,
+} from "../features/compatibility/feature-contribution.js";
+import {
   type CurrentBuildContribution,
   createCurrentBuildContribution,
 } from "../features/current-build/feature-contribution.js";
@@ -24,6 +28,7 @@ export type SidePanelFeatureContributions = readonly [
   CandidateManagementContribution,
   CurrentBuildContribution,
   ProductCaptureContribution,
+  CompatibilityContribution,
 ];
 
 /** Real `chrome.tabs`/`chrome.scripting` handles, supplied by the runtime entrypoint. */
@@ -75,5 +80,14 @@ export const createSidePanelFeatureContributions = (
         : [];
     },
   });
-  return [candidateManagement, currentBuild, productCapture];
+  const compatibility = createCompatibilityContribution(context, {
+    currentBuildQuery: currentBuild.registration.publicApi.query,
+    candidateQuery: candidateManagement.registration.publicApi.query,
+    async getProjectId() {
+      const projects =
+        await candidateManagement.registration.publicApi.query.listProjects();
+      return projects.ok ? (projects.value[0]?.id ?? null) : null;
+    },
+  });
+  return [candidateManagement, currentBuild, productCapture, compatibility];
 };
