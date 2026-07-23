@@ -47,6 +47,18 @@ export interface ExtractionCandidate {
  */
 export type RawCapturePayload = unknown;
 
+/**
+ * The shape `RawCapturePayload` must decode to before its fields are trusted.
+ * `requestId`/`tabId`/`pageUrl` are echoed back so the coordinator can detect
+ * a stale response from a tab that navigated or closed mid-capture.
+ */
+export interface CapturePagePayload {
+  readonly requestId: string;
+  readonly tabId: number;
+  readonly pageUrl: string;
+  readonly candidates: readonly ExtractionCandidate[];
+}
+
 /** A capture item after acceptance, keeping the original wording alongside any user edit. */
 export interface CaptureSessionField {
   readonly field: CaptureField;
@@ -89,6 +101,16 @@ export interface NormalizedField {
 export interface CaptureDraftFields {
   readonly fields: readonly NormalizedField[];
   readonly missingCoreFields: readonly CaptureCoreField[];
+}
+
+/** The coordinator's successful output; not yet a session and never persisted. */
+export interface CaptureResult {
+  readonly requestId: RequestId;
+  readonly tabId: number;
+  readonly pageUrl: string;
+  readonly capturedAt: UtcTimestamp;
+  readonly draft: CaptureDraftFields;
+  readonly rejectedFields: readonly CaptureFieldRejection[];
 }
 
 /**
