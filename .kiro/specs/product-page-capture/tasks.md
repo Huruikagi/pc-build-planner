@@ -94,7 +94,7 @@
   - _Depends: application-shell 4.1, 5.3; project-candidate-management 4.2; local tasks 4.4, 5.2_
   - _Requirements: 1.1, 2.1, 2.2, 2.4, 3.5, 4.1, 4.2, 5.1, 5.3, 5.4, 5.5_
 
-- [ ] 6.2 失敗・安全性・fixture制約の回帰テストを完成する
+- [x] 6.2 失敗・安全性・fixture制約の回帰テストを完成する
   - 権限失効、制限ページ、ページ遷移、形式不正、抽出失敗、projectなし、容量不足、保存失敗、重複送信を検証する
   - 商品値・完全URL・HTMLがログや保存payloadへ漏れず、実行可能なページ値が描画されないことを検証する
   - テスト資産が架空HTMLと架空商品だけで構成され、実サイトHTML、画像、取得データなしで全テストが通る
@@ -116,3 +116,5 @@
 - Task 4.4: application-shell/public.tsがRegistrationErrorを再公開していなかったため追加した(ApplicationWorkerRegistration.register()の戻り値型として必須)。styles.cssはFile Structure Plan逸脱として本taskでは未実装(current-build-managementと同様の記録)。CaptureStateはoperation policy gatingを持たないため、保守モード中の保存拒否はtask 5.2で配線するCaptureCandidatePort側のエラー伝播に委ねる。
 
 - Task 6.1: createProductCaptureContribution()はCaptureStateを一度だけ生成しmount()間で共有するため、詳細編集の往復によるsession維持はsnapshot/restoreを使わず実現できる(application-composition.tsがcontribution factoryをstart()ごとに一度だけ呼ぶため、この前提は本番構成でも成立する)。CaptureRuntimePortの実chrome.scripting連携とside-panel-contributions.tsへの実登録はtask 6.3へ意図的に切り出した(ユーザー承認済み、実Chromeで動作検証できない開発環境のため)。openManualEntryのproject解決はdependencies.projects[0]をデフォルトに使う暫定挙動であり、projectsが空の場合は無音でno-opになる既知の制約。
+
+- Task 6.2: 6.2が要求する失敗・安全性シナリオはほぼ全てtask 2〜5の各unit test(coordinator/normalizer/state/view/draft-mapper/submit-draft.test.ts)で既に個別検証済みのため、本taskではcreateProductCaptureContribution()経由の実合成を通したend-to-end確認に絞った(regression.test.ts、8 tests)。特にRequirement 6.5(診断ログへ商品値・URLを記録しない)はconsole.*呼び出しが該当featureに一件も存在しないことによる構造的充足であり、regression.test.tsのconsole spyテストが唯一の具体的な回帰guardになる。console.log/warn/errorをmonkey-patchするharnessは`--test-isolation=none`環境でグローバル汚染を招くため、afterEachで必ず元へ復元すること(レビュー1回目で指摘・修正済み)。同様にmockのcall記録なしで「呼べた」だけを確認するテストはtautologyになりやすい(検出・修正済み: openCandidateEditorの呼び出し引数を記録し、prefillの内容まで検証する)。
