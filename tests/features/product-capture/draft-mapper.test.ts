@@ -5,8 +5,14 @@ import type {
   RequestId,
   UtcTimestamp,
 } from "../../../src/domain/public.js";
-import type { CaptureSession } from "../../../src/features/product-capture/contracts.js";
-import { toCandidateDraft } from "../../../src/features/product-capture/draft-mapper.js";
+import type {
+  CaptureSession,
+  ConfirmedCaptureSession,
+} from "../../../src/features/product-capture/contracts.js";
+import {
+  createCaptureDraftMapper,
+  toCandidateDraft,
+} from "../../../src/features/product-capture/draft-mapper.js";
 
 const REQUEST_ID = "80000000-0000-4000-8000-000000000001" as RequestId;
 const CAPTURED_AT = "2026-07-23T00:00:00Z" as UtcTimestamp;
@@ -174,4 +180,54 @@ test("projectId未選択のセッションはproject-requiredになる", () => {
   const result = toCandidateDraft(withoutProject);
 
   assert.deepEqual(result, { ok: false, error: { kind: "project-required" } });
+});
+
+test("CaptureDraftMapperは確認済みセッションからtoCandidateDraftと同じ結果を返す", () => {
+  const mapper = createCaptureDraftMapper();
+  const confirmed = session() as ConfirmedCaptureSession;
+
+  assert.deepEqual(
+    mapper.toCandidateDraft(confirmed),
+    toCandidateDraft(confirmed),
+  );
+});
+
+test("CaptureDraftMapperは欠損を含む有効セッションを型安全な候補ドラフトへ変換する", () => {
+  const mapper = createCaptureDraftMapper();
+  const confirmed = session({
+    fields: [
+      {
+        field: "name",
+        value: { original: "架空CPU X100", confirmed: "架空CPU X100" },
+        source: "json-ld",
+        sourceLabel: "JSON-LD name",
+      },
+    ],
+    missingCoreFields: [
+      "category",
+      "manufacturer",
+      "modelNumber",
+      "price",
+      "url",
+    ],
+  }) as ConfirmedCaptureSession;
+
+  const result = mapper.toCandidateDraft(confirmed);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.category, "uncategorized");
+  assert.equal(result.value.product.manufacturer, undefined);
+});
+
+test("CaptureDraftMapperは不正セッションを項目エラーへ変換する", () => {
+  const mapper = createCaptureDraftMapper();
+  const confirmed = session({ fields: [] }) as ConfirmedCaptureSession;
+
+  const result = mapper.toCandidateDraft(confirmed);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "validation", fields: { name: "required" } },
+  });
 });

@@ -10,6 +10,7 @@ import type {
   CaptureCoreField,
   CaptureError,
   CaptureSession,
+  ConfirmedCaptureSession,
 } from "./contracts.js";
 import { createCaptureNormalizer } from "./normalizer.js";
 
@@ -113,3 +114,16 @@ export const toCandidateDraft = (
     normalizedAttributes: { category: "uncategorized" },
   });
 };
+
+export interface CaptureDraftMapper {
+  toCandidateDraft(
+    session: ConfirmedCaptureSession,
+  ): Result<CandidateDraft, CaptureError>;
+}
+
+/** Delegates to the same rules `CandidateEditorNavigation.open` uses, so both stay in sync. */
+export const createCaptureDraftMapper = (): CaptureDraftMapper => ({
+  toCandidateDraft(session) {
+    return toCandidateDraft(session);
+  },
+});
