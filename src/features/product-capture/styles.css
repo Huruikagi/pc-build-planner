@@ -1,0 +1,21 @@
+.product-capture__field {
+  margin-block-end: 0.75rem;
+}
+
+.product-capture__source,
+.product-capture__original {
+  margin: 0;
+  color: var(--product-capture-muted-text, #555);
+  font-size: 0.85em;
+}
+
+.product-capture__missing {
+  margin: 0;
+  color: var(--product-capture-missing-text, #a15c00);
+  font-size: 0.85em;
+}
+
+.product-capture__error {
+  color: var(--product-capture-error-text, #b3261e);
+  font-weight: 600;
+}

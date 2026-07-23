@@ -63,7 +63,7 @@
   - _Requirements: 4.2, 4.3, 4.6_
   - _Boundary: CandidateEditorNavigation_
 
-- [ ] 4.4 React root adapterとfeature registrationを実装する
+- [x] 4.4 React root adapterとfeature registrationを実装する
   - `view.tsx`をframework非依存のCaptureState/portへ接続し、`public.ts`、side panel registration、worker registrationをfeature内で所有する
   - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
   - shell contract test kitでUI登録、action handler登録、typed activation呼出、operation policy、cleanupが適合することを確認できる
@@ -104,3 +104,5 @@
 
 - Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。
 - Task 4.1: 注入されたasync依存（`coordinator.captureCurrentTab()`、`submitDraft()`）は必ずtry/catchで包み、例外を`failed`状態へ変換すること。素通しすると再入防止guardのせいで`extracting`/`submitting`のまま永久に復帰不能になる（レビュー1回目で指摘・修正済み）。同様の依存注入を行う後続task（5.2など）でも同じ防御を徹底する。
+
+- Task 4.4: application-shell/public.tsがRegistrationErrorを再公開していなかったため追加した(ApplicationWorkerRegistration.register()の戻り値型として必須)。styles.cssはFile Structure Plan逸脱として本taskでは未実装(current-build-managementと同様の記録)。CaptureStateはoperation policy gatingを持たないため、保守モード中の保存拒否はtask 5.2で配線するCaptureCandidatePort側のエラー伝播に委ねる。

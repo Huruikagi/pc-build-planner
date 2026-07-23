@@ -23,6 +23,7 @@ export type {
   OperationKind,
   OperationPolicy,
   PreparedFeatureActivation,
+  RegistrationError,
   ShellNavigator,
   WorkerRegistrationContext,
 } from "./contracts.js";
