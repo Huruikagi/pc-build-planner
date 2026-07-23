@@ -112,7 +112,7 @@
   - _Requirements: 1.1, 1.2, 2.2, 2.3, 2.4, 3.2, 3.3, 3.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: Current build side panel integration_
 
-- [ ] 5.2 構成管理と下流公開契約の受け入れ回帰を完成する
+- [x] 5.2 構成管理と下流公開契約の受け入れ回帰を完成する
   - 全カテゴリpolicy、別project・未分類・不正数量拒否、複数構成・重複・不正参照の操作停止を架空データで検証する。
   - 候補・projectの変更と同じcommitで参照が修復され、追加writeなしで他の選択が保持されることを検証する。
   - 再起動後の構成、activation rollback後の未保存UI状態、下流queryが同じ候補ID・数量を返すことを検証する。
@@ -136,3 +136,5 @@
 - current-buildのFile Structure Planにreact-root.tsxは含まれないため、React root生成はcandidate-managementのように別ファイルへ分離せずregistration.ts内へ直接実装した。
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
+- Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- 全29 acceptance criteria（requirements.md）は既存のunit(category-policy)、contract(contracts/service/query)、integration(reference-repair/query.integration/current-build-flow.integration)、DOM(state/view/registration)、e2eテストで完全に追跡できることを5.2で監査済み。current-build-managementのspecは全task完了。
