@@ -55,7 +55,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Boundary: CompatibilityState_
 
-- [ ] 4.2 集約結果と個別根拠をReactで安全に表示する
+- [x] 4.2 集約結果と個別根拠をReactで安全に表示する
   - framework非依存のCompatibilityStateをpropsとして受け、4区分の集約結果と、各ルールの対象名、比較値または不足項目、理由を同じ画面で確認可能にする
   - 注意事項ありでは互換と判定不能の個別行を隠さず、利用者が補う情報を特定できるようにする
   - マークアップを含む架空パーツ名を通常のJSX childとして表示し、`dangerouslySetInnerHTML`と`innerHTML`を使用しない。空・失敗・loadingをfeature所有のCSSで結果区分と視覚的に区別する

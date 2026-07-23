@@ -2,3 +2,4 @@
 @import "./shell-view.css";
 @import "../features/candidate-management/styles.css";
 @import "../features/product-capture/styles.css";
+@import "../features/compatibility/styles.css";
