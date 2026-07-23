@@ -85,7 +85,7 @@
   - _Requirements: 5.3, 5.4, 5.5, 5.6, 5.7, 6.3_
 
 - [ ] 6. 取り込み全体の受け入れフローと回帰を検証する
-- [ ] 6.1 actionから候補保存までを統合する
+- [x] 6.1 actionから候補保存までを統合する
   - application shellがside panel registration、worker registration、`public.ts`をcompositionし、feature側から共有runtime入口とroot barrelを編集しない
   - action、抽出、順位付け、確認、修正、project選択、候補作成を既存runtimeとサイドパネルへ接続する
   - 情報が十分な架空ページと欠損のある架空ページの両方で、保存完了まで一連の操作が成立する
@@ -100,9 +100,19 @@
   - テスト資産が架空HTMLと架空商品だけで構成され、実サイトHTML、画像、取得データなしで全テストが通る
   - _Requirements: 1.4, 1.5, 2.5, 3.1, 3.2, 3.3, 3.4, 4.5, 4.6, 5.2, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3_
 
+- [ ] 6.3 実chrome.scripting連携によるproduction composition接続を実装する
+  - task 6.1で抽象のままとした`CaptureRuntimePort`へ、`chrome.tabs`/`chrome.scripting.executeScript`を用いた実装を追加する(content-script bundle用のesbuild entry追加を含む可能性があり、`scripts/build.mjs`という全spec共有のbuild toolingへの変更を伴う)
+  - `chrome.action.onClicked`からside panelを開き、worker registrationのaction handlerを起動する実配線をservice worker側に追加する
+  - `src/application-shell/side-panel-contributions.ts`・production worker compositionへ`createProductCaptureContribution`を実際に登録する
+  - 実Chromeブラウザでの動作確認ができない開発環境のため、自動テストとコードレビューだけで検証し、実機での早期の手動確認を推奨する旨を記録する
+  - _Depends: local task 6.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
 ## Implementation Notes
 
 - Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。
 - Task 4.1: 注入されたasync依存（`coordinator.captureCurrentTab()`、`submitDraft()`）は必ずtry/catchで包み、例外を`failed`状態へ変換すること。素通しすると再入防止guardのせいで`extracting`/`submitting`のまま永久に復帰不能になる（レビュー1回目で指摘・修正済み）。同様の依存注入を行う後続task（5.2など）でも同じ防御を徹底する。
 
 - Task 4.4: application-shell/public.tsがRegistrationErrorを再公開していなかったため追加した(ApplicationWorkerRegistration.register()の戻り値型として必須)。styles.cssはFile Structure Plan逸脱として本taskでは未実装(current-build-managementと同様の記録)。CaptureStateはoperation policy gatingを持たないため、保守モード中の保存拒否はtask 5.2で配線するCaptureCandidatePort側のエラー伝播に委ねる。
+
+- Task 6.1: createProductCaptureContribution()はCaptureStateを一度だけ生成しmount()間で共有するため、詳細編集の往復によるsession維持はsnapshot/restoreを使わず実現できる(application-composition.tsがcontribution factoryをstart()ごとに一度だけ呼ぶため、この前提は本番構成でも成立する)。CaptureRuntimePortの実chrome.scripting連携とside-panel-contributions.tsへの実登録はtask 6.3へ意図的に切り出した(ユーザー承認済み、実Chromeで動作検証できない開発環境のため)。openManualEntryのproject解決はdependencies.projects[0]をデフォルトに使う暫定挙動であり、projectsが空の場合は無音でno-opになる既知の制約。
