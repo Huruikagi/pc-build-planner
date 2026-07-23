@@ -38,6 +38,11 @@ export interface ChromeCaptureRuntimeDependencies {
  * `files`-based completion values reliably, so it stashes the result on a
  * well-known global and this reads it back through a second, self-contained
  * `func` call — `func` results are Chrome's only well-documented return path.
+ *
+ * Both injections run in the extension's isolated world, so the hook is only
+ * ever the one `content-script.ts` installed; page script cannot define or
+ * observe it. A navigation between the two calls tears that world down and
+ * leaves the hook undefined, which surfaces below as an injection failure.
  */
 const readExtractionResult = (): unknown =>
   (
@@ -45,6 +50,24 @@ const readExtractionResult = (): unknown =>
       __pcbpExtract?: () => unknown;
     }
   ).__pcbpExtract?.();
+
+interface PageExtractionResult {
+  readonly pageUrl: string;
+  readonly candidates: readonly unknown[];
+}
+
+const decodePageExtractionResult = (
+  value: unknown,
+): PageExtractionResult | undefined => {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { pageUrl, candidates } = value as {
+    readonly pageUrl?: unknown;
+    readonly candidates?: unknown;
+  };
+  if (typeof pageUrl !== "string" || !Array.isArray(candidates))
+    return undefined;
+  return { pageUrl, candidates };
+};
 
 const PERMISSION_FAILURE_PATTERN =
   /activeTab|cannot access|missing host permission|the extensions gallery/i;
@@ -92,13 +115,21 @@ export const createChromeCaptureRuntimePort = (
           target: { tabId: target.tabId },
           func: readExtractionResult,
         });
-        const candidates = injected?.result;
-        if (!Array.isArray(candidates)) return err("unknown");
+        const extraction = decodePageExtractionResult(injected?.result);
+        if (extraction === undefined) return err("unknown");
+        /**
+         * `pageUrl` must come from the page, never from `target.url`: it is the
+         * only field that can disagree with what the capture asked for, and the
+         * coordinator's stale-response check is what makes that disagreement a
+         * `tab-changed` failure instead of silently mismatched candidate data.
+         * `tabId` is Chrome's own injection target and `requestId` is not
+         * page-derivable, so both stay runtime-supplied.
+         */
         return ok({
           requestId,
           tabId: target.tabId,
-          pageUrl: target.url,
-          candidates,
+          pageUrl: extraction.pageUrl,
+          candidates: extraction.candidates,
         });
       } catch (error) {
         return err(classifyInjectionFailure(error));

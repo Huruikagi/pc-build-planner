@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
@@ -39,6 +39,36 @@ test("buildがside panel runtime fixtureを生成する", async () => {
     await readFile("dist/side-panel.html", "utf8"),
     /src=["']\.\/side-panel\.js["']/,
   );
+});
+
+/**
+ * `side-panel.css` は各featureのstylesheetを`@import`で束ねる唯一のentryなので、
+ * import漏れはbuildもlintも素通りし、無styleのまま出荷される。
+ * feature側でstyles.cssを追加した時点でこのtestが落ちるようにしておく。
+ */
+test("buildが全featureのstylesheetをside panel bundleへ取り込む", async () => {
+  const features = await readdir("src/features", { withFileTypes: true });
+  const bundled = await readFile("dist/styles.css", "utf8");
+
+  let checked = 0;
+  for (const feature of features) {
+    if (!feature.isDirectory()) continue;
+    const source = `src/features/${feature.name}/styles.css`;
+    let stylesheet: string;
+    try {
+      stylesheet = await readFile(source, "utf8");
+    } catch {
+      continue;
+    }
+    const firstSelector = /^\s*(\.[\w-]+)/m.exec(stylesheet)?.[1];
+    assert.ok(firstSelector, `${source} にclass selectorが見つからない`);
+    assert.ok(
+      bundled.includes(firstSelector),
+      `${source} が dist/styles.css へ束ねられていない (src/application-shell/side-panel.css の @import 漏れ)`,
+    );
+    checked += 1;
+  }
+  assert.ok(checked > 0, "feature stylesheetが一件も検査されていない");
 });
 
 test("buildがroot公開bundleと共有service workerを生成する", async () => {

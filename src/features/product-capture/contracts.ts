@@ -50,8 +50,9 @@ export type RawCapturePayload = unknown;
 
 /**
  * The shape `RawCapturePayload` must decode to before its fields are trusted.
- * `requestId`/`tabId`/`pageUrl` are echoed back so the coordinator can detect
- * a stale response from a tab that navigated or closed mid-capture.
+ * `pageUrl` is the URL the extraction actually ran against, so comparing it to
+ * the URL the capture targeted is what detects a tab that navigated mid-capture.
+ * `requestId` and `tabId` identify the request the runtime issued.
  */
 export interface CapturePagePayload {
   readonly requestId: string;
