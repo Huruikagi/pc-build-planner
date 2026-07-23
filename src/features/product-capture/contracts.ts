@@ -15,14 +15,17 @@ export type ExtractionSource =
   | "table"
   | "definition-list";
 
+export const CAPTURE_CORE_FIELDS = [
+  "name",
+  "category",
+  "manufacturer",
+  "modelNumber",
+  "price",
+  "url",
+] as const;
+
 /** Core capture item; `spec:<key>` carries a page-specific specification value. */
-export type CaptureCoreField =
-  | "name"
-  | "category"
-  | "manufacturer"
-  | "modelNumber"
-  | "price"
-  | "url";
+export type CaptureCoreField = (typeof CAPTURE_CORE_FIELDS)[number];
 
 export type CaptureField = CaptureCoreField | `spec:${string}`;
 
@@ -75,6 +78,17 @@ export interface NormalizedField {
   readonly rawValue: string;
   readonly source: ExtractionSource;
   readonly sourceLabel: string;
+}
+
+/**
+ * One winning candidate per field, chosen by fixed source priority (ties broken
+ * by document order). `missingCoreFields` lists known items with no accepted
+ * candidate at all; `spec:*` items have no fixed expected set, so they are
+ * never reported as missing.
+ */
+export interface CaptureDraftFields {
+  readonly fields: readonly NormalizedField[];
+  readonly missingCoreFields: readonly CaptureCoreField[];
 }
 
 /**
