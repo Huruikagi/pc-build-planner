@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CandidatePartId } from "../../../src/domain/public.js";
 import type {
+  CompatibilityValue,
   RuleId,
+  RuleResult,
   RuleTarget,
   RuleTargetParty,
 } from "../../../src/features/compatibility/contracts.js";
@@ -21,7 +23,7 @@ const psuId = partId("66666666-6666-4666-8666-666666666666");
 const present = (
   candidatePartId: CandidatePartId,
   displayName: string,
-  value?: string | readonly string[],
+  value?: CompatibilityValue,
 ): RuleTargetParty =>
   value === undefined
     ? { kind: "present", candidatePartId, displayName }
@@ -35,226 +37,223 @@ const ruleFor = (ruleId: RuleId) => {
   return found;
 };
 
+/**
+ * One fixture per fixed rule, covering both an equality-style rule
+ * (cpu-motherboard-socket, motherboard-memory-ddr) and containment-style
+ * rules (the remaining three), each with a left/right party pair and a
+ * confirmed value that matches or mismatches deterministically.
+ */
+interface RuleFixture {
+  readonly ruleId: RuleId;
+  readonly leftId: CandidatePartId;
+  readonly leftName: string;
+  readonly rightId: CandidatePartId;
+  readonly rightName: string;
+  readonly matching: {
+    readonly left: CompatibilityValue;
+    readonly right: CompatibilityValue;
+  };
+  readonly mismatching: {
+    readonly left: CompatibilityValue;
+    readonly right: CompatibilityValue;
+  };
+}
+
+const RULE_FIXTURES: readonly RuleFixture[] = [
+  {
+    ruleId: "cpu-motherboard-socket",
+    leftId: cpuId,
+    leftName: "架空CPU",
+    rightId: motherboardId,
+    rightName: "架空マザーボード",
+    matching: { left: "AM5", right: "AM5" },
+    mismatching: { left: "AM5", right: "LGA1700" },
+  },
+  {
+    ruleId: "motherboard-memory-ddr",
+    leftId: motherboardId,
+    leftName: "架空マザーボード",
+    rightId: memoryId,
+    rightName: "架空メモリ",
+    matching: { left: "DDR5", right: "DDR5" },
+    mismatching: { left: "DDR5", right: "DDR4" },
+  },
+  {
+    ruleId: "cooler-cpu-socket",
+    leftId: cpuId,
+    leftName: "架空CPU",
+    rightId: coolerId,
+    rightName: "架空クーラー",
+    matching: { left: "AM5", right: ["AM4", "AM5"] },
+    mismatching: { left: "LGA1700", right: ["AM4", "AM5"] },
+  },
+  {
+    ruleId: "case-motherboard-form-factor",
+    leftId: motherboardId,
+    leftName: "架空マザーボード",
+    rightId: caseId,
+    rightName: "架空ケース",
+    matching: { left: "Micro-ATX", right: ["ATX", "Micro-ATX"] },
+    mismatching: { left: "E-ATX", right: ["ATX", "Micro-ATX"] },
+  },
+  {
+    ruleId: "case-psu-form-factor",
+    leftId: psuId,
+    leftName: "架空電源",
+    rightId: caseId,
+    rightName: "架空ケース",
+    matching: { left: "ATX", right: ["ATX", "SFX"] },
+    mismatching: { left: "SFX-L", right: ["ATX", "SFX"] },
+  },
+];
+
 test("RULE_REGISTRY registers exactly the five fixed rules", () => {
-  const expected: readonly RuleId[] = [
-    "cpu-motherboard-socket",
-    "motherboard-memory-ddr",
-    "cooler-cpu-socket",
-    "case-motherboard-form-factor",
-    "case-psu-form-factor",
-  ];
+  const expected: readonly RuleId[] = RULE_FIXTURES.map((f) => f.ruleId);
   assert.deepEqual(
     [...RULE_REGISTRY.map((rule) => rule.id)].sort(),
     [...expected].sort(),
   );
+  assert.equal(RULE_REGISTRY.length, 5);
 });
 
-test("cpu-motherboard-socket: matching confirmed sockets are compatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cpu-motherboard-socket",
-    left: present(cpuId, "架空CPU", "AM5"),
-    right: present(motherboardId, "架空マザーボード", "AM5"),
-  };
-  const result = ruleFor("cpu-motherboard-socket").evaluate(target);
-  if (result.status === "compatible" || result.status === "incompatible") {
-    assert.equal(result.status, "compatible");
-    assert.deepEqual(result.comparedValue, { left: "AM5", right: "AM5" });
-  } else {
-    assert.fail("expected a decided status");
-  }
-});
+for (const fixture of RULE_FIXTURES) {
+  const rule = () => ruleFor(fixture.ruleId);
 
-test("cpu-motherboard-socket: mismatched confirmed sockets are incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cpu-motherboard-socket",
-    left: present(cpuId, "架空CPU", "AM5"),
-    right: present(motherboardId, "架空マザーボード", "LGA1700"),
-  };
-  const result = ruleFor("cpu-motherboard-socket").evaluate(target);
-  if (result.status === "compatible" || result.status === "incompatible") {
-    assert.equal(result.status, "incompatible");
-    assert.deepEqual(result.comparedValue, { left: "AM5", right: "LGA1700" });
-  } else {
-    assert.fail("expected a decided status");
-  }
-});
+  test(`${fixture.ruleId}: 一致する確認済み値は互換性ありとする`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName, fixture.matching.left),
+      right: present(
+        fixture.rightId,
+        fixture.rightName,
+        fixture.matching.right,
+      ),
+    };
+    const result = rule().evaluate(target);
+    if (result.status === "compatible" || result.status === "incompatible") {
+      assert.equal(result.status, "compatible");
+      assert.deepEqual(result.comparedValue, fixture.matching);
+      assert.equal(result.left.candidatePartId, fixture.leftId);
+      assert.equal(result.right.candidatePartId, fixture.rightId);
+    } else {
+      assert.fail("expected a decided status");
+    }
+  });
 
-test("cpu-motherboard-socket: absent CPU category yields unknown, not incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cpu-motherboard-socket",
-    left: absent,
-    right: present(motherboardId, "架空マザーボード", "AM5"),
-  };
-  const result = ruleFor("cpu-motherboard-socket").evaluate(target);
-  assert.equal(result.status, "unknown");
-  if (result.status === "unknown") {
-    assert.deepEqual(result.missingFields, [
-      { side: "left", reason: "category-missing" },
-    ]);
-    assert.equal(result.left, undefined);
-    assert.ok(result.right);
-  } else {
-    assert.fail("expected unknown status");
-  }
-});
+  test(`${fixture.ruleId}: 不一致な確認済み値は互換性なしとする`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName, fixture.mismatching.left),
+      right: present(
+        fixture.rightId,
+        fixture.rightName,
+        fixture.mismatching.right,
+      ),
+    };
+    const result = rule().evaluate(target);
+    if (result.status === "compatible" || result.status === "incompatible") {
+      assert.equal(result.status, "incompatible");
+      assert.deepEqual(result.comparedValue, fixture.mismatching);
+    } else {
+      assert.fail("expected a decided status");
+    }
+  });
 
-test("cpu-motherboard-socket: unconfirmed motherboard socket yields unknown, not incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cpu-motherboard-socket",
-    left: present(cpuId, "架空CPU", "AM5"),
-    right: present(motherboardId, "架空マザーボード"),
-  };
-  const result = ruleFor("cpu-motherboard-socket").evaluate(target);
-  assert.equal(result.status, "unknown");
-  if (result.status === "unknown") {
-    assert.deepEqual(result.missingFields, [
-      { side: "right", reason: "value-unconfirmed" },
-    ]);
-  } else {
-    assert.fail("expected unknown status");
-  }
-});
+  test(`${fixture.ruleId}: 左側カテゴリ欠如は不足項目付き判定不能とし非互換へ変換しない`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: absent,
+      right: present(
+        fixture.rightId,
+        fixture.rightName,
+        fixture.matching.right,
+      ),
+    };
+    const result = rule().evaluate(target);
+    assert.equal(result.status, "unknown");
+    if (result.status === "unknown") {
+      assert.deepEqual(result.missingFields, [
+        { side: "left", reason: "category-missing" },
+      ]);
+      assert.equal(result.left, undefined);
+    } else {
+      assert.fail("expected unknown status");
+    }
+  });
 
-test("motherboard-memory-ddr: matching DDR standards are compatible", () => {
-  const target: RuleTarget = {
-    ruleId: "motherboard-memory-ddr",
-    left: present(motherboardId, "架空マザーボード", "DDR5"),
-    right: present(memoryId, "架空メモリ", "DDR5"),
-  };
-  const result = ruleFor("motherboard-memory-ddr").evaluate(target);
-  assert.equal(result.status, "compatible");
-});
+  test(`${fixture.ruleId}: 右側カテゴリ欠如は不足項目付き判定不能とし非互換へ変換しない`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName, fixture.matching.left),
+      right: absent,
+    };
+    const result = rule().evaluate(target);
+    assert.equal(result.status, "unknown");
+    if (result.status === "unknown") {
+      assert.deepEqual(result.missingFields, [
+        { side: "right", reason: "category-missing" },
+      ]);
+      assert.equal(result.right, undefined);
+    } else {
+      assert.fail("expected unknown status");
+    }
+  });
 
-test("motherboard-memory-ddr: mismatched DDR standards are incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "motherboard-memory-ddr",
-    left: present(motherboardId, "架空マザーボード", "DDR5"),
-    right: present(memoryId, "架空メモリ", "DDR4"),
-  };
-  const result = ruleFor("motherboard-memory-ddr").evaluate(target);
-  assert.equal(result.status, "incompatible");
-});
+  test(`${fixture.ruleId}: 左側の未確認値は判定不能とし非互換へ変換しない`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName),
+      right: present(
+        fixture.rightId,
+        fixture.rightName,
+        fixture.matching.right,
+      ),
+    };
+    const result = rule().evaluate(target);
+    assert.equal(result.status, "unknown");
+    if (result.status === "unknown") {
+      assert.deepEqual(result.missingFields, [
+        { side: "left", reason: "value-unconfirmed" },
+      ]);
+    } else {
+      assert.fail("expected unknown status");
+    }
+  });
 
-test("motherboard-memory-ddr: absent memory category yields unknown", () => {
-  const target: RuleTarget = {
-    ruleId: "motherboard-memory-ddr",
-    left: present(motherboardId, "架空マザーボード", "DDR5"),
-    right: absent,
-  };
-  const result = ruleFor("motherboard-memory-ddr").evaluate(target);
-  assert.equal(result.status, "unknown");
-  if (result.status === "unknown") {
-    assert.deepEqual(result.missingFields, [
-      { side: "right", reason: "category-missing" },
-    ]);
-  } else {
-    assert.fail("expected unknown status");
-  }
-});
+  test(`${fixture.ruleId}: 右側の未確認値は判定不能とし非互換へ変換しない`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName, fixture.matching.left),
+      right: present(fixture.rightId, fixture.rightName),
+    };
+    const result = rule().evaluate(target);
+    assert.equal(result.status, "unknown");
+    if (result.status === "unknown") {
+      assert.deepEqual(result.missingFields, [
+        { side: "right", reason: "value-unconfirmed" },
+      ]);
+    } else {
+      assert.fail("expected unknown status");
+    }
+  });
 
-test("cooler-cpu-socket: CPU socket included in cooler's supported sockets is compatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cooler-cpu-socket",
-    left: present(cpuId, "架空CPU", "AM5"),
-    right: present(coolerId, "架空クーラー", ["AM4", "AM5"]),
-  };
-  const result = ruleFor("cooler-cpu-socket").evaluate(target);
-  if (result.status === "compatible" || result.status === "incompatible") {
-    assert.equal(result.status, "compatible");
-    assert.deepEqual(result.comparedValue, {
-      left: "AM5",
-      right: ["AM4", "AM5"],
-    });
-  } else {
-    assert.fail("expected a decided status");
-  }
-});
+  test(`${fixture.ruleId}: 同じ入力へ繰り返し評価しても同一の個別結果を返す`, () => {
+    const target: RuleTarget = {
+      ruleId: fixture.ruleId,
+      left: present(fixture.leftId, fixture.leftName, fixture.matching.left),
+      right: present(
+        fixture.rightId,
+        fixture.rightName,
+        fixture.matching.right,
+      ),
+    };
+    const first = rule().evaluate(target);
+    const second = rule().evaluate(target);
+    assert.deepEqual(first, second);
+  });
+}
 
-test("cooler-cpu-socket: CPU socket not in cooler's supported sockets is incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cooler-cpu-socket",
-    left: present(cpuId, "架空CPU", "LGA1700"),
-    right: present(coolerId, "架空クーラー", ["AM4", "AM5"]),
-  };
-  const result = ruleFor("cooler-cpu-socket").evaluate(target);
-  assert.equal(result.status, "incompatible");
-});
-
-test("cooler-cpu-socket: unconfirmed CPU socket yields unknown, not incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "cooler-cpu-socket",
-    left: present(cpuId, "架空CPU"),
-    right: present(coolerId, "架空クーラー", ["AM4", "AM5"]),
-  };
-  const result = ruleFor("cooler-cpu-socket").evaluate(target);
-  assert.equal(result.status, "unknown");
-  if (result.status === "unknown") {
-    assert.deepEqual(result.missingFields, [
-      { side: "left", reason: "value-unconfirmed" },
-    ]);
-  } else {
-    assert.fail("expected unknown status");
-  }
-});
-
-test("case-motherboard-form-factor: supported motherboard form factor is compatible", () => {
-  const target: RuleTarget = {
-    ruleId: "case-motherboard-form-factor",
-    left: present(motherboardId, "架空マザーボード", "Micro-ATX"),
-    right: present(caseId, "架空ケース", ["ATX", "Micro-ATX"]),
-  };
-  const result = ruleFor("case-motherboard-form-factor").evaluate(target);
-  assert.equal(result.status, "compatible");
-});
-
-test("case-motherboard-form-factor: unsupported motherboard form factor is incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "case-motherboard-form-factor",
-    left: present(motherboardId, "架空マザーボード", "E-ATX"),
-    right: present(caseId, "架空ケース", ["ATX", "Micro-ATX"]),
-  };
-  const result = ruleFor("case-motherboard-form-factor").evaluate(target);
-  assert.equal(result.status, "incompatible");
-});
-
-test("case-motherboard-form-factor: absent case category yields unknown", () => {
-  const target: RuleTarget = {
-    ruleId: "case-motherboard-form-factor",
-    left: present(motherboardId, "架空マザーボード", "Micro-ATX"),
-    right: absent,
-  };
-  const result = ruleFor("case-motherboard-form-factor").evaluate(target);
-  assert.equal(result.status, "unknown");
-  if (result.status === "unknown") {
-    assert.deepEqual(result.missingFields, [
-      { side: "right", reason: "category-missing" },
-    ]);
-  } else {
-    assert.fail("expected unknown status");
-  }
-});
-
-test("case-psu-form-factor: supported power supply form factor is compatible", () => {
-  const target: RuleTarget = {
-    ruleId: "case-psu-form-factor",
-    left: present(psuId, "架空電源", "ATX"),
-    right: present(caseId, "架空ケース", ["ATX", "SFX"]),
-  };
-  const result = ruleFor("case-psu-form-factor").evaluate(target);
-  assert.equal(result.status, "compatible");
-});
-
-test("case-psu-form-factor: unsupported power supply form factor is incompatible", () => {
-  const target: RuleTarget = {
-    ruleId: "case-psu-form-factor",
-    left: present(psuId, "架空電源", "SFX-L"),
-    right: present(caseId, "架空ケース", ["ATX", "SFX"]),
-  };
-  const result = ruleFor("case-psu-form-factor").evaluate(target);
-  assert.equal(result.status, "incompatible");
-});
-
-test("case-psu-form-factor: both categories absent yields unknown with both sides flagged", () => {
+test("両側カテゴリ欠如でも判定不能とし片方だけの不足に丸めない", () => {
   const target: RuleTarget = {
     ruleId: "case-psu-form-factor",
     left: absent,
@@ -274,15 +273,35 @@ test("case-psu-form-factor: both categories absent yields unknown with both side
   }
 });
 
-test("evaluation is deterministic and free of side effects for identical confirmed input", () => {
-  const target: RuleTarget = {
-    ruleId: "cooler-cpu-socket",
-    left: present(cpuId, "架空CPU", "AM5"),
-    right: present(coolerId, "架空クーラー", ["AM4", "AM5"]),
-  };
-  const rule = ruleFor("cooler-cpu-socket");
-  const first = rule.evaluate(target);
-  const second = rule.evaluate(target);
-  assert.deepEqual(first, second);
-  assert.deepEqual(target.left, present(cpuId, "架空CPU", "AM5"));
+test("5規則を異なる実行順序で評価しても各規則の個別結果は変わらない", () => {
+  const targets: readonly RuleTarget[] = RULE_FIXTURES.map((fixture) => ({
+    ruleId: fixture.ruleId,
+    left: present(fixture.leftId, fixture.leftName, fixture.matching.left),
+    right: present(fixture.rightId, fixture.rightName, fixture.matching.right),
+  }));
+
+  const evaluateAll = (order: readonly RuleTarget[]): readonly RuleResult[] =>
+    order.map((target) => ruleFor(target.ruleId).evaluate(target));
+
+  const forward = evaluateAll(targets);
+  const reversed = evaluateAll([...targets].reverse());
+  const shuffled = evaluateAll([
+    targets[2] as RuleTarget,
+    targets[0] as RuleTarget,
+    targets[4] as RuleTarget,
+    targets[1] as RuleTarget,
+    targets[3] as RuleTarget,
+  ]);
+
+  const byRule = (results: readonly RuleResult[]) =>
+    new Map(results.map((result) => [result.ruleId, result]));
+
+  const forwardByRule = byRule(forward);
+  for (const [ruleId, result] of byRule(reversed)) {
+    assert.deepEqual(result, forwardByRule.get(ruleId));
+  }
+  for (const [ruleId, result] of byRule(shuffled)) {
+    assert.deepEqual(result, forwardByRule.get(ruleId));
+  }
+  assert.ok(forward.every((result) => result.status === "compatible"));
 });
