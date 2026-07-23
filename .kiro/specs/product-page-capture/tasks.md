@@ -55,11 +55,11 @@
   - _Requirements: 2.3, 2.4, 3.3, 4.1, 4.3, 4.4, 4.5, 4.6, 6.1, 6.2, 6.3, 6.5_
   - _Boundary: CaptureView_
 
-- [ ] 4.3 候補管理の詳細編集導線を接続する
+- [x] 4.3 候補管理の詳細編集導線を接続する
   - 抽出済み値、`sourceInfo`、元表記、取得根拠を候補管理の型付きprefillへ変換し、`openCandidateEditor`だけを介して詳細編集を要求する
   - 商品候補がない場合も手入力用の詳細編集へ進めるようにする
   - shell navigation、候補側検証、mountの失敗時はcapture sessionを保持し、簡易確認と詳細編集の往復後も同じ修正値とproject選択が表示される
-  - _Depends: application-shell 5.3; project-candidate-management 2.5_
+  - _Depends: application-shell 5.3; project-candidate-management 5.1_
   - _Requirements: 4.2, 4.3, 4.6_
   - _Boundary: CandidateEditorNavigation_
 
