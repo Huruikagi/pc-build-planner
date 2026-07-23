@@ -56,22 +56,22 @@
 
 ## Implementation Status
 
-2026-07-22時点の `tasks.md` と実装履歴を基準とする。`spec.json.phase` は仕様生成フェーズを表すため、実装進捗は各specのtask checkboxとこの一覧で追跡する。
+2026-07-23時点の `tasks.md` と実装履歴を基準とする。`spec.json.phase` は仕様生成フェーズを表すため、実装進捗は各specのtask checkboxとこの一覧で追跡する。
 
-- [x] local-data-foundation — 40/40 sub-tasks完了。共有データ契約、永続化、単一write authority、runtime contributionを実装済み。
-- [x] application-shell — 26/26 sub-tasks完了。typed activation 5.1–5.3を含むshell、runtime composition、最終gateを実装済み。
-- [x] project-candidate-management — 15/15 sub-tasks完了。候補管理の参加境界、管理画面、typed candidate editor activation、snapshot-aware registration、境界統合と受け入れ回帰を実装済み。
-- [ ] current-build-management — 0/12 sub-tasks完了。tasks承認済みで実装可能。project-candidate-management完了後に着手する。
-- [ ] product-page-capture — 0/11 sub-tasks完了。tasks承認済み。project-candidate-managementの公開編集契約へ依存する。
-- [ ] compatibility-checking — 0/14 sub-tasks完了。design/tasks未承認のため実装開始不可。
-- [ ] backup-restore — 0/14 sub-tasks完了。design/tasks未承認のため実装開始不可。
+- [x] local-data-foundation — 48/48 sub-tasks完了。共有データ契約、永続化、単一write authority、runtime contributionを実装済み。
+- [x] application-shell — 33/33 sub-tasks完了。typed activation 5.1–5.3を含むshell、runtime composition、最終gateを実装済み。
+- [x] project-candidate-management — 29/29 sub-tasks完了。候補管理の参加境界、管理画面、typed candidate editor activation、snapshot-aware registration、境界統合と受け入れ回帰を実装済み。
+- [x] current-build-management — 18/18 sub-tasks完了。構成管理と下流公開契約の受け入れ回帰を含め実装済み。
+- [ ] product-page-capture — 0/17 sub-tasks完了。tasks承認済み。project-candidate-managementの公開編集契約へ依存し、実装着手可能。
+- [ ] compatibility-checking — design/tasks未承認のため実装開始不可。
+- [ ] backup-restore — design/tasks未承認のため実装開始不可。
 
 ## Specs (dependency order)
 
 - [x] local-data-foundation -- 共通 `Result<T, E>`、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencingを所有する。Dependencies: none
 - [x] application-shell -- side panel host、feature registration、`ShellNavigator` / `FeatureActivationIntent`、service worker composition、公開API組立、共通maintenance表示を所有する。typed activationを含め実装済み。Dependencies: local-data-foundation
 - [x] project-candidate-management -- projectと候補の管理、候補query、typed candidate editor activationを所有する。実装済み。Dependencies: local-data-foundation, application-shell
-- [ ] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
+- [x] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [ ] product-page-capture -- ユーザー操作起点の商品抽出、確認session、候補作成連携を所有する。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [ ] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 - [ ] backup-restore -- バージョン付きJSONのbackup/restore、preflight、maintenance下の原子的置換を提供する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
