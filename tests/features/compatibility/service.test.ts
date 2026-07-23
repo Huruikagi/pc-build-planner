@@ -169,6 +169,34 @@ const snapshotWith = (build: CurrentBuild | null): CurrentBuildSnapshot => ({
   currentBuild: build,
 });
 
+const cpuUnconfirmed = (original: string): CandidatePart =>
+  candidate(cpuId, "cpu", { category: "cpu", socket: { original } });
+
+const dynamicBuildQuery = (
+  read: () => Result<CurrentBuildSnapshot, BuildError>,
+): CurrentBuildQuery => ({
+  async getByProject() {
+    return read();
+  },
+});
+
+const dynamicCandidateQuery = (
+  read: () => Result<readonly CandidatePart[], ManagementError>,
+): CandidateQuery => ({
+  async listProjects(): Promise<never> {
+    throw new Error("not used by service tests");
+  },
+  async listCandidates(): Promise<never> {
+    throw new Error("not used by service tests");
+  },
+  async listBuildEligible() {
+    return read();
+  },
+  async getCandidateDraft(): Promise<never> {
+    throw new Error("not used by service tests");
+  },
+});
+
 test("有効な入力から個別根拠と集約結果を持つreportを生成する", async () => {
   const build = fullBuild();
   const parts = partsWith("AM5", "AM5");
@@ -343,4 +371,102 @@ test("同じ入力から同じreportを再現し上流データを変更しな�
   assert.deepEqual(first, second);
   assert.deepEqual(parts, partsSnapshot);
   assert.deepEqual(build, buildSnapshot);
+});
+
+test("評価要求ごとに上流を再読取し、構成または属性変更後の結果へ更新する", async () => {
+  const build = fullBuild();
+  let parts: readonly CandidatePart[] = partsWith("AM5", "AM5");
+  const service = createCompatibilityService({
+    currentBuildQuery: dynamicBuildQuery(() => ({
+      ok: true,
+      value: snapshotWith(build),
+    })),
+    candidateQuery: dynamicCandidateQuery(() => ({ ok: true, value: parts })),
+  });
+
+  const before = await service.evaluate(projectId);
+  assert.equal(before.ok, true);
+  if (!before.ok) return;
+  assert.equal(before.value.status, "compatible");
+
+  parts = partsWith("AM5", "LGA1700");
+  const after = await service.evaluate(projectId);
+  assert.equal(after.ok, true);
+  if (!after.ok) return;
+  assert.equal(after.value.status, "incompatible");
+});
+
+test("未確認の元表記だけが変わっても互換性判定の根拠へ混入しない", async () => {
+  const build = fullBuild();
+  let cpuOriginal = "架空元表記A";
+  const service = createCompatibilityService({
+    currentBuildQuery: dynamicBuildQuery(() => ({
+      ok: true,
+      value: snapshotWith(build),
+    })),
+    candidateQuery: dynamicCandidateQuery(() => ({
+      ok: true,
+      value: [
+        cpuUnconfirmed(cpuOriginal),
+        motherboard("AM5"),
+        memory(),
+        cooler(),
+        pcCase(),
+        psu(),
+      ],
+    })),
+  });
+
+  const before = await service.evaluate(projectId);
+  assert.equal(before.ok, true);
+  if (!before.ok) return;
+  const socketBefore = before.value.results.find(
+    (r) => r.ruleId === "cpu-motherboard-socket",
+  );
+  assert.equal(socketBefore?.status, "unknown");
+  assert.equal(before.value.status, "caution");
+
+  cpuOriginal = "架空元表記B（全く異なる表記）";
+  const after = await service.evaluate(projectId);
+  assert.equal(after.ok, true);
+  if (!after.ok) return;
+  const socketAfter = after.value.results.find(
+    (r) => r.ruleId === "cpu-motherboard-socket",
+  );
+  assert.equal(socketAfter?.status, "unknown");
+  assert.equal(after.value.status, before.value.status);
+});
+
+test("変更後の確認済み値で再実行すると個別結果と集約statusが更新される", async () => {
+  const build = fullBuild();
+  let motherboardSocket = "LGA1700";
+  const service = createCompatibilityService({
+    currentBuildQuery: dynamicBuildQuery(() => ({
+      ok: true,
+      value: snapshotWith(build),
+    })),
+    candidateQuery: dynamicCandidateQuery(() => ({
+      ok: true,
+      value: partsWith("AM5", motherboardSocket),
+    })),
+  });
+
+  const before = await service.evaluate(projectId);
+  assert.equal(before.ok, true);
+  if (!before.ok) return;
+  assert.equal(before.value.status, "incompatible");
+  const socketBefore = before.value.results.find(
+    (r) => r.ruleId === "cpu-motherboard-socket",
+  );
+  assert.equal(socketBefore?.status, "incompatible");
+
+  motherboardSocket = "AM5";
+  const after = await service.evaluate(projectId);
+  assert.equal(after.ok, true);
+  if (!after.ok) return;
+  assert.equal(after.value.status, "compatible");
+  const socketAfter = after.value.results.find(
+    (r) => r.ruleId === "cpu-motherboard-socket",
+  );
+  assert.equal(socketAfter?.status, "compatible");
 });
