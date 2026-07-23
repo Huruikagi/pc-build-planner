@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 現在構成の公開契約とカテゴリポリシーを確立する
+- [x] 1. 現在構成の公開契約とカテゴリポリシーを確立する
 - [x] 1.1 現在構成の操作・読取・失敗契約を定義する
   - Foundationが所有するID、CurrentBuild、BuildItem、正整数、revision、Resultを再利用し、候補詳細や互換性結果を重複させない。
   - 選択、数量変更、解除を表す操作と、request ID・expected revisionを持つ更新context、回復方針を選べる失敗分類を揃える。
@@ -17,7 +17,7 @@
   - _Requirements: 1.3, 2.1, 2.5, 3.1, 3.4_
   - _Boundary: CategoryPolicy_
 
-- [ ] 2. 現在構成の照会と更新規則を実装する
+- [x] 2. 現在構成の照会と更新規則を実装する
 - [x] 2.1 (P) project別の現在構成を検証して照会する
   - 検証済みrootからprojectのrevisionと0件または1件の現在構成を読み、構成なしを正常な空結果として扱う。
   - 同じprojectの分類済み候補だけを参照し、候補ID重複、複数構成、カテゴリ別選択数違反を変更停止errorへ変換する。
@@ -46,7 +46,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 5.1, 5.3_
   - _Boundary: BuildService_
 
-- [ ] 3. Foundationの原子的参照修復を統合する
+- [x] 3. Foundationの原子的参照修復を統合する
 - [x] 3.1 候補・project変更時の参照修復を契約検証する
   - 候補削除、未分類化、カテゴリ変更、project削除で無効になる構成参照が、上流mutationと同じcommitから除去されることを確認する。
   - current-build側から成功後のreconcile writeを発行せず、無関係な候補参照と数量が維持されることを確認する。
@@ -63,7 +63,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.2, 5.4_
   - _Boundary: CurrentBuildQuery integration_
 
-- [ ] 4. 現在構成の画面状態と表示を実装する
+- [x] 4. 現在構成の画面状態と表示を実装する
 - [x] 4.1 読込・保存・失敗回復の画面状態を実装する
   - feature再表示・project再選択で候補と現在構成を再照会し、修復後状態を表示stateへ反映する。
   - 選択project・カテゴリ、候補、commit済み構成snapshot、数量draft、保存中操作、表示errorを分離する。
@@ -102,7 +102,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.2, 4.5, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: CurrentBuildFeatureRegistration_
 
-- [ ] 5. side panel統合と受け入れ回帰を完成する
+- [x] 5. side panel統合と受け入れ回帰を完成する
 - [x] 5.1 Foundation・候補query・shellへ現在構成機能を統合する
   - candidate-managementの公開入口から分類済み候補queryだけを受け取り、feature内部へのdeep importを行わない。
   - current-buildのquery、service、state、view、registration、公開APIをcompositionへ渡し、Storage APIと共有runtime入口をfeature側から直接操作しない。
