@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { afterEach, test } from "node:test";
 
-import { act } from "react";
-import { createRoot } from "react-dom/client";
+import { cleanup, render } from "@testing-library/react";
+import { userEvent } from "@testing-library/user-event";
 
 import type {
   CandidatePart,
@@ -146,62 +146,53 @@ const createHarness = (
 
 async function renderView(harness: Harness) {
   await harness.state.load();
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  await act(() => root.render(<BuildView state={harness.state} />));
+  const user = userEvent.setup();
+  const view = render(<BuildView state={harness.state} />);
+  const query = <E extends Element = HTMLElement>(selector: string): E => {
+    const element = view.container.querySelector<E>(selector);
+    assert.ok(element, `expected element for selector ${selector}`);
+    return element;
+  };
   return {
-    container,
-    rerender: async () => {
-      await act(() => root.render(<BuildView state={harness.state} />));
-    },
-    cleanup: async () => {
-      await act(() => root.unmount());
-      container.remove();
-    },
+    ...view,
+    user,
+    query,
+    text: () => view.container.textContent ?? "",
   };
 }
+
+afterEach(cleanup);
 
 test("選択中カテゴリの候補だけを表示し未分類候補や別カテゴリは表示しない", async () => {
   const harness = createHarness();
   const rendered = await renderView(harness);
-  const cpuTab = rendered.container.querySelector(
-    "[data-category='cpu']",
-  ) as HTMLButtonElement;
-  await act(async () => cpuTab.click());
-  await rendered.rerender();
+  await rendered.user.click(rendered.query("[data-category='cpu']"));
 
-  assert.match(rendered.container.textContent ?? "", /架空CPU 一号/);
-  assert.match(rendered.container.textContent ?? "", /架空CPU 二号/);
-  assert.doesNotMatch(rendered.container.textContent ?? "", /架空メモリ/);
+  assert.match(rendered.text(), /架空CPU 一号/);
+  assert.match(rendered.text(), /架空CPU 二号/);
+  assert.doesNotMatch(rendered.text(), /架空メモリ/);
   assert.equal(
     rendered.container.querySelector("[data-category='uncategorized']"),
     null,
     "未分類カテゴリはタブとして表示しない",
   );
-
-  await rendered.cleanup();
 });
 
 test("候補なし・構成なしを識別可能に表示する", async () => {
   const harness = createHarness({ eligible: [] });
   const rendered = await renderView(harness);
 
-  assert.match(rendered.container.textContent ?? "", /候補がありません/);
-  assert.match(rendered.container.textContent ?? "", /現在構成がありません/);
-
-  await rendered.cleanup();
+  assert.match(rendered.text(), /候補がありません/);
+  assert.match(rendered.text(), /現在構成がありません/);
 });
 
 test("単一選択カテゴリで候補を選ぶと選択状態になり別候補で置き換えられる", async () => {
   const harness = createHarness();
   const rendered = await renderView(harness);
 
-  const select = rendered.container.querySelector(
-    `[data-select-candidate-id='${cpuCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => select.click());
-  await rendered.rerender();
+  await rendered.user.click(
+    rendered.query(`[data-select-candidate-id='${cpuCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[0], {
     type: "select",
@@ -209,19 +200,15 @@ test("単一選択カテゴリで候補を選ぶと選択状態になり別候�
     candidatePartId: cpuCandidateId,
   });
 
-  const replace = rendered.container.querySelector(
-    `[data-select-candidate-id='${otherCpuCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => replace.click());
-  await rendered.rerender();
+  await rendered.user.click(
+    rendered.query(`[data-select-candidate-id='${otherCpuCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[1], {
     type: "select",
     projectId,
     candidatePartId: otherCpuCandidateId,
   });
-
-  await rendered.cleanup();
 });
 
 test("単一選択カテゴリで選択済み候補を解除できる", async () => {
@@ -236,42 +223,31 @@ test("単一選択カテゴリで選択済み候補を解除できる", async ()
   const harness = createHarness({ currentBuild: existingBuild });
   const rendered = await renderView(harness);
 
-  const remove = rendered.container.querySelector(
-    `[data-remove-candidate-id='${cpuCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => remove.click());
+  await rendered.user.click(
+    rendered.query(`[data-remove-candidate-id='${cpuCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[0], {
     type: "remove",
     projectId,
     candidatePartId: cpuCandidateId,
   });
-
-  await rendered.cleanup();
 });
 
 test("複数選択カテゴリで候補を追加し数量を確定できる", async () => {
   const harness = createHarness();
   const rendered = await renderView(harness);
 
-  const memoryTab = rendered.container.querySelector(
-    "[data-category='memory']",
-  ) as HTMLButtonElement;
-  await act(async () => memoryTab.click());
-  await rendered.rerender();
-
-  const add = rendered.container.querySelector(
-    `[data-select-candidate-id='${memoryCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => add.click());
+  await rendered.user.click(rendered.query("[data-category='memory']"));
+  await rendered.user.click(
+    rendered.query(`[data-select-candidate-id='${memoryCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[0], {
     type: "select",
     projectId,
     candidatePartId: memoryCandidateId,
   });
-
-  await rendered.cleanup();
 });
 
 test("複数選択カテゴリの数量確定と解除が構成へ反映される", async () => {
@@ -286,28 +262,16 @@ test("複数選択カテゴリの数量確定と解除が構成へ反映され�
   const harness = createHarness({ currentBuild: existingBuild });
   const rendered = await renderView(harness);
 
-  const memoryTab = rendered.container.querySelector(
-    "[data-category='memory']",
-  ) as HTMLButtonElement;
-  await act(async () => memoryTab.click());
-  await rendered.rerender();
+  await rendered.user.click(rendered.query("[data-category='memory']"));
 
-  const quantityInput = rendered.container.querySelector(
+  const quantityInput = rendered.query<HTMLInputElement>(
     `[data-quantity-input='${memoryCandidateId}']`,
-  ) as HTMLInputElement;
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value",
-  )?.set;
-  await act(async () => {
-    setter?.call(quantityInput, "5");
-    quantityInput.dispatchEvent(new window.Event("input", { bubbles: true }));
-  });
-
-  const confirmQuantity = rendered.container.querySelector(
-    `[data-confirm-quantity='${memoryCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => confirmQuantity.click());
+  );
+  await rendered.user.clear(quantityInput);
+  await rendered.user.type(quantityInput, "5");
+  await rendered.user.click(
+    rendered.query(`[data-confirm-quantity='${memoryCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[0], {
     type: "set-quantity",
@@ -316,18 +280,15 @@ test("複数選択カテゴリの数量確定と解除が構成へ反映され�
     quantity: 5,
   });
 
-  const remove = rendered.container.querySelector(
-    `[data-remove-candidate-id='${memoryCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => remove.click());
+  await rendered.user.click(
+    rendered.query(`[data-remove-candidate-id='${memoryCandidateId}']`),
+  );
 
   assert.deepEqual(harness.commands[1], {
     type: "remove",
     projectId,
     candidatePartId: memoryCandidateId,
   });
-
-  await rendered.cleanup();
 });
 
 test("不正な数量入力は保存前に拒否され識別可能なerrorを示す", async () => {
@@ -342,34 +303,19 @@ test("不正な数量入力は保存前に拒否され識別可能なerrorを示
   const harness = createHarness({ currentBuild: existingBuild });
   const rendered = await renderView(harness);
 
-  const memoryTab = rendered.container.querySelector(
-    "[data-category='memory']",
-  ) as HTMLButtonElement;
-  await act(async () => memoryTab.click());
-  await rendered.rerender();
+  await rendered.user.click(rendered.query("[data-category='memory']"));
 
-  const quantityInput = rendered.container.querySelector(
+  const quantityInput = rendered.query<HTMLInputElement>(
     `[data-quantity-input='${memoryCandidateId}']`,
-  ) as HTMLInputElement;
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value",
-  )?.set;
-  await act(async () => {
-    setter?.call(quantityInput, "0");
-    quantityInput.dispatchEvent(new window.Event("input", { bubbles: true }));
-  });
-
-  const confirmQuantity = rendered.container.querySelector(
-    `[data-confirm-quantity='${memoryCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => confirmQuantity.click());
-  await rendered.rerender();
+  );
+  await rendered.user.clear(quantityInput);
+  await rendered.user.type(quantityInput, "0");
+  await rendered.user.click(
+    rendered.query(`[data-confirm-quantity='${memoryCandidateId}']`),
+  );
 
   assert.equal(harness.commands.length, 0, "不正数量はserviceへ到達しない");
-  assert.match(rendered.container.textContent ?? "", /正整数/);
-
-  await rendered.cleanup();
+  assert.match(rendered.text(), /正整数/);
 });
 
 test("保存errorを識別可能に表示する", async () => {
@@ -378,15 +324,11 @@ test("保存errorを識別可能に表示する", async () => {
   });
   const rendered = await renderView(harness);
 
-  const select = rendered.container.querySelector(
-    `[data-select-candidate-id='${cpuCandidateId}']`,
-  ) as HTMLButtonElement;
-  await act(async () => select.click());
-  await rendered.rerender();
+  await rendered.user.click(
+    rendered.query(`[data-select-candidate-id='${cpuCandidateId}']`),
+  );
 
-  assert.match(rendered.container.textContent ?? "", /保存領域/);
-
-  await rendered.cleanup();
+  assert.match(rendered.text(), /保存領域/);
 });
 
 test("外部文字列を安全なJSX childとして描画しHTML注入を許さない", async () => {
@@ -396,8 +338,6 @@ test("外部文字列を安全なJSX childとして描画しHTML注入を許さ�
   });
   const rendered = await renderView(harness);
 
-  assert.match(rendered.container.textContent ?? "", /危険な候補名/);
+  assert.match(rendered.text(), /危険な候補名/);
   assert.equal(rendered.container.querySelector("img"), null);
-
-  await rendered.cleanup();
 });
