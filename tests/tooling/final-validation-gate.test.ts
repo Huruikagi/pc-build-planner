@@ -12,7 +12,8 @@ const validManifest = {
   name: "Synthetic extension",
   version: "1.0.0",
   minimum_chrome_version: "116",
-  permissions: ["storage"],
+  permissions: ["storage", "activeTab", "scripting"],
+  action: {},
   background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
   content_security_policy: {

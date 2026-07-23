@@ -10,9 +10,11 @@ function fail(message) {
   throw new Error(`Artifact validation failed: ${message}`);
 }
 
+const allowedPermissions = new Set(["storage", "activeTab", "scripting"]);
+
 /**
  * @param {{ manifest_version?: unknown, minimum_chrome_version?: unknown,
- * permissions?: unknown, side_panel?: { default_path?: unknown },
+ * permissions?: unknown, action?: unknown, side_panel?: { default_path?: unknown },
  * background?: { service_worker?: unknown, type?: unknown },
  * content_security_policy?: { extension_pages?: unknown },
  * [key: string]: unknown }} manifest
@@ -31,10 +33,25 @@ export function validateManifest(manifest) {
   }
   if (
     !Array.isArray(manifest.permissions) ||
-    manifest.permissions.length !== 1 ||
-    manifest.permissions[0] !== "storage"
+    manifest.permissions.length === 0 ||
+    new Set(manifest.permissions).size !== manifest.permissions.length ||
+    !manifest.permissions.every(
+      (permission) =>
+        typeof permission === "string" && allowedPermissions.has(permission),
+    ) ||
+    !manifest.permissions.includes("storage")
   ) {
-    fail("storage must be the only permission");
+    fail(
+      "only the minimal storage, activeTab, scripting permissions are allowed",
+    );
+  }
+  if (
+    manifest.action === undefined ||
+    manifest.action === null ||
+    typeof manifest.action !== "object" ||
+    Array.isArray(manifest.action)
+  ) {
+    fail("action must be declared as an object");
   }
   if (manifest.side_panel?.default_path !== "side-panel.html") {
     fail("side_panel.default_path must be side-panel.html");

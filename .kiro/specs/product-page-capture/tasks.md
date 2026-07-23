@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 取り込み実行入口と型付き境界を整える
+- [x] 1. 取り込み実行入口と型付き境界を整える
   - 上流のFoundation、候補作成ポート、サイドパネル、ビルド・テスト基盤が利用可能であることを前提条件として確認する
   - action、`activeTab`、`scripting`を最小権限で追加し、全サイトへの恒久権限やリモートコードを導入しない
   - 未信頼payload、取得候補、根拠、セッション、判別可能な失敗の共有契約をstrict型で定義する
@@ -99,3 +99,7 @@
   - 商品値・完全URL・HTMLがログや保存payloadへ漏れず、実行可能なページ値が描画されないことを検証する
   - テスト資産が架空HTMLと架空商品だけで構成され、実サイトHTML、画像、取得データなしで全テストが通る
   - _Requirements: 1.4, 1.5, 2.5, 3.1, 3.2, 3.3, 3.4, 4.5, 4.6, 5.2, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3_
+
+## Implementation Notes
+
+- Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。

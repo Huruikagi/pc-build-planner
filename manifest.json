@@ -3,7 +3,8 @@
   "name": "PC Build Planner",
   "version": "1.0.0",
   "minimum_chrome_version": "116",
-  "permissions": ["storage"],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "action": {},
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"

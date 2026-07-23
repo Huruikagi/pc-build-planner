@@ -14,7 +14,8 @@ const validManifest = {
   name: "PC Build Planner",
   version: "1.0.0",
   minimum_chrome_version: "116",
-  permissions: ["storage"],
+  permissions: ["storage", "activeTab", "scripting"],
+  action: {},
   background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
   content_security_policy: {
@@ -32,13 +33,31 @@ test("manifestはChrome 116以降向けの最小MV3契約である", async () =>
     type: "module",
   });
   assert.equal(manifest.side_panel.default_path, "side-panel.html");
+  assert.deepEqual(manifest.action, {});
+  assert.deepEqual(manifest.permissions, ["storage", "activeTab", "scripting"]);
 });
 
 test("禁止権限と全サイト権限を拒否する", () => {
   for (const manifest of [
     { ...validManifest, permissions: ["storage", "unlimitedStorage"] },
+    { ...validManifest, permissions: ["storage", "tabs"] },
+    { ...validManifest, permissions: ["storage", "storage"] },
+    { ...validManifest, permissions: ["activeTab", "scripting"] },
     { ...validManifest, host_permissions: ["<all_urls>"] },
     { ...validManifest, optional_host_permissions: ["https://*/*"] },
+  ]) {
+    assert.throws(() => validateManifest(manifest));
+  }
+});
+
+test("actionが未宣言または不正な形状の場合は拒否する", () => {
+  for (const manifest of [
+    (() => {
+      const { action, ...rest } = validManifest;
+      return rest;
+    })(),
+    { ...validManifest, action: null },
+    { ...validManifest, action: [] },
   ]) {
     assert.throws(() => validateManifest(manifest));
   }
