@@ -46,7 +46,7 @@
   - _Requirements: 3.5, 3.6, 4.3, 4.4, 4.5, 5.1, 5.2, 5.6, 5.7, 6.3, 6.4_
   - _Boundary: CaptureState_
 
-- [ ] 4.2 (P) 簡易確認と回復可能な案内をReactで表示する
+- [x] 4.2 (P) 簡易確認と回復可能な案内をReactで表示する
   - 商品名、カテゴリ、価格、メーカー、型番、URL、欠損、取得元、元表記を安全なtext表示で描画する
   - 権限、制限ページ、抽出なし、タブ遷移、保存失敗ごとに再実行または手入力の導線を示す
   - framework非依存のCaptureStateをpropsとして受け、抽出値を通常のJSX childとして描画し、`dangerouslySetInnerHTML`と`innerHTML`を使用しない
