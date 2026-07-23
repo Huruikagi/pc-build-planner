@@ -92,7 +92,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 2.4, 2.5, 3.2, 3.3, 3.4, 3.5, 4.2, 4.5, 5.3, 5.4_
   - _Boundary: BuildView_
 
-- [ ] 4.4 snapshot-awareなfeature registrationを実装する
+- [x] 4.4 snapshot-awareなfeature registrationを実装する
   - current-buildの公開query、navigation metadata、availability、mount lifecycleをshell登録契約へ提供する。
   - shellのoperation policyを変更可否へ反映し、専用feature containerだけへReact rootをmountする。
   - 復元候補をfeature内codecで検証し、mounted handleは同じcodecのopaque snapshotだけをcaptureする。
@@ -132,3 +132,5 @@
 - BuildStateはproject単位でしか候補を先読みしない（BuildService/CurrentBuildQueryと同じ設計判断）ため、snapshot codecのstale候補参照チェックは「現在選択中のcategoryで絞り込まれたvalue.candidates」ではなく、project全体のeligible候補集合に対して行う必要がある。BuildState.hasCandidateReference(candidatePartId, projectId)を追加し、category-management側のManagementState.hasCandidateReferenceと同じ役割を持たせた。
 - BuildState.value.selectedCategoryがnullのとき、value.candidatesはprojectの全classified候補（uncategorized以外の全カテゴリ）を含む。BuildViewでカテゴリ別に絞り込む前提のtestを書く場合は、対象カテゴリタブを明示的にクリックしてからassertする必要がある（category未選択=「すべて」相当のため）。
 - 単一選択カテゴリの候補には数量入力欄自体を描画しない設計とした。これによりrequirement 2.5（数量変更を許可しない）はUI操作導線を提供しないことで満たされ、reject理由の表示は不要になる。
+- BuildStateはproject単位の遅延読込のため、registrationのmount時にrestoredStateの`selectedProjectId`を非権威的にpeekしてから`state.selectProject(...)`で対象projectのeligible候補を先読みし、その後にcodec.restore()で正式検証する必要がある（candidate-managementのManagementStateは全project分を`load()`で先読みするため、この前処理が不要）。検証失敗時は`state.load()`を再実行してphantom選択を確実に既定projectへ戻してからrejectSnapshotRestore()を呼ぶ。
+- current-buildのFile Structure Planにreact-root.tsxは含まれないため、React root生成はcandidate-managementのように別ファイルへ分離せずregistration.ts内へ直接実装した。

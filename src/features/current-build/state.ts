@@ -173,6 +173,47 @@ export class BuildState {
     };
   }
 
+  /**
+   * Drops unsaved screen state so a fresh mount starts from the persisted data
+   * only. The state instance outlives a single mount, and the shell restores a
+   * previous screen exclusively through a validated snapshot, so carrying a
+   * category selection, quantity draft, or display error across mounts would
+   * bypass that path.
+   */
+  public resetTransientState(): void {
+    this.#set({
+      selectedCategory: null,
+      quantityDrafts: emptyQuantityDrafts,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
+  }
+
+  /**
+   * Applies a previously validated feature-local snapshot without persistence.
+   * Assumes the snapshot's project, if any, is already the one currently
+   * loaded — the mount orchestration selects it before validating so
+   * `hasCandidateReference` checks the right project's eligible candidates.
+   */
+  public applySnapshot(snapshot: {
+    readonly selectedCategory: PartCategory | null;
+    readonly quantityDrafts: Readonly<Record<string, string>>;
+  }): void {
+    this.#set({
+      selectedCategory: snapshot.selectedCategory,
+      candidates: this.#filterCandidates(
+        this.#value.selectedProjectId,
+        snapshot.selectedCategory,
+      ),
+      quantityDrafts: snapshot.quantityDrafts,
+    });
+  }
+
+  /** Keeps persistent data untouched when a shell-provided snapshot is rejected. */
+  public rejectSnapshotRestore(): void {
+    this.#set({ displayError: { code: "snapshot-restore-failed" } });
+  }
+
   /** Re-reads projects and, for the selected project, candidates and the current build. */
   public async load(): Promise<void> {
     this.#set({
