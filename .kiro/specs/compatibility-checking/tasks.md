@@ -62,7 +62,7 @@
   - _Requirements: 5.5, 5.6, 6.1, 6.2, 6.4, 6.5_
   - _Boundary: CompatibilityView_
 
-- [ ] 4.3 React root adapterとfeature registration・合成入口を実装する
+- [x] 4.3 React root adapterとfeature registration・合成入口を実装する
   - `view.tsx`をframework非依存のCompatibilityState/Query portへ接続し、`public.ts`、registration module、`FeatureCompositionContext`から`FeatureContribution`を組み立てる合成入口をfeature内で所有する
   - application shellの`FeatureMountContext`へReact rootをmountし、切替・停止時に`root.unmount()`と購読解除を一度だけ行う
   - shell contract test kitで登録、read-only operation policy、公開API、cleanupが適合し、合成入口が返すFeatureContributionをshellが解決できることを確認できる
