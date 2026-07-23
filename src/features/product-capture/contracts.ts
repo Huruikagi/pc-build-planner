@@ -1,4 +1,5 @@
 import type {
+  MoneyValue,
   ProjectId,
   RequestId,
   SourcedValue,
@@ -62,6 +63,18 @@ export type CaptureFieldRejectionReason =
 export interface CaptureFieldRejection {
   readonly field: CaptureField;
   readonly reason: CaptureFieldRejectionReason;
+}
+
+/** `price` normalizes to a separable amount/currency pair; every other field stays a string. */
+export type CaptureNormalizedValue = string | MoneyValue;
+
+/** A candidate that passed validation; still unconfirmed by the user until adopted into a session. */
+export interface NormalizedField {
+  readonly field: CaptureField;
+  readonly normalizedValue: CaptureNormalizedValue;
+  readonly rawValue: string;
+  readonly source: ExtractionSource;
+  readonly sourceLabel: string;
 }
 
 /**
