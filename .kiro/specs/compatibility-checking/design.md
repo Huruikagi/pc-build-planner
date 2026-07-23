@@ -32,7 +32,7 @@
 ### Allowed Dependencies
 - `current-build-management` の `CurrentBuildQuery` と読取専用スナップショット
 - `project-candidate-management` の `CandidateQuery.listBuildEligible`
-- `local-data-foundation` のID、カテゴリ、CandidatePart、確認状態、Result型
+- `local-data-foundation` のID、カテゴリ、CandidatePart、確認状態、`UtcTimestamp`、Result型（正準型を再定義しない）
 - 既存のTypeScript strict、React 19系/React DOM、side panel CSS基盤
 - application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
@@ -80,7 +80,8 @@ graph LR
 ```text
 src/features/compatibility/contracts.ts           # 入力、個別・集約結果、エラー型
 src/features/compatibility/public.ts              # CompatibilityQueryの唯一の公開入口
-src/features/compatibility/registration.ts        # shellへ渡すfeature registrationと依存組立
+src/features/compatibility/feature-contribution.ts # FeatureCompositionContextからFeatureContributionを組み立てる合成入口
+src/features/compatibility/registration.ts        # shellへ渡すApplicationFeatureRegistrationと依存組立
 src/features/compatibility/rules.ts               # Rule契約と固定5規則
 src/features/compatibility/target-expander.ts     # 構成候補の検証とペア展開
 src/features/compatibility/aggregator.ts           # 4区分の集約優先規則
@@ -99,7 +100,8 @@ tests/features/compatibility/integration.test.ts
 ```
 
 ### Modified Files
-- 共有side panel runtimeとroot `src/index.ts`は変更しない。application shellが`registration.ts`と`public.ts`をcompositionする。
+- `src/application-shell/side-panel-contributions.ts`: shell所有の合成点へ本機能のcontributionを1件追加する。既存の依存順合成(`createSidePanelFeatureContributions`)に倣い、`candidate-management`と`current-build`のcontributionを先に構築し、それぞれの`registration.publicApi.query`(`CandidateQuery`と`CurrentBuildQuery`)を本機能の`feature-contribution.ts`へ注入する。
+- shellが実際にcompositionする入口は`feature-contribution.ts`が返す`FeatureContribution`である。`registration.ts`と`public.ts`はその内部で組み立てられ、featureは`side-panel-contributions.ts`以外の共有side panel runtimeとroot `src/index.ts`を変更しない。
 
 ## System Flows
 
@@ -206,7 +208,7 @@ interface CompatibilityQuery {
 
 interface CompatibilityReport {
   readonly projectId: ProjectId;
-  readonly buildUpdatedAt: UtcIsoDateTime;
+  readonly buildUpdatedAt: UtcTimestamp;
   readonly status: AggregateStatus;
   readonly results: readonly RuleResult[];
 }
@@ -217,7 +219,7 @@ interface CompatibilityReport {
 - Outbound: CandidateQuery — 同一projectの分類済み候補 (P0)
 - Outbound: TargetExpander、RuleRegistry、ResultAggregator — 評価 (P0)
 
-構成なしは`no-build`、参照不正は`invalid-reference`、上流失敗は`read-failed`として区別する。結果は保存せず、毎回新しい読取から作る。
+構成なしは`no-build`、参照不正は`invalid-reference`、上流失敗は`read-failed`として区別する。結果は保存せず、毎回新しい読取から作る。`buildUpdatedAt`は`CurrentBuildSnapshot.currentBuild.updatedAt`（正準`UtcTimestamp`）から採取し、構成が存在しない場合は`no-build`とするため参照しない。
 
 ### UI Layer
 
