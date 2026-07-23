@@ -31,6 +31,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
   assert.deepEqual(Object.keys(composed.value), [
     "candidateManagement",
     "currentBuild",
+    "productCapture",
   ]);
 });
 

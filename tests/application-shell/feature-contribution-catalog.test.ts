@@ -66,7 +66,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
 
   assert.deepEqual(
     contributions.map(({ key }) => key),
-    ["candidateManagement", "currentBuild"],
+    ["candidateManagement", "currentBuild", "productCapture"],
   );
   const [candidateManagement, currentBuild] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");

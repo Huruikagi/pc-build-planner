@@ -109,7 +109,12 @@ const harness = (): Harness => {
     createContribution() {
       return createProductCaptureContribution(
         { data: {} as never, navigator: {} as never },
-        { runtime, capture, openCandidateEditor, projects: PROJECTS },
+        {
+          runtime,
+          capture,
+          openCandidateEditor,
+          listProjects: async () => PROJECTS,
+        },
       );
     },
   };

@@ -33,7 +33,7 @@ test("registrationはshell契約(mount/unmount/availability)へ適合する", as
   const availabilityListeners = new Set<(value: Availability) => void>();
   const registration = createProductCaptureFeatureRegistration({
     state,
-    projects: PROJECTS,
+    listProjects: async () => PROJECTS,
     subscribeAvailability(listener) {
       availabilityListeners.add(listener);
       return () => availabilityListeners.delete(listener);
@@ -53,7 +53,7 @@ test("mountは取り込み開始の案内を描画しunmountで確実に取り�
   const state = createState();
   const registration = createProductCaptureFeatureRegistration({
     state,
-    projects: PROJECTS,
+    listProjects: async () => PROJECTS,
   });
   const container = document.createElement("div");
 
@@ -72,6 +72,41 @@ test("mountは取り込み開始の案内を描画しunmountで確実に取り�
   await act(async () => handle?.unmount());
 
   assert.equal(container.textContent, "");
+});
+
+test("mountのたびにlistProjectsを呼び直し最新のproject一覧を取得する", async () => {
+  const state = createState();
+  let calls = 0;
+  const registration = createProductCaptureFeatureRegistration({
+    state,
+    listProjects: async () => {
+      calls += 1;
+      return PROJECTS;
+    },
+  });
+  const container = document.createElement("div");
+
+  let handle: Awaited<ReturnType<typeof registration.mount>> | undefined;
+  await act(async () => {
+    handle = await registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+  assert.equal(calls, 1);
+
+  await act(async () => handle?.unmount());
+  await act(async () => {
+    handle = await registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+
+  assert.equal(calls, 2);
+  await act(async () => handle?.unmount());
 });
 
 test("mountできるstateを持たないregistrationはmountを成功と偽らない", async () => {

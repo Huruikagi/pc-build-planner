@@ -66,6 +66,7 @@ test("buildがroot公開bundleと共有service workerを生成する", async () 
   assert.deepEqual(Object.keys(composed.value), [
     "candidateManagement",
     "currentBuild",
+    "productCapture",
   ]);
   assert.equal(Object.getPrototypeOf(composed.value), null);
   assert.equal(Object.isFrozen(composed.value), true);

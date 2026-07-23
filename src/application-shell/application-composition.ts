@@ -92,7 +92,12 @@ export function createProductionSidePanelComposition(
     },
     createContributions: (context) => ({
       features: getSidePanelContributions(
-        createSidePanelFeatureContributions(context),
+        createSidePanelFeatureContributions(
+          context,
+          typeof chrome !== "undefined" && chrome.tabs && chrome.scripting
+            ? { tabs: chrome.tabs, scripting: chrome.scripting }
+            : undefined,
+        ),
       ) as unknown as SidePanelFeatureContributions,
       workerRegistrations: [],
     }),

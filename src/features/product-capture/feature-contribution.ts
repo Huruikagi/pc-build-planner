@@ -23,6 +23,19 @@ import { createSubmitCaptureDraft } from "./submit-draft.js";
 import type { CaptureProjectOption } from "./view.js";
 import { createCaptureWorkerRegistration } from "./worker-registration.js";
 
+export {
+  type ChromeScriptingApi,
+  type ChromeTabsApi,
+  createChromeCaptureRuntimePort,
+} from "./chrome-runtime-port.js";
+/**
+ * Re-exported so `application-shell/side-panel-contributions.ts` (the only
+ * caller allowed to construct a real Chrome-backed runtime for this feature)
+ * never needs a deep import into `chrome-runtime-port.ts`/`coordinator.ts` —
+ * `feature-contribution.ts` is this feature's other allowed shell entry point.
+ */
+export type { CaptureRuntimePort } from "./coordinator.js";
+
 export const productCaptureContributionKey = "productCapture";
 
 export type ProductCaptureContribution = FeatureContribution<
@@ -30,19 +43,14 @@ export type ProductCaptureContribution = FeatureContribution<
   ProductCapturePublicApi
 >;
 
-/**
- * `runtime` (the `chrome.tabs`/`chrome.scripting`-backed adapter) has no
- * production implementation yet; that Chrome-facing wiring, plus registering
- * this contribution into the real side panel catalog, is tracked as task 6.3
- * so shipping an untestable-in-this-environment adapter isn't done silently.
- */
 export interface ProductCaptureContributionDependencies {
   readonly runtime: CaptureRuntimePort;
   readonly capture: CaptureCandidatePort;
   readonly openCandidateEditor: (
     prefill: CandidateEditorPrefill,
   ) => Promise<Result<void, FeatureActivationError>>;
-  readonly projects: readonly CaptureProjectOption[];
+  /** Resolved fresh on every mount; see `registration.ts`'s `listProjects`. */
+  readonly listProjects: () => Promise<readonly CaptureProjectOption[]>;
 }
 
 /**
@@ -70,12 +78,19 @@ export const createProductCaptureContribution = (
     openCandidateEditor: dependencies.openCandidateEditor,
   });
 
+  /** Manual-entry project resolution needs the latest list even though it runs outside `mount()`'s own async fetch. */
+  let latestProjects: readonly CaptureProjectOption[] = [];
+  const listProjects = async (): Promise<readonly CaptureProjectOption[]> => {
+    latestProjects = await dependencies.listProjects();
+    return latestProjects;
+  };
+
   const registration = createProductCaptureFeatureRegistration({
     state,
-    projects: dependencies.projects,
+    listProjects,
     onOpenDetailEdit: (manualName) => {
       if (manualName !== undefined) {
-        const projectId = dependencies.projects[0]?.id;
+        const projectId = latestProjects[0]?.id;
         if (projectId !== undefined)
           void navigation.openManualEntry(manualName, projectId);
         return;

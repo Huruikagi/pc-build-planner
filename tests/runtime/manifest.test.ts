@@ -14,7 +14,7 @@ const validManifest = {
   name: "PC Build Planner",
   version: "1.0.0",
   minimum_chrome_version: "116",
-  permissions: ["storage", "activeTab", "scripting"],
+  permissions: ["storage", "activeTab", "scripting", "sidePanel"],
   action: {},
   background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
@@ -34,7 +34,12 @@ test("manifestはChrome 116以降向けの最小MV3契約である", async () =>
   });
   assert.equal(manifest.side_panel.default_path, "side-panel.html");
   assert.deepEqual(manifest.action, {});
-  assert.deepEqual(manifest.permissions, ["storage", "activeTab", "scripting"]);
+  assert.deepEqual(manifest.permissions, [
+    "storage",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+  ]);
 });
 
 test("禁止権限と全サイト権限を拒否する", () => {

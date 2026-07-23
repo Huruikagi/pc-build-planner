@@ -10,7 +10,12 @@ function fail(message) {
   throw new Error(`Artifact validation failed: ${message}`);
 }
 
-const allowedPermissions = new Set(["storage", "activeTab", "scripting"]);
+const allowedPermissions = new Set([
+  "storage",
+  "activeTab",
+  "scripting",
+  "sidePanel",
+]);
 
 /**
  * @param {{ manifest_version?: unknown, minimum_chrome_version?: unknown,
@@ -42,7 +47,7 @@ export function validateManifest(manifest) {
     !manifest.permissions.includes("storage")
   ) {
     fail(
-      "only the minimal storage, activeTab, scripting permissions are allowed",
+      "only the minimal storage, activeTab, scripting, sidePanel permissions are allowed",
     );
   }
   if (

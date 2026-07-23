@@ -35,17 +35,19 @@ export interface CaptureFeatureRegistrationDependencies {
   ) => () => void;
   /** Supplied by the feature-local React/state composition when capture is enabled. */
   readonly state?: CaptureState;
-  readonly projects?: readonly CaptureProjectOption[];
+  /** Resolved fresh on every mount, so a project created after startup is visible on the next visit. */
+  readonly listProjects?: () => Promise<readonly CaptureProjectOption[]>;
   readonly onOpenDetailEdit?: (manualName?: string) => void;
 }
 
 const mountCaptureView =
   (
     state: CaptureState,
-    projects: readonly CaptureProjectOption[],
+    listProjects: () => Promise<readonly CaptureProjectOption[]>,
     onOpenDetailEdit: ((manualName?: string) => void) | undefined,
   ): CaptureMount =>
   async ({ container }) => {
+    const projects = await listProjects();
     const root = mountCaptureReactRoot(container, {
       state,
       projects,
@@ -84,7 +86,7 @@ export const createProductCaptureFeatureRegistration = (
       ? mountUnavailable
       : mountCaptureView(
           dependencies.state,
-          dependencies.projects ?? [],
+          dependencies.listProjects ?? (async () => []),
           dependencies.onOpenDetailEdit,
         ));
   const getAvailability =

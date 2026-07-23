@@ -25,6 +25,20 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
     sourcemap: false,
     target: "chrome116",
   });
+  // `chrome.scripting.executeScript({ files: [...] })` injects a classic
+  // (non-module) script, so this entry is built separately as an IIFE.
+  await build({
+    bundle: true,
+    entryPoints: {
+      "content-script": "src/features/product-capture/content-script.ts",
+    },
+    define: { "process.env.NODE_ENV": '"production"' },
+    format: "iife",
+    outdir: outputDirectory,
+    platform: "browser",
+    sourcemap: false,
+    target: "chrome116",
+  });
   await copyFile("manifest.json", `${outputDirectory}/manifest.json`);
   await copyFile("side-panel.html", `${outputDirectory}/side-panel.html`);
   await writeFile(`${outputDirectory}/.build-ready`, "unpacked\n", "utf8");

@@ -10,6 +10,10 @@ import {
   createChromeFoundationMessageTarget,
   type FoundationMessageRuntime,
 } from "./foundation-message-target.js";
+import {
+  type ChromeSidePanelOpenApi,
+  createOpenSidePanelGestureHandler,
+} from "./open-side-panel.js";
 
 const isActionMessage = (value: unknown, actionId: string): boolean =>
   typeof value === "object" &&
@@ -60,6 +64,35 @@ export const createProductionServiceWorkerBootstrap = (
     ...(initializeFoundation ? { initializeFoundation } : {}),
   });
 
+export interface ChromeActionClickRuntime {
+  readonly action: {
+    readonly onClicked: {
+      addListener(listener: (tab: { readonly id?: number }) => void): void;
+    };
+  };
+  readonly sidePanel: ChromeSidePanelOpenApi;
+}
+
+/**
+ * Product capture's own retrigger is a normal in-panel button in the same
+ * document (`data-capture-start`); this listener's only job is to get the
+ * side panel open for the clicked tab under `activeTab`'s user-gesture
+ * requirement. It must call `sidePanel.open` synchronously within the click,
+ * per `createOpenSidePanelGestureHandler`'s own contract.
+ */
+export const createActionClickSidePanelBootstrap = (
+  runtime: ChromeActionClickRuntime,
+  reportError: (message: string) => void = () => {},
+): void => {
+  const openSidePanel = createOpenSidePanelGestureHandler(runtime.sidePanel);
+  runtime.action.onClicked.addListener((tab) => {
+    if (typeof tab.id !== "number") return;
+    void openSidePanel({ tabId: tab.id }).then((result) => {
+      if (!result.ok) reportError(result.error.message);
+    });
+  });
+};
+
 const runtime = typeof chrome !== "undefined" ? chrome.runtime : undefined;
 if (
   runtime &&
@@ -71,4 +104,16 @@ if (
   typeof runtime.onMessage.removeListener === "function"
 ) {
   void createProductionServiceWorkerBootstrap(runtime).start();
+}
+
+if (
+  typeof chrome !== "undefined" &&
+  chrome.action &&
+  typeof chrome.action.onClicked?.addListener === "function" &&
+  chrome.sidePanel &&
+  typeof chrome.sidePanel.open === "function"
+) {
+  createActionClickSidePanelBootstrap(chrome, (message) =>
+    console.error(message),
+  );
 }
