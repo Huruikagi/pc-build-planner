@@ -64,8 +64,9 @@ graph LR
     State --> View[Capture view]
     State --> Mapper[Draft mapper]
     Mapper --> Port[Candidate creation port]
-    State --> Editor[Candidate editor port]
-    Editor --> Navigator[Shell navigator]
+    State --> Editor[Candidate editor navigation]
+    Editor --> OpenEditor[candidate-management openCandidateEditor]
+    OpenEditor --> Navigator[Shell navigator]
     Port --> Repo[Foundation repository]
 ```
 
@@ -210,7 +211,7 @@ interface CaptureDraftMapper {
 }
 ```
 
-商品名とprojectIdを必須とし、カテゴリ未確認は`unclassified`へ変換する。`confirmed`、`sourceSnapshot`、`sourceInfo`を上流契約どおり分離し、ページ由来の余剰フィールドを渡さない。
+商品名とprojectIdを必須とし、カテゴリ未確認はfoundationの`PartCategory`である`uncategorized`へ変換し、`normalizedAttributes`は`{ category: "uncategorized" }`を生成する（`unclassified`はドメイン契約に存在しないため使用しない）。`confirmed`、`sourceSnapshot`、`sourceInfo`を上流契約どおり分離し、ページ由来の余剰フィールドを渡さない。
 
 #### CandidateEditorNavigation
 
@@ -221,6 +222,8 @@ interface CandidateEditorNavigation {
 ```
 
 `open`は同じmapper規則で`CandidateDraft`を生成し、選択projectと組み合わせた`CandidateEditorPrefill`を候補管理の`openCandidateEditor`へ渡す。shell intentやfeature IDをcapture側で直接組み立てず、candidate managementの型付き公開portを利用する。失敗時はCaptureSession、修正値、project選択を保持する。
+
+上流の`openCandidateEditor`は非空の商品名（`SourcedValue`の`original`または`confirmed`）を持つprefillだけを受理し、空名は`invalid_activation`で拒否する。したがって`open`は非空商品名を前提とし、この前提を満たさない場合は遷移を試みず`project-required`/`validation`相当のCaptureErrorを返して確認画面に留める。抽出候補ゼロ（Requirement 4.6）の手入力導線は、この`open`経路とは分離し、後述のCaptureViewが最低限の商品名入力を促す案内を表示したうえで、商品名が入力された時点で初めて`open`を有効化する（prefillなしの空エディタ遷移は行わない）。
 
 ### Runtime and UI Layer
 
@@ -250,7 +253,7 @@ type CaptureSessionState =
 
 #### CaptureView
 
-簡易項目、欠損、取得元、元表記、project選択、保存・再試行・詳細編集操作を描画する。文字列は`textContent`相当で扱い、URLも自動的に実行・遷移可能なHTMLとして挿入しない。
+簡易項目、欠損、取得元、元表記、project選択、保存・再試行・詳細編集操作を描画する。抽出候補がゼロの場合（Requirement 4.6）は、空の詳細編集へ即時遷移せず、手入力で詳細編集へ進むための商品名入力を促す案内を表示する。商品名が空の間は保存と詳細編集遷移（`CandidateEditorNavigation.open`）をいずれも無効化し、非空になった時点で有効化する。文字列は`textContent`相当で扱い、URLも自動的に実行・遷移可能なHTMLとして挿入しない。
 
 ## Data Models
 
@@ -265,7 +268,7 @@ type CaptureSessionState =
 
 ## Testing Strategy
 
-- **Unit**: 各抽出ソース、優先順位、同順位、欠損、文字列長、制御文字、URL、価格、未分類変換を検証する。
+- **Unit**: 各抽出ソース、優先順位、同順位、欠損、文字列長、制御文字、URL、価格、未分類変換（`uncategorized`への変換）を検証する。
 - **Runtime integration**: action以外で抽出しないこと、権限失効、制限URL、タブ遷移、payload不正をChrome API stubで検証する。
 - **State/UI integration**: 簡易確認、根拠表示、修正分離、空商品名、projectなし、二重送信、保存失敗時保持、詳細編集遷移を検証する。
 - **Contract integration**: 架空ページから`CandidateDraft`を生成し、保存では`CaptureCandidatePort`へ一度だけ渡す。詳細編集では`sourceInfo`と元表記を保持したprefillを`openCandidateEditor`へ一度だけ渡し、navigation失敗時のsession保持を検証する。
