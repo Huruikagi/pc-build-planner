@@ -38,7 +38,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 3.3, 3.4, 6.1, 6.2, 6.4, 7.2_
 
 - [ ] 4. 確認セッションとサイドパネル表示を実装する
-- [ ] 4.1 (P) 一時セッションの状態遷移と編集を実装する
+- [x] 4.1 (P) 一時セッションの状態遷移と編集を実装する
   - 抽出中、確認、保存中、成功、失敗を区別し、元表記と利用者修正値を別々に保持する
   - 商品名必須、未分類、project選択、失敗後のドラフト保持と再試行を状態規則へ反映する
   - 保存中の再送を拒否し、同一セッションから保存要求が一度だけ発生する
@@ -103,3 +103,4 @@
 ## Implementation Notes
 
 - Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。
+- Task 4.1: 注入されたasync依存（`coordinator.captureCurrentTab()`、`submitDraft()`）は必ずtry/catchで包み、例外を`failed`状態へ変換すること。素通しすると再入防止guardのせいで`extracting`/`submitting`のまま永久に復帰不能になる（レビュー1回目で指摘・修正済み）。同様の依存注入を行う後続task（5.2など）でも同じ防御を徹底する。

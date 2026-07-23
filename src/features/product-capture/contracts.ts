@@ -1,4 +1,5 @@
 import type {
+  CandidatePartId,
   MoneyValue,
   ProjectId,
   RequestId,
@@ -59,10 +60,15 @@ export interface CapturePagePayload {
   readonly candidates: readonly ExtractionCandidate[];
 }
 
-/** A capture item after acceptance, keeping the original wording alongside any user edit. */
+/**
+ * A capture item after acceptance. `value.original` keeps the raw page wording;
+ * `value.confirmed` starts as the normalizer's suggestion and is never itself
+ * mutated — a user edit is tracked separately in `CaptureSession.userCorrections`
+ * so the two stay distinguishable per Requirement 3.5.
+ */
 export interface CaptureSessionField {
   readonly field: CaptureField;
-  readonly value: SourcedValue<string>;
+  readonly value: SourcedValue<CaptureNormalizedValue>;
   readonly source: ExtractionSource;
   readonly sourceLabel: string;
 }
@@ -124,9 +130,33 @@ export interface CaptureSession {
   readonly capturedAt: UtcTimestamp;
   readonly fields: readonly CaptureSessionField[];
   readonly rejectedFields: readonly CaptureFieldRejection[];
+  readonly missingCoreFields: readonly CaptureCoreField[];
   readonly userCorrections: Readonly<Partial<Record<CaptureField, string>>>;
   readonly projectId?: ProjectId;
 }
+
+/** A session with the project selected; required before a `CandidateDraft` can be built. */
+export interface ConfirmedCaptureSession extends CaptureSession {
+  readonly projectId: ProjectId;
+}
+
+/** The side-panel-only lifecycle; nothing here is persisted until `saved`. */
+export type CaptureSessionState =
+  | { readonly status: "idle" }
+  | { readonly status: "extracting"; readonly requestId: string }
+  | { readonly status: "review"; readonly session: CaptureSession }
+  | { readonly status: "submitting"; readonly session: ConfirmedCaptureSession }
+  | {
+      readonly status: "saved";
+      readonly candidateId: CandidatePartId;
+      readonly projectId: ProjectId;
+    }
+  | {
+      readonly status: "failed";
+      readonly recoverable: boolean;
+      readonly draft?: CaptureSession;
+      readonly error: CaptureError;
+    };
 
 /** Distinguishable capture and save failures; each keeps prior state recoverable. */
 export type CaptureError =
