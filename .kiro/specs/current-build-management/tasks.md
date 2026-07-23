@@ -103,7 +103,7 @@
   - _Boundary: CurrentBuildFeatureRegistration_
 
 - [ ] 5. side panel統合と受け入れ回帰を完成する
-- [ ] 5.1 Foundation・候補query・shellへ現在構成機能を統合する
+- [x] 5.1 Foundation・候補query・shellへ現在構成機能を統合する
   - candidate-managementの公開入口から分類済み候補queryだけを受け取り、feature内部へのdeep importを行わない。
   - current-buildのquery、service、state、view、registration、公開APIをcompositionへ渡し、Storage APIと共有runtime入口をfeature側から直接操作しない。
   - maintenance中は読取を維持しつつ変更操作を拒否し、通常時はproject選択から単一・複数候補の採用、数量変更、解除、再表示までを完了できるようにする。
@@ -134,3 +134,5 @@
 - 単一選択カテゴリの候補には数量入力欄自体を描画しない設計とした。これによりrequirement 2.5（数量変更を許可しない）はUI操作導線を提供しないことで満たされ、reject理由の表示は不要になる。
 - BuildStateはproject単位の遅延読込のため、registrationのmount時にrestoredStateの`selectedProjectId`を非権威的にpeekしてから`state.selectProject(...)`で対象projectのeligible候補を先読みし、その後にcodec.restore()で正式検証する必要がある（candidate-managementのManagementStateは全project分を`load()`で先読みするため、この前処理が不要）。検証失敗時は`state.load()`を再実行してphantom選択を確実に既定projectへ戻してからrejectSnapshotRestore()を呼ぶ。
 - current-buildのFile Structure Planにreact-root.tsxは含まれないため、React root生成はcandidate-managementのように別ファイルへ分離せずregistration.ts内へ直接実装した。
+- side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
+- 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。

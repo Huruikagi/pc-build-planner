@@ -28,7 +28,10 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
   if (!composed.ok) return;
   assert.equal(Object.getPrototypeOf(composed.value), null);
   assert.equal(Object.isFrozen(composed.value), true);
-  assert.deepEqual(Object.keys(composed.value), ["candidateManagement"]);
+  assert.deepEqual(Object.keys(composed.value), [
+    "candidateManagement",
+    "currentBuild",
+  ]);
 });
 
 test("実featureの公開契約がroot入口から到達できる", () => {
@@ -41,4 +44,6 @@ test("実featureの公開契約がroot入口から到達できる", () => {
   assert.equal(typeof candidateManagement.query.getCandidateDraft, "function");
   assert.equal(typeof candidateManagement.capture.createCandidate, "function");
   assert.equal(typeof candidateManagement.openCandidateEditor, "function");
+  const currentBuild = composed.value.currentBuild;
+  assert.equal(typeof currentBuild.query.getByProject, "function");
 });

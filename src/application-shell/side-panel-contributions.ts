@@ -2,10 +2,11 @@ import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
 } from "../features/candidate-management/feature-contribution.js";
-import type {
-  FeatureCompositionContext,
-  FeatureContributionFactory,
-} from "./feature-contribution-catalog.js";
+import {
+  type CurrentBuildContribution,
+  createCurrentBuildContribution,
+} from "../features/current-build/feature-contribution.js";
+import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 
 /**
  * The only module that knows the concrete side panel features.
@@ -13,13 +14,19 @@ import type {
  */
 export type SidePanelFeatureContributions = readonly [
   CandidateManagementContribution,
+  CurrentBuildContribution,
 ];
 
-/** Every side panel feature participates through this factory contract. */
-const factories = [
-  createCandidateManagementContribution,
-] as const satisfies readonly FeatureContributionFactory[];
-
+/**
+ * current-build depends on candidate-management's public query, so
+ * contributions are built in dependency order rather than as a uniform list.
+ */
 export const createSidePanelFeatureContributions = (
   context: FeatureCompositionContext,
-): SidePanelFeatureContributions => [factories[0](context)];
+): SidePanelFeatureContributions => {
+  const candidateManagement = createCandidateManagementContribution(context);
+  const currentBuild = createCurrentBuildContribution(context, {
+    candidates: candidateManagement.registration.publicApi.query,
+  });
+  return [candidateManagement, currentBuild];
+};
