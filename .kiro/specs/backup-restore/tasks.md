@@ -76,7 +76,7 @@
   - _Requirements: 1.3, 3.1, 3.2, 3.4_
   - _Boundary: FileGateway_
 
-- [ ] 4.2 バックアップ・検証・確認・復元の状態遷移を実装する
+- [x] 4.2 バックアップ・検証・確認・復元の状態遷移を実装する
   - idle、exporting、validating、awaiting-confirmation、restoring、succeeded、failedを判別可能に管理する
   - 成功したpreflightだけがticketを保持し、取消、再選択、画面再生成で破棄する
   - 処理中の重複要求と競合操作が抑止され、失敗後は既存表示を維持して再試行できる
@@ -128,3 +128,4 @@
 - 2.1: `tests/fixtures/`配下は`scripts/validate-fixture-assets.mjs`のraw-html等asset policyでスキャンされる（`.test.ts`ファイルはスキャン対象外）。生HTML文字列を含む不正値fixtureは`tests/fixtures/`に置かず、対象の`.test.ts`内へ直接記述する。
 - 全task共通: このBash環境はデフォルトで`globstar`が無効なため、`tests/**/*.test.ts`のような2階層以上深いglobはshellが部分展開してしまい`tests/features/<feature>/*.test.ts`を静かに取りこぼす。全件回帰確認は`shopt -s globstar`を同一コマンド内で有効にしてから実行する。
 - 3.3: design.mdのData Modelsに`RestoreSummary`の明示的な型定義がなかったため、`RestoreService.commit`の戻り値として`contracts.ts`へ追加した（`RestorePreview`と同じ件数フィールドの確定値）。release/abort呼び出し自体の成否はcommitの戻り値へ反映せず、replaceRootの成否だけを最終結果として返す（release/abort失敗はFoundation側のmaintenance lease自然失効に委ねる設計判断）。
+- 4.2: `BackupRestoreStateValue`はphaseに加え、succeeded/failedへ`operation: "backup"|"restore"`を持たせた（design.mdは7 phase名だけを列挙していたが、backup作成とrestore復元を同じstate machineで扱うため、どちらの操作が終端したかを型で判別可能にした）。cancel()はawaiting-confirmation/failed/succeededからidleへ戻すが、busy phase（exporting/validating/restoring）中は無視する。
