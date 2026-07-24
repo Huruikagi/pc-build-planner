@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 交換契約とFoundation消費境界を確立する
+- [x] 1. 交換契約とFoundation消費境界を確立する
 - [x] 1.1 バージョン付き交換契約と判別可能な結果を定義する
   - 製品識別子、形式版、作成日時、全プロジェクト・候補・現在構成、preview、artifact、復元ticket（candidateとreplacement assessment）を型安全に表現する
   - ファイル、形式、参照、非対応版、容量、保存、stale確認の失敗を値を含まないcodeとpathで区別し、Foundationの結果をfeature codeへ写像する形を用意する
@@ -14,7 +14,7 @@
   - _Requirements: 3.4, 4.3, 5.1, 5.2, 5.4_
   - _Boundary: Foundation public surface_
 
-- [ ] 2. 交換データの検証・移行・変換を実装する
+- [x] 2. 交換データの検証・移行・変換を実装する
 - [x] 2.1 (P) 現行交換形式の実行時検証を実装する
   - JSON解析結果をunknownとして、必須構造、JSON互換性、ID・日時・カテゴリ、禁止内容を検証する
   - 候補所属、構成の同一プロジェクト候補参照、正整数数量、ID一意性をpath付きで検証する
@@ -40,7 +40,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.6, 2.1, 2.2, 2.3_
   - _Boundary: ExchangeMapper_
 
-- [ ] 3. バックアップ作成と復元preflight・commitを実装する
+- [x] 3. バックアップ作成と復元preflight・commitを実装する
 - [x] 3.1 (P) バックアップartifact生成サービスを実装する
   - read-only参照から検証済み全ルートを読み、作成日時付きEnvelopeをJSONへ直列化する
   - 製品接頭辞と作成日を含むファイル名、MIME type、UTF-8バイト数を返す
@@ -67,7 +67,7 @@
   - _Requirements: 4.2, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: RestoreService commit, FoundationDataPort integration_
 
-- [ ] 4. extension pageのファイルI/Oと画面状態を実装する
+- [x] 4. extension pageのファイルI/Oと画面状態を実装する
 - [x] 4.1 (P) ブラウザ標準APIによるファイルgatewayを実装する
   - 単一JSON Fileのサイズを本文読取前に確認し、textと実バイト数を返す
   - artifactをBlobとしてダウンロードし、操作後にobject URLを破棄する
@@ -101,7 +101,7 @@
   - _Requirements: 1.3, 3.1, 3.6, 4.1, 4.2, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: BackupRestoreFeatureRegistration, ReactRootAdapter_
 
-- [ ] 5. side panel統合と全体回帰を完成する
+- [x] 5. side panel統合と全体回帰を完成する
 - [x] 5.1 バックアップ・復元機能を既存管理画面とFoundation portへ統合する
   - application shellがfeatureの`registration`と`public`をcompositionし、置換・保守capabilityを含むscoped portを本機能へ供給する（既定の最小権限portは置換・保守を外すため専用供給とする）
   - 共有runtime入口、HTML host、root barrelをfeature側から編集せず、RestoreServiceの保守acquire/renew/release/abortと置換をFoundationへ接続する
