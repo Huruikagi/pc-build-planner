@@ -54,7 +54,7 @@
 - [x] product-page-capture -- `public.ts` とregistration方式、typed candidate editor activation、maintenance中の保存拒否、Coordinator/DraftMapper境界、worker registration portを明示し、共有service workerを直接編集しない。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] current-build-management -- `public.ts` とregistration方式を採用し、公開候補query名と依存契約を統一する。候補変更成功後のreconcile writeを削除し、foundationの同一transaction内参照修復policyとの責務境界を明示する。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] compatibility-checking -- `public.ts`、`project-candidate-management` へのdirect dependency、registration方式を明示し、共有runtime入口を直接編集しない。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
-- [ ] backup-restore -- `public.ts` を採用し、Repository primitiveの所有をfoundationへ戻す。maintenance leaseとatomic replacementの利用側、shellへの状態通知側へ限定し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
+- [x] backup-restore -- `public.ts` を採用し、Repository primitiveの所有をfoundationへ戻す。maintenance leaseとatomic replacementの利用側、shellへの状態通知側へ限定し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 
 ## Direct Implementation Candidates
 
@@ -62,7 +62,7 @@
 
 ## Implementation Status
 
-2026-07-24時点の `tasks.md` と実装履歴を基準とする。`spec.json.phase` は仕様生成フェーズを表すため、実装進捗は各specのtask checkboxとこの一覧で追跡する。
+2026-07-25時点の `tasks.md` と実装履歴を基準とする。`spec.json.phase` は仕様生成フェーズを表すため、実装進捗は各specのtask checkboxとこの一覧で追跡する。
 
 - [x] local-data-foundation — 48/48 sub-tasks完了。共有データ契約、永続化、単一write authority、runtime contributionを実装済み。
 - [x] application-shell — 33/33 sub-tasks完了。typed activation 5.1–5.3を含むshell、runtime composition、最終gateを実装済み。
@@ -70,7 +70,7 @@
 - [x] current-build-management — 18/18 sub-tasks完了。構成管理と下流公開契約の受け入れ回帰を含め実装済み。
 - [x] product-page-capture — 全task完了。`/kiro-validate-impl`(2026-07-24)でクロスタスク欠陥2件(本番経路でのtab-changed検証未到達、feature stylesheet未bundle)を検出・修正済み。`pnpm test` 584 pass、Playwright e2e 4 passed。実Chromeでの`chrome.scripting.executeScript`成功経路は自動テストで再現不可のため手動確認を推奨(既知の制約として記録済み)。
 - [x] compatibility-checking — 19/19 sub-tasks完了。固定5規則、判定対象展開、集約優先規則、service/状態/画面統合、side panel統合と受け入れ回帰を実装済み。`/kiro-validate-impl`(2026-07-24)でGO判定(`pnpm test` 702 pass、typecheck/lint/boundaries/build/final-gate全通過、境界違反・秘匿情報なし)。
-- [ ] backup-restore — requirementsのみ承認済み、design/tasks未承認のため実装開始不可(0/19 sub-tasks)。
+- [x] backup-restore — 19/19 sub-tasks完了。requirements/design/tasks承認済みで、バージョン付きJSONのexport/import、preflight、maintenance下の原子的置換、Foundation portへの統合、実拡張でのexport→復元E2Eまで実装済み。
 
 ## Specs (dependency order)
 
@@ -80,4 +80,4 @@
 - [x] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] product-page-capture -- ユーザー操作起点の商品抽出、確認session、候補作成連携を所有する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
-- [ ] backup-restore -- バージョン付きJSONのbackup/restore、preflight、maintenance下の原子的置換を提供する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
+- [x] backup-restore -- バージョン付きJSONのbackup/restore、preflight、maintenance下の原子的置換を提供する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
