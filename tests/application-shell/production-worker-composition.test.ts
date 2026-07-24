@@ -38,6 +38,13 @@ const fixture = (
       query: async () => ({ ok: true, value: {} as never }),
       mutate: async () => ({ ok: true, value: {} as never }),
     },
+    fullDataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
+      assessReplacement: async () => ({ ok: true, value: {} as never }),
+      replaceRoot: async () => ({ ok: true, value: {} as never }),
+      runMaintenance: async () => ({ ok: true, value: {} as never }),
+    },
     workerRegistration: {
       async register() {
         events.push("foundation:register");
@@ -178,6 +185,13 @@ test("遅延registration中のstopはcatalogを開始せず完了resourceを解�
     dataPort: {
       query: async () => ({ ok: true, value: {} as never }),
       mutate: async () => ({ ok: true, value: {} as never }),
+    },
+    fullDataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
+      assessReplacement: async () => ({ ok: true, value: {} as never }),
+      replaceRoot: async () => ({ ok: true, value: {} as never }),
+      runMaintenance: async () => ({ ok: true, value: {} as never }),
     },
     workerRegistration: {
       async register() {

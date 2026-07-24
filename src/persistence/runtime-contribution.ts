@@ -31,6 +31,7 @@ import {
 import {
   createScopedDataPort,
   createWriteAuthority,
+  type FoundationDataPort,
   type FoundationScopedDataPort,
 } from "./write-authority.js";
 
@@ -51,6 +52,8 @@ export interface FoundationRuntimeContribution {
   readonly workerRegistration: DataWorkerRegistration;
   /** 参照と原子的root mutationだけへ絞ったUI context向けport。 */
   readonly dataPort: FoundationScopedDataPort;
+  /** 置換・保守capabilityを含む完全port。信頼済み拡張UI context内の専用consumerだけへ供給する。 */
+  readonly fullDataPort: FoundationDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -155,6 +158,7 @@ export const initializeFoundationRuntimeContributionFromPlatform = async (
       maintenanceSource,
       workerRegistration,
       dataPort: createScopedDataPort(authority),
+      fullDataPort: authority,
       dispose() {
         if (disposed) return;
         disposed = true;

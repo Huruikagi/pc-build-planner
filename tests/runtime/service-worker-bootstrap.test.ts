@@ -43,6 +43,13 @@ test("production bootstrapでfoundation handlerとcatalog actionを順序どお�
       query: async () => ({ ok: true, value: {} as never }),
       mutate: async () => ({ ok: true, value: {} as never }),
     },
+    fullDataPort: {
+      query: async () => ({ ok: true, value: {} as never }),
+      mutate: async () => ({ ok: true, value: {} as never }),
+      assessReplacement: async () => ({ ok: true, value: {} as never }),
+      replaceRoot: async () => ({ ok: true, value: {} as never }),
+      runMaintenance: async () => ({ ok: true, value: {} as never }),
+    },
     workerRegistration: {
       async register(target) {
         events.push("foundation:register");

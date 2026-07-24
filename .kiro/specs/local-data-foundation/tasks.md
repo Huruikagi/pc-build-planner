@@ -323,7 +323,7 @@
   - _Requirements: 2.1, 2.2, 2.4, 2.7, 3.2, 3.11, 8.1, 8.2_
   - _Boundary: SchemaValidator, DomainPublicApi_
 
-- [ ] 6.13 信頼済みUI context向けに完全なFoundationDataPortを公開する
+- [x] 6.13 信頼済みUI context向けに完全なFoundationDataPortを公開する
   - production runtime contributionのhandleへ、query・mutate・assessReplacement・replaceRoot・runMaintenanceのすべてを転送する完全な`FoundationDataPort`を追加する。既定の`FoundationScopedDataPort`（6.11）は変更せず併存させる。
   - 完全portは同じ固定名Web Lockと永続root revision・maintenance fenceで絞り込みportと直列化され、単一write authorityの不変条件を維持することを回帰で確認する。
   - Storage access restriction失敗時は完全portを含む全contributionを公開しないことをfail-closedに確認する。
@@ -344,3 +344,5 @@
 
 - `chrome.storage.local` のread/writeだけではcross-worker CASを構成できず、module-level queueはMV3 worker再生成で失われる。
 - `StoragePort.runExclusive`は採用せず、固定名Web Lockを協調writerの線形化点、永続rootのgeneration・owner・lease・revisionをworker再生成後の認可根拠とする。
+
+- 6.13: `FoundationRuntimeContribution`へ`fullDataPort`を追加する過程で、`tests/persistence/runtime-contribution.test.ts`の`platform()` fixtureが`storageLocal.set()`を no-op のまま実装しており、write-then-read（acquire→assessReplacement→replaceRoot）を検証する新testで初めて顕在化した。fixtureの`get`/`set`を実際に永続化するmutable変数へ修正した。既存の`FoundationScopedDataPort`とconsumer（backup-restore以外の全feature）は無変更。

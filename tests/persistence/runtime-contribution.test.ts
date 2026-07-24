@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { UtcTimestamp } from "../../src/domain/identifiers.js";
+import type { UtcTimestamp, Uuid } from "../../src/domain/identifiers.js";
+import type { MaintenanceOwnerId } from "../../src/domain/model.js";
 import type { FoundationError } from "../../src/domain/result.js";
 import { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "../../src/persistence/runtime-contribution.js";
 import { createInitialRoot } from "../../src/persistence/schema.js";
@@ -10,7 +11,7 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
   let handlers = 0;
   let removedListeners = 0;
   let removedHandlers = 0;
-  const root = createInitialRoot();
+  let storedRoot: unknown = createInitialRoot();
   return {
     counters: {
       get restrictions() {
@@ -30,9 +31,11 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
       storageLocal: {
         QUOTA_BYTES: 10 * 1024 * 1024,
         async get() {
-          return { localDataRoot: root };
+          return { localDataRoot: storedRoot };
         },
-        async set() {},
+        async set(items: Record<string, unknown>) {
+          if ("localDataRoot" in items) storedRoot = items.localDataRoot;
+        },
         async getBytesInUse() {
           return 100;
         },
@@ -81,6 +84,7 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   assert.deepEqual(Object.keys(initialized.value).sort(), [
     "dataPort",
     "dispose",
+    "fullDataPort",
     "maintenanceSource",
     "workerRegistration",
   ]);
@@ -90,6 +94,19 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
     "query",
   ]);
   assert.equal(Object.isFrozen(initialized.value.dataPort), true);
+  // The full port is the same write authority, exposed for trusted first-party consumers only.
+  for (const method of [
+    "assessReplacement",
+    "mutate",
+    "query",
+    "replaceRoot",
+    "runMaintenance",
+  ] as const)
+    assert.equal(
+      typeof initialized.value.fullDataPort[method],
+      "function",
+      method,
+    );
   assert.equal(fixture.counters.restrictions, 1);
   const registered = await initialized.value.workerRegistration.register(
     fixture.target,
@@ -109,6 +126,56 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   unsubscribe();
   unsubscribe();
   assert.equal(fixture.counters.removedListeners, 1);
+});
+
+test("完全portでの置換は絞り込みportのqueryへ同じrevisionとして反映される", async () => {
+  const fixture = platform();
+  const initialized = await initializeFoundationRuntimeContribution(
+    fixture.value,
+  );
+  assert.equal(initialized.ok, true);
+  if (!initialized.ok) return;
+
+  const before = await initialized.value.dataPort.query(
+    (root) => root.revision,
+  );
+  assert.equal(before.ok, true);
+
+  const ownerId =
+    "10000000-0000-4000-8000-000000000001" as Uuid as MaintenanceOwnerId;
+  const acquired = await initialized.value.fullDataPort.runMaintenance({
+    type: "acquire",
+    ownerId,
+    leaseMs: 1000,
+  });
+  assert.equal(acquired.ok, true);
+  if (!acquired.ok || acquired.value.fence === undefined) return;
+  const fence = acquired.value.fence;
+
+  const candidate = createInitialRoot();
+  const assessed =
+    await initialized.value.fullDataPort.assessReplacement(candidate);
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+
+  const replaced = await initialized.value.fullDataPort.replaceRoot({
+    candidate,
+    assessment: assessed.value,
+    fence,
+  });
+  assert.equal(replaced.ok, true);
+
+  await initialized.value.fullDataPort.runMaintenance({
+    type: "release",
+    fence,
+  });
+
+  const after = await initialized.value.dataPort.query((root) => root.revision);
+  assert.equal(after.ok, true);
+  // acquire (+1) then replaceRoot (+1); release does not persist a candidate change.
+  if (before.ok && after.ok) assert.equal(after.value, before.value + 2);
+
+  await initialized.value.dispose();
 });
 
 test("不正platformは副作用前にtyped failureとなる", async () => {
