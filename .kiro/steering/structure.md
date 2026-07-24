@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-greenfield段階を終え、`src/` と `tests/` にlocal data foundation、application shell、runtime composition、候補管理の初期sliceが実装されている。新規実装は、承認済みの製品文書、roadmap、specに加え、既存コードで確立した公開境界とテスト配置を基準とする。
+MVP（v0.1.0）の全specが実装済みであり、`src/` にlocal data foundation、application shell、runtime composition、5つの業務feature（候補管理、現在構成、商品取り込み、互換性判定、backup/restore）が揃っている。新規実装は、承認済みの製品文書、roadmap、specに加え、既存コードで確立した公開境界とテスト配置を基準とする。
 
 仕様は `.kiro/specs/<feature-name>/` にfeature単位で配置し、feature名にはkebab-caseを使用する。ステアリングはパターンを保持し、個別ファイルの完全な一覧やspecの実装詳細を重複させない。
 
@@ -54,6 +54,16 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 
 **原則**: feature固有テストはfeatureごとにまとめ、共有基盤とcompositionのテストはそれぞれの責務別に配置する。fixtureには架空データだけを使用する。
 
+責務別サブディレクトリの意味は次のとおり。`tests/features/<feature>/` はfeature内部、`tests/domain/` `tests/persistence/` `tests/application-shell/` `tests/runtime/` は各所有境界、`tests/contracts/` はfeatureをまたぐ契約kit、`tests/tooling/` は公開境界・build成果物・最終gateの検証、`tests/fixtures/` は共有ファクトリ、`tests/performance/` は容量・性能回帰に対応する。
+
+### E2Eとbuild/検証script
+
+**場所**: `e2e/`、`scripts/`
+
+**目的**: `e2e/` はproduction buildした未パッケージ拡張を実Chromeで駆動するPlaywright仕様、`scripts/` はbuildと機械的検証gate（公開境界、fixture資産、生成物、最終gate）を提供する。
+
+**原則**: 人手のチェックリストへ落とさず、破ってはならない規約はscriptとして実行可能にし、`pnpm validate` から一括で呼べる状態を保つ。E2Eはfeature単位のspecファイルに分け、拡張の起動手順は共有fixtureへ寄せる。
+
 ## 所有権と依存方向
 
 - root `src/index.ts`、`src/runtime/side-panel.ts`、`src/runtime/service-worker.ts`、`side-panel.html` はapplication shellだけがcompositionする。
@@ -91,7 +101,7 @@ import type { CandidateQuery } from "../features/candidate-management/public.js"
 - feature外のconsumerはfeature-owned `public.ts` だけをimportする。
 - root barrelはapplication shellだけが合成し、featureはroot barrelへ自己登録しない。
 - 同一feature内では相対importを使用し、featureをまたぐ依存は公開入口によって見える形にする。
-- path aliasはbuild基盤導入時に決定する。未決定のaliasを前提にしない。
+- path aliasは導入しない。TypeScriptは `NodeNext` module resolutionで運用し、相対importには実行時のESM解決に合わせて `.js` 拡張子を明示する（`.tsx` を指す場合も `.js`）。
 
 ## 命名規約
 
@@ -101,7 +111,7 @@ import type { CandidateQuery } from "../features/candidate-management/public.js"
 - **関数、method、変数**: camelCase
 - **定数**: 既存のWeb/TypeScript慣習に従い、共有契約上の固定識別子は意図が分かる名前にする
 - **テスト**: 対象名に `.test.ts` またはReact DOM test用の `.test.tsx` を付ける
-- **spec feature名**: kebab-case
+- **spec feature名**: kebab-case。`src/features/<dir>` はspec名の短縮形を使ってよい（例: spec `project-candidate-management` に対しdirectory `candidate-management`）。対応関係はspecの `design.md` で明示する。
 
 ## コード構成の原則
 

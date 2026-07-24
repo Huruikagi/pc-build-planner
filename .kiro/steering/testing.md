@@ -9,7 +9,9 @@
 - React component のテストには **testing-library** を使う。
   - `@testing-library/react`（`render` / `cleanup`）
   - `@testing-library/user-event`（操作の発火）
+- TypeScriptはビルドせず `--import tsx` で直接実行する。事前トランスパイル済みの成果物をテスト対象にしない。
 - 実行は `package.json` の `test` script に集約し、`--import ./tests/setup-dom.ts` と `--test-isolation=none` を前提にする。
+- 実拡張の起動が必要な検証（unpacked拡張のロード、side panel、実ブラウザ経路）は `node:test` ではなく `e2e/` のPlaywrightへ置く。`node:test` 側でChrome実体を起動しない。
 
 ### 入れないもの（意図的な非採用）
 

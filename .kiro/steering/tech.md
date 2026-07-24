@@ -14,7 +14,7 @@ PC版Chrome 116以降を対象とする、ローカルファーストのManifest
 - **Package manager**: pnpm 11.13.1
 - **Module system**: ESM
 - **Code quality tool**: Biome 2.5.4
-- **Application source**: local data foundation、application shell、Manifest V3 runtime、型検査、build、test基盤は実装済み。project-candidate-managementは管理契約と永続化連携まで実装済みで、UI feature群は段階的に実装中。
+- **Application source**: MVP（v0.1.0）の全specが実装済み。local data foundation、application shell、Manifest V3 runtime、5つの業務feature、型検査、build、test、E2E、検証gateが揃っている。以降の変更は既存の公開境界と検証フローに乗せる。
 
 UI実装にはReact 19系とReact DOMを使用し、production buildへ同梱する。TypeScript 7、esbuild、Node test runner、jsdom、Playwright、Chrome typingsを固定済みであり、Node.js 26とChrome 116以降を対象に共通検証scriptから実行する。依存更新時はReact、React DOM、型定義の対応majorと、MV3/CSP互換性を維持する。
 
@@ -47,12 +47,11 @@ UI実装にはReact 19系とReact DOMを使用し、production buildへ同梱す
 
 ## セキュリティ
 
-- 商品取得はユーザーの明示操作だけを契機とし、基本権限は `activeTab` と `scripting` の一時権限に限定する。
-- Storageアクセスは `TRUSTED_CONTEXTS` へ限定し、content scriptへ保存APIを公開しない。
-- sender、tab、URL、request ID、payload形状を検証し、ページ由来のデータを信頼しない。
-- remote code、`eval`、動的コード評価、インラインJavaScript、恒久的host permission、`unlimitedStorage`を使用せず、CSPを弱めない。
-- 外部文字列は通常のJSX childまたは安全なDOM textとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。
-- ログやエラーへ生HTML、商品値、完全URL、保存内容などの未信頼・機微データを出さない。
+脅威モデルは閲覧中のWebページであり、防御の中心は最小権限・境界での検証・ローカルデータの保全にある。判断の根拠と機械検査に落とし込んだ規約は `security.md` に集約する。技術選択に直結する要点だけを再掲する。
+
+- 商品取得はユーザーの明示操作だけを契機とし、基本権限は `activeTab` と `scripting` の一時権限に限定する。恒久的host permissionと `unlimitedStorage` を使用しない。
+- remote code、`eval`、動的コード評価、インラインJavaScript、`dangerouslySetInnerHTML` / `innerHTML` を使用せず、CSPを弱めない。
+- ページ由来のデータとcontent scriptからのメッセージを未信頼入力として扱い、送信元と payload 形状を境界で検証する。
 - 実サイト由来のHTML、画像、取得商品データをfixtureやサンプルとしてリポジトリへ含めない。
 
 ## テストと品質
@@ -72,10 +71,11 @@ UI実装にはReact 19系とReact DOMを使用し、production buildへ同梱す
 
 - `pnpm typecheck` / `pnpm typecheck:public-consumer`: 実装と公開consumerの型検査
 - `pnpm lint`: Biomeによる静的検査
-- `pnpm test`: Node test runnerによるunit・contract・integration・DOM test
+- `pnpm test`: Node test runner（tsx loader）によるunit・contract・integration・DOM test
 - `pnpm build`: MV3 production artifactの生成
 - `pnpm test:e2e`: production build後のPlaywright E2E
-- `pnpm validate`: 型、lint、境界、fixture、最終build gate、test、E2Eをまとめたcanonical validation
+- `pnpm validate:boundaries` / `validate:fixtures` / `validate:final-build` / `validate:artifacts`: 公開境界違反、実データ混入、最終build gate、生成物の機械的検査
+- `pnpm validate`: 上記をまとめたcanonical validation（型、lint、境界、fixture、最終build gate、test、E2E）
 
 局所タスクでは関連する軽量commandを先に実行し、feature完了時は `pnpm validate` を基準とする。
 
