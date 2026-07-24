@@ -15,7 +15,7 @@
   - _Boundary: Foundation public surface_
 
 - [ ] 2. 交換データの検証・移行・変換を実装する
-- [ ] 2.1 (P) 現行交換形式の実行時検証を実装する
+- [x] 2.1 (P) 現行交換形式の実行時検証を実装する
   - JSON解析結果をunknownとして、必須構造、JSON互換性、ID・日時・カテゴリ、禁止内容を検証する
   - 候補所属、構成の同一プロジェクト候補参照、正整数数量、ID一意性をpath付きで検証する
   - 不正構造、孤立候補、別プロジェクト参照、危険な余剰内容が永続化前に拒否される
@@ -125,3 +125,5 @@
 
 - 1.1: 現行交換形式版は1が初出のため、対応対象の旧版fixtureは存在しない。`tests/fixtures/backup.ts`は現行版・空データ・将来版(2)のfixtureのみを提供する。旧版fixtureは形式版2以降を追加する時点で用意する。
 - 1.2: `MaintenanceOwnerId`は既に`domain/public.ts`経由で公開済みだったため追加不要。`MaintenanceFence`のみ`persistence/public.ts`へ追加公開した。`tests/tooling/public-boundaries.test.ts`のFoundation非公開境界guardは`MaintenanceFence`だけを許可するよう意図的に更新済み（他の内部型は引き続き禁止）。
+- 2.1: `tests/fixtures/`配下は`scripts/validate-fixture-assets.mjs`のraw-html等asset policyでスキャンされる（`.test.ts`ファイルはスキャン対象外）。生HTML文字列を含む不正値fixtureは`tests/fixtures/`に置かず、対象の`.test.ts`内へ直接記述する。
+- 全task共通: このBash環境はデフォルトで`globstar`が無効なため、`tests/**/*.test.ts`のような2階層以上深いglobはshellが部分展開してしまい`tests/features/<feature>/*.test.ts`を静かに取りこぼす。全件回帰確認は`shopt -s globstar`を同一コマンド内で有効にしてから実行する。

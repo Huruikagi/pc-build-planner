@@ -84,3 +84,123 @@ export const buildFutureVersionEnvelope = (): unknown => ({
     currentBuilds: [],
   },
 });
+
+export interface CorruptBackupEnvelope {
+  readonly name: string;
+  readonly envelope: unknown;
+  readonly expectedCode: string;
+  readonly expectedPath: string;
+}
+
+const corrupted = (change: (envelope: Record<string, unknown>) => void) => {
+  const envelope = structuredClone(
+    buildCurrentBackupEnvelope(),
+  ) as unknown as Record<string, unknown>;
+  change(envelope);
+  return envelope;
+};
+
+/** ExchangeValidator境界専用。破損値も実サイトassetを一切含まない。 */
+export const buildCorruptBackupEnvelopes =
+  (): readonly CorruptBackupEnvelope[] => [
+    {
+      name: "product mismatch",
+      envelope: corrupted((envelope) => {
+        envelope.product = "other-product";
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.product",
+    },
+    {
+      name: "unsupported format version",
+      envelope: corrupted((envelope) => {
+        envelope.formatVersion = 2;
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.formatVersion",
+    },
+    {
+      name: "unexpected top-level field",
+      envelope: corrupted((envelope) => {
+        envelope.unexpected = "架空余剰値";
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.unexpected",
+    },
+    {
+      name: "missing createdAt",
+      envelope: corrupted((envelope) => {
+        delete envelope.createdAt;
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.createdAt",
+    },
+    {
+      name: "orphan candidate project reference",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const parts = data.parts as Array<Record<string, unknown>>;
+        if (parts[0])
+          parts[0].projectId = "90000000-0000-4000-8000-000000000001";
+      }),
+      expectedCode: "invalid-reference",
+      expectedPath: "$.data.parts[0].projectId",
+    },
+    {
+      name: "cross-project current build reference",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const otherProject = {
+          id: "90000000-0000-4000-8000-000000000002",
+          name: "架空別プロジェクト",
+          createdAt: CREATED_AT,
+          updatedAt: CREATED_AT,
+        };
+        (data.projects as unknown[]).push(otherProject);
+        const builds = data.currentBuilds as Array<Record<string, unknown>>;
+        if (builds[0]) builds[0].projectId = otherProject.id;
+      }),
+      expectedCode: "invalid-reference",
+      expectedPath: "$.data.currentBuilds[0].items[0].candidatePartId",
+    },
+    {
+      name: "duplicate project id",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const projects = data.projects as Array<Record<string, unknown>>;
+        if (projects[0]) projects.push({ ...projects[0] });
+      }),
+      expectedCode: "invalid-reference",
+      expectedPath: "$.data.projects[1].id",
+    },
+    {
+      name: "invalid build item quantity",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const builds = data.currentBuilds as Array<Record<string, unknown>>;
+        const items = builds[0]?.items as
+          | Array<Record<string, unknown>>
+          | undefined;
+        if (items?.[0]) items[0].quantity = 0;
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.data.currentBuilds[0].items[0].quantity",
+    },
+    {
+      name: "forbidden nested key",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const parts = data.parts as Array<Record<string, unknown>>;
+        const product = parts[0]?.product as
+          | Record<string, unknown>
+          | undefined;
+        if (product)
+          product.notes = {
+            original: null,
+            confirmed: { image: "架空禁止値" },
+          };
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.data.parts[0].product.notes.confirmed.image",
+    },
+  ];
