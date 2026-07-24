@@ -95,6 +95,7 @@ graph LR
 src/features/backup-restore/contracts.ts           # Envelope、preview、command、error契約
 src/features/backup-restore/public.ts              # バックアップ・復元公開契約の唯一の入口
 src/features/backup-restore/registration.ts        # shellへ渡すfeature registrationと依存組立
+src/features/backup-restore/feature-contribution.ts # shell composition向けcontribution（置換・保守を含む完全port供給）
 src/features/backup-restore/exchange.ts            # 交換形式検証、形式移行、LocalDataRoot変換
 src/features/backup-restore/service.ts             # バックアップ生成と復元preflight・commit
 src/features/backup-restore/file-gateway.ts        # File読取とBlobダウンロード
@@ -109,6 +110,7 @@ tests/features/backup-restore/file-gateway.test.ts # UTF-8読取、ファイル�
 tests/features/backup-restore/state.test.ts        # 状態遷移、確認、重複抑止、再試行
 tests/features/backup-restore/view.test.ts         # 案内、preview、エラー、操作可否
 tests/features/backup-restore/integration.test.ts  # 全データ往復とRepository回帰
+e2e/backup-restore.spec.ts                         # 実拡張・実storageでのexport→改変→復元→再起動
 ```
 
 `persistence`のwrite経路・ロジックは変更せず、既存の`FoundationDataPort`（`assessReplacement`/`replaceRoot`/`runMaintenance`）をそのまま消費して交換形式をFoundationへ持ち込まない。consumerの型付けに必要な`MaintenanceFence`・`MaintenanceOwnerId`のpublic再公開だけは例外的に許容する。共有side panel runtime、`side-panel.html`、root `src/index.ts`は変更せず、application shellが`registration.ts`と`public.ts`をcompositionし、置換・保守可能なscoped portを本機能へ供給する。
@@ -279,7 +281,11 @@ interface RestoreInput {
 }
 ```
 
-`preflight`はサイズ上限、JSON解析、交換形式移行、交換検証、保存root候補への変換の順に交換層で行い、続けて`FoundationDataPort.assessReplacement(candidate)`へ渡す。保存schema検証（参照整合性含む）・容量見積り・digest付きassessment生成はFoundationが担い、非対応版・破損・容量超過はここで拒否される。`commit`は`runMaintenance({type:"acquire"})`でfenceを取得し、`replaceRoot({candidate, assessment, fence})`を呼ぶ。assessment再検証・stale検出・容量再判定・単一writeはFoundation内部で完結する。成功・失敗・取消の全経路で`runMaintenance({type:"release"|"abort"})`を呼び、解放失敗を成功として隠さない。`ownerId`は復元セッションごとに生成したUUIDを用い、ticketはUI state外へ永続化しない。
+`preflight`はサイズ上限、JSON解析、交換形式移行、交換検証、保存root候補への変換の順に交換層で行い、続けて`FoundationDataPort.assessReplacement(candidate)`へ渡す。保存schema検証（参照整合性含む）・容量見積り・digest付きassessment生成はFoundationが担い、非対応版・破損・容量超過はここで拒否される。`commit`は`runMaintenance({type:"acquire"})`でfenceを取得し、`replaceRoot({candidate, assessment, fence})`を呼ぶ。assessment再検証・stale検出・容量再判定・単一writeはFoundation内部で完結する。成功・失敗・取消の全経路で`runMaintenance({type:"release"|"abort"})`を呼ぶ。`ownerId`は復元セッションごとに生成したUUIDを用い、ticketはUI state外へ永続化しない。
+
+`acquire`と`replaceRoot`はいずれもrevisionを進めるため、commitは(1) acquire後に`assessReplacement`を再実行してから`replaceRoot`へ渡し、(2) `replaceRoot`が返した新revisionをfenceへ反映してから`release`する。これを怠ると前者は常に`stale-assessment`、後者は`stale-fence`で保守が解放されないまま残る。
+
+commitの最終結果は`replaceRoot`の成否だけを表し、`release`/`abort`自体の失敗は結果へ反映しない。復元の成否は単一writeの成否で確定しており、解放漏れはFoundation側のmaintenance leaseが自然失効することで回復するため、利用者へ再試行不能な失敗として提示しない。
 
 ### Persistence Layer
 
