@@ -12,7 +12,7 @@ import {
 const validManifest = {
   manifest_version: 3,
   name: "PC Build Planner",
-  version: "1.0.0",
+  version: "0.1.0",
   minimum_chrome_version: "116",
   permissions: ["storage", "activeTab", "scripting", "sidePanel"],
   action: {},

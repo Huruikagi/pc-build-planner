@@ -8,6 +8,12 @@
 
 候補変更とCurrentBuild参照修復は成功後イベントによる別writeへ分離せず、local data foundationが所有する単一write authority内の原子的root mutationとして扱う。共通 `Result<T, E>` もfoundationをcanonical ownerとし、shellと各featureは再定義せず利用する。
 
+## バージョンとマイルストーン
+
+- 現行MVPのゴールを GitHub マイルストーン `v0.1.0`（https://github.com/Huruikagi/pc-build-planner/milestone/1）とし、拡張のバージョンも `0.1.0` とする。
+- v0.1.0 の要求仕様は `docs/requirements-v0.1.0.md`。版ごとの要求は `docs/requirements-vX.Y.Z.md` の命名で並べる。
+- v0.1.0 以降の機能改善（ブックマーク系・取り込み高度化など）は GitHub Issue で管理し、v0.2.0 以降のマイルストーンへ割り当てる。
+
 ## Approach Decision
 
 - **Chosen**: 新規 `application-shell` specと既存spec更新の混合分解。共有UI/runtime統合面、typed feature activation、service worker compositionをapplication shellへ、共通 `Result<T, E>`、参照整合性修復を含む原子的root mutation、置換、全書き込みを覆う排他契約をlocal data foundationへ集約する。

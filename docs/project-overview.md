@@ -1,7 +1,7 @@
 # pc-build-planner プロジェクト概要・要件
 
 > [!NOTE]
-> この文書は長期的なプロダクト像を示す。現在のMVPは、サーバーやWebアプリを持たないローカルファーストのChrome拡張として開発する。具体的なMVP要求と未決事項は [`requirements.md`](./requirements.md) を参照する。
+> この文書は長期的なプロダクト像を示す。現在のMVPは、サーバーやWebアプリを持たないローカルファーストのChrome拡張として開発する。具体的なMVP要求と未決事項は [`requirements-v0.1.0.md`](./requirements-v0.1.0.md) を参照する。
 
 ## 1. プロジェクトの目的
 

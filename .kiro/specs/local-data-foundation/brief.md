@@ -35,7 +35,7 @@ Chrome 116以降のManifest V3拡張として読み込め、プロジェクト�
 
 ## Upstream / Downstream
 
-- **Upstream**: `docs/requirements.md`、Chrome Manifest V3とStorage APIの制約。
+- **Upstream**: `docs/requirements-v0.1.0.md`、Chrome Manifest V3とStorage APIの制約。
 - **Downstream**: project-candidate-management、product-page-capture、current-build-management、compatibility-checking、backup-restore。
 
 ## Existing Spec Touchpoints

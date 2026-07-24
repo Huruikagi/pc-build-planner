@@ -18,7 +18,7 @@
 
 ### 判定範囲と集約
 - **Context**: 4区分を、5種類の決定的な二項規格ルールと複数選択へ一貫して適用する必要がある。
-- **Sources Consulted**: `docs/requirements.md`、`docs/project-overview.md`、本specのbrief。
+- **Sources Consulted**: `docs/requirements-v0.1.0.md`、`docs/project-overview.md`、本specのbrief。
 - **Findings**: MVP規則は等値または集合包含で表現できる。欠損は非互換でない。数量は規格比較数を増やさず、異なる選択候補だけを展開すればよい。
 - **Implications**: 個別規則は compatible / incompatible / unknown を返し、集約器が「ありと不明の混在」を caution として表現する。
 
@@ -56,7 +56,7 @@
 - `.kiro/specs/local-data-foundation/design.md`
 - `.kiro/specs/project-candidate-management/design.md`
 - `.kiro/specs/current-build-management/design.md`
-- `docs/requirements.md`
+- `docs/requirements-v0.1.0.md`
 - `docs/project-overview.md`
 
 ### 2026-07-19 React UI方針更新
