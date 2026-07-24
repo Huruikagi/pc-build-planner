@@ -20,6 +20,7 @@ import {
   type ShellPresentationAdapter,
 } from "../../src/application-shell/shell-presentation.js";
 import type {
+  FoundationDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
@@ -32,6 +33,24 @@ const stubDataPort: FoundationScopedDataPort = {
     return { ok: true, value: {} } as never;
   },
   async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+};
+
+const stubFullDataPort: FoundationDataPort = {
+  async query() {
+    return { ok: true, value: {} } as never;
+  },
+  async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+  async assessReplacement() {
+    return { ok: true, value: {} } as never;
+  },
+  async replaceRoot() {
+    return { ok: true, value: {} } as never;
+  },
+  async runMaintenance() {
     return { ok: true, value: {} } as never;
   },
 };
@@ -590,6 +609,7 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
         },
         workerRegistrations: [],
         dataPort: stubDataPort,
+        fullDataPort: stubFullDataPort,
         dispose() {
           foundationStops += 1;
           events.push("foundation:stop");
@@ -764,6 +784,7 @@ test("同じproduction presentation fixtureは空catalogを安全なempty state�
         maintenanceSource: maintenance.maintenanceSource,
         workerRegistrations: [],
         dataPort: stubDataPort,
+        fullDataPort: stubFullDataPort,
         dispose() {
           foundationStops += 1;
         },

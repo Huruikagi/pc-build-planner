@@ -102,7 +102,7 @@
   - _Boundary: BackupRestoreFeatureRegistration, ReactRootAdapter_
 
 - [ ] 5. side panel統合と全体回帰を完成する
-- [ ] 5.1 バックアップ・復元機能を既存管理画面とFoundation portへ統合する
+- [x] 5.1 バックアップ・復元機能を既存管理画面とFoundation portへ統合する
   - application shellがfeatureの`registration`と`public`をcompositionし、置換・保守capabilityを含むscoped portを本機能へ供給する（既定の最小権限portは置換・保守を外すため専用供給とする）
   - 共有runtime入口、HTML host、root barrelをfeature側から編集せず、RestoreServiceの保守acquire/renew/release/abortと置換をFoundationへ接続する
   - shellのread-only maintenance projectionとMutationGateが復元中の全feature mutationを抑止し、read-only navigationを維持したまま成功・失敗・取消後に現行generation終了でmutationを復帰する
@@ -131,3 +131,4 @@
 - 4.2: `BackupRestoreStateValue`はphaseに加え、succeeded/failedへ`operation: "backup"|"restore"`を持たせた（design.mdは7 phase名だけを列挙していたが、backup作成とrestore復元を同じstate machineで扱うため、どちらの操作が終端したかを型で判別可能にした）。cancel()はawaiting-confirmation/failed/succeededからidleへ戻すが、busy phase（exporting/validating/restoring）中は無視する。
 - 4.3: `styles.css`は本taskで一度作成したが、`tests/tooling/build-smoke.test.ts`が「`src/features/<feature>/styles.css`は`application-shell/side-panel.css`へ`@import`されている前提」を検査するため、shell側の`@import`追加（4.4のregistration/mount、または5.1のside panel統合の責務）と対にしないと回帰する。View単体のtaskではCSSファイルを作らず、実際にfeatureをmount・登録するtaskで追加する。React testでは非同期action（`state.exportBackup()`等をfire-and-forgetで呼ぶonClickハンドラ）の検証に`act(async () => element.click())`を使い、mid-flightの状態（busy中のdisabled確認等）を見たい場合は`act(() => { pending = state.xxx(); })`のように同期actでstate呼び出し自体をラップしてPromiseを外へ保持する。
 - 4.4: `FeatureMountContext`に`data`は含まれない。`FoundationDataPort`（または`FoundationScopedDataPort`）はregistration factory自身のconstructor依存として渡し、`mount()`内のclosureで使う（candidate-management/current-buildと同じ既存パターン）。styles.cssをまだ`side-panel.css`へ@importしていないため（4.3のnote参照）、実際のside panel mount配線・stylesheet追加は5.1で行う。backup-restoreは`captureState`/`activation`を一切公開せず、画面再生成のたびに新しいidle状態のBackupRestoreStateから始まる（Requirement 6.6）。
+- 5.1: `FeatureCompositionContext`/`ProductionFoundationHandle`へ`fullDataPort`を追加した（既定の`data`は引き続きscoped port）。real Foundationを使う統合testで初めて判明した実バグ2件を修正: (1) `RestoreService.commit`はacquire自体がrevisionを進めるため、preflight時のassessmentをそのままreplaceRootへ渡すと必ずstale-assessmentになる — acquire後にassessReplacementを再実行してから渡すよう修正。(2) replaceRoot自体もrevisionを進めるため、releaseにacquire時のfenceをそのまま渡すとstale-fenceで黙って失敗し保守が解放されないまま残る — replaceRootが返す新revisionをfenceへ反映してからreleaseするよう修正。単体testのfake portだけでは検出できない類のバグで、実Foundationを使う結合testの価値を示す例。

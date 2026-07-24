@@ -113,7 +113,11 @@ const harness = (): Harness => {
     },
     createContribution() {
       return createProductCaptureContribution(
-        { data: {} as never, navigator: {} as never },
+        {
+          data: {} as never,
+          fullDataPort: {} as never,
+          navigator: {} as never,
+        },
         {
           runtime,
           capture,

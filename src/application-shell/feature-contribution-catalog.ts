@@ -1,4 +1,7 @@
-import type { FoundationScopedDataPort } from "../persistence/public.js";
+import type {
+  FoundationDataPort,
+  FoundationScopedDataPort,
+} from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
@@ -22,6 +25,8 @@ export interface FeatureContribution<
  */
 export interface FeatureCompositionContext {
   readonly data: FoundationScopedDataPort;
+  /** 置換・保守capabilityを含む完全port。backup-restore専用の依存であり、既定の絞り込みportとは別に供給する。 */
+  readonly fullDataPort: FoundationDataPort;
   readonly navigator: ShellNavigator;
 }
 

@@ -141,6 +141,7 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
 
   const contributions = createSidePanelFeatureContributions({
     data,
+    fullDataPort: data,
     navigator: {
       async activate() {
         return { ok: true as const, value: undefined };
@@ -317,6 +318,7 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
 
   const contributions = createSidePanelFeatureContributions({
     data,
+    fullDataPort: data,
     navigator: {
       async activate() {
         return { ok: true as const, value: undefined };

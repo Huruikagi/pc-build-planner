@@ -111,6 +111,7 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
 
   const contributions = createSidePanelFeatureContributions({
     data,
+    fullDataPort: data,
     navigator: {
       async activate() {
         return { ok: true as const, value: undefined };

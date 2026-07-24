@@ -1,0 +1,226 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { act } from "react";
+import { createSidePanelFeatureContributions } from "../../../src/application-shell/side-panel-contributions.js";
+import type {
+  CandidatePartId,
+  ProjectId,
+  RequestId,
+  Revision,
+  UtcTimestamp,
+  Uuid,
+} from "../../../src/domain/public.js";
+import { schemaValidator } from "../../../src/domain/public.js";
+import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
+import {
+  createInMemoryStorageAdapter,
+  createInMemoryStorageState,
+} from "../../../src/persistence/in-memory-storage-adapter.js";
+import { maintenancePolicy } from "../../../src/persistence/maintenance.js";
+import { createMigrationRegistry } from "../../../src/persistence/migration-registry.js";
+import { createMutationPipeline } from "../../../src/persistence/mutation-pipeline.js";
+import { referenceRepairPolicy } from "../../../src/persistence/reference-repair-policy.js";
+import { createReplacementCoordinator } from "../../../src/persistence/replacement.js";
+import { createLocalDataRepository } from "../../../src/persistence/repository.js";
+import { createRootTransactionRunner } from "../../../src/persistence/root-transaction-runner.js";
+import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
+import { createInitialRoot } from "../../../src/persistence/schema.js";
+import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+
+const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
+const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
+const candidateId =
+  "30000000-0000-4000-8000-000000000091" as Uuid as CandidatePartId;
+let requestSequence = 0;
+
+const nextRequest = (): RequestId =>
+  `20000000-0000-4000-8000-${String(++requestSequence).padStart(12, "0")}` as Uuid as RequestId;
+
+const createFoundationPort = () => {
+  const storageState = createInMemoryStorageState({ quotaBytes: 10_000_000 });
+  const storage = createInMemoryStorageAdapter(storageState);
+  const migrations = createMigrationRegistry(1, [], schemaValidator);
+  const runner = createRootTransactionRunner({
+    storage,
+    lock: createInMemoryRootWriteLock(),
+    migrations,
+    validator: schemaValidator,
+    maintenance: maintenancePolicy,
+    replacement: createReplacementCoordinator(migrations, schemaValidator),
+    now: () => timestamp,
+    initialRoot: createInitialRoot,
+  });
+  return createWriteAuthority({
+    repository: createLocalDataRepository(storage, migrations),
+    runner,
+    pipeline: createMutationPipeline(schemaValidator, referenceRepairPolicy),
+  });
+};
+
+const policy = { isAllowed: () => true, subscribe: () => () => {} };
+
+const waitUntil = async (
+  predicate: () => boolean,
+  attempts = 50,
+): Promise<void> => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("condition did not become true in time");
+};
+
+const fakeFileList = (file: File): FileList => {
+  const list: Record<PropertyKey, unknown> = {
+    0: file,
+    length: 1,
+    item: (index: number) => (index === 0 ? file : null),
+    [Symbol.iterator]: function* () {
+      yield file;
+    },
+  };
+  return list as unknown as FileList;
+};
+
+test("実foundationを共有するside panel構成でexport・変更・復元後に他featureの照会が復元後データを返す", async () => {
+  const data = createFoundationPort();
+
+  const seedService = createCandidateManagementService({
+    data,
+    now: () => timestamp,
+    createProjectId: () => projectId,
+    createCandidateId: () => candidateId,
+  });
+  const created = await seedService.createProject(
+    { name: "架空バックアップ統合構成" },
+    { requestId: nextRequest(), expectedRevision: 0 as Revision },
+  );
+  assert.equal(created.ok, true);
+  const candidateCreated = await seedService.createCandidate(
+    {
+      projectId,
+      category: "memory",
+      product: {
+        name: { original: "架空メモリ統合候補", confirmed: "SYN-MEMORY" },
+      },
+      normalizedAttributes: {
+        category: "memory",
+        memoryStandard: { original: "架空規格", confirmed: "SYN-DDR" },
+      },
+    },
+    { requestId: nextRequest(), expectedRevision: 1 as Revision },
+  );
+  assert.equal(candidateCreated.ok, true);
+
+  const contributions = createSidePanelFeatureContributions({
+    data,
+    fullDataPort: data,
+    navigator: {
+      async activate() {
+        return { ok: true as const, value: undefined };
+      },
+    },
+  });
+  const [candidateManagement, , , , backupRestore] = contributions;
+
+  const originalCreateObjectURL = URL.createObjectURL.bind(URL);
+  const originalRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+  const originalClick = HTMLAnchorElement.prototype.click;
+  const blobs: Blob[] = [];
+  URL.createObjectURL = ((blob: Blob) => {
+    blobs.push(blob);
+    return originalCreateObjectURL(blob);
+  }) as typeof URL.createObjectURL;
+  URL.revokeObjectURL = originalRevokeObjectURL;
+  HTMLAnchorElement.prototype.click = function click() {};
+
+  const container = document.createElement("div");
+  let handle:
+    | Awaited<ReturnType<typeof backupRestore.registration.mount>>
+    | undefined;
+  try {
+    await act(async () => {
+      handle = await backupRestore.registration.mount({
+        container,
+        operationPolicy: policy,
+        reportError: () => {},
+      });
+    });
+
+    const exportButton = container.querySelector(
+      'button[data-action="export"]',
+    ) as HTMLButtonElement;
+    assert.ok(exportButton);
+    await act(async () => {
+      exportButton.click();
+      await waitUntil(() => blobs.length === 1);
+    });
+    const exportedJson = await blobs[0]?.text();
+    assert.ok(exportedJson);
+    assert.match(exportedJson ?? "", /SYN-MEMORY/);
+
+    // Simulate the user changing local data after taking the backup.
+    const renamed = await seedService.renameProject(
+      { id: projectId, name: "架空バックアップ統合構成（変更後）" },
+      { requestId: nextRequest(), expectedRevision: 2 as Revision },
+    );
+    assert.equal(renamed.ok, true);
+
+    const restoreFile = new File([exportedJson ?? ""], "restore.json", {
+      type: "application/json",
+    });
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    Object.defineProperty(input, "files", {
+      value: fakeFileList(restoreFile),
+      configurable: true,
+    });
+    await act(async () => {
+      input.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await waitUntil(
+        () => container.querySelector('button[data-action="confirm"]') !== null,
+      );
+    });
+    // Preview shows counts only (Requirement 3.6/6.5), never entity names.
+    assert.match(container.textContent ?? "", /プロジェクト数1/);
+    assert.doesNotMatch(
+      container.textContent ?? "",
+      /架空バックアップ統合構成/,
+    );
+
+    const confirmButton = container.querySelector(
+      'button[data-action="confirm"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      confirmButton.click();
+      await waitUntil(
+        () =>
+          container.querySelector('[role="alert"]') === null &&
+          /完了|成功/.test(container.textContent ?? ""),
+      );
+    });
+
+    const projects =
+      await candidateManagement.registration.publicApi.query.listProjects();
+    assert.equal(projects.ok, true);
+    if (projects.ok)
+      assert.deepEqual(
+        projects.value.map((project) => project.name),
+        ["架空バックアップ統合構成"],
+      );
+
+    const maintenanceAfter = await data.query(
+      (root) => root.maintenance.active,
+    );
+    assert.equal(maintenanceAfter.ok, true);
+    if (maintenanceAfter.ok) assert.equal(maintenanceAfter.value, false);
+  } finally {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    HTMLAnchorElement.prototype.click = originalClick;
+    const mounted = handle;
+    if (mounted !== undefined) await act(async () => mounted.unmount());
+  }
+});

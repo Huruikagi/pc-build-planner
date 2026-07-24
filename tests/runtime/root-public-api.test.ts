@@ -3,7 +3,10 @@ import test from "node:test";
 
 import type { FeatureCompositionContext } from "../../src/application-shell/public.js";
 import { composeApplicationApi } from "../../src/index.js";
-import type { FoundationScopedDataPort } from "../../src/persistence/public.js";
+import type {
+  FoundationDataPort,
+  FoundationScopedDataPort,
+} from "../../src/persistence/public.js";
 
 const context = (): FeatureCompositionContext => ({
   data: {
@@ -14,6 +17,23 @@ const context = (): FeatureCompositionContext => ({
       return { ok: true as const, value: {} as never };
     },
   } satisfies FoundationScopedDataPort,
+  fullDataPort: {
+    async query() {
+      return { ok: true as const, value: 0 as never };
+    },
+    async mutate() {
+      return { ok: true as const, value: {} as never };
+    },
+    async assessReplacement() {
+      return { ok: true as const, value: {} as never };
+    },
+    async replaceRoot() {
+      return { ok: true as const, value: {} as never };
+    },
+    async runMaintenance() {
+      return { ok: true as const, value: {} as never };
+    },
+  } satisfies FoundationDataPort,
   navigator: {
     async activate() {
       return { ok: true as const, value: undefined };
@@ -33,6 +53,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
     "currentBuild",
     "productCapture",
     "compatibility",
+    "backupRestore",
   ]);
 });
 

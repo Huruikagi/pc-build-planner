@@ -57,6 +57,23 @@ test("side panel contributionは合成contextから実featureを組み立てる"
         return { ok: true, value: {} } as never;
       },
     },
+    fullDataPort: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+      async assessReplacement() {
+        return { ok: true, value: {} } as never;
+      },
+      async replaceRoot() {
+        return { ok: true, value: {} } as never;
+      },
+      async runMaintenance() {
+        return { ok: true, value: {} } as never;
+      },
+    },
     navigator: {
       async activate() {
         return { ok: true, value: undefined };
@@ -66,7 +83,13 @@ test("side panel contributionは合成contextから実featureを組み立てる"
 
   assert.deepEqual(
     contributions.map(({ key }) => key),
-    ["candidateManagement", "currentBuild", "productCapture", "compatibility"],
+    [
+      "candidateManagement",
+      "currentBuild",
+      "productCapture",
+      "compatibility",
+      "backupRestore",
+    ],
   );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");

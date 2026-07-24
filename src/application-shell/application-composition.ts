@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "../domain/public.js";
 import {
+  type FoundationDataPort,
   type FoundationScopedDataPort,
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
@@ -44,6 +45,8 @@ export interface ProductionFoundationHandle {
   readonly workerRegistrations: readonly ApplicationWorkerRegistration[];
   /** Scoped query and atomic root mutation port handed to feature composition. */
   readonly dataPort: FoundationScopedDataPort;
+  /** 置換・保守capabilityを含む完全port。backup-restore専用の供給に使う。 */
+  readonly fullDataPort: FoundationDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -87,6 +90,7 @@ export function createProductionSidePanelComposition(
         maintenanceSource: initialized.value.maintenanceSource,
         workerRegistrations: [],
         dataPort: initialized.value.dataPort,
+        fullDataPort: initialized.value.fullDataPort,
         dispose: () => initialized.value.dispose(),
       });
     },
@@ -144,6 +148,20 @@ function validateFoundationHandle(
       dataPort === null ||
       typeof (dataPort as Record<string, unknown>).query !== "function" ||
       typeof (dataPort as Record<string, unknown>).mutate !== "function"
+    )
+      return undefined;
+    const fullDataPort = candidate.fullDataPort;
+    if (
+      typeof fullDataPort !== "object" ||
+      fullDataPort === null ||
+      typeof (fullDataPort as Record<string, unknown>).query !== "function" ||
+      typeof (fullDataPort as Record<string, unknown>).mutate !== "function" ||
+      typeof (fullDataPort as Record<string, unknown>).assessReplacement !==
+        "function" ||
+      typeof (fullDataPort as Record<string, unknown>).replaceRoot !==
+        "function" ||
+      typeof (fullDataPort as Record<string, unknown>).runMaintenance !==
+        "function"
     )
       return undefined;
     return value as ProductionFoundationHandle;
@@ -375,6 +393,7 @@ export function createProductionApplicationComposition<
     try {
       const compositionContext: FeatureCompositionContext = {
         data: validatedFoundation.dataPort,
+        fullDataPort: validatedFoundation.fullDataPort,
         navigator: shellNavigator,
       };
       let contributions: ApplicationRuntimeContributions<TFeatures>;

@@ -98,6 +98,7 @@ test("buildがroot公開bundleと共有service workerを生成する", async () 
     "currentBuild",
     "productCapture",
     "compatibility",
+    "backupRestore",
   ]);
   assert.equal(Object.getPrototypeOf(composed.value), null);
   assert.equal(Object.isFrozen(composed.value), true);

@@ -26,7 +26,10 @@ import type {
   CurrentBuildQuery,
   CurrentBuildSnapshot,
 } from "../../../src/features/current-build/public.js";
-import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
+import type {
+  FoundationDataPort,
+  FoundationScopedDataPort,
+} from "../../../src/persistence/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const buildId =
@@ -105,6 +108,23 @@ const compositionContext = {
       throw new Error("not used by feature-contribution tests");
     },
   } as unknown as FoundationScopedDataPort,
+  fullDataPort: {
+    async query() {
+      return { ok: true, value: undefined } as Result<never, FoundationError>;
+    },
+    async mutate() {
+      throw new Error("not used by feature-contribution tests");
+    },
+    async assessReplacement() {
+      throw new Error("not used by feature-contribution tests");
+    },
+    async replaceRoot() {
+      throw new Error("not used by feature-contribution tests");
+    },
+    async runMaintenance() {
+      throw new Error("not used by feature-contribution tests");
+    },
+  } as unknown as FoundationDataPort,
   navigator: {
     async activate() {
       throw new Error("not used by feature-contribution tests");

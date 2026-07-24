@@ -1,4 +1,8 @@
 import {
+  type BackupRestoreContribution,
+  createBackupRestoreContribution,
+} from "../features/backup-restore/feature-contribution.js";
+import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
 } from "../features/candidate-management/feature-contribution.js";
@@ -29,6 +33,7 @@ export type SidePanelFeatureContributions = readonly [
   CurrentBuildContribution,
   ProductCaptureContribution,
   CompatibilityContribution,
+  BackupRestoreContribution,
 ];
 
 /** Real `chrome.tabs`/`chrome.scripting` handles, supplied by the runtime entrypoint. */
@@ -89,5 +94,12 @@ export const createSidePanelFeatureContributions = (
       return projects.ok ? (projects.value[0]?.id ?? null) : null;
     },
   });
-  return [candidateManagement, currentBuild, productCapture, compatibility];
+  const backupRestore = createBackupRestoreContribution(context);
+  return [
+    candidateManagement,
+    currentBuild,
+    productCapture,
+    compatibility,
+    backupRestore,
+  ];
 };

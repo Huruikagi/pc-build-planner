@@ -13,6 +13,7 @@ import type {
 } from "../../src/application-shell/contracts.js";
 import type { ShellPresentationAdapter } from "../../src/application-shell/shell-presentation.js";
 import type {
+  FoundationDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
@@ -24,6 +25,24 @@ const stubDataPort: FoundationScopedDataPort = {
     return { ok: true, value: {} } as never;
   },
   async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+};
+
+const stubFullDataPort: FoundationDataPort = {
+  async query() {
+    return { ok: true, value: {} } as never;
+  },
+  async mutate() {
+    return { ok: true, value: {} } as never;
+  },
+  async assessReplacement() {
+    return { ok: true, value: {} } as never;
+  },
+  async replaceRoot() {
+    return { ok: true, value: {} } as never;
+  },
+  async runMaintenance() {
     return { ok: true, value: {} } as never;
   },
 };
@@ -113,6 +132,7 @@ function harness(options?: {
         maintenanceSource: source,
         workerRegistrations: [] as const,
         dataPort: stubDataPort,
+        fullDataPort: stubFullDataPort,
         dispose: () => {
           events.push("foundation:stop");
         },
@@ -434,6 +454,7 @@ test("cleanup失敗中は新規startを拒否し、stop再試行成功後だけr
           maintenanceSource: source,
           workerRegistrations: [] as const,
           dataPort: stubDataPort,
+          fullDataPort: stubFullDataPort,
           dispose() {
             disposeAttempts += 1;
             if (disposeAttempts === 1) throw new Error("fixture cleanup");

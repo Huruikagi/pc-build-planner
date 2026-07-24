@@ -168,9 +168,20 @@ export const createRestoreService = (
     const fence = acquired.value.fence;
     if (fence === undefined) return err({ code: "storage-unavailable" });
 
+    // acquire自体もrevisionを進めるため、preflight時のassessmentは必ず古い。
+    // replaceRootへ渡す前にacquire後の状態で再assessし、真の並行更新だけを
+    // stale-assessmentとして検出できるようにする。
+    const reassessed = await dependencies.data.assessReplacement(
+      ticket.candidate,
+    );
+    if (!reassessed.ok) {
+      await dependencies.data.runMaintenance({ type: "abort", fence });
+      return err(mapFoundationError(reassessed.error));
+    }
+
     const replaced = await dependencies.data.replaceRoot({
       candidate: ticket.candidate,
-      assessment: ticket.assessment,
+      assessment: reassessed.value,
       fence,
     });
 
@@ -179,7 +190,12 @@ export const createRestoreService = (
       return err(mapFoundationError(replaced.error));
     }
 
-    await dependencies.data.runMaintenance({ type: "release", fence });
+    // replaceRoot自体もrevisionを進めるため、releaseにはその新しいrevisionを
+    // 反映したfenceを渡す（generation・ownerIdは同一の保守sessionのまま）。
+    await dependencies.data.runMaintenance({
+      type: "release",
+      fence: { ...fence, revision: replaced.value.revision },
+    });
     return ok({
       projectCount: ticket.preview.projectCount,
       partCount: ticket.preview.partCount,

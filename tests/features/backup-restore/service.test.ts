@@ -328,13 +328,22 @@ const FAKE_TICKET = {
 
 const FAKE_FENCE = { generation: 1, ownerId: "owner", revision: 4 };
 
+/** acquire自体もrevisionを進めるため、preflight時のticket.assessmentはacquire後には必ず古くなる。 */
+const FRESH_ASSESSMENT = {
+  ...FAKE_ASSESSMENT,
+  candidateDigest: "fresh-digest",
+};
+
 interface RecordedCall {
-  readonly method: "runMaintenance" | "replaceRoot";
+  readonly method: "runMaintenance" | "assessReplacement" | "replaceRoot";
   readonly args: unknown;
 }
 
 const foundationDataForCommit = (options: {
   readonly acquire: Awaited<ReturnType<FoundationDataPort["runMaintenance"]>>;
+  readonly assessReplacement?: Awaited<
+    ReturnType<FoundationDataPort["assessReplacement"]>
+  >;
   readonly replaceRoot?: Awaited<ReturnType<FoundationDataPort["replaceRoot"]>>;
   readonly releaseOrAbort?: Awaited<
     ReturnType<FoundationDataPort["runMaintenance"]>
@@ -344,11 +353,16 @@ const foundationDataForCommit = (options: {
   const data: FoundationDataPort = {
     query: notExpected("query"),
     mutate: notExpected("mutate"),
-    assessReplacement: notExpected("assessReplacement"),
+    assessReplacement: async (candidate) => {
+      calls.push({ method: "assessReplacement", args: candidate });
+      if (options.assessReplacement === undefined)
+        throw new Error("assessReplacement must not be called before acquire");
+      return options.assessReplacement;
+    },
     replaceRoot: async (command) => {
       calls.push({ method: "replaceRoot", args: command });
       if (options.replaceRoot === undefined)
-        throw new Error("replaceRoot must not be called before acquire");
+        throw new Error("replaceRoot must not be called before re-assessment");
       return options.replaceRoot;
     },
     runMaintenance: async (command) => {
@@ -361,9 +375,10 @@ const foundationDataForCommit = (options: {
   return { data, calls };
 };
 
-test("commit成功時はacquire・replaceRoot・releaseの順で呼びpreview件数のsummaryを返す", async () => {
+test("commit成功時はacquire・再assess・replaceRoot・releaseの順で呼びpreview件数のsummaryを返す", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
     replaceRoot: {
       ok: true,
       value: { revision: 5, beforeBytes: 1, afterBytes: 2 } as never,
@@ -382,21 +397,33 @@ test("commit成功時はacquire・replaceRoot・releaseの順で呼びpreview件
     });
   assert.deepEqual(
     calls.map((call) => call.method),
-    ["runMaintenance", "replaceRoot", "runMaintenance"],
+    ["runMaintenance", "assessReplacement", "replaceRoot", "runMaintenance"],
   );
   const acquireCall = calls[0]?.args as { type: string; leaseMs: number };
   assert.equal(acquireCall.type, "acquire");
   assert.equal(typeof acquireCall.leaseMs, "number");
   assert.ok(acquireCall.leaseMs > 0);
-  const releaseCall = calls[2]?.args as { type: string; fence: unknown };
+  assert.deepEqual(calls[1]?.args, FAKE_TICKET.candidate);
+  const releaseCall = calls[3]?.args as { type: string; fence: unknown };
   assert.equal(releaseCall.type, "release");
-  assert.deepEqual(releaseCall.fence, FAKE_FENCE);
-  const replaceCall = calls[1]?.args as { fence: unknown; candidate: unknown };
+  // replaceRoot itself advances the revision, so release must carry the
+  // fence forward with that new revision, not the acquire-time one.
+  assert.deepEqual(releaseCall.fence, { ...FAKE_FENCE, revision: 5 });
+  const replaceCall = calls[2]?.args as {
+    fence: unknown;
+    candidate: unknown;
+    assessment: unknown;
+  };
   assert.deepEqual(replaceCall.fence, FAKE_FENCE);
   assert.deepEqual(replaceCall.candidate, FAKE_TICKET.candidate);
+  // The stale preflight assessment must not reach replaceRoot; only the fresh
+  // post-acquire re-assessment does (acquire itself advances the revision,
+  // which would otherwise make the original ticket.assessment stale).
+  assert.deepEqual(replaceCall.assessment, FRESH_ASSESSMENT);
+  assert.notDeepEqual(replaceCall.assessment, FAKE_TICKET.assessment);
 });
 
-test("acquireが保守競合で失敗した場合はreplaceRootを呼ばず値を含まず拒否される", async () => {
+test("acquireが保守競合で失敗した場合は再assessを呼ばず値を含まず拒否される", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: false, error: { code: "maintenance-active" } },
   });
@@ -413,9 +440,30 @@ test("acquireが保守競合で失敗した場合はreplaceRootを呼ばず値�
   );
 });
 
+test("acquire後の再assessが失敗した場合はabortして既存データを保持する", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: false, error: { code: "quota-exceeded" } },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.deepEqual(result.error, { code: "quota-exceeded" });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ["runMaintenance", "assessReplacement", "runMaintenance"],
+  );
+  const abortCall = calls[2]?.args as { type: string; fence: unknown };
+  assert.equal(abortCall.type, "abort");
+  assert.deepEqual(abortCall.fence, FAKE_FENCE);
+});
+
 test("replaceRootがstale-assessmentで失敗した場合はabortして既存データを保持する", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
     replaceRoot: { ok: false, error: { code: "stale-assessment" } },
   });
   const service = createRestoreService({ data });
@@ -424,7 +472,7 @@ test("replaceRootがstale-assessmentで失敗した場合はabortして既存デ
 
   assert.equal(result.ok, false);
   if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
-  const abortCall = calls[2]?.args as { type: string; fence: unknown };
+  const abortCall = calls[3]?.args as { type: string; fence: unknown };
   assert.equal(abortCall.type, "abort");
   assert.deepEqual(abortCall.fence, FAKE_FENCE);
 });
@@ -432,6 +480,7 @@ test("replaceRootがstale-assessmentで失敗した場合はabortして既存デ
 test("replaceRootが容量超過で失敗した場合もabortして既存データを保持する", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
     replaceRoot: { ok: false, error: { code: "quota-exceeded" } },
   });
   const service = createRestoreService({ data });
@@ -440,13 +489,14 @@ test("replaceRootが容量超過で失敗した場合もabortして既存デー�
 
   assert.equal(result.ok, false);
   if (!result.ok) assert.deepEqual(result.error, { code: "quota-exceeded" });
-  const abortCall = calls[2]?.args as { type: string };
+  const abortCall = calls[3]?.args as { type: string };
   assert.equal(abortCall.type, "abort");
 });
 
 test("replaceRootがowner外・期限切れ相当のstale-fenceで失敗した場合もabortして拒否される", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
     replaceRoot: { ok: false, error: { code: "stale-fence" } },
   });
   const service = createRestoreService({ data });
@@ -455,13 +505,14 @@ test("replaceRootがowner外・期限切れ相当のstale-fenceで失敗した�
 
   assert.equal(result.ok, false);
   if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
-  const abortCall = calls[2]?.args as { type: string };
+  const abortCall = calls[3]?.args as { type: string };
   assert.equal(abortCall.type, "abort");
 });
 
 test("復元セッションごとにUUID owner識別子でacquireする", async () => {
   const { data, calls } = foundationDataForCommit({
     acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
     replaceRoot: {
       ok: true,
       value: { revision: 5, beforeBytes: 1, afterBytes: 2 } as never,

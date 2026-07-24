@@ -1,0 +1,68 @@
+.backup-restore {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.backup-restore-notice {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, Canvas);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: color-mix(in srgb, CanvasText 80%, Canvas);
+}
+
+.backup-restore-export,
+.backup-restore-import {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.backup-restore button {
+  min-height: 2rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, Canvas);
+  border-radius: 0.375rem;
+  background: Canvas;
+  color: inherit;
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  justify-self: start;
+}
+
+.backup-restore button:hover:not(:disabled) {
+  background: color-mix(in srgb, CanvasText 10%, Canvas);
+}
+
+.backup-restore button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.backup-restore input[type="file"]:disabled {
+  opacity: 0.5;
+}
+
+.backup-restore [role="alert"] {
+  color: color-mix(in srgb, Mark 70%, CanvasText);
+}
+
+.backup-restore [role="alertdialog"] {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, Canvas);
+  border-radius: 0.375rem;
+}
+
+.backup-restore [role="alertdialog"] dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+}
