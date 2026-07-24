@@ -68,7 +68,7 @@
   - _Boundary: RestoreService commit, FoundationDataPort integration_
 
 - [ ] 4. extension pageのファイルI/Oと画面状態を実装する
-- [ ] 4.1 (P) ブラウザ標準APIによるファイルgatewayを実装する
+- [x] 4.1 (P) ブラウザ標準APIによるファイルgatewayを実装する
   - 単一JSON Fileのサイズを本文読取前に確認し、textと実バイト数を返す
   - artifactをBlobとしてダウンロードし、操作後にobject URLを破棄する
   - 読取不能・サイズ超過が分類され、生成ファイル名とJSON本文が変更されずダウンロードへ渡る

@@ -22,7 +22,11 @@ import type {
   RestoreSummary,
   RestoreTicket,
 } from "./contracts.js";
-import { BACKUP_PRODUCT_ID, mapFoundationError } from "./contracts.js";
+import {
+  BACKUP_PRODUCT_ID,
+  MAX_RESTORE_INPUT_BYTES,
+  mapFoundationError,
+} from "./contracts.js";
 import { exchangeMapper, exchangeMigration } from "./exchange.js";
 
 export interface BackupService {
@@ -99,9 +103,6 @@ export interface RestoreService {
 export interface RestoreServiceDependencies {
   readonly data: FoundationDataPort;
 }
-
-/** 保存上限10MBを基準に、JSON解析前に読取前サイズだけで拒否する実装定数。 */
-const MAX_RESTORE_INPUT_BYTES = 10 * 1024 * 1024;
 
 /** ExchangeMigration・ExchangeMapperの失敗codeはRestoreErrorCodeの部分集合であり、そのまま写像できる。 */
 const exchangeFailureToRestoreError = (error: {

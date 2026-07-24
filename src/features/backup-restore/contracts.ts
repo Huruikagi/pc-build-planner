@@ -16,6 +16,9 @@ import type { ReplacementAssessment } from "../../persistence/public.js";
 export const BACKUP_PRODUCT_ID = "pc-build-planner";
 export const CURRENT_BACKUP_FORMAT_VERSION = 1;
 
+/** 保存上限10MBを基準に、ファイル読取前・JSON解析前の両方でこの定数を用いて拒否する。 */
+export const MAX_RESTORE_INPUT_BYTES = 10 * 1024 * 1024;
+
 /** 保存schemaVersionとは独立した交換形式の版。永続モデルの変更から公開契約を分離する。 */
 export interface CurrentBackupEnvelope {
   readonly product: typeof BACKUP_PRODUCT_ID;
