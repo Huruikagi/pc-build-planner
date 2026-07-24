@@ -323,6 +323,15 @@
   - _Requirements: 2.1, 2.2, 2.4, 2.7, 3.2, 3.11, 8.1, 8.2_
   - _Boundary: SchemaValidator, DomainPublicApi_
 
+- [ ] 6.13 信頼済みUI context向けに完全なFoundationDataPortを公開する
+  - production runtime contributionのhandleへ、query・mutate・assessReplacement・replaceRoot・runMaintenanceのすべてを転送する完全な`FoundationDataPort`を追加する。既定の`FoundationScopedDataPort`（6.11）は変更せず併存させる。
+  - 完全portは同じ固定名Web Lockと永続root revision・maintenance fenceで絞り込みportと直列化され、単一write authorityの不変条件を維持することを回帰で確認する。
+  - Storage access restriction失敗時は完全portを含む全contributionを公開しないことをfail-closedに確認する。
+  - 完了時、模擬trusted-extension consumerが完全portだけでassessReplacement→replaceRoot→runMaintenanceの一連呼び出しを型検査でき、既存の絞り込みport契約・consumerには挙動変化がないことを確認できる。
+  - _Depends: 6.11_
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 3.1, 3.8, 3.10, 6.1, 6.4, 8.2_
+  - _Boundary: FoundationRuntimeContribution, FoundationDataPort_
+
 ## Implementation Notes
 
 - 候補取得元の欠損や元表記snapshotは下流で補完せず、Foundationのoptional canonical契約へそのまま保存する。
