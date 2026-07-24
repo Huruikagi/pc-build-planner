@@ -90,6 +90,13 @@ export interface BackupArtifact {
   readonly byteLength: number;
 }
 
+/** commit成功時だけ返す復元後件数。ticketのpreview件数と同じ対象を確定値として示す。 */
+export interface RestoreSummary {
+  readonly projectCount: number;
+  readonly partCount: number;
+  readonly currentBuildCount: number;
+}
+
 /** JSON解析、必須構造、非対応版以外の値検証失敗。問題値を含めずcodeとpathだけを公開する。 */
 export type ExchangeStructureErrorCode =
   | "not-json"

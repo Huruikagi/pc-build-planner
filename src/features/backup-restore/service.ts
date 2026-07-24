@@ -1,9 +1,15 @@
 import type {
   FoundationError,
+  MaintenanceOwnerId,
   Result,
   UtcTimestamp,
 } from "../../domain/public.js";
-import { createUtcTimestamp, err, ok } from "../../domain/public.js";
+import {
+  createUtcTimestamp,
+  createUuid,
+  err,
+  ok,
+} from "../../domain/public.js";
 import type {
   FoundationDataPort,
   FoundationScopedDataPort,
@@ -13,6 +19,7 @@ import type {
   BackupError,
   RestoreError,
   RestoreInput,
+  RestoreSummary,
   RestoreTicket,
 } from "./contracts.js";
 import { BACKUP_PRODUCT_ID, mapFoundationError } from "./contracts.js";
@@ -86,6 +93,7 @@ export const createBackupService = (
 
 export interface RestoreService {
   preflight(input: RestoreInput): Promise<Result<RestoreTicket, RestoreError>>;
+  commit(ticket: RestoreTicket): Promise<Result<RestoreSummary, RestoreError>>;
 }
 
 export interface RestoreServiceDependencies {
@@ -103,6 +111,9 @@ const exchangeFailureToRestoreError = (error: {
   code: error.code as RestoreError["code"],
   path: error.path,
 });
+
+/** commit全体はacquire→replaceRoot→release|abortの短い同期区間で完結するため、短いleaseで十分。 */
+const MAINTENANCE_LEASE_MS = 30_000;
 
 export const createRestoreService = (
   dependencies: RestoreServiceDependencies,
@@ -142,6 +153,36 @@ export const createRestoreService = (
         currentBuildCount: envelope.data.currentBuilds.length,
         estimatedBytes: assessment.value.requiredBytes,
       },
+    });
+  },
+
+  async commit(ticket) {
+    const ownerId = createUuid() as MaintenanceOwnerId;
+    const acquired = await dependencies.data.runMaintenance({
+      type: "acquire",
+      ownerId,
+      leaseMs: MAINTENANCE_LEASE_MS,
+    });
+    if (!acquired.ok) return err(mapFoundationError(acquired.error));
+    const fence = acquired.value.fence;
+    if (fence === undefined) return err({ code: "storage-unavailable" });
+
+    const replaced = await dependencies.data.replaceRoot({
+      candidate: ticket.candidate,
+      assessment: ticket.assessment,
+      fence,
+    });
+
+    if (!replaced.ok) {
+      await dependencies.data.runMaintenance({ type: "abort", fence });
+      return err(mapFoundationError(replaced.error));
+    }
+
+    await dependencies.data.runMaintenance({ type: "release", fence });
+    return ok({
+      projectCount: ticket.preview.projectCount,
+      partCount: ticket.preview.partCount,
+      currentBuildCount: ticket.preview.currentBuildCount,
     });
   },
 });

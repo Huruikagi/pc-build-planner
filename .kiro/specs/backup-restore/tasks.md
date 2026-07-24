@@ -58,7 +58,7 @@
   - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.3, 6.5_
   - _Boundary: RestoreService preflight_
 
-- [ ] 3.3 検証済みticketの復元commitを実装する
+- [x] 3.3 検証済みticketの復元commitを実装する
   - 復元セッションのUUID owner識別子でFoundationの保守acquireを呼び、返却fenceを取得する
   - candidate・assessment・fenceをFoundationの置換へ渡し、assessment再検証・stale検出・容量再判定・単一writeはFoundation内部に委譲する
   - 成功時はrelease、取消・stale・検証・容量・write失敗時はabortして既存データを保持する
@@ -127,3 +127,4 @@
 - 1.2: `MaintenanceOwnerId`は既に`domain/public.ts`経由で公開済みだったため追加不要。`MaintenanceFence`のみ`persistence/public.ts`へ追加公開した。`tests/tooling/public-boundaries.test.ts`のFoundation非公開境界guardは`MaintenanceFence`だけを許可するよう意図的に更新済み（他の内部型は引き続き禁止）。
 - 2.1: `tests/fixtures/`配下は`scripts/validate-fixture-assets.mjs`のraw-html等asset policyでスキャンされる（`.test.ts`ファイルはスキャン対象外）。生HTML文字列を含む不正値fixtureは`tests/fixtures/`に置かず、対象の`.test.ts`内へ直接記述する。
 - 全task共通: このBash環境はデフォルトで`globstar`が無効なため、`tests/**/*.test.ts`のような2階層以上深いglobはshellが部分展開してしまい`tests/features/<feature>/*.test.ts`を静かに取りこぼす。全件回帰確認は`shopt -s globstar`を同一コマンド内で有効にしてから実行する。
+- 3.3: design.mdのData Modelsに`RestoreSummary`の明示的な型定義がなかったため、`RestoreService.commit`の戻り値として`contracts.ts`へ追加した（`RestorePreview`と同じ件数フィールドの確定値）。release/abort呼び出し自体の成否はcommitの戻り値へ反映せず、replaceRootの成否だけを最終結果として返す（release/abort失敗はFoundation側のmaintenance lease自然失効に委ねる設計判断）。

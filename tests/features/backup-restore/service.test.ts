@@ -312,3 +312,168 @@ test("Foundationのassessがstale-assessmentを返した場合はstale-ticketへ
   assert.equal(result.ok, false);
   if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
 });
+
+const FAKE_TICKET = {
+  candidate: { schemaVersion: 1 },
+  assessment: FAKE_ASSESSMENT,
+  preview: {
+    createdAt: NOW,
+    formatVersion: 1,
+    projectCount: 3,
+    partCount: 5,
+    currentBuildCount: 2,
+    estimatedBytes: FAKE_ASSESSMENT.requiredBytes,
+  },
+};
+
+const FAKE_FENCE = { generation: 1, ownerId: "owner", revision: 4 };
+
+interface RecordedCall {
+  readonly method: "runMaintenance" | "replaceRoot";
+  readonly args: unknown;
+}
+
+const foundationDataForCommit = (options: {
+  readonly acquire: Awaited<ReturnType<FoundationDataPort["runMaintenance"]>>;
+  readonly replaceRoot?: Awaited<ReturnType<FoundationDataPort["replaceRoot"]>>;
+  readonly releaseOrAbort?: Awaited<
+    ReturnType<FoundationDataPort["runMaintenance"]>
+  >;
+}): { readonly data: FoundationDataPort; readonly calls: RecordedCall[] } => {
+  const calls: RecordedCall[] = [];
+  const data: FoundationDataPort = {
+    query: notExpected("query"),
+    mutate: notExpected("mutate"),
+    assessReplacement: notExpected("assessReplacement"),
+    replaceRoot: async (command) => {
+      calls.push({ method: "replaceRoot", args: command });
+      if (options.replaceRoot === undefined)
+        throw new Error("replaceRoot must not be called before acquire");
+      return options.replaceRoot;
+    },
+    runMaintenance: async (command) => {
+      calls.push({ method: "runMaintenance", args: command });
+      return command.type === "acquire"
+        ? options.acquire
+        : (options.releaseOrAbort ?? { ok: true, value: {} });
+    },
+  };
+  return { data, calls };
+};
+
+test("commit成功時はacquire・replaceRoot・releaseの順で呼びpreview件数のsummaryを返す", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    replaceRoot: {
+      ok: true,
+      value: { revision: 5, beforeBytes: 1, afterBytes: 2 } as never,
+    },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, true);
+  if (result.ok)
+    assert.deepEqual(result.value, {
+      projectCount: 3,
+      partCount: 5,
+      currentBuildCount: 2,
+    });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ["runMaintenance", "replaceRoot", "runMaintenance"],
+  );
+  const acquireCall = calls[0]?.args as { type: string; leaseMs: number };
+  assert.equal(acquireCall.type, "acquire");
+  assert.equal(typeof acquireCall.leaseMs, "number");
+  assert.ok(acquireCall.leaseMs > 0);
+  const releaseCall = calls[2]?.args as { type: string; fence: unknown };
+  assert.equal(releaseCall.type, "release");
+  assert.deepEqual(releaseCall.fence, FAKE_FENCE);
+  const replaceCall = calls[1]?.args as { fence: unknown; candidate: unknown };
+  assert.deepEqual(replaceCall.fence, FAKE_FENCE);
+  assert.deepEqual(replaceCall.candidate, FAKE_TICKET.candidate);
+});
+
+test("acquireが保守競合で失敗した場合はreplaceRootを呼ばず値を含まず拒否される", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: false, error: { code: "maintenance-active" } },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok)
+    assert.deepEqual(result.error, { code: "maintenance-active" });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ["runMaintenance"],
+  );
+});
+
+test("replaceRootがstale-assessmentで失敗した場合はabortして既存データを保持する", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    replaceRoot: { ok: false, error: { code: "stale-assessment" } },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
+  const abortCall = calls[2]?.args as { type: string; fence: unknown };
+  assert.equal(abortCall.type, "abort");
+  assert.deepEqual(abortCall.fence, FAKE_FENCE);
+});
+
+test("replaceRootが容量超過で失敗した場合もabortして既存データを保持する", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    replaceRoot: { ok: false, error: { code: "quota-exceeded" } },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.deepEqual(result.error, { code: "quota-exceeded" });
+  const abortCall = calls[2]?.args as { type: string };
+  assert.equal(abortCall.type, "abort");
+});
+
+test("replaceRootがowner外・期限切れ相当のstale-fenceで失敗した場合もabortして拒否される", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    replaceRoot: { ok: false, error: { code: "stale-fence" } },
+  });
+  const service = createRestoreService({ data });
+
+  const result = await service.commit(FAKE_TICKET as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
+  const abortCall = calls[2]?.args as { type: string };
+  assert.equal(abortCall.type, "abort");
+});
+
+test("復元セッションごとにUUID owner識別子でacquireする", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    replaceRoot: {
+      ok: true,
+      value: { revision: 5, beforeBytes: 1, afterBytes: 2 } as never,
+    },
+  });
+  const service = createRestoreService({ data });
+
+  await service.commit(FAKE_TICKET as never);
+
+  const acquireCall = calls[0]?.args as { ownerId: string };
+  assert.match(
+    acquireCall.ownerId,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+});
