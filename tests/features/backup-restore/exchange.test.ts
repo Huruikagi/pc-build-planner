@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { exchangeValidator } from "../../../src/features/backup-restore/exchange.js";
+import {
+  exchangeMigration,
+  exchangeValidator,
+} from "../../../src/features/backup-restore/exchange.js";
 import {
   buildCorruptBackupEnvelopes,
   buildCurrentBackupEnvelope,
   buildEmptyBackupEnvelope,
+  buildFutureVersionEnvelope,
 } from "../../fixtures/backup.js";
 
 test("全カテゴリを含む現行envelopeは検証を通り値がそのまま返る", () => {
@@ -75,5 +79,58 @@ test("マークアップを含む値はinvalid-structureとして値を含まず
     assert.equal(result.error.code, "invalid-structure");
     assert.equal(result.error.path, "$.data.parts[0].product.notes.confirmed");
     assert.equal(Object.keys(result.error).length, 2);
+  }
+});
+
+test("現行版envelopeはそのまま検証され現行形式へ到達する", () => {
+  const envelope = buildCurrentBackupEnvelope();
+  const result = exchangeMigration.toCurrent(envelope);
+
+  assert.equal(result.ok, true);
+  if (result.ok) assert.deepEqual(result.value, envelope);
+});
+
+test("空データの現行版envelopeも現行形式へ到達する", () => {
+  const result = exchangeMigration.toCurrent(buildEmptyBackupEnvelope());
+
+  assert.equal(result.ok, true);
+});
+
+test("将来形式版は内容を変換せずunsupported-versionとして拒否される", () => {
+  const result = exchangeMigration.toCurrent(buildFutureVersionEnvelope());
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "unsupported-version");
+    assert.equal(result.error.path, "$.formatVersion");
+    assert.equal(Object.keys(result.error).length, 2);
+  }
+});
+
+test("移行経路が登録されていない旧版番号もunsupported-versionとして拒否される", () => {
+  const envelope = {
+    ...buildEmptyBackupEnvelope(),
+    formatVersion: 0,
+  };
+  const result = exchangeMigration.toCurrent(envelope);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "unsupported-version");
+    assert.equal(result.error.path, "$.formatVersion");
+  }
+});
+
+test("formatVersionが数値でない場合はvalidatorへ委譲され構造エラーとなる", () => {
+  const envelope = {
+    ...buildEmptyBackupEnvelope(),
+    formatVersion: "1",
+  };
+  const result = exchangeMigration.toCurrent(envelope);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "invalid-structure");
+    assert.equal(result.error.path, "$.formatVersion");
   }
 });

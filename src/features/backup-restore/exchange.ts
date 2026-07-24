@@ -13,6 +13,7 @@ import type {
   BackupProject,
   CurrentBackupEnvelope,
   ExchangeValidationError,
+  ExchangeVersionError,
 } from "./contracts.js";
 import {
   BACKUP_PRODUCT_ID,
@@ -286,4 +287,62 @@ export interface ExchangeValidator {
 
 export const exchangeValidator: ExchangeValidator = {
   validate: validateBackupEnvelope,
+};
+
+type ExchangeMigrationStep = (input: Record<string, unknown>) => unknown;
+
+/**
+ * 現行形式版1が初出のため、対応旧版は現状存在しない。
+ * 将来の形式版追加時、旧sourceVersionをkeyとする連続な純粋変換をここへ登録する。
+ */
+const MIGRATION_REGISTRY: Readonly<Record<number, ExchangeMigrationStep>> = {};
+
+const readFormatVersion = (input: unknown): number | undefined => {
+  if (typeof input !== "object" || input === null || Array.isArray(input))
+    return undefined;
+  const value = Reflect.get(input, "formatVersion");
+  return typeof value === "number" ? value : undefined;
+};
+
+/** 各移行段階を再検証し、未知・将来・経路欠落版は内容を変換せずunsupported-versionとして拒否する。 */
+export const migrateBackupEnvelopeToCurrent = (
+  input: unknown,
+): Result<
+  CurrentBackupEnvelope,
+  ExchangeVersionError | ExchangeValidationError
+> => {
+  const sourceVersion = readFormatVersion(input);
+  if (
+    sourceVersion === undefined ||
+    sourceVersion === CURRENT_BACKUP_FORMAT_VERSION
+  )
+    return validateBackupEnvelope(input);
+
+  let migrated: unknown = input;
+  let version = sourceVersion;
+  while (version < CURRENT_BACKUP_FORMAT_VERSION) {
+    const step = MIGRATION_REGISTRY[version];
+    if (step === undefined)
+      return err({ code: "unsupported-version", path: "$.formatVersion" });
+    migrated = step(migrated as Record<string, unknown>);
+    const revalidated = validateBackupEnvelope(migrated);
+    if (!revalidated.ok) return revalidated;
+    version += 1;
+  }
+  if (version !== CURRENT_BACKUP_FORMAT_VERSION)
+    return err({ code: "unsupported-version", path: "$.formatVersion" });
+  return validateBackupEnvelope(migrated);
+};
+
+export interface ExchangeMigration {
+  toCurrent(
+    input: unknown,
+  ): Result<
+    CurrentBackupEnvelope,
+    ExchangeVersionError | ExchangeValidationError
+  >;
+}
+
+export const exchangeMigration: ExchangeMigration = {
+  toCurrent: migrateBackupEnvelopeToCurrent,
 };
