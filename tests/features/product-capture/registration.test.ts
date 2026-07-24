@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
-import type { Availability } from "../../../src/application-shell/public.js";
-import type { ProjectId } from "../../../src/domain/public.js";
+import { createFeatureRegistry } from "../../../src/application-shell/feature-registry.js";
+import type {
+  ApplicationFeatureRegistration,
+  Availability,
+  FeatureId,
+} from "../../../src/application-shell/public.js";
+import { createSidePanelHost } from "../../../src/application-shell/side-panel-host.js";
+import { ok, type ProjectId } from "../../../src/domain/public.js";
 import type { CaptureCoordinator } from "../../../src/features/product-capture/coordinator.js";
 import { createProductCaptureFeatureRegistration } from "../../../src/features/product-capture/registration.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
@@ -72,6 +78,114 @@ test("mountは取り込み開始の案内を描画しunmountで確実に取り�
   await act(async () => handle?.unmount());
 
   assert.equal(container.textContent, "");
+});
+
+test("mount handleはcaptureStateを公開し、切り替え元としてshellが要求するスナップショット前提を満たす", async () => {
+  const state = createState();
+  const registration = createProductCaptureFeatureRegistration({
+    state,
+    listProjects: async () => PROJECTS,
+  });
+  const container = document.createElement("div");
+
+  let handle: Awaited<ReturnType<typeof registration.mount>> | undefined;
+  await act(async () => {
+    handle = await registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+
+  assert.equal(typeof handle?.captureState, "function");
+  const snapshot = await handle?.captureState?.();
+  assert.deepEqual(snapshot, { ok: true, value: undefined });
+
+  await act(async () => handle?.unmount());
+});
+
+/**
+ * Regression coverage for the real `side-panel-host` fail-closed rule: it
+ * refuses to switch away from a feature whose mount handle has no
+ * `captureState`, even when the target activates successfully. Without a real
+ * `captureState`, every "詳細編集" click silently failed in production
+ * (`activation_failed`: "source feature does not provide an activation
+ * snapshot") while unit tests that mock `openCandidateEditor` directly never
+ * exercised this shell-level precondition.
+ */
+test("商品取り込みが表示中でも、shellは他featureへのactivation切替を拒否しない", async () => {
+  const state = createState();
+  const captureRegistration = createProductCaptureFeatureRegistration({
+    state,
+    listProjects: async () => PROJECTS,
+  });
+  const events: string[] = [];
+  const targetId = "target" as FeatureId;
+  const target: ApplicationFeatureRegistration<object, { value: string }> = {
+    id: targetId,
+    navigation: { label: "target", order: 1 },
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => {},
+    async mount({ container }) {
+      const marker = document.createElement("p");
+      marker.dataset.feature = "target";
+      container.append(marker);
+      return {
+        async captureState() {
+          return ok(undefined);
+        },
+        async unmount() {
+          marker.remove();
+        },
+      };
+    },
+    activation: {
+      validate(intent) {
+        if (
+          intent.target !== "open" ||
+          typeof intent.payload !== "object" ||
+          intent.payload === null ||
+          !("value" in intent.payload)
+        )
+          return {
+            ok: false,
+            error: { kind: "invalid_activation", detail: "" },
+          };
+        return ok(intent.payload as { value: string });
+      },
+      async activate(input) {
+        events.push(`activate:${input.value}`);
+        return ok(undefined);
+      },
+    },
+  };
+
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(captureRegistration).ok, true);
+  assert.equal(registry.register(target).ok, true);
+  const diagnostics: string[] = [];
+  const host = createSidePanelHost({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    registry,
+    onStateChange: () => {},
+    reportError: (message) => diagnostics.push(message),
+  });
+  await act(async () => {
+    await host.start();
+  });
+
+  const result = await act(async () =>
+    host.activate({
+      featureId: targetId,
+      target: "open",
+      payload: { value: "prefill" },
+    }),
+  );
+
+  assert.deepEqual(result, { ok: true, value: undefined });
+  assert.deepEqual(events, ["activate:prefill"]);
 });
 
 test("mountのたびにlistProjectsを呼び直し最新のproject一覧を取得する", async () => {

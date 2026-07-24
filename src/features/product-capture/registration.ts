@@ -5,6 +5,7 @@ import type {
   FeatureMountHandle,
   OperationPolicy,
 } from "../../application-shell/public.js";
+import { ok } from "../../domain/public.js";
 import {
   createProductCapturePublicApi,
   type ProductCapturePublicApi,
@@ -62,6 +63,17 @@ const mountCaptureView =
         if (unmounted) return;
         unmounted = true;
         root.unmount();
+      },
+      /**
+       * `CaptureState` outlives a single mount (see `createProductCaptureContribution`),
+       * so switching away needs nothing snapshotted to restore a screen later.
+       * The shell's activation flow still requires a source feature to expose
+       * `captureState` before it will switch away from it at all (see
+       * `side-panel-host.ts`'s `capturePreviousState`), so this is a no-op that
+       * only satisfies that precondition.
+       */
+      async captureState() {
+        return ok(undefined);
       },
     };
   };

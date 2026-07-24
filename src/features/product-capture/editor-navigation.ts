@@ -32,9 +32,18 @@ export interface CandidateEditorNavigationDependencies {
   ) => Promise<Result<void, FeatureActivationError>>;
 }
 
-const toNavigationError = (_error: FeatureActivationError): CaptureError => ({
-  kind: "navigation",
-});
+/**
+ * `CaptureError`'s `navigation` variant carries no detail (the UI shows one
+ * fixed message for every cause), so the underlying reason would otherwise be
+ * lost the moment this conversion happens. Logging it here — the last point
+ * where it's still available — is the only way to diagnose *why* a detail
+ * transition failed, since `side-panel-host` treats an activation failure as
+ * a normal `Result` and never reports it as a diagnostic itself.
+ */
+const toNavigationError = (error: FeatureActivationError): CaptureError => {
+  console.error("product-capture: detail edit activation failed", error);
+  return { kind: "navigation" };
+};
 
 export const createCandidateEditorNavigation = (
   dependencies: CandidateEditorNavigationDependencies,
