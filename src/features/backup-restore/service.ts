@@ -4,10 +4,19 @@ import type {
   UtcTimestamp,
 } from "../../domain/public.js";
 import { createUtcTimestamp, err, ok } from "../../domain/public.js";
-import type { FoundationScopedDataPort } from "../../persistence/public.js";
-import type { BackupArtifact, BackupError } from "./contracts.js";
-import { BACKUP_PRODUCT_ID } from "./contracts.js";
-import { exchangeMapper } from "./exchange.js";
+import type {
+  FoundationDataPort,
+  FoundationScopedDataPort,
+} from "../../persistence/public.js";
+import type {
+  BackupArtifact,
+  BackupError,
+  RestoreError,
+  RestoreInput,
+  RestoreTicket,
+} from "./contracts.js";
+import { BACKUP_PRODUCT_ID, mapFoundationError } from "./contracts.js";
+import { exchangeMapper, exchangeMigration } from "./exchange.js";
 
 export interface BackupService {
   create(): Promise<Result<BackupArtifact, BackupError>>;
@@ -74,3 +83,65 @@ export const createBackupService = (
     },
   };
 };
+
+export interface RestoreService {
+  preflight(input: RestoreInput): Promise<Result<RestoreTicket, RestoreError>>;
+}
+
+export interface RestoreServiceDependencies {
+  readonly data: FoundationDataPort;
+}
+
+/** 保存上限10MBを基準に、JSON解析前に読取前サイズだけで拒否する実装定数。 */
+const MAX_RESTORE_INPUT_BYTES = 10 * 1024 * 1024;
+
+/** ExchangeMigration・ExchangeMapperの失敗codeはRestoreErrorCodeの部分集合であり、そのまま写像できる。 */
+const exchangeFailureToRestoreError = (error: {
+  readonly code: string;
+  readonly path: string;
+}): RestoreError => ({
+  code: error.code as RestoreError["code"],
+  path: error.path,
+});
+
+export const createRestoreService = (
+  dependencies: RestoreServiceDependencies,
+): RestoreService => ({
+  async preflight(input) {
+    if (input.byteLength > MAX_RESTORE_INPUT_BYTES)
+      return err({ code: "size-exceeded" });
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(input.text);
+    } catch {
+      return err({ code: "not-json", path: "$" });
+    }
+
+    const migrated = exchangeMigration.toCurrent(parsed);
+    if (!migrated.ok) return err(exchangeFailureToRestoreError(migrated.error));
+    const envelope = migrated.value;
+
+    const candidate = exchangeMapper.toRoot(envelope);
+    if (!candidate.ok)
+      return err(exchangeFailureToRestoreError(candidate.error));
+
+    const assessment = await dependencies.data.assessReplacement(
+      candidate.value,
+    );
+    if (!assessment.ok) return err(mapFoundationError(assessment.error));
+
+    return ok({
+      candidate: candidate.value,
+      assessment: assessment.value,
+      preview: {
+        createdAt: envelope.createdAt,
+        formatVersion: envelope.formatVersion,
+        projectCount: envelope.data.projects.length,
+        partCount: envelope.data.parts.length,
+        currentBuildCount: envelope.data.currentBuilds.length,
+        estimatedBytes: assessment.value.requiredBytes,
+      },
+    });
+  },
+});

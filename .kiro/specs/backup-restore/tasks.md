@@ -49,7 +49,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
   - _Boundary: BackupService_
 
-- [ ] 3.2 復元preflightとpreview生成を実装する
+- [x] 3.2 復元preflightとpreview生成を実装する
   - 読取前サイズ、JSON解析、交換形式移行、交換検証、保存root候補への変換を交換層で順に行う
   - 変換済み候補をFoundationの置換評価へ渡し、保存schema検証・参照整合性・容量見積り・digest付きassessment生成をFoundationへ委譲する
   - 成功時だけ件数、作成日時、形式版、見積り容量と非永続ticket（candidateとassessment）を返す
