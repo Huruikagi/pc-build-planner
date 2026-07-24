@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type {
+  LocalDataRoot,
+  UtcTimestamp,
+} from "../../../src/domain/public.js";
 import {
+  exchangeMapper,
   exchangeMigration,
   exchangeValidator,
 } from "../../../src/features/backup-restore/exchange.js";
@@ -11,6 +16,17 @@ import {
   buildEmptyBackupEnvelope,
   buildFutureVersionEnvelope,
 } from "../../fixtures/backup.js";
+import { buildFoundationRoot } from "../../fixtures/foundation.js";
+
+const EMPTY_ROOT = {
+  schemaVersion: 1,
+  revision: 0,
+  projects: [],
+  candidateParts: [],
+  currentBuilds: [],
+  requestDedupe: [],
+  maintenance: { generation: 0, active: false },
+} as unknown as LocalDataRoot;
 
 test("全カテゴリを含む現行envelopeは検証を通り値がそのまま返る", () => {
   const envelope = buildCurrentBackupEnvelope();
@@ -133,4 +149,73 @@ test("formatVersionが数値でない場合はvalidatorへ委譲され構造エ�
     assert.equal(result.error.code, "invalid-structure");
     assert.equal(result.error.path, "$.formatVersion");
   }
+});
+
+test("空rootのfromRoot・toRoot往復はEnvelope形式とroot形状の双方を保つ", () => {
+  const createdAt = "2026-07-19T01:00:00.000Z" as UtcTimestamp;
+  const envelope = exchangeMapper.fromRoot(EMPTY_ROOT, createdAt);
+
+  assert.equal(envelope.product, "pc-build-planner");
+  assert.equal(envelope.formatVersion, 1);
+  assert.equal(envelope.createdAt, createdAt);
+  assert.deepEqual(envelope.data, {
+    projects: [],
+    parts: [],
+    currentBuilds: [],
+  });
+
+  const restored = exchangeMapper.toRoot(envelope);
+  assert.equal(restored.ok, true);
+  if (restored.ok) {
+    assert.equal(restored.value.schemaVersion, 1);
+    assert.equal(restored.value.revision, 0);
+    assert.deepEqual(restored.value.maintenance, {
+      generation: 0,
+      active: false,
+    });
+    assert.deepEqual(restored.value.requestDedupe, []);
+    assert.deepEqual(restored.value.projects, []);
+    assert.deepEqual(restored.value.candidateParts, []);
+    assert.deepEqual(restored.value.currentBuilds, []);
+  }
+});
+
+test("全12カテゴリを含むrootのfromRoot・toRoot往復は業務データを欠落なく一致させる", () => {
+  const root = buildFoundationRoot();
+  const createdAt = "2026-07-19T02:00:00.000Z" as UtcTimestamp;
+
+  const envelope = exchangeMapper.fromRoot(root, createdAt);
+  assert.equal(envelope.data.projects.length, root.projects.length);
+  assert.equal(envelope.data.parts.length, root.candidateParts.length);
+  assert.equal(envelope.data.currentBuilds.length, root.currentBuilds.length);
+
+  const restored = exchangeMapper.toRoot(envelope);
+  assert.equal(restored.ok, true);
+  if (restored.ok) {
+    assert.deepEqual(restored.value.projects, root.projects);
+    assert.deepEqual(restored.value.candidateParts, root.candidateParts);
+    assert.deepEqual(restored.value.currentBuilds, root.currentBuilds);
+    // 保存schemaVersion・revision・maintenance・requestDedupeは交換データから信頼せず、
+    // Foundationのassess/replace側で再確定される前提のplaceholder値へ一律揃える。
+    assert.equal(restored.value.schemaVersion, 1);
+    assert.equal(restored.value.revision, 0);
+    assert.deepEqual(restored.value.requestDedupe, []);
+  }
+});
+
+test("交換データを検証してから相互変換しても業務データが一致する", () => {
+  const envelope = buildCurrentBackupEnvelope();
+  const validated = exchangeValidator.validate(envelope);
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const restored = exchangeMapper.toRoot(validated.value);
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+
+  const roundTripped = exchangeMapper.fromRoot(
+    restored.value,
+    envelope.createdAt,
+  );
+  assert.deepEqual(roundTripped.data, envelope.data);
 });

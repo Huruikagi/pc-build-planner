@@ -1,4 +1,14 @@
-import type { PartCategory, Result } from "../../domain/public.js";
+import type {
+  CandidatePart,
+  CurrentBuild,
+  LocalDataRoot,
+  MaintenanceGeneration,
+  PartCategory,
+  Project,
+  Result,
+  Revision,
+  UtcTimestamp,
+} from "../../domain/public.js";
 import {
   err,
   isJsonValue,
@@ -12,6 +22,7 @@ import type {
   BackupCurrentBuild,
   BackupProject,
   CurrentBackupEnvelope,
+  ExchangeMappingError,
   ExchangeValidationError,
   ExchangeVersionError,
 } from "./contracts.js";
@@ -345,4 +356,115 @@ export interface ExchangeMigration {
 
 export const exchangeMigration: ExchangeMigration = {
   toCurrent: migrateBackupEnvelopeToCurrent,
+};
+
+/** 保存rootのschemaVersion。交換形式版（CURRENT_BACKUP_FORMAT_VERSION）とは独立して管理する。 */
+const CURRENT_PERSISTED_SCHEMA_VERSION = 1;
+
+const projectToBackup = (project: Project): BackupProject => ({
+  id: project.id,
+  name: project.name,
+  createdAt: project.createdAt,
+  updatedAt: project.updatedAt,
+});
+
+const partToBackup = (part: CandidatePart): BackupCandidatePart => ({
+  id: part.id,
+  projectId: part.projectId,
+  category: part.category,
+  product: part.product,
+  ...(part.sourceInfo === undefined ? {} : { sourceInfo: part.sourceInfo }),
+  ...(part.sourceSnapshot === undefined
+    ? {}
+    : { sourceSnapshot: part.sourceSnapshot }),
+  normalizedAttributes: part.normalizedAttributes,
+  createdAt: part.createdAt,
+  updatedAt: part.updatedAt,
+});
+
+const buildToBackup = (build: CurrentBuild): BackupCurrentBuild => ({
+  id: build.id,
+  projectId: build.projectId,
+  items: build.items.map((item) => ({
+    candidatePartId: item.candidatePartId,
+    quantity: item.quantity,
+  })),
+  updatedAt: build.updatedAt,
+});
+
+/** 検証済み保存rootを現行交換形式Envelopeへ写像する。保存schemaVersionは含めない。 */
+export const mapRootToBackupEnvelope = (
+  root: LocalDataRoot,
+  createdAt: UtcTimestamp,
+): CurrentBackupEnvelope => ({
+  product: BACKUP_PRODUCT_ID,
+  formatVersion: CURRENT_BACKUP_FORMAT_VERSION,
+  createdAt,
+  data: {
+    projects: root.projects.map(projectToBackup),
+    parts: root.candidateParts.map(partToBackup),
+    currentBuilds: root.currentBuilds.map(buildToBackup),
+  },
+});
+
+const projectFromBackup = (project: BackupProject): Project => ({
+  id: project.id,
+  name: project.name,
+  createdAt: project.createdAt,
+  updatedAt: project.updatedAt,
+});
+
+const partFromBackup = (part: BackupCandidatePart): CandidatePart => ({
+  id: part.id,
+  projectId: part.projectId,
+  category: part.category,
+  product: part.product,
+  ...(part.sourceInfo === undefined ? {} : { sourceInfo: part.sourceInfo }),
+  ...(part.sourceSnapshot === undefined
+    ? {}
+    : { sourceSnapshot: part.sourceSnapshot }),
+  normalizedAttributes: part.normalizedAttributes,
+  createdAt: part.createdAt,
+  updatedAt: part.updatedAt,
+});
+
+const buildFromBackup = (build: BackupCurrentBuild): CurrentBuild => ({
+  id: build.id,
+  projectId: build.projectId,
+  items: build.items.map((item) => ({
+    candidatePartId: item.candidatePartId,
+    quantity: item.quantity,
+  })),
+  updatedAt: build.updatedAt,
+});
+
+/**
+ * 検証済みEnvelopeから現行保存スキーマ版の保存root候補を構築する。
+ * schemaVersion・revision・maintenance・requestDedupeは交換データから信頼せず、
+ * Foundationのassess/replace側で再確定される前提のplaceholder値へ一律揃える。
+ * この候補はFoundation検証へ渡す前提であり、feature側でschema検証・容量判定を重複実行しない。
+ */
+export const mapBackupEnvelopeToRoot = (
+  envelope: CurrentBackupEnvelope,
+): Result<LocalDataRoot, ExchangeMappingError> =>
+  ok({
+    schemaVersion: CURRENT_PERSISTED_SCHEMA_VERSION,
+    revision: 0 as Revision,
+    projects: envelope.data.projects.map(projectFromBackup),
+    candidateParts: envelope.data.parts.map(partFromBackup),
+    currentBuilds: envelope.data.currentBuilds.map(buildFromBackup),
+    requestDedupe: [],
+    maintenance: { generation: 0 as MaintenanceGeneration, active: false },
+  } as LocalDataRoot);
+
+export interface ExchangeMapper {
+  fromRoot(root: LocalDataRoot, createdAt: UtcTimestamp): CurrentBackupEnvelope;
+  toRoot(
+    envelope: CurrentBackupEnvelope,
+  ): Result<LocalDataRoot, ExchangeMappingError>;
+}
+
+export const exchangeMapper: ExchangeMapper = {
+  fromRoot: mapRootToBackupEnvelope,
+  toRoot: mapBackupEnvelopeToRoot,
 };
