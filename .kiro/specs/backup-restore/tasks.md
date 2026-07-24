@@ -41,7 +41,7 @@
   - _Boundary: ExchangeMapper_
 
 - [ ] 3. バックアップ作成と復元preflight・commitを実装する
-- [ ] 3.1 (P) バックアップartifact生成サービスを実装する
+- [x] 3.1 (P) バックアップartifact生成サービスを実装する
   - read-only参照から検証済み全ルートを読み、作成日時付きEnvelopeをJSONへ直列化する
   - 製品接頭辞と作成日を含むファイル名、MIME type、UTF-8バイト数を返す
   - 空データでも復元可能なartifactが生成され、読取・検証失敗時はartifactが返らない
