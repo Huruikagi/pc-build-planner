@@ -17,6 +17,16 @@ export const PART_CATEGORIES = [
 
 export type PartCategory = (typeof PART_CATEGORIES)[number];
 
+/** 安定した既知規格の一覧。ソケットやメモリ規格と異なり新規格の追加頻度が低いため固定値として持つ。 */
+export const MOTHERBOARD_FORM_FACTORS = [
+  "E-ATX",
+  "ATX",
+  "Micro-ATX",
+  "Mini-ITX",
+] as const;
+
+export const POWER_SUPPLY_FORM_FACTORS = ["ATX", "SFX", "SFX-L"] as const;
+
 export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue =
   | JsonPrimitive

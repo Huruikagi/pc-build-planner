@@ -3,8 +3,10 @@ import { useReducer, useState, useSyncExternalStore } from "react";
 
 import {
   type CandidatePartId,
+  MOTHERBOARD_FORM_FACTORS,
   PART_CATEGORIES,
   type PartCategory,
+  POWER_SUPPLY_FORM_FACTORS,
   type UtcTimestamp,
 } from "../../domain/public.js";
 import { withCategory } from "./category-draft.js";
@@ -142,6 +144,7 @@ type EditableAttribute = {
   readonly key: string;
   readonly label: string;
   readonly list: boolean;
+  readonly options?: readonly string[];
 };
 
 const editableAttributes = (
@@ -156,29 +159,165 @@ const editableAttributes = (
       return [
         { key: "socket", label: "ソケット", list: false },
         { key: "memoryStandard", label: "メモリ規格", list: false },
-        { key: "formFactor", label: "フォームファクター", list: false },
+        {
+          key: "formFactor",
+          label: "フォームファクター",
+          list: false,
+          options: MOTHERBOARD_FORM_FACTORS,
+        },
       ];
     case "memory":
       return [{ key: "memoryStandard", label: "メモリ規格", list: false }];
     case "power-supply":
-      return [{ key: "formFactor", label: "フォームファクター", list: false }];
+      return [
+        {
+          key: "formFactor",
+          label: "フォームファクター",
+          list: false,
+          options: POWER_SUPPLY_FORM_FACTORS,
+        },
+      ];
     case "case":
       return [
         {
           key: "supportedMotherboardFormFactors",
           label: "対応マザーボード規格",
           list: true,
+          options: MOTHERBOARD_FORM_FACTORS,
         },
         {
           key: "supportedPowerSupplyFormFactors",
           label: "対応電源規格",
           list: true,
+          options: POWER_SUPPLY_FORM_FACTORS,
         },
       ];
     default:
       return [];
   }
 };
+
+/** Sentinel select value that switches a form-factor field into free-text entry. */
+const CUSTOM_OPTION = "__custom__";
+
+/**
+ * A select of known, stable form-factor values with a free-text escape hatch,
+ * since scraped or future form factors may fall outside the fixed list.
+ */
+function SingleFormFactorField({
+  error,
+  field,
+  onChange,
+  value,
+}: {
+  readonly error: string | null;
+  readonly field: EditableAttribute & { readonly options: readonly string[] };
+  readonly onChange: (value: string) => void;
+  readonly value: string;
+}) {
+  const isCustom = value !== "" && !field.options.includes(value);
+  const [customMode, setCustomMode] = useState(isCustom);
+  const key = `normalizedAttributes.${field.key}`;
+  return (
+    <div>
+      <label>
+        {field.label}
+        <select
+          aria-describedby={error === null ? undefined : `${key}-error`}
+          aria-invalid={error === null ? undefined : true}
+          name={`attribute-${field.key}`}
+          onChange={(event) => {
+            if (event.target.value === CUSTOM_OPTION) {
+              setCustomMode(true);
+              return;
+            }
+            setCustomMode(false);
+            onChange(event.target.value);
+          }}
+          value={customMode ? CUSTOM_OPTION : value}
+        >
+          <option value="">未選択</option>
+          {field.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          <option value={CUSTOM_OPTION}>その他（自由入力）</option>
+        </select>
+      </label>
+      {customMode ? (
+        <input
+          aria-label={`${field.label}（自由入力）`}
+          name={`attribute-${field.key}-custom`}
+          onChange={(event) => onChange(event.target.value)}
+          value={value}
+        />
+      ) : null}
+      <FieldError id={`${key}-error`} message={error} />
+    </div>
+  );
+}
+
+/**
+ * Checkbox group over known form-factor values plus a comma-separated
+ * free-text field for values outside the fixed list.
+ */
+function MultiFormFactorField({
+  error,
+  field,
+  onChange,
+  values,
+}: {
+  readonly error: string | null;
+  readonly field: EditableAttribute & { readonly options: readonly string[] };
+  readonly onChange: (values: readonly string[]) => void;
+  readonly values: readonly string[];
+}) {
+  const extra = values.filter((value) => !field.options.includes(value));
+  const [extraText, setExtraText] = useState(extra.join(", "));
+  const key = `normalizedAttributes.${field.key}`;
+  const toggle = (option: string, checked: boolean) => {
+    const known = values.filter((value) => field.options.includes(value));
+    const nextKnown = checked
+      ? [...known, option]
+      : known.filter((value) => value !== option);
+    onChange([...nextKnown, ...extra]);
+  };
+  return (
+    <fieldset aria-describedby={error === null ? undefined : `${key}-error`}>
+      <legend>{field.label}</legend>
+      {field.options.map((option) => (
+        <label key={option}>
+          <input
+            checked={values.includes(option)}
+            onChange={(event) => toggle(option, event.target.checked)}
+            type="checkbox"
+          />
+          {option}
+        </label>
+      ))}
+      <label>
+        その他（カンマ区切りで自由入力）
+        <input
+          name={`attribute-${field.key}-custom`}
+          onChange={(event) => {
+            setExtraText(event.target.value);
+            const known = values.filter((value) =>
+              field.options.includes(value),
+            );
+            const parsed = event.target.value
+              .split(",")
+              .map((item) => item.trim())
+              .filter((item) => item.length > 0);
+            onChange([...known, ...parsed]);
+          }}
+          value={extraText}
+        />
+      </label>
+      <FieldError id={`${key}-error`} message={error} />
+    </fieldset>
+  );
+}
 
 const fieldErrorMessages: Readonly<Record<string, string>> = {
   required: "必須項目です",
@@ -263,6 +402,17 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
                 .filter((item) => item.length > 0)
             : value,
         },
+      },
+    } as CandidateDraft);
+  const setAttributeList = (
+    field: EditableAttribute,
+    values: readonly string[],
+  ) =>
+    update({
+      ...draft,
+      normalizedAttributes: {
+        ...attributes,
+        [field.key]: { original: null, confirmed: values },
       },
     } as CandidateDraft);
   const attributeValues = attributes as unknown as Readonly<
@@ -403,6 +553,36 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         const confirmed = value?.confirmed;
         const key = `normalizedAttributes.${field.key}`;
         const message = errorFor(key);
+        if (field.options !== undefined && field.list) {
+          const values = Array.isArray(confirmed) ? confirmed : [];
+          return (
+            <MultiFormFactorField
+              error={message}
+              field={
+                field as EditableAttribute & { options: readonly string[] }
+              }
+              key={field.key}
+              onChange={(next) => setAttributeList(field, next)}
+              values={values}
+            />
+          );
+        }
+        if (field.options !== undefined && !field.list) {
+          const stringValue: string = Array.isArray(confirmed)
+            ? ""
+            : ((confirmed as string | undefined) ?? value?.original ?? "");
+          return (
+            <SingleFormFactorField
+              error={message}
+              field={
+                field as EditableAttribute & { options: readonly string[] }
+              }
+              key={field.key}
+              onChange={(next) => setAttribute(field, next)}
+              value={stringValue}
+            />
+          );
+        }
         return (
           <div key={field.key}>
             <label>
