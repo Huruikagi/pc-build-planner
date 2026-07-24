@@ -84,7 +84,7 @@
   - _Requirements: 1.5, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 5.5, 6.4, 6.6_
   - _Boundary: BackupRestoreState_
 
-- [ ] 4.3 管理画面の操作、preview、警告、確認表示をReactで実装する
+- [x] 4.3 管理画面の操作、preview、警告、確認表示をReactで実装する
   - バックアップ作成と復元を分離し、拡張削除時の消失可能性、利用者の保管責任、自動・クラウド・同期なしを表示する
   - framework非依存のBackupRestoreStateをpropsとして受け、検証後の件数・日時・形式版と全体置換確認、成功summary、分類済みエラーを通常のJSX childで描画する
   - `dangerouslySetInnerHTML`と`innerHTML`を使用せず、安全な描画をDOM testで確認できる
@@ -129,3 +129,4 @@
 - 全task共通: このBash環境はデフォルトで`globstar`が無効なため、`tests/**/*.test.ts`のような2階層以上深いglobはshellが部分展開してしまい`tests/features/<feature>/*.test.ts`を静かに取りこぼす。全件回帰確認は`shopt -s globstar`を同一コマンド内で有効にしてから実行する。
 - 3.3: design.mdのData Modelsに`RestoreSummary`の明示的な型定義がなかったため、`RestoreService.commit`の戻り値として`contracts.ts`へ追加した（`RestorePreview`と同じ件数フィールドの確定値）。release/abort呼び出し自体の成否はcommitの戻り値へ反映せず、replaceRootの成否だけを最終結果として返す（release/abort失敗はFoundation側のmaintenance lease自然失効に委ねる設計判断）。
 - 4.2: `BackupRestoreStateValue`はphaseに加え、succeeded/failedへ`operation: "backup"|"restore"`を持たせた（design.mdは7 phase名だけを列挙していたが、backup作成とrestore復元を同じstate machineで扱うため、どちらの操作が終端したかを型で判別可能にした）。cancel()はawaiting-confirmation/failed/succeededからidleへ戻すが、busy phase（exporting/validating/restoring）中は無視する。
+- 4.3: `styles.css`は本taskで一度作成したが、`tests/tooling/build-smoke.test.ts`が「`src/features/<feature>/styles.css`は`application-shell/side-panel.css`へ`@import`されている前提」を検査するため、shell側の`@import`追加（4.4のregistration/mount、または5.1のside panel統合の責務）と対にしないと回帰する。View単体のtaskではCSSファイルを作らず、実際にfeatureをmount・登録するtaskで追加する。React testでは非同期action（`state.exportBackup()`等をfire-and-forgetで呼ぶonClickハンドラ）の検証に`act(async () => element.click())`を使い、mid-flightの状態（busy中のdisabled確認等）を見たい場合は`act(() => { pending = state.xxx(); })`のように同期actでstate呼び出し自体をラップしてPromiseを外へ保持する。
