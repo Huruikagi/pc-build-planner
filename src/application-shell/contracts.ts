@@ -64,6 +64,8 @@ export interface ApplicationFeatureRegistration<
   readonly navigation: {
     readonly label: string;
     readonly order: number;
+    /** Semantic icon key rendered by the shell navigation (falls back to label). */
+    readonly icon?: string;
   };
   readonly publicApi: TPublic;
   getAvailability(): Availability;

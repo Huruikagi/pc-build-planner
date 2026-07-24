@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 
 import type { FeatureId, ShellViewState } from "./contracts.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
+import { hasNavIcon, NavIcon } from "./nav-icons.js";
 
 export interface ShellNavigationItem {
   readonly id: FeatureId;
   readonly label: string;
+  readonly icon?: string;
 }
 
 export interface ShellViewProps {
@@ -27,17 +29,22 @@ function ShellNavigation({
 }) {
   return (
     <nav aria-label="機能ナビゲーション" className="shell-navigation">
-      {items.map((item) => (
-        <button
-          aria-current={item.id === selected ? "page" : undefined}
-          className="shell-navigation__item"
-          key={item.id}
-          onClick={() => onNavigate(item.id)}
-          type="button"
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item) => {
+        const showIcon = item.icon !== undefined && hasNavIcon(item.icon);
+        return (
+          <button
+            aria-current={item.id === selected ? "page" : undefined}
+            aria-label={showIcon ? item.label : undefined}
+            className="shell-navigation__item"
+            key={item.id}
+            onClick={() => onNavigate(item.id)}
+            title={item.label}
+            type="button"
+          >
+            {showIcon ? <NavIcon name={item.icon as string} /> : item.label}
+          </button>
+        );
+      })}
     </nav>
   );
 }

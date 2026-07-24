@@ -98,7 +98,7 @@ export const createCompatibilityFeatureRegistration = (
 
   return {
     id: compatibilityFeatureId,
-    navigation: { label: "互換性確認", order: 50 },
+    navigation: { label: "互換性確認", order: 50, icon: "puzzle" },
     publicApi,
     getAvailability,
     subscribeAvailability,

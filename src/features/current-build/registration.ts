@@ -124,7 +124,7 @@ export const createCurrentBuildFeatureRegistration = (
 
   return {
     id: currentBuildFeatureId,
-    navigation: { label: "現在構成", order: 30 },
+    navigation: { label: "現在構成", order: 30, icon: "cpu" },
     publicApi,
     getAvailability,
     subscribeAvailability,

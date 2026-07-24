@@ -415,6 +415,9 @@ export function createProductionApplicationComposition<
         const navigation = createdRegistry.snapshot().map((feature) => ({
           id: feature.id,
           label: feature.navigation.label,
+          ...(feature.navigation.icon === undefined
+            ? {}
+            : { icon: feature.navigation.icon }),
           available: feature.getAvailability().status === "available",
           selected:
             (state.kind === "ready" || state.kind === "maintenance") &&

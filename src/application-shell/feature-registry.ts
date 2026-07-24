@@ -150,6 +150,14 @@ function validateRegistrationShape(value: unknown): RegistrationError | null {
     return invalidRegistration(
       "registration.navigation.order: finite order is required",
     );
+  if (
+    value.navigation.icon !== undefined &&
+    (typeof value.navigation.icon !== "string" ||
+      value.navigation.icon.trim().length === 0)
+  )
+    return invalidRegistration(
+      "registration.navigation.icon: non-empty icon key is required when present",
+    );
   if (!isRecord(value.publicApi))
     return invalidRegistration("registration.publicApi: object is required");
   if (typeof value.getAvailability !== "function")
