@@ -28,9 +28,12 @@ test("domain と persistence の公開入口は許可された契約だけを公
     /initializeProductionFoundationRuntimeContribution/,
   );
   assert.match(persistencePublic, /initializeFoundationRuntimeContribution/);
+  // MaintenanceFenceはbackup-restoreの復元commit（fence受け渡し）用途にだけ公開する最小型。
+  // owner/lease操作capability自体（acquire/renew等の実行手段）は引き続き非公開のまま。
+  assert.match(persistencePublic, /export type \{ MaintenanceFence \}/);
   assert.doesNotMatch(
     persistencePublic,
-    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|ReplacementToken|RootQuery|RootTransactionRunner|MutationPipeline|WriteAuthority|MaintenanceFence|MaintenanceOwner|MaintenanceLease/,
+    /StoragePort|RootWriteLock|ChromeStorageAdapter|WebLocksAdapter|ReplacementToken|RootQuery|RootTransactionRunner|MutationPipeline|WriteAuthority|MaintenanceOwner|MaintenanceLease/,
   );
 });
 

@@ -10,6 +10,7 @@ import type {
   FoundationCommandDecoder,
   FoundationDataPort,
   FoundationRuntimeContribution,
+  MaintenanceFence,
   MaintenanceSnapshotSource,
   RootMutationCommand,
 } from "../../src/persistence/public.js";
@@ -44,6 +45,19 @@ export const composeMaintenanceSource = (
   ...dependencies: Parameters<typeof createMaintenanceSnapshotSource>
 ): MaintenanceSnapshotSource =>
   createMaintenanceSnapshotSource(...dependencies);
+
+/** Downstream restore consumers replace the root, then release or abort the acquired fence. */
+export const releaseAfterReplace = async (
+  data: FoundationDataPort,
+  fence: MaintenanceFence,
+  candidate: unknown,
+  assessment: Parameters<FoundationDataPort["replaceRoot"]>[0]["assessment"],
+): ReturnType<FoundationDataPort["runMaintenance"]> => {
+  const replaced = await data.replaceRoot({ candidate, assessment, fence });
+  return data.runMaintenance(
+    replaced.ok ? { type: "release", fence } : { type: "abort", fence },
+  );
+};
 
 export const composeProductionFoundationRuntime = (): Promise<
   Result<FoundationRuntimeContribution, { readonly code: string }>

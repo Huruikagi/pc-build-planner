@@ -7,7 +7,7 @@
   - 現行・旧・将来版fixtureが型検査でき、保存スキーマ版が公開交換契約へ混入しない
   - _Requirements: 1.1, 1.2, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.2, 3.6, 5.3, 6.5_
 
-- [ ] 1.2 Foundationの置換・保守契約を本機能consumerへ公開する
+- [x] 1.2 Foundationの置換・保守契約を本機能consumerへ公開する
   - 既存Foundationデータportの置換・保守・参照capabilityを本機能から型付きで利用できるよう、public入口へ必要型（保守fence、保守owner識別子）を再公開する
   - write経路・保存ロジック・容量判定は変更せず、public再公開だけを行う
   - 本機能から置換・保守呼び出しとfence受け渡しが型検査を通り、公開consumer型検査が緑になる
@@ -124,3 +124,4 @@
 ## Implementation Notes
 
 - 1.1: 現行交換形式版は1が初出のため、対応対象の旧版fixtureは存在しない。`tests/fixtures/backup.ts`は現行版・空データ・将来版(2)のfixtureのみを提供する。旧版fixtureは形式版2以降を追加する時点で用意する。
+- 1.2: `MaintenanceOwnerId`は既に`domain/public.ts`経由で公開済みだったため追加不要。`MaintenanceFence`のみ`persistence/public.ts`へ追加公開した。`tests/tooling/public-boundaries.test.ts`のFoundation非公開境界guardは`MaintenanceFence`だけを許可するよう意図的に更新済み（他の内部型は引き続き禁止）。
