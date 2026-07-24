@@ -1,5 +1,6 @@
 /* Side panel stylesheet entry. Bundled to dist/styles.css and linked from side-panel.html. */
 @import "./shell-view.css";
 @import "../features/candidate-management/styles.css";
+@import "../features/current-build/styles.css";
 @import "../features/product-capture/styles.css";
 @import "../features/compatibility/styles.css";
