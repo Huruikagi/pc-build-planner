@@ -24,7 +24,7 @@
 - 全保存データと交換データ間の変換、交換形式検証、復元プレビュー
 - バックアップ生成と検証済みルートの復元調整
 - 管理画面のファイル選択、確認、処理状態、警告、結果表示
-- Repositoryへ追加する検証済みルートの原子的置換ユースケース
+- Foundationの置換・保守portを用いた復元commitの調整（fence取得→replaceRoot→解放）
 
 ### Out of Boundary
 - `Project`、`CandidatePart`、`CurrentBuild`の所有権と業務規則
@@ -33,16 +33,16 @@
 - 復元時のマージ、部分選択、互換性結果の再計算
 
 ### Allowed Dependencies
-- Foundationの`LocalDataRoot`、`SchemaValidator`、`LocalDataRepository`、`Result`、容量・エラー契約、maintenance acquire/renew/release/fence契約とread-only状態購読
+- Foundationの`LocalDataRoot`、`Result`、エラー契約。read-only参照は`LocalDataRepository`（`query`/`readRoot`）、置換・保守は`FoundationDataPort`の`assessReplacement`/`replaceRoot`/`runMaintenance`（`ReplacementAssessment`、`ReplacementCommand`、`MaintenanceCommand`、`MaintenanceFence`契約）とread-only maintenance状態購読
 - Candidate managementとCurrent build managementが定義する保存済みデータ契約
 - 既存side panelランタイムと信頼済みextension page
 - Chrome 116以降のFile、Blob、URL、TextEncoder、React 19系/React DOM
 - application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 
-依存方向は`Domain contracts → Exchange validation and migration → Mapper → Repository → Backup and Restore services → State → View and File gateway → Runtime integration`とし、右側は左側だけへ依存する。File gatewayはRepositoryへ直接アクセスしない。
+依存方向は`Domain contracts → Exchange validation and migration → Mapper → Foundation data port（参照・置換・保守）→ Backup and Restore services → State → View and File gateway → Runtime integration`とし、右側は左側だけへ依存する。File gatewayはFoundation portへ直接アクセスしない。
 
 ### Revalidation Triggers
-- `LocalDataRoot`、カテゴリ、候補所属、現在構成参照、Repositoryエラーの形状変更
+- `LocalDataRoot`、カテゴリ、候補所属、現在構成参照、`FoundationDataPort`（`assessReplacement`/`replaceRoot`/`runMaintenance`）またはRepositoryエラーの形状変更
 - 交換形式の追加・削除、形式版の変更、旧版サポート範囲の変更
 - 保存が単一キー一括書込でなくなる変更、容量上限または書込原子性の変更
 - side panel以外への管理画面移動、File API前提、信頼済みコンテキスト設定の変更
@@ -53,7 +53,7 @@
 
 Foundationは`LocalDataRoot`を単一キーで保存し、読取・保存時にスキーマと参照を検証する。Candidate managementはプロジェクトと候補、Current build managementは構成参照と数量を所有し、どちらもRepositoryを介して保存する。本仕様はこれらの公開保存値だけを入力とし、業務サービスやStorage APIへ直接依存しない。
 
-既存Repositoryには全ルート読取はあるが、検証済み全ルートの一括置換契約がない。個別CRUDの連続実行は部分復元を生むため、Repository境界へ`replaceRoot`を追加し、既存の直列化、Validator、容量確認、単一writeを再利用する。
+Foundationは検証済み全ルートの原子的置換を`FoundationDataPort`の`assessReplacement`（migration・schema検証・容量見積り・digest付きassessment生成）と`replaceRoot`（assessment再検証・fence認可・容量再判定・単一write）として既に提供し、`runMaintenance`でacquire/renew/release/abortのfenceライフサイクルを扱う。いずれも単一write queueと`RootWriteLock`で直列化される。本機能はこれらを再実装せず消費し、`persistence`への書込追加やStorage APIの新経路は作らない。read-only参照だけ`LocalDataRepository`を使う。
 
 ### Architecture Pattern & Boundary Map
 
@@ -67,15 +67,16 @@ graph LR
     Restore --> Validator[Exchange validator]
     Restore --> Migration[Exchange migration]
     Restore --> Mapper
-    Export --> Repository[Local data repository]
-    Restore --> Repository
-    Repository --> Schema[Schema validator]
-    Repository --> Storage[Chrome storage adapter]
+    Export --> Repository[Local data repository read-only]
+    Restore --> Foundation[Foundation data port]
+    Foundation --> Runner[Root transaction runner]
+    Runner --> Schema[Schema validator]
+    Runner --> Storage[Chrome storage adapter]
 ```
 
 - **Selected pattern**: 機能サービスとポート・アダプター。交換形式の純粋処理とブラウザI/Oを分離する。
 - **Existing patterns preserved**: `unknown`入力検証、判別可能な`Result`、Repository経由の保存、UI stateとDOM viewの分離。
-- **New components rationale**: Exchange componentsは保存版との分離に、RestoreServiceは検証順序と一回のcommitに、FileGatewayはDOM固有処理の隔離に必要である。
+- **New components rationale**: Exchange componentsは保存版との分離に、RestoreServiceは交換層検証とFoundation置換・保守呼び出しの順序調整に、FileGatewayはDOM固有処理の隔離に必要である。置換・保守・単一writeの原子性はFoundationが所有し新設しない。
 - **Steering compliance**: MV3同梱コード、最小権限、10MB上限、架空fixture、service worker寿命への非依存を維持する。
 
 ### Technology Stack
@@ -85,13 +86,12 @@ graph LR
 | Language | TypeScript 7.x strict | 交換形式、結果、状態契約 | `any`禁止、入力は`unknown` |
 | UI | React 19系 / React DOM / CSS | 管理操作、確認、案内 | 既存mount契約を維持 |
 | File I/O | File、Blob、URL、TextEncoder | 読取、生成、UTF-8サイズ | Chrome 116標準、新規依存なし |
-| Data | 既存Repository / Chrome storage local | 読取、容量、単一置換 | Storage API直接利用なし |
+| Data | `LocalDataRepository`（read-only）/ `FoundationDataPort` | 参照、容量見積り、原子的置換、保守fence | Storage API直接利用なし |
 | Test | Vitest 3.x / DOM test環境 | 純粋契約、統合、UI検証 | 架空データのみ |
 
 ## File Structure Plan
 
 ```text
-src/persistence/repository.ts                     # 検証済みルートのreplaceRoot契約と実装を追加
 src/features/backup-restore/contracts.ts           # Envelope、preview、command、error契約
 src/features/backup-restore/public.ts              # バックアップ・復元公開契約の唯一の入口
 src/features/backup-restore/registration.ts        # shellへ渡すfeature registrationと依存組立
@@ -111,7 +111,7 @@ tests/features/backup-restore/view.test.ts         # 案内、preview、エラ�
 tests/features/backup-restore/integration.test.ts  # 全データ往復とRepository回帰
 ```
 
-`repository.ts`の変更は保存境界内の一回の置換だけとし、交換形式をFoundationへ持ち込まない。共有side panel runtime、`side-panel.html`、root `src/index.ts`は変更せず、application shellが`registration.ts`と`public.ts`をcompositionする。
+`persistence`のwrite経路・ロジックは変更せず、既存の`FoundationDataPort`（`assessReplacement`/`replaceRoot`/`runMaintenance`）をそのまま消費して交換形式をFoundationへ持ち込まない。consumerの型付けに必要な`MaintenanceFence`・`MaintenanceOwnerId`のpublic再公開だけは例外的に許容する。共有side panel runtime、`side-panel.html`、root `src/index.ts`は変更せず、application shellが`registration.ts`と`public.ts`をcompositionし、置換・保守可能なscoped portを本機能へ供給する。
 
 ## System Flows
 
@@ -145,28 +145,27 @@ sequenceDiagram
     participant State
     participant Restore
     participant Exchange
-    participant Maintenance
-    participant Repo
+    participant Foundation
     User->>File: select JSON
     File-->>State: text and byte size
     State->>Restore: preflight unknown input
     Restore->>Exchange: parse validate migrate map
-    Exchange-->>Restore: validated root and preview
-    Restore->>Repo: assess capacity
-    Repo-->>Restore: capacity result
+    Exchange-->>Restore: storage root candidate and preview
+    Restore->>Foundation: assessReplacement candidate
+    Foundation-->>Restore: replacement assessment or rejection
     Restore-->>State: restore ticket and preview
     State-->>User: replacement confirmation
     User->>State: confirm
     State->>Restore: commit ticket
-    Restore->>Maintenance: acquire persistent fence
-    Maintenance-->>Restore: fence and active projection
-    Restore->>Repo: replace validated root with fence
-    Repo-->>Restore: saved root
-    Restore->>Maintenance: release fence
+    Restore->>Foundation: runMaintenance acquire
+    Foundation-->>Restore: maintenance fence
+    Restore->>Foundation: replaceRoot candidate assessment fence
+    Foundation-->>Restore: replacement receipt
+    Restore->>Foundation: runMaintenance release
     Restore-->>State: success summary
 ```
 
-`RestoreTicket`は検証済みルートとその内容ハッシュ相当の不変tokenをstate内だけに保持する。ファイルを変更・再選択した場合はticketを破棄し、commit時にもSchemaValidatorと容量を再確認する。commitはFoundationの永続maintenance fenceを取得してから置換し、成功・失敗・取消の全経路でreleaseまたはabortする。application shellは同じFoundationのread-only maintenance購読を投影するため、復元featureが他featureのUIを直接操作せず全mutationを共通抑止できる。
+`RestoreTicket`は`assessReplacement`が返した`ReplacementAssessment`（digest・token・`cursor.revision`を含む）と対応するcandidateをstate内だけに保持する。ファイルを変更・再選択した場合はticketを破棄する。commit時の再検証・容量再判定・stale検出（`cursor.revision`不一致→`stale-assessment`）はFoundationの`replaceRoot`が内部で行うため、feature側で重複実装しない。commitは`runMaintenance({type:"acquire"})`でfenceを取得してから`replaceRoot`へfenceを渡し、成功・失敗・取消の全経路で`release`または`abort`する。application shellは同じFoundationのread-only maintenance購読を投影するため、復元featureが他featureのUIを直接操作せず全mutationを共通抑止できる。
 
 ## Requirements Traceability
 
@@ -178,12 +177,12 @@ sequenceDiagram
 | 2.1, 2.2, 2.3 | 交換契約 | ExchangeValidator、ExchangeMapper | BackupEnvelope | 両フロー |
 | 2.4, 2.5 | 形式版と移行 | ExchangeMigration | migrate | 復元 |
 | 3.1, 3.2, 3.3, 3.5 | 事前検証 | RestoreService、ExchangeValidator | preflight | 復元 |
-| 3.4 | 容量拒否 | RestoreService、LocalDataRepository | assessRestore | 復元 |
+| 3.4 | 容量拒否 | RestoreService、FoundationDataPort | assessReplacement | 復元 |
 | 3.6 | preview | RestoreService、BackupRestoreView | RestorePreview | 復元 |
 | 4.1, 4.2 | 確認 | BackupRestoreState、BackupRestoreView | RestoreTicket | 復元 |
-| 4.3, 4.5, 4.6 | 全体置換と共通操作ロック | RestoreService、MaintenanceSessionPort、LocalDataRepository、application shell | maintenance fence、replaceRoot | 復元 |
+| 4.3, 4.5, 4.6 | 全体置換と共通操作ロック | RestoreService、FoundationDataPort、application shell | runMaintenance、replaceRoot | 復元 |
 | 4.4 | 成功反映 | BackupRestoreState、RuntimeIntegration | RestoreSummary | 復元 |
-| 5.1, 5.2, 5.3, 5.4 | 原子的失敗回復 | RestoreService、LocalDataRepository | replaceRoot、RestoreError | 復元 |
+| 5.1, 5.2, 5.3, 5.4 | 原子的失敗回復 | RestoreService、FoundationDataPort | replaceRoot、RestoreError | 復元 |
 | 5.5 | 再試行 | BackupRestoreState | resetSelection | 復元 |
 | 6.1, 6.2, 6.3, 6.4 | 管理画面と案内 | BackupRestoreView、BackupRestoreState | ViewState | 両フロー |
 | 6.5 | 値を露出しない診断 | 全検証・サービス | path based errors | 両フロー |
@@ -197,9 +196,9 @@ sequenceDiagram
 | ExchangeMigration | Exchange | 対応旧形式を現行へ変換 | 2.4, 2.5, 5.3 | ExchangeValidator P0 | Service |
 | ExchangeMapper | Exchange | Envelopeと保存ルートを相互変換 | 1.1–2.3 | DomainModel P0 | Service |
 | BackupService | Feature | 検証済みデータをfile artifact化 | 1.1–1.6 | Repository P0、Mapper P0 | Service |
-| RestoreService | Feature | preflightとfence付きcommitを調整 | 3.1–5.5 | Exchange P0、Repository P0、MaintenanceSessionPort P0 | Service |
-| MaintenanceSessionPort | Foundation port | 永続maintenance fenceの取得・更新・解放 | 4.3, 4.5, 5.1–5.5 | write authority P0 | Service, State |
-| LocalDataRepository | Persistence | 容量確認付き単一置換 | 3.4, 4.3, 5.1–5.4 | Validator P0、Storage P0 | Service |
+| RestoreService | Feature | preflightとfence付きcommitを調整 | 3.1–5.5 | Exchange P0、FoundationDataPort P0 | Service |
+| FoundationDataPort | Foundation port | 参照・原子的置換・保守fenceの単一write authority | 3.1–5.5 | RootTransactionRunner P0 | Service |
+| LocalDataRepository | Persistence (read-only) | 検証済みsnapshotの参照 | 1.1, 1.4 | Storage P0 | Service |
 | FileGateway | UI adapter | extension pageのファイルI/O | 1.3, 3.1 | Web API P0 | Service |
 | BackupRestoreState | UI state | 処理状態、ticket、再試行 | 1.5, 3.5–6.6 | Services P0 | State |
 | BackupRestoreView | UI | 操作、案内、preview、確認 | 3.2, 3.6, 4.1–6.5 | State P0 | State |
@@ -232,7 +231,7 @@ interface ExchangeMapper {
 }
 ```
 
-MapperはID、日時、確認値、出典、正規化属性、候補所属、構成参照を保持する。保存`schemaVersion`は交換データから信頼せず、現行保存スキーマ版を用いてルートを構築し、SchemaValidatorで最終検証する。
+MapperはID、日時、確認値、出典、正規化属性、候補所属、構成参照を保持する。保存`schemaVersion`は交換データから信頼せず、現行保存スキーマ版を用いて保存root候補を構築する。この候補は`unknown`として`FoundationDataPort.assessReplacement`へ渡し、最終的なschema検証・参照整合性・容量判定はFoundationが行う（feature側でSchemaValidatorや容量判定を重複実行しない）。
 
 ### Feature Layer
 
@@ -261,11 +260,17 @@ interface RestoreService {
   commit(ticket: RestoreTicket): Promise<Result<RestoreSummary, RestoreError>>;
 }
 
-interface MaintenanceSessionPort {
-  acquire(ownerId: MaintenanceOwnerId, leaseMs: number): Promise<Result<MaintenanceFence, RestoreError>>;
-  renew(fence: MaintenanceFence, leaseMs: number): Promise<Result<MaintenanceFence, RestoreError>>;
-  release(fence: MaintenanceFence): Promise<Result<void, RestoreError>>;
-  abort(fence: MaintenanceFence): Promise<Result<void, RestoreError>>;
+// Foundation所有。本機能はこのportを消費するだけで再定義しない。
+interface FoundationDataPort {
+  assessReplacement(input: unknown): Promise<Result<ReplacementAssessment, FoundationError>>;
+  replaceRoot(command: ReplacementCommand): Promise<Result<ReplacementReceipt, FoundationError>>;
+  runMaintenance(command: MaintenanceCommand): Promise<Result<MaintenanceReceipt, FoundationError>>;
+}
+
+interface RestoreTicket {
+  readonly candidate: unknown;                 // ExchangeMapperが生成した保存root候補
+  readonly assessment: ReplacementAssessment;  // digest・token・cursor.revisionを含む
+  readonly preview: RestorePreview;
 }
 
 interface RestoreInput {
@@ -274,22 +279,38 @@ interface RestoreInput {
 }
 ```
 
-`preflight`はサイズ上限、JSON解析、形式移行、交換検証、保存ルート変換、SchemaValidator、容量見積りの順に実行する。`commit`は永続maintenance fenceを取得し、必要ならleaseを更新しながらticketの検証済みルートとfenceをRepositoryへ渡し、再検証と再容量判定後の成功だけを返す。成功・失敗・取消の全経路でfenceをreleaseまたはabortし、解放失敗を成功として隠さない。ticketはUI state外へ永続化しない。
+`preflight`はサイズ上限、JSON解析、交換形式移行、交換検証、保存root候補への変換の順に交換層で行い、続けて`FoundationDataPort.assessReplacement(candidate)`へ渡す。保存schema検証（参照整合性含む）・容量見積り・digest付きassessment生成はFoundationが担い、非対応版・破損・容量超過はここで拒否される。`commit`は`runMaintenance({type:"acquire"})`でfenceを取得し、`replaceRoot({candidate, assessment, fence})`を呼ぶ。assessment再検証・stale検出・容量再判定・単一writeはFoundation内部で完結する。成功・失敗・取消の全経路で`runMaintenance({type:"release"|"abort"})`を呼び、解放失敗を成功として隠さない。`ownerId`は復元セッションごとに生成したUUIDを用い、ticketはUI state外へ永続化しない。
 
 ### Persistence Layer
 
-#### LocalDataRepository Extension
+#### Foundation contracts consumed（persistenceは変更しない）
+
+本機能はpersistenceへ手を加えず、Foundationが既に公開する契約をそのまま消費する。
 
 ```typescript
+// 既存。参照はread-only。
 interface LocalDataRepository {
-  read(): Promise<Result<LocalDataRoot, RepositoryError>>;
-  capacity(): Promise<Result<CapacityStatus, RepositoryError>>;
-  assessReplacement(root: LocalDataRoot): Promise<Result<ReplacementCapacity, RepositoryError>>;
-  replaceRoot(root: LocalDataRoot, fence: MaintenanceFence): Promise<Result<LocalDataRoot, RepositoryError>>;
+  readRoot(): Promise<Result<LocalDataRoot, RepositoryError>>;
+  query<T>(query: RootQuery<T>): Promise<Result<T, RepositoryError>>;
 }
+
+// 既存。置換command。candidateはunknownとして検証される。
+interface ReplacementCommand {
+  readonly candidate: unknown;
+  readonly assessment: ReplacementAssessment;
+  readonly fence: MaintenanceFence;
+}
+
+// 既存。保守command。
+type MaintenanceCommand =
+  | { readonly type: "acquire"; readonly ownerId: MaintenanceOwnerId; readonly leaseMs: number }
+  | { readonly type: "renew"; readonly fence: MaintenanceFence; readonly leaseMs: number }
+  | { readonly type: "release" | "abort"; readonly fence: MaintenanceFence };
 ```
 
-`replaceRoot`は既存更新キュー内で入力再検証、最新容量確認、単一キーへの一回のwrite、保存後結果返却を行う。書込前に現在値を変更せず、write失敗を成功へ変換しない。Chrome Storage APIへの追加アクセス経路は作らない。
+`assessReplacement`と`replaceRoot`は既存の単一write queueと`RootWriteLock`内で、migration・schema検証・容量確認・digest照合・fence認可・単一writeを行い、書込前に現在値を変更せず、write失敗を成功へ変換しない。Chrome Storage APIへの追加アクセス経路は作らない。
+
+application shellは置換・保守capabilityを含むscoped portを本機能へ供給する。既定の`createScopedDataPort`は最小権限のため置換・保守を外すので、本機能専用の登録契約でのみ露出する。合わせて、consumerが型付けに必要な`MaintenanceFence`・`MaintenanceOwnerId`をFoundationのpublic入口から利用可能にする（現状未公開なら公開追加を前提とする）。
 
 ### UI Layer
 
@@ -342,7 +363,7 @@ interface RestorePreview {
 
 - `FileError`: 未選択、複数選択、読取不能、事前サイズ超過。
 - `ExchangeError`: JSON解析、必須構造、非対応版、path付き値・参照問題。入力値は表示しない。
-- `RestoreError`: 上記に加え`quota`、`storage`、`corrupt-current-data`、`stale-ticket`を判別する。
+- `RestoreError`: 上記に加え`quota`、`storage`、`corrupt-current-data`、`unsupported-version`、`stale-ticket`を判別し、Foundationの`quota-exceeded`/`storage-unavailable`/`unsupported-version`/`stale-assessment`/`validation`等を対応するfeature codeへ写像する（値は露出しない）。
 - `BackupError`: `corrupt-current-data`、`unsupported-current-data`、`storage`、`serialization`を判別する。
 - 失敗時は永続スナップショットを更新せず、stateは再選択・再試行可能な`failed`へ遷移する。
 
@@ -351,7 +372,7 @@ interface RestorePreview {
 ## Testing Strategy
 
 - **Unit**: Envelope全フィールド、未知・旧・将来版、非JSON値、禁止内容、ID重複、孤立候補、別プロジェクト構成参照、Mapper往復同値性を検証する。
-- **Repository integration**: `replaceRoot`の再検証、容量境界、単一write、書込失敗時の保存値不変、管理更新との直列化を検証する。
+- **Foundation port integration**: `assessReplacement`/`replaceRoot`経由の再検証、容量境界、単一write、書込失敗時の保存値不変、通常mutationとの直列化を、本機能の呼び出し経路で検証する（Foundation内部実装は再テストせず消費側契約を対象とする）。
 - **Maintenance integration**: acquire後だけfence付き置換を許可し、renew、成功release、失敗abort、shell全体のmutation抑止とread-only navigation維持を検証する。
 - **Service integration**: 空・全データexport、決定的ファイル名、preflight順序、preview件数、stale ticket、commit成功と全失敗点の不変性を検証する。
 - **State/React UI**: 処理中抑止、取消、再選択、確認前commit不可、警告文、値を露出しないエラー、再表示時の未選択状態、unmount cleanupを検証する。
