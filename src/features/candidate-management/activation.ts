@@ -7,9 +7,12 @@ import type {
 import {
   err,
   ok,
+  PART_CATEGORIES,
+  type PartCategory,
   type ProjectId,
   validateCandidatePartContent,
 } from "../../domain/public.js";
+import { withCategory } from "./category-draft.js";
 import type { CandidateDraft } from "./contracts.js";
 import type { ManagementState } from "./state.js";
 
@@ -19,14 +22,20 @@ export const openCandidateEditorTarget = "open-candidate-editor";
 export interface CandidateEditorPrefill {
   readonly projectId: ProjectId;
   readonly draft: CandidateDraft;
+  /**
+   * A non-binding category suggestion (e.g. inferred from a captured page's
+   * category label). It seeds the editor's default selection only when the
+   * draft has no confirmed category; the user still ratifies it by saving.
+   */
+  readonly categoryHint?: PartCategory;
 }
+
+const isPartCategory = (value: unknown): value is PartCategory =>
+  typeof value === "string" &&
+  (PART_CATEGORIES as readonly string[]).includes(value);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
-  Object.keys(value).every((key) => keys.includes(key)) &&
-  keys.every((key) => key in value);
 
 const hasAllowedKeys = (
   value: Record<string, unknown>,
@@ -73,10 +82,11 @@ const isCandidateEditorPrefill = (
   payload: unknown,
 ): payload is CandidateEditorPrefill =>
   isRecord(payload) &&
-  hasOnlyKeys(payload, ["projectId", "draft"]) &&
+  hasAllowedKeys(payload, ["projectId", "draft", "categoryHint"]) &&
   typeof payload.projectId === "string" &&
   isDraft(payload.draft) &&
-  payload.draft.projectId === payload.projectId;
+  payload.draft.projectId === payload.projectId &&
+  (payload.categoryHint === undefined || isPartCategory(payload.categoryHint));
 
 /** Revalidates shell-delivered unknown payloads before changing feature UI state. */
 export const createCandidateActivation = (
@@ -106,7 +116,17 @@ export const createCandidateActivation = (
       });
     }
     await state.selectProject(prefill.projectId);
-    state.beginCreate(prefill.draft);
+    /**
+     * Apply the suggestion only when the draft carries no confirmed category,
+     * so an existing formal category always wins over a hint. The seeded draft
+     * is unsaved editor state, ratified by the user on save.
+     */
+    const initialDraft =
+      prefill.categoryHint !== undefined &&
+      prefill.draft.category === "uncategorized"
+        ? withCategory(prefill.draft, prefill.categoryHint)
+        : prefill.draft;
+    state.beginCreate(initialDraft);
     /**
      * The editor stays closed when the shell forbids mutations, so reporting
      * success would tell an upstream capture feature that an editor it cannot

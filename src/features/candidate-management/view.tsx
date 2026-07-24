@@ -7,6 +7,7 @@ import {
   type PartCategory,
   type UtcTimestamp,
 } from "../../domain/public.js";
+import { withCategory } from "./category-draft.js";
 import type { CandidateDraft, CandidateSummary } from "./contracts.js";
 import type { ManagementDisplayError, ManagementState } from "./state.js";
 
@@ -120,46 +121,6 @@ function CandidateListItem({
     </li>
   );
 }
-
-const attributesFor = (
-  category: PartCategory,
-): CandidateDraft["normalizedAttributes"] => {
-  switch (category) {
-    case "cpu":
-      return { category, socket: { original: null } };
-    case "cpu-cooler":
-      return { category, supportedSockets: { original: null } };
-    case "motherboard":
-      return {
-        category,
-        socket: { original: null },
-        memoryStandard: { original: null },
-        formFactor: { original: null },
-      };
-    case "memory":
-      return { category, memoryStandard: { original: null } };
-    case "power-supply":
-      return { category, formFactor: { original: null } };
-    case "case":
-      return {
-        category,
-        supportedMotherboardFormFactors: { original: null },
-        supportedPowerSupplyFormFactors: { original: null },
-      };
-    default:
-      return { category };
-  }
-};
-
-const changeCategory = (
-  draft: CandidateDraft,
-  category: PartCategory,
-): CandidateDraft =>
-  ({
-    ...draft,
-    category,
-    normalizedAttributes: attributesFor(category),
-  }) as CandidateDraft;
 
 /**
  * Clears a confirmed price without inventing one. Any extracted original is
@@ -426,7 +387,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         <select
           name="candidate-category"
           onChange={(event) =>
-            update(changeCategory(draft, event.target.value as PartCategory))
+            update(withCategory(draft, event.target.value as PartCategory))
           }
           value={draft.category}
         >

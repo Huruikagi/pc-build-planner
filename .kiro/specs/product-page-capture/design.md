@@ -147,7 +147,7 @@ sequenceDiagram
 | 1.1, 1.2, 1.3, 1.4, 1.5 | 明示操作と一時権限 | Coordinator、Runtime | CaptureRequest | 取り込み |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 汎用抽出と根拠 | Extractor、Ranker | ExtractionCandidate | 取り込み |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 正規化・未信頼入力 | Normalizer、Coordinator | RawCapturePayload、NormalizedField | 取り込み |
-| 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | 確認・補正 | CaptureState、CaptureView、CandidateEditorNavigation | CaptureSessionState、CandidateEditorPrefill | 確認・typed activation |
+| 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8 | 確認・補正・カテゴリ参考値 | CaptureState、CaptureView、CandidateEditorNavigation、inferCategoryHint | CaptureSessionState、CandidateEditorPrefill（categoryHint） | 確認・typed activation |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | project選択・保存 | State、DraftMapper | CaptureCandidatePort | 保存 |
 | 6.1, 6.2, 6.3, 6.4, 6.5 | 失敗・再試行 | Coordinator、State、View | CaptureError | 取り込み・保存 |
 | 7.1, 7.2, 7.3 | 架空資産による検証 | 全コンポーネント | Test fixtures | 全フロー |
@@ -223,6 +223,15 @@ interface CandidateEditorNavigation {
 
 `open`は同じmapper規則で`CandidateDraft`を生成し、選択projectと組み合わせた`CandidateEditorPrefill`を候補管理の`openCandidateEditor`へ渡す。shell intentやfeature IDをcapture側で直接組み立てず、candidate managementの型付き公開portを利用する。失敗時はCaptureSession、修正値、project選択を保持する。
 
+##### カテゴリ参考値（categoryHint）（Requirement 4.7, 4.8）
+
+抽出したカテゴリ表記は`CandidateDraft`の`category`には反映しない（`CandidateDraft`は`category`と`normalizedAttributes`が整合する判別共用体であり、確信のない推定を`category`へ入れることはRequirement 3.6に反し型的にも不整合になるため）。代わりに、capture側の`inferCategoryHint(raw): PartCategory | undefined`が抽出表記から確信できる場合だけ`PartCategory`を推定し、`CandidateEditorPrefill`の**draftとは別枠**の任意項目`categoryHint`として運ぶ。
+
+- `CandidateEditorPrefill`に`readonly categoryHint?: PartCategory`を追加する。activationの実行時検証は`categoryHint`が未指定または有効な`PartCategory`のときだけ受理する。
+- 候補管理のactivationは、詳細編集を開く際に`draft.category === "uncategorized"`かつ`categoryHint`があるときだけ、それを初期カテゴリ（および当該カテゴリの空属性）として種付けする（`確定値 ?? 参考値 ?? uncategorized`の優先順位）。種付けされたdraftは未保存の編集状態であり、利用者が保存して初めて確定するため、Requirement 3.6の「システムが推測で確定しない」を保つ。
+- `categoryHint`は詳細編集経路（prefill→editor）にのみ流し、直接「保存」経路には効かせない。直接保存は従来どおり`uncategorized`のままとし、人的確認を経ないカテゴリ確定を発生させない。
+- 推定表(`inferCategoryHint`)は、より具体的なカテゴリを広いキーワードより先に評価する（例: 「CPUクーラー」は`cpu`より先に`cpu-cooler`へ一致）。`other`・`uncategorized`は推定対象としない。確信できない場合は`undefined`を返し、`categoryHint`を付与しない。
+
 上流の`openCandidateEditor`は非空の商品名（`SourcedValue`の`original`または`confirmed`）を持つprefillだけを受理し、空名は`invalid_activation`で拒否する。したがって`open`は非空商品名を前提とし、この前提を満たさない場合は遷移を試みず`project-required`/`validation`相当のCaptureErrorを返して確認画面に留める。抽出候補ゼロ（Requirement 4.6）の手入力導線は、この`open`経路とは分離し、後述のCaptureViewが最低限の商品名入力を促す案内を表示したうえで、商品名が入力された時点で初めて`open`を有効化する（prefillなしの空エディタ遷移は行わない）。
 
 ### Runtime and UI Layer
@@ -253,7 +262,7 @@ type CaptureSessionState =
 
 #### CaptureView
 
-簡易項目、欠損、取得元、元表記、project選択、保存・再試行・詳細編集操作を描画する。抽出候補がゼロの場合（Requirement 4.6）は、空の詳細編集へ即時遷移せず、手入力で詳細編集へ進むための商品名入力を促す案内を表示する。商品名が空の間は保存と詳細編集遷移（`CandidateEditorNavigation.open`）をいずれも無効化し、非空になった時点で有効化する。文字列は`textContent`相当で扱い、URLも自動的に実行・遷移可能なHTMLとして挿入しない。
+簡易項目、欠損、取得元、元表記、project選択、保存・再試行・詳細編集操作を描画する。カテゴリ行は編集用の入力欄を持たず、`inferCategoryHint`による推定結果と取得根拠を表示専用で描画する（Requirement 4.7。編集して破棄される誤解を避け、確定は詳細編集の選択UIへ集約する）。抽出候補がゼロの場合（Requirement 4.6）は、空の詳細編集へ即時遷移せず、手入力で詳細編集へ進むための商品名入力を促す案内を表示する。商品名が空の間は保存と詳細編集遷移（`CandidateEditorNavigation.open`）をいずれも無効化し、非空になった時点で有効化する。文字列は`textContent`相当で扱い、URLも自動的に実行・遷移可能なHTMLとして挿入しない。
 
 ## Data Models
 

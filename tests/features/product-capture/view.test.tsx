@@ -186,6 +186,45 @@ test("reviewでは項目・取得元・元表記・欠損を表示し値を修�
   );
 });
 
+test("カテゴリ行は入力欄ではなく推定と取得根拠を読み取り専用で表示する", async () => {
+  const harness = createHarness();
+  harness.setCaptureResult(
+    ok(
+      captureResult({
+        draft: {
+          fields: [
+            {
+              field: "name",
+              normalizedValue: "架空GPU",
+              rawValue: "架空GPU",
+              source: "json-ld",
+              sourceLabel: "JSON-LD name",
+            },
+            {
+              field: "category",
+              normalizedValue: "グラフィックボード",
+              rawValue: "グラフィックボード",
+              source: "breadcrumb",
+              sourceLabel: "breadcrumb category segment",
+            },
+          ],
+          missingCoreFields: ["manufacturer", "modelNumber", "price", "url"],
+        },
+      }),
+    ),
+  );
+  await harness.state.startCapture();
+  const rendered = await renderView(harness);
+
+  assert.equal(
+    rendered.container.querySelector("[data-capture-field='category']"),
+    null,
+  );
+  const hint = rendered.query("[data-capture-category-hint]");
+  assert.match(hint.textContent ?? "", /推定: GPU/);
+  assert.match(rendered.text(), /元表記:\s*グラフィックボード/);
+});
+
 test("商品名が空の間は保存と詳細編集を無効化し入力すると有効化する", async () => {
   const harness = createHarness();
   await harness.state.startCapture();

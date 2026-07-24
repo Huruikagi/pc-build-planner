@@ -15,6 +15,17 @@
   font-size: 0.85em;
 }
 
+.product-capture__field-label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.product-capture__category-hint {
+  margin: 0;
+  color: var(--product-capture-hint-text, #33691e);
+  font-size: 0.9em;
+}
+
 .product-capture__error {
   color: var(--product-capture-error-text, #b3261e);
   font-weight: 600;

@@ -80,6 +80,68 @@ test("openは採用値からprefillを生成しopenCandidateEditorだけを介�
   assert.equal(h.calls[0]?.draft.category, "uncategorized");
 });
 
+test("抽出カテゴリからcategoryHintを推定しprefillへ付与する（draftは未分類のまま）", async () => {
+  const h = harness();
+  const navigation = createCandidateEditorNavigation({
+    openCandidateEditor: h.openCandidateEditor,
+  });
+
+  const result = await navigation.open(
+    session({
+      fields: [
+        {
+          field: "name",
+          value: { original: "架空GPU", confirmed: "架空GPU" },
+          source: "json-ld",
+          sourceLabel: "JSON-LD name",
+        },
+        {
+          field: "category",
+          value: {
+            original: "グラフィックボード",
+            confirmed: "グラフィックボード",
+          },
+          source: "breadcrumb",
+          sourceLabel: "breadcrumb category segment",
+        },
+      ],
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(h.calls[0]?.categoryHint, "gpu");
+  assert.equal(h.calls[0]?.draft.category, "uncategorized");
+});
+
+test("推定不能なカテゴリではcategoryHintを付与しない", async () => {
+  const h = harness();
+  const navigation = createCandidateEditorNavigation({
+    openCandidateEditor: h.openCandidateEditor,
+  });
+
+  const result = await navigation.open(
+    session({
+      fields: [
+        {
+          field: "name",
+          value: { original: "架空品", confirmed: "架空品" },
+          source: "json-ld",
+          sourceLabel: "JSON-LD name",
+        },
+        {
+          field: "category",
+          value: { original: "配送方法", confirmed: "配送方法" },
+          source: "table",
+          sourceLabel: "表",
+        },
+      ],
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal("categoryHint" in (h.calls[0] ?? {}), false);
+});
+
 test("商品名が空のセッションはopenCandidateEditorを呼ばずvalidationを返す", async () => {
   const h = harness();
   const navigation = createCandidateEditorNavigation({

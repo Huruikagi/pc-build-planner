@@ -108,6 +108,15 @@
   - _Depends: local task 6.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
+- [x] 7. カテゴリ参考値（categoryHint）を詳細編集の初期選択へ引き継ぐ
+  - `inferCategoryHint(raw): PartCategory | undefined`を追加し、抽出カテゴリ表記から確信できるカテゴリだけを推定する（具体カテゴリを広いキーワードより優先、`other`/`uncategorized`は非推定、確信できなければ`undefined`）
+  - `CandidateEditorPrefill`へdraftとは別枠の`categoryHint?: PartCategory`を追加し、activationの実行時検証で未指定または有効カテゴリだけを受理する
+  - 候補管理activationは`draft.category === "uncategorized"`かつ`categoryHint`があるときだけ初期カテゴリと空属性を種付けする（確定値優先。共有ヘルパー`withCategory`を候補管理内でview/activation双方から利用）
+  - `CandidateEditorNavigation.open`は抽出カテゴリから`categoryHint`を推定してprefillへ付与する。直接「保存」経路は従来どおり`uncategorized`のままとし、人的確認を経ないカテゴリ確定を発生させない
+  - CaptureViewのカテゴリ行を編集不可の表示専用（推定＋取得根拠）へ変更する
+  - _Requirements: 3.6, 4.7, 4.8_
+  - _Boundary: inferCategoryHint / CandidateEditorNavigation / CandidateEditorPrefill_
+
 ## Implementation Notes
 
 - Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。

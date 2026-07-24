@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
-import type { ProjectId } from "../../domain/public.js";
+import type { PartCategory, ProjectId } from "../../domain/public.js";
+import { inferCategoryHint } from "./category-hint.js";
 import {
   CAPTURE_CORE_FIELDS,
   type CaptureCoreField,
@@ -30,6 +31,22 @@ const FIELD_LABELS: Readonly<Record<CaptureCoreField, string>> = {
   manufacturer: "メーカー",
   modelNumber: "型番",
   url: "URL",
+};
+
+/** Labels for the read-only category suggestion; the formal picker lives in detail edit. */
+const CATEGORY_HINT_LABELS: Readonly<Record<PartCategory, string>> = {
+  cpu: "CPU",
+  "cpu-cooler": "CPUクーラー",
+  motherboard: "マザーボード",
+  memory: "メモリ",
+  gpu: "GPU",
+  storage: "ストレージ",
+  "power-supply": "電源",
+  case: "ケース",
+  "case-fan": "ケースファン",
+  "expansion-card": "拡張カード",
+  other: "その他",
+  uncategorized: "未分類",
 };
 
 const SOURCE_LABELS: Readonly<Record<ExtractionSource, string>> = {
@@ -129,6 +146,46 @@ function FieldRow({
   );
 }
 
+/**
+ * Category is read-only here: its value is never persisted from this panel and
+ * only seeds the detail editor's default selection (see `category-hint`). An
+ * editable field would imply a correction that is silently dropped, so we show
+ * the inferred suggestion and its source label instead of an input.
+ */
+function CategoryRow({ session }: { readonly session: CaptureSession }) {
+  const entry = fieldEntry(session, "category");
+  const text = resolvedFieldText(session, "category");
+  const hint = inferCategoryHint(text);
+  const missing = session.missingCoreFields.includes("category");
+  return (
+    <div className="product-capture__field" data-capture-field-row="category">
+      <p className="product-capture__field-label">{FIELD_LABELS.category}</p>
+      <p className="product-capture__category-hint" data-capture-category-hint>
+        {hint === undefined
+          ? "推定できませんでした（詳細編集で選択します）"
+          : `推定: ${CATEGORY_HINT_LABELS[hint]}（詳細編集の初期選択になります）`}
+      </p>
+      {entry === undefined ? null : (
+        <p className="product-capture__source">
+          取得元: {SOURCE_LABELS[entry.source]}（{entry.sourceLabel}）
+        </p>
+      )}
+      {entry?.value.original === null ||
+      entry?.value.original === undefined ? null : entry.value.original
+          .length === 0 ? null : (
+        <p className="product-capture__original">
+          元表記: {entry.value.original}
+        </p>
+      )}
+      {missing ? (
+        <p className="product-capture__missing" role="status">
+          未入力の項目です
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function RejectedFields({
   rejectedFields,
 }: {
@@ -167,14 +224,18 @@ function ReviewPanel({
           {ERROR_MESSAGES[error.kind]}
         </p>
       )}
-      {CAPTURE_CORE_FIELDS.map((field) => (
-        <FieldRow
-          field={field}
-          key={field}
-          onChange={(target, value) => state.updateField(target, value)}
-          session={session}
-        />
-      ))}
+      {CAPTURE_CORE_FIELDS.map((field) =>
+        field === "category" ? (
+          <CategoryRow key={field} session={session} />
+        ) : (
+          <FieldRow
+            field={field}
+            key={field}
+            onChange={(target, value) => state.updateField(target, value)}
+            session={session}
+          />
+        ),
+      )}
       <RejectedFields rejectedFields={session.rejectedFields} />
       <label>
         保存先プロジェクト

@@ -171,6 +171,79 @@ test("mutation が禁止された状態の activation は編集画面を開か�
   state.releaseOperationPolicy();
 });
 
+test("categoryHint は未分類 draft の初期カテゴリと属性を種付けする", async () => {
+  const state = createState();
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const prepared = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: {
+      projectId: prefillProjectId,
+      draft: { ...draft, projectId: prefillProjectId },
+      categoryHint: "gpu",
+    },
+  });
+
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.equal((await prepared.value.activate()).ok, true);
+  assert.equal(state.value.editor?.mode, "create");
+  assert.equal(state.value.editor?.draft.category, "gpu");
+  assert.deepEqual(state.value.editor?.draft.normalizedAttributes, {
+    category: "gpu",
+  });
+});
+
+test("categoryHint は確定済みカテゴリを上書きしない", async () => {
+  const state = createState();
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const prepared = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: {
+      projectId: prefillProjectId,
+      draft: {
+        projectId: prefillProjectId,
+        category: "cpu" as const,
+        product: { name: { original: "架空CPU" } },
+        normalizedAttributes: {
+          category: "cpu" as const,
+          socket: { original: "LGA1700" },
+        },
+      },
+      categoryHint: "gpu",
+    },
+  });
+
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.equal((await prepared.value.activate()).ok, true);
+  assert.equal(state.value.editor?.draft.category, "cpu");
+});
+
+test("不正な categoryHint を含む prefill は拒否され画面を保持する", async () => {
+  const state = createState();
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const result = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: {
+      projectId: prefillProjectId,
+      draft: { ...draft, projectId: prefillProjectId },
+      categoryHint: "not-a-category",
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(state.value.editor, null);
+});
+
 test("存在しない project を指定した activation は draft を変更しない", async () => {
   const state = createState();
   await state.load();

@@ -1,8 +1,20 @@
 import type { FeatureActivationError } from "../../application-shell/public.js";
 import { err, ok, type ProjectId, type Result } from "../../domain/public.js";
 import type { CandidateEditorPrefill } from "../candidate-management/public.js";
+import { inferCategoryHint } from "./category-hint.js";
 import type { CaptureError, CaptureSession } from "./contracts.js";
 import { toCandidateDraft } from "./draft-mapper.js";
+
+/** The current category label a user would see: their edit, else the extracted value. */
+const resolvedCategoryText = (session: CaptureSession): string | undefined => {
+  const corrected = session.userCorrections.category;
+  if (corrected !== undefined) return corrected;
+  const entry = session.fields.find((field) => field.field === "category");
+  if (entry === undefined) return undefined;
+  return typeof entry.value.confirmed === "string"
+    ? entry.value.confirmed
+    : (entry.value.original ?? undefined);
+};
 
 export interface CandidateEditorNavigation {
   /** Requires a non-empty resolved name and a selected project; never invents a prefill. */
@@ -31,9 +43,11 @@ export const createCandidateEditorNavigation = (
     const draft = toCandidateDraft(session);
     if (!draft.ok) return draft;
 
+    const categoryHint = inferCategoryHint(resolvedCategoryText(session));
     const result = await dependencies.openCandidateEditor({
       projectId: draft.value.projectId,
       draft: draft.value,
+      ...(categoryHint === undefined ? {} : { categoryHint }),
     });
     return result.ok ? ok(undefined) : err(toNavigationError(result.error));
   },
