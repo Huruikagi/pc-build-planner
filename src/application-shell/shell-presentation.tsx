@@ -1,5 +1,3 @@
-import { Fragment } from "react";
-
 import { err, ok, type Result } from "../domain/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
 import { createReactShellRoot } from "./react-shell-root.js";
@@ -39,15 +37,14 @@ export function createShellPresentation(): ShellPresentationAdapter {
           },
         },
         render: (next) => (
-          <Fragment>
-            <ShellView
-              navigation={navigation}
-              onNavigate={input.onNavigate}
-              onRetry={input.onRetry}
-              state={next}
-            />
+          <ShellView
+            navigation={navigation}
+            onNavigate={input.onNavigate}
+            onRetry={input.onRetry}
+            state={next}
+          >
             <div data-shell-feature-slot={featureSlotMarker} />
-          </Fragment>
+          </ShellView>
         ),
       });
 

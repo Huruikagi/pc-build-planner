@@ -128,24 +128,24 @@ export function ShellView({
             <p>利用可能になるまでお待ちください。</p>
           </section>
         ) : null}
-        {(state.kind === "ready" || state.kind === "maintenance") &&
-        state.selected !== null ? (
-          <section className="shell-feature" data-feature-id={state.selected}>
-            <ShellErrorBoundary
-              renderFallback={(resetBoundary) => (
-                <FeatureFailure
-                  onRetry={() => {
-                    resetBoundary();
-                    onRetry?.();
-                  }}
-                />
-              )}
-              resetKey={state.selected}
-            >
-              {children}
-            </ShellErrorBoundary>
-          </section>
-        ) : null}
+        <section
+          className="shell-feature"
+          data-feature-id={selected ?? undefined}
+        >
+          <ShellErrorBoundary
+            renderFallback={(resetBoundary) => (
+              <FeatureFailure
+                onRetry={() => {
+                  resetBoundary();
+                  onRetry?.();
+                }}
+              />
+            )}
+            resetKey={selected}
+          >
+            {children}
+          </ShellErrorBoundary>
+        </section>
       </main>
     </div>
   );
