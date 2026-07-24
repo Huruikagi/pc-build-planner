@@ -47,7 +47,7 @@
 - [x] project-candidate-management -- `public.ts` とfeature registration、typed activationで開く `openCandidateEditor(prefill)`、`CandidateDraft.sourceInfo`、公開query名、cross-spec boundary注記を整合する。候補変更はfoundationの原子的root mutationを利用し、成功後の別writeによるbuild修復を要求しない。Dependencies: local-data-foundation, application-shell
 - [x] product-page-capture -- `public.ts` とregistration方式、typed candidate editor activation、maintenance中の保存拒否、Coordinator/DraftMapper境界、worker registration portを明示し、共有service workerを直接編集しない。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] current-build-management -- `public.ts` とregistration方式を採用し、公開候補query名と依存契約を統一する。候補変更成功後のreconcile writeを削除し、foundationの同一transaction内参照修復policyとの責務境界を明示する。Dependencies: local-data-foundation, application-shell, project-candidate-management
-- [ ] compatibility-checking -- `public.ts`、`project-candidate-management` へのdirect dependency、registration方式を明示し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
+- [x] compatibility-checking -- `public.ts`、`project-candidate-management` へのdirect dependency、registration方式を明示し、共有runtime入口を直接編集しない。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 - [ ] backup-restore -- `public.ts` を採用し、Repository primitiveの所有をfoundationへ戻す。maintenance leaseとatomic replacementの利用側、shellへの状態通知側へ限定し、共有runtime入口を直接編集しない。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 
 ## Direct Implementation Candidates
@@ -63,7 +63,7 @@
 - [x] project-candidate-management — 29/29 sub-tasks完了。候補管理の参加境界、管理画面、typed candidate editor activation、snapshot-aware registration、境界統合と受け入れ回帰を実装済み。
 - [x] current-build-management — 18/18 sub-tasks完了。構成管理と下流公開契約の受け入れ回帰を含め実装済み。
 - [x] product-page-capture — 全task完了。`/kiro-validate-impl`(2026-07-24)でクロスタスク欠陥2件(本番経路でのtab-changed検証未到達、feature stylesheet未bundle)を検出・修正済み。`pnpm test` 584 pass、Playwright e2e 4 passed。実Chromeでの`chrome.scripting.executeScript`成功経路は自動テストで再現不可のため手動確認を推奨(既知の制約として記録済み)。
-- [ ] compatibility-checking — requirements/design/tasks承認済み、`ready_for_implementation: true`。依存(current-build-management)実装済みのため着手可能、未着手(0/19 sub-tasks)。
+- [x] compatibility-checking — 19/19 sub-tasks完了。固定5規則、判定対象展開、集約優先規則、service/状態/画面統合、side panel統合と受け入れ回帰を実装済み。`/kiro-validate-impl`(2026-07-24)でGO判定(`pnpm test` 702 pass、typecheck/lint/boundaries/build/final-gate全通過、境界違反・秘匿情報なし)。
 - [ ] backup-restore — requirementsのみ承認済み、design/tasks未承認のため実装開始不可(0/19 sub-tasks)。
 
 ## Specs (dependency order)
@@ -73,5 +73,5 @@
 - [x] project-candidate-management -- projectと候補の管理、候補query、typed candidate editor activationを所有する。実装済み。Dependencies: local-data-foundation, application-shell
 - [x] current-build-management -- project内の現在構成、カテゴリ別選択policy、下流向け現在構成queryを所有する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
 - [x] product-page-capture -- ユーザー操作起点の商品抽出、確認session、候補作成連携を所有する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management
-- [ ] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。design/tasks承認済み、実装着手可能。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
+- [x] compatibility-checking -- 現在構成と候補属性から固定ルールによる互換性reportを生成する。実装済み。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
 - [ ] backup-restore -- バージョン付きJSONのbackup/restore、preflight、maintenance下の原子的置換を提供する。design/tasks承認後に実装する。Dependencies: local-data-foundation, application-shell, project-candidate-management, current-build-management
