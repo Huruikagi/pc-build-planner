@@ -110,3 +110,75 @@ test("入力順序が変わってもcautionの判定は変わらない", () => {
   assert.equal(resultAggregator.aggregate(forward), "caution");
   assert.equal(resultAggregator.aggregate(reversed), "caution");
 });
+
+test("入力順序が変わっても全互換の判定は変わらない", () => {
+  const forward: readonly RuleResult[] = [
+    compatible("cpu-motherboard-socket"),
+    compatible("motherboard-memory-ddr"),
+    compatible("cooler-cpu-socket"),
+    compatible("case-motherboard-form-factor"),
+    compatible("case-psu-form-factor"),
+  ];
+  const reversed = [...forward].reverse();
+  const shuffled = [
+    forward[3] as RuleResult,
+    forward[1] as RuleResult,
+    forward[4] as RuleResult,
+    forward[0] as RuleResult,
+    forward[2] as RuleResult,
+  ];
+
+  assert.equal(resultAggregator.aggregate(forward), "compatible");
+  assert.equal(resultAggregator.aggregate(reversed), "compatible");
+  assert.equal(resultAggregator.aggregate(shuffled), "compatible");
+});
+
+test("入力順序が変わっても全判定不能の判定は変わらない", () => {
+  const forward: readonly RuleResult[] = [
+    unknown("cpu-motherboard-socket"),
+    unknown("motherboard-memory-ddr"),
+    unknown("cooler-cpu-socket"),
+  ];
+  const reversed = [...forward].reverse();
+  const shuffled = [
+    forward[2] as RuleResult,
+    forward[0] as RuleResult,
+    forward[1] as RuleResult,
+  ];
+
+  assert.equal(resultAggregator.aggregate(forward), "unknown");
+  assert.equal(resultAggregator.aggregate(reversed), "unknown");
+  assert.equal(resultAggregator.aggregate(shuffled), "unknown");
+});
+
+test("非互換・互換・判定不能が混在しても順序に関わらず非互換を最優先する", () => {
+  const forward: readonly RuleResult[] = [
+    compatible("cpu-motherboard-socket"),
+    unknown("motherboard-memory-ddr"),
+    incompatible("cooler-cpu-socket"),
+    compatible("case-motherboard-form-factor"),
+    unknown("case-psu-form-factor"),
+  ];
+  const permutations: readonly (readonly RuleResult[])[] = [
+    [...forward].reverse(),
+    [
+      forward[2] as RuleResult,
+      forward[4] as RuleResult,
+      forward[0] as RuleResult,
+      forward[3] as RuleResult,
+      forward[1] as RuleResult,
+    ],
+    [
+      forward[1] as RuleResult,
+      forward[3] as RuleResult,
+      forward[2] as RuleResult,
+      forward[0] as RuleResult,
+      forward[4] as RuleResult,
+    ],
+  ];
+
+  assert.equal(resultAggregator.aggregate(forward), "incompatible");
+  for (const permutation of permutations) {
+    assert.equal(resultAggregator.aggregate(permutation), "incompatible");
+  }
+});
