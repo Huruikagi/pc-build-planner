@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 互換性判定の契約と固定ルールを確立する
+- [x] 1. 互換性判定の契約と固定ルールを確立する
 - [x] 1.1 判定対象、個別結果、集約結果、失敗の契約を定義する
   - 上流ID・日時・Resultを再利用し、RuleId、確認済み入力、根拠、不足項目を判別可能にする
   - 個別statusと4区分の集約statusを混同せず、結果を読み取り専用の派生スナップショットとして表現する
@@ -13,7 +13,7 @@
   - 一致、非一致、左右欠損の架空入力に対し、5規則が決定的な個別結果を返す
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 2. 判定対象展開と集約を実装する
+- [x] 2. 判定対象展開と集約を実装する
 - [x] 2.1 (P) 現在構成からルール対象を展開する
   - 構成項目を同一projectの分類済み候補へ結合し、5規則の左右カテゴリごとに候補ID単位の組み合わせを生成する
   - 数量による同一組み合わせの重複を抑止し、カテゴリ欠如をルール単位の不足対象として残す
@@ -30,7 +30,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
   - _Boundary: ResultAggregator_
 
-- [ ] 3. 上流読取と判定サービスを統合する
+- [x] 3. 上流読取と判定サービスを統合する
 - [x] 3.1 現在構成と候補照会から互換性reportを生成する
   - CurrentBuildQueryとCandidateQueryをprojectIdで照会し、参照検証後に対象展開、ルール評価、集約を順に実行する
   - 構成なし、読取失敗、破損・非対応、不正参照を結果statusと混同しない失敗へ写像する
@@ -46,7 +46,7 @@
   - _Requirements: 1.4, 1.5, 4.5_
   - _Boundary: CompatibilityService_
 
-- [ ] 4. 互換性画面の状態と表示を実装する
+- [x] 4. 互換性画面の状態と表示を実装する
 - [x] 4.1 評価の読込、最新性、空、失敗状態を実装する
   - idle、loading、ready、empty、failedを分離し、同時評価では最新世代の完了だけを反映する
   - loading中は以前のreportを最新として操作判断に利用させず、失敗時は誤った互換性statusを表示しない
@@ -70,7 +70,7 @@
   - _Requirements: 1.1, 1.4, 1.5, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
 
-- [ ] 5. side panel統合と受け入れ検証を完成する
+- [x] 5. side panel統合と受け入れ検証を完成する
 - [x] 5.1 互換性機能を既存side panelと公開入口へ統合する
   - shell所有の`side-panel-contributions.ts`へ本機能のcontributionを追加し、featureが返すFeatureContributionをshellがcompositionする。共有runtime入口とroot barrelはfeature側から編集しない
   - 既存の依存順合成に倣い、CandidateQueryとCurrentBuildQueryをそれぞれの上流contributionの公開queryから取得してserviceへ注入し、RepositoryやStorage APIを直接利用せず画面を起動する
