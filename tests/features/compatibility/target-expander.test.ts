@@ -464,3 +464,71 @@ test("同じ入力に対して実行順序へ依存しない同一結果を返�
   const second = targetExpander.expand(snapshotWith(fullBuild), fullParts);
   assert.deepEqual(first, second);
 });
+
+test("不正参照は構成の途中に現れても全評価を停止し部分結果を返さない", () => {
+  const build: CurrentBuild = {
+    ...fullBuild,
+    items: [item(cpuId), item(unlistedId), item(motherboardId)],
+  };
+
+  const result = targetExpander.expand(snapshotWith(build), fullParts);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "invalid-reference");
+});
+
+test("表示名は確認済み商品名がなければ元表記商品名を使う", () => {
+  const cpuWithOriginalNameOnly: CandidatePart = {
+    ...cpuCandidate(cpuId, "AM5"),
+    product: { name: { original: "元表記CPU名" } },
+  };
+  const build: CurrentBuild = {
+    ...fullBuild,
+    items: [item(cpuId), item(motherboardId)],
+  };
+  const parts: readonly CandidatePart[] = [
+    cpuWithOriginalNameOnly,
+    motherboardCandidate(motherboardId, { socket: "AM5" }),
+  ];
+
+  const result = targetExpander.expand(snapshotWith(build), parts);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  const socketTarget = result.value.find(
+    (target) => target.ruleId === "cpu-motherboard-socket",
+  );
+  assert.ok(socketTarget);
+  assert.equal(
+    socketTarget.left.kind === "present" ? socketTarget.left.displayName : null,
+    "元表記CPU名",
+  );
+});
+
+test("表示名は商品名が一切なければcandidatePartIdを使う", () => {
+  const cpuWithoutName: CandidatePart = {
+    ...cpuCandidate(cpuId, "AM5"),
+    product: {},
+  };
+  const build: CurrentBuild = {
+    ...fullBuild,
+    items: [item(cpuId), item(motherboardId)],
+  };
+  const parts: readonly CandidatePart[] = [
+    cpuWithoutName,
+    motherboardCandidate(motherboardId, { socket: "AM5" }),
+  ];
+
+  const result = targetExpander.expand(snapshotWith(build), parts);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  const socketTarget = result.value.find(
+    (target) => target.ruleId === "cpu-motherboard-socket",
+  );
+  assert.ok(socketTarget);
+  assert.equal(
+    socketTarget.left.kind === "present" ? socketTarget.left.displayName : null,
+    cpuId,
+  );
+});
