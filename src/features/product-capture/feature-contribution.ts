@@ -102,7 +102,10 @@ export const createProductCaptureContribution = (
           : value.status === "failed"
             ? value.draft
             : undefined;
-      if (session !== undefined) void navigation.open(session);
+      if (session === undefined) return;
+      void navigation.open(session).then((result) => {
+        if (!result.ok) state.reportDetailEditFailure(result.error);
+      });
     },
   });
 

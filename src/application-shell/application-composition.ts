@@ -106,9 +106,9 @@ export function createProductionSidePanelComposition(
       addActionHandler() {
         throw new Error("Side panel does not own worker handlers.");
       },
-      reportError: () => undefined,
+      reportError: (message) => console.error(message),
     },
-    reportError: () => undefined,
+    reportError: (message) => console.error(message),
   });
 }
 

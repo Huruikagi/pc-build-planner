@@ -129,6 +129,19 @@ export class CaptureState {
     this.#set({ status: "review", session: { ...session, projectId } });
   }
 
+  /**
+   * Surfaces a detail-edit navigation failure (e.g. shell activation rejected
+   * the prefill) as a recoverable `failed` state, keeping the session so the
+   * caller (`CandidateEditorNavigation.open`) doesn't lose the review draft.
+   * A no-op without an active session, since there is nothing to attach the
+   * error to.
+   */
+  public reportDetailEditFailure(error: CaptureError): void {
+    const session = this.#activeSession();
+    if (session === undefined) return;
+    this.#set({ status: "failed", recoverable: true, draft: session, error });
+  }
+
   /** Flips to `submitting` before awaiting the port call, so a re-entrant call is a no-op. */
   public async submit(): Promise<void> {
     const session = this.#activeSession();

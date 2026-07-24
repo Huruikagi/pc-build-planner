@@ -10,7 +10,7 @@ import type {
   Result,
   UtcTimestamp,
 } from "../../../src/domain/public.js";
-import { ok } from "../../../src/domain/public.js";
+import { err, ok } from "../../../src/domain/public.js";
 import type {
   CandidateDraft,
   CandidateEditorPrefill,
@@ -53,6 +53,7 @@ interface Harness {
   readonly createdCandidates: CandidateDraft[];
   readonly editorCalls: CandidateEditorPrefill[];
   setPage(html: string, url: string): void;
+  setEditorResult(result: Result<void, FeatureActivationError>): void;
   createContribution(): ReturnType<typeof createProductCaptureContribution>;
 }
 
@@ -92,11 +93,12 @@ const harness = (): Harness => {
     },
   };
 
+  let editorResult: Result<void, FeatureActivationError> = ok(undefined);
   const openCandidateEditor = async (
     prefill: CandidateEditorPrefill,
   ): Promise<Result<void, FeatureActivationError>> => {
     editorCalls.push(prefill);
-    return ok(undefined);
+    return editorResult;
   };
 
   return {
@@ -105,6 +107,9 @@ const harness = (): Harness => {
     setPage(html, url) {
       currentHtml = html;
       currentUrl = url;
+    },
+    setEditorResult(result) {
+      editorResult = result;
     },
     createContribution() {
       return createProductCaptureContribution(
@@ -264,4 +269,37 @@ test("同じ架空sessionから詳細編集を選ぶと型付きprefillで開き
     "[data-capture-project-select]",
   ) as HTMLSelectElement;
   assert.equal(restoredSelect.value, PROJECT_ID);
+});
+
+test("詳細編集への遷移がshell側で失敗すると確認画面に留まりエラーと入力値を表示する", async () => {
+  const h = harness();
+  h.setPage(RICH_HTML, "https://shop.example.invalid/products/x100");
+  h.setEditorResult(
+    err({ kind: "invalid_activation", detail: "架空の遷移失敗" }),
+  );
+  const contribution = h.createContribution();
+  const { container } = await mount(contribution);
+  const runAction = actionHandlerOf(contribution);
+
+  await act(async () => {
+    await runAction();
+  });
+
+  const user = userEvent.setup();
+  await user.selectOptions(
+    container.querySelector("[data-capture-project-select]") as HTMLElement,
+    PROJECT_ID,
+  );
+  await user.click(
+    container.querySelector("[data-capture-open-detail-edit]") as HTMLElement,
+  );
+
+  assert.equal(h.editorCalls.length, 1);
+  await act(async () => {
+    await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+  });
+
+  assert.match(container.textContent ?? "", /詳細編集画面を開けませんでした/);
+  assert.match(container.textContent ?? "", /架空CPU X100/);
+  assert.ok(container.querySelector("[data-capture-submit]"));
 });

@@ -184,6 +184,45 @@ test("review以外では修正やproject選択を無視する", () => {
   assert.deepEqual(state.value, { status: "idle" });
 });
 
+test("reportDetailEditFailureはreview中のセッションを保持したままnavigationエラーのfailedへ遷移する", async () => {
+  const h = harness();
+  const state = createCaptureState(h.dependencies);
+  await state.startCapture();
+  state.selectProject(PROJECT_ID);
+
+  state.reportDetailEditFailure({ kind: "navigation" });
+
+  assert.equal(state.value.status, "failed");
+  if (state.value.status !== "failed") return;
+  assert.deepEqual(state.value.error, { kind: "navigation" });
+  assert.equal(state.value.draft?.projectId, PROJECT_ID);
+});
+
+test("reportDetailEditFailureはdraftを保持したfailedからも同じdraftを保ってエラーを差し替える", async () => {
+  const h = harness();
+  const state = createCaptureState(h.dependencies);
+  await state.startCapture();
+  state.updateField("name", "");
+  await state.submit();
+  assert.equal(state.value.status, "failed");
+
+  state.reportDetailEditFailure({ kind: "navigation" });
+
+  assert.equal(state.value.status, "failed");
+  if (state.value.status !== "failed") return;
+  assert.deepEqual(state.value.error, { kind: "navigation" });
+  assert.equal(state.value.draft?.userCorrections.name, "");
+});
+
+test("activeなセッションがない状態でのreportDetailEditFailureは無視される", () => {
+  const h = harness();
+  const state = createCaptureState(h.dependencies);
+
+  state.reportDetailEditFailure({ kind: "navigation" });
+
+  assert.deepEqual(state.value, { status: "idle" });
+});
+
 test("projectを選択できる", async () => {
   const h = harness();
   const state = createCaptureState(h.dependencies);
