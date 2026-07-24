@@ -30,6 +30,26 @@ test("新しいcursorを辞書順に適用し現行世代の終了を反映す�
   });
 });
 
+test("空ストレージ起動時のgeneration 0 / revision 0初期snapshotをstale扱いせず取り込む", () => {
+  const projection = createMaintenanceProjection();
+
+  assert.equal(projection.accept(snapshot(0, 0, false)), "applied");
+  assert.deepEqual(projection.getSnapshot(), {
+    status: "inactive",
+    cursor: { generation: 0, revision: 0 },
+  });
+  // 初期受理後は同一cursorの重複が通常どおりstaleとして棄却される。
+  assert.equal(projection.accept(snapshot(0, 0, true)), "stale_ignored");
+  assert.equal(projection.getSnapshot().status, "inactive");
+});
+
+test("初期snapshotがactiveならcursorが初期値と同一でも維持状態を反映する", () => {
+  const projection = createMaintenanceProjection();
+
+  assert.equal(projection.accept(snapshot(0, 0, true)), "applied");
+  assert.equal(projection.getSnapshot().status, "active");
+});
+
 test("古い世代、古いrevision、同一cursorの重複を無視して後退しない", () => {
   const projection = createMaintenanceProjection();
   projection.accept(snapshot(2, 8, false));

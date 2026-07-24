@@ -13,6 +13,11 @@ const INVALID_CURSOR_MESSAGE =
 
 export function createMaintenanceProjection(): MaintenanceProjection {
   let current = inactiveState({ generation: 0, revision: 0 });
+  // 起動直後の初期cursorは「未受信」を表す暫定値であり、Foundationの実cursorと
+  // 比較可能な観測値ではない。最初の受理だけは比較せず必ず適用しないと、
+  // 空ストレージ起動時の実snapshot（generation 0 / revision 0）が
+  // 構造的にstale扱いとなり初期状態を取り込めない。
+  let seeded = false;
   const listeners = new Set<(state: ShellMaintenanceState) => void>();
 
   return {
@@ -22,9 +27,10 @@ export function createMaintenanceProjection(): MaintenanceProjection {
         generation: next.generation,
         revision: next.revision,
       };
-      if (compareCursor(nextCursor, current.cursor) <= 0) {
+      if (seeded && compareCursor(nextCursor, current.cursor) <= 0) {
         return "stale_ignored";
       }
+      seeded = true;
 
       current = next.active
         ? activeState(nextCursor)

@@ -189,6 +189,23 @@ test("mount中のfeatureはpolicy購読でmaintenance遷移を再mountなしに�
   assert.equal(policy.isAllowed("mutation"), false);
 });
 
+test("空ストレージ起動でも初期snapshotを診断エラーなしで取り込む", async () => {
+  const { diagnostics, fixture, integration, states } = setup(
+    snapshot(0, 0, false),
+  );
+  assert.equal((await integration.start()).ok, true);
+
+  assert.equal(diagnostics.length, 0);
+  assert.deepEqual(states.at(-1), {
+    kind: "ready",
+    selected: featureId("projects"),
+  });
+
+  // 初期受理後もcursor後退の抑止は従来どおり働く。
+  fixture.emit(snapshot(0, 0, true));
+  assert.ok(diagnostics.some((message) => message.includes("stale")));
+});
+
 test("初期snapshot失敗はfeatureをmountせずstartup failureへ変換する", async () => {
   const { contexts, integration, states } = setup(new Error("storage detail"));
   const result = await integration.start();
