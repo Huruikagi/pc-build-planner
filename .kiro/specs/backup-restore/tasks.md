@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 交換契約とFoundation消費境界を確立する
-- [ ] 1.1 バージョン付き交換契約と判別可能な結果を定義する
+- [x] 1.1 バージョン付き交換契約と判別可能な結果を定義する
   - 製品識別子、形式版、作成日時、全プロジェクト・候補・現在構成、preview、artifact、復元ticket（candidateとreplacement assessment）を型安全に表現する
   - ファイル、形式、参照、非対応版、容量、保存、stale確認の失敗を値を含まないcodeとpathで区別し、Foundationの結果をfeature codeへ写像する形を用意する
   - 現行・旧・将来版fixtureが型検査でき、保存スキーマ版が公開交換契約へ混入しない
@@ -120,3 +120,7 @@
   - _Depends: 5.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: Backup restore acceptance and regression tests_
+
+## Implementation Notes
+
+- 1.1: 現行交換形式版は1が初出のため、対応対象の旧版fixtureは存在しない。`tests/fixtures/backup.ts`は現行版・空データ・将来版(2)のfixtureのみを提供する。旧版fixtureは形式版2以降を追加する時点で用意する。
