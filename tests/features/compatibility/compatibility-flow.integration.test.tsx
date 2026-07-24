@@ -282,3 +282,138 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
   await act(async () => reopenedHandle?.unmount());
   await act(async () => buildHandle?.unmount());
 });
+
+test("現在構成が空なら互換性画面は全不足の判定不能を示し、上流保存値を変更しない", async () => {
+  const data = createFoundationPort();
+  const seedService = createCandidateManagementService({
+    data,
+    now: () => timestamp,
+    createProjectId: () => projectId,
+    createCandidateId: nextCandidateId,
+  });
+
+  const created = await seedService.createProject(
+    { name: "架空統合PC構成（未選択）" },
+    { requestId: nextRequest(), expectedRevision: 0 as Revision },
+  );
+  assert.equal(created.ok, true);
+
+  const cpu = await seedService.createCandidate(
+    {
+      projectId,
+      category: "cpu",
+      product: {
+        name: { original: "架空CPU未選択", confirmed: "架空CPU未選択" },
+      },
+      normalizedAttributes: {
+        category: "cpu",
+        socket: { original: "元表記", confirmed: "SYN-AM5" },
+      },
+    },
+    { requestId: nextRequest(), expectedRevision: 1 as Revision },
+  );
+  assert.equal(cpu.ok, true);
+  if (!cpu.ok) throw new Error("cpu候補を作成できません");
+
+  const contributions = createSidePanelFeatureContributions({
+    data,
+    navigator: {
+      async activate() {
+        return { ok: true as const, value: undefined };
+      },
+    },
+  });
+  const [candidateManagement, currentBuild, , compatibility] = contributions;
+  const candidateQuery = candidateManagement.registration.publicApi.query;
+  const buildQuery = currentBuild.registration.publicApi.query;
+
+  // 選択して解除することで、items が空の実在するCurrentBuild行を用意する
+  // （プロジェクトにCurrentBuildが一度も存在しない no-build 状態とは区別する）。
+  const buildContainer = document.createElement("div");
+  let buildHandle:
+    | Awaited<ReturnType<typeof currentBuild.registration.mount>>
+    | undefined;
+  await act(async () => {
+    buildHandle = await currentBuild.registration.mount({
+      container: buildContainer,
+      operationPolicy: policy,
+      reportError: () => {},
+    });
+  });
+  const selectButton = buildContainer.querySelector(
+    `[data-select-candidate-id='${cpu.value.id}']`,
+  ) as HTMLButtonElement;
+  await act(async () => {
+    selectButton.click();
+    await waitUntil(async () => {
+      const result = await buildQuery.getByProject(projectId);
+      return (
+        result.ok &&
+        result.value.currentBuild?.items.some(
+          (entry) => entry.candidatePartId === cpu.value.id,
+        ) === true
+      );
+    });
+  });
+  const removeButton = buildContainer.querySelector(
+    `[data-remove-candidate-id='${cpu.value.id}']`,
+  ) as HTMLButtonElement;
+  await act(async () => {
+    removeButton.click();
+    await waitUntil(async () => {
+      const result = await buildQuery.getByProject(projectId);
+      return (
+        result.ok &&
+        result.value.currentBuild !== null &&
+        result.value.currentBuild.items.length === 0
+      );
+    });
+  });
+  await act(async () => buildHandle?.unmount());
+
+  const candidatesBefore = await candidateQuery.listBuildEligible(projectId);
+  const buildBefore = await buildQuery.getByProject(projectId);
+  assert.equal(candidatesBefore.ok, true);
+  assert.equal(buildBefore.ok, true);
+
+  // 何も選択しないまま互換性画面を開く: 全5規則が両側欠如で判定不能となり、
+  // 集約結果は情報不足で判定不能になる。
+  const compatibilityContainer = document.createElement("div");
+  let compatibilityHandle:
+    | Awaited<ReturnType<typeof compatibility.registration.mount>>
+    | undefined;
+  await act(async () => {
+    compatibilityHandle = await compatibility.registration.mount({
+      container: compatibilityContainer,
+      operationPolicy: policy,
+      reportError: () => {},
+    });
+  });
+
+  assert.match(compatibilityContainer.textContent ?? "", /情報不足で判定不能/);
+  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /互換性あり/);
+  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /互換性なし/);
+  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /注意事項あり/);
+  const resultRows = compatibilityContainer.querySelectorAll(
+    "[data-result-status='unknown']",
+  );
+  assert.equal(resultRows.length, 5, "全5規則が判定不能として表示されていない");
+
+  await act(async () => compatibilityHandle?.unmount());
+
+  // 互換性確認は読取専用であり、候補・現在構成の保存値を変更しない。
+  const candidatesAfter = await candidateQuery.listBuildEligible(projectId);
+  const buildAfter = await buildQuery.getByProject(projectId);
+  assert.equal(candidatesAfter.ok, true);
+  assert.equal(buildAfter.ok, true);
+  if (
+    !candidatesBefore.ok ||
+    !candidatesAfter.ok ||
+    !buildBefore.ok ||
+    !buildAfter.ok
+  ) {
+    throw new Error("上流データを照会できません");
+  }
+  assert.deepEqual(candidatesAfter.value, candidatesBefore.value);
+  assert.deepEqual(buildAfter.value, buildBefore.value);
+});
