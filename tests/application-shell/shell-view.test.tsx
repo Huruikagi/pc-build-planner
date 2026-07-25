@@ -50,7 +50,11 @@ test("loading、maintenance、empty stateを利用者へ表示する", async () 
   for (const [state, expected] of [
     [{ kind: "loading" }, "読み込み中"],
     [
-      { kind: "maintenance", selected: plannerId, message: "復元処理中です" },
+      {
+        kind: "maintenance",
+        selected: plannerId,
+        message: { key: "復元処理中です" },
+      },
       "復元処理中です",
     ],
     [{ kind: "ready", selected: null }, "利用可能な機能がありません"],
@@ -91,7 +95,7 @@ test("外部由来error messageをmarkupではなくテキストとして表示�
   const message = '<img src=x onerror="globalThis.compromised=true">';
   const rendered = await renderShell({
     kind: "error",
-    message,
+    message: { key: message },
     recoverable: false,
   });
   assert.match(rendered.container.textContent ?? "", /<img src=x onerror=/);

@@ -3,6 +3,7 @@ import type {
   MaintenanceSnapshot as FoundationMaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../persistence/public.js";
+import type { MessageDescriptor } from "../ui-messages/public.js";
 
 export type FeatureId = string & { readonly __brand: "FeatureId" };
 
@@ -129,7 +130,7 @@ export type ShellMaintenanceState =
   | {
       readonly status: "active";
       readonly cursor: MaintenanceCursor;
-      readonly message: string;
+      readonly message: MessageDescriptor;
     };
 
 export interface MaintenancePresentationPort {
@@ -149,22 +150,22 @@ export type ShellViewState =
   | {
       readonly kind: "maintenance";
       readonly selected: FeatureId | null;
-      readonly message: string;
+      readonly message: MessageDescriptor;
     }
   | {
       readonly kind: "error";
-      readonly message: string;
+      readonly message: MessageDescriptor;
       readonly recoverable: boolean;
     };
 
 export type StartupError = {
   readonly kind: "startup_failed";
-  readonly message: string;
+  readonly message: MessageDescriptor;
 };
 
 export type SelectionError = {
   readonly kind: "unavailable" | "mount_failed";
-  readonly message: string;
+  readonly message: MessageDescriptor;
 };
 
 export interface SidePanelHost {
@@ -178,7 +179,7 @@ export interface SidePanelHost {
 
 export type CompositionError = {
   readonly kind: "missing_dependency" | "startup_failed";
-  readonly message: string;
+  readonly message: MessageDescriptor;
 };
 
 export interface ApplicationCompositionRoot<TRootApi extends object> {

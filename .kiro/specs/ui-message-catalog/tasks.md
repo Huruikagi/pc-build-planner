@@ -180,7 +180,7 @@
 
 - [ ] 4. アプリケーションシェルの契約変更と移行
 
-- [ ] 4.1 シェル表示経路のメッセージ記述子化
+- [x] 4.1 シェル表示経路のメッセージ記述子化
   - `src/application-shell/contracts.ts` の `ShellViewState` / `ShellMaintenanceState` / `StartupError` / `SelectionError` / `CompositionError` の `message` を `MessageDescriptor` へ変更する
   - `src/application-shell/shell-view.tsx` が `useMessages()` で記述子を解決し、状態表示（読み込み中・エラー・保守中・機能なし）と再試行ラベル・機能表示失敗の文言をカタログ参照へ移す
   - `src/application-shell/react-shell-root.tsx` でシェルの React root に `MessageProvider` を張る

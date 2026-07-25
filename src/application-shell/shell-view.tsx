@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useMessages } from "../ui-messages/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
 import { hasNavIcon, NavIcon } from "./nav-icons.js";
@@ -27,8 +28,12 @@ function ShellNavigation({
   readonly selected: FeatureId | null;
   readonly onNavigate: (id: FeatureId) => void;
 }) {
+  const messages = useMessages();
   return (
-    <nav aria-label="機能ナビゲーション" className="shell-navigation">
+    <nav
+      aria-label={messages("shell.navigationLabel")}
+      className="shell-navigation"
+    >
       {items.map((item) => {
         const showIcon = item.icon !== undefined && hasNavIcon(item.icon);
         return (
@@ -55,9 +60,10 @@ function RetryButton({
 }: {
   readonly onRetry?: (() => void) | undefined;
 }) {
+  const messages = useMessages();
   return onRetry === undefined ? null : (
     <button data-action="retry" onClick={onRetry} type="button">
-      再試行
+      {messages("shell.retry")}
     </button>
   );
 }
@@ -67,10 +73,11 @@ function FeatureFailure({
 }: {
   readonly onRetry?: (() => void) | undefined;
 }) {
+  const messages = useMessages();
   return (
     <section aria-live="polite" className="shell-status shell-status--error">
-      <h2>機能を表示できませんでした</h2>
-      <p>再試行するか、別の機能へ移動してください。</p>
+      <h2>{messages("shell.featureFailureHeading")}</h2>
+      <p>{messages("shell.featureFailureBody")}</p>
       <RetryButton onRetry={onRetry} />
     </section>
   );
@@ -94,6 +101,7 @@ export function ShellView({
   onNavigate,
   onRetry,
 }: ShellViewProps) {
+  const messages = useMessages();
   const selected = selectedFeature(state);
   return (
     <div className="application-shell">
@@ -107,7 +115,7 @@ export function ShellView({
       <main className="shell-main">
         {state.kind === "loading" ? (
           <p aria-live="polite" className="shell-status">
-            読み込み中です
+            {messages("shell.loading")}
           </p>
         ) : null}
         {state.kind === "error" ? (
@@ -115,8 +123,8 @@ export function ShellView({
             aria-live="polite"
             className="shell-status shell-status--error"
           >
-            <h2>エラーが発生しました</h2>
-            <p>{state.message}</p>
+            <h2>{messages("shell.errorHeading")}</h2>
+            <p>{messages.resolveDescriptor(state.message)}</p>
             {state.recoverable ? <RetryButton onRetry={onRetry} /> : null}
           </section>
         ) : null}
@@ -125,15 +133,15 @@ export function ShellView({
             aria-live="polite"
             className="shell-status shell-status--maintenance"
           >
-            <h2>メンテナンス中</h2>
-            <p>{state.message}</p>
+            <h2>{messages("shell.maintenanceHeading")}</h2>
+            <p>{messages.resolveDescriptor(state.message)}</p>
           </aside>
         ) : null}
         {(state.kind === "ready" || state.kind === "maintenance") &&
         state.selected === null ? (
           <section className="shell-status shell-status--empty">
-            <h2>利用可能な機能がありません</h2>
-            <p>利用可能になるまでお待ちください。</p>
+            <h2>{messages("shell.emptyHeading")}</h2>
+            <p>{messages("shell.emptyBody")}</p>
           </section>
         ) : null}
         <section

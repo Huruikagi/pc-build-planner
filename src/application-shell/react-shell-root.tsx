@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root as ReactDomRoot } from "react-dom/client";
 
+import { MessageProvider } from "../ui-messages/public.js";
 import type { ShellViewState } from "./contracts.js";
 
 export interface ShellStateSource {
@@ -63,7 +65,11 @@ export function createReactShellRoot(
       let active = true;
       const renderState = (state: ShellViewState) => {
         if (active) {
-          flushSync(() => root.render(options.render(state)));
+          flushSync(() =>
+            root.render(
+              createElement(MessageProvider, null, options.render(state)),
+            ),
+          );
         }
       };
       try {
