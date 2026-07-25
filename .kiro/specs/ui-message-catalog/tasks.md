@@ -74,7 +74,7 @@
   - _Boundary: MessageFormatter_
   - _Depends: 2.1_
 
-- [ ] 2.3 共有名前空間のカタログ投入と重複文言の統合
+- [x] 2.3 共有名前空間のカタログ投入と重複文言の統合
   - `src/ui-messages/catalog/` を新設する。**この時点で10個の名前空間ファイルを全て作成し、`catalog/index.ts` の集約を確定させる**。機能名前空間（`candidate` / `build` / `compatibility` / `capture` / `backup`）は空の定数として置き、以降のタスクが自分のファイルだけを編集できる状態にする
   - `common` / `category` / `persistenceError` / `nav` / `shell` の各名前空間へ現行の文言をそのまま転記する
   - カテゴリ表示名12件を、3つの view に重複していた表から単一定義へ統合する。`PartCategory` を網羅する型として定義し、増減が型検査で失敗するようにする
