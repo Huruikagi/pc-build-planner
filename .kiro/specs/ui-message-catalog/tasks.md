@@ -64,7 +64,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 4.5, 10.1, 10.4_
   - _Boundary: MessageContracts_
 
-- [ ] 2.2 (P) メッセージフォーマッタの実装
+- [x] 2.2 (P) メッセージフォーマッタの実装
   - `src/ui-messages/format.ts` に `formatMessage` を実装する。`{name}` の置換、`PluralDefinition` の `count` によるフォーム選択、`one` / `zero` 未定義時の `other` への後退を行う
   - 未対応のプレースホルダは置換せずそのまま残し、例外を投げない
   - 返り値は常に `string` とし、マークアップを生成しない
