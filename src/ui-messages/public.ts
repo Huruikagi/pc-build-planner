@@ -6,6 +6,7 @@
 
 export type { MessageCatalogShape, MessageKey } from "./catalog/index.js";
 export type { MessageDescriptor, MessageParams } from "./contracts.js";
+export { MessageProvider, useMessages } from "./message-context.js";
 export type { MessageResolver } from "./resolver.js";
 export {
   createMessageResolver,

@@ -97,7 +97,7 @@
   - _Boundary: MessageResolver, UiMessagesPublicEntry_
   - _Depends: 2.2, 2.3_
 
-- [ ] 2.5 React Context による供給経路の実装
+- [x] 2.5 React Context による供給経路の実装
   - `src/ui-messages/react.tsx` に `MessageProvider` と `useMessages` を実装する。既定値は同梱カタログに対する resolver とする
   - Context の値は resolver そのものとし、言語コードやカタログを露出しない
   - `tests/setup-dom.ts` 系のテストハーネスから Provider 付きで `render` できるヘルパを整える
@@ -254,3 +254,4 @@
 ## Implementation Notes
 
 - タスク1.3: `src/application-shell/shell-view.tsx` のナビゲーションボタンは現状 `data-feature-id` などの安定識別子を持たない（`data-feature-id` は選択中機能を表す `.shell-feature` セクション側にのみ存在し、ナビゲーションボタン自体には無い）。`e2e/locators.ts` の `navItem` は `.shell-navigation [data-feature-id="..."]` を前提に実装済みのため、タスク1.4でナビゲーションボタンへ `data-feature-id={item.id}` を追加する必要がある。
+- タスク2.5: `pnpm test`（`--test-isolation=none` で全テストが単一プロセスを共有）実行時、`tests/persistence/**` の一部が `await import("....ts")`（拡張子明示の動的import、Node型stripping用）を使うと、tsx のローダーがそれ以降 `.js` 指定子から `.tsx` ファイルへのフォールバック解決に失敗する（`ERR_MODULE_NOT_FOUND`、対象ファイルを常に `.ts` として探す）。単体で実行すれば再現しないため気づきにくい。回避策として `src/ui-messages/react.tsx` は使わず、JSX構文を避けて `createElement` で実装した `.ts` ファイル（`message-context.ts`）とする。以降 `ui-messages` 配下や関連テストヘルパへ新規ファイルを追加する際、実DOMを描画しないロジックには `.tsx` ではなく `createElement` ベースの `.ts` を優先する。
