@@ -148,7 +148,7 @@
   - _Boundary: MessageCatalog_
   - _Depends: 2.5_
 
-- [ ] 3.5 候補管理の view 移行
+- [x] 3.5 候補管理の view 移行
   - `src/features/candidate-management/view.tsx` の全文言リテラルを `useMessages()` 経由へ置き換える
   - `categoryLabels` / `errorMessages` / `fieldErrorMessages` をキーへの写像に置き換える
   - `aria-label` / `placeholder` の値も resolver 経由にする。`aria-label` の文字列は変更しない

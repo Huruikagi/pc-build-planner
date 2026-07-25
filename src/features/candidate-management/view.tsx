@@ -9,31 +9,34 @@ import {
   POWER_SUPPLY_FORM_FACTORS,
   type UtcTimestamp,
 } from "../../domain/public.js";
+import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
+import { useMessages } from "../../ui-messages/public.js";
 import { withCategory } from "./category-draft.js";
 import type { CandidateDraft, CandidateSummary } from "./contracts.js";
 import type { ManagementDisplayError, ManagementState } from "./state.js";
 
-const categoryLabels: Readonly<Record<PartCategory, string>> = {
-  cpu: "CPU",
-  "cpu-cooler": "CPUクーラー",
-  motherboard: "マザーボード",
-  memory: "メモリ",
-  gpu: "GPU",
-  storage: "ストレージ",
-  "power-supply": "電源",
-  case: "ケース",
-  "case-fan": "ケースファン",
-  "expansion-card": "拡張カード",
-  other: "その他",
-  uncategorized: "未分類",
-};
+const categoryMessageKeys = {
+  cpu: "category.cpu",
+  "cpu-cooler": "category.cpu-cooler",
+  motherboard: "category.motherboard",
+  memory: "category.memory",
+  gpu: "category.gpu",
+  storage: "category.storage",
+  "power-supply": "category.power-supply",
+  case: "category.case",
+  "case-fan": "category.case-fan",
+  "expansion-card": "category.expansion-card",
+  other: "category.other",
+  uncategorized: "category.uncategorized",
+} as const satisfies Record<PartCategory, MessageKey>;
 
 function displayValue(
   value:
     | { readonly original: string | null; readonly confirmed?: string }
     | undefined,
+  messages: MessageResolver,
 ): string {
-  return value?.confirmed ?? value?.original ?? "未入力";
+  return value?.confirmed ?? value?.original ?? messages("common.notEntered");
 }
 
 /**
@@ -49,24 +52,21 @@ function editableValue(
 }
 
 /** Each failure stays distinguishable so the user can pick a recovery action. */
-const errorMessages: Readonly<Record<ManagementDisplayError["code"], string>> =
-  {
-    "unsupported-data":
-      "保存データが破損しているか、対応していない形式です。既存データは変更していません。",
-    quota:
-      "保存容量が不足しています。不要な候補を削除してからもう一度お試しください。",
-    storage:
-      "保存領域を利用できません。拡張機能を開き直してからもう一度お試しください。",
-    maintenance: "保守操作の実行中です。完了後にもう一度お試しください。",
-    conflict:
-      "他の変更と競合しました。最新の内容を読み込んでからもう一度お試しください。",
-    "not-found": "対象が見つかりませんでした。一覧を読み込み直してください。",
-    validation: "入力内容を確認してください。",
-    "snapshot-restore-failed": "前回の画面状態を復元できませんでした。",
-  };
+const errorMessageKeys = {
+  "unsupported-data": "candidate.errors.unsupportedData",
+  quota: "persistenceError.quota",
+  storage: "candidate.errors.storage",
+  maintenance: "persistenceError.maintenance",
+  conflict: "persistenceError.conflict",
+  "not-found": "candidate.errors.notFound",
+  validation: "persistenceError.validation",
+  "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
+} as const satisfies Record<ManagementDisplayError["code"], MessageKey>;
 
-const errorMessage = (code: ManagementDisplayError["code"]) =>
-  errorMessages[code];
+const errorMessage = (
+  code: ManagementDisplayError["code"],
+  messages: MessageResolver,
+) => messages(errorMessageKeys[code]);
 
 function CandidateListItem({
   candidate,
@@ -79,46 +79,53 @@ function CandidateListItem({
   readonly onDelete: (candidate: CandidateSummary) => void;
   readonly onEdit: (candidate: CandidateSummary) => void;
 }) {
-  const name = displayValue(candidate.name);
+  const messages = useMessages();
+  const name = displayValue(candidate.name, messages);
   return (
     <li className="candidate-management__candidate">
       <h3>{name}</h3>
       <dl>
         <div>
-          <dt>カテゴリ</dt>
-          <dd>{categoryLabels[candidate.category]}</dd>
+          <dt>{messages("candidate.categoryFieldLabel")}</dt>
+          <dd>{messages(categoryMessageKeys[candidate.category])}</dd>
         </div>
         <div>
-          <dt>メーカー</dt>
-          <dd>{displayValue(candidate.manufacturer)}</dd>
+          <dt>{messages("candidate.manufacturerFieldLabel")}</dt>
+          <dd>{displayValue(candidate.manufacturer, messages)}</dd>
         </div>
         <div>
-          <dt>型番</dt>
-          <dd>{displayValue(candidate.modelNumber)}</dd>
+          <dt>{messages("candidate.modelNumberFieldLabel")}</dt>
+          <dd>{displayValue(candidate.modelNumber, messages)}</dd>
         </div>
         <div>
-          <dt>価格</dt>
-          <dd>{candidate.price === undefined ? "未入力" : "入力済み"}</dd>
+          <dt>{messages("candidate.priceFieldLabel")}</dt>
+          <dd>
+            {candidate.price === undefined
+              ? messages("common.notEntered")
+              : messages("candidate.priceEntered")}
+          </dd>
         </div>
       </dl>
-      {candidate.hasMissingDetails ? <p>未入力の項目があります</p> : null}
+      {candidate.hasMissingDetails ? (
+        <p>{messages("candidate.missingDetailsNotice")}</p>
+      ) : null}
       <button
-        aria-label={`${name}を編集`}
+        aria-label={messages("candidate.editCandidateAction", { name })}
         data-edit-candidate-id={candidate.id}
         disabled={disabled}
         onClick={() => onEdit(candidate)}
         type="button"
       >
-        編集
+        {messages("candidate.editAction")}
       </button>
       <button
-        aria-label={`${name}を削除`}
+        aria-label={messages("candidate.deleteCandidateAction", { name })}
         data-delete-candidate-id={candidate.id}
         disabled={disabled}
         onClick={() => onDelete(candidate)}
         type="button"
       >
-        削除
+        {messages("common.delete")}
       </button>
     </li>
   );
@@ -140,9 +147,17 @@ const withoutConfirmedPrice = (draft: CandidateDraft): CandidateDraft => {
   } as CandidateDraft;
 };
 
+type AttributeLabelKey =
+  | "candidate.attributeLabels.socket"
+  | "candidate.attributeLabels.supportedSockets"
+  | "candidate.attributeLabels.memoryStandard"
+  | "candidate.attributeLabels.formFactor"
+  | "candidate.attributeLabels.supportedMotherboardFormFactors"
+  | "candidate.attributeLabels.supportedPowerSupplyFormFactors";
+
 type EditableAttribute = {
   readonly key: string;
-  readonly label: string;
+  readonly labelKey: AttributeLabelKey;
   readonly list: boolean;
   readonly options?: readonly string[];
 };
@@ -152,27 +167,53 @@ const editableAttributes = (
 ): readonly EditableAttribute[] => {
   switch (category) {
     case "cpu":
-      return [{ key: "socket", label: "ソケット", list: false }];
+      return [
+        {
+          key: "socket",
+          labelKey: "candidate.attributeLabels.socket",
+          list: false,
+        },
+      ];
     case "cpu-cooler":
-      return [{ key: "supportedSockets", label: "対応ソケット", list: true }];
+      return [
+        {
+          key: "supportedSockets",
+          labelKey: "candidate.attributeLabels.supportedSockets",
+          list: true,
+        },
+      ];
     case "motherboard":
       return [
-        { key: "socket", label: "ソケット", list: false },
-        { key: "memoryStandard", label: "メモリ規格", list: false },
+        {
+          key: "socket",
+          labelKey: "candidate.attributeLabels.socket",
+          list: false,
+        },
+        {
+          key: "memoryStandard",
+          labelKey: "candidate.attributeLabels.memoryStandard",
+          list: false,
+        },
         {
           key: "formFactor",
-          label: "フォームファクター",
+          labelKey: "candidate.attributeLabels.formFactor",
           list: false,
           options: MOTHERBOARD_FORM_FACTORS,
         },
       ];
     case "memory":
-      return [{ key: "memoryStandard", label: "メモリ規格", list: false }];
+      return [
+        {
+          key: "memoryStandard",
+          labelKey: "candidate.attributeLabels.memoryStandard",
+          list: false,
+        },
+      ];
     case "power-supply":
       return [
         {
           key: "formFactor",
-          label: "フォームファクター",
+          labelKey: "candidate.attributeLabels.formFactor",
           list: false,
           options: POWER_SUPPLY_FORM_FACTORS,
         },
@@ -181,13 +222,13 @@ const editableAttributes = (
       return [
         {
           key: "supportedMotherboardFormFactors",
-          label: "対応マザーボード規格",
+          labelKey: "candidate.attributeLabels.supportedMotherboardFormFactors",
           list: true,
           options: MOTHERBOARD_FORM_FACTORS,
         },
         {
           key: "supportedPowerSupplyFormFactors",
-          label: "対応電源規格",
+          labelKey: "candidate.attributeLabels.supportedPowerSupplyFormFactors",
           list: true,
           options: POWER_SUPPLY_FORM_FACTORS,
         },
@@ -215,13 +256,15 @@ function SingleFormFactorField({
   readonly onChange: (value: string) => void;
   readonly value: string;
 }) {
+  const messages = useMessages();
   const isCustom = value !== "" && !field.options.includes(value);
   const [customMode, setCustomMode] = useState(isCustom);
   const key = `normalizedAttributes.${field.key}`;
+  const fieldLabel = messages(field.labelKey);
   return (
     <div>
       <label>
-        {field.label}
+        {fieldLabel}
         <select
           aria-describedby={error === null ? undefined : `${key}-error`}
           aria-invalid={error === null ? undefined : true}
@@ -236,18 +279,22 @@ function SingleFormFactorField({
           }}
           value={customMode ? CUSTOM_OPTION : value}
         >
-          <option value="">未選択</option>
+          <option value="">{messages("common.notSelected")}</option>
           {field.options.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
-          <option value={CUSTOM_OPTION}>その他（自由入力）</option>
+          <option value={CUSTOM_OPTION}>
+            {messages("candidate.customOptionLabel")}
+          </option>
         </select>
       </label>
       {customMode ? (
         <input
-          aria-label={`${field.label}（自由入力）`}
+          aria-label={messages("candidate.customFieldAriaLabel", {
+            field: fieldLabel,
+          })}
           name={`attribute-${field.key}-custom`}
           onChange={(event) => onChange(event.target.value)}
           value={value}
@@ -273,6 +320,7 @@ function MultiFormFactorField({
   readonly onChange: (values: readonly string[]) => void;
   readonly values: readonly string[];
 }) {
+  const messages = useMessages();
   const extra = values.filter((value) => !field.options.includes(value));
   const [extraText, setExtraText] = useState(extra.join(", "));
   const key = `normalizedAttributes.${field.key}`;
@@ -285,7 +333,7 @@ function MultiFormFactorField({
   };
   return (
     <fieldset aria-describedby={error === null ? undefined : `${key}-error`}>
-      <legend>{field.label}</legend>
+      <legend>{messages(field.labelKey)}</legend>
       {field.options.map((option) => (
         <label key={option}>
           <input
@@ -297,7 +345,7 @@ function MultiFormFactorField({
         </label>
       ))}
       <label>
-        その他（カンマ区切りで自由入力）
+        {messages("candidate.customListLabel")}
         <input
           name={`attribute-${field.key}-custom`}
           onChange={(event) => {
@@ -319,22 +367,38 @@ function MultiFormFactorField({
   );
 }
 
-const fieldErrorMessages: Readonly<Record<string, string>> = {
-  required: "必須項目です",
-  "invalid-url": "http またはhttps のURLを入力してください",
-  "invalid-utc-timestamp": "UTCの日時形式で入力してください",
-  "invalid-string": "文字列として入力してください",
-  "invalid-array": "カンマ区切りの文字列で入力してください",
-  "category-mismatch": "選択したカテゴリでは受け付けられない値です",
-  "unexpected-field": "選択したカテゴリでは受け付けられない項目です",
-  "missing-field": "必須項目です",
-  "forbidden-payload": "保存できない内容が含まれています",
+type FieldErrorMessageKey =
+  | "candidate.fieldErrors.required"
+  | "candidate.fieldErrors.invalid-url"
+  | "candidate.fieldErrors.invalid-utc-timestamp"
+  | "candidate.fieldErrors.invalid-string"
+  | "candidate.fieldErrors.invalid-array"
+  | "candidate.fieldErrors.category-mismatch"
+  | "candidate.fieldErrors.unexpected-field"
+  | "candidate.fieldErrors.missing-field"
+  | "candidate.fieldErrors.forbidden-payload";
+
+const fieldErrorMessageKeys: Readonly<
+  Partial<Record<string, FieldErrorMessageKey>>
+> = {
+  required: "candidate.fieldErrors.required",
+  "invalid-url": "candidate.fieldErrors.invalid-url",
+  "invalid-utc-timestamp": "candidate.fieldErrors.invalid-utc-timestamp",
+  "invalid-string": "candidate.fieldErrors.invalid-string",
+  "invalid-array": "candidate.fieldErrors.invalid-array",
+  "category-mismatch": "candidate.fieldErrors.category-mismatch",
+  "unexpected-field": "candidate.fieldErrors.unexpected-field",
+  "missing-field": "candidate.fieldErrors.missing-field",
+  "forbidden-payload": "candidate.fieldErrors.forbidden-payload",
 };
 
-const fieldErrorMessage = (code: string | undefined): string | null =>
+const fieldErrorMessage = (
+  code: string | undefined,
+  messages: MessageResolver,
+): string | null =>
   code === undefined
     ? null
-    : (fieldErrorMessages[code] ?? "入力内容を確認してください");
+    : messages(fieldErrorMessageKeys[code] ?? "candidate.fieldErrors.default");
 
 /** Binds a draft-relative field key to its input for assistive technology. */
 function FieldError({
@@ -359,6 +423,7 @@ const editorKey = (editor: ManagementState["value"]["editor"]): string => {
 };
 
 function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
+  const messages = useMessages();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [nameError, setNameError] = useState<string | null>(null);
   /** Raw text keeps unparsable input visible without storing it in the draft. */
@@ -366,7 +431,8 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const [priceError, setPriceError] = useState<string | null>(null);
   const editor = state.value.editor;
   const fieldErrors = state.value.fieldErrors;
-  const errorFor = (key: string) => fieldErrorMessage(fieldErrors[key]);
+  const errorFor = (key: string) =>
+    fieldErrorMessage(fieldErrors[key], messages);
   if (editor === null) return null;
   const { draft } = editor;
   const update = (next: CandidateDraft) => {
@@ -427,14 +493,14 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
 
   return (
     <form
-      aria-label="候補編集"
+      aria-label={messages("candidate.editorFormTitle")}
       data-region="candidate-form"
       onSubmit={async (event) => {
         event.preventDefault();
         const name =
           draft.product.name.confirmed ?? draft.product.name.original ?? "";
         if (name.trim().length === 0) {
-          setNameError("商品名を入力してください");
+          setNameError(messages("candidate.nameRequiredError"));
           return;
         }
         if (priceError !== null) return;
@@ -442,9 +508,15 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         rerender();
       }}
     >
-      <h2>{editor.mode === "create" ? "候補を作成" : "候補を編集"}</h2>
+      <h2>
+        {messages(
+          editor.mode === "create"
+            ? "candidate.createCandidateHeading"
+            : "candidate.editCandidateHeading",
+        )}
+      </h2>
       <label>
-        商品名
+        {messages("candidate.nameFieldLabel")}
         <input
           disabled={state.value.isSaving || state.value.mutationsDisabled}
           aria-describedby={
@@ -467,29 +539,29 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         message={nameError ?? errorFor("product.name")}
       />
       <label>
-        メーカー
+        {messages("candidate.manufacturerFieldLabel")}
         <input
           name="candidate-manufacturer"
           onChange={(event) =>
             setProductText("manufacturer", event.target.value)
           }
-          placeholder="未入力"
+          placeholder={messages("common.notEntered")}
           value={editableValue(draft.product.manufacturer)}
         />
       </label>
       <label>
-        型番
+        {messages("candidate.modelNumberFieldLabel")}
         <input
           name="candidate-model-number"
           onChange={(event) =>
             setProductText("modelNumber", event.target.value)
           }
-          placeholder="未入力"
+          placeholder={messages("common.notEntered")}
           value={editableValue(draft.product.modelNumber)}
         />
       </label>
       <label>
-        価格
+        {messages("candidate.priceFieldLabel")}
         <input
           aria-describedby={
             priceError === null ? undefined : "candidate-price-error"
@@ -508,7 +580,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
             const amount = Number(raw);
             if (!Number.isFinite(amount)) {
               // Unparsable text is reported, never rounded into a stored price.
-              setPriceError("数値で入力してください");
+              setPriceError(messages("candidate.priceNotNumberError"));
               update(withoutConfirmedPrice(draft));
               return;
             }
@@ -529,13 +601,13 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
               },
             } as CandidateDraft);
           }}
-          placeholder="未入力"
+          placeholder={messages("common.notEntered")}
           value={priceText ?? draft.product.price?.confirmed?.amount ?? ""}
         />
       </label>
       <FieldError id="candidate-price-error" message={priceError} />
       <label>
-        カテゴリ
+        {messages("candidate.categoryFieldLabel")}
         <select
           name="candidate-category"
           onChange={(event) =>
@@ -545,7 +617,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         >
           {PART_CATEGORIES.map((category) => (
             <option key={category} value={category}>
-              {categoryLabels[category]}
+              {messages(categoryMessageKeys[category])}
             </option>
           ))}
         </select>
@@ -588,7 +660,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         return (
           <div key={field.key}>
             <label>
-              {field.label}
+              {messages(field.labelKey)}
               <input
                 aria-describedby={message === null ? undefined : `${key}-error`}
                 aria-invalid={message === null ? undefined : true}
@@ -606,7 +678,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         );
       })}
       <label>
-        取得元URL
+        {messages("candidate.sourceUrlLabel")}
         <input
           aria-describedby={
             errorFor("sourceInfo.pageUrl") === null
@@ -631,7 +703,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         message={errorFor("sourceInfo.pageUrl")}
       />
       <label>
-        取得日時
+        {messages("candidate.capturedAtLabel")}
         <input
           aria-describedby={
             errorFor("sourceInfo.capturedAt") === null
@@ -659,7 +731,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         message={errorFor("sourceInfo.capturedAt")}
       />
       <label>
-        取得元表記
+        {messages("candidate.sourceSnapshotLabel")}
         <textarea
           name="candidate-source-snapshot"
           readOnly
@@ -667,13 +739,15 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         />
       </label>
       {state.value.displayError === null ? null : (
-        <p role="alert">{errorMessage(state.value.displayError.code)}</p>
+        <p role="alert">
+          {errorMessage(state.value.displayError.code, messages)}
+        </p>
       )}
       <button
         disabled={state.value.isSaving || state.value.mutationsDisabled}
         type="submit"
       >
-        保存
+        {messages("common.save")}
       </button>
       <button
         disabled={state.value.isSaving}
@@ -683,7 +757,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         }}
         type="button"
       >
-        キャンセル
+        {messages("common.cancel")}
       </button>
     </form>
   );
@@ -691,6 +765,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
 
 /** Renders feature-owned state without moving domain state into React hooks. */
 export function ManagementView({ state }: { readonly state: ManagementState }) {
+  const messages = useMessages();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   useSyncExternalStore(
     (listener) => state.subscribe(listener),
@@ -722,7 +797,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
   const saveProject = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (projectName.trim().length === 0) {
-      setProjectNameError("プロジェクト名を入力してください");
+      setProjectNameError(messages("candidate.projectNameRequiredError"));
       return;
     }
     setProjectNameError(null);
@@ -761,12 +836,21 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
     );
     return candidate === undefined
       ? null
-      : { kind: "candidate" as const, name: displayValue(candidate.name) };
+      : {
+          kind: "candidate" as const,
+          name: displayValue(candidate.name, messages),
+        };
   })();
 
   return (
-    <section aria-label="候補管理" className="candidate-management">
-      <nav aria-label="プロジェクト" data-region="projects">
+    <section
+      aria-label={messages("candidate.title")}
+      className="candidate-management"
+    >
+      <nav
+        aria-label={messages("candidate.projectsNav")}
+        data-region="projects"
+      >
         {value.projects.map((project) => (
           <span key={project.id}>
             <button
@@ -785,7 +869,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               onClick={() => beginRenameProject(project)}
               type="button"
             >
-              名前を変更
+              {messages("candidate.renameProject")}
             </button>
             <button
               data-delete-project-id={project.id}
@@ -799,20 +883,22 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               }}
               type="button"
             >
-              削除
+              {messages("common.delete")}
             </button>
           </span>
         ))}
       </nav>
       <form
-        aria-label="プロジェクト編集"
+        aria-label={messages("candidate.projectFormTitle")}
         data-region="project-form"
         onSubmit={(event) => void saveProject(event)}
       >
         <label>
-          {editingProjectId === null
-            ? "新しいプロジェクト名"
-            : "プロジェクト名"}
+          {messages(
+            editingProjectId === null
+              ? "candidate.newProjectNameLabel"
+              : "candidate.projectNameLabel",
+          )}
           <input
             aria-describedby={
               projectNameError === null ? undefined : "project-name-error"
@@ -833,15 +919,17 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
           </p>
         )}
         {value.displayError === null ? null : (
-          <p role="alert">{errorMessage(value.displayError.code)}</p>
+          <p role="alert">{errorMessage(value.displayError.code, messages)}</p>
         )}
         <button
           disabled={value.isSaving || value.mutationsDisabled}
           type="submit"
         >
-          {editingProjectId === null
-            ? "プロジェクトを作成"
-            : "プロジェクト名を保存"}
+          {messages(
+            editingProjectId === null
+              ? "candidate.createProjectAction"
+              : "candidate.saveProjectNameAction",
+          )}
         </button>
         {editingProjectId === null ? null : (
           <button
@@ -853,18 +941,18 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             }}
             type="button"
           >
-            キャンセル
+            {messages("common.cancel")}
           </button>
         )}
       </form>
-      <nav aria-label="カテゴリ">
+      <nav aria-label={messages("candidate.categoryNav")}>
         <button
           aria-current={value.selectedCategory === null ? "page" : undefined}
           data-category="all"
           onClick={() => void selectCategory(null)}
           type="button"
         >
-          すべて
+          {messages("candidate.allCategories")}
         </button>
         {PART_CATEGORIES.map((category) => (
           <button
@@ -876,7 +964,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             onClick={() => void selectCategory(category)}
             type="button"
           >
-            {categoryLabels[category]}
+            {messages(categoryMessageKeys[category])}
           </button>
         ))}
       </nav>
@@ -893,9 +981,12 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         }}
         type="button"
       >
-        候補を作成
+        {messages("candidate.createCandidateAction")}
       </button>
-      <ul aria-label="候補一覧" data-region="candidate-list">
+      <ul
+        aria-label={messages("candidate.candidateListLabel")}
+        data-region="candidate-list"
+      >
         {value.candidates.map((candidate) => (
           <CandidateListItem
             candidate={candidate}
@@ -913,17 +1004,28 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         ))}
       </ul>
       {deletionTarget === null ? null : (
-        <section aria-label="削除確認" role="dialog">
-          <h2>削除を確認</h2>
+        <section
+          aria-label={messages("candidate.deleteConfirmationTitle")}
+          role="dialog"
+        >
+          <h2>{messages("candidate.deleteConfirmationHeading")}</h2>
           {deletionTarget.kind === "project" ? (
             <p>
-              プロジェクト「{deletionTarget.name}」と所属する候補も削除します。
+              {messages("candidate.deleteProjectMessage", {
+                name: deletionTarget.name,
+              })}
             </p>
           ) : (
-            <p>候補「{deletionTarget.name}」を削除します。</p>
+            <p>
+              {messages("candidate.deleteCandidateMessage", {
+                name: deletionTarget.name,
+              })}
+            </p>
           )}
           {value.displayError === null ? null : (
-            <p role="alert">{errorMessage(value.displayError.code)}</p>
+            <p role="alert">
+              {errorMessage(value.displayError.code, messages)}
+            </p>
           )}
           <button
             data-confirm-deletion
@@ -931,7 +1033,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             onClick={() => void confirmDeletion()}
             type="button"
           >
-            削除する
+            {messages("candidate.confirmDeleteAction")}
           </button>
           <button
             data-cancel-deletion
@@ -942,7 +1044,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             }}
             type="button"
           >
-            取消
+            {messages("common.dismiss")}
           </button>
         </section>
       )}

@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import { MessageProvider } from "../../ui-messages/public.js";
 import type { ManagementState } from "./state.js";
 import { ManagementView } from "./view.js";
 
@@ -15,7 +16,13 @@ export const mountManagementReactRoot = (
 ): ManagementReactRoot => {
   const root: Root = createRoot(container);
   let unmounted = false;
-  root.render(createElement(ManagementView, { state }));
+  root.render(
+    createElement(
+      MessageProvider,
+      null,
+      createElement(ManagementView, { state }),
+    ),
+  );
   return {
     unmount() {
       if (unmounted) return;

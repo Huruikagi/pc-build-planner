@@ -14,6 +14,7 @@ export const candidate = {
   projectNameLabel: "プロジェクト名",
   createProjectAction: "プロジェクトを作成",
   saveProjectNameAction: "プロジェクト名を保存",
+  projectNameRequiredError: "プロジェクト名を入力してください",
   createCandidateAction: "候補を作成",
   candidateListLabel: "候補一覧",
   categoryFieldLabel: "カテゴリ",
