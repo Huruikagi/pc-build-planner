@@ -10,7 +10,7 @@ import { useMessages } from "../../ui-messages/public.js";
 import { createCategoryPolicy, isValidQuantity } from "./category-policy.js";
 import type { BuildDisplayError, BuildState } from "./state.js";
 
-const categoryMessageKeys: Readonly<Record<PartCategory, MessageKey>> = {
+const categoryMessageKeys = {
   cpu: "category.cpu",
   "cpu-cooler": "category.cpu-cooler",
   motherboard: "category.motherboard",
@@ -23,16 +23,14 @@ const categoryMessageKeys: Readonly<Record<PartCategory, MessageKey>> = {
   "expansion-card": "category.expansion-card",
   other: "category.other",
   uncategorized: "category.uncategorized",
-};
+} as const satisfies Record<PartCategory, MessageKey>;
 
 /** Uncategorized candidates are never build-eligible, so the tab never applies. */
 const selectableCategories = PART_CATEGORIES.filter(
   (category) => category !== "uncategorized",
 );
 
-const errorMessageKeys: Readonly<
-  Record<BuildDisplayError["code"], MessageKey>
-> = {
+const errorMessageKeys = {
   validation: "persistenceError.validation",
   "not-found": "build.notFound",
   conflict: "persistenceError.conflict",
@@ -42,7 +40,7 @@ const errorMessageKeys: Readonly<
   quota: "persistenceError.quota",
   storage: "build.storage",
   "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
-};
+} as const satisfies Record<BuildDisplayError["code"], MessageKey>;
 
 const policy = createCategoryPolicy();
 
