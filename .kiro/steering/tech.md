@@ -75,9 +75,13 @@ UI実装にはReact 19系とReact DOMを使用し、production buildへ同梱す
 - `pnpm build`: MV3 production artifactの生成
 - `pnpm test:e2e`: production build後のPlaywright E2E
 - `pnpm validate:boundaries` / `validate:fixtures` / `validate:final-build` / `validate:artifacts`: 公開境界違反、実データ混入、最終build gate、生成物の機械的検査
-- `pnpm validate`: 上記をまとめたcanonical validation（型、lint、境界、fixture、最終build gate、test、E2E）
+- `pnpm validate:ci`: 型、lint、境界、fixture、最終build gate、testの逐次実行（E2Eを含まない）
+- `pnpm validate`: `validate:ci` にPlaywright E2Eを加えた完全検証
+- `pnpm package`: build後、配布用zipを`release/`へ生成する
 
 局所タスクでは関連する軽量commandを先に実行し、feature完了時は `pnpm validate` を基準とする。
+
+CIとリリースの責務は分離している。検証CI（`.github/workflows/ci.yml`）は`main`へのpush・PR・手動起動でE2Eを含まない`pnpm validate:ci`のみを実行し、検証ロジック自体は持たない。E2Eを含む完全検証（`pnpm validate`）は手動起動のみのリリースワークフロー（`.github/workflows/release.yml`）で実行し、version整合・タグ重複・マイルストーン状態の前提ゲートを通過した後にのみ走らせる。
 
 ## 主要な技術判断
 

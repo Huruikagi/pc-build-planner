@@ -42,9 +42,19 @@ pnpm build
 | `pnpm test` | unit / contract / integration / DOM テスト |
 | `pnpm test:e2e` | production build 後の Playwright E2E |
 | `pnpm build` | MV3 production artifact の生成 |
-| `pnpm validate` | 上記に境界・fixture・最終build gate を加えた一括検証 |
+| `pnpm validate:ci` | 型・静的検査・境界・fixture・最終build gate・test（E2E を含まない） |
+| `pnpm validate` | `validate:ci` に Playwright E2E を加えた完全検証 |
+| `pnpm package` | build 後、配布用 zip を `release/` へ生成する |
 
 機能の完了判定は `pnpm validate` を基準とする。E2E を初めて実行する場合は `pnpm install:e2e-browser` で Chromium を取得する。
+
+## リリース手順
+
+1. `manifest.json` と `package.json` の `version` を手動で更新する（両者を一致させる）。
+2. 対象バージョンのマイルストーン配下の issue をすべて完了（close）させる。
+3. GitHub Actions の「Release」ワークフローを手動起動する。
+
+検証 CI（`ci.yml`）は E2E を含まない `pnpm validate:ci` のみを実行する。E2E を含む完全検証（`pnpm validate`）はリリースワークフロー（`release.yml`）でのみ実行され、前提ゲート（version 整合・タグ重複・マイルストーン状態）を通過した後に走る。
 
 ## プロジェクト構成
 
