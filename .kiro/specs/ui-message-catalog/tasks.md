@@ -21,7 +21,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
   - _Boundary: ElementIdentityConvention_
 
-- [ ] 1.3 E2E ロケータヘルパの新設と src 参照経路の実測
+- [x] 1.3 E2E ロケータヘルパの新設と src 参照経路の実測
   - `e2e/locators.ts` を新設し、`region` / `action` / `navItem` の要素特定ヘルパを定義する
   - Playwright のトランスフォームが `src/` の TypeScript を NodeNext 流の `.js` 指定子で解決できるかを、最小の import 1件で実測する。解決できない場合はその事実を本ファイルのコメントへ記録し、タスク5.2の方針をロケータのみの移行へ後退させる
   - 完了条件: 既存 E2E を1本もその場では書き換えないまま、`e2e/locators.ts` を import した状態で Playwright が起動し全 spec が成功する
