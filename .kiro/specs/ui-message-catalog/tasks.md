@@ -250,3 +250,7 @@
   - 完了条件: `pnpm validate` が全段成功し、表示上の差分がゼロであることが確認できている
   - _Requirements: 1.5, 2.1, 2.2, 2.3, 2.4, 8.4, 10.5_
   - _Depends: 5.3_
+
+## Implementation Notes
+
+- タスク1.3: `src/application-shell/shell-view.tsx` のナビゲーションボタンは現状 `data-feature-id` などの安定識別子を持たない（`data-feature-id` は選択中機能を表す `.shell-feature` セクション側にのみ存在し、ナビゲーションボタン自体には無い）。`e2e/locators.ts` の `navItem` は `.shell-navigation [data-feature-id="..."]` を前提に実装済みのため、タスク1.4でナビゲーションボタンへ `data-feature-id={item.id}` を追加する必要がある。
