@@ -1,13 +1,18 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { defaultMessageResolver } from "../src/ui-messages/public.js";
+
 /**
  * Task 1.3 measurement: a temporary spec re-exporting a value from
  * `src/domain/public.js` (a NodeNext `.js`-specifier import into `src/`) was
  * run under Playwright and passed. The transform resolves `src/` modules this
- * way, so `expectedText` (task 5.2) can re-export the default resolver from
+ * way, so `expectedText` (task 5.2) re-exports the default resolver from
  * `src/ui-messages/public.js` as designed in design.md's E2ELocatorHelpers
  * section, without falling back to the locator-only degradation path.
  */
+
+/** Resolves catalog text for E2E expected-value assertions (design.md's E2ELocatorHelpers). */
+export const expectedText = defaultMessageResolver;
 
 /** Locates a page region by its stable, language-independent `data-region` identifier. */
 export const region = (scope: Locator | Page, name: string): Locator =>

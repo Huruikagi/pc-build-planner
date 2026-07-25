@@ -1,7 +1,7 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { navItem, region } from "./locators.js";
+import { expectedText, navItem, region } from "./locators.js";
 
 async function extensionId(context: {
   serviceWorkers(): readonly { url(): string }[];
@@ -101,7 +101,7 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
   // No real activeTab grant exists in this harness, so the coordinator's
   // real chrome.tabs.query call correctly reports the page as unreadable.
   await expect(sidePanel.locator("body")).toContainText(
-    /ページへのアクセス権限が失効しました/,
+    expectedText("capture.errors.permission-lost"),
     { timeout: 10_000 },
   );
   await expect(sidePanel.locator("[data-capture-retry]")).toBeVisible();

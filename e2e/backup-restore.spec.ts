@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { action, navItem, region } from "./locators.js";
+import { action, expectedText, navItem, region } from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -103,7 +103,7 @@ test("side panelからexportしたバックアップが実storageの全データ
   const backupPath = testInfo.outputPath("backup.json");
   await download.saveAs(backupPath);
   await expect(backupRegion.getByRole("status")).toContainText(
-    "をダウンロードしました。",
+    expectedText("backup.downloaded", { filename: "" }),
   );
 
   // The artifact is the versioned exchange envelope, not the persistence root.
@@ -143,7 +143,7 @@ test("side panelからexportしたバックアップが実storageの全データ
   const confirmation = region(backupRestoreRoot, "restore-confirmation");
   await expect(confirmation).toBeVisible();
   await expect(confirmation).toContainText(
-    "現在の全データが選択したファイルの内容で置き換わります。",
+    expectedText("backup.restoreWarning"),
   );
   await expect(confirmation.getByRole("definition").nth(1)).toHaveText("1");
 
@@ -163,7 +163,11 @@ test("side panelからexportしたバックアップが実storageの全データ
   await expect(confirmation).toBeVisible();
   await action(confirmation, "confirm").click();
   await expect(restoreRegion.getByRole("status")).toContainText(
-    "復元が完了しました",
+    expectedText("backup.restoreCompleted", {
+      projectCount: 1,
+      partCount: 1,
+      currentBuildCount: 0,
+    }),
   );
 
   // Reload: the restored snapshot must survive a real storage round trip and
