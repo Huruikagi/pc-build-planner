@@ -30,6 +30,7 @@ import type {
   FoundationDataPort,
   FoundationScopedDataPort,
 } from "../../../src/persistence/public.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const buildId =
@@ -172,7 +173,10 @@ test("mountは上流queryから読み取り実際の5規則評価結果を描画
 
   // socketが一致するcpu/motherboardのみ選択済みのためcpu-motherboard-socketは互換性あり、
   // 他4規則は該当カテゴリ不足でunknownとなりcautionへ集約される。
-  assert.match(container.textContent ?? "", /注意事項あり/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.caution")),
+  );
   assert.match(container.textContent ?? "", /架空パーツ/);
 
   await act(async () => handle?.unmount());

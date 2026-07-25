@@ -10,6 +10,7 @@ import type {
 import { createBackupRestoreFeatureRegistration } from "../../../src/features/backup-restore/registration.js";
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import type { FoundationDataPort } from "../../../src/persistence/public.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 const notExpected = (label: string) => (): never => {
@@ -125,7 +126,12 @@ test("state注入時は注入されたstateをそのままmountする", async ()
     });
   });
 
-  assert.equal(container.textContent?.includes("バックアップ"), true);
+  assert.equal(
+    container.textContent?.includes(
+      defaultMessageResolver("backup.exportHeading"),
+    ),
+    true,
+  );
   await act(async () => handle?.unmount());
   await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");

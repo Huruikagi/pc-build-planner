@@ -23,6 +23,7 @@ import type {
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createProductCaptureContribution } from "../../../src/features/product-capture/feature-contribution.js";
 import type { CaptureProjectOption } from "../../../src/features/product-capture/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const extractor = createGenericExtractor();
 const parse = (html: string): Document =>
@@ -188,7 +189,14 @@ test("情報が十分な架空ページはactionから保存完了まで一連�
     container.querySelector("[data-capture-submit]") as HTMLElement,
   );
 
-  assert.match(container.textContent ?? "", /保存しました/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("capture.savedWithProject", {
+        projectName: "架空プロジェクトA",
+      }),
+    ),
+  );
   assert.equal(h.createdCandidates.length, 1);
   assert.equal(h.createdCandidates[0]?.category, "uncategorized");
   assert.equal(h.createdCandidates[0]?.product.name.confirmed, "架空CPU X100");
@@ -207,7 +215,10 @@ test("欠損のある架空ページも手入力で補って保存完了まで�
 
   // 商品名だけが取得でき、他は欠損のまま保存できることを確認する。
   assert.match(container.textContent ?? "", /架空スパースCPU/);
-  assert.match(container.textContent ?? "", /未入力の項目です/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.missingFieldStatus")),
+  );
 
   const user = userEvent.setup();
   await user.selectOptions(
@@ -218,7 +229,14 @@ test("欠損のある架空ページも手入力で補って保存完了まで�
     container.querySelector("[data-capture-submit]") as HTMLElement,
   );
 
-  assert.match(container.textContent ?? "", /保存しました/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("capture.savedWithProject", {
+        projectName: "架空プロジェクトA",
+      }),
+    ),
+  );
   assert.equal(h.createdCandidates.length, 1);
   assert.equal(h.createdCandidates[0]?.product.manufacturer, undefined);
 });
@@ -303,7 +321,10 @@ test("詳細編集への遷移がshell側で失敗すると確認画面に留ま
     await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
   });
 
-  assert.match(container.textContent ?? "", /詳細編集画面を開けませんでした/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.errors.navigation")),
+  );
   assert.match(container.textContent ?? "", /架空CPU X100/);
   assert.ok(container.querySelector("[data-capture-submit]"));
 });

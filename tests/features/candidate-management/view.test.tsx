@@ -20,6 +20,7 @@ import type {
 } from "../../../src/features/candidate-management/contracts.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { ManagementView } from "../../../src/features/candidate-management/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const firstProjectId =
   "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -135,8 +136,14 @@ test("プロジェクト、全カテゴリ、未分類を含む候補一覧と�
 
   assert.match(rendered.container.textContent ?? "", /メイン構成/);
   assert.match(rendered.container.textContent ?? "", /CPU/);
-  assert.match(rendered.container.textContent ?? "", /未分類/);
-  assert.match(rendered.container.textContent ?? "", /未入力/);
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("category.uncategorized")),
+  );
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("common.notEntered")),
+  );
   assert.match(
     rendered.container.textContent ?? "",
     /<img src=x onerror=alert\(1\)> CPU/,
@@ -224,7 +231,7 @@ test("空名を拒否し、フォームからプロジェクトを作成・改�
   await act(async () => form.requestSubmit());
   assert.match(
     rendered.container.textContent ?? "",
-    /プロジェクト名を入力してください/,
+    new RegExp(defaultMessageResolver("candidate.projectNameRequiredError")),
   );
   assert.equal(input.value, "");
 
@@ -268,7 +275,7 @@ test("プロジェクト保存の失敗では入力を保持して再試行で�
   assert.equal(input.value, "保存を再試行する構成");
   assert.match(
     rendered.container.textContent ?? "",
-    /保存領域を利用できません/,
+    new RegExp(defaultMessageResolver("candidate.errors.storage")),
   );
 
   await rendered.cleanup();
@@ -302,7 +309,10 @@ test("候補フォームは共通項目・カテゴリ属性・読み取り専�
   const root = createRoot(container);
   await act(() => root.render(<ManagementView state={state} />));
 
-  assert.match(container.textContent ?? "", /候補を作成/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.createCandidateHeading")),
+  );
   assert.equal(
     (
       container.querySelector(
@@ -370,13 +380,19 @@ test("候補の無効入力と保存失敗では編集draftを画面に保持す
   await act(async () => setInputValue(input, ""));
   await act(async () => form.requestSubmit());
   assert.equal(input.value, "");
-  assert.match(container.textContent ?? "", /商品名を入力してください/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.nameRequiredError")),
+  );
 
   await act(async () => setInputValue(input, "保存を再試行する候補"));
   await act(async () => form.requestSubmit());
 
   assert.equal(input.value, "保存を再試行する候補");
-  assert.match(container.textContent ?? "", /保存領域を利用できません/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.errors.storage")),
+  );
 
   await act(() => root.unmount());
   container.remove();
@@ -404,7 +420,14 @@ test("プロジェクト削除では対象と所属候補への影響を確認�
 
   const confirmation = rendered.container.querySelector('[role="dialog"]');
   assert.match(confirmation?.textContent ?? "", new RegExp(projectName ?? ""));
-  assert.match(confirmation?.textContent ?? "", /所属する候補も削除/);
+  assert.match(
+    confirmation?.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("candidate.deleteProjectMessage", {
+        name: projectName ?? "",
+      }),
+    ),
+  );
   assert.equal(deletedProjectId, undefined);
 
   const confirm = rendered.container.querySelector(
@@ -448,7 +471,7 @@ test("候補削除の取消は保存を行わず、失敗時は候補と確認�
   assert.match(rendered.container.textContent ?? "", /未分類の候補/);
   assert.match(
     rendered.container.textContent ?? "",
-    /保存領域を利用できません/,
+    new RegExp(defaultMessageResolver("candidate.errors.storage")),
   );
   assert.notEqual(rendered.container.querySelector('[role="dialog"]'), null);
 

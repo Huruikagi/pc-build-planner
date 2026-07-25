@@ -27,6 +27,7 @@ import type {
   CurrentBuildQuery,
   CurrentBuildSnapshot,
 } from "../../../src/features/current-build/public.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
 const buildId =
@@ -227,8 +228,14 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
     readFailedView.container.querySelector("[data-aggregate-status]"),
     null,
   );
-  assert.doesNotMatch(readFailedView.container.textContent ?? "", /互換性あり/);
-  assert.doesNotMatch(readFailedView.container.textContent ?? "", /互換性なし/);
+  assert.doesNotMatch(
+    readFailedView.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.compatible")),
+  );
+  assert.doesNotMatch(
+    readFailedView.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
 });
 
 test("遅延した旧評価が後から完了しても画面は最新の評価結果だけを反映する", async () => {

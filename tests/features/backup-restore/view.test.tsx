@@ -17,6 +17,7 @@ import type {
 } from "../../../src/features/backup-restore/service.js";
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import { BackupRestoreView } from "../../../src/features/backup-restore/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const FAKE_ARTIFACT: BackupArtifact = {
   filename: "<img src=x onerror=alert(1)>-backup.json",
@@ -102,13 +103,26 @@ test("バックアップと復元を分離し消失リスク・保管責任・�
   const rendered = await renderView(state);
 
   const text = rendered.container.textContent ?? "";
-  assert.match(text, /バックアップ/);
-  assert.match(text, /復元/);
-  assert.match(text, /削除.*失われる|失われる.*削除/);
-  assert.match(text, /保管.*責任|責任.*保管/);
-  assert.match(text, /自動/);
-  assert.match(text, /クラウド/);
-  assert.match(text, /同期/);
+  assert.match(
+    text,
+    new RegExp(defaultMessageResolver("backup.exportHeading")),
+  );
+  assert.match(
+    text,
+    new RegExp(defaultMessageResolver("backup.restoreHeading")),
+  );
+  assert.match(
+    text,
+    new RegExp(defaultMessageResolver("backup.noticeUninstall")),
+  );
+  assert.match(
+    text,
+    new RegExp(defaultMessageResolver("backup.noticeFileOwnership")),
+  );
+  assert.match(
+    text,
+    new RegExp(defaultMessageResolver("backup.noticeNoAutoBackup")),
+  );
 
   await rendered.cleanup();
 });
@@ -214,7 +228,16 @@ test("確認確定でconfirmRestoreを呼び成功summaryを表示する", async
   await act(async () => confirmButton.click());
 
   const text = rendered.container.textContent ?? "";
-  assert.match(text, /完了|成功/);
+  assert.match(
+    text,
+    new RegExp(
+      defaultMessageResolver("backup.restoreCompleted", {
+        projectCount: 3,
+        partCount: 5,
+        currentBuildCount: 2,
+      }),
+    ),
+  );
   assert.equal(
     rendered.container.querySelector('button[data-action="confirm"]'),
     null,

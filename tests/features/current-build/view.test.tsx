@@ -32,6 +32,7 @@ import {
   createBuildState,
 } from "../../../src/features/current-build/state.js";
 import { BuildView } from "../../../src/features/current-build/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -182,8 +183,14 @@ test("候補なし・構成なしを識別可能に表示する", async () => {
   const harness = createHarness({ eligible: [] });
   const rendered = await renderView(harness);
 
-  assert.match(rendered.text(), /候補がありません/);
-  assert.match(rendered.text(), /現在構成がありません/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("build.noCandidates")),
+  );
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("build.noCurrentBuild")),
+  );
 });
 
 test("単一選択カテゴリで候補を選ぶと選択状態になり別候補で置き換えられる", async () => {
@@ -315,7 +322,10 @@ test("不正な数量入力は保存前に拒否され識別可能なerrorを示
   );
 
   assert.equal(harness.commands.length, 0, "不正数量はserviceへ到達しない");
-  assert.match(rendered.text(), /正整数/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("build.invalidQuantity")),
+  );
 });
 
 test("保存errorを識別可能に表示する", async () => {
@@ -328,7 +338,10 @@ test("保存errorを識別可能に表示する", async () => {
     rendered.query(`[data-select-candidate-id='${cpuCandidateId}']`),
   );
 
-  assert.match(rendered.text(), /保存領域/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("build.storage")),
+  );
 });
 
 test("外部文字列を安全なJSX childとして描画しHTML注入を許さない", async () => {

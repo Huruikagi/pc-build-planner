@@ -13,7 +13,10 @@ import type { CaptureCoordinator } from "../../../src/features/product-capture/c
 import { createProductCaptureFeatureRegistration } from "../../../src/features/product-capture/registration.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
 import type { CaptureProjectOption } from "../../../src/features/product-capture/view.js";
-import type { MessageKey } from "../../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+} from "../../../src/ui-messages/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 const PROJECTS: readonly CaptureProjectOption[] = [
@@ -73,7 +76,10 @@ test("mountは取り込み開始の案内を描画しunmountで確実に取り�
     });
   });
 
-  assert.match(container.textContent ?? "", /取り込みを開始/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.startAction")),
+  );
 
   await act(async () => handle?.unmount());
   await act(async () => handle?.unmount());

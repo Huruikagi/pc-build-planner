@@ -18,6 +18,7 @@ import type {
 } from "../../../src/features/compatibility/contracts.js";
 import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
 import { CompatibilityView } from "../../../src/features/compatibility/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
@@ -186,7 +187,10 @@ test("互換性ありの集約結果と個別根拠を同時に表示する", as
     "[data-status='ready'][data-aggregate-status='compatible']",
   );
   assert.ok(ready);
-  assert.match(view.container.textContent ?? "", /互換性あり/);
+  assert.match(
+    view.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.compatible")),
+  );
   assert.match(view.container.textContent ?? "", /架空CPU/);
   assert.match(view.container.textContent ?? "", /架空マザーボード/);
 });
@@ -202,7 +206,10 @@ test("注意事項ありでは互換と判定不能の個別行を隠さず両�
 
   const view = render(<CompatibilityView state={state} />);
 
-  assert.match(view.container.textContent ?? "", /注意事項あり/);
+  assert.match(
+    view.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.caution")),
+  );
   const compatibleRow = view.container.querySelector(
     "[data-rule-id='cpu-motherboard-socket'][data-result-status='compatible']",
   );
@@ -211,7 +218,12 @@ test("注意事項ありでは互換と判定不能の個別行を隠さず両�
   );
   assert.ok(compatibleRow, "互換の個別行が隠されている");
   assert.ok(unknownRow, "判定不能の個別行が隠されている");
-  assert.match(unknownRow?.textContent ?? "", /確認|選択/);
+  assert.match(
+    unknownRow?.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("compatibility.missingCategory", { side: "" }),
+    ),
+  );
 });
 
 test("非互換の個別結果は比較値と理由を表示する", async () => {
@@ -225,7 +237,10 @@ test("非互換の個別結果は比較値と理由を表示する", async () =>
 
   const view = render(<CompatibilityView state={state} />);
 
-  assert.match(view.container.textContent ?? "", /互換性なし/);
+  assert.match(
+    view.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
   const row = view.container.querySelector(
     "[data-rule-id='cooler-cpu-socket'][data-result-status='incompatible']",
   );

@@ -27,6 +27,7 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
@@ -184,7 +185,10 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
       );
     });
     // Preview shows counts only (Requirement 3.6/6.5), never entity names.
-    assert.match(container.textContent ?? "", /プロジェクト数1/);
+    assert.match(
+      container.textContent ?? "",
+      new RegExp(`${defaultMessageResolver("backup.projectCountLabel")}1`),
+    );
     assert.doesNotMatch(
       container.textContent ?? "",
       /架空バックアップ統合構成/,
@@ -198,7 +202,13 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
       await waitUntil(
         () =>
           container.querySelector('[role="alert"]') === null &&
-          /完了|成功/.test(container.textContent ?? ""),
+          (container.textContent ?? "").includes(
+            defaultMessageResolver("backup.restoreCompleted", {
+              projectCount: 1,
+              partCount: 1,
+              currentBuildCount: 0,
+            }),
+          ),
       );
     });
 

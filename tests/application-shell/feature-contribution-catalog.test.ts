@@ -101,7 +101,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     defaultMessageResolver.resolveDescriptor({
       key: candidateManagement.registration.navigation.labelKey,
     }),
-    "候補管理",
+    defaultMessageResolver("nav.candidateManagement"),
   );
   assert.equal(
     typeof candidateManagement.registration.activation?.validate,
@@ -112,7 +112,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     defaultMessageResolver.resolveDescriptor({
       key: currentBuild.registration.navigation.labelKey,
     }),
-    "現在構成",
+    defaultMessageResolver("nav.currentBuild"),
   );
   assert.equal(
     typeof currentBuild.registration.publicApi.query.getByProject,
@@ -123,7 +123,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     defaultMessageResolver.resolveDescriptor({
       key: compatibility.registration.navigation.labelKey,
     }),
-    "互換性確認",
+    defaultMessageResolver("nav.compatibility"),
   );
   assert.equal(
     typeof compatibility.registration.publicApi.query.evaluate,

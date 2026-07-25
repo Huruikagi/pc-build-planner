@@ -94,7 +94,7 @@ test("registrationはcompatibility識別子とラベルを持つ", () => {
     defaultMessageResolver.resolveDescriptor({
       key: registration.navigation.labelKey,
     }),
-    "互換性確認",
+    defaultMessageResolver("nav.compatibility"),
   );
 });
 
@@ -118,7 +118,10 @@ test("mountはgetProjectIdが返すprojectで評価しViewを描画する", asyn
   });
 
   assert.deepEqual(query.calls, [projectId]);
-  assert.match(container.textContent ?? "", /互換性なし/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
   await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");
 });

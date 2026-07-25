@@ -24,6 +24,7 @@ import type {
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createProductCaptureContribution } from "../../../src/features/product-capture/feature-contribution.js";
 import type { CaptureProjectOption } from "../../../src/features/product-capture/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const extractor = createGenericExtractor();
 const parse = (html: string): Document =>
@@ -233,7 +234,10 @@ test("権限失効は永続状態を変えず再実行可能である", async ()
     await runAction();
   });
 
-  assert.match(container.textContent ?? "", /アクセス権限が失効/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.errors.permission-lost")),
+  );
   assert.equal(h.createCandidateCalls.length, 0);
 
   h.setActiveTab({
@@ -262,7 +266,10 @@ test("制限ページは注入を試みず対象外であることを表示す�
     await runAction();
   });
 
-  assert.match(container.textContent ?? "", /対象外です/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.errors.restricted-page")),
+  );
   assert.equal(h.injectCalls, 0);
 });
 
@@ -286,7 +293,10 @@ test("容量不足の保存失敗は抽出結果と選択projectを保持し識�
     container.querySelector("[data-capture-submit]") as HTMLElement,
   );
 
-  assert.match(container.textContent ?? "", /保存容量が不足/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("persistenceError.quota")),
+  );
   assert.match(container.textContent ?? "", /架空CPU X100/);
   assert.equal(
     (
@@ -318,7 +328,10 @@ test("保存領域の利用不能による失敗は既存データを上書き�
     container.querySelector("[data-capture-submit]") as HTMLElement,
   );
 
-  assert.match(container.textContent ?? "", /保存領域を利用できません/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.errors.storage")),
+  );
   assert.equal(h.createCandidateCalls.length, 1);
 });
 
@@ -365,7 +378,10 @@ test("抽出候補ゼロでも手入力から詳細編集を型付きprefillで�
     await runAction();
   });
 
-  assert.match(container.textContent ?? "", /自動取得できませんでした/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.errors.no-candidate")),
+  );
 
   const user = userEvent.setup();
   await user.type(

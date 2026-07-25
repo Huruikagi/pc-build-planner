@@ -5,7 +5,10 @@ import { act } from "react";
 
 import type { FeatureId } from "../../src/application-shell/contracts.js";
 import { createShellPresentation } from "../../src/application-shell/shell-presentation.js";
-import type { MessageKey } from "../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+} from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
 const labelKey = (value: string) => value as MessageKey;
@@ -96,7 +99,10 @@ test("空catalogではnavigationなしのempty stateと安定slotを表示する
 
   await act(() => mounted.value.publish({ kind: "ready", selected: null }, []));
   assert.equal(shellContainer.querySelectorAll("nav button").length, 0);
-  assert.match(shellContainer.textContent ?? "", /利用可能な機能がありません/);
+  assert.match(
+    shellContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.emptyHeading")),
+  );
   assert.equal(shellContainer.contains(mounted.value.featureContainer), true);
   await act(() => mounted.value.stop());
   shellContainer.remove();

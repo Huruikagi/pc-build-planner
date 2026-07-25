@@ -9,7 +9,10 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import { ShellView } from "../../src/application-shell/shell-view.js";
-import type { MessageKey } from "../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+} from "../../src/ui-messages/public.js";
 
 const plannerId = "planner" as FeatureId;
 const libraryId = "library" as FeatureId;
@@ -49,7 +52,7 @@ async function renderShell(
 
 test("loading、maintenance、empty stateを利用者へ表示する", async () => {
   for (const [state, expected] of [
-    [{ kind: "loading" }, "読み込み中"],
+    [{ kind: "loading" }, defaultMessageResolver("shell.loading")],
     [
       {
         kind: "maintenance",
@@ -58,7 +61,10 @@ test("loading、maintenance、empty stateを利用者へ表示する", async () 
       },
       "復元処理中です",
     ],
-    [{ kind: "ready", selected: null }, "利用可能な機能がありません"],
+    [
+      { kind: "ready", selected: null },
+      defaultMessageResolver("shell.emptyHeading"),
+    ],
   ] as const) {
     const rendered = await renderShell(state);
     assert.match(rendered.container.textContent ?? "", new RegExp(expected));
@@ -125,7 +131,7 @@ test("feature render failureを隔離しnavigationと再試行を維持する", 
   assert.equal(rendered.container.querySelectorAll("nav button").length, 2);
   assert.match(
     rendered.container.textContent ?? "",
-    /機能を表示できませんでした/,
+    new RegExp(defaultMessageResolver("shell.featureFailureHeading")),
   );
   const retry = rendered.container.querySelector(
     "[data-action='retry']",
@@ -135,7 +141,7 @@ test("feature render failureを隔離しnavigationと再試行を維持する", 
   assert.match(rendered.container.textContent ?? "", /復旧した機能/);
   assert.doesNotMatch(
     rendered.container.textContent ?? "",
-    /機能を表示できませんでした/,
+    new RegExp(defaultMessageResolver("shell.featureFailureHeading")),
   );
   await rendered.cleanup();
 });
@@ -158,7 +164,10 @@ test("feature切替時にもerror boundaryをresetする", async () => {
       </ShellView>,
     );
   });
-  assert.match(container.textContent ?? "", /機能を表示できませんでした/);
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.featureFailureHeading")),
+  );
 
   await act(() => {
     root.render(
@@ -174,7 +183,7 @@ test("feature切替時にもerror boundaryをresetする", async () => {
   assert.match(container.textContent ?? "", /候補パーツ画面/);
   assert.doesNotMatch(
     container.textContent ?? "",
-    /機能を表示できませんでした/,
+    new RegExp(defaultMessageResolver("shell.featureFailureHeading")),
   );
   await act(() => root.unmount());
   container.remove();

@@ -25,7 +25,10 @@ import type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
-import type { MessageKey } from "../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+} from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
 const labelKey = (value: string) => value as MessageKey;
@@ -710,7 +713,14 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
 
   await clickNavigation("Broken");
   assert.equal(featureSlot.textContent, "");
-  assert.match(shellContainer.textContent ?? "", /表示開始に失敗しました/);
+  assert.match(
+    shellContainer.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("shell.featureMountFailed", {
+        featureId: "broken",
+      }),
+    ),
+  );
   assert.equal(shellContainer.querySelector("script"), null);
   await clickNavigation("Projects <img src=x>");
   assert.equal(featureSlot.textContent, "projects-view");
@@ -757,7 +767,10 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
   await act(() => maintenance.emit(snapshot(8, 1, true)));
   assert.equal(policy.isAllowed("read"), true);
   assert.equal(policy.isAllowed("mutation"), false);
-  assert.match(shellContainer.textContent ?? "", /メンテナンス中/);
+  assert.match(
+    shellContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.maintenanceActive")),
+  );
   await act(() => maintenance.emit(snapshot(7, 99, false)));
   assert.equal(policy.isAllowed("mutation"), false);
   await act(() => maintenance.emit(snapshot(8, 2, false)));
@@ -819,7 +832,10 @@ test("同じproduction presentation fixtureは空catalogを安全なempty state�
   });
   assert.equal((await act(() => root.start())).ok, true);
   assert.equal(shellContainer.querySelectorAll("nav button").length, 0);
-  assert.match(shellContainer.textContent ?? "", /利用可能な機能がありません/);
+  assert.match(
+    shellContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.emptyHeading")),
+  );
   const featureSlot = shellContainer.querySelector("[data-shell-feature-slot]");
   assert.ok(featureSlot);
   assert.notEqual(featureSlot, shellContainer);

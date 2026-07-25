@@ -24,6 +24,7 @@ import type {
 } from "../../../src/features/candidate-management/contracts.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { ManagementView } from "../../../src/features/candidate-management/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const candidateId =
@@ -171,7 +172,10 @@ test("候補一覧の作成導線から選択中プロジェクトの候補を�
   const harness = await renderView();
 
   await click(harness.container.querySelector("[data-create-candidate]"));
-  assert.match(harness.container.textContent ?? "", /候補を作成/);
+  assert.match(
+    harness.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.createCandidateHeading")),
+  );
 
   setInputValue(input(harness, "candidate-name"), "画面から作成した架空候補");
   await act(async () => undefined);
@@ -200,7 +204,10 @@ test("候補の編集導線は詳細取得契約から属性と元表記を含�
 
   // Requirement 4.1: the editor is opened from the stored draft, not the summary.
   assert.deepEqual(harness.draftReads, [candidateId]);
-  assert.match(harness.container.textContent ?? "", /候補を編集/);
+  assert.match(
+    harness.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.editCandidateHeading")),
+  );
   assert.equal(input(harness, "candidate-name").value, "架空CPU 確認済み");
   assert.equal(input(harness, "attribute-socket").value, "架空ソケットSK1");
   assert.equal(
@@ -356,9 +363,18 @@ test("破損・非対応、容量不足、利用不能を利用者が区別で�
   }
 
   assert.equal(new Set(messages.values()).size, messages.size);
-  assert.match(messages.get("unsupported-data") ?? "", /破損|対応していない/);
-  assert.match(messages.get("quota") ?? "", /容量/);
-  assert.match(messages.get("storage") ?? "", /保存領域/);
+  assert.match(
+    messages.get("unsupported-data") ?? "",
+    new RegExp(defaultMessageResolver("candidate.errors.unsupportedData")),
+  );
+  assert.match(
+    messages.get("quota") ?? "",
+    new RegExp(defaultMessageResolver("persistenceError.quota")),
+  );
+  assert.match(
+    messages.get("storage") ?? "",
+    new RegExp(defaultMessageResolver("candidate.errors.storage")),
+  );
 });
 
 test("mount後にmaintenanceが開始すると操作要素が即座に無効表示へ切り替わる", async () => {
@@ -452,7 +468,7 @@ test("欠損した任意項目は空欄で開き、一覧の未入力表示を�
   assert.equal(input(harness, "candidate-model-number").value, "");
   assert.equal(
     input(harness, "candidate-manufacturer").getAttribute("placeholder"),
-    "未入力",
+    defaultMessageResolver("common.notEntered"),
   );
 
   setInputValue(input(harness, "candidate-name"), "架空候補");

@@ -24,6 +24,7 @@ import {
   type CaptureProjectOption,
   CaptureView,
 } from "../../../src/features/product-capture/view.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const REQUEST_ID = "80000000-0000-4000-8000-000000000001" as RequestId;
 const CAPTURED_AT = "2026-07-23T00:00:00Z" as UtcTimestamp;
@@ -138,7 +139,10 @@ test("idle状態は取り込み開始の案内とボタンを表示する", asyn
   const harness = createHarness();
   const rendered = await renderView(harness);
 
-  assert.match(rendered.text(), /取り込みを開始/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("capture.startAction")),
+  );
 
   await rendered.user.click(rendered.query("[data-capture-start]"));
   assert.ok(rendered.query("[data-capture-field='name']"));
@@ -160,7 +164,10 @@ test("抽出中は取り込み中である旨を表示する", async () => {
   void state.startCapture();
   const rendered = render(<CaptureView projects={PROJECTS} state={state} />);
 
-  assert.match(rendered.container.textContent ?? "", /取り込んでいます/);
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("capture.extractingStatus")),
+  );
 });
 
 test("reviewでは項目・取得元・元表記・欠損を表示し値を修正できる", async () => {
@@ -169,9 +176,27 @@ test("reviewでは項目・取得元・元表記・欠損を表示し値を修�
   const rendered = await renderView(harness);
 
   assert.match(rendered.text(), /架空CPU X100/);
-  assert.match(rendered.text(), /取得元: 構造化データ/);
-  assert.match(rendered.text(), /元表記:\s*架空CPU X100/);
-  assert.match(rendered.text(), /未入力の項目です/);
+  assert.match(
+    rendered.text(),
+    new RegExp(
+      defaultMessageResolver("capture.sourceAttribution", {
+        source: defaultMessageResolver("capture.sources.json-ld"),
+        sourceLabel: "JSON-LD name",
+      }),
+    ),
+  );
+  assert.match(
+    rendered.text(),
+    new RegExp(
+      defaultMessageResolver("capture.originalValueLabel", {
+        value: " 架空CPU X100 ",
+      }),
+    ),
+  );
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("capture.missingFieldStatus")),
+  );
 
   const nameInput = rendered.query<HTMLInputElement>(
     "[data-capture-field='name']",
@@ -221,8 +246,22 @@ test("カテゴリ行は入力欄ではなく推定と取得根拠を読み取�
     null,
   );
   const hint = rendered.query("[data-capture-category-hint]");
-  assert.match(hint.textContent ?? "", /推定: GPU/);
-  assert.match(rendered.text(), /元表記:\s*グラフィックボード/);
+  assert.match(
+    hint.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("capture.categoryHintEstimated", {
+        label: defaultMessageResolver("category.gpu"),
+      }),
+    ),
+  );
+  assert.match(
+    rendered.text(),
+    new RegExp(
+      defaultMessageResolver("capture.originalValueLabel", {
+        value: "グラフィックボード",
+      }),
+    ),
+  );
 });
 
 test("商品名が空の間は保存と詳細編集を無効化し入力すると有効化する", async () => {
@@ -268,8 +307,14 @@ test("projectを選択し保存を押すとsubmitへ進み保存完了を表示�
   );
   await rendered.user.click(rendered.query("[data-capture-submit]"));
 
-  assert.match(rendered.text(), /保存しました/);
-  assert.match(rendered.text(), /架空プロジェクトA/);
+  assert.match(
+    rendered.text(),
+    new RegExp(
+      defaultMessageResolver("capture.savedWithProject", {
+        projectName: "架空プロジェクトA",
+      }),
+    ),
+  );
 });
 
 test("詳細編集ボタンはonOpenDetailEditを呼び出す", async () => {
@@ -291,7 +336,10 @@ test("取り込み失敗(draftなし)は再実行導線を表示する", async (
   await harness.state.startCapture();
   const rendered = await renderView(harness);
 
-  assert.match(rendered.text(), /対象外です/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("capture.errors.restricted-page")),
+  );
   assert.ok(rendered.query("[data-capture-retry]"));
 });
 
@@ -304,7 +352,10 @@ test("抽出候補ゼロは手入力での案内を表示し商品名入力で�
     receivedName = manualName;
   });
 
-  assert.match(rendered.text(), /自動取得できませんでした/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("capture.errors.no-candidate")),
+  );
   const button = rendered.query<HTMLButtonElement>(
     "[data-capture-open-detail-edit]",
   );
@@ -328,7 +379,10 @@ test("保存失敗はdraftを保持したreview相当の画面とエラーを表
   await harness.state.submit();
   const rendered = await renderView(harness);
 
-  assert.match(rendered.text(), /保存領域を利用できません/);
+  assert.match(
+    rendered.text(),
+    new RegExp(defaultMessageResolver("capture.errors.storage")),
+  );
   assert.match(rendered.text(), /架空CPU X100/);
   assert.ok(rendered.query("[data-capture-submit]"));
 });

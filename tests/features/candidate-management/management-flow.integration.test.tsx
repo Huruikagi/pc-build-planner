@@ -28,6 +28,7 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const storageKey = "localDataRoot";
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
@@ -197,7 +198,14 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   await act(async () =>
     reopenedState.requestDeletion({ kind: "project", projectId }),
   );
-  assert.match(reopenedContainer.textContent ?? "", /所属する候補も削除/);
+  assert.match(
+    reopenedContainer.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("candidate.deleteProjectMessage", {
+        name: "改名した架空統合プロジェクト",
+      }),
+    ),
+  );
   await act(async () => reopenedState.confirmDeletion());
   revision = 5;
   await act(async () => reopenedHandle.unmount());

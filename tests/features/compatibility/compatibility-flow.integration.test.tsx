@@ -27,6 +27,7 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000081" as Uuid as ProjectId;
@@ -215,7 +216,10 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
     });
   });
 
-  assert.match(compatibilityContainer.textContent ?? "", /互換性なし/);
+  assert.match(
+    compatibilityContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
   assert.match(compatibilityContainer.textContent ?? "", /架空CPU/);
   assert.match(compatibilityContainer.textContent ?? "", /架空マザーボードA/);
   const resultRows = compatibilityContainer.querySelectorAll("[data-rule-id]");
@@ -271,8 +275,14 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
 
   // 他4規則は該当カテゴリ不足でunknownのまま残るためcautionへ集約されるが、
   // 非互換だったCPUソケット規則は一致するマザーボードへの変更を反映しcompatibleへ更新される。
-  assert.match(reopenedContainer.textContent ?? "", /注意事項あり/);
-  assert.doesNotMatch(reopenedContainer.textContent ?? "", /互換性なし/);
+  assert.match(
+    reopenedContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.caution")),
+  );
+  assert.doesNotMatch(
+    reopenedContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
   const socketRow = reopenedContainer.querySelector(
     "[data-rule-id='cpu-motherboard-socket']",
   );
@@ -392,10 +402,22 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
     });
   });
 
-  assert.match(compatibilityContainer.textContent ?? "", /情報不足で判定不能/);
-  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /互換性あり/);
-  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /互換性なし/);
-  assert.doesNotMatch(compatibilityContainer.textContent ?? "", /注意事項あり/);
+  assert.match(
+    compatibilityContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.unknown")),
+  );
+  assert.doesNotMatch(
+    compatibilityContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.compatible")),
+  );
+  assert.doesNotMatch(
+    compatibilityContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
+  );
+  assert.doesNotMatch(
+    compatibilityContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("compatibility.aggregate.caution")),
+  );
   const resultRows = compatibilityContainer.querySelectorAll(
     "[data-result-status='unknown']",
   );
