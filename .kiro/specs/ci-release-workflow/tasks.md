@@ -99,7 +99,7 @@
   - _Depends: 1.1, 2.1_
   - _Boundary: README, steering tech_
 
-- [ ] 4.2 ワークフローの実機動作を確認する
+- [x] 4.2 ワークフローの実機動作を確認する
   - ドキュメントのみを変更したpushで検証CIが起動しないことを確認する
   - 通常の変更をmainへpushして検証CIが起動し、5分以内に成功することを実行ログの所要時間から確認する
   - open issueが残るマイルストーンに対してリリースワークフローを起動し、完全検証へ到達する前に失敗することを確認する
@@ -112,4 +112,8 @@
 ## Implementation Notes
 
 - タスク2.1完了時に `pnpm test` のみで確認し `pnpm validate:ci`（typecheck/lint含む）を未実行だったため、`exactOptionalPropertyTypes` によるtypecheckエラーとbiome整形違反がタスク2.2着手時に発覚した。以降のタスクは完了前に必ず `pnpm validate:ci` を実行して確認する。
-- タスク4.2実機確認: 通常の変更のpushでci.ymlが起動し31秒で成功した（実行ID 30140786880）。
+- タスク4.2実機確認（4点すべて確認済み）:
+  1. `.kiro/**` のみを変更したpush（commit 9d77202）ではci.ymlの新規実行が起動しないことを確認した。
+  2. 通常の変更のpush（commit 281e531ほか、run 30140786880）でci.ymlが起動し31秒で成功した（5分以内）。
+  3. open issue（#17, #18）が残るmilestone v0.1.0に対してrelease.ymlを手動起動（run 30142575859）し、Check milestoneステップで未完了issue一覧つきで失敗し、完全検証・パッケージ生成・リリース作成・milestone close のいずれにも到達しないことを確認した。
+  4. `pnpm package` で生成したzipを展開し、manifest.jsonが最上位に存在することを確認したうえで、ユーザーがChromeの「パッケージ化されていない拡張機能を読み込む」で実際に読み込み、エラーなく動作することを確認した。
