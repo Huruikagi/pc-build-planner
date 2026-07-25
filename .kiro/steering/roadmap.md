@@ -61,7 +61,8 @@ Issue #7「日本向け専用の看板を外し、国非依存の汎用ツール
 
 ## Existing Spec Updates
 
-- [ ] application-shell -- 言語切り替えUIの設置面としての責務と、ナビゲーションラベルがカタログ由来になる点を requirements へ反映する。`ui-internationalization` の設計確定後に実施。Dependencies: ui-internationalization
+- [x] application-shell -- 言語切り替えUIの設置面としての責務と、ナビゲーションラベルがカタログ由来になる点を requirements/design/tasks へ反映済み（要件1.6・8.1・8.2、task 6.1/6.2）。実装は`ui-message-catalog`/`ui-internationalization`側のタスク完了後。Dependencies: ui-internationalization
+- [ ] local-data-foundation -- `ui-internationalization` が新設する `src/ui-language/preference-store.ts` を、「featureはchrome.storageへ直接依存しない」という既存の Allowed Dependencies 原則に対する明示的な例外として Allowed Dependencies へ追記する。言語設定はドメインデータではなく `localDataRoot` の外にある専用キー1つに閉じ、write authority・交換形式・容量監視のいずれにも影響しないことを確認済み（`ui-internationalization` design.md の「保存先の判断」を参照）。`scripts/validate-boundaries.mjs` の到達点制限（StorageAccessGuard）と合わせて反映する。Dependencies: ui-internationalization
 - [ ] ci-release-workflow -- 既存のリリース手順（version 整合ゲート、マイルストーン確認）をそのまま使う。手順変更が不要であることを v0.2.0 の実機リリースで確認する。Dependencies: なし
 
 ## Direct Implementation Candidates
@@ -72,5 +73,5 @@ Issue #7「日本向け専用の看板を外し、国非依存の汎用ツール
 
 ## Specs (dependency order)
 
-- [ ] ui-message-catalog -- UI文言を単一カタログへ集約し、テスト・スタイルの文言依存を剥がす振る舞い不変のリファクタ。Dependencies: none
-- [ ] ui-internationalization -- 自前カタログ方式による ja/en 対応、言語切り替えUI、`_locales/` と manifest の国際化。Dependencies: ui-message-catalog
+- [x] ui-message-catalog -- UI文言を単一カタログへ集約し、テスト・スタイルの文言依存を剥がす振る舞い不変のリファクタ。Dependencies: none
+- [x] ui-internationalization -- 自前カタログ方式による ja/en 対応、言語切り替えUI、`_locales/` と manifest の国際化。Dependencies: ui-message-catalog

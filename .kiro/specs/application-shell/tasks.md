@@ -247,6 +247,24 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.7_
   - _Boundary: MutationGate, CoreContracts, ContractTestKit_
 
+- [ ] 6. 表示言語対応の受け入れを検証する
+- [ ] 6.1 ナビゲーションラベルの表示言語追随を検証する
+  - `ui-message-catalog`が提供する`labelKey`/`useMessages()`解決経路を前提に、ナビゲーションラベルが選択中の表示言語に応じた文字列で表示されることを確認する
+  - 実装（`ApplicationFeatureRegistration.navigation.labelKey`化、`ShellView`の解決処理）は`ui-message-catalog`が所有し、本タスクはapplication-shell側の受け入れ観点での回帰追加に限定する
+  - 完了時、表示言語を切り替えた統合テストでナビゲーションラベルの表示文字列が追随することを観測できる
+  - _Depends: ui-message-catalog 4.1, ui-message-catalog 4.3_
+  - _Requirements: 1.6_
+  - _Boundary: ShellView_
+
+- [ ] 6.2 表示言語コントロールの設置面を検証する
+  - `ui-internationalization`が提供する共通ヘッダ領域と言語コントロールの配置を前提に、読み込み中・通常・エラー・保守中の全状態で操作可能であることを確認する
+  - 実装（ヘッダ領域の追加、`react-shell-root.tsx`のProvider差し替え）は`ui-internationalization`が所有し、本タスクはapplication-shell側の受け入れ観点での回帰追加に限定する
+  - 設置面の追加によって選択中featureが再mountされず、入力途中の状態が保持されることを確認する
+  - 完了時、4状態での操作可能性とfeature非再mountが統合テストで観測できる
+  - _Depends: ui-internationalization 5.1_
+  - _Requirements: 8.1, 8.2_
+  - _Boundary: ShellView, ReactShellRoot_
+
 ## Implementation Notes
 
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。

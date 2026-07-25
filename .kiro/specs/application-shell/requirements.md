@@ -7,8 +7,8 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 ## 境界コンテキスト
 
 - **対象内**: side panel host、featureナビゲーション、登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance表示、mutation操作の共通抑止、composition root、root公開API合成。
-- **対象外**: feature固有の業務ロジック・state・view、永続化、maintenance lease管理、復元、商品抽出、互換性判定。
-- **隣接する期待**: local-data-foundationは信頼できるmaintenance状態をread-only契約で提供し、各featureは登録情報・view lifecycle・公開契約を提供する。
+- **対象外**: feature固有の業務ロジック・state・view、永続化、maintenance lease管理、復元、商品抽出、互換性判定、表示言語の意味・保存・解決。
+- **隣接する期待**: local-data-foundationは信頼できるmaintenance状態をread-only契約で提供し、各featureは登録情報・view lifecycle・公開契約を提供する。ui-messages/ui-languageはメッセージカタログと表示言語の状態・永続化・解決を所有し、application shellはfeatureから受け取ったナビゲーション情報を現在の表示言語で提示し、表示言語コントロールの設置面を提供するだけで、文言・言語の意味や保存を解釈しない。
 
 ## 要件
 
@@ -21,6 +21,7 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 3. When 別のfeatureへ移動したとき, the application shell shall 以前のfeatureの表示を終了してから新しいfeatureを表示する
 4. If 選択中のfeatureが利用不可になったとき, the application shell shall 利用可能な遷移先と理由を表示する
 5. The application shell shall 同時に一つのfeatureだけを主表示領域へ表示する
+6. The application shell shall 各featureが提供するナビゲーションラベルを、利用者が選択している表示言語で提示する
 
 ### 要件2: Feature登録契約
 **目的:** feature実装者として、共有runtimeファイルを編集せずにfeatureをshellへ参加させたい。それによりfeatureを独立して実装・検証できる。
@@ -84,3 +85,10 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 4. If 対象featureの表示開始またはactivation適用が失敗したとき, the application shell shall 入力元featureが提供した状態を復元して表示し、回復可能な案内を提供する
 5. The application shell shall feature固有のactivation内容を解釈または変換せず対象featureの検証結果に従う
 6. If activation先featureの表示終了に失敗したとき, the application shell shall 入力元featureを同時に表示せず、失敗したfeatureの終了を再試行可能な状態として保持する
+
+### 要件8: 表示言語コントロールの設置面
+**目的:** 利用者として、どの画面状態にいても表示言語を切り替えたい。それにより読み込み中やエラー表示中でも操作方法に迷わない。
+
+#### 受け入れ基準
+1. The application shell shall 表示言語を切り替える操作面を、読み込み中・通常表示・エラー表示・maintenance表示のいずれの状態でも利用可能な共通領域として提示する
+2. When 表示言語コントロールの設置面が追加されたとき, the application shell shall 現在mount中のfeatureを不要に再mountさせない
