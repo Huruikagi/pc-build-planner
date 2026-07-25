@@ -37,7 +37,7 @@
   - _Boundary: E2ELocatorHelpers_
   - _Depends: 1.1, 1.2, 1.3_
 
-- [ ] 1.5 (P) 商品取り込み・バックアップ復元の E2E ロケータ移行
+- [x] 1.5 (P) 商品取り込み・バックアップ復元の E2E ロケータ移行
   - `e2e/product-capture.spec.ts` と `e2e/backup-restore.spec.ts` に同じ移行を適用する
   - 対象要素に識別属性が無い場合は view へ `data-region` / `data-action` を追加する。`aria-label` は変更しない
   - 「特定の文言が表示されること」を検証している `expect` は文言リテラルのまま残す

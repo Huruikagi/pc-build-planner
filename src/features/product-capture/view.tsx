@@ -218,7 +218,7 @@ function ReviewPanel({
 }) {
   const canProceed = resolvedName(session).length > 0;
   return (
-    <section aria-label="取り込み確認">
+    <section aria-label="取り込み確認" data-region="review">
       {error === null ? null : (
         <p className="product-capture__error" role="alert">
           {ERROR_MESSAGES[error.kind]}

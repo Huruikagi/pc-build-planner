@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
+import { action, navItem, region } from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -34,11 +35,11 @@ function watchDiagnostics(page: Page): Diagnostics {
 }
 
 async function openCandidateManagement(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "候補管理" }).click();
+  await navItem(page, "candidate-management").click();
 }
 
 async function openBackupRestore(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "バックアップ・復元" }).click();
+  await navItem(page, "backupRestore").click();
 }
 
 test("side panelからexportしたバックアップが実storageの全データを復元し再起動後も維持される", async ({
@@ -53,13 +54,21 @@ test("side panelからexportしたバックアップが実storageの全データ
     "data-runtime-state",
     "started",
   );
+  const candidateManagementRoot = page.locator(
+    '.shell-feature[data-feature-id="candidate-management"]',
+  );
+  const backupRestoreRoot = page.locator(
+    '.shell-feature[data-feature-id="backupRestore"]',
+  );
 
   // Seed a project and a classified candidate that the backup must carry.
   await openCandidateManagement(page);
   await page
     .locator("input[name='project-name']")
     .fill("E2E バックアップ対象プロジェクト");
-  await page.getByRole("button", { name: "プロジェクトを作成" }).click();
+  await region(candidateManagementRoot, "project-form")
+    .locator('button[type="submit"]')
+    .click();
   await expect(
     page.getByRole("button", {
       name: "E2E バックアップ対象プロジェクト",
@@ -67,30 +76,26 @@ test("side panelからexportしたバックアップが実storageの全データ
     }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await candidateManagementRoot.locator("[data-create-candidate]").click();
   await page.locator("input[name='candidate-name']").fill("E2E 退避対象CPU");
   await page.locator("select[name='candidate-category']").selectOption("cpu");
   await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(candidateManagementRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 退避対象CPU" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 退避対象CPU" }),
   ).toBeVisible();
 
   // Export: the real Blob download path must produce a named JSON artifact.
   await openBackupRestore(page);
-  const backupRegion = page.getByRole("region", {
-    name: "バックアップ作成",
-    exact: true,
-  });
+  const backupRegion = region(backupRestoreRoot, "export");
   await expect(backupRegion).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
-  await backupRegion
-    .getByRole("button", { name: "バックアップを作成" })
-    .click();
+  await action(backupRegion, "export").click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(
     /^pc-build-planner-backup-\d{4}-\d{2}-\d{2}\.json$/,
@@ -111,7 +116,7 @@ test("side panelからexportしたバックアップが実storageの全データ
 
   // Diverge the stored data after the backup so the restore has to undo it.
   await openCandidateManagement(page);
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await candidateManagementRoot.locator("[data-create-candidate]").click();
   await page
     .locator("input[name='candidate-name']")
     .fill("E2E 復元で消える候補");
@@ -121,20 +126,21 @@ test("side panelからexportしたバックアップが実storageの全データ
   await page
     .locator("input[name='attribute-memoryStandard']")
     .fill("SYN-E2E-DDR");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(candidateManagementRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 復元で消える候補" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 復元で消える候補" }),
   ).toBeVisible();
 
   // Preflight: selecting the file must preview counts without writing.
   await openBackupRestore(page);
-  const restoreRegion = page.getByRole("region", { name: "復元", exact: true });
+  const restoreRegion = region(backupRestoreRoot, "restore");
   await restoreRegion.locator("input[type='file']").setInputFiles(backupPath);
 
-  const confirmation = page.getByRole("alertdialog", { name: "復元の確認" });
+  const confirmation = region(backupRestoreRoot, "restore-confirmation");
   await expect(confirmation).toBeVisible();
   await expect(confirmation).toContainText(
     "現在の全データが選択したファイルの内容で置き換わります。",
@@ -142,18 +148,20 @@ test("side panelからexportしたバックアップが実storageの全データ
   await expect(confirmation.getByRole("definition").nth(1)).toHaveText("1");
 
   // Cancelling must leave the diverged data untouched.
-  await confirmation.getByRole("button", { name: "取消" }).click();
+  await action(confirmation, "cancel").click();
   await expect(confirmation).toBeHidden();
   await openCandidateManagement(page);
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 復元で消える候補" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 復元で消える候補" }),
   ).toBeVisible();
 
   // Confirming replaces every root in a single Foundation write.
   await openBackupRestore(page);
   await restoreRegion.locator("input[type='file']").setInputFiles(backupPath);
   await expect(confirmation).toBeVisible();
-  await confirmation.getByRole("button", { name: "復元を確定" }).click();
+  await action(confirmation, "confirm").click();
   await expect(restoreRegion.getByRole("status")).toContainText(
     "復元が完了しました",
   );
@@ -173,30 +181,33 @@ test("side panelからexportしたバックアップが実storageの全データ
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 退避対象CPU" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 退避対象CPU" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 復元で消える候補" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 復元で消える候補" }),
   ).toHaveCount(0);
 
   // Normal CRUD and a second backup must still work after the replacement.
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await candidateManagementRoot.locator("[data-create-candidate]").click();
   await page.locator("input[name='candidate-name']").fill("E2E 復元後の新候補");
   await page.locator("select[name='candidate-category']").selectOption("cpu");
   await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU2");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(candidateManagementRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 復元後の新候補" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 復元後の新候補" }),
   ).toBeVisible();
 
   await openBackupRestore(page);
   const secondDownload = page.waitForEvent("download");
-  await backupRegion
-    .getByRole("button", { name: "バックアップを作成" })
-    .click();
+  await action(backupRegion, "export").click();
   expect((await secondDownload).suggestedFilename()).toMatch(
     /^pc-build-planner-backup-\d{4}-\d{2}-\d{2}\.json$/,
   );

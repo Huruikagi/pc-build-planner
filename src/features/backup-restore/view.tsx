@@ -70,7 +70,11 @@ export function BackupRestoreView({
         <p>バックアップは自動作成・クラウド保存・同期されません。</p>
       </div>
 
-      <section aria-label="バックアップ作成" className="backup-restore-export">
+      <section
+        aria-label="バックアップ作成"
+        className="backup-restore-export"
+        data-region="export"
+      >
         <h3>バックアップ作成</h3>
         <button
           data-action="export"
@@ -91,7 +95,11 @@ export function BackupRestoreView({
         )}
       </section>
 
-      <section aria-label="復元" className="backup-restore-import">
+      <section
+        aria-label="復元"
+        className="backup-restore-import"
+        data-region="restore"
+      >
         <h3>復元</h3>
         <input
           accept="application/json"
@@ -103,7 +111,11 @@ export function BackupRestoreView({
           <p role="status">ファイルを確認しています…</p>
         )}
         {value.phase === "awaiting-confirmation" && (
-          <div aria-label="復元の確認" role="alertdialog">
+          <div
+            aria-label="復元の確認"
+            data-region="restore-confirmation"
+            role="alertdialog"
+          >
             <p>現在の全データが選択したファイルの内容で置き換わります。</p>
             <dl>
               <dt>作成日時</dt>

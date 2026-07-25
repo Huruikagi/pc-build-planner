@@ -1,6 +1,7 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
+import { navItem, region } from "./locators.js";
 
 async function extensionId(context: {
   serviceWorkers(): readonly { url(): string }[];
@@ -68,11 +69,16 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
   );
 
   // A project must exist before capture can save anywhere.
-  await sidePanel.getByRole("button", { name: "候補管理" }).click();
+  await navItem(sidePanel, "candidate-management").click();
+  const candidateManagementRoot = sidePanel.locator(
+    '.shell-feature[data-feature-id="candidate-management"]',
+  );
   await sidePanel
     .locator("input[name='project-name']")
     .fill("E2E 取り込み先プロジェクト");
-  await sidePanel.getByRole("button", { name: "プロジェクトを作成" }).click();
+  await region(candidateManagementRoot, "project-form")
+    .locator('button[type="submit"]')
+    .click();
   await expect(
     sidePanel.getByRole("button", {
       name: "E2E 取り込み先プロジェクト",
@@ -80,14 +86,17 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
     }),
   ).toBeVisible();
 
-  await sidePanel.getByRole("button", { name: "商品取り込み" }).click();
+  await navItem(sidePanel, "product-capture").click();
+  const captureRoot = sidePanel.locator(
+    '.shell-feature[data-feature-id="product-capture"]',
+  );
   await expect(
-    sidePanel
-      .getByRole("region", { name: "取り込み確認" })
-      .or(sidePanel.locator("[data-capture-start]")),
+    region(captureRoot, "review").or(
+      captureRoot.locator("[data-capture-start]"),
+    ),
   ).toBeVisible();
 
-  await sidePanel.locator("[data-capture-start]").click();
+  await captureRoot.locator("[data-capture-start]").click();
 
   // No real activeTab grant exists in this harness, so the coordinator's
   // real chrome.tabs.query call correctly reports the page as unreadable.
