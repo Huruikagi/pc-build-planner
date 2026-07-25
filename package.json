@@ -21,7 +21,8 @@
     "validate:artifacts": "node scripts/validate-artifacts.mjs dist && node scripts/validate-boundaries.mjs dist && node scripts/validate-fixture-assets.mjs dist",
     "validate:final-build": "node scripts/validate-final-gate.mjs dist",
     "validate:ci": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm validate:boundaries && pnpm validate:fixtures && pnpm validate:final-build && pnpm test",
-    "validate": "pnpm validate:ci && playwright test"
+    "validate": "pnpm validate:ci && playwright test",
+    "package": "pnpm build && node scripts/package.mjs"
   },
   "keywords": [],
   "author": "",
