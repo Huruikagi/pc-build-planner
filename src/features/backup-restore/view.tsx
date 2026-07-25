@@ -1,39 +1,37 @@
 import type { ChangeEvent } from "react";
 import { useSyncExternalStore } from "react";
 
+import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
+import { useMessages } from "../../ui-messages/public.js";
 import type { BackupError, FileError, RestoreError } from "./contracts.js";
 import type { BackupRestoreState } from "./state.js";
 
 type DisplayError = BackupError | FileError | RestoreError;
 
-/** codeだけを鍵とし、値は一切含めない診断メッセージ表。全codeを網羅する。 */
-const errorMessages: Readonly<Record<DisplayError["code"], string>> = {
-  "no-file-selected": "ファイルが選択されていません。",
-  "multiple-files-selected": "ファイルは一つだけ選択してください。",
-  unreadable: "ファイルを読み取れませんでした。",
-  "size-exceeded": "ファイルサイズが上限を超えています。",
-  "not-json": "JSONとして読み取れないファイルです。",
-  "invalid-structure": "ファイルの形式が不正です。",
-  "invalid-reference": "ファイル内の参照関係が不正です。",
-  "unsupported-version": "対応していない形式のバージョンです。",
-  "quota-exceeded": "保存容量が不足しています。",
-  "storage-unavailable": "保存領域を利用できません。",
-  "corrupt-current-data":
-    "保存データが破損しています。既存データは変更していません。",
-  "unsupported-current-data":
-    "保存データが対応していない形式です。既存データは変更していません。",
-  "stale-ticket":
-    "確認内容が古くなりました。もう一度ファイルを選び直してください。",
-  "maintenance-active":
-    "他の保守処理が進行中です。しばらくしてからお試しください。",
-  storage: "保存領域を利用できません。",
-  serialization: "データの変換に失敗しました。",
-};
+/** codeだけを鍵とし、値は一切含めないキー写像。全codeを網羅する。 */
+const errorMessageKeys = {
+  "no-file-selected": "backup.errors.no-file-selected",
+  "multiple-files-selected": "backup.errors.multiple-files-selected",
+  unreadable: "backup.errors.unreadable",
+  "size-exceeded": "backup.errors.size-exceeded",
+  "not-json": "backup.errors.not-json",
+  "invalid-structure": "backup.errors.invalid-structure",
+  "invalid-reference": "backup.errors.invalid-reference",
+  "unsupported-version": "backup.errors.unsupported-version",
+  "quota-exceeded": "backup.errors.quota-exceeded",
+  "storage-unavailable": "backup.errors.storage-unavailable",
+  "corrupt-current-data": "backup.errors.corrupt-current-data",
+  "unsupported-current-data": "backup.errors.unsupported-current-data",
+  "stale-ticket": "backup.errors.stale-ticket",
+  "maintenance-active": "backup.errors.maintenance-active",
+  storage: "backup.errors.storage",
+  serialization: "backup.errors.serialization",
+} as const satisfies Record<DisplayError["code"], MessageKey>;
 
-const messageFor = (error: DisplayError): string => {
-  const base = errorMessages[error.code];
+const messageFor = (error: DisplayError, messages: MessageResolver): string => {
+  const base = messages(errorMessageKeys[error.code]);
   return "path" in error && error.path !== undefined
-    ? `${base}（位置: ${error.path}）`
+    ? messages("backup.withPosition", { message: base, path: error.path })
     : base;
 };
 
@@ -44,6 +42,7 @@ export function BackupRestoreView({
 }: {
   readonly state: BackupRestoreState;
 }) {
+  const messages = useMessages();
   useSyncExternalStore(
     (listener) => state.subscribe(listener),
     () => state.value,
@@ -61,46 +60,46 @@ export function BackupRestoreView({
   };
 
   return (
-    <section aria-label="バックアップと復元" className="backup-restore">
+    <section aria-label={messages("backup.title")} className="backup-restore">
       <div className="backup-restore-notice">
-        <p>
-          拡張機能を削除すると、保存されているローカルデータは失われる可能性があります。
-        </p>
-        <p>生成したファイルの保管は利用者の責任です。</p>
-        <p>バックアップは自動作成・クラウド保存・同期されません。</p>
+        <p>{messages("backup.noticeUninstall")}</p>
+        <p>{messages("backup.noticeFileOwnership")}</p>
+        <p>{messages("backup.noticeNoAutoBackup")}</p>
       </div>
 
       <section
-        aria-label="バックアップ作成"
+        aria-label={messages("backup.exportHeading")}
         className="backup-restore-export"
         data-region="export"
       >
-        <h3>バックアップ作成</h3>
+        <h3>{messages("backup.exportHeading")}</h3>
         <button
           data-action="export"
           disabled={busy}
           onClick={() => void state.exportBackup()}
           type="button"
         >
-          バックアップを作成
+          {messages("backup.exportAction")}
         </button>
         {value.phase === "exporting" && (
-          <p role="status">バックアップを作成しています…</p>
+          <p role="status">{messages("backup.exporting")}</p>
         )}
         {value.phase === "succeeded" && value.operation === "backup" && (
-          <p role="status">{value.filename} をダウンロードしました。</p>
+          <p role="status">
+            {messages("backup.downloaded", { filename: value.filename })}
+          </p>
         )}
         {value.phase === "failed" && value.operation === "backup" && (
-          <p role="alert">{messageFor(value.error)}</p>
+          <p role="alert">{messageFor(value.error, messages)}</p>
         )}
       </section>
 
       <section
-        aria-label="復元"
+        aria-label={messages("backup.restoreHeading")}
         className="backup-restore-import"
         data-region="restore"
       >
-        <h3>復元</h3>
+        <h3>{messages("backup.restoreHeading")}</h3>
         <input
           accept="application/json"
           disabled={busy}
@@ -108,25 +107,25 @@ export function BackupRestoreView({
           type="file"
         />
         {value.phase === "validating" && (
-          <p role="status">ファイルを確認しています…</p>
+          <p role="status">{messages("backup.validating")}</p>
         )}
         {value.phase === "awaiting-confirmation" && (
           <div
-            aria-label="復元の確認"
+            aria-label={messages("backup.restoreConfirmationTitle")}
             data-region="restore-confirmation"
             role="alertdialog"
           >
-            <p>現在の全データが選択したファイルの内容で置き換わります。</p>
+            <p>{messages("backup.restoreWarning")}</p>
             <dl>
-              <dt>作成日時</dt>
+              <dt>{messages("backup.createdAtLabel")}</dt>
               <dd>{value.ticket.preview.createdAt}</dd>
-              <dt>形式版</dt>
+              <dt>{messages("backup.formatVersionLabel")}</dt>
               <dd>{value.ticket.preview.formatVersion}</dd>
-              <dt>プロジェクト数</dt>
+              <dt>{messages("backup.projectCountLabel")}</dt>
               <dd>{value.ticket.preview.projectCount}</dd>
-              <dt>候補数</dt>
+              <dt>{messages("backup.partCountLabel")}</dt>
               <dd>{value.ticket.preview.partCount}</dd>
-              <dt>現在構成数</dt>
+              <dt>{messages("backup.currentBuildCountLabel")}</dt>
               <dd>{value.ticket.preview.currentBuildCount}</dd>
             </dl>
             <button
@@ -134,27 +133,31 @@ export function BackupRestoreView({
               onClick={() => void state.confirmRestore()}
               type="button"
             >
-              復元を確定
+              {messages("backup.confirmAction")}
             </button>
             <button
               data-action="cancel"
               onClick={() => state.cancel()}
               type="button"
             >
-              取消
+              {messages("common.dismiss")}
             </button>
           </div>
         )}
-        {value.phase === "restoring" && <p role="status">復元しています…</p>}
+        {value.phase === "restoring" && (
+          <p role="status">{messages("backup.restoring")}</p>
+        )}
         {value.phase === "succeeded" && value.operation === "restore" && (
           <p role="status">
-            復元が完了しました（プロジェクト{value.summary.projectCount}
-            件、候補{value.summary.partCount}件、現在構成
-            {value.summary.currentBuildCount}件）。
+            {messages("backup.restoreCompleted", {
+              projectCount: value.summary.projectCount,
+              partCount: value.summary.partCount,
+              currentBuildCount: value.summary.currentBuildCount,
+            })}
           </p>
         )}
         {value.phase === "failed" && value.operation === "restore" && (
-          <p role="alert">{messageFor(value.error)}</p>
+          <p role="alert">{messageFor(value.error, messages)}</p>
         )}
       </section>
     </section>
