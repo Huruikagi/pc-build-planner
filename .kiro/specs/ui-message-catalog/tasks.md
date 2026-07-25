@@ -242,7 +242,7 @@
   - _Boundary: UiTextGuard_
   - _Depends: 5.2_
 
-- [ ] 5.4 振る舞い不変性の最終検証
+- [x] 5.4 振る舞い不変性の最終検証
   - `pnpm validate` の全段（型検査、公開consumer型検査、静的検査、公開境界検査、fixture検査、文言検査、最終ビルドゲート、単体・統合テスト、Playwright E2E）を実行する
   - 生成物に対する `pnpm validate:artifacts` を実行し、カタログの静的同梱と CSP 非弱化を確認する
   - 移行前後で `pnpm typecheck` の所要時間に顕著な悪化がないことを確認し、悪化していれば型レベルのパラメータ導出を明示的な型注釈へ後退させる
@@ -256,3 +256,5 @@
 - タスク1.3: `src/application-shell/shell-view.tsx` のナビゲーションボタンは現状 `data-feature-id` などの安定識別子を持たない（`data-feature-id` は選択中機能を表す `.shell-feature` セクション側にのみ存在し、ナビゲーションボタン自体には無い）。`e2e/locators.ts` の `navItem` は `.shell-navigation [data-feature-id="..."]` を前提に実装済みのため、タスク1.4でナビゲーションボタンへ `data-feature-id={item.id}` を追加する必要がある。
 - タスク3.2: キーのみの写像テーブル（`categoryLabels`→`categoryMessageKeys` 等）を `Readonly<Record<X, MessageKey>>` のように**広い** `MessageKey` へ型注釈すると、カタログにプレースホルダ付きキー（例: `compatibility.missingCategory`）が1つでも存在した時点で、そのテーブルからの参照 `messages(table[x])` が「パラメータ不足」の型エラーになる（`ParamsArgsFor` が MessageKey 全体の積集合を要求するため）。対策: テーブル宣言を `as const satisfies Record<X, MessageKey>` にして各値の literal 型を保持する（`: Record<X, MessageKey>` という直接注釈をしない）。複数フィールドを持つ入れ子テーブル（例: `RULE_LABEL_KEYS`）や `string` キーで引く `Partial<Record<string, ...>>` テーブルは、値の型を `MessageKey` ではなく実際に使う literal key の union（例: `type ReasonMessageKey = "compatibility.reasons.value-equal" | ...`）に絞る。以降のfeature移行タスク（3.3以降）でも同じ写像パターンを使う際はこの型を踏襲する。
 - タスク2.5: `pnpm test`（`--test-isolation=none` で全テストが単一プロセスを共有）実行時、`tests/persistence/**` の一部が `await import("....ts")`（拡張子明示の動的import、Node型stripping用）を使うと、tsx のローダーがそれ以降 `.js` 指定子から `.tsx` ファイルへのフォールバック解決に失敗する（`ERR_MODULE_NOT_FOUND`、対象ファイルを常に `.ts` として探す）。単体で実行すれば再現しないため気づきにくい。回避策として `src/ui-messages/react.tsx` は使わず、JSX構文を避けて `createElement` で実装した `.ts` ファイル（`message-context.ts`）とする。以降 `ui-messages` 配下や関連テストヘルパへ新規ファイルを追加する際、実DOMを描画しないロジックには `.tsx` ではなく `createElement` ベースの `.ts` を優先する。
+- タスク5.3: 素朴な `scanner.scan()` ループ（`validate-boundaries.mjs` の既存 `tokenize` と同方式）は、テンプレートリテラルの `${...}` を閉じる `}` を通常token として扱ってしまい、その時点でトークン列が desync する（TypeScript の scanner は `reScanTemplateToken` の明示呼び出しでのみテンプレート継続を正しく再開できる）。JSX中心の `view.tsx` は `` `id={`${x}-error`}` `` のようなネスト構文を頻繁に含むため、desync するとファイル残り全体（数百行規模）が1個の未終端テンプレートtokenへ飲み込まれ、以降の文言リテラルやimportが検査から漏れる。`scripts/validate-ui-text.mjs` はテンプレートの穴ごとの中括弧深さをスタックで追跡し、深さ0で閉じる `}` でのみ `reScanTemplateToken(false)` を呼ぶことで対処した。同じ `createScanner` ベースのトークン走査を今後 `.tsx` ファイルへ新規適用する場合はこの対処を踏襲する。
+- タスク5.4: esbuild は生成物中の非ASCII文字列リテラルを既定で `\uXXXX`（**大文字**16進）へエスケープする（コメントは変換されない）。ビルド成果物に特定の日本語文言が静的同梱されているかを機械的に確認する場合、生の部分文字列一致や小文字16進エスケープでは検出できず、大文字16進エスケープでの一致を取るか、バンドルを実際に評価してresolverを呼び出す方式にする必要がある。
