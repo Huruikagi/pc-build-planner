@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
+import { useMessages } from "../../ui-messages/public.js";
 import type {
   AggregateStatus,
   RuleId,
@@ -12,96 +14,116 @@ import type {
   CompatibilityState,
 } from "./state.js";
 
-interface RuleLabel {
-  readonly name: string;
-  readonly left: string;
-  readonly right: string;
-}
-
-const RULE_LABELS: Readonly<Record<RuleId, RuleLabel>> = {
+const RULE_LABEL_KEYS = {
   "cpu-motherboard-socket": {
-    name: "CPUソケット",
-    left: "CPU",
-    right: "マザーボード",
+    name: "compatibility.rules.cpu-motherboard-socket.name",
+    left: "compatibility.rules.cpu-motherboard-socket.left",
+    right: "compatibility.rules.cpu-motherboard-socket.right",
   },
   "motherboard-memory-ddr": {
-    name: "メモリ規格",
-    left: "マザーボード",
-    right: "メモリ",
+    name: "compatibility.rules.motherboard-memory-ddr.name",
+    left: "compatibility.rules.motherboard-memory-ddr.left",
+    right: "compatibility.rules.motherboard-memory-ddr.right",
   },
   "cooler-cpu-socket": {
-    name: "CPUクーラー対応ソケット",
-    left: "CPU",
-    right: "CPUクーラー",
+    name: "compatibility.rules.cooler-cpu-socket.name",
+    left: "compatibility.rules.cooler-cpu-socket.left",
+    right: "compatibility.rules.cooler-cpu-socket.right",
   },
   "case-motherboard-form-factor": {
-    name: "ケース対応フォームファクタ",
-    left: "マザーボード",
-    right: "ケース",
+    name: "compatibility.rules.case-motherboard-form-factor.name",
+    left: "compatibility.rules.case-motherboard-form-factor.left",
+    right: "compatibility.rules.case-motherboard-form-factor.right",
   },
   "case-psu-form-factor": {
-    name: "ケース対応電源規格",
-    left: "電源",
-    right: "ケース",
+    name: "compatibility.rules.case-psu-form-factor.name",
+    left: "compatibility.rules.case-psu-form-factor.left",
+    right: "compatibility.rules.case-psu-form-factor.right",
   },
-};
+} as const satisfies Record<
+  RuleId,
+  Record<"name" | "left" | "right", MessageKey>
+>;
 
-const REASON_LABELS: Readonly<Record<string, string>> = {
-  "value-equal": "規格が一致しています。",
-  "value-not-equal": "規格が一致していません。",
-  "value-included": "対応範囲に含まれています。",
-  "value-not-included": "対応範囲に含まれていません。",
-  "input-missing": "必要な確認済み情報が不足しています。",
-};
+type RuleLabelKeys = (typeof RULE_LABEL_KEYS)[RuleId];
 
-const AGGREGATE_LABELS: Readonly<Record<AggregateStatus, string>> = {
-  compatible: "互換性あり",
-  incompatible: "互換性なし",
-  caution: "注意事項あり",
-  unknown: "情報不足で判定不能",
-};
+type ReasonMessageKey =
+  | "compatibility.reasons.value-equal"
+  | "compatibility.reasons.value-not-equal"
+  | "compatibility.reasons.value-included"
+  | "compatibility.reasons.value-not-included"
+  | "compatibility.reasons.input-missing";
 
-const EMPTY_MESSAGES: Readonly<Record<CompatibilityEmptyReason, string>> = {
-  "no-build": "現在構成が選択されていません。パーツを選択してください。",
-  "invalid-reference":
-    "現在構成に不正な参照が含まれています。構成を確認してください。",
-};
+const REASON_MESSAGE_KEYS: Readonly<Partial<Record<string, ReasonMessageKey>>> =
+  {
+    "value-equal": "compatibility.reasons.value-equal",
+    "value-not-equal": "compatibility.reasons.value-not-equal",
+    "value-included": "compatibility.reasons.value-included",
+    "value-not-included": "compatibility.reasons.value-not-included",
+    "input-missing": "compatibility.reasons.input-missing",
+  };
 
-const FAILURE_MESSAGES: Readonly<Record<CompatibilityFailureReason, string>> = {
-  "corrupt-data": "保存データが破損しています。互換性を判定できません。",
-  "unsupported-data":
-    "保存データが対応していない形式です。互換性を判定できません。",
-  "read-failed": "データを読み込めませんでした。互換性を判定できません。",
-};
+const AGGREGATE_MESSAGE_KEYS = {
+  compatible: "compatibility.aggregate.compatible",
+  incompatible: "compatibility.aggregate.incompatible",
+  caution: "compatibility.aggregate.caution",
+  unknown: "compatibility.aggregate.unknown",
+} as const satisfies Record<AggregateStatus, MessageKey>;
 
-const compareValueText = (value: string | readonly string[]): string =>
-  typeof value === "string" ? value : value.join("、");
+const EMPTY_MESSAGE_KEYS = {
+  "no-build": "compatibility.empty.no-build",
+  "invalid-reference": "compatibility.empty.invalid-reference",
+} as const satisfies Record<CompatibilityEmptyReason, MessageKey>;
+
+const FAILURE_MESSAGE_KEYS = {
+  "corrupt-data": "compatibility.failure.corrupt-data",
+  "unsupported-data": "compatibility.failure.unsupported-data",
+  "read-failed": "compatibility.failure.read-failed",
+} as const satisfies Record<CompatibilityFailureReason, MessageKey>;
+
+const compareValueText = (
+  value: string | readonly string[],
+  messages: MessageResolver,
+): string =>
+  typeof value === "string"
+    ? value
+    : value.join(messages("common.listSeparator"));
 
 const partyName = (
-  labels: RuleLabel,
+  labels: RuleLabelKeys,
   side: "left" | "right",
   party: RuleResultParty | undefined,
-): string => party?.displayName ?? `${labels[side]}（未選択）`;
+  messages: MessageResolver,
+): string =>
+  party?.displayName ??
+  messages("compatibility.unselectedParty", { side: messages(labels[side]) });
 
 const resultKey = (result: RuleResult): string =>
   `${result.ruleId}-${result.left?.candidatePartId ?? "none"}-${result.right?.candidatePartId ?? "none"}`;
 
 function ResultRow({ result }: { readonly result: RuleResult }) {
-  const labels = RULE_LABELS[result.ruleId];
+  const messages = useMessages();
+  const labels = RULE_LABEL_KEYS[result.ruleId];
+  const reasonKey = REASON_MESSAGE_KEYS[result.reasonCode];
   return (
     <li data-result-status={result.status} data-rule-id={result.ruleId}>
-      <span className="compatibility-result__rule-name">{labels.name}</span>
+      <span className="compatibility-result__rule-name">
+        {messages(labels.name)}
+      </span>
       {result.status === "unknown" ? (
         <>
-          <span>{partyName(labels, "left", result.left)}</span>
-          <span>{partyName(labels, "right", result.right)}</span>
-          <ul aria-label="不足項目">
+          <span>{partyName(labels, "left", result.left, messages)}</span>
+          <span>{partyName(labels, "right", result.right, messages)}</span>
+          <ul aria-label={messages("compatibility.missingFieldsLabel")}>
             {result.missingFields.map((field) => (
               <li key={`${field.side}-${field.reason}`}>
-                {labels[field.side]}
                 {field.reason === "category-missing"
-                  ? "が選択されていません。"
-                  : "の値が未確認です。"}
+                  ? messages("compatibility.missingCategory", {
+                      side: messages(labels[field.side]),
+                    })
+                  : messages("compatibility.missingConfirmedValue", {
+                      side: messages(labels[field.side]),
+                    })}
               </li>
             ))}
           </ul>
@@ -111,12 +133,14 @@ function ResultRow({ result }: { readonly result: RuleResult }) {
           <span>{result.left.displayName}</span>
           <span>{result.right.displayName}</span>
           <span>
-            {compareValueText(result.comparedValue.left)} /{" "}
-            {compareValueText(result.comparedValue.right)}
+            {compareValueText(result.comparedValue.left, messages)} /{" "}
+            {compareValueText(result.comparedValue.right, messages)}
           </span>
         </>
       )}
-      <span>{REASON_LABELS[result.reasonCode] ?? result.reasonCode}</span>
+      <span>
+        {reasonKey === undefined ? result.reasonCode : messages(reasonKey)}
+      </span>
     </li>
   );
 }
@@ -127,6 +151,7 @@ export function CompatibilityView({
 }: {
   readonly state: CompatibilityState;
 }) {
+  const messages = useMessages();
   const value = useSyncExternalStore(
     (listener) => state.subscribe(listener),
     () => state.value,
@@ -136,11 +161,11 @@ export function CompatibilityView({
   if (value.status === "idle") {
     return (
       <section
-        aria-label="互換性確認"
+        aria-label={messages("compatibility.title")}
         className="compatibility compatibility--idle"
         data-status="idle"
       >
-        <p>互換性の評価を開始してください。</p>
+        <p>{messages("compatibility.idle")}</p>
       </section>
     );
   }
@@ -148,11 +173,11 @@ export function CompatibilityView({
   if (value.status === "loading") {
     return (
       <section
-        aria-label="互換性確認"
+        aria-label={messages("compatibility.title")}
         className="compatibility compatibility--loading"
         data-status="loading"
       >
-        <p role="status">評価しています…</p>
+        <p role="status">{messages("compatibility.loading")}</p>
       </section>
     );
   }
@@ -160,12 +185,12 @@ export function CompatibilityView({
   if (value.status === "empty") {
     return (
       <section
-        aria-label="互換性確認"
+        aria-label={messages("compatibility.title")}
         className="compatibility compatibility--empty"
         data-empty-reason={value.reason}
         data-status="empty"
       >
-        <p>{EMPTY_MESSAGES[value.reason]}</p>
+        <p>{messages(EMPTY_MESSAGE_KEYS[value.reason])}</p>
       </section>
     );
   }
@@ -173,12 +198,12 @@ export function CompatibilityView({
   if (value.status === "failed") {
     return (
       <section
-        aria-label="互換性確認"
+        aria-label={messages("compatibility.title")}
         className="compatibility compatibility--failed"
         data-failure-reason={value.reason}
         data-status="failed"
       >
-        <p role="alert">{FAILURE_MESSAGES[value.reason]}</p>
+        <p role="alert">{messages(FAILURE_MESSAGE_KEYS[value.reason])}</p>
       </section>
     );
   }
@@ -186,15 +211,15 @@ export function CompatibilityView({
   const { report } = value;
   return (
     <section
-      aria-label="互換性確認"
+      aria-label={messages("compatibility.title")}
       className={`compatibility compatibility--${report.status}`}
       data-aggregate-status={report.status}
       data-status="ready"
     >
       <p className="compatibility__summary">
-        {AGGREGATE_LABELS[report.status]}
+        {messages(AGGREGATE_MESSAGE_KEYS[report.status])}
       </p>
-      <ul aria-label="個別判定結果">
+      <ul aria-label={messages("compatibility.resultsLabel")}>
         {report.results.map((result) => (
           <ResultRow key={resultKey(result)} result={result} />
         ))}

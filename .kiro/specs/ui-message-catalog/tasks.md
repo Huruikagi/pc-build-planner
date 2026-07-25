@@ -118,7 +118,7 @@
   - _Boundary: FeatureViewAdapters_
   - _Depends: 2.5_
 
-- [ ] 3.2 (P) 互換性確認のカタログ値投入と view 移行
+- [x] 3.2 (P) 互換性確認のカタログ値投入と view 移行
   - `compatibility` 名前空間へ文言を転記し、`RULE_LABELS` / `REASON_LABELS` / `AGGREGATE_LABELS` / `EMPTY_MESSAGES` / `FAILURE_MESSAGES` をキーへの写像に置き換える
   - 助詞連結を文単位メッセージへ再設計する。「{側ラベル}が選択されていません。」「{側ラベル}の値が未確認です。」を条件ごとの独立キーとし、側ラベルをパラメータで受ける
   - 「{側ラベル}（未選択）」のテンプレート合成を1つの完結した文へ置き換える

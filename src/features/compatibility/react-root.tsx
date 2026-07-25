@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import { MessageProvider } from "../../ui-messages/public.js";
 import type { CompatibilityState } from "./state.js";
 import { CompatibilityView } from "./view.js";
 
@@ -15,7 +16,13 @@ export const mountCompatibilityReactRoot = (
 ): CompatibilityReactRoot => {
   const root: Root = createRoot(container);
   let unmounted = false;
-  root.render(createElement(CompatibilityView, { state }));
+  root.render(
+    createElement(
+      MessageProvider,
+      null,
+      createElement(CompatibilityView, { state }),
+    ),
+  );
   return {
     unmount() {
       if (unmounted) return;

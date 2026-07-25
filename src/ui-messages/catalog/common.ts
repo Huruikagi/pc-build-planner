@@ -6,4 +6,6 @@ export const common = {
   delete: "削除",
   dismiss: "取消",
   cancel: "キャンセル",
+  /** 読点による列挙結合の区切り文字（`value.join("、")` の置き換え先）。 */
+  listSeparator: "、",
 } as const;
