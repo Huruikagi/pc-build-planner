@@ -13,6 +13,10 @@ import {
   getWorkerContributions,
 } from "../../src/application-shell/feature-contribution-catalog.js";
 import { createSidePanelFeatureContributions } from "../../src/application-shell/side-panel-contributions.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+} from "../../src/ui-messages/public.js";
 
 const id = (value: string) => value as FeatureId;
 
@@ -25,7 +29,7 @@ function contribution<const TKey extends string, TPublic extends object>(
 ): FeatureContribution<TKey, TPublic> {
   const registration: ApplicationFeatureRegistration<TPublic> = {
     id: id(featureId),
-    navigation: { label: featureId, order },
+    navigation: { labelKey: featureId as MessageKey, order },
     publicApi,
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => {},
@@ -93,19 +97,34 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
-  assert.equal(candidateManagement.registration.navigation.label, "候補管理");
+  assert.equal(
+    defaultMessageResolver.resolveDescriptor({
+      key: candidateManagement.registration.navigation.labelKey,
+    }),
+    "候補管理",
+  );
   assert.equal(
     typeof candidateManagement.registration.activation?.validate,
     "function",
   );
   assert.equal(currentBuild.registration.id, "currentBuild");
-  assert.equal(currentBuild.registration.navigation.label, "現在構成");
+  assert.equal(
+    defaultMessageResolver.resolveDescriptor({
+      key: currentBuild.registration.navigation.labelKey,
+    }),
+    "現在構成",
+  );
   assert.equal(
     typeof currentBuild.registration.publicApi.query.getByProject,
     "function",
   );
   assert.equal(compatibility.registration.id, "compatibility");
-  assert.equal(compatibility.registration.navigation.label, "互換性確認");
+  assert.equal(
+    defaultMessageResolver.resolveDescriptor({
+      key: compatibility.registration.navigation.labelKey,
+    }),
+    "互換性確認",
+  );
   assert.equal(
     typeof compatibility.registration.publicApi.query.evaluate,
     "function",

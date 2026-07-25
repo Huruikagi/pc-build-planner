@@ -14,6 +14,7 @@ import type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const featureId = "mock-feature" as FeatureId;
 
@@ -23,7 +24,7 @@ interface MockPublicApi {
 
 export const mockFeature: ApplicationFeatureRegistration<MockPublicApi> = {
   id: featureId,
-  navigation: { label: "Mock feature", order: 1 },
+  navigation: { labelKey: "Mock feature" as MessageKey, order: 1 },
   publicApi: { inspect: () => "ready" },
   getAvailability: () => ({ status: "available" }),
   subscribeAvailability: () => () => undefined,

@@ -9,12 +9,13 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import { ShellView } from "../../src/application-shell/shell-view.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const plannerId = "planner" as FeatureId;
 const libraryId = "library" as FeatureId;
 const navigation = [
-  { id: plannerId, label: "構成プラン" },
-  { id: libraryId, label: "候補パーツ" },
+  { id: plannerId, labelKey: "構成プラン" as MessageKey },
+  { id: libraryId, labelKey: "候補パーツ" as MessageKey },
 ] as const;
 
 async function renderShell(

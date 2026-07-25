@@ -37,7 +37,7 @@ export const createBackupRestoreFeatureRegistration = (
 
   return {
     id: backupRestoreFeatureId,
-    navigation: { label: "バックアップ・復元", order: 60, icon: "archive" },
+    navigation: { labelKey: "nav.backupRestore", order: 60, icon: "archive" },
     publicApi: {},
     getAvailability,
     subscribeAvailability,

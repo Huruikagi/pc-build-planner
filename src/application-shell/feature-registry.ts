@@ -137,11 +137,11 @@ function validateRegistrationShape(value: unknown): RegistrationError | null {
   if (!isRecord(value.navigation))
     return invalidRegistration("registration.navigation: object is required");
   if (
-    typeof value.navigation.label !== "string" ||
-    value.navigation.label.trim().length === 0
+    typeof value.navigation.labelKey !== "string" ||
+    value.navigation.labelKey.trim().length === 0
   )
     return invalidRegistration(
-      "registration.navigation.label: non-empty label is required",
+      "registration.navigation.labelKey: non-empty label key is required",
     );
   if (
     typeof value.navigation.order !== "number" ||

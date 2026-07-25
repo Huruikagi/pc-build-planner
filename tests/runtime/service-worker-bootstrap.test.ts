@@ -6,6 +6,7 @@ import type { FeatureContribution } from "../../src/application-shell/feature-co
 import type { FoundationRuntimeContribution } from "../../src/persistence/public.js";
 import type { RuntimeMessageListener } from "../../src/runtime/foundation-message-target.js";
 import { createProductionServiceWorkerBootstrap } from "../../src/runtime/service-worker.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 test("runtime bootstrapはfoundationの具体initializerを直接importしない", async () => {
   const source = await readFile("src/runtime/service-worker.ts", "utf8");
@@ -71,7 +72,7 @@ test("production bootstrapでfoundation handlerとcatalog actionを順序どお�
       key: "feature",
       registration: {
         id: "feature" as FeatureId,
-        navigation: { label: "Feature", order: 1 },
+        navigation: { labelKey: "Feature" as MessageKey, order: 1 },
         publicApi: {},
         getAvailability: () => ({ status: "available" }),
         subscribeAvailability: () => () => {},

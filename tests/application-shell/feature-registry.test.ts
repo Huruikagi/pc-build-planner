@@ -7,6 +7,7 @@ import type {
   FeatureId,
 } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 function feature(
   id: string,
@@ -17,7 +18,7 @@ function feature(
   const listeners = new Set<(value: Availability) => void>();
   const registration: ApplicationFeatureRegistration = {
     id: id as FeatureId,
-    navigation: { label: `Feature ${id}`, order },
+    navigation: { labelKey: `Feature ${id}` as MessageKey, order },
     publicApi: {},
     getAvailability: () => availability,
     subscribeAvailability(listener) {
@@ -84,14 +85,14 @@ test("未信頼な不正登録を安定診断へ変換し正常登録を継続�
     [
       {
         ...feature("invalid", 2).registration,
-        navigation: { label: "", order: 2 },
+        navigation: { labelKey: "", order: 2 },
       },
-      "registration.navigation.label: non-empty label is required",
+      "registration.navigation.labelKey: non-empty label key is required",
     ],
     [
       {
         ...feature("invalid", 2).registration,
-        navigation: { label: "Invalid", order: Number.NaN },
+        navigation: { labelKey: "Invalid", order: Number.NaN },
       },
       "registration.navigation.order: finite order is required",
     ],

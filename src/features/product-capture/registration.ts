@@ -109,7 +109,7 @@ export const createProductCaptureFeatureRegistration = (
 
   return {
     id: productCaptureFeatureId,
-    navigation: { label: "商品取り込み", order: 40, icon: "download" },
+    navigation: { labelKey: "nav.productCapture", order: 40, icon: "download" },
     publicApi,
     getAvailability,
     subscribeAvailability,

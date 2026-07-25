@@ -11,6 +11,7 @@ import type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const id = (value: string) => value as FeatureId;
 const maintenanceSource: MaintenanceSnapshotSource = {
@@ -31,7 +32,7 @@ function feature<TPublic extends object>(value: string, publicApi: TPublic) {
   let availabilityCleanup = 0;
   const registration: ApplicationFeatureRegistration<TPublic> = {
     id: id(value),
-    navigation: { label: value, order: 0 },
+    navigation: { labelKey: value as MessageKey, order: 0 },
     publicApi,
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => {

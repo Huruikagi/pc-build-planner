@@ -10,6 +10,7 @@ import type {
   FoundationRuntimeContribution,
   WorkerMessageTarget,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const target: WorkerMessageTarget = { addHandler: () => () => {} };
 const context: WorkerRegistrationContext = {
@@ -69,7 +70,7 @@ const fixture = (
           key: "feature",
           registration: {
             id: "feature" as FeatureId,
-            navigation: { label: "Feature", order: 1 },
+            navigation: { labelKey: "Feature" as MessageKey, order: 1 },
             publicApi: {},
             getAvailability: () => ({ status: "available" }),
             subscribeAvailability: () => () => {},

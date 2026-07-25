@@ -17,6 +17,7 @@ import type {
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const id = (value: string) => value as FeatureId;
 
@@ -87,7 +88,7 @@ function harness(options?: {
     readonly ping: () => string;
   }> = {
     id: id("planner"),
-    navigation: { label: "Planner", order: 1 },
+    navigation: { labelKey: "Planner" as MessageKey, order: 1 },
     publicApi: { ping: () => "pong" },
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => events.push("feature:unsubscribe"),

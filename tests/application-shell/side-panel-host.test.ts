@@ -12,6 +12,7 @@ import type {
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
 import { err, ok } from "../../src/domain/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
 
@@ -25,7 +26,7 @@ function feature(
   const listeners = new Set<(value: Availability) => void>();
   return {
     id: featureId(id),
-    navigation: { label: id, order },
+    navigation: { labelKey: id as MessageKey, order },
     publicApi: {},
     getAvailability: () => availability,
     subscribeAvailability(listener) {

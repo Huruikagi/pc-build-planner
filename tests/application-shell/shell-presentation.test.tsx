@@ -5,8 +5,10 @@ import { act } from "react";
 
 import type { FeatureId } from "../../src/application-shell/contracts.js";
 import { createShellPresentation } from "../../src/application-shell/shell-presentation.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
+const labelKey = (value: string) => value as MessageKey;
 
 test("shellとfeatureの別containerを維持してstateとnavigationを描画する", async () => {
   const shellContainer = document.createElement("div");
@@ -29,8 +31,8 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
 
   await act(() =>
     handle.publish({ kind: "ready", selected: featureId("projects") }, [
-      { id: featureId("projects"), label: "Projects" },
-      { id: featureId("parts"), label: "Parts" },
+      { id: featureId("projects"), labelKey: labelKey("Projects") },
+      { id: featureId("parts"), labelKey: labelKey("Parts") },
     ]),
   );
   const slot = handle.featureContainer;
@@ -48,8 +50,8 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
         message: { key: "停止中" },
       },
       [
-        { id: featureId("projects"), label: "Projects" },
-        { id: featureId("parts"), label: "Parts" },
+        { id: featureId("projects"), labelKey: labelKey("Projects") },
+        { id: featureId("parts"), labelKey: labelKey("Parts") },
       ],
     ),
   );

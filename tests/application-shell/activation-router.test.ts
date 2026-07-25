@@ -9,6 +9,7 @@ import type {
 } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { err, ok } from "../../src/domain/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const id = (value: string) => value as FeatureId;
 
@@ -18,7 +19,7 @@ function feature(
 ): ApplicationFeatureRegistration<object, { readonly value: string }> {
   return {
     id: featureId,
-    navigation: { label: featureId, order: 1 },
+    navigation: { labelKey: featureId as unknown as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: () => availability,
     subscribeAvailability: () => () => undefined,

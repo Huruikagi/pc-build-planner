@@ -25,8 +25,10 @@ import type {
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
+const labelKey = (value: string) => value as MessageKey;
 
 const stubDataPort: FoundationScopedDataPort = {
   async query() {
@@ -103,7 +105,7 @@ function setup(initial: MaintenanceSnapshot | Error) {
   for (const [order, id] of ["projects", "compatibility"].entries()) {
     const registration: ApplicationFeatureRegistration = {
       id: featureId(id),
-      navigation: { label: id, order },
+      navigation: { labelKey: labelKey(id), order },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => {},
@@ -244,7 +246,7 @@ test("deferred初期snapshot中のstopは後続subscribeとfeature mountを開�
   assert.equal(
     registry.register({
       id: featureId("deferred"),
-      navigation: { label: "deferred", order: 0 },
+      navigation: { labelKey: labelKey("deferred"), order: 0 },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => {},
@@ -287,7 +289,7 @@ test("concurrent startは初期化、購読、mountをsingle-flight化する", a
   assert.equal(
     registry.register({
       id: featureId("single"),
-      navigation: { label: "single", order: 0 },
+      navigation: { labelKey: labelKey("single"), order: 0 },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => {},
@@ -333,7 +335,7 @@ test("unsubscribeとhost cleanupは成功するまで所有し、失敗分だけ
   assert.equal(
     registry.register({
       id: featureId("retry-cleanup"),
-      navigation: { label: "retry-cleanup", order: 0 },
+      navigation: { labelKey: labelKey("retry-cleanup"), order: 0 },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => {},
@@ -385,7 +387,7 @@ test("stopはfeature hostを先に停止してからmaintenance購読を解除�
   assert.equal(
     registry.register({
       id: featureId("ordered-cleanup"),
-      navigation: { label: "ordered", order: 0 },
+      navigation: { labelKey: labelKey("ordered"), order: 0 },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => {},
@@ -430,7 +432,7 @@ test("stopはfeature hostを先に停止してからmaintenance購読を解除�
 test("host start失敗時に取得済みresourceをrollbackしretryで実際にmountする", async () => {
   const registration: ApplicationFeatureRegistration = {
     id: featureId("retry-start"),
-    navigation: { label: "retry-start", order: 0 },
+    navigation: { labelKey: labelKey("retry-start"), order: 0 },
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => {},
@@ -522,7 +524,7 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
   ): ApplicationFeatureRegistration<{ readonly name: string }> => ({
     id: featureId(id),
     navigation: {
-      label,
+      labelKey: labelKey(label),
       order: id === "projects" ? 0 : id === "broken" ? 1 : 2,
     },
     publicApi: { name: id },

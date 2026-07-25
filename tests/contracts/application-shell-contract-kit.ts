@@ -13,6 +13,7 @@ import type {
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
 import { err, ok, type Result } from "../../src/domain/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 export interface ContractFixtureObservations {
   mountCount: number;
@@ -79,7 +80,7 @@ export function createFeatureContractFixture(
   const feature: ApplicationFeatureRegistration<object, unknown> = {
     id: options.invalid ? ("" as FeatureId) : fixtureId,
     navigation: {
-      label: options.invalid ? "" : "Contract fixture",
+      labelKey: (options.invalid ? "" : "Contract fixture") as MessageKey,
       order: options.invalid ? Number.NaN : 10,
     },
     publicApi: {},
@@ -226,7 +227,7 @@ export function createActivationLifecycleFixture(): ActivationLifecycleFixture {
   const available = () => ({ status: "available" as const });
   const source: ApplicationFeatureRegistration<object, unknown> = {
     id: sourceId,
-    navigation: { label: "Activation source", order: 0 },
+    navigation: { labelKey: "Activation source" as MessageKey, order: 0 },
     publicApi: {},
     getAvailability: available,
     subscribeAvailability: () => () => {},
@@ -246,7 +247,7 @@ export function createActivationLifecycleFixture(): ActivationLifecycleFixture {
   };
   const target: ApplicationFeatureRegistration<object, unknown> = {
     id: targetId,
-    navigation: { label: "Activation target", order: 1 },
+    navigation: { labelKey: "Activation target" as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: available,
     subscribeAvailability: () => () => {},
@@ -324,9 +325,9 @@ export async function collectFeatureContractViolations(
   const violations: string[] = [];
   if (feature.id.trim().length === 0)
     violations.push("registration.id: non-empty feature id is required");
-  if (feature.navigation.label.trim().length === 0)
+  if (feature.navigation.labelKey.trim().length === 0)
     violations.push(
-      "registration.navigation.label: non-empty label is required",
+      "registration.navigation.labelKey: non-empty label key is required",
     );
   if (!Number.isFinite(feature.navigation.order))
     violations.push("registration.navigation.order: finite order is required");

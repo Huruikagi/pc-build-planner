@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import type { MessageKey } from "../ui-messages/public.js";
 import { useMessages } from "../ui-messages/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
@@ -7,7 +8,7 @@ import { hasNavIcon, NavIcon } from "./nav-icons.js";
 
 export interface ShellNavigationItem {
   readonly id: FeatureId;
-  readonly label: string;
+  readonly labelKey: MessageKey;
   readonly icon?: string;
 }
 
@@ -36,18 +37,19 @@ function ShellNavigation({
     >
       {items.map((item) => {
         const showIcon = item.icon !== undefined && hasNavIcon(item.icon);
+        const label = messages.resolveDescriptor({ key: item.labelKey });
         return (
           <button
             aria-current={item.id === selected ? "page" : undefined}
-            aria-label={showIcon ? item.label : undefined}
+            aria-label={showIcon ? label : undefined}
             className="shell-navigation__item"
             data-feature-id={item.id}
             key={item.id}
             onClick={() => onNavigate(item.id)}
-            title={item.label}
+            title={label}
             type="button"
           >
-            {showIcon ? <NavIcon name={item.icon as string} /> : item.label}
+            {showIcon ? <NavIcon name={item.icon as string} /> : label}
           </button>
         );
       })}

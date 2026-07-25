@@ -114,7 +114,11 @@ export const createCandidateFeatureRegistration = (
 
   return {
     id: candidateManagementFeatureId,
-    navigation: { label: "候補管理", order: 20, icon: "list" },
+    navigation: {
+      labelKey: "nav.candidateManagement",
+      order: 20,
+      icon: "list",
+    },
     publicApi,
     getAvailability,
     subscribeAvailability,

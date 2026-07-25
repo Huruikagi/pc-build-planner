@@ -13,6 +13,7 @@ import type { CaptureCoordinator } from "../../../src/features/product-capture/c
 import { createProductCaptureFeatureRegistration } from "../../../src/features/product-capture/registration.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
 import type { CaptureProjectOption } from "../../../src/features/product-capture/view.js";
+import type { MessageKey } from "../../../src/ui-messages/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 const PROJECTS: readonly CaptureProjectOption[] = [
@@ -123,7 +124,7 @@ test("商品取り込みが表示中でも、shellは他featureへのactivation�
   const targetId = "target" as FeatureId;
   const target: ApplicationFeatureRegistration<object, { value: string }> = {
     id: targetId,
-    navigation: { label: "target", order: 1 },
+    navigation: { labelKey: "target" as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => {},
@@ -247,11 +248,11 @@ test("公開APIは他featureに公開する能力を持たない凍結済みの�
   assert.equal(Object.isFrozen(registration.publicApi), true);
 });
 
-test("navigation.labelとorderは有効な値を持つ", () => {
+test("navigation.labelKeyとorderは有効な値を持つ", () => {
   const registration = createProductCaptureFeatureRegistration({
     state: createState(),
   });
 
-  assert.ok(registration.navigation.label.length > 0);
+  assert.ok(registration.navigation.labelKey.length > 0);
   assert.ok(Number.isFinite(registration.navigation.order));
 });

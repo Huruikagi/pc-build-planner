@@ -3,7 +3,7 @@ import type {
   MaintenanceSnapshot as FoundationMaintenanceSnapshot,
   MaintenanceSnapshotSource,
 } from "../persistence/public.js";
-import type { MessageDescriptor } from "../ui-messages/public.js";
+import type { MessageDescriptor, MessageKey } from "../ui-messages/public.js";
 
 export type FeatureId = string & { readonly __brand: "FeatureId" };
 
@@ -63,7 +63,7 @@ export interface ApplicationFeatureRegistration<
 > {
   readonly id: FeatureId;
   readonly navigation: {
-    readonly label: string;
+    readonly labelKey: MessageKey;
     readonly order: number;
     /** Semantic icon key rendered by the shell navigation (falls back to label). */
     readonly icon?: string;

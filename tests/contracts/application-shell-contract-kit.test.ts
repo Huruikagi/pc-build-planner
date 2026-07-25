@@ -69,7 +69,7 @@ test("不正fixtureは違反箇所を安定した順序で報告する", async (
 
   assert.deepEqual(await collectFeatureContractViolations(fixture.feature), [
     "registration.id: non-empty feature id is required",
-    "registration.navigation.label: non-empty label is required",
+    "registration.navigation.labelKey: non-empty label key is required",
     "registration.navigation.order: finite order is required",
     "availability.reason: unavailable reason is required",
     "mount: feature did not render into the supplied container",

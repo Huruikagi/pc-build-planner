@@ -201,7 +201,7 @@
   - _Boundary: ShellMessageEmitters_
   - _Depends: 4.1_
 
-- [ ] 4.3 ナビゲーションラベルのキー申告への一括移行
+- [x] 4.3 ナビゲーションラベルのキー申告への一括移行
   - `ApplicationFeatureRegistration.navigation.label` を `labelKey: MessageKey` へ変更し、`ShellNavigationItem` も同様に変更する
   - 5つの feature の `registration.ts` を同時に `nav` 名前空間のキー申告へ移す。`order` と `icon` は変更しない
   - `feature-registry.ts` の `navigation` 検証を `labelKey` に合わせる

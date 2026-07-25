@@ -17,6 +17,7 @@ import type {
 } from "../../../src/features/compatibility/contracts.js";
 import { createCompatibilityFeatureRegistration } from "../../../src/features/compatibility/registration.js";
 import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
+import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -89,7 +90,12 @@ test("registrationはcompatibility識別子とラベルを持つ", () => {
   const registration = createCompatibilityFeatureRegistration({ query });
 
   assert.equal(registration.id, "compatibility");
-  assert.equal(registration.navigation.label, "互換性確認");
+  assert.equal(
+    defaultMessageResolver.resolveDescriptor({
+      key: registration.navigation.labelKey,
+    }),
+    "互換性確認",
+  );
 });
 
 test("mountはgetProjectIdが返すprojectで評価しViewを描画する", async () => {

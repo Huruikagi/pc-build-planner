@@ -434,7 +434,7 @@ export function createProductionApplicationComposition<
       const publish = (state: ShellViewState): void => {
         const navigation = createdRegistry.snapshot().map((feature) => ({
           id: feature.id,
-          label: feature.navigation.label,
+          labelKey: feature.navigation.labelKey,
           ...(feature.navigation.icon === undefined
             ? {}
             : { icon: feature.navigation.icon }),
