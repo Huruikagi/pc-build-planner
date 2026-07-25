@@ -117,4 +117,8 @@
   2. 通常の変更のpush（commit 281e531ほか、run 30140786880）でci.ymlが起動し31秒で成功した（5分以内）。
   3. open issue（#17, #18）が残るmilestone v0.1.0に対してrelease.ymlを手動起動（run 30142575859）し、Check milestoneステップで未完了issue一覧つきで失敗し、完全検証・パッケージ生成・リリース作成・milestone close のいずれにも到達しないことを確認した。
   4. `pnpm package` で生成したzipを展開し、manifest.jsonが最上位に存在することを確認したうえで、ユーザーがChromeの「パッケージ化されていない拡張機能を読み込む」で実際に読み込み、エラーなく動作することを確認した。
+- リリースワークフローの本番実行を確認済み（2026-07-25、run 30149484114）。design.mdの「手動確認」項目4に相当する。全14ステップが成功し、所要時間は56秒（E2E込みの完全検証を含む）。
+  - 前提ゲート（Resolve version → Check tag → Check milestone）が完全検証より前で通過し、Validate → Package → Upload artifact → Build release notes → Create release → Close milestone の順で設計どおりに流れた。
+  - 公開結果: タグ `v0.1.0` 作成、Release へ `pc-build-planner-v0.1.0.zip`（446,373 bytes）を添付、ワークフロー成果物 `release-zip` をRelease作成より前にupload済み、マイルストーン `v0.1.0` は closed（closed_issues=2 / open_issues=0）。
+  - 実行前にアンブレラissue #17 の label を `documentation` から `enhancement` へ変更した。リリースノートの分類はlabelの運用に依存し、ワークフローは状態を読み取るのみで補正しない（requirements.md の Adjacent expectations どおりの挙動）。
 - feature検証（`/kiro-validate-impl`）でタスク2.2とタスク3.3の接合部に欠陥を検出し修正した。`gh issue list` は既定で30件までしか取得しないため、release.ymlのclosed issue取得がリリースノート入力を無言で切り詰め、31件以上のマイルストーンで要件6.1を満たさなくなる状態だった。`release-notes.mjs` 側の「入力の全issueがちょうど1回出現する」不変条件は単体testで守られていたため、タスク単体のレビューでは検出できなかった。release.ymlの3箇所の `gh issue list` すべてに `--limit 200` を明示して解消した。
