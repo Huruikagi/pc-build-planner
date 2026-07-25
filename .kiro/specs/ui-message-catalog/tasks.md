@@ -56,7 +56,7 @@
 
 - [ ] 2. UIメッセージカタログ基盤
 
-- [ ] 2.1 メッセージ契約と型基盤の定義
+- [x] 2.1 メッセージ契約と型基盤の定義
   - `src/ui-messages/contracts.ts` に `MessageDefinition` / `PluralDefinition` / `MessageParams` / `MessageNamespace` / `MessageDescriptor` を定義する
   - 定数オブジェクトからドット区切りキー union を導出する `MessageKeyOf`、キーから定義を引く `DefinitionAt`、プレースホルダ名を抽出する `PlaceholderNames` を定義する
   - 型は言語に依存しない形にする。言語ごとの値集合が後から追加できることを型で担保する
