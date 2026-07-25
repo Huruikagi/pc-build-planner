@@ -78,3 +78,45 @@ jobs:
           fi
 
           echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Install E2E browser
+        run: pnpm install:e2e-browser
+
+      - name: Validate (E2E included)
+        run: pnpm validate
+
+      - name: Package
+        run: pnpm package
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-zip
+          path: release/${{ steps.version.outputs.zipFileName }}
+          if-no-files-found: error
+
+      - name: Build release notes
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          repo="${{ github.repository }}"
+          gh issue list --repo "$repo" --milestone "$tag" --state closed --json number,title,labels,url \
+            | node scripts/release-notes.mjs --tag "$tag" > release-notes.md
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          repo="${{ github.repository }}"
+          gh release create "$tag" "release/${{ steps.version.outputs.zipFileName }}" \
+            --repo "$repo" --title "$tag" --notes-file release-notes.md
+
+      - name: Close milestone
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          number="${{ steps.milestone.outputs.number }}"
+          if ! gh api -X PATCH "repos/$repo/milestones/$number" -f state=closed >/dev/null; then
+            echo "::error::release ${{ steps.version.outputs.tag }} was published but closing milestone $number failed; close it manually"
+            exit 1
+          fi
