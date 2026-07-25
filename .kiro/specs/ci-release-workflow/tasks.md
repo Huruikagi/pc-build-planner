@@ -117,3 +117,4 @@
   2. 通常の変更のpush（commit 281e531ほか、run 30140786880）でci.ymlが起動し31秒で成功した（5分以内）。
   3. open issue（#17, #18）が残るmilestone v0.1.0に対してrelease.ymlを手動起動（run 30142575859）し、Check milestoneステップで未完了issue一覧つきで失敗し、完全検証・パッケージ生成・リリース作成・milestone close のいずれにも到達しないことを確認した。
   4. `pnpm package` で生成したzipを展開し、manifest.jsonが最上位に存在することを確認したうえで、ユーザーがChromeの「パッケージ化されていない拡張機能を読み込む」で実際に読み込み、エラーなく動作することを確認した。
+- feature検証（`/kiro-validate-impl`）でタスク2.2とタスク3.3の接合部に欠陥を検出し修正した。`gh issue list` は既定で30件までしか取得しないため、release.ymlのclosed issue取得がリリースノート入力を無言で切り詰め、31件以上のマイルストーンで要件6.1を満たさなくなる状態だった。`release-notes.mjs` 側の「入力の全issueがちょうど1回出現する」不変条件は単体testで守られていたため、タスク単体のレビューでは検出できなかった。release.ymlの3箇所の `gh issue list` すべてに `--limit 200` を明示して解消した。

@@ -488,14 +488,14 @@ declare function renderReleaseNotes(input: {
   8. **Validate** — `pnpm validate`（E2E 込み）。失敗時はここでジョブ終了（4.2, 4.3）
   9. **Package** — `pnpm package`（3.1–3.6）
   10. `actions/upload-artifact@v7`（`if-no-files-found: error`）（7.2）
-  11. **Build release notes** — `gh issue list --milestone <tag> --state closed --json number,title,labels,url` を `node scripts/release-notes.mjs --tag <tag>` へ渡し `release-notes.md` を生成（6.1–6.4）
+  11. **Build release notes** — `gh issue list --milestone <tag> --state closed --limit 200 --json number,title,labels,url` を `node scripts/release-notes.mjs --tag <tag>` へ渡し `release-notes.md` を生成（6.1–6.4）
   12. **Create release** — `gh release create <tag> <zip> --title <tag> --notes-file release-notes.md`（7.1）
   13. **Close milestone** — `gh api -X PATCH repos/{owner}/{repo}/milestones/{number} -f state=closed`（7.3）
 - **Idempotency & recovery**: tag 重複チェック（ステップ 5）により、同一バージョンでの二重リリースは失敗する。ステップ 12 まで到達しなかった場合は副作用が残らないため、原因を解消して再実行できる。ステップ 12 成功後に 13 が失敗した場合はリリースのみ公開済みとなるため、マイルストーンを手動で close する（ログにその旨を出す）。
 
 **Implementation Notes**
 
-- Integration: マイルストーンの特定には `gh api "repos/{owner}/{repo}/milestones?state=all&per_page=100"` を用い、`title` 完全一致で `number` と `state` を取得する。open / closed issue の件数判定にはマイルストーンオブジェクトの集計値ではなく `gh issue list --milestone` を用いる（集計値は pull request を含むため）。
+- Integration: マイルストーンの特定には `gh api "repos/{owner}/{repo}/milestones?state=all&per_page=100"` を用い、`title` 完全一致で `number` と `state` を取得する。open / closed issue の件数判定にはマイルストーンオブジェクトの集計値ではなく `gh issue list --milestone` を用いる（集計値は pull request を含むため）。`gh issue list` は既定で 30 件までしか取得しないため、件数判定・未完了 issue 一覧・リリースノート入力のすべてに `--limit 200` を明示し、暗黙の打ち切りによる issue 欠落を防ぐ。
 - Validation: 前提ゲートを完全検証より前に置くのは実行時間の最適化であり、要件 4.3 / 5.5 の「失敗時に公開しない」保証はステップの逐次実行と fail-fast によって成立する。
 - Note: ステップ 8 の `pnpm validate`（内部の `validate:final-build`）と ステップ 9 の `pnpm package`（先行する `pnpm build`）で `dist` が二度生成される。build は数秒であり、`package` が「検証済みの状態から作り直した成果物」を圧縮する構造のほうが依存関係として明快なため、この重複を許容する。`validate` の副産物を再利用する最適化は行わない。
 - Risks: `github.token` によるマイルストーン更新は `issues: write` を要する。権限不足の場合はステップ 13 のみが失敗し、リリースは公開済みとなる。この状態はログから判別可能であり、手動 close で回復できる。

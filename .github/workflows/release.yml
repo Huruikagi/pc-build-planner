@@ -63,15 +63,15 @@ jobs:
             exit 1
           fi
 
-          open_count=$(gh issue list --repo "$repo" --milestone "$tag" --state open --json number --jq 'length')
+          open_count=$(gh issue list --repo "$repo" --milestone "$tag" --state open --limit 200 --json number --jq 'length')
           if [ "$open_count" -gt 0 ]; then
             echo "::error::milestone $tag has $open_count open issue(s)"
-            gh issue list --repo "$repo" --milestone "$tag" --state open --json number,title \
+            gh issue list --repo "$repo" --milestone "$tag" --state open --limit 200 --json number,title \
               --jq '.[] | "#\(.number) \(.title)"'
             exit 1
           fi
 
-          closed_count=$(gh issue list --repo "$repo" --milestone "$tag" --state closed --json number --jq 'length')
+          closed_count=$(gh issue list --repo "$repo" --milestone "$tag" --state closed --limit 200 --json number --jq 'length')
           if [ "$closed_count" -eq 0 ]; then
             echo "::error::milestone $tag has no closed issues"
             exit 1
@@ -100,7 +100,7 @@ jobs:
           set -euo pipefail
           tag="${{ steps.version.outputs.tag }}"
           repo="${{ github.repository }}"
-          gh issue list --repo "$repo" --milestone "$tag" --state closed --json number,title,labels,url \
+          gh issue list --repo "$repo" --milestone "$tag" --state closed --limit 200 --json number,title,labels,url \
             | node scripts/release-notes.mjs --tag "$tag" > release-notes.md
 
       - name: Create release
