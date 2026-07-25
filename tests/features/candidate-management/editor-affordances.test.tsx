@@ -496,3 +496,22 @@ test("価格を空にすると保存対象から外れ、数値でない入力�
 
   await harness.cleanup();
 });
+
+test("通貨が判明していない候補の手入力価格は通貨を推測しない", async () => {
+  const harness = await renderView();
+
+  await click(harness.container.querySelector("[data-create-candidate]"));
+  setInputValue(input(harness, "candidate-name"), "架空候補");
+  setInputValue(input(harness, "candidate-price-amount"), "1234");
+  await act(async () => undefined);
+  await submitEditor(harness);
+
+  // No extracted currency exists, so none is invented from the UI locale.
+  assert.equal(harness.created.length, 1);
+  assert.deepEqual(harness.created[0]?.product.price?.confirmed, {
+    amount: 1234,
+    currency: "",
+  });
+
+  await harness.cleanup();
+});

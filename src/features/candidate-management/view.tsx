@@ -521,7 +521,8 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
                   original: previous?.original ?? null,
                   confirmed: {
                     amount,
-                    currency: previous?.confirmed?.currency ?? "JPY",
+                    // An empty currency means "unknown", never a guessed locale.
+                    currency: previous?.confirmed?.currency ?? "",
                   },
                 },
               },
