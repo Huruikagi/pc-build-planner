@@ -87,7 +87,7 @@
   - _Boundary: MessageCatalog_
   - _Depends: 2.1_
 
-- [ ] 2.4 リゾルバ・記述子ファクトリ・公開入口の実装
+- [x] 2.4 リゾルバ・記述子ファクトリ・公開入口の実装
   - `src/ui-messages/resolver.ts` に `createMessageResolver` と `message` を実装する。キーとパラメータの過不足がコンパイルエラーになることを型で保証する
   - `resolveDescriptor` は未知キーに対してキー文字列を返し、画面を落とさない
   - `src/ui-messages/public.ts` を唯一の公開入口として整備し、`defaultMessageResolver` を含む公開面を確定する。カタログ定数そのものは公開しない
