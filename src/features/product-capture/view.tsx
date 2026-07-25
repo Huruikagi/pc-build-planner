@@ -1,5 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import type { PartCategory, ProjectId } from "../../domain/public.js";
+import type { MessageKey } from "../../ui-messages/public.js";
+import { useMessages } from "../../ui-messages/public.js";
 import { inferCategoryHint } from "./category-hint.js";
 import {
   CAPTURE_CORE_FIELDS,
@@ -24,62 +26,54 @@ export interface CaptureViewProps {
   readonly onOpenDetailEdit?: (manualName?: string) => void;
 }
 
-const FIELD_LABELS: Readonly<Record<CaptureCoreField, string>> = {
-  name: "商品名",
-  category: "カテゴリ",
-  price: "価格",
-  manufacturer: "メーカー",
-  modelNumber: "型番",
-  url: "URL",
-};
+const fieldMessageKeys = {
+  name: "capture.fields.name",
+  category: "capture.fields.category",
+  price: "capture.fields.price",
+  manufacturer: "capture.fields.manufacturer",
+  modelNumber: "capture.fields.modelNumber",
+  url: "capture.fields.url",
+} as const satisfies Record<CaptureCoreField, MessageKey>;
 
-/** Labels for the read-only category suggestion; the formal picker lives in detail edit. */
-const CATEGORY_HINT_LABELS: Readonly<Record<PartCategory, string>> = {
-  cpu: "CPU",
-  "cpu-cooler": "CPUクーラー",
-  motherboard: "マザーボード",
-  memory: "メモリ",
-  gpu: "GPU",
-  storage: "ストレージ",
-  "power-supply": "電源",
-  case: "ケース",
-  "case-fan": "ケースファン",
-  "expansion-card": "拡張カード",
-  other: "その他",
-  uncategorized: "未分類",
-};
+const categoryMessageKeys = {
+  cpu: "category.cpu",
+  "cpu-cooler": "category.cpu-cooler",
+  motherboard: "category.motherboard",
+  memory: "category.memory",
+  gpu: "category.gpu",
+  storage: "category.storage",
+  "power-supply": "category.power-supply",
+  case: "category.case",
+  "case-fan": "category.case-fan",
+  "expansion-card": "category.expansion-card",
+  other: "category.other",
+  uncategorized: "category.uncategorized",
+} as const satisfies Record<PartCategory, MessageKey>;
 
-const SOURCE_LABELS: Readonly<Record<ExtractionSource, string>> = {
-  "json-ld": "構造化データ",
-  meta: "メタ情報",
-  heading: "見出し",
-  breadcrumb: "パンくず",
-  table: "表",
-  "definition-list": "定義リスト",
-};
+const sourceMessageKeys = {
+  "json-ld": "capture.sources.json-ld",
+  meta: "capture.sources.meta",
+  heading: "capture.sources.heading",
+  breadcrumb: "capture.sources.breadcrumb",
+  table: "capture.sources.table",
+  "definition-list": "capture.sources.definition-list",
+} as const satisfies Record<ExtractionSource, MessageKey>;
 
-const ERROR_MESSAGES: Readonly<Record<CaptureError["kind"], string>> = {
-  "permission-lost":
-    "ページへのアクセス権限が失効しました。ページを表示し直してから再実行してください。",
-  "restricted-page":
-    "このページは拡張から読み取れないため取り込みの対象外です。",
-  "tab-changed":
-    "取り込み中にページが移動または更新されました。表示中のページで再実行してください。",
-  "injection-failed":
-    "ページの読み取りに失敗しました。もう一度実行してください。",
-  "invalid-payload":
-    "ページから取得した内容を解釈できませんでした。もう一度実行してください。",
-  "no-candidate": "このページからは商品情報を自動取得できませんでした。",
-  validation: "入力内容を確認してください。",
-  "project-required":
-    "保存先のプロジェクトを選択してください。プロジェクトがない場合は先に作成してください。",
-  navigation: "詳細編集画面を開けませんでした。",
-  maintenance: "保守操作の実行中です。完了後にもう一度お試しください。",
-  storage: "保存領域を利用できません。もう一度お試しください。",
-  quota:
-    "保存容量が不足しています。不要な候補を削除してからもう一度お試しください。",
-  "unsupported-data": "保存データが破損しているか、対応していない形式です。",
-};
+const errorMessageKeys = {
+  "permission-lost": "capture.errors.permission-lost",
+  "restricted-page": "capture.errors.restricted-page",
+  "tab-changed": "capture.errors.tab-changed",
+  "injection-failed": "capture.errors.injection-failed",
+  "invalid-payload": "capture.errors.invalid-payload",
+  "no-candidate": "capture.errors.no-candidate",
+  validation: "persistenceError.validation",
+  "project-required": "capture.errors.project-required",
+  navigation: "capture.errors.navigation",
+  maintenance: "persistenceError.maintenance",
+  storage: "capture.errors.storage",
+  quota: "persistenceError.quota",
+  "unsupported-data": "capture.errors.unsupportedData",
+} as const satisfies Record<CaptureError["kind"], MessageKey>;
 
 const formatNormalizedValue = (value: CaptureNormalizedValue): string =>
   typeof value === "string" ? value : `${value.amount} ${value.currency}`;
@@ -113,12 +107,13 @@ function FieldRow({
   readonly session: CaptureSession;
   readonly onChange: (field: CaptureField, value: string) => void;
 }) {
+  const messages = useMessages();
   const entry = fieldEntry(session, field);
   const missing = session.missingCoreFields.includes(field);
   return (
     <div className="product-capture__field" data-capture-field-row={field}>
       <label>
-        {FIELD_LABELS[field]}
+        {messages(fieldMessageKeys[field])}
         <input
           data-capture-field={field}
           onChange={(event) => onChange(field, event.target.value)}
@@ -127,19 +122,24 @@ function FieldRow({
       </label>
       {entry === undefined ? null : (
         <p className="product-capture__source">
-          取得元: {SOURCE_LABELS[entry.source]}（{entry.sourceLabel}）
+          {messages("capture.sourceAttribution", {
+            source: messages(sourceMessageKeys[entry.source]),
+            sourceLabel: entry.sourceLabel,
+          })}
         </p>
       )}
       {entry?.value.original === null ||
       entry?.value.original === undefined ? null : entry.value.original
           .length === 0 ? null : (
         <p className="product-capture__original">
-          元表記: {entry.value.original}
+          {messages("capture.originalValueLabel", {
+            value: entry.value.original,
+          })}
         </p>
       )}
       {missing ? (
         <p className="product-capture__missing" role="status">
-          未入力の項目です
+          {messages("capture.missingFieldStatus")}
         </p>
       ) : null}
     </div>
@@ -153,33 +153,43 @@ function FieldRow({
  * the inferred suggestion and its source label instead of an input.
  */
 function CategoryRow({ session }: { readonly session: CaptureSession }) {
+  const messages = useMessages();
   const entry = fieldEntry(session, "category");
   const text = resolvedFieldText(session, "category");
   const hint = inferCategoryHint(text);
   const missing = session.missingCoreFields.includes("category");
   return (
     <div className="product-capture__field" data-capture-field-row="category">
-      <p className="product-capture__field-label">{FIELD_LABELS.category}</p>
+      <p className="product-capture__field-label">
+        {messages(fieldMessageKeys.category)}
+      </p>
       <p className="product-capture__category-hint" data-capture-category-hint>
         {hint === undefined
-          ? "推定できませんでした（詳細編集で選択します）"
-          : `推定: ${CATEGORY_HINT_LABELS[hint]}（詳細編集の初期選択になります）`}
+          ? messages("capture.categoryHintUnknown")
+          : messages("capture.categoryHintEstimated", {
+              label: messages(categoryMessageKeys[hint]),
+            })}
       </p>
       {entry === undefined ? null : (
         <p className="product-capture__source">
-          取得元: {SOURCE_LABELS[entry.source]}（{entry.sourceLabel}）
+          {messages("capture.sourceAttribution", {
+            source: messages(sourceMessageKeys[entry.source]),
+            sourceLabel: entry.sourceLabel,
+          })}
         </p>
       )}
       {entry?.value.original === null ||
       entry?.value.original === undefined ? null : entry.value.original
           .length === 0 ? null : (
         <p className="product-capture__original">
-          元表記: {entry.value.original}
+          {messages("capture.originalValueLabel", {
+            value: entry.value.original,
+          })}
         </p>
       )}
       {missing ? (
         <p className="product-capture__missing" role="status">
-          未入力の項目です
+          {messages("capture.missingFieldStatus")}
         </p>
       ) : null}
     </div>
@@ -191,9 +201,10 @@ function RejectedFields({
 }: {
   readonly rejectedFields: CaptureSession["rejectedFields"];
 }) {
+  const messages = useMessages();
   if (rejectedFields.length === 0) return null;
   return (
-    <ul aria-label="取得できなかった項目">
+    <ul aria-label={messages("capture.rejectedFieldsLabel")}>
       {rejectedFields.map((rejection) => (
         <li key={rejection.field}>
           {rejection.field}: {rejection.reason}
@@ -216,12 +227,13 @@ function ReviewPanel({
   readonly error: CaptureError | null;
   readonly onOpenDetailEdit: ((manualName?: string) => void) | undefined;
 }) {
+  const messages = useMessages();
   const canProceed = resolvedName(session).length > 0;
   return (
-    <section aria-label="取り込み確認" data-region="review">
+    <section aria-label={messages("capture.reviewTitle")} data-region="review">
       {error === null ? null : (
         <p className="product-capture__error" role="alert">
-          {ERROR_MESSAGES[error.kind]}
+          {messages(errorMessageKeys[error.kind])}
         </p>
       )}
       {CAPTURE_CORE_FIELDS.map((field) =>
@@ -238,7 +250,7 @@ function ReviewPanel({
       )}
       <RejectedFields rejectedFields={session.rejectedFields} />
       <label>
-        保存先プロジェクト
+        {messages("capture.saveDestinationLabel")}
         <select
           data-capture-project-select
           onChange={(event) => {
@@ -249,7 +261,7 @@ function ReviewPanel({
           }}
           value={session.projectId ?? ""}
         >
-          <option value="">選択してください</option>
+          <option value="">{messages("capture.selectPrompt")}</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>
               {project.name}
@@ -258,9 +270,7 @@ function ReviewPanel({
         </select>
       </label>
       {projects.length === 0 ? (
-        <p role="status">
-          保存先のプロジェクトがありません。先にプロジェクトを作成してください。
-        </p>
+        <p role="status">{messages("capture.noProjectsNotice")}</p>
       ) : null}
       <button
         data-capture-submit
@@ -268,7 +278,7 @@ function ReviewPanel({
         onClick={() => void state.submit()}
         type="button"
       >
-        保存
+        {messages("common.save")}
       </button>
       <button
         data-capture-open-detail-edit
@@ -276,42 +286,45 @@ function ReviewPanel({
         onClick={() => onOpenDetailEdit?.()}
         type="button"
       >
-        詳細編集
+        {messages("capture.detailEditAction")}
       </button>
       <button
         data-capture-retry
         onClick={() => void state.startCapture()}
         type="button"
       >
-        取り込み直す
+        {messages("capture.retryCaptureAction")}
       </button>
     </section>
   );
 }
 
 function IdleView({ onStart }: { readonly onStart: () => void }) {
+  const messages = useMessages();
   return (
-    <section aria-label="取り込み">
-      <p>拡張のアイコンから取り込みを開始してください。</p>
+    <section aria-label={messages("capture.idleTitle")}>
+      <p>{messages("capture.idleInstruction")}</p>
       <button data-capture-start onClick={onStart} type="button">
-        取り込みを開始
+        {messages("capture.startAction")}
       </button>
     </section>
   );
 }
 
 function ExtractingView() {
+  const messages = useMessages();
   return (
-    <section aria-busy="true" aria-label="取り込み中">
-      <p>ページを取り込んでいます…</p>
+    <section aria-busy="true" aria-label={messages("capture.extractingTitle")}>
+      <p>{messages("capture.extractingStatus")}</p>
     </section>
   );
 }
 
 function SubmittingView() {
+  const messages = useMessages();
   return (
-    <section aria-busy="true" aria-label="保存中">
-      <p>保存しています…</p>
+    <section aria-busy="true" aria-label={messages("capture.submittingTitle")}>
+      <p>{messages("capture.submittingStatus")}</p>
     </section>
   );
 }
@@ -323,15 +336,16 @@ function SavedView({
   readonly projectName: string | undefined;
   readonly onCaptureAgain: () => void;
 }) {
+  const messages = useMessages();
   return (
-    <section aria-label="保存完了">
+    <section aria-label={messages("capture.savedTitle")}>
       <p>
         {projectName === undefined
-          ? "候補を保存しました。"
-          : `候補を保存しました（保存先: ${projectName}）。`}
+          ? messages("capture.savedWithoutProject")
+          : messages("capture.savedWithProject", { projectName })}
       </p>
       <button data-capture-start onClick={onCaptureAgain} type="button">
-        別のページを取り込む
+        {messages("capture.captureAnotherAction")}
       </button>
     </section>
   );
@@ -344,11 +358,12 @@ function RetryGuidance({
   readonly error: CaptureError;
   readonly onRetry: () => void;
 }) {
+  const messages = useMessages();
   return (
-    <section aria-label="取り込み失敗">
-      <p role="alert">{ERROR_MESSAGES[error.kind]}</p>
+    <section aria-label={messages("capture.failedTitle")}>
+      <p role="alert">{messages(errorMessageKeys[error.kind])}</p>
       <button data-capture-retry onClick={onRetry} type="button">
-        再実行
+        {messages("capture.retryAction")}
       </button>
     </section>
   );
@@ -359,16 +374,17 @@ function ManualEntryGuidance({
 }: {
   readonly onProceed: (name: string) => void;
 }) {
+  const messages = useMessages();
   const [name, setName] = useState("");
   const trimmed = name.trim();
   return (
-    <section aria-label="手入力での登録案内">
+    <section aria-label={messages("capture.manualEntryTitle")}>
       <p role="alert">
-        {ERROR_MESSAGES["no-candidate"]}
-        商品名を入力すると詳細編集へ進めます。
+        {messages(errorMessageKeys["no-candidate"])}
+        {messages("capture.manualEntryInstruction")}
       </p>
       <label>
-        商品名
+        {messages(fieldMessageKeys.name)}
         <input
           data-capture-manual-name
           onChange={(event) => setName(event.target.value)}
@@ -381,7 +397,7 @@ function ManualEntryGuidance({
         onClick={() => onProceed(trimmed)}
         type="button"
       >
-        詳細編集
+        {messages("capture.detailEditAction")}
       </button>
     </section>
   );

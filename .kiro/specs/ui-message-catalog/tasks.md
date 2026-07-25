@@ -168,7 +168,7 @@
   - _Boundary: MessageCatalog_
   - _Depends: 2.5_
 
-- [ ] 3.7 商品取り込みの view 移行
+- [x] 3.7 商品取り込みの view 移行
   - `src/features/product-capture/view.tsx` の全文言リテラルを `useMessages()` 経由へ置き換える
   - 各フェーズ画面（取り込み前・取り込み中・確認・保存中・完了・失敗・手入力案内）の文言と `aria-label` を resolver 経由にする
   - 外部由来の商品名を含む描画が通常の JSX child のままであり、マークアップとして解釈されないことを回帰テストで固定する

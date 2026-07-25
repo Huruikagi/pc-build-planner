@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MessageProvider } from "../../ui-messages/public.js";
 import type { CaptureState } from "./state.js";
 import { type CaptureProjectOption, CaptureView } from "./view.js";
 
@@ -21,13 +22,17 @@ export const mountCaptureReactRoot = (
   const root: Root = createRoot(container);
   let unmounted = false;
   root.render(
-    createElement(CaptureView, {
-      state: dependencies.state,
-      projects: dependencies.projects,
-      ...(dependencies.onOpenDetailEdit === undefined
-        ? {}
-        : { onOpenDetailEdit: dependencies.onOpenDetailEdit }),
-    }),
+    createElement(
+      MessageProvider,
+      null,
+      createElement(CaptureView, {
+        state: dependencies.state,
+        projects: dependencies.projects,
+        ...(dependencies.onOpenDetailEdit === undefined
+          ? {}
+          : { onOpenDetailEdit: dependencies.onOpenDetailEdit }),
+      }),
+    ),
   );
   return {
     unmount() {

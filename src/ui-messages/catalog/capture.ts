@@ -36,6 +36,7 @@ export const capture = {
     "保存先のプロジェクトがありません。先にプロジェクトを作成してください。",
   detailEditAction: "詳細編集",
   retryCaptureAction: "取り込み直す",
+  reviewTitle: "取り込み確認",
   idleTitle: "取り込み",
   idleInstruction: "拡張のアイコンから取り込みを開始してください。",
   startAction: "取り込みを開始",
