@@ -112,3 +112,4 @@
 ## Implementation Notes
 
 - タスク2.1完了時に `pnpm test` のみで確認し `pnpm validate:ci`（typecheck/lint含む）を未実行だったため、`exactOptionalPropertyTypes` によるtypecheckエラーとbiome整形違反がタスク2.2着手時に発覚した。以降のタスクは完了前に必ず `pnpm validate:ci` を実行して確認する。
+- タスク4.2実機確認: 通常の変更のpushでci.ymlが起動し31秒で成功した（実行ID 30140786880）。
