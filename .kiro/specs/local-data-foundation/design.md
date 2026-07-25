@@ -34,6 +34,7 @@
 - 候補の選択数、編集権限、互換性、表示文言などfeature固有規則
 - backup JSON envelopeとファイル選択・download/upload（`backup-restore`所有）
 - `chrome.runtime.onMessage` adapter、sender metadataのplatform判定、listener登録・解除、side panel/service workerのstart/stop（`application-shell`所有）
+- 表示言語などドメイン外の利用者インターフェース設定の保存・整合性・容量管理（`ui-internationalization`が`localDataRoot`外の専用キーで所有。下記Allowed Dependenciesの例外を参照）
 
 ### Allowed Dependencies
 - Chrome 116以降のManifest V3、`chrome.storage.local`、`crypto.randomUUID()`、標準JSON/Web API
@@ -42,6 +43,7 @@
 - `application-shell`はfoundationのproduction runtime contribution factoryだけを公開入口から利用し、返されたworker registrationとmaintenance sourceをcompositionする。foundationからshellへimportしない
 - production factoryは`globalThis.chrome.storage.local`、`chrome.storage.onChanged`、`globalThis.navigator.locks`をfoundation所有adapter内で解決する。application-shellはこれらのplatform primitiveを構築・注入しない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
+- **明示的な例外**: `src/ui-language/preference-store.ts`（`ui-internationalization`所有）は`chrome.storage.local`の専用キー`uiLanguage`1つに限定して直接読み書きしてよい。表示言語はプロジェクト・候補パーツ・現在構成のいずれにも属さないドメイン外の利用者設定であり、`localDataRoot`へは一切触れず、単一write authorityが統制する対象（バージョン付きroot、参照整合性、maintenance fencing、交換形式、容量監視）に加わらない。この例外は到達点を2ファイル（本adapterと`preference-store.ts`）に限定する機械検査（`ui-internationalization`が追加する`scripts/validate-boundaries.mjs`のStorageAccessGuard規則）で固定され、それ以外からの`chrome.storage`直接利用は引き続き拒否される
 
 ### Revalidation Triggers
 - `LocalDataRoot`、category、normalized attribute、`Result`、error codeの形状変更
@@ -50,6 +52,7 @@
 - root write lock名、`RootWriteLock`契約、またはWeb Locks APIを使わない排他方式への変更
 - storage key分割、quota前提、Storage API以外への移行、runtime registration契約の変更
 - production runtime contributionのglobal platform解決、公開handle、caller policy、初期access restriction、cleanup責務の変更
+- `chrome.storage`直接到達を許可される例外ファイルの追加・変更（現在は`src/persistence/chrome-storage-adapter.ts`と`src/ui-language/preference-store.ts`の2ファイルに限定）、またはドメイン外設定が`localDataRoot`・交換形式・容量監視の対象へ混入する変更提案
 
 ## Architecture
 
@@ -235,6 +238,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 2.5 | IDと日時規約 | IdentifierPolicy | branded ID、UtcTimestamp | validation |
 | 2.6 | 参照関係 | DomainModel、ReferenceRepairPolicy | root invariants | mutation flow |
 | 2.7 | 取得元欠損と元表記snapshotの分離 | DomainModel、SchemaValidator | optional SourceInfo、SourceSnapshot | validation |
+| 2.8 | ドメイン外の利用者インターフェース設定を保存ルート・交換形式へ含めない | DomainModel、SchemaValidator | root object shapeの固定keyと`unexpected-field`拒否 | validation |
 | 3.1 | CRUD結果と永続化 | MutationPipeline、RootTransactionRunner、WriteAuthority、RuntimeContributionFactory | FoundationDataPort、worker registration | mutation flow |
 | 3.2 | 保存前検証 | MutationPipeline、SchemaValidator | mutateRoot | mutation flow |
 | 3.3 | 読取時検証 | LocalDataRepository、MigrationRegistry | readRoot | read flow |
@@ -325,6 +329,7 @@ function validateCandidatePartContent(
 - Postconditions: success値は参照整合性を満たす現行schemaである。
 - Invariants: validatorはinputを変更せず、errorはpathと機械判別可能codeを持つ。
 - `validateCandidatePartValue`は識別子・日時を検証したうえで`validateCandidatePartContent`へ委譲し、内容規則の実装を二重化しない。`validateCandidatePartContent`は保存前の候補入力（識別子と日時が未確定なdraft）を検証する唯一のcanonical入口であり、利用側がroot全体や無関係なaggregate（CurrentBuild、maintenance、requestDedupe）を偽造して検証することを不要にする。返す`ValidationError.path`は`$.product.name`のようにfield位置を示し、表示層が問題項目へ対応付けられる。
+- root検証は固定key集合（`schemaVersion`、`revision`、`projects`、`candidateParts`、`currentBuilds`、`requestDedupe`、`maintenance`）以外のkeyを`unexpected-field`として拒否する。これにより表示言語のようなドメイン外の利用者インターフェース設定が`localDataRoot`へ紛れ込んでも検証段階で拒否され、交換形式（backup-restoreが写像するのはこのroot形状のみ）にも伝播しない（2.8）。
 
 ### Persistence Layer
 
@@ -559,6 +564,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 
 ### Unit Tests
 - `SchemaValidator`で全12category、取得元とsnapshotを含む欠損値、元表記と確認値、UUID/UTC、cross-project参照、生HTML・画像/data URL拒否を検証する（2.1–2.7, 5.4）。
+- `SchemaValidator`のroot検証が、固定key集合以外のkey（表示言語のようなドメイン外設定を模した任意のkeyを含む）を`unexpected-field`として拒否することを検証する（2.8。既存の`tests/domain/validation.test.ts`のroot extra-field caseが充足済み）。
 - `MigrationRegistry`で連続migration、経路欠落、将来版、step失敗、source非変更を検証する（4.1–4.5）。
 - `ReferenceRepairPolicy`でcandidate削除・category変更時のbuild item除去、project削除時の所属candidate・CurrentBuild除去、無関係なproject dataの保持を検証する（3.7, 3.9）。
 - `MaintenancePolicy`でinactiveからのgeneration増分、owner外拒否、期限切れ、renew/release/abort、stale generation・owner・revision、破損state非変更を検証する（7.4–7.7）。
