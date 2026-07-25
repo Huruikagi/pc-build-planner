@@ -90,6 +90,7 @@ CIとリリースの責務は分離している。検証CI（`.github/workflows/
 - local data foundationだけが共通結果型、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencingを所有する。
 - featureは `public.ts`、登録モジュール、必要なruntime registration portを公開し、共有runtime入口を直接編集しない。
 - ライブラリの固定より、境界契約、最小権限、データ整合性、決定的テストを優先する。
+- ライブラリは実装開始時点の最新stable majorを採用し、対象Node/Chromeとの互換性を確認する。旧major互換の維持や段階的migrationは行わない。
 
 ---
 _依存パッケージの一覧ではなく、技術選択と実装判断を導く原則を記録する。_
