@@ -232,7 +232,7 @@
   - _Boundary: E2ELocatorHelpers_
   - _Depends: 5.1_
 
-- [ ] 5.3 文言リテラル再混入の機械検査の追加
+- [x] 5.3 文言リテラル再混入の機械検査の追加
   - `scripts/validate-ui-text.mjs` を新設する。既存の `validate-boundaries.mjs` と同じ TypeScript scanner ベースのトークン走査方式を用いる
   - 検査規則: view / registration / react-root / application-shell の文字列・テンプレートリテラルに自然言語が含まれること、スタイルシートの属性セレクタ値に自然言語が含まれること、view がカタログ定数を直接 import していること
   - 除外対象（`src/ui-messages/catalog/`、`src/features/product-capture/category-hint.ts`、`src/domain/`、`src/persistence/`、`tests/`）を明示し、除外理由をスクリプト内へ記録する
