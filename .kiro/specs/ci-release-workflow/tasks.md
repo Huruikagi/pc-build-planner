@@ -11,7 +11,7 @@
   - _Requirements: 2.3, 2.4, 2.5_
   - _Boundary: package.json scripts_
 
-- [ ] 1.2 (P) リリースバージョンの解決と整合検証を実装する
+- [x] 1.2 (P) リリースバージョンの解決と整合検証を実装する
   - manifestのversionをリリース対象バージョンの正とし、そこからタグ名とzipファイル名を導出する単一の情報源を用意する
   - manifestとpackage定義のversionが一致しない場合、双方の実測値を含むメッセージで失敗させる
   - versionが未定義または空の場合も明示的に失敗させる
