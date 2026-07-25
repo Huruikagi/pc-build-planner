@@ -28,7 +28,7 @@
   - _Requirements: 9.5_
   - _Boundary: E2ELocatorHelpers_
 
-- [ ] 1.4 (P) 候補管理・現在構成の E2E ロケータ移行
+- [x] 1.4 (P) 候補管理・現在構成の E2E ロケータ移行
   - `e2e/candidate-management.spec.ts` と `e2e/current-build.spec.ts` の文言ベースのロケータを、`e2e/locators.ts` 経由の識別子ベースへ置き換える
   - ナビゲーションの機能切替は機能 ID による特定へ移す
   - 「特定の文言が表示されること」を検証している `expect` は**この時点では文言リテラルのまま残す**

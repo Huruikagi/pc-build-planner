@@ -1,6 +1,7 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
+import { navItem, region } from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -46,43 +47,49 @@ test("side panel drives project and candidate management against real storage", 
   );
 
   // The feature must be reachable from shell navigation, not just registered.
-  const navigation = page.getByRole("button", { name: "候補管理" });
+  const navigation = navItem(page, "candidate-management");
   await expect(navigation).toBeVisible();
   await navigation.click();
-  await expect(page.getByRole("region", { name: "候補管理" })).toBeVisible();
+  const featureRoot = page.locator(
+    '.shell-feature[data-feature-id="candidate-management"]',
+  );
+  await expect(featureRoot).toBeVisible();
 
   // Create a project.
   await page.locator("input[name='project-name']").fill("E2E 架空プロジェクト");
-  await page.getByRole("button", { name: "プロジェクトを作成" }).click();
+  await region(featureRoot, "project-form")
+    .locator('button[type="submit"]')
+    .click();
   await expect(
     page.getByRole("button", { name: "E2E 架空プロジェクト", exact: true }),
   ).toBeVisible();
 
   // Create a candidate through the list affordance.
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await featureRoot.locator("[data-create-candidate]").click();
   await page.locator("input[name='candidate-name']").fill("E2E 架空CPU");
   await page.locator("select[name='candidate-category']").selectOption("cpu");
   await page.locator("input[name='attribute-socket']").fill("SYN-E2E-1");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(featureRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
-  await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 架空CPU" }),
-  ).toBeVisible();
+  const cpuListItem = region(featureRoot, "candidate-list")
+    .getByRole("listitem")
+    .filter({ hasText: "E2E 架空CPU" });
+  await expect(cpuListItem).toBeVisible();
 
   // Edit the stored candidate; the draft must come back from persistence.
-  await page.getByRole("button", { name: "E2E 架空CPUを編集" }).click();
+  await cpuListItem.locator("[data-edit-candidate-id]").click();
   await expect(page.locator("input[name='attribute-socket']")).toHaveValue(
     "SYN-E2E-1",
   );
   await page.locator("input[name='candidate-name']").fill("E2E 架空CPU 改訂版");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(featureRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 架空CPU 改訂版" }),
+    region(featureRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 架空CPU 改訂版" }),
   ).toBeVisible();
 
   // Reload: projects, candidates and confirmed values must be restored.
@@ -91,12 +98,14 @@ test("side panel drives project and candidate management against real storage", 
     "data-runtime-state",
     "started",
   );
-  await page.getByRole("button", { name: "候補管理" }).click();
+  await navItem(page, "candidate-management").click();
   await expect(
     page.getByRole("button", { name: "E2E 架空プロジェクト", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 架空CPU 改訂版" }),
+    region(featureRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 架空CPU 改訂版" }),
   ).toBeVisible();
 
   expect(diagnostics.pageErrors, "boot must not raise runtime errors").toEqual(

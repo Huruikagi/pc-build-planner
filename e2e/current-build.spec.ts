@@ -1,6 +1,7 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
+import { navItem, region } from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -46,11 +47,16 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   );
 
   // Seed a project and two classified candidates through candidate management.
-  await page.getByRole("button", { name: "候補管理" }).click();
+  await navItem(page, "candidate-management").click();
+  const candidateManagementRoot = page.locator(
+    '.shell-feature[data-feature-id="candidate-management"]',
+  );
   await page
     .locator("input[name='project-name']")
     .fill("E2E 現在構成プロジェクト");
-  await page.getByRole("button", { name: "プロジェクトを作成" }).click();
+  await region(candidateManagementRoot, "project-form")
+    .locator('button[type="submit"]')
+    .click();
   await expect(
     page.getByRole("button", {
       name: "E2E 現在構成プロジェクト",
@@ -58,19 +64,20 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
     }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await candidateManagementRoot.locator("[data-create-candidate]").click();
   await page.locator("input[name='candidate-name']").fill("E2E 現在構成CPU");
   await page.locator("select[name='candidate-category']").selectOption("cpu");
   await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(candidateManagementRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 現在構成CPU" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 現在構成CPU" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "候補を作成" }).click();
+  await candidateManagementRoot.locator("[data-create-candidate]").click();
   await page.locator("input[name='candidate-name']").fill("E2E 現在構成メモリ");
   await page
     .locator("select[name='candidate-category']")
@@ -78,17 +85,20 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   await page
     .locator("input[name='attribute-memoryStandard']")
     .fill("SYN-E2E-DDR");
-  await page
-    .getByRole("form", { name: "候補編集" })
-    .getByRole("button", { name: "保存" })
+  await region(candidateManagementRoot, "candidate-form")
+    .locator('button[type="submit"]')
     .click();
   await expect(
-    page.getByRole("listitem").filter({ hasText: "E2E 現在構成メモリ" }),
+    region(candidateManagementRoot, "candidate-list")
+      .getByRole("listitem")
+      .filter({ hasText: "E2E 現在構成メモリ" }),
   ).toBeVisible();
 
   // The feature must be reachable from shell navigation, not just registered.
-  await page.getByRole("button", { name: "現在構成", exact: true }).click();
-  const buildRegion = page.getByRole("region", { name: "現在構成" });
+  await navItem(page, "currentBuild").click();
+  const buildRegion = page.locator(
+    '.shell-feature[data-feature-id="currentBuild"]',
+  );
   await expect(buildRegion).toBeVisible();
   await expect(
     buildRegion.getByRole("button", {
@@ -98,26 +108,22 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   ).toBeVisible();
 
   // Single-select category: adopt the CPU candidate.
-  await buildRegion.getByRole("button", { name: "CPU", exact: true }).click();
-  const cpuRow = buildRegion
+  await buildRegion.locator('[data-category="cpu"]').click();
+  const cpuRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成CPU" });
-  await cpuRow.getByRole("button", { name: "選択" }).click();
-  await expect(cpuRow.getByRole("button", { name: "解除" })).toBeVisible();
+  await cpuRow.locator("[data-select-candidate-id]").click();
+  await expect(cpuRow.locator("[data-remove-candidate-id]")).toBeVisible();
 
   // Multiple-select category: add the memory candidate and confirm a quantity.
-  await buildRegion
-    .getByRole("button", { name: "メモリ", exact: true })
-    .click();
-  const memoryRow = buildRegion
+  await buildRegion.locator('[data-category="memory"]').click();
+  const memoryRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成メモリ" });
-  await memoryRow.getByRole("button", { name: "追加" }).click();
-  await expect(
-    memoryRow.getByRole("button", { name: "数量を確定" }),
-  ).toBeVisible();
+  await memoryRow.locator("[data-select-candidate-id]").click();
+  await expect(memoryRow.locator("[data-confirm-quantity]")).toBeVisible();
   await memoryRow.locator("input[data-quantity-input]").fill("2");
-  await memoryRow.getByRole("button", { name: "数量を確定" }).click();
+  await memoryRow.locator("[data-confirm-quantity]").click();
   await expect(memoryRow.locator("input[data-quantity-input]")).toHaveValue(
     "2",
   );
@@ -161,24 +167,20 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
     "data-runtime-state",
     "started",
   );
-  await page.getByRole("button", { name: "現在構成", exact: true }).click();
-  const reopenedRegion = page.getByRole("region", { name: "現在構成" });
+  await navItem(page, "currentBuild").click();
+  const reopenedRegion = page.locator(
+    '.shell-feature[data-feature-id="currentBuild"]',
+  );
+  await expect(reopenedRegion.locator('[data-category="cpu"]')).toBeVisible();
+  await reopenedRegion.locator('[data-category="cpu"]').click();
   await expect(
-    reopenedRegion.getByRole("button", { name: "CPU", exact: true }),
-  ).toBeVisible();
-  await reopenedRegion
-    .getByRole("button", { name: "CPU", exact: true })
-    .click();
-  await expect(
-    reopenedRegion
+    region(reopenedRegion, "candidate-list")
       .getByRole("listitem")
       .filter({ hasText: "E2E 現在構成CPU" })
-      .getByRole("button", { name: "解除" }),
+      .locator("[data-remove-candidate-id]"),
   ).toBeVisible();
-  await reopenedRegion
-    .getByRole("button", { name: "メモリ", exact: true })
-    .click();
-  const reopenedMemoryRow = reopenedRegion
+  await reopenedRegion.locator('[data-category="memory"]').click();
+  const reopenedMemoryRow = region(reopenedRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成メモリ" });
   await expect(
@@ -186,18 +188,16 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   ).toHaveValue("2");
 
   // Unselect the memory candidate; the CPU selection must be unaffected.
-  await reopenedMemoryRow.getByRole("button", { name: "解除" }).click();
+  await reopenedMemoryRow.locator("[data-remove-candidate-id]").click();
   await expect(
-    reopenedMemoryRow.getByRole("button", { name: "追加" }),
+    reopenedMemoryRow.locator("[data-select-candidate-id]"),
   ).toBeVisible();
-  await reopenedRegion
-    .getByRole("button", { name: "CPU", exact: true })
-    .click();
+  await reopenedRegion.locator('[data-category="cpu"]').click();
   await expect(
-    reopenedRegion
+    region(reopenedRegion, "candidate-list")
       .getByRole("listitem")
       .filter({ hasText: "E2E 現在構成CPU" })
-      .getByRole("button", { name: "解除" }),
+      .locator("[data-remove-candidate-id]"),
   ).toBeVisible();
 
   expect(diagnostics.pageErrors, "boot must not raise runtime errors").toEqual(

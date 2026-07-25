@@ -36,6 +36,7 @@ function ShellNavigation({
             aria-current={item.id === selected ? "page" : undefined}
             aria-label={showIcon ? item.label : undefined}
             className="shell-navigation__item"
+            data-feature-id={item.id}
             key={item.id}
             onClick={() => onNavigate(item.id)}
             title={item.label}
