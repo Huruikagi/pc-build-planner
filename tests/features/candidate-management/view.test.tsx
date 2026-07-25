@@ -153,7 +153,7 @@ test("プロジェクトまたはカテゴリを切り替えると該当候補�
   ) as HTMLButtonElement;
   await act(async () => category.click());
   const candidateList = rendered.container.querySelector(
-    "[aria-label='候補一覧']",
+    "[data-region='candidate-list']",
   );
   assert.match(candidateList?.textContent ?? "", /未分類の候補/);
   assert.doesNotMatch(
@@ -218,7 +218,7 @@ test("空名を拒否し、フォームからプロジェクトを作成・改�
     "[name='project-name']",
   ) as HTMLInputElement;
   const form = rendered.container.querySelector(
-    "[aria-label='プロジェクト編集']",
+    "[data-region='project-form']",
   ) as HTMLFormElement;
 
   await act(async () => form.requestSubmit());
@@ -259,7 +259,7 @@ test("プロジェクト保存の失敗では入力を保持して再試行で�
     "[name='project-name']",
   ) as HTMLInputElement;
   const form = rendered.container.querySelector(
-    "[aria-label='プロジェクト編集']",
+    "[data-region='project-form']",
   ) as HTMLFormElement;
 
   await act(async () => setInputValue(input, "保存を再試行する構成"));
@@ -327,7 +327,7 @@ test("候補フォームは共通項目・カテゴリ属性・読み取り専�
 
   await act(async () => {
     const form = container.querySelector(
-      "[aria-label='候補編集']",
+      "[data-region='candidate-form']",
     ) as HTMLFormElement;
     form.requestSubmit();
   });
@@ -364,7 +364,7 @@ test("候補の無効入力と保存失敗では編集draftを画面に保持す
     "[name='candidate-name']",
   ) as HTMLInputElement;
   const form = container.querySelector(
-    "[aria-label='候補編集']",
+    "[data-region='candidate-form']",
   ) as HTMLFormElement;
 
   await act(async () => setInputValue(input, ""));
@@ -402,9 +402,7 @@ test("プロジェクト削除では対象と所属候補への影響を確認�
   ).textContent;
   await act(async () => request.click());
 
-  const confirmation = rendered.container.querySelector(
-    "[aria-label='削除確認']",
-  );
+  const confirmation = rendered.container.querySelector('[role="dialog"]');
   assert.match(confirmation?.textContent ?? "", new RegExp(projectName ?? ""));
   assert.match(confirmation?.textContent ?? "", /所属する候補も削除/);
   assert.equal(deletedProjectId, undefined);
@@ -452,10 +450,7 @@ test("候補削除の取消は保存を行わず、失敗時は候補と確認�
     rendered.container.textContent ?? "",
     /保存領域を利用できません/,
   );
-  assert.notEqual(
-    rendered.container.querySelector("[aria-label='削除確認']"),
-    null,
-  );
+  assert.notEqual(rendered.container.querySelector('[role="dialog"]'), null);
 
   await rendered.cleanup();
 });

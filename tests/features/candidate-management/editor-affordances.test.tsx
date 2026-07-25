@@ -160,7 +160,9 @@ const input = (harness: Harness, name: string): HTMLInputElement => {
 };
 
 const submitEditor = async (harness: Harness): Promise<void> => {
-  const form = harness.container.querySelector("form[aria-label='候補編集']");
+  const form = harness.container.querySelector(
+    "form[data-region='candidate-form']",
+  );
   assert.ok(form, "候補編集フォームが見つかりません");
   await act(async () => (form as HTMLFormElement).requestSubmit());
 };
@@ -428,7 +430,7 @@ test("maintenance中は変更操作を開始できずserviceを呼ばない", as
 
   // The editor never opens, so no draft can be submitted to the service.
   assert.equal(
-    harness.container.querySelector("form[aria-label='候補編集']"),
+    harness.container.querySelector("form[data-region='candidate-form']"),
     null,
   );
   assert.deepEqual(harness.draftReads, []);

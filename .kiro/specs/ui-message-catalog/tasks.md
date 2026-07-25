@@ -46,7 +46,7 @@
   - _Boundary: E2ELocatorHelpers, ElementIdentityConvention_
   - _Depends: 1.3_
 
-- [ ] 1.6 単体・統合テストの要素特定の識別子移行
+- [x] 1.6 単体・統合テストの要素特定の識別子移行
   - `tests/features/**` と `tests/application-shell/**` のうち、表示文言で要素を特定しているアサーションを `data-*` による `querySelector` または役割ベースの特定へ移す
   - 期待値そのものが文言であるアサーション（`textContent` への正規表現マッチなど）は**変更しない**
   - 検証している振る舞いの集合を増減させない
