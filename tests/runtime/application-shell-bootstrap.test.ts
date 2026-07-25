@@ -45,7 +45,7 @@ test("host欠落とstartup failureを固定診断へ変換しthrowしない", as
     async start() {
       return {
         ok: false,
-        error: { kind: "startup_failed", message: "secret" },
+        error: { kind: "startup_failed", message: { key: "secret" } },
       };
     },
     async stop() {},
@@ -55,7 +55,7 @@ test("host欠落とstartup failureを固定診断へ変換しthrowしない", as
     ok: false,
     error: {
       kind: "missing_host",
-      message: "Application shell host is unavailable.",
+      message: { key: "Application shell host is unavailable." },
     },
   });
   assert.equal(document.documentElement.dataset.runtimeState, "failed");
@@ -72,7 +72,7 @@ test("host欠落とstartup failureを固定診断へ変換しthrowしない", as
     ok: false,
     error: {
       kind: "startup_failed",
-      message: "Application shell failed to start.",
+      message: { key: "Application shell failed to start." },
     },
   });
   assert.equal(host.dataset.runtimeState, "failed");

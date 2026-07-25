@@ -141,7 +141,7 @@ test("maintenanceを共通表示と全featureの同一live policyへ反映しsta
   assert.deepEqual(states.at(-1), {
     kind: "maintenance",
     selected: featureId("projects"),
-    message: "メンテナンス中です。変更操作は利用できません。",
+    message: { key: "shell.maintenanceActive" },
   });
   assert.equal(firstPolicy.isAllowed("read"), true);
   assert.equal(firstPolicy.isAllowed("mutation"), false);
@@ -213,7 +213,7 @@ test("初期snapshot失敗はfeatureをmountせずstartup failureへ変換する
   assert.equal(contexts.size, 0);
   assert.deepEqual(states.at(-1), {
     kind: "error",
-    message: "メンテナンス状態を取得できませんでした",
+    message: { key: "shell.maintenanceStartupFailed" },
     recoverable: false,
   });
 });

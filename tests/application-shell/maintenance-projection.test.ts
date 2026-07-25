@@ -21,7 +21,7 @@ test("新しいcursorを辞書順に適用し現行世代の終了を反映す�
   assert.deepEqual(projection.getSnapshot(), {
     status: "active",
     cursor: { generation: 1, revision: 4 },
-    message: "メンテナンス中です。変更操作は利用できません。",
+    message: { key: "shell.maintenanceActive" },
   });
   assert.equal(projection.accept(snapshot(1, 5, false)), "applied");
   assert.deepEqual(projection.getSnapshot(), {

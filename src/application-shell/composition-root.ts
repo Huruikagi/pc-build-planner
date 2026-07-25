@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "../domain/public.js";
+import { type MessageDescriptor, message } from "../ui-messages/public.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -63,8 +64,8 @@ export type CompositionRootApi<T extends readonly CompositionFeature[]> =
     [TFeature in T[number] as TFeature["key"]]: TFeature["registration"]["publicApi"];
   }>;
 
-const STARTUP_FAILED = "アプリケーションを開始できませんでした";
-const MISSING_DEPENDENCY = "必須の依存関係がありません";
+const STARTUP_FAILED = message("shell.startupFailed");
+const MISSING_DEPENDENCY = message("shell.missingDependency");
 
 export function createCompositionRoot<
   const TFeatures extends readonly CompositionFeature[],
@@ -91,7 +92,7 @@ export function createCompositionRoot<
     }
   };
 
-  const presentStartupError = (message: string): void => {
+  const presentStartupError = (message: MessageDescriptor): void => {
     try {
       options.onStateChange({ kind: "error", message, recoverable: false });
     } catch {
@@ -146,15 +147,15 @@ export function createCompositionRoot<
 
   const fail = async (
     kind: CompositionError["kind"],
-    message: string,
+    descriptor: MessageDescriptor,
   ): Promise<Result<{ readonly api: RootApi }, CompositionError>> => {
-    presentStartupError(message);
+    presentStartupError(descriptor);
     try {
       await cleanup();
     } catch {
       diagnose("startup rollback failed; cleanup remains owned");
     }
-    return err({ kind, message });
+    return err({ kind, message: descriptor });
   };
 
   const runStart = async (

@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "../domain/public.js";
+import { message } from "../ui-messages/public.js";
 import type {
   FeatureActivationError,
   FeatureActivationIntent,
@@ -32,7 +33,7 @@ export interface ApplicationShellIntegration
   ): Promise<Result<void, FeatureActivationError>>;
 }
 
-const STARTUP_FAILURE_MESSAGE = "メンテナンス状態を取得できませんでした";
+const STARTUP_FAILURE_MESSAGE = message("shell.maintenanceStartupFailed");
 
 export function createApplicationShellIntegration(
   options: ApplicationShellIntegrationOptions,

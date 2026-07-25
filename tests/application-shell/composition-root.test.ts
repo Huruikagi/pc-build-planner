@@ -188,7 +188,7 @@ test("公開API合成失敗はhost mount前にrollbackする", async () => {
     ok: false,
     error: {
       kind: "missing_dependency",
-      message: "必須の依存関係がありません",
+      message: { key: "shell.missingDependency" },
     },
   });
   assert.equal(hostCompositions, 0);
@@ -217,7 +217,7 @@ test("foundation失敗は安全な共通error stateを通知しobserver例外を
   assert.equal((await root.start()).ok, false);
   assert.deepEqual(states.at(-1), {
     kind: "error",
-    message: "アプリケーションを開始できませんでした",
+    message: { key: "shell.startupFailed" },
     recoverable: false,
   });
   throwObserver = true;
@@ -384,13 +384,13 @@ test("registry factoryのthrowとnullを型付きfailureへ変換しfoundation�
       ok: false,
       error: {
         kind: "missing_dependency",
-        message: "必須の依存関係がありません",
+        message: { key: "shell.missingDependency" },
       },
     });
     assert.equal(foundationCleanup, 1);
     assert.deepEqual(states.at(-1), {
       kind: "error",
-      message: "必須の依存関係がありません",
+      message: { key: "shell.missingDependency" },
       recoverable: false,
     });
   }
@@ -430,7 +430,7 @@ test("非関数foundation disposerを副作用前にmissing dependencyとして�
     ok: false,
     error: {
       kind: "missing_dependency",
-      message: "必須の依存関係がありません",
+      message: { key: "shell.missingDependency" },
     },
   });
   assert.equal(featureSubscriptions, 0);

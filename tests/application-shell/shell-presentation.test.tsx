@@ -42,7 +42,11 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
   slot.textContent = "feature-owned";
   await act(() =>
     handle.publish(
-      { kind: "maintenance", selected: featureId("parts"), message: "停止中" },
+      {
+        kind: "maintenance",
+        selected: featureId("parts"),
+        message: { key: "停止中" },
+      },
       [
         { id: featureId("projects"), label: "Projects" },
         { id: featureId("parts"), label: "Parts" },
@@ -57,7 +61,7 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
     handle.publish(
       {
         kind: "error",
-        message: "safe <script>text</script>",
+        message: { key: "safe <script>text</script>" },
         recoverable: true,
       },
       [],

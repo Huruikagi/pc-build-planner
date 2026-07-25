@@ -37,7 +37,7 @@ test("active中はmutationだけを拒否してreadを維持する", () => {
   const maintenance = createMaintenancePort({
     status: "active",
     cursor,
-    message: "maintenance",
+    message: { key: "maintenance" },
   });
   const gate = createMutationGate(maintenance);
 
@@ -54,7 +54,7 @@ test("判定時の最新maintenance snapshotへ操作分類を写像する", () 
   maintenance.setSnapshot({
     status: "active",
     cursor: { generation: 2, revision: 2 },
-    message: "maintenance",
+    message: { key: "maintenance" },
   });
   assert.equal(gate.isAllowed("mutation"), false);
   assert.equal(gate.isAllowed("read"), true);
@@ -104,13 +104,13 @@ test("mount中のmutation可否の変化だけを購読者へ通知する", () =
   maintenance.emit({
     status: "active",
     cursor: { generation: 2, revision: 2 },
-    message: "maintenance",
+    message: { key: "maintenance" },
   });
   // Still active: the allowed set did not change, so no notification.
   maintenance.emit({
     status: "active",
     cursor: { generation: 2, revision: 3 },
-    message: "maintenance",
+    message: { key: "maintenance" },
   });
   maintenance.emit({
     status: "inactive",
@@ -152,7 +152,7 @@ test("購読者の例外は他の購読者とgateの進行を妨げない", () =
   maintenance.emit({
     status: "active",
     cursor: { generation: 3, revision: 1 },
-    message: "maintenance",
+    message: { key: "maintenance" },
   });
 
   assert.deepEqual(seen, ["second"]);

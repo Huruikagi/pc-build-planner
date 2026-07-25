@@ -4,6 +4,7 @@ import {
   type FoundationScopedDataPort,
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
+import { message } from "../ui-messages/public.js";
 import {
   type ApplicationShellIntegration,
   createApplicationShellIntegration,
@@ -73,7 +74,7 @@ export interface ProductionApplicationCompositionOptions<
   readonly reportError: (message: string) => void;
 }
 
-const STARTUP_ERROR = "アプリケーションを開始できませんでした";
+const STARTUP_ERROR = message("shell.startupFailed");
 
 export function createProductionSidePanelComposition(
   shellContainer: HTMLElement,

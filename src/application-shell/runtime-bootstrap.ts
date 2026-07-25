@@ -1,11 +1,12 @@
 import { err, type Result } from "../domain/public.js";
+import type { MessageDescriptor } from "../ui-messages/public.js";
 import type {
   ApplicationCompositionRoot,
   CompositionError,
 } from "./contracts.js";
 
 export type SidePanelBootstrapError =
-  | { readonly kind: "missing_host"; readonly message: string }
+  | { readonly kind: "missing_host"; readonly message: MessageDescriptor }
   | CompositionError;
 
 export interface SidePanelBootstrapResult<TRootApi extends object> {
@@ -29,8 +30,12 @@ export interface SidePanelBootstrapOptions<TRootApi extends object> {
   readonly hostSelector?: string;
 }
 
-const MISSING_HOST_MESSAGE = "Application shell host is unavailable.";
-const STARTUP_FAILURE_MESSAGE = "Application shell failed to start.";
+const MISSING_HOST_MESSAGE: MessageDescriptor = {
+  key: "Application shell host is unavailable.",
+};
+const STARTUP_FAILURE_MESSAGE: MessageDescriptor = {
+  key: "Application shell failed to start.",
+};
 
 export function createSidePanelBootstrap<TRootApi extends object>(
   options: SidePanelBootstrapOptions<TRootApi>,

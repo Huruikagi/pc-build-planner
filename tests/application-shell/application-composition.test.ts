@@ -263,7 +263,7 @@ test("foundation失敗時のpresentation例外をrejectせずtyped failureへ変
     ok: false,
     error: {
       kind: "startup_failed",
-      message: "アプリケーションを開始できませんでした",
+      message: { key: "shell.startupFailed" },
     },
   });
 });

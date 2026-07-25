@@ -126,9 +126,17 @@ test("利用不可featureの理由を返し、選択中が不可なら安全な�
   assert.equal(rejected.ok, false);
   if (!rejected.ok) {
     assert.equal(rejected.error.kind, "unavailable");
-    assert.match(rejected.error.message, /同期が必要です/);
+    assert.deepEqual(rejected.error.message, {
+      key: "shell.featureUnavailable",
+      params: { featureId: dynamic.id, reason: "同期が必要です" },
+    });
   }
-  assert.ok(diagnostics.some((message) => message.includes("同期が必要です")));
+  assert.ok(
+    diagnostics.some(
+      (message) =>
+        message.includes("feature-unavailable") && message.includes(dynamic.id),
+    ),
+  );
 });
 
 test("mount失敗をfeature単位で隔離し、再試行と別featureへの移動を維持する", async () => {
@@ -182,7 +190,10 @@ test("遷移先がなければunavailable理由を利用者向けerror stateへ�
 
   assert.deepEqual(states.at(-1), {
     kind: "error",
-    message: "feature only は利用できません: 初期設定が必要です",
+    message: {
+      key: "shell.featureUnavailable",
+      params: { featureId: only.id, reason: "初期設定が必要です" },
+    },
     recoverable: true,
   });
   assert.deepEqual(events, ["mount:only", "unmount:only"]);
@@ -344,8 +355,10 @@ test("stale viewのcleanup失敗を診断しfallback遷移を継続する", asyn
     "mount:fallback",
   ]);
   assert.ok(
-    diagnostics.some((message) =>
-      message.includes("stale feature pending の表示終了に失敗しました"),
+    diagnostics.some(
+      (message) =>
+        message.includes("stale-feature-unmount-failed") &&
+        message.includes("pending"),
     ),
   );
   assert.deepEqual(states.at(-1), { kind: "ready", selected: fallback.id });
@@ -434,7 +447,7 @@ test("stopのunmountが常に失敗してもownershipを保持して再stopで�
   assert.equal(unmountAttempts, 2);
   assert.equal(
     diagnostics.filter((message) =>
-      message.includes("停止時のfeature表示終了に失敗しました"),
+      message.includes("host-stop-unmount-failed"),
     ).length,
     2,
   );

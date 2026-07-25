@@ -190,7 +190,7 @@
   - _Boundary: ShellMessageContracts, ShellViewAdapter_
   - _Depends: 2.5_
 
-- [ ] 4.2 シェルロジック層の記述子化と診断コード化
+- [x] 4.2 シェルロジック層の記述子化と診断コード化
   - `side-panel-host.ts` の表示経路を `message(...)` による記述子構築へ置き換える
   - 同ファイルの診断経路（`reportDiagnostic`）を安定した英字コードへ置き換え、日本語文言と機微値を出さない
   - `maintenance-projection.ts` の保守メッセージ、`application-shell-integration.ts` の起動失敗メッセージ、`composition-root.ts` / `application-composition.ts` の起動失敗メッセージを記述子化し、統合済みの単一キーを参照する

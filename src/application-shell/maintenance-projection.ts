@@ -1,3 +1,4 @@
+import { message } from "../ui-messages/public.js";
 import type {
   FoundationMaintenanceSnapshot,
   MaintenanceCursor,
@@ -5,8 +6,7 @@ import type {
   ShellMaintenanceState,
 } from "./contracts.js";
 
-export const MAINTENANCE_ACTIVE_MESSAGE =
-  "メンテナンス中です。変更操作は利用できません。";
+export const MAINTENANCE_ACTIVE_MESSAGE = message("shell.maintenanceActive");
 
 const INVALID_CURSOR_MESSAGE =
   "maintenance cursor must contain non-negative finite integers";

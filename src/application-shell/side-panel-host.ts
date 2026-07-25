@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "../domain/public.js";
+import { message } from "../ui-messages/public.js";
 import { createActivationRouter } from "./activation-router.js";
 import type {
   ApplicationFeatureRegistration,
@@ -36,13 +37,16 @@ export function createSidePanelHost(
     try {
       options.onStateChange(state);
     } catch {
-      reportDiagnostic("state observer failed");
+      reportDiagnostic("state-observer-failed");
     }
   };
 
-  const reportDiagnostic = (message: string): void => {
+  /** Diagnostics carry only a stable code and, where relevant, a feature id — never display text or a feature-declared reason. */
+  const reportDiagnostic = (code: string, featureId?: FeatureId): void => {
     try {
-      options.reportError(`side-panel-host: ${message}`);
+      options.reportError(
+        `side-panel-host: ${code}${featureId === undefined ? "" : ` featureId=${featureId}`}`,
+      );
     } catch {
       // A diagnostic sink is an external runtime boundary.
     }
@@ -73,10 +77,12 @@ export function createSidePanelHost(
       return ok(undefined);
     } catch {
       const id = previous ?? ("unknown" as FeatureId);
-      const message = `feature ${id} の表示終了に失敗しました`;
-      reportDiagnostic(message);
-      publish({ kind: "error", message, recoverable: true });
-      return err({ kind: "mount_failed", message });
+      reportDiagnostic("feature-unmount-failed", id);
+      const descriptor = message("shell.featureUnmountFailed", {
+        featureId: id,
+      });
+      publish({ kind: "error", message: descriptor, recoverable: true });
+      return err({ kind: "mount_failed", message: descriptor });
     }
   }
 
@@ -86,21 +92,26 @@ export function createSidePanelHost(
     if (stopped) {
       return err({
         kind: "unavailable",
-        message: "side panel host は停止しています",
+        message: message("shell.hostStopped"),
       });
     }
     const feature = find(id);
     if (feature === undefined) {
       return err({
         kind: "unavailable",
-        message: `feature ${id} は未登録です`,
+        message: message("shell.featureNotRegistered", { featureId: id }),
       });
     }
     const availability = feature.getAvailability();
     if (availability.status === "unavailable") {
-      const message = `feature ${id} は利用できません: ${availability.reason}`;
-      reportDiagnostic(message);
-      return err({ kind: "unavailable", message });
+      reportDiagnostic("feature-unavailable", id);
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureUnavailable", {
+          featureId: id,
+          reason: availability.reason,
+        }),
+      });
     }
     if (selected === id && mounted !== undefined) return ok(undefined);
 
@@ -111,7 +122,10 @@ export function createSidePanelHost(
       const handle = await feature.mount({
         container: options.container,
         operationPolicy: options.operationPolicy,
-        reportError: (message) => reportDiagnostic(`feature ${id}: ${message}`),
+        reportError: (featureMessage) =>
+          options.reportError(
+            `side-panel-host: feature ${id}: ${featureMessage}`,
+          ),
       });
       const currentAvailability = feature.getAvailability();
       if (
@@ -122,14 +136,17 @@ export function createSidePanelHost(
         try {
           await handle.unmount();
         } catch {
-          reportDiagnostic(`stale feature ${id} の表示終了に失敗しました`);
+          reportDiagnostic("stale-feature-unmount-failed", id);
         }
         return err({
           kind: "unavailable",
           message:
             currentAvailability.status === "unavailable"
-              ? `feature ${id} は利用できません: ${currentAvailability.reason}`
-              : `feature ${id} の表示要求は無効になりました`,
+              ? message("shell.featureUnavailable", {
+                  featureId: id,
+                  reason: currentAvailability.reason,
+                })
+              : message("shell.featureRequestInvalidated", { featureId: id }),
         });
       }
       mounted = handle;
@@ -137,10 +154,10 @@ export function createSidePanelHost(
       publish({ kind: "ready", selected: id });
       return ok(undefined);
     } catch {
-      const message = `feature ${id} の表示開始に失敗しました`;
-      reportDiagnostic(message);
-      publish({ kind: "error", message, recoverable: true });
-      return err({ kind: "mount_failed", message });
+      reportDiagnostic("feature-mount-failed", id);
+      const descriptor = message("shell.featureMountFailed", { featureId: id });
+      publish({ kind: "error", message: descriptor, recoverable: true });
+      return err({ kind: "mount_failed", message: descriptor });
     }
   }
 
@@ -165,8 +182,10 @@ export function createSidePanelHost(
       const handle = await feature.mount({
         container: options.container,
         operationPolicy: options.operationPolicy,
-        reportError: (message) =>
-          reportDiagnostic(`feature ${feature.id}: ${message}`),
+        reportError: (featureMessage) =>
+          options.reportError(
+            `side-panel-host: feature ${feature.id}: ${featureMessage}`,
+          ),
         ...(restoring ? { restoredState } : {}),
       });
       const availability = feature.getAvailability();
@@ -181,10 +200,18 @@ export function createSidePanelHost(
           // A stale target still owns the slot until its handle is released.
           mounted = handle;
           selected = feature.id;
-          const message = `stale feature ${feature.id} の表示終了に失敗しました`;
-          reportDiagnostic(message);
-          publish({ kind: "error", message, recoverable: true });
-          return err({ kind: "activation_failed", detail: message });
+          reportDiagnostic("stale-feature-unmount-failed", feature.id);
+          publish({
+            kind: "error",
+            message: message("shell.featureUnmountFailed", {
+              featureId: feature.id,
+            }),
+            recoverable: true,
+          });
+          return err({
+            kind: "activation_failed",
+            detail: "stale feature cleanup failed",
+          });
         }
         return err({
           kind: "mount_failed",
@@ -196,9 +223,14 @@ export function createSidePanelHost(
       publish({ kind: "ready", selected: feature.id });
       return ok(undefined);
     } catch {
-      const message = `feature ${feature.id} の表示開始に失敗しました`;
-      reportDiagnostic(message);
-      publish({ kind: "error", message, recoverable: true });
+      reportDiagnostic("feature-mount-failed", feature.id);
+      publish({
+        kind: "error",
+        message: message("shell.featureMountFailed", {
+          featureId: feature.id,
+        }),
+        recoverable: true,
+      });
       return err({ kind: "mount_failed", featureId: feature.id });
     }
   };
@@ -209,8 +241,7 @@ export function createSidePanelHost(
   ): Promise<void> => {
     if (previous === undefined) return;
     const restored = await mountFeature(previous, snapshot, true);
-    if (!restored.ok)
-      reportDiagnostic(`feature ${previous.id} の表示復旧に失敗しました`);
+    if (!restored.ok) reportDiagnostic("feature-restore-failed", previous.id);
   };
 
   const capturePreviousState = async (
@@ -277,9 +308,7 @@ export function createSidePanelHost(
 
     const released = await unmountCurrent();
     if (!released.ok) {
-      reportDiagnostic(
-        `activation失敗後のfeature ${intent.featureId} の表示終了に失敗しました`,
-      );
+      reportDiagnostic("activation-unmount-failed", intent.featureId);
       return err({ kind: "mount_failed", featureId: intent.featureId });
     }
     await restorePrevious(previous, snapshot.value);
@@ -309,13 +338,8 @@ export function createSidePanelHost(
     const availability = current?.getAvailability();
     if (availability?.status === "available") return;
 
-    const reason =
-      availability?.status === "unavailable"
-        ? availability.reason
-        : "登録が解除されました";
     const previous = selected;
-    const unavailableMessage = `feature ${previous} は利用できません: ${reason}`;
-    reportDiagnostic(unavailableMessage);
+    reportDiagnostic("feature-unavailable", previous);
     const fallback = firstAvailable(previous);
     if (fallback !== undefined) {
       await enqueueSelect(fallback.id);
@@ -325,7 +349,13 @@ export function createSidePanelHost(
     if (result.ok) {
       publish({
         kind: "error",
-        message: unavailableMessage,
+        message:
+          availability?.status === "unavailable"
+            ? message("shell.featureUnavailable", {
+                featureId: previous,
+                reason: availability.reason,
+              })
+            : message("shell.featureUnregistered", { featureId: previous }),
         recoverable: true,
       });
     }
@@ -340,7 +370,7 @@ export function createSidePanelHost(
       unsubscribeRegistry = options.registry.subscribe(() => {
         lifecycleEpoch += 1;
         void reconcileAvailability().catch(() => {
-          reportDiagnostic("availability reconciliation failed");
+          reportDiagnostic("availability-reconciliation-failed");
         });
       });
       const initial = firstAvailable();
@@ -384,7 +414,7 @@ export function createSidePanelHost(
           }
         } catch (error: unknown) {
           failures.push(error);
-          reportDiagnostic("停止時のfeature表示終了に失敗しました");
+          reportDiagnostic("host-stop-unmount-failed");
         }
       }
       if (failures.length > 0) {
