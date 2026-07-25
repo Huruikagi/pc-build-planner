@@ -78,11 +78,3 @@ test("persistenceError名前空間は統合対象コードだけを、移行前�
     );
   }
 });
-
-test("機能名前空間は後続タスクが投入するまで空である", () => {
-  assert.deepEqual(Object.keys(MESSAGES.candidate), []);
-  assert.deepEqual(Object.keys(MESSAGES.build), []);
-  assert.deepEqual(Object.keys(MESSAGES.compatibility), []);
-  assert.deepEqual(Object.keys(MESSAGES.capture), []);
-  assert.deepEqual(Object.keys(MESSAGES.backup), []);
-});

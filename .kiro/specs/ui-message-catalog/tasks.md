@@ -109,7 +109,7 @@
 
 - [ ] 3. 機能ごとのカタログ値投入と view 移行
 
-- [ ] 3.1 (P) 現在構成のカタログ値投入と view 移行
+- [x] 3.1 (P) 現在構成のカタログ値投入と view 移行
   - `build` 名前空間へ現在構成の文言を転記し、`src/features/current-build/view.tsx` の文言リテラルを `useMessages()` 経由へ置き換える
   - `categoryLabels` と `errorMessages` は共有名前空間のキーへの写像に置き換える。写像は文言を持たない
   - `current-build/registration.ts` の `mountBuildView` で `MessageProvider` を張る

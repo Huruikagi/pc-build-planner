@@ -10,6 +10,7 @@ import type {
   OperationPolicy,
 } from "../../application-shell/public.js";
 import type { ProjectId } from "../../domain/public.js";
+import { MessageProvider } from "../../ui-messages/public.js";
 import type { CurrentBuildQuery } from "./contracts.js";
 import {
   type CurrentBuildPublicApi,
@@ -62,7 +63,9 @@ const mountBuildView =
     /** A mount starts from persisted data; only a snapshot may restore a screen. */
     state.resetTransientState();
     const root: Root = createRoot(container);
-    root.render(createElement(BuildView, { state }));
+    root.render(
+      createElement(MessageProvider, null, createElement(BuildView, { state })),
+    );
     let unmounted = false;
 
     await state.load();

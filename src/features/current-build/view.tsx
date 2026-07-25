@@ -5,22 +5,24 @@ import {
   PART_CATEGORIES,
   type PartCategory,
 } from "../../domain/public.js";
+import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
+import { useMessages } from "../../ui-messages/public.js";
 import { createCategoryPolicy, isValidQuantity } from "./category-policy.js";
 import type { BuildDisplayError, BuildState } from "./state.js";
 
-const categoryLabels: Readonly<Record<PartCategory, string>> = {
-  cpu: "CPU",
-  "cpu-cooler": "CPUクーラー",
-  motherboard: "マザーボード",
-  memory: "メモリ",
-  gpu: "GPU",
-  storage: "ストレージ",
-  "power-supply": "電源",
-  case: "ケース",
-  "case-fan": "ケースファン",
-  "expansion-card": "拡張カード",
-  other: "その他",
-  uncategorized: "未分類",
+const categoryMessageKeys: Readonly<Record<PartCategory, MessageKey>> = {
+  cpu: "category.cpu",
+  "cpu-cooler": "category.cpu-cooler",
+  motherboard: "category.motherboard",
+  memory: "category.memory",
+  gpu: "category.gpu",
+  storage: "category.storage",
+  "power-supply": "category.power-supply",
+  case: "category.case",
+  "case-fan": "category.case-fan",
+  "expansion-card": "category.expansion-card",
+  other: "category.other",
+  uncategorized: "category.uncategorized",
 };
 
 /** Uncategorized candidates are never build-eligible, so the tab never applies. */
@@ -28,38 +30,40 @@ const selectableCategories = PART_CATEGORIES.filter(
   (category) => category !== "uncategorized",
 );
 
-const errorMessages: Readonly<Record<BuildDisplayError["code"], string>> = {
-  validation: "入力内容を確認してください。",
-  "not-found": "対象の候補が見つかりませんでした。読み込み直してください。",
-  conflict:
-    "他の変更と競合しました。最新の内容を読み込んでからもう一度お試しください。",
-  maintenance: "保守操作の実行中です。完了後にもう一度お試しください。",
-  "corrupt-data": "保存データが破損しています。既存データは変更していません。",
-  "unsupported-data":
-    "保存データが対応していない形式です。既存データは変更していません。",
-  quota:
-    "保存容量が不足しています。不要な候補を削除してからもう一度お試しください。",
-  storage:
-    "保存領域を利用できません。拡張機能を開き直してからもう一度お試しください。",
-  "snapshot-restore-failed": "前回の画面状態を復元できませんでした。",
+const errorMessageKeys: Readonly<
+  Record<BuildDisplayError["code"], MessageKey>
+> = {
+  validation: "persistenceError.validation",
+  "not-found": "build.notFound",
+  conflict: "persistenceError.conflict",
+  maintenance: "persistenceError.maintenance",
+  "corrupt-data": "build.corruptData",
+  "unsupported-data": "build.unsupportedData",
+  quota: "persistenceError.quota",
+  storage: "build.storage",
+  "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
 };
 
 const policy = createCategoryPolicy();
 
-const displayName = (candidate: {
-  readonly product: {
-    readonly name?: {
-      readonly original: string | null;
-      readonly confirmed?: string;
+const displayName = (
+  candidate: {
+    readonly product: {
+      readonly name?: {
+        readonly original: string | null;
+        readonly confirmed?: string;
+      };
     };
-  };
-}): string =>
+  },
+  messages: MessageResolver,
+): string =>
   candidate.product.name?.confirmed ??
   candidate.product.name?.original ??
-  "未入力";
+  messages("common.notEntered");
 
 /** Renders feature-owned state without moving domain state into React hooks. */
 export function BuildView({ state }: { readonly state: BuildState }) {
+  const messages = useMessages();
   useSyncExternalStore(
     (listener) => state.subscribe(listener),
     () => state.value,
@@ -100,7 +104,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
     if (!isValidQuantity("multiple", parsed)) {
       setQuantityErrors((current) => ({
         ...current,
-        [candidatePartId]: "正整数を入力してください",
+        [candidatePartId]: messages("build.invalidQuantity"),
       }));
       return;
     }
@@ -117,8 +121,8 @@ export function BuildView({ state }: { readonly state: BuildState }) {
   };
 
   return (
-    <section aria-label="現在構成" className="current-build">
-      <nav aria-label="プロジェクト">
+    <section aria-label={messages("build.title")} className="current-build">
+      <nav aria-label={messages("build.projectsNav")}>
         {value.projects.map((project) => (
           <button
             aria-current={
@@ -134,7 +138,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
           </button>
         ))}
       </nav>
-      <nav aria-label="カテゴリ">
+      <nav aria-label={messages("build.categoryNav")}>
         {selectableCategories.map((category) => (
           <button
             aria-current={
@@ -145,18 +149,21 @@ export function BuildView({ state }: { readonly state: BuildState }) {
             onClick={() => state.selectCategory(category)}
             type="button"
           >
-            {categoryLabels[category]}
+            {messages(categoryMessageKeys[category])}
           </button>
         ))}
       </nav>
       {value.candidates.length === 0 ? (
-        <p>候補がありません</p>
+        <p>{messages("build.noCandidates")}</p>
       ) : (
-        <ul aria-label="候補一覧" data-region="candidate-list">
+        <ul
+          aria-label={messages("build.candidateListLabel")}
+          data-region="candidate-list"
+        >
           {value.candidates.map((candidate) => {
             const mode = policy.modeFor(candidate.category);
             const item = itemsByCandidate.get(candidate.id);
-            const name = displayName(candidate);
+            const name = displayName(candidate, messages);
             const quantityError = quantityErrors[candidate.id];
 
             if (mode !== "multiple") {
@@ -170,7 +177,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
                       onClick={() => select(candidate.id)}
                       type="button"
                     >
-                      選択
+                      {messages("build.select")}
                     </button>
                   ) : (
                     <button
@@ -179,7 +186,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
                       onClick={() => remove(candidate.id)}
                       type="button"
                     >
-                      解除
+                      {messages("build.remove")}
                     </button>
                   )}
                 </li>
@@ -196,7 +203,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
                     onClick={() => select(candidate.id)}
                     type="button"
                   >
-                    追加
+                    {messages("build.add")}
                   </button>
                 ) : (
                   <>
@@ -226,7 +233,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
                       onClick={() => confirmQuantity(candidate.id)}
                       type="button"
                     >
-                      数量を確定
+                      {messages("build.confirmQuantity")}
                     </button>
                     {quantityError === undefined ? null : (
                       <p id={`quantity-error-${candidate.id}`} role="alert">
@@ -239,7 +246,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
                       onClick={() => remove(candidate.id)}
                       type="button"
                     >
-                      解除
+                      {messages("build.remove")}
                     </button>
                   </>
                 )}
@@ -248,9 +255,13 @@ export function BuildView({ state }: { readonly state: BuildState }) {
           })}
         </ul>
       )}
-      {value.currentBuild === null ? <p>現在構成がありません</p> : null}
+      {value.currentBuild === null ? (
+        <p>{messages("build.noCurrentBuild")}</p>
+      ) : null}
       {value.displayError === null ? null : (
-        <p role="alert">{errorMessages[value.displayError.code]}</p>
+        <p role="alert">
+          {messages(errorMessageKeys[value.displayError.code])}
+        </p>
       )}
     </section>
   );
