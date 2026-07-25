@@ -14,7 +14,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
   - _Boundary: ElementIdentityConvention_
 
-- [ ] 1.2 (P) 現在構成の要素識別属性の付与とスタイル移行
+- [x] 1.2 (P) 現在構成の要素識別属性の付与とスタイル移行
   - `src/features/current-build/view.tsx` の候補一覧へ `data-region="candidate-list"` を付与する
   - `src/features/current-build/styles.css` の日本語属性セレクタ4箇所を置き換える
   - 完了条件: `styles.css` に日本語が1文字も残らず、現在構成の既存 DOM テストと E2E が無改変で成功する

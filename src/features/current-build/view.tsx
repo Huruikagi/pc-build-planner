@@ -152,7 +152,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
       {value.candidates.length === 0 ? (
         <p>候補がありません</p>
       ) : (
-        <ul aria-label="候補一覧">
+        <ul aria-label="候補一覧" data-region="candidate-list">
           {value.candidates.map((candidate) => {
             const mode = policy.modeFor(candidate.category);
             const item = itemsByCandidate.get(candidate.id);
