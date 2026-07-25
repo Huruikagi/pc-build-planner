@@ -428,6 +428,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   return (
     <form
       aria-label="候補編集"
+      data-region="candidate-form"
       onSubmit={async (event) => {
         event.preventDefault();
         const name =
@@ -765,7 +766,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
 
   return (
     <section aria-label="候補管理" className="candidate-management">
-      <nav aria-label="プロジェクト">
+      <nav aria-label="プロジェクト" data-region="projects">
         {value.projects.map((project) => (
           <span key={project.id}>
             <button
@@ -805,6 +806,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       </nav>
       <form
         aria-label="プロジェクト編集"
+        data-region="project-form"
         onSubmit={(event) => void saveProject(event)}
       >
         <label>
@@ -893,7 +895,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       >
         候補を作成
       </button>
-      <ul aria-label="候補一覧">
+      <ul aria-label="候補一覧" data-region="candidate-list">
         {value.candidates.map((candidate) => (
           <CandidateListItem
             candidate={candidate}

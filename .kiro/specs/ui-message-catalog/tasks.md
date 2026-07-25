@@ -6,7 +6,7 @@
 
 - [ ] 1. 文言非依存の要素識別基盤とロケータ移行
 
-- [ ] 1.1 (P) 候補管理の要素識別属性の付与とスタイル移行
+- [x] 1.1 (P) 候補管理の要素識別属性の付与とスタイル移行
   - `src/features/candidate-management/view.tsx` の該当要素へ `data-region` を付与する（`projects` / `project-form` / `candidate-list` / `candidate-form`）
   - `src/features/candidate-management/styles.css` の日本語 `aria-label` 属性セレクタ6箇所を `data-region` セレクタへ置き換える。ルートクラスとの結合を維持し詳細度を落とさない
   - 既存の `aria-label`・クラス名・DOM 構造は一切変更しない。属性は追加のみ
