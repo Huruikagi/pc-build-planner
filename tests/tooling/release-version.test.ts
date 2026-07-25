@@ -43,7 +43,10 @@ test("manifestとpackageのversion不一致を双方の実測値つきで失敗�
 test("versionが未定義の場合に失敗させる", async () => {
   const root = await mkdtemp(join(tmpdir(), "release-version-"));
   await writeFile(join(root, "manifest.json"), JSON.stringify({}));
-  await writeFile(join(root, "package.json"), JSON.stringify({ version: "0.1.0" }));
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({ version: "0.1.0" }),
+  );
 
   await assert.rejects(resolveReleaseVersion({ rootDirectory: root }));
 });

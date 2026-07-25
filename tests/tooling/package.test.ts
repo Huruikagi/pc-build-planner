@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import { packageExtension } from "../../scripts/package.mjs";
 
@@ -51,7 +58,10 @@ async function workspace() {
     join(root, "manifest.json"),
     JSON.stringify({ version: "1.0.0" }),
   );
-  await writeFile(join(root, "package.json"), JSON.stringify({ version: "1.0.0" }));
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({ version: "1.0.0" }),
+  );
   return root;
 }
 
@@ -74,9 +84,17 @@ test("配布対象のみをステージングしdotで始まるファイルを�
     rootDirectory: root,
   });
 
-  assert.ok(!result.includedFiles.some((path) => path.split(/[\\/]/).some((part) => part.startsWith("."))));
+  assert.ok(
+    !result.includedFiles.some((path) =>
+      path.split(/[\\/]/).some((part) => part.startsWith(".")),
+    ),
+  );
   const entries = await listZipEntries(result.zipPath);
-  assert.ok(!entries.some((entry) => entry.split("/").some((part) => part.startsWith("."))));
+  assert.ok(
+    !entries.some((entry) =>
+      entry.split("/").some((part) => part.startsWith(".")),
+    ),
+  );
 });
 
 test("展開結果の最上位にmanifestが来る構造にする", async () => {
@@ -126,7 +144,9 @@ test("成果物検査に失敗した場合はzipを生成しない", async () =>
       rootDirectory: root,
     }),
   );
-  await assert.rejects(access(join(root, "release", "pc-build-planner-v1.0.0.zip")));
+  await assert.rejects(
+    access(join(root, "release", "pc-build-planner-v1.0.0.zip")),
+  );
 });
 
 test("再実行時にステージングと既存zipの残骸を持ち越さない", async () => {
@@ -135,7 +155,11 @@ test("再実行時にステージングと既存zipの残骸を持ち越さな�
   await writeValidBuildOutput(outputDirectory);
   const releaseDirectory = join(root, "release");
 
-  await packageExtension({ outputDirectory, releaseDirectory, rootDirectory: root });
+  await packageExtension({
+    outputDirectory,
+    releaseDirectory,
+    rootDirectory: root,
+  });
 
   const stalePath = join(releaseDirectory, "package", "stale-leftover.txt");
   await mkdir(join(releaseDirectory, "package"), { recursive: true });

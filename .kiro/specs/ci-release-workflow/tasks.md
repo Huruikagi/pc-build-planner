@@ -37,7 +37,7 @@
   - _Depends: 1.2_
   - _Boundary: package script_
 
-- [ ] 2.2 (P) リリースノートの整形を実装する
+- [x] 2.2 (P) リリースノートの整形を実装する
   - closed issueの一覧（番号・タイトル・URL・label）を標準入力から受け取り、Markdownのリリースノート本文を返す純関数として実装する。GitHub APIへは直接アクセスしない
   - labelの優先順位表（新機能・改善 → 不具合修正 → ドキュメント）で最初に一致したグループへ各issueを分類し、1つのissueが複数グループへ重複掲載されないようにする
   - 優先順位表のいずれにも該当しないlabelのみを持つissue、およびlabel未付与のissueを既定グループへ分類し、リリースノートから欠落させない
@@ -108,3 +108,7 @@
   - 完了状態: 上記4点の確認結果が実行ログとローカルでのzip読み込みによって裏づけられている
   - _Requirements: 1.3, 2.7, 3.2, 5.3_
   - _Depends: 3.1, 3.3_
+
+## Implementation Notes
+
+- タスク2.1完了時に `pnpm test` のみで確認し `pnpm validate:ci`（typecheck/lint含む）を未実行だったため、`exactOptionalPropertyTypes` によるtypecheckエラーとbiome整形違反がタスク2.2着手時に発覚した。以降のタスクは完了前に必ず `pnpm validate:ci` を実行して確認する。

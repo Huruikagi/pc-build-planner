@@ -61,7 +61,9 @@ export async function packageExtension({
   releaseDirectory = "release",
   rootDirectory,
 } = {}) {
-  const { zipFileName } = await resolveReleaseVersion({ rootDirectory });
+  const { zipFileName } = await resolveReleaseVersion(
+    rootDirectory === undefined ? undefined : { rootDirectory },
+  );
   const stagingDirectory = join(releaseDirectory, "package");
   const zipPath = join(releaseDirectory, zipFileName);
 
