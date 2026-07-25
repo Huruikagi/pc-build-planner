@@ -9,8 +9,13 @@ test("開発基盤が共通検証と未パッケージbuild契約を公開する
   assert.deepEqual(packageJson.engines, { node: "26.5.0", pnpm: "11.13.1" });
   assert.equal(packageJson.packageManager, "pnpm@11.13.1");
   assert.match(
+    packageJson.scripts["validate:ci"],
+    /typecheck.*lint.*validate:final-build.*test/,
+  );
+  assert.doesNotMatch(packageJson.scripts["validate:ci"], /playwright test/);
+  assert.equal(
     packageJson.scripts.validate,
-    /typecheck.*lint.*validate:final-build.*test.*playwright test/,
+    "pnpm validate:ci && playwright test",
   );
   assert.equal(
     packageJson.scripts["install:e2e-browser"],

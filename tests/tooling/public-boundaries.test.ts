@@ -86,8 +86,8 @@ test("専用consumer型検査と境界検査が共通validateに組み込まれ�
     packageJson.scripts["validate:boundaries"],
     /validate-boundaries/,
   );
-  assert.match(packageJson.scripts.validate, /typecheck:public-consumer/);
-  assert.match(packageJson.scripts.validate, /validate:boundaries/);
+  assert.match(packageJson.scripts["validate:ci"], /typecheck:public-consumer/);
+  assert.match(packageJson.scripts["validate:ci"], /validate:boundaries/);
 });
 
 test("模擬feature consumerの公開importだけを許可する", () => {
