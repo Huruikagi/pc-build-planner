@@ -17,11 +17,20 @@ import type {
 } from "../../../src/features/compatibility/contracts.js";
 import { createCompatibilityFeatureRegistration } from "../../../src/features/compatibility/registration.js";
 import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
-import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  type MessageKey,
+  message,
+} from "../../../src/ui-messages/public.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
+
+type NavigationMessageKey = Extract<MessageKey, `nav.${string}`>;
+
+const navigationMessage = (key: MessageKey) =>
+  message(key as NavigationMessageKey);
 
 const reportOf = (
   status: CompatibilityReport["status"],
@@ -91,9 +100,9 @@ test("registrationはcompatibility識別子とラベルを持つ", () => {
 
   assert.equal(registration.id, "compatibility");
   assert.equal(
-    defaultMessageResolver.resolveDescriptor({
-      key: registration.navigation.labelKey,
-    }),
+    defaultMessageResolver.resolveDescriptor(
+      navigationMessage(registration.navigation.labelKey),
+    ),
     defaultMessageResolver("nav.compatibility"),
   );
 });

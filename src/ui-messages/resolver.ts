@@ -82,7 +82,9 @@ export const message = <K extends MessageKey>(
   ...params: ParamsArgs<K>
 ): MessageDescriptor => {
   const value = params[0] as MessageParams | undefined;
-  return value === undefined ? { key } : { key, params: value };
+  return (
+    value === undefined ? { key } : { key, params: value }
+  ) as MessageDescriptor;
 };
 
 /** Flattens the nested catalog namespace into the dot-keyed shape `createMessageResolver` expects. */

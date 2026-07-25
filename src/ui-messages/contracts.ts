@@ -42,8 +42,11 @@ export type DefinitionAt<
     ? T[K]
     : never;
 
+declare const MESSAGE_DESCRIPTOR_BRAND: unique symbol;
+
 /** The only value logic layers pass to the display layer for a message. */
 export interface MessageDescriptor {
   readonly key: string;
   readonly params?: MessageParams;
+  readonly [MESSAGE_DESCRIPTOR_BRAND]: true;
 }

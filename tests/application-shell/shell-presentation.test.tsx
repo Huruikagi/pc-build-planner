@@ -8,6 +8,7 @@ import { createShellPresentation } from "../../src/application-shell/shell-prese
 import {
   defaultMessageResolver,
   type MessageKey,
+  message,
 } from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
@@ -50,7 +51,7 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
       {
         kind: "maintenance",
         selected: featureId("parts"),
-        message: { key: "停止中" },
+        message: message("shell.maintenanceActive"),
       },
       [
         { id: featureId("projects"), labelKey: labelKey("Projects") },
@@ -60,13 +61,19 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
   );
   assert.equal(handle.featureContainer, slot);
   assert.equal(slot.textContent, "feature-owned");
-  assert.match(shellContainer.textContent ?? "", /停止中/);
+  assert.match(
+    shellContainer.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.maintenanceActive")),
+  );
 
   await act(() =>
     handle.publish(
       {
         kind: "error",
-        message: { key: "safe <script>text</script>" },
+        message: message("shell.featureUnavailable", {
+          featureId: "parts",
+          reason: "safe <script>text</script>",
+        }),
         recoverable: true,
       },
       [],

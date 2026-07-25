@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { MessageKey } from "../ui-messages/public.js";
-import { useMessages } from "../ui-messages/public.js";
+import { message, useMessages } from "../ui-messages/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
 import { hasNavIcon, NavIcon } from "./nav-icons.js";
@@ -20,6 +20,11 @@ export interface ShellViewProps {
   readonly onRetry?: (() => void) | undefined;
 }
 
+type NavigationMessageKey = Extract<MessageKey, `nav.${string}`>;
+
+const navigationMessage = (key: MessageKey) =>
+  message(key as NavigationMessageKey);
+
 function ShellNavigation({
   items,
   selected,
@@ -37,7 +42,9 @@ function ShellNavigation({
     >
       {items.map((item) => {
         const showIcon = item.icon !== undefined && hasNavIcon(item.icon);
-        const label = messages.resolveDescriptor({ key: item.labelKey });
+        const label = messages.resolveDescriptor(
+          navigationMessage(item.labelKey),
+        );
         return (
           <button
             aria-current={item.id === selected ? "page" : undefined}

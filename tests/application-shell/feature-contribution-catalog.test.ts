@@ -16,7 +16,13 @@ import { createSidePanelFeatureContributions } from "../../src/application-shell
 import {
   defaultMessageResolver,
   type MessageKey,
+  message,
 } from "../../src/ui-messages/public.js";
+
+type NavigationMessageKey = Extract<MessageKey, `nav.${string}`>;
+
+const navigationMessage = (key: MessageKey) =>
+  message(key as NavigationMessageKey);
 
 const id = (value: string) => value as FeatureId;
 
@@ -98,9 +104,9 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
   assert.equal(
-    defaultMessageResolver.resolveDescriptor({
-      key: candidateManagement.registration.navigation.labelKey,
-    }),
+    defaultMessageResolver.resolveDescriptor(
+      navigationMessage(candidateManagement.registration.navigation.labelKey),
+    ),
     defaultMessageResolver("nav.candidateManagement"),
   );
   assert.equal(
@@ -109,9 +115,9 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
   assert.equal(currentBuild.registration.id, "currentBuild");
   assert.equal(
-    defaultMessageResolver.resolveDescriptor({
-      key: currentBuild.registration.navigation.labelKey,
-    }),
+    defaultMessageResolver.resolveDescriptor(
+      navigationMessage(currentBuild.registration.navigation.labelKey),
+    ),
     defaultMessageResolver("nav.currentBuild"),
   );
   assert.equal(
@@ -120,9 +126,9 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
   assert.equal(compatibility.registration.id, "compatibility");
   assert.equal(
-    defaultMessageResolver.resolveDescriptor({
-      key: compatibility.registration.navigation.labelKey,
-    }),
+    defaultMessageResolver.resolveDescriptor(
+      navigationMessage(compatibility.registration.navigation.labelKey),
+    ),
     defaultMessageResolver("nav.compatibility"),
   );
   assert.equal(

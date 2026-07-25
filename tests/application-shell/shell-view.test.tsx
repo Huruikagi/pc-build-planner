@@ -12,6 +12,7 @@ import { ShellView } from "../../src/application-shell/shell-view.js";
 import {
   defaultMessageResolver,
   type MessageKey,
+  message,
 } from "../../src/ui-messages/public.js";
 
 const plannerId = "planner" as FeatureId;
@@ -57,9 +58,9 @@ test("loading、maintenance、empty stateを利用者へ表示する", async () 
       {
         kind: "maintenance",
         selected: plannerId,
-        message: { key: "復元処理中です" },
+        message: message("shell.maintenanceActive"),
       },
-      "復元処理中です",
+      defaultMessageResolver("shell.maintenanceActive"),
     ],
     [
       { kind: "ready", selected: null },
@@ -99,10 +100,13 @@ test("navigationと選択中featureを表示する", async () => {
 });
 
 test("外部由来error messageをmarkupではなくテキストとして表示する", async () => {
-  const message = '<img src=x onerror="globalThis.compromised=true">';
+  const unsafeReason = '<img src=x onerror="globalThis.compromised=true">';
   const rendered = await renderShell({
     kind: "error",
-    message: { key: message },
+    message: message("shell.featureUnavailable", {
+      featureId: "planner",
+      reason: unsafeReason,
+    }),
     recoverable: false,
   });
   assert.match(rendered.container.textContent ?? "", /<img src=x onerror=/);

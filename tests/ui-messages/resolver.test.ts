@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { MessageCatalogShape } from "../../src/ui-messages/catalog/index.js";
 import { MESSAGES } from "../../src/ui-messages/catalog/index.js";
+import type {
+  MessageDescriptor,
+  MessageParams,
+} from "../../src/ui-messages/contracts.js";
 import type { ParamsArgsFor } from "../../src/ui-messages/resolver.js";
 import {
   createMessageResolver,
@@ -54,6 +58,14 @@ function _pluralParamsTypeCheck(): void {
 }
 void _pluralParamsTypeCheck;
 
+const unsafeDescriptor = (
+  key: string,
+  params?: MessageParams,
+): MessageDescriptor =>
+  (params === undefined
+    ? { key }
+    : { key, params }) as unknown as MessageDescriptor;
+
 test("存在しないキーの参照とパラメータの過不足はコンパイルエラーになる", () => {
   const catalog = flattenNamespace(MESSAGES) as unknown as MessageCatalogShape;
   const resolver = createMessageResolver(catalog);
@@ -71,7 +83,7 @@ test("createMessageResolverはキーを解決し、未知キーはキー文字�
   const resolver = createMessageResolver(catalog);
   assert.equal(resolver("common.save"), "保存");
   assert.equal(
-    resolver.resolveDescriptor({ key: "does.not.exist" }),
+    resolver.resolveDescriptor(unsafeDescriptor("does.not.exist")),
     "does.not.exist",
   );
 });
@@ -82,10 +94,9 @@ test("resolveDescriptorはparams付きの記述子を解決する", () => {
   }) as unknown as MessageCatalogShape;
   const resolver = createMessageResolver(catalog);
   assert.equal(
-    resolver.resolveDescriptor({
-      key: "candidate.editButton",
-      params: { name: "CPU" },
-    }),
+    resolver.resolveDescriptor(
+      unsafeDescriptor("candidate.editButton", { name: "CPU" }),
+    ),
     "CPUを編集",
   );
 });

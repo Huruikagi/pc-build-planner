@@ -18,6 +18,8 @@ export const shell = {
   maintenanceActive: "メンテナンス中です。変更操作は利用できません。",
   maintenanceStartupFailed: "メンテナンス状態を取得できませんでした",
   hostStopped: "side panel host は停止しています",
+  runtimeHostUnavailable: "Application shell host is unavailable.",
+  runtimeStartupFailed: "Application shell failed to start.",
   /** `feature ${id} は未登録です` の再設計。 */
   featureNotRegistered: "feature {featureId} は未登録です",
   /** `feature ${id} は利用できません: ${reason}` の再設計。`{reason}` は機能が申告した自由文字列を受け取る。 */

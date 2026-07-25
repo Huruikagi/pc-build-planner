@@ -3,6 +3,10 @@ import test from "node:test";
 
 import type { ApplicationCompositionRoot } from "../../src/application-shell/contracts.js";
 import { createSidePanelBootstrap } from "../../src/application-shell/runtime-bootstrap.js";
+import {
+  defaultMessageResolver,
+  message,
+} from "../../src/ui-messages/public.js";
 
 const api = Object.freeze({
   projects: { list: () => ["alpha"] },
@@ -45,19 +49,29 @@ test("host欠落とstartup failureを固定診断へ変換しthrowしない", as
     async start() {
       return {
         ok: false,
-        error: { kind: "startup_failed", message: { key: "secret" } },
+        error: {
+          kind: "startup_failed",
+          message: message("shell.startupFailed"),
+        },
       };
     },
     async stop() {},
   };
   const missing = createSidePanelBootstrap({ root, document });
-  assert.deepEqual(await missing.start(), {
+  const missingResult = await missing.start();
+  assert.deepEqual(missingResult, {
     ok: false,
     error: {
       kind: "missing_host",
-      message: { key: "Application shell host is unavailable." },
+      message: { key: "shell.runtimeHostUnavailable" },
     },
   });
+  assert.equal(missingResult.ok, false);
+  if (!missingResult.ok)
+    assert.equal(
+      defaultMessageResolver.resolveDescriptor(missingResult.error.message),
+      "Application shell host is unavailable.",
+    );
   assert.equal(document.documentElement.dataset.runtimeState, "failed");
   assert.equal(
     document.documentElement.dataset.runtimeDiagnostic,
@@ -68,13 +82,20 @@ test("host欠落とstartup failureを固定診断へ変換しthrowしない", as
   host.id = "application-shell";
   document.body.append(host);
   const failed = createSidePanelBootstrap({ root, document });
-  assert.deepEqual(await failed.start(), {
+  const failedResult = await failed.start();
+  assert.deepEqual(failedResult, {
     ok: false,
     error: {
       kind: "startup_failed",
-      message: { key: "Application shell failed to start." },
+      message: { key: "shell.runtimeStartupFailed" },
     },
   });
+  assert.equal(failedResult.ok, false);
+  if (!failedResult.ok)
+    assert.equal(
+      defaultMessageResolver.resolveDescriptor(failedResult.error.message),
+      "Application shell failed to start.",
+    );
   assert.equal(host.dataset.runtimeState, "failed");
   assert.equal(host.dataset.runtimeDiagnostic, "startup_failed");
   host.remove();
