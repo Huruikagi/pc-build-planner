@@ -1,0 +1,6 @@
+/* Styles for the display-language switch control. Not yet linked from
+   side-panel.css — the shell placement task (ShellLanguageSurface) wires
+   this in when it mounts the control. */
+[data-region="language-select"] {
+  font: inherit;
+}

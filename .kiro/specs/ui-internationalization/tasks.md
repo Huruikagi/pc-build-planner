@@ -84,7 +84,7 @@
   - _Boundary: DocumentLanguageSync_
   - _Depends: 2.3_
 
-- [ ] 3.3 言語切り替えコントロール
+- [x] 3.3 言語切り替えコントロール
   - 選択可能な言語の一覧から選択肢を導出し、各言語の原語表記で表示するコントロールを実装する。言語一覧をコントロール内に持たない
   - 現在選択されている言語が判別できる状態を持たせ、選択でストアの切り替えを発火させる。コントロール自身は状態を持たない
   - コントロールのアクセシブル名はカタログ由来とし、要素の識別は既存の識別属性の規約に従う。文言に依存するセレクタを作らない
@@ -249,3 +249,7 @@
   - 完了条件: 全段が成功し、日本語表示に差分がなく、英語表示に日本語の取り残しがない
   - _Requirements: 4.3, 8.6_
   - _Depends: 8.2, 6.2, 6.4, 7.1, 4.6_
+
+## Implementation Notes
+
+- タスク3.1/3.3: `src/ui-language/react.tsx`（JSX不使用でも）や `language-select.tsx` を `pnpm test`（`--test-isolation=none` で全テストが単一プロセスを共有）のフル実行下に置くと、`tests/persistence/**` の拡張子明示 `.ts` 動的importが tsx のローダーを desync させ、以後の `.js` 指定子から `.tsx` ファイルへのフォールバック解決が `ERR_MODULE_NOT_FOUND` で失敗する（`ui-message-catalog` タスク2.5で既知の同一問題）。孤立実行では再現せず、`pnpm test` の実行順でのみ顕在化する。回避策は同じ: `src/ui-language/` 配下の新規モジュールは実DOMを描画する場合でも JSX 構文を避けて `createElement` ベースの `.ts` ファイルとする（`react.tsx`→`react.ts`、`language-select.tsx`→`language-select.ts`）。**テストファイル自体は `.tsx` のままで問題ない**（失敗するのは相対 `.js` 指定子を介した解決であり、テストランナーが直接開く entry ファイルの拡張子ではないため）。

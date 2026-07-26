@@ -8,4 +8,5 @@ export const common = {
   cancel: "キャンセル",
   /** 読点による列挙結合の区切り文字（`value.join("、")` の置き換え先）。 */
   listSeparator: "、",
+  languageSelectLabel: "表示言語",
 } as const;
