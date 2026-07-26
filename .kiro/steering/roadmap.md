@@ -62,16 +62,20 @@ Issue #7「日本向け専用の看板を外し、国非依存の汎用ツール
 ## Existing Spec Updates
 
 - [x] application-shell -- 言語切り替えUIの設置面としての責務と、ナビゲーションラベルがカタログ由来になる点を requirements/design/tasks へ反映済み（要件1.6・8.1・8.2、task 6.1/6.2）。実装は`ui-message-catalog`/`ui-internationalization`側のタスク完了後。Dependencies: ui-internationalization
-- [ ] local-data-foundation -- `ui-internationalization` が新設する `src/ui-language/preference-store.ts` を、「featureはchrome.storageへ直接依存しない」という既存の Allowed Dependencies 原則に対する明示的な例外として Allowed Dependencies へ追記する。言語設定はドメインデータではなく `localDataRoot` の外にある専用キー1つに閉じ、write authority・交換形式・容量監視のいずれにも影響しないことを確認済み（`ui-internationalization` design.md の「保存先の判断」を参照）。`scripts/validate-boundaries.mjs` の到達点制限（StorageAccessGuard）と合わせて反映する。Dependencies: ui-internationalization
-- [ ] ci-release-workflow -- 既存のリリース手順（version 整合ゲート、マイルストーン確認）をそのまま使う。手順変更が不要であることを v0.2.0 の実機リリースで確認する。Dependencies: なし
+- [x] local-data-foundation -- `ui-internationalization` が新設した `src/ui-language/preference-store.ts` を、「featureはchrome.storageへ直接依存しない」という既存の Allowed Dependencies 原則に対する明示的な例外として Allowed Dependencies へ追記済み（コミット `00a744e`）。言語設定はドメインデータではなく `localDataRoot` の外にある専用キー1つに閉じ、write authority・交換形式・容量監視のいずれにも影響しないことを確認済み（`ui-internationalization` design.md の「保存先の判断」を参照）。`scripts/validate-boundaries.mjs` の到達点制限（StorageAccessGuard、2ファイル限定）と整合済み。Dependencies: ui-internationalization
+- [ ] ci-release-workflow -- 既存のリリース手順（version 整合ゲート、マイルストーン確認）をそのまま使う。手順変更が不要であることを v0.2.0 の実機リリースで確認する。ワークフロー自体の本番実行は milestone `v0.1.0` に対して確認済み（run `30149484114`、`ci-release-workflow` spec 自身の検証）だが、これは本ロードマップが求める **v0.2.0 での実機リリース確認ではない**。下記「v0.2.0 バージョン更新」の完了が前提。Dependencies: なし
 
 ## Direct Implementation Candidates
 
-- [ ] 通貨フォールバックの是正 -- `src/features/candidate-management/view.tsx:524` の `?? "JPY"` を空文字へ変更し、「通貨不明」を明示的に表現する。候補管理UIは通貨を表示していないため見た目の変化はなく、ドメイン型（`currency: string`）の変更も不要。実質1行。spec を切る規模ではない。
-- [ ] steering のポジショニング更新 -- `.kiro/steering/product.md:3` の「日本の自作PCユーザー向け」を国非依存の記述へ改める。あわせて「UI文言の i18n を v0.2.0 で対応する」旨と、`円` パーサおよび `category-hint.ts` を日本語ロケール向けの局所最適化として維持する旨を記録する。文書編集のみ。
-- [ ] v0.2.0 バージョン更新 -- `manifest.json` と `package.json` の `version` を一致させて更新する（README の手順に既述、`ci-release-workflow` spec が所有）。両 spec の完了後、リリース直前に実施する。
+- [x] 通貨フォールバックの是正 -- `src/features/candidate-management/view.tsx` の `?? "JPY"` を空文字へ変更し、「通貨不明」を明示的に表現する変更を実施済み（コミット `98059c6`）。候補管理UIの見た目・ドメイン型（`currency: string`）は変更なし。
+- [x] steering のポジショニング更新 -- `.kiro/steering/product.md` の「日本の自作PCユーザー向け」を国非依存の記述へ改め、「国・言語への非依存」を新設済み（コミット `c1d80dd`）。「UI文言の i18n は v0.2.0 の対象」および `円` パーサ・`category-hint.ts` を日本語ロケール向けの局所最適化（翻訳対象外）として維持する旨も記録済み。
+- [ ] v0.2.0 バージョン更新 -- `manifest.json` と `package.json` の `version` を一致させて更新する（README の手順に既述、`ci-release-workflow` spec が所有）。現状は両ファイルとも `0.1.0` のまま、タグ・リリースも未作成。両 spec と上記 Direct Implementation Candidates が完了済みのため、**次に残る唯一の実施可能アクションはこのバージョン更新とそれに続くリリース**。
 
 ## Specs (dependency order)
 
 - [x] ui-message-catalog -- UI文言を単一カタログへ集約し、テスト・スタイルの文言依存を剥がす振る舞い不変のリファクタ。Dependencies: none
-- [x] ui-internationalization -- 自前カタログ方式による ja/en 対応、言語切り替えUI、`_locales/` と manifest の国際化。Dependencies: ui-message-catalog
+- [x] ui-internationalization -- 自前カタログ方式による ja/en 対応、言語切り替えUI、`_locales/` と manifest の国際化。Dependencies: ui-message-catalog。`/kiro-validate-impl` でGO判定済み（要件1.1〜9.5の全50節を被覆、`pnpm validate:ci` 940件 pass、Playwright 9件 pass、境界違反ゼロ、2026-07-26確認）。
+
+## Status（2026-07-26 更新）
+
+両 spec（`ui-message-catalog` / `ui-internationalization`）と Direct Implementation Candidates（通貨フォールバック是正、steering更新）は完了。Existing Spec Updates も `application-shell` / `local-data-foundation` の反映が完了。残るのは `v0.2.0 バージョン更新` と、それに続く `ci-release-workflow` の手順によるv0.2.0実機リリースのみ。
