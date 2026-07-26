@@ -1,3 +1,7 @@
+import type {
+  AssertCatalogParity,
+  FlattenLocalizedCatalog,
+} from "../../catalog-parity.js";
 import type { MessageNamespace } from "../../contracts.js";
 import { backup } from "./backup.js";
 import { build } from "./build.js";
@@ -12,7 +16,7 @@ import { shell } from "./shell.js";
 
 /**
  * 英語カタログの10個の名前空間を束ねる集約点。日本語カタログと同一の
- * 名前空間構成に揃える。値は後続タスクが名前空間ファイルごとに投入する。
+ * 名前空間構成に揃える。
  */
 export const EN_MESSAGES = {
   common,
@@ -26,3 +30,12 @@ export const EN_MESSAGES = {
   capture,
   backup,
 } as const satisfies MessageNamespace;
+
+/**
+ * ja側と同じキー集合を持つことのコンパイル時表明（タスク1.2のパターン）。
+ * プレースホルダ名の一致は型では扱わない。`catalog-parity.test.ts`（タスク4.6）
+ * が唯一の検証手段である。
+ */
+type _AssertEnCatalogParity = AssertCatalogParity<
+  FlattenLocalizedCatalog<typeof EN_MESSAGES>
+>;
