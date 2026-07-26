@@ -1,14 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Query suffixes keep repository test resolve hooks from rewriting dependency .js files to .ts.
-const scannerModule = "../node_modules/typescript/dist/ast/scanner.js?ui-text";
-const syntaxKindModule =
-  "../node_modules/typescript/dist/enums/syntaxKind.js?ui-text";
-/** @type {typeof import("typescript/unstable/ast/scanner").createScanner} */
-const createScanner = (await import(scannerModule)).createScanner;
-/** @type {typeof import("typescript/unstable/ast").SyntaxKind} */
-const SyntaxKind = (await import(syntaxKindModule)).SyntaxKind;
+import { createScanner, SyntaxKind } from "./typescript-scanner.mjs";
 
 /**
  * @typedef {{ readonly path: string, readonly source: string }} SourceFile
@@ -21,6 +15,19 @@ const SyntaxKind = (await import(syntaxKindModule)).SyntaxKind;
 // - tests/: test fixtures and titles legitimately contain natural language.
 // - src/domain/, src/persistence/: no display layer, never render literal text.
 const NATURAL_LANGUAGE = /[぀-ヿ㐀-鿿]/;
+const ENGLISH_DISPLAY_TEXT = /[A-Za-z]/;
+const USER_PERCEIVABLE_ATTRIBUTES = new Set([
+  "aria-label",
+  "aria-description",
+  "aria-placeholder",
+  "aria-roledescription",
+  "aria-valuetext",
+  "aria-braillelabel",
+  "aria-brailleroledescription",
+  "placeholder",
+  "title",
+  "alt",
+]);
 
 const TS_SCAN_TARGETS = [
   { glob: /(?:^|\/)features\/[^/]+\/view\.tsx$/, label: "view" },
@@ -55,7 +62,7 @@ const lineOf = (source, offset) => source.slice(0, offset).split("\n").length;
  * hiding every later literal and import from the scan. This walks the file
  * once, tracking open-brace depth per pending template hole so the matching
  * close brace is re-scanned in template mode instead of treated as a normal token.
- * @param {string} source @returns {{ kind: number, text: string, value: string, fullStart: number }[]}
+ * @param {string} source @returns {{ kind: number, text: string, value: string, fullStart: number, start: number, end: number }[]}
  */
 const tokenize = (source) => {
   const scanner = createScanner(true, undefined, source);
@@ -76,6 +83,8 @@ const tokenize = (source) => {
           text: scanner.getTokenText(),
           value: scanner.getTokenValue(),
           fullStart: scanner.getTokenFullStart(),
+          start: scanner.getTokenStart(),
+          end: scanner.getTokenEnd(),
         });
         if (kind === SyntaxKind.TemplateTail) templateHoleDepths.pop();
         kind = scanner.scan();
@@ -88,6 +97,8 @@ const tokenize = (source) => {
       text: scanner.getTokenText(),
       value: scanner.getTokenValue(),
       fullStart: scanner.getTokenFullStart(),
+      start: scanner.getTokenStart(),
+      end: scanner.getTokenEnd(),
     });
     kind = scanner.scan();
   }
@@ -133,14 +144,20 @@ const findCatalogImportViolations = ({ path, source }) => {
   return violations;
 };
 
-const ATTRIBUTE_SELECTOR_VALUE = /\[[^\]{}]*?=\s*["']([^"']*)["'][^\]]*\]/g;
+const ATTRIBUTE_SELECTOR_VALUE =
+  /\[\s*([\w-]+)[^\]{}]*?=\s*(?:"([^"]*)"|'([^']*)'|([\w-]+))[^\]]*\]/g;
 
 /** @param {SourceFile} file @returns {UiTextViolation[]} */
 const findCssSelectorViolations = ({ path, source }) => {
   const violations = [];
   for (const match of source.matchAll(ATTRIBUTE_SELECTOR_VALUE)) {
-    const value = match[1] ?? "";
-    if (NATURAL_LANGUAGE.test(value))
+    const attribute = (match[1] ?? "").toLowerCase();
+    const value = match[2] ?? match[3] ?? match[4] ?? "";
+    if (
+      NATURAL_LANGUAGE.test(value) ||
+      (USER_PERCEIVABLE_ATTRIBUTES.has(attribute) &&
+        ENGLISH_DISPLAY_TEXT.test(value))
+    )
       violations.push({
         path,
         line: lineOf(source, match.index ?? 0),
@@ -150,12 +167,57 @@ const findCssSelectorViolations = ({ path, source }) => {
   return violations;
 };
 
+const AST_HELPER = fileURLToPath(
+  new URL("./validate-ui-text-ast.mjs", import.meta.url),
+);
+
+const JSX_ENTITY = /&(?:#\d+|#x[\da-f]+|[a-z][\da-z]+);/gi;
+
+/** @param {SourceFile} file @returns {UiTextViolation[]} */
+const findJsxEntityViolations = ({ path, source }) =>
+  [...source.matchAll(JSX_ENTITY)].map((match) => ({
+    path,
+    line: lineOf(source, match.index ?? 0),
+    rule: "no-jsx-entity",
+  }));
+
+/** @param {readonly SourceFile[]} sources @returns {UiTextViolation[]} */
+const findJsxViolationsInVanillaNode = (sources) => {
+  if (sources.length === 0) return [];
+  const output = execFileSync(process.execPath, [AST_HELPER], {
+    encoding: "utf8",
+    input: JSON.stringify(sources),
+    windowsHide: true,
+  });
+  return JSON.parse(output);
+};
+
 /** @param {readonly SourceFile[]} sources @returns {UiTextViolation[]} */
 export const findUiTextViolations = (sources) => {
   const violations = [];
+  const tsxTargets = sources.filter((file) => {
+    const normalized = file.path.replaceAll("\\", "/");
+    return (
+      /\.tsx$/.test(normalized) &&
+      TS_SCAN_TARGETS.some(({ glob }) => glob.test(normalized))
+    );
+  });
+  const jsxEntityViolations = tsxTargets.flatMap(findJsxEntityViolations);
+  const entityPaths = new Set(
+    jsxEntityViolations.map((violation) => violation.path),
+  );
+  violations.push(
+    ...findJsxViolationsInVanillaNode(
+      tsxTargets.filter((file) => !entityPaths.has(file.path)),
+    ),
+    ...jsxEntityViolations,
+  );
   for (const file of sources) {
     const normalized = file.path.replaceAll("\\", "/");
-    if (TS_SCAN_TARGETS.some(({ glob }) => glob.test(normalized))) {
+    if (
+      TS_SCAN_TARGETS.some(({ glob }) => glob.test(normalized)) &&
+      !entityPaths.has(file.path)
+    ) {
       violations.push(...findLiteralViolations(file));
       violations.push(...findCatalogImportViolations(file));
     }

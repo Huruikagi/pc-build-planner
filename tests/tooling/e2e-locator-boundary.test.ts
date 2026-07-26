@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
-import { createScanner, SyntaxKind } from "typescript/unstable/ast";
+
+import {
+  createScanner,
+  SyntaxKind,
+} from "../../scripts/typescript-scanner.mjs";
 
 interface RawLocatorCall {
   readonly column: number;
