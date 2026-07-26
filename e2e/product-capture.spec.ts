@@ -1,7 +1,18 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { expectedText, navItem, region } from "./locators.js";
+import {
+  applicationShell,
+  captureRetryButton,
+  captureStartButton,
+  documentBody,
+  expectedText,
+  featureRoot,
+  formField,
+  navItem,
+  region,
+  submitButton,
+} from "./locators.js";
 
 async function extensionId(context: {
   serviceWorkers(): readonly { url(): string }[];
@@ -63,22 +74,19 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
 
   const sidePanel = await context.newPage();
   await sidePanel.goto(`chrome-extension://${id}/side-panel.html`);
-  await expect(sidePanel.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(sidePanel)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
 
   // A project must exist before capture can save anywhere.
   await navItem(sidePanel, "candidate-management").click();
-  const candidateManagementRoot = sidePanel.locator(
-    '.shell-feature[data-feature-id="candidate-management"]',
+  const candidateManagementRoot = featureRoot(
+    sidePanel,
+    "candidate-management",
   );
-  await sidePanel
-    .locator("input[name='project-name']")
-    .fill("E2E 取り込み先プロジェクト");
-  await region(candidateManagementRoot, "project-form")
-    .locator('button[type="submit"]')
-    .click();
+  await formField(sidePanel, "project-name").fill("E2E 取り込み先プロジェクト");
+  await submitButton(region(candidateManagementRoot, "project-form")).click();
   await expect(
     sidePanel.getByRole("button", {
       name: "E2E 取り込み先プロジェクト",
@@ -87,24 +95,20 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
   ).toBeVisible();
 
   await navItem(sidePanel, "product-capture").click();
-  const captureRoot = sidePanel.locator(
-    '.shell-feature[data-feature-id="product-capture"]',
-  );
+  const captureRoot = featureRoot(sidePanel, "product-capture");
   await expect(
-    region(captureRoot, "review").or(
-      captureRoot.locator("[data-capture-start]"),
-    ),
+    region(captureRoot, "review").or(captureStartButton(captureRoot)),
   ).toBeVisible();
 
-  await captureRoot.locator("[data-capture-start]").click();
+  await captureStartButton(captureRoot).click();
 
   // No real activeTab grant exists in this harness, so the coordinator's
   // real chrome.tabs.query call correctly reports the page as unreadable.
-  await expect(sidePanel.locator("body")).toContainText(
+  await expect(documentBody(sidePanel)).toContainText(
     expectedText("capture.errors.permission-lost"),
     { timeout: 10_000 },
   );
-  await expect(sidePanel.locator("[data-capture-retry]")).toBeVisible();
+  await expect(captureRetryButton(captureRoot)).toBeVisible();
 
   expect(
     diagnostics.pageErrors,

@@ -2,7 +2,18 @@ import { readFile } from "node:fs/promises";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { action, expectedText, navItem, region } from "./locators.js";
+import {
+  action,
+  applicationShell,
+  createCandidateButton,
+  expectedText,
+  featureRoot,
+  formField,
+  navItem,
+  region,
+  restoreFileInput,
+  submitButton,
+} from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -50,25 +61,19 @@ test("side panelからexportしたバックアップが実storageの全データ
   const diagnostics = watchDiagnostics(page);
   await page.goto(`chrome-extension://${id}/side-panel.html`);
 
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
-  const candidateManagementRoot = page.locator(
-    '.shell-feature[data-feature-id="candidate-management"]',
-  );
-  const backupRestoreRoot = page.locator(
-    '.shell-feature[data-feature-id="backupRestore"]',
-  );
+  const candidateManagementRoot = featureRoot(page, "candidate-management");
+  const backupRestoreRoot = featureRoot(page, "backupRestore");
 
   // Seed a project and a classified candidate that the backup must carry.
   await openCandidateManagement(page);
-  await page
-    .locator("input[name='project-name']")
-    .fill("E2E バックアップ対象プロジェクト");
-  await region(candidateManagementRoot, "project-form")
-    .locator('button[type="submit"]')
-    .click();
+  await formField(page, "project-name").fill(
+    "E2E バックアップ対象プロジェクト",
+  );
+  await submitButton(region(candidateManagementRoot, "project-form")).click();
   await expect(
     page.getByRole("button", {
       name: "E2E バックアップ対象プロジェクト",
@@ -76,13 +81,11 @@ test("side panelからexportしたバックアップが実storageの全データ
     }),
   ).toBeVisible();
 
-  await candidateManagementRoot.locator("[data-create-candidate]").click();
-  await page.locator("input[name='candidate-name']").fill("E2E 退避対象CPU");
-  await page.locator("select[name='candidate-category']").selectOption("cpu");
-  await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU");
-  await region(candidateManagementRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await createCandidateButton(candidateManagementRoot).click();
+  await formField(page, "candidate-name").fill("E2E 退避対象CPU");
+  await formField(page, "candidate-category").selectOption("cpu");
+  await formField(page, "attribute-socket").fill("SYN-E2E-CPU");
+  await submitButton(region(candidateManagementRoot, "candidate-form")).click();
   await expect(
     region(candidateManagementRoot, "candidate-list")
       .getByRole("listitem")
@@ -116,19 +119,11 @@ test("side panelからexportしたバックアップが実storageの全データ
 
   // Diverge the stored data after the backup so the restore has to undo it.
   await openCandidateManagement(page);
-  await candidateManagementRoot.locator("[data-create-candidate]").click();
-  await page
-    .locator("input[name='candidate-name']")
-    .fill("E2E 復元で消える候補");
-  await page
-    .locator("select[name='candidate-category']")
-    .selectOption("memory");
-  await page
-    .locator("input[name='attribute-memoryStandard']")
-    .fill("SYN-E2E-DDR");
-  await region(candidateManagementRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await createCandidateButton(candidateManagementRoot).click();
+  await formField(page, "candidate-name").fill("E2E 復元で消える候補");
+  await formField(page, "candidate-category").selectOption("memory");
+  await formField(page, "attribute-memoryStandard").fill("SYN-E2E-DDR");
+  await submitButton(region(candidateManagementRoot, "candidate-form")).click();
   await expect(
     region(candidateManagementRoot, "candidate-list")
       .getByRole("listitem")
@@ -138,7 +133,7 @@ test("side panelからexportしたバックアップが実storageの全データ
   // Preflight: selecting the file must preview counts without writing.
   await openBackupRestore(page);
   const restoreRegion = region(backupRestoreRoot, "restore");
-  await restoreRegion.locator("input[type='file']").setInputFiles(backupPath);
+  await restoreFileInput(restoreRegion).setInputFiles(backupPath);
 
   const confirmation = region(backupRestoreRoot, "restore-confirmation");
   await expect(confirmation).toBeVisible();
@@ -159,7 +154,7 @@ test("side panelからexportしたバックアップが実storageの全データ
 
   // Confirming replaces every root in a single Foundation write.
   await openBackupRestore(page);
-  await restoreRegion.locator("input[type='file']").setInputFiles(backupPath);
+  await restoreFileInput(restoreRegion).setInputFiles(backupPath);
   await expect(confirmation).toBeVisible();
   await action(confirmation, "confirm").click();
   await expect(restoreRegion.getByRole("status")).toContainText(
@@ -173,7 +168,7 @@ test("side panelからexportしたバックアップが実storageの全データ
   // Reload: the restored snapshot must survive a real storage round trip and
   // the post-backup candidate must be gone rather than merged.
   await page.reload();
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
@@ -196,13 +191,11 @@ test("side panelからexportしたバックアップが実storageの全データ
   ).toHaveCount(0);
 
   // Normal CRUD and a second backup must still work after the replacement.
-  await candidateManagementRoot.locator("[data-create-candidate]").click();
-  await page.locator("input[name='candidate-name']").fill("E2E 復元後の新候補");
-  await page.locator("select[name='candidate-category']").selectOption("cpu");
-  await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU2");
-  await region(candidateManagementRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await createCandidateButton(candidateManagementRoot).click();
+  await formField(page, "candidate-name").fill("E2E 復元後の新候補");
+  await formField(page, "candidate-category").selectOption("cpu");
+  await formField(page, "attribute-socket").fill("SYN-E2E-CPU2");
+  await submitButton(region(candidateManagementRoot, "candidate-form")).click();
   await expect(
     region(candidateManagementRoot, "candidate-list")
       .getByRole("listitem")

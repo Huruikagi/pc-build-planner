@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 
 import { expect, extensionPath, test } from "./extension-fixture.js";
+import { applicationShell } from "./locators.js";
 
 interface ExtensionInfo {
   id: string;
@@ -66,7 +67,7 @@ test("dist is recognized as an error-free unpacked MV3 extension on Chrome 116+"
   await sidePanel.goto(
     `chrome-extension://${extensionInfo?.id}/side-panel.html`,
   );
-  await expect(sidePanel.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(sidePanel)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );

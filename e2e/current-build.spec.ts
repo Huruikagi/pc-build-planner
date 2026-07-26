@@ -1,7 +1,20 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { navItem, region } from "./locators.js";
+import {
+  applicationShell,
+  categoryButton,
+  confirmQuantityButton,
+  createCandidateButton,
+  featureRoot,
+  formField,
+  navItem,
+  quantityInput,
+  region,
+  removeCandidateButton,
+  selectCandidateButton,
+  submitButton,
+} from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -41,22 +54,16 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   const diagnostics = watchDiagnostics(page);
   await page.goto(`chrome-extension://${id}/side-panel.html`);
 
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
 
   // Seed a project and two classified candidates through candidate management.
   await navItem(page, "candidate-management").click();
-  const candidateManagementRoot = page.locator(
-    '.shell-feature[data-feature-id="candidate-management"]',
-  );
-  await page
-    .locator("input[name='project-name']")
-    .fill("E2E 現在構成プロジェクト");
-  await region(candidateManagementRoot, "project-form")
-    .locator('button[type="submit"]')
-    .click();
+  const candidateManagementRoot = featureRoot(page, "candidate-management");
+  await formField(page, "project-name").fill("E2E 現在構成プロジェクト");
+  await submitButton(region(candidateManagementRoot, "project-form")).click();
   await expect(
     page.getByRole("button", {
       name: "E2E 現在構成プロジェクト",
@@ -64,30 +71,22 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
     }),
   ).toBeVisible();
 
-  await candidateManagementRoot.locator("[data-create-candidate]").click();
-  await page.locator("input[name='candidate-name']").fill("E2E 現在構成CPU");
-  await page.locator("select[name='candidate-category']").selectOption("cpu");
-  await page.locator("input[name='attribute-socket']").fill("SYN-E2E-CPU");
-  await region(candidateManagementRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await createCandidateButton(candidateManagementRoot).click();
+  await formField(page, "candidate-name").fill("E2E 現在構成CPU");
+  await formField(page, "candidate-category").selectOption("cpu");
+  await formField(page, "attribute-socket").fill("SYN-E2E-CPU");
+  await submitButton(region(candidateManagementRoot, "candidate-form")).click();
   await expect(
     region(candidateManagementRoot, "candidate-list")
       .getByRole("listitem")
       .filter({ hasText: "E2E 現在構成CPU" }),
   ).toBeVisible();
 
-  await candidateManagementRoot.locator("[data-create-candidate]").click();
-  await page.locator("input[name='candidate-name']").fill("E2E 現在構成メモリ");
-  await page
-    .locator("select[name='candidate-category']")
-    .selectOption("memory");
-  await page
-    .locator("input[name='attribute-memoryStandard']")
-    .fill("SYN-E2E-DDR");
-  await region(candidateManagementRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await createCandidateButton(candidateManagementRoot).click();
+  await formField(page, "candidate-name").fill("E2E 現在構成メモリ");
+  await formField(page, "candidate-category").selectOption("memory");
+  await formField(page, "attribute-memoryStandard").fill("SYN-E2E-DDR");
+  await submitButton(region(candidateManagementRoot, "candidate-form")).click();
   await expect(
     region(candidateManagementRoot, "candidate-list")
       .getByRole("listitem")
@@ -96,9 +95,7 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
 
   // The feature must be reachable from shell navigation, not just registered.
   await navItem(page, "currentBuild").click();
-  const buildRegion = page.locator(
-    '.shell-feature[data-feature-id="currentBuild"]',
-  );
+  const buildRegion = featureRoot(page, "currentBuild");
   await expect(buildRegion).toBeVisible();
   await expect(
     buildRegion.getByRole("button", {
@@ -108,25 +105,23 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   ).toBeVisible();
 
   // Single-select category: adopt the CPU candidate.
-  await buildRegion.locator('[data-category="cpu"]').click();
+  await categoryButton(buildRegion, "cpu").click();
   const cpuRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成CPU" });
-  await cpuRow.locator("[data-select-candidate-id]").click();
-  await expect(cpuRow.locator("[data-remove-candidate-id]")).toBeVisible();
+  await selectCandidateButton(cpuRow).click();
+  await expect(removeCandidateButton(cpuRow)).toBeVisible();
 
   // Multiple-select category: add the memory candidate and confirm a quantity.
-  await buildRegion.locator('[data-category="memory"]').click();
+  await categoryButton(buildRegion, "memory").click();
   const memoryRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成メモリ" });
-  await memoryRow.locator("[data-select-candidate-id]").click();
-  await expect(memoryRow.locator("[data-confirm-quantity]")).toBeVisible();
-  await memoryRow.locator("input[data-quantity-input]").fill("2");
-  await memoryRow.locator("[data-confirm-quantity]").click();
-  await expect(memoryRow.locator("input[data-quantity-input]")).toHaveValue(
-    "2",
-  );
+  await selectCandidateButton(memoryRow).click();
+  await expect(confirmQuantityButton(memoryRow)).toBeVisible();
+  await quantityInput(memoryRow).fill("2");
+  await confirmQuantityButton(memoryRow).click();
+  await expect(quantityInput(memoryRow)).toHaveValue("2");
 
   // chrome.storage.local writes can lag the resolved UI promise under heavy
   // parallel test load; wait for the quantity to be durably persisted before
@@ -163,42 +158,29 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
 
   // Reload: the adopted parts and confirmed quantity must be restored.
   await page.reload();
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
   await navItem(page, "currentBuild").click();
-  const reopenedRegion = page.locator(
-    '.shell-feature[data-feature-id="currentBuild"]',
-  );
-  await expect(reopenedRegion.locator('[data-category="cpu"]')).toBeVisible();
-  await reopenedRegion.locator('[data-category="cpu"]').click();
-  await expect(
-    region(reopenedRegion, "candidate-list")
-      .getByRole("listitem")
-      .filter({ hasText: "E2E 現在構成CPU" })
-      .locator("[data-remove-candidate-id]"),
-  ).toBeVisible();
-  await reopenedRegion.locator('[data-category="memory"]').click();
+  const reopenedRegion = featureRoot(page, "currentBuild");
+  await expect(categoryButton(reopenedRegion, "cpu")).toBeVisible();
+  await categoryButton(reopenedRegion, "cpu").click();
+  const reopenedCpuRow = region(reopenedRegion, "candidate-list")
+    .getByRole("listitem")
+    .filter({ hasText: "E2E 現在構成CPU" });
+  await expect(removeCandidateButton(reopenedCpuRow)).toBeVisible();
+  await categoryButton(reopenedRegion, "memory").click();
   const reopenedMemoryRow = region(reopenedRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成メモリ" });
-  await expect(
-    reopenedMemoryRow.locator("input[data-quantity-input]"),
-  ).toHaveValue("2");
+  await expect(quantityInput(reopenedMemoryRow)).toHaveValue("2");
 
   // Unselect the memory candidate; the CPU selection must be unaffected.
-  await reopenedMemoryRow.locator("[data-remove-candidate-id]").click();
-  await expect(
-    reopenedMemoryRow.locator("[data-select-candidate-id]"),
-  ).toBeVisible();
-  await reopenedRegion.locator('[data-category="cpu"]').click();
-  await expect(
-    region(reopenedRegion, "candidate-list")
-      .getByRole("listitem")
-      .filter({ hasText: "E2E 現在構成CPU" })
-      .locator("[data-remove-candidate-id]"),
-  ).toBeVisible();
+  await removeCandidateButton(reopenedMemoryRow).click();
+  await expect(selectCandidateButton(reopenedMemoryRow)).toBeVisible();
+  await categoryButton(reopenedRegion, "cpu").click();
+  await expect(removeCandidateButton(reopenedCpuRow)).toBeVisible();
 
   expect(diagnostics.pageErrors, "boot must not raise runtime errors").toEqual(
     [],

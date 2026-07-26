@@ -1,7 +1,16 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
-import { navItem, region } from "./locators.js";
+import {
+  applicationShell,
+  createCandidateButton,
+  editCandidateButton,
+  featureRoot,
+  formField,
+  navItem,
+  region,
+  submitButton,
+} from "./locators.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -41,7 +50,7 @@ test("side panel drives project and candidate management against real storage", 
   const diagnostics = watchDiagnostics(page);
   await page.goto(`chrome-extension://${id}/side-panel.html`);
 
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
@@ -50,51 +59,41 @@ test("side panel drives project and candidate management against real storage", 
   const navigation = navItem(page, "candidate-management");
   await expect(navigation).toBeVisible();
   await navigation.click();
-  const featureRoot = page.locator(
-    '.shell-feature[data-feature-id="candidate-management"]',
-  );
-  await expect(featureRoot).toBeVisible();
+  const candidateManagement = featureRoot(page, "candidate-management");
+  await expect(candidateManagement).toBeVisible();
 
   // Create a project.
-  await page.locator("input[name='project-name']").fill("E2E 架空プロジェクト");
-  await region(featureRoot, "project-form")
-    .locator('button[type="submit"]')
-    .click();
+  await formField(page, "project-name").fill("E2E 架空プロジェクト");
+  await submitButton(region(candidateManagement, "project-form")).click();
   await expect(
     page.getByRole("button", { name: "E2E 架空プロジェクト", exact: true }),
   ).toBeVisible();
 
   // Create a candidate through the list affordance.
-  await featureRoot.locator("[data-create-candidate]").click();
-  await page.locator("input[name='candidate-name']").fill("E2E 架空CPU");
-  await page.locator("select[name='candidate-category']").selectOption("cpu");
-  await page.locator("input[name='attribute-socket']").fill("SYN-E2E-1");
-  await region(featureRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
-  const cpuListItem = region(featureRoot, "candidate-list")
+  await createCandidateButton(candidateManagement).click();
+  await formField(page, "candidate-name").fill("E2E 架空CPU");
+  await formField(page, "candidate-category").selectOption("cpu");
+  await formField(page, "attribute-socket").fill("SYN-E2E-1");
+  await submitButton(region(candidateManagement, "candidate-form")).click();
+  const cpuListItem = region(candidateManagement, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 架空CPU" });
   await expect(cpuListItem).toBeVisible();
 
   // Edit the stored candidate; the draft must come back from persistence.
-  await cpuListItem.locator("[data-edit-candidate-id]").click();
-  await expect(page.locator("input[name='attribute-socket']")).toHaveValue(
-    "SYN-E2E-1",
-  );
-  await page.locator("input[name='candidate-name']").fill("E2E 架空CPU 改訂版");
-  await region(featureRoot, "candidate-form")
-    .locator('button[type="submit"]')
-    .click();
+  await editCandidateButton(cpuListItem).click();
+  await expect(formField(page, "attribute-socket")).toHaveValue("SYN-E2E-1");
+  await formField(page, "candidate-name").fill("E2E 架空CPU 改訂版");
+  await submitButton(region(candidateManagement, "candidate-form")).click();
   await expect(
-    region(featureRoot, "candidate-list")
+    region(candidateManagement, "candidate-list")
       .getByRole("listitem")
       .filter({ hasText: "E2E 架空CPU 改訂版" }),
   ).toBeVisible();
 
   // Reload: projects, candidates and confirmed values must be restored.
   await page.reload();
-  await expect(page.locator("#application-shell")).toHaveAttribute(
+  await expect(applicationShell(page)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
@@ -103,7 +102,7 @@ test("side panel drives project and candidate management against real storage", 
     page.getByRole("button", { name: "E2E 架空プロジェクト", exact: true }),
   ).toBeVisible();
   await expect(
-    region(featureRoot, "candidate-list")
+    region(candidateManagement, "candidate-list")
       .getByRole("listitem")
       .filter({ hasText: "E2E 架空CPU 改訂版" }),
   ).toBeVisible();
