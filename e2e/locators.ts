@@ -88,6 +88,14 @@ export const createCandidateButton = (feature: Locator): Locator =>
 export const editCandidateButton = (candidateRow: Locator): Locator =>
   candidateRow.locator("[data-edit-candidate-id]");
 
+/** Locates the delete affordance for a candidate row. */
+export const deleteCandidateButton = (candidateRow: Locator): Locator =>
+  candidateRow.locator("[data-delete-candidate-id]");
+
+/** Locates the deletion confirmation affordance in the deletion dialog. */
+export const confirmDeletionButton = (page: Page): Locator =>
+  page.locator("[data-confirm-deletion]");
+
 /** Locates a category switcher by its stable domain category id. */
 export const categoryButton = (build: Locator, category: string): Locator =>
   build.locator(`[data-category="${category}"]`);
