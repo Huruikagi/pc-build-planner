@@ -175,4 +175,7 @@ test("side panel documentは同梱module bootstrapだけを読み込む", async 
     /<script\b[^>]*>(?!\s*<\/script>)[\s\S]*?<\/script>/i,
   );
   assert.doesNotMatch(html, /https?:\/\//i);
+  // 表示言語はランタイムが決定する（5.3）。静的な既定言語という事実を
+  // 文書に残さない。
+  assert.doesNotMatch(html, /<html\b[^>]*\blang=/i);
 });
