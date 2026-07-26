@@ -69,7 +69,7 @@ Issue #7「日本向け専用の看板を外し、国非依存の汎用ツール
 
 - [x] 通貨フォールバックの是正 -- `src/features/candidate-management/view.tsx` の `?? "JPY"` を空文字へ変更し、「通貨不明」を明示的に表現する変更を実施済み（コミット `98059c6`）。候補管理UIの見た目・ドメイン型（`currency: string`）は変更なし。
 - [x] steering のポジショニング更新 -- `.kiro/steering/product.md` の「日本の自作PCユーザー向け」を国非依存の記述へ改め、「国・言語への非依存」を新設済み（コミット `c1d80dd`）。「UI文言の i18n は v0.2.0 の対象」および `円` パーサ・`category-hint.ts` を日本語ロケール向けの局所最適化（翻訳対象外）として維持する旨も記録済み。
-- [ ] v0.2.0 バージョン更新 -- `manifest.json` と `package.json` の `version` を一致させて更新する（README の手順に既述、`ci-release-workflow` spec が所有）。現状は両ファイルとも `0.1.0` のまま、タグ・リリースも未作成。両 spec と上記 Direct Implementation Candidates が完了済みのため、**次に残る唯一の実施可能アクションはこのバージョン更新とそれに続くリリース**。
+- [x] v0.2.0 バージョン更新 -- `manifest.json` と `package.json` の `version` を `0.2.0` へ一致させて更新済み（README リリース手順の1.のみ実施。マイルストーン配下issueの完了確認とRelease ワークフローの手動起動（手順2・3）は未実施）。
 
 ## Specs (dependency order)
 
@@ -78,4 +78,4 @@ Issue #7「日本向け専用の看板を外し、国非依存の汎用ツール
 
 ## Status（2026-07-26 更新）
 
-両 spec（`ui-message-catalog` / `ui-internationalization`）と Direct Implementation Candidates（通貨フォールバック是正、steering更新）は完了。Existing Spec Updates も `application-shell` / `local-data-foundation` の反映が完了。残るのは `v0.2.0 バージョン更新` と、それに続く `ci-release-workflow` の手順によるv0.2.0実機リリースのみ。
+両 spec（`ui-message-catalog` / `ui-internationalization`）、Direct Implementation Candidates（通貨フォールバック是正、steering更新、v0.2.0バージョン更新）、Existing Spec Updates（`application-shell` / `local-data-foundation`）はすべて完了。残るのは README リリース手順の2.（対象マイルストーン配下issueの完了確認）と3.（GitHub Actions「Release」ワークフローの手動起動）によるv0.2.0実機リリースのみ。
