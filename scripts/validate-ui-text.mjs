@@ -12,6 +12,8 @@ import { createScanner, SyntaxKind } from "./typescript-scanner.mjs";
 // Excluded by design (see design.md's UiTextGuard Implementation Notes):
 // - src/ui-messages/catalog/ (both ja/ and en/): the catalog IS the
 //   natural-language source of truth.
+// - src/ui-messages/languages.ts: holds each language's own-language endonym
+//   (e.g. "日本語"), which is language-independent data, not translated text.
 // - src/features/product-capture/category-hint.ts: a keyword dictionary, not display text.
 // - tests/: test fixtures and titles legitimately contain natural language.
 // - src/domain/, src/persistence/: no display layer, never render literal text.

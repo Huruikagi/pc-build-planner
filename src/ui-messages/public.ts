@@ -6,6 +6,14 @@
 
 export type { MessageCatalogShape, MessageKey } from "./catalog/index.js";
 export type { MessageDescriptor, MessageParams } from "./contracts.js";
+export type { SupportedLanguage } from "./languages.js";
+export {
+  FALLBACK_LANGUAGE,
+  languageEndonym,
+  resolverFor,
+  SOURCE_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+} from "./languages.js";
 export { MessageProvider, useMessages } from "./message-context.js";
 export type { MessageResolver } from "./resolver.js";
 export {
