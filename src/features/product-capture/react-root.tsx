@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MessageProvider } from "../../ui-messages/public.js";
+import { LanguageProvider } from "../../ui-language/public.js";
 import type { CaptureState } from "./state.js";
 import { type CaptureProjectOption, CaptureView } from "./view.js";
 
@@ -23,7 +23,7 @@ export const mountCaptureReactRoot = (
   let unmounted = false;
   root.render(
     createElement(
-      MessageProvider,
+      LanguageProvider,
       null,
       createElement(CaptureView, {
         state: dependencies.state,

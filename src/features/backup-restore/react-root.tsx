@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import { MessageProvider } from "../../ui-messages/public.js";
+import { LanguageProvider } from "../../ui-language/public.js";
 import type { BackupRestoreState } from "./state.js";
 import { BackupRestoreView } from "./view.js";
 
@@ -18,7 +18,7 @@ export const mountBackupRestoreReactRoot = (
   let unmounted = false;
   root.render(
     createElement(
-      MessageProvider,
+      LanguageProvider,
       null,
       createElement(BackupRestoreView, { state }),
     ),

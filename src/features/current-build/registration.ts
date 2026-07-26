@@ -10,7 +10,7 @@ import type {
   OperationPolicy,
 } from "../../application-shell/public.js";
 import type { ProjectId } from "../../domain/public.js";
-import { MessageProvider } from "../../ui-messages/public.js";
+import { LanguageProvider } from "../../ui-language/public.js";
 import type { CurrentBuildQuery } from "./contracts.js";
 import {
   type CurrentBuildPublicApi,
@@ -64,7 +64,11 @@ const mountBuildView =
     state.resetTransientState();
     const root: Root = createRoot(container);
     root.render(
-      createElement(MessageProvider, null, createElement(BuildView, { state })),
+      createElement(
+        LanguageProvider,
+        null,
+        createElement(BuildView, { state }),
+      ),
     );
     let unmounted = false;
 

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import { MessageProvider } from "../../ui-messages/public.js";
+import { LanguageProvider } from "../../ui-language/public.js";
 import type { ManagementState } from "./state.js";
 import { ManagementView } from "./view.js";
 
@@ -18,7 +18,7 @@ export const mountManagementReactRoot = (
   let unmounted = false;
   root.render(
     createElement(
-      MessageProvider,
+      LanguageProvider,
       null,
       createElement(ManagementView, { state }),
     ),
