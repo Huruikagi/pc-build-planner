@@ -211,8 +211,8 @@ src/
 │   ├── resolve.ts                     # 純関数。言語タグ正規化と初期値決定
 │   ├── preference-store.ts            # 専用キー1つに閉じた chrome.storage.local アダプタ
 │   ├── store.ts                       # React 外の単一ストア。購読と初期化
-│   ├── react.tsx                      # LanguageProvider（MessageProvider を内包）/ useLanguage
-│   ├── language-select.tsx            # 切り替えコントロール（振る舞いの所有）
+│   ├── react.ts                       # LanguageProvider（MessageProvider を内包）/ useLanguage
+│   ├── language-select.ts             # 切り替えコントロール（振る舞いの所有）
 │   ├── language-select.css            # コントロールのスタイル
 │   ├── document-language.ts           # documentElement.lang の同期
 │   └── public.ts                      # 唯一の公開入口
