@@ -74,6 +74,7 @@
 - `default_locale` の変更、`_locales/` のキー追加・改称（Chrome Web Store の入稿内容へ波及する）。
 - 言語切り替えコントロールの識別属性の変更（`styles.css` と E2E ヘルパへ波及する）。
 - カタログのディレクトリ配置の変更（`scripts/validate-ui-text.mjs` の除外パスへ波及する）。
+- 上流 `MessageDefinition` の形状、`MultiPluralDefinition.selectors`、または selector 組み合わせキー構文の変更（英語カタログとカタログ整合テストへ波及する）。
 
 ## Architecture
 
@@ -342,7 +343,7 @@ graph LR
 | 4.2 | パラメータ名の言語間一致（単体テスト） | EnglishCatalog | `catalog-parity.test.ts` | 言語追加時の波及 |
 | 4.3, 4.6, 4.7 | 全画面の英語表示、共有語彙、外部由来文字列の非翻訳 | EnglishCatalog, LanguageRegistry | `resolverFor` | 言語切り替えの伝播 |
 | 4.4 | 単一件数の単複表現 | EnglishCatalog | `PluralDefinition` | — |
-| 4.5 | 複数件数を含む1文 | EnglishCatalog | ラベル併記形の文型 | — |
+| 4.5 | 複数件数を含む1文 | EnglishCatalog | ラベル併記形の文型、必要時の `MultiPluralDefinition` | — |
 | 5.1, 5.2, 5.3 | 文書の言語属性 | DocumentLanguageSync, LanguageRuntimeBootstrap | `syncDocumentLanguage` | 起動時の言語決定 / 言語切り替えの伝播 |
 | 6.1, 6.2, 6.3, 6.4 | manifest とストア掲載の国際化 | ExtensionLocaleAssets | `_locales/{en,ja}/messages.json`, `default_locale` | — |
 | 6.5, 6.6 | ロケール整合と既存セキュリティ検査の維持 | ManifestLocaleGuard | `validateManifest` 拡張 | — |
@@ -453,6 +454,7 @@ export const resolverFor: (language: SupportedLanguage) => MessageResolver;
 - **キーの追加・改称・削除を行わない**。英語化のために文構造の変更が必要になった場合も、上流が用意したパラメータの範囲で解く。
 - **単一件数のメッセージ**は `PluralDefinition` を用い、`one` / `other` を定義する。日本語側は単純文字列のままとし、フォームを作らない。
 - **複数件数を1文に含むメッセージ**（復元完了通知）は、数の一致を要求しないラベル併記形の文型で解く。断片の連結や、件数ごとの部分メッセージの合成を行わない。
+- 上流の `MultiPluralDefinition` は利用可能な契約として保持する。復元完了通知は現要件ではラベル併記形の単純文字列を採用してよいが、将来数量別の完結文が必要になれば `selectors: ["projectCount", "partCount", "currentBuildCount"]` と組み合わせフォームへ置き換える。caller は既に3件数を渡すため変更しない。
 - パーツカテゴリ名など共有名前空間の語彙は、機能をまたいで単一の英語表記を用いる。
 - 外部由来文字列（商品名、プロジェクト名、取得元、ファイル位置）はパラメータであり、英語カタログでも翻訳しない。
 - 文面は日本語の直訳ではなく、英語として自然な表現を採る。ただし上流が確定させた**意味**は変えない。
@@ -482,7 +484,7 @@ export const EN_MESSAGES = {
 **Implementation Notes**
 
 - Integration: 名前空間ごとに独立して投入できるため、機能単位の並行作業が可能である。集約点（`catalog/en/index.ts`）だけは先に確定させる。
-- Validation: 単複が必要なキーの一覧を単体テストで固定し、`count` の 0 / 1 / 2 に対する英語の出力を検証する。
+- Validation: 単複が必要なキーの一覧を単体テストで固定し、`count` の 0 / 1 / 2 に対する英語の出力を検証する。言語間の整合検証はキーと全フォームのプレースホルダに加え、複数数量フォームでは selector 名・順序も比較する。
 - Risks: 直訳による不自然な英語。レビューでは「日本語との1対1対応」ではなく「英語として読めるか」を判断基準にする。
 
 #### CatalogParityTypes
@@ -495,7 +497,7 @@ export const EN_MESSAGES = {
 **Responsibilities & Constraints**
 
 - **キー集合の一致は双方向に塞ぐ**。欠落はマップ型 `Record<MessageKey, ...>` の網羅性で、余剰は `satisfies` の余剰プロパティ検査で検出する。
-- **プレースホルダ名の一致は型で扱わない。** union の双方向条件型（`[A] extends [B] ? [B] extends [A] : ...`)は、不一致時の型エラーメッセージが実用に耐えず、`pnpm typecheck` の所要時間も悪化させる。パラメータ名と個数の言語間一致（要件4.2）は `catalog-parity.test.ts`（単体テスト）が唯一の検証手段とする。
+- **プレースホルダ名と複数数量 selector の一致は型で扱わない。** union の双方向条件型（`[A] extends [B] ? [B] extends [A] : ...`)は、不一致時の型エラーメッセージが実用に耐えず、`pnpm typecheck` の所要時間も悪化させる。パラメータ名と個数、全フォームのプレースホルダ集合、`MultiPluralDefinition.selectors` の名称と順序の言語間一致（要件4.2）は `catalog-parity.test.ts`（単体テスト）が唯一の検証手段とする。
 - キー集合の不一致は「どのキーが不一致か」を型として表出させ、コンパイルエラーのメッセージから対象キーを特定できるようにする。
 
 **Dependencies**
@@ -533,7 +535,7 @@ export type AssertCatalogParity<TTarget extends LocalizedCatalog> =
 **Implementation Notes**
 
 - Integration: 表明は言語カタログの集約点に置く。言語が増えるたびに同じ表明を1行追加する。
-- Validation: 意図的にキーを1件落とし、型検査が失敗することを最小例で確認する。プレースホルダ名の不一致は `catalog-parity.test.ts` で検証する（要件4.2、複数形の各フォーム間の一致を含む）。
+- Validation: 意図的にキーを1件落とし、型検査が失敗することを最小例で確認する。プレースホルダ名の不一致は `catalog-parity.test.ts` で検証する（要件4.2、全フォーム間の一致を含む）。複数数量フォームは selector 名・順序の不一致も同テストで検出する。
 - Risks: プレースホルダ名の不一致は型検査ではなく単体テストの実行時にしか検出されない。CI がテストを必ず実行することが前提になる。
 
 ### ui-language
@@ -989,7 +991,7 @@ export const syncDocumentLanguage: (
 3. `LanguagePreferencePort` が壊れた保存値に対して `ok(undefined)` を返し、書き込み失敗を `Result` で返し、いずれの経路でも例外を漏らさないこと（2.5, 3.5）。
 4. `LanguageStore` が同値設定で通知せず、保存失敗で値を巻き戻さず、`initialize` が冪等であり明示的な選択を上書きしないこと（1.2, 2.6, 3.5）。
 5. 英語カタログの単複が `count` の 0 / 1 / 2 に対して期待どおりのフォームを返すこと（4.4）。
-6. ja / en の各キーのプレースホルダ名集合が一致すること（単体テストが唯一の検証手段。複数形フォーム間の一致を含む）（4.2）。
+6. ja / en の各キーについて、全フォームのプレースホルダ名集合が一致し、`MultiPluralDefinition` では selector 名・順序も一致すること（単体テストが唯一の検証手段）（4.2）。
 7. カタログのキーを1件落とす、対応言語を1つ足して原語表記を書かない、の2ケースが**型検査で失敗する**ことを最小例で確認すること（4.1, 9.2, 9.3）。
 
 ### Integration Tests

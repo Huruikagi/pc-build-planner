@@ -42,6 +42,71 @@ test("countが渡されない場合はotherを使う", () => {
   assert.equal(formatMessage(definition), "件数不明");
 });
 
+test("MultiPluralDefinitionは複数のselectorの組み合わせでフォームを選ぶ", () => {
+  const definition = {
+    selectors: ["projectCount", "partCount", "currentBuildCount"] as const,
+    forms: {
+      "one|one|zero":
+        "{projectCount} project, {partCount} part, no current builds",
+      "other|one|one":
+        "{projectCount} projects, {partCount} part, {currentBuildCount} current build",
+      other:
+        "{projectCount} projects, {partCount} parts, {currentBuildCount} current builds",
+    },
+  };
+
+  assert.equal(
+    formatMessage(definition, {
+      projectCount: 1,
+      partCount: 1,
+      currentBuildCount: 0,
+    }),
+    "1 project, 1 part, no current builds",
+  );
+  assert.equal(
+    formatMessage(definition, {
+      projectCount: 2,
+      partCount: 1,
+      currentBuildCount: 1,
+    }),
+    "2 projects, 1 part, 1 current build",
+  );
+});
+
+test("MultiPluralDefinitionはselector不足または組み合わせ未定義ならotherへ後退する", () => {
+  const definition = {
+    selectors: ["projectCount", "partCount"] as const,
+    forms: {
+      "one|one": "各1件",
+      other: "{projectCount}プロジェクト、{partCount}パーツ",
+    },
+  };
+
+  assert.equal(
+    formatMessage(definition, { projectCount: 2, partCount: 2 }),
+    "2プロジェクト、2パーツ",
+  );
+  assert.equal(
+    formatMessage(definition, { projectCount: 1 }),
+    "1プロジェクト、{partCount}パーツ",
+  );
+});
+
+test("MultiPluralDefinitionの誤記された組み合わせキーには到達せずotherへ後退する", () => {
+  const definition = {
+    selectors: ["projectCount", "partCount"] as const,
+    forms: {
+      "one|one|other": "selector数と一致しない誤記フォーム",
+      other: "安全な既定フォーム",
+    },
+  };
+
+  assert.equal(
+    formatMessage(definition, { projectCount: 1, partCount: 1 }),
+    "安全な既定フォーム",
+  );
+});
+
 test("副作用を持たず、同じ入力には同じ出力を返す", () => {
   const params = { name: "CPU" };
   const first = formatMessage("{name}を編集", params);

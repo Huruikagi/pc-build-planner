@@ -1,5 +1,6 @@
 /** A message value that varies by quantity. Values are language-specific; the shape is not. */
 export interface PluralDefinition {
+  readonly selectors?: never;
   readonly forms: {
     readonly other: string;
     readonly one?: string;
@@ -7,7 +8,30 @@ export interface PluralDefinition {
   };
 }
 
-export type MessageDefinition = string | PluralDefinition;
+/**
+ * A message value selected by multiple independent quantities.
+ *
+ * Combination keys list each selector's category in selector order, joined by
+ * `|` (for example `one|other|zero`). Missing combinations fall back to
+ * `forms.other`.
+ */
+export interface MultiPluralDefinition<
+  Selectors extends readonly [string, ...string[]] = readonly [
+    string,
+    ...string[],
+  ],
+> {
+  readonly selectors: Selectors;
+  readonly forms: {
+    readonly other: string;
+    readonly [combination: string]: string;
+  };
+}
+
+export type MessageDefinition =
+  | string
+  | PluralDefinition
+  | MultiPluralDefinition;
 
 export type MessageParamValue = string | number;
 export type MessageParams = Readonly<Record<string, MessageParamValue>>;

@@ -15,7 +15,7 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 
 - `MessageProvider` は「後続 spec の言語切り替えの唯一の差し替え点」と明記されている。Provider は React root ごとに張る規約であり、**`FeatureMountContext` 経由での供給は禁止**されている。
 - `MessageCatalogShape` は「キー集合を平坦化した Record」であり、「後続 spec が `en` を追加する際にキー不足を型検査で検出させるための接合面」として設計されている。
-- `PluralDefinition` は `forms.other / one? / zero?` を持ち、`count` パラメータでフォームを選ぶ。日本語カタログではこの分岐を一度も通らず、単体テストで挙動が固定されている。
+- `PluralDefinition` は `forms.other / one? / zero?` を持ち、`count` パラメータで単一数量のフォームを選ぶ。加えて `MultiPluralDefinition` は明示した複数 selector の `zero / one / other` 組み合わせで完結文を選び、未定義時は `forms.other` へ後退する。日本語カタログでは数量フォームを使わず、単体テストで両契約の挙動が固定されている。
 - カタログは名前空間ごとに1ファイル、`catalog/index.ts` だけが集約する。
 - **含意**: 言語次元の追加は「`catalog/` を `catalog/ja/` と `catalog/en/` の2系統へ分け、集約点を言語レジストリへ拡張する」形が最小の歪みで収まる。`MessageProvider` / `useMessages` / `MessageDescriptor` の公開シグネチャは変更しない。
 
@@ -73,9 +73,9 @@ React root が6本に分かれているため、Context だけでは状態を共
 
 上流 `formatMessage` の `one` / `other` 選択（`count === 1` で `one`）は英語の複数形規則と厳密に一致し、日本語には複数形が無い。2言語の範囲で `Intl.PluralRules` は純粋な追加コストである。3言語目の追加時に再検討する旨をカタログのコメントへ残す。
 
-### D-5. 複数件数を含む文は複数形分岐で解かない
+### D-5. 複数件数を含む文は現要件ではラベル併記形とし、将来の数量分岐契約を保持する
 
-`復元が完了しました（プロジェクト{n}件、候補{n}件、現在構成{n}件）` は3つの独立した件数を持ち、単一の `count` によるフォーム選択では表現できない。断片連結は上流が禁止している。英語値は「ラベル + 件数」の並置形（`Projects: {n}, candidates: {n}, current builds: {n}`）とし、数の一致を要求しない文型で解く。単一件数のメッセージには従来どおり `PluralDefinition` を使う。
+`復元が完了しました（プロジェクト{n}件、候補{n}件、現在構成{n}件）` は3つの独立した件数を持ち、単一の `count` によるフォーム選択では表現できない。上流はこの制約に対して `MultiPluralDefinition` を追加し、`projectCount` / `partCount` / `currentBuildCount` の組み合わせから完結文を選べる契約を用意した。caller は既に3件数を渡しているため、将来この形へ切り替えても変更不要である。現要件の英語値は「ラベル + 件数」の並置形（`Projects: {n}, candidates: {n}, current builds: {n}`）を採用し、数の一致を要求しない単純文字列で解く。断片連結は行わず、単一件数のメッセージには従来どおり `PluralDefinition` を使う。
 
 ### D-6. `side-panel.html` から `lang` 属性を取り除く
 

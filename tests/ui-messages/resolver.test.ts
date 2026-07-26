@@ -29,6 +29,14 @@ const SAMPLE = {
     restored: {
       forms: { other: "{count}件復元しました", one: "1件復元しました" },
     },
+    multiRestored: {
+      selectors: ["projectCount", "partCount", "currentBuildCount"],
+      forms: {
+        "one|one|one": "{archiveName}: all singular",
+        other:
+          "{archiveName}: {projectCount} projects, {partCount} parts, {currentBuildCount} builds",
+      },
+    },
   },
 } as const;
 
@@ -57,6 +65,30 @@ function _pluralParamsTypeCheck(): void {
   callPlural({ count: "3" });
 }
 void _pluralParamsTypeCheck;
+
+declare function callMultiPlural(
+  ...params: ParamsArgsFor<typeof SAMPLE, "backup.multiRestored">
+): void;
+function _multiPluralParamsTypeCheck(): void {
+  callMultiPlural({
+    archiveName: "backup.zip",
+    projectCount: 1,
+    partCount: 1,
+    currentBuildCount: 1,
+  });
+  // @ts-expect-error every selector named by the definition is required.
+  callMultiPlural({ archiveName: "backup.zip", projectCount: 1, partCount: 1 });
+  // @ts-expect-error placeholders across every form remain required.
+  callMultiPlural({ projectCount: 1, partCount: 1, currentBuildCount: 1 });
+  callMultiPlural({
+    archiveName: "backup.zip",
+    // @ts-expect-error selector values must be numeric for plural-form selection.
+    projectCount: "1",
+    partCount: 1,
+    currentBuildCount: 1,
+  });
+}
+void _multiPluralParamsTypeCheck;
 
 const unsafeDescriptor = (
   key: string,
@@ -113,4 +145,31 @@ test("flattenNamespaceは入れ子の名前空間をドット区切りの平坦�
     category: { cpu: "CPU" },
   });
   assert.deepEqual(flat, { "common.save": "保存", "category.cpu": "CPU" });
+});
+
+test("createMessageResolverは複数selectorのフォームを解決する", () => {
+  const catalog = flattenNamespace({
+    backup: {
+      restored: {
+        selectors: ["projectCount", "partCount", "currentBuildCount"],
+        forms: {
+          "one|one|zero": "単数の組み合わせ",
+          other:
+            "{projectCount}プロジェクト、{partCount}パーツ、{currentBuildCount}ビルド",
+        },
+      },
+    },
+  }) as unknown as MessageCatalogShape;
+  const resolver = createMessageResolver(catalog);
+
+  assert.equal(
+    resolver.resolveDescriptor(
+      unsafeDescriptor("backup.restored", {
+        projectCount: 1,
+        partCount: 1,
+        currentBuildCount: 0,
+      }),
+    ),
+    "単数の組み合わせ",
+  );
 });

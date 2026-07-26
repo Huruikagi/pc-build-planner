@@ -5,6 +5,7 @@ import type {
   MessageDescriptor,
   MessageParams,
   MessageParamValue,
+  MultiPluralDefinition,
   PlaceholderNames,
   PluralDefinition,
 } from "./contracts.js";
@@ -13,38 +14,51 @@ import { formatMessage } from "./format.js";
 /** Placeholder names required by a message definition, across every plural form. */
 type PlaceholdersOfDefinition<D> = D extends string
   ? PlaceholderNames<D>
-  : D extends PluralDefinition
-    ?
-        | PlaceholderNames<D["forms"]["other"]>
-        | PlaceholderNames<Exclude<D["forms"]["one"], undefined>>
-        | PlaceholderNames<Exclude<D["forms"]["zero"], undefined>>
-    : never;
+  : D extends MultiPluralDefinition
+    ? PlaceholderNames<D["forms"][keyof D["forms"]]>
+    : D extends PluralDefinition
+      ?
+          | PlaceholderNames<D["forms"]["other"]>
+          | PlaceholderNames<Exclude<D["forms"]["one"], undefined>>
+          | PlaceholderNames<Exclude<D["forms"]["zero"], undefined>>
+      : never;
 
 /**
  * The `(key, ...params)` call shape for key `K` in `Catalog`: no arguments when the
- * message has no placeholders, otherwise a single required params object. Plural
- * messages always require `count`, even when no form text references it.
+ * message has no placeholders, otherwise a single required params object. A
+ * single plural requires `count`; a multi-plural requires every named selector.
+ * Selectors are required even when no form text references them.
  */
 export type ParamsArgsFor<Catalog, K extends string> =
-  DefinitionAt<Catalog, K> extends PluralDefinition
+  DefinitionAt<Catalog, K> extends MultiPluralDefinition
     ? [
         params: Readonly<
           Record<
             PlaceholdersOfDefinition<DefinitionAt<Catalog, K>>,
             MessageParamValue
-          >
-        > & { readonly count: number },
+          > &
+            Record<DefinitionAt<Catalog, K>["selectors"][number], number>
+        >,
       ]
-    : [PlaceholdersOfDefinition<DefinitionAt<Catalog, K>>] extends [never]
-      ? []
-      : [
+    : DefinitionAt<Catalog, K> extends PluralDefinition
+      ? [
           params: Readonly<
             Record<
               PlaceholdersOfDefinition<DefinitionAt<Catalog, K>>,
               MessageParamValue
             >
-          >,
-        ];
+          > & { readonly count: number },
+        ]
+      : [PlaceholdersOfDefinition<DefinitionAt<Catalog, K>>] extends [never]
+        ? []
+        : [
+            params: Readonly<
+              Record<
+                PlaceholdersOfDefinition<DefinitionAt<Catalog, K>>,
+                MessageParamValue
+              >
+            >,
+          ];
 
 type ParamsArgs<K extends MessageKey> = ParamsArgsFor<typeof MESSAGES, K>;
 
@@ -59,7 +73,9 @@ export interface MessageResolver {
 export const createMessageResolver = (
   catalog: MessageCatalogShape,
 ): MessageResolver => {
-  const flat = catalog as Readonly<Record<string, string | PluralDefinition>>;
+  const flat = catalog as Readonly<
+    Record<string, string | PluralDefinition | MultiPluralDefinition>
+  >;
 
   const resolve = (key: string, params?: MessageParams): string => {
     const definition = flat[key];
@@ -91,8 +107,11 @@ export const message = <K extends MessageKey>(
 export const flattenNamespace = (
   namespace: Readonly<Record<string, unknown>>,
   prefix = "",
-): Readonly<Record<string, string | PluralDefinition>> => {
-  const out: Record<string, string | PluralDefinition> = {};
+): Readonly<
+  Record<string, string | PluralDefinition | MultiPluralDefinition>
+> => {
+  const out: Record<string, string | PluralDefinition | MultiPluralDefinition> =
+    {};
   for (const [key, value] of Object.entries(namespace)) {
     const path = prefix.length === 0 ? key : `${prefix}.${key}`;
     if (typeof value === "string") {

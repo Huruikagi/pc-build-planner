@@ -61,7 +61,7 @@
 以下の変更は下流（`ui-internationalization`）および全参照箇所の再確認を要する。
 
 - キーの命名規約、名前空間の分割方針の変更。
-- プレースホルダ構文（`{name}`）または `MessageDefinition` の形状（複数形表現）の変更。
+- プレースホルダ構文（`{name}`）または `MessageDefinition` の3形状（単純文字列・単一数量・複数数量）と selector 組み合わせ構文の変更。本設計で `MultiPluralDefinition` を追加したため、下流 `ui-internationalization` のカタログ整合検証を再確認する。
 - `MessageResolver` / `MessageDescriptor` / `MessageProvider` の公開シグネチャの変更。
 - `ApplicationFeatureRegistration.navigation` の形状変更。
 - `data-region` / `data-action` の命名規約の変更（`styles.css` と E2E ヘルパの双方へ波及する）。
@@ -255,7 +255,7 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 | 3.3 | シェル状態表示のカタログ化 | ShellViewAdapter | `useMessages()` | 表示文言の解決経路 |
 | 3.4 | view に文言が残っていないことの検出 | UiTextGuard | `validate:ui-text` | — |
 | 4.1, 4.2, 4.3, 4.4 | 文単位メッセージへの再設計 | MessageCatalog, FeatureViewAdapters | `ParamsFor` | — |
-| 4.5 | 件数を含む文 | MessageContracts, MessageFormatter | `PluralDefinition` | — |
+| 4.5 | 単一または複数の件数を含む文 | MessageContracts, MessageFormatter | `PluralDefinition`, `MultiPluralDefinition` | — |
 | 5.1, 5.2, 5.3, 5.4, 5.5 | 重複定義の単一化 | MessageCatalog | `CategoryLabelMap` の網羅型 | — |
 | 6.1, 6.2, 6.3, 6.5 | ロジック層のメッセージ識別子化 | ShellMessageContracts, ShellMessageEmitters, ShellViewAdapter | `MessageDescriptor` | 表示文言の解決経路 |
 | 6.4 | 診断への機微値の非混入 | ShellMessageEmitters | 安定コードのみ | — |
@@ -297,7 +297,7 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 
 **Responsibilities & Constraints**
 
-- 値の表現を「単純文字列」と「数量別フォーム」の判別可能な2形とする。判別は `forms` プロパティの有無で行う。
+- 値の表現を「単純文字列」「単一数量フォーム」「複数数量フォーム」の判別可能な3形とする。構造化フォームは `forms` の有無で単純文字列と区別し、複数数量フォームは `selectors` の有無で単一数量フォームと区別する。
 - プレースホルダ構文を `{name}` に固定する。`name` は英字始まりの英数字とする。
 - カタログ定数から、ドット区切りのキー union と、キーごとの必須パラメータ型を導出する。
 - **言語を型に持ち込まない。** カタログの「形」（キー集合とパラメータ）は言語から独立した型として定義し、言語ごとの値集合はその型を満たす実体として与える。後続 spec は同じ型を満たす `en` の実体を追加するだけでよく、キーの不足は型検査で失敗する。
@@ -314,6 +314,7 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 ```typescript
 /** 数量に応じて表現を切り替えるメッセージ。日本語は使わないが、形式として塞がない。 */
 export interface PluralDefinition {
+  readonly selectors?: never;
   readonly forms: {
     readonly other: string;
     readonly one?: string;
@@ -321,7 +322,19 @@ export interface PluralDefinition {
   };
 }
 
-export type MessageDefinition = string | PluralDefinition;
+/** 複数の独立した数量に応じて、完結した1文を切り替えるメッセージ。 */
+export interface MultiPluralDefinition<
+  Selectors extends readonly [string, ...string[]] = readonly [string, ...string[]],
+> {
+  readonly selectors: Selectors;
+  readonly forms: {
+    readonly other: string;
+    /** selector順の zero / one / other を `|` で連結したキー。 */
+    readonly [combination: string]: string;
+  };
+}
+
+export type MessageDefinition = string | PluralDefinition | MultiPluralDefinition;
 
 export type MessageParamValue = string | number;
 export type MessageParams = Readonly<Record<string, MessageParamValue>>;
@@ -362,13 +375,14 @@ export interface MessageDescriptor {
 ```
 
 - Preconditions: カタログ定数は `as const` で宣言され、値がリテラル型として保持されていること。
-- Postconditions: `MessageKeyOf` はカタログに実在するキーだけを含む。存在しないキーは型として構築できない。
+- Postconditions: `MessageKeyOf` はカタログに実在するキーだけを含む。存在しないキーは型として構築できない。`ParamsArgsFor` は `PluralDefinition` の `count`、または `MultiPluralDefinition.selectors` の全名称を数値として必須にし、全フォームのプレースホルダも必須にする。
 - Invariants: 型は言語に依存しない。カタログの実体が増えても型定義は変わらない。
 
 **Implementation Notes**
 
 - Integration: `noUncheckedIndexedAccess` 下でも安全なように、解決は動的な添字アクセスではなく型付きの経路探索で行う。実行時の探索は `unknown` 経由で受けて葉に到達したことを検査する。
 - Validation: `PlaceholderNames` によるパラメータ型導出はキーごとに `void` 引数（パラメータ無し）と必須オブジェクト引数を切り替える。パラメータ無しのキーに引数を渡す呼び出しは型エラーになる。
+- Validation: `MultiPluralDefinition` は全 selector と全フォームのプレースホルダが呼び出し型で必須になることを型検査で固定する。組み合わせキーは可変長 selector に対する文字列契約とし、誤記・未定義のキーには到達せず `other` へ後退することを実行時テストで固定する。
 - Risks: 型レベル文字列処理のコンパイル負荷。キー数は約200・値は短文であり実害は小さい見込みだが、`pnpm typecheck` 所要時間を移行前後で比較する。
 
 #### MessageCatalog
@@ -462,6 +476,7 @@ export type MessageCatalogShape = {
 
 - `{name}` をパラメータ値へ置換する。数値は既定の文字列化を用いる（ロケール別数値整形は Out of Boundary）。
 - `PluralDefinition` の場合は `count` パラメータでフォームを選ぶ。`one` / `zero` が未定義なら `other` を使う。
+- `MultiPluralDefinition` の場合は、`selectors` の順に各数値を `zero` / `one` / `other` へ分類して `|` で連結した組み合わせキーを選ぶ。selector 不足、組み合わせ未定義、組み合わせキーの誤記はいずれも `forms.other` へ後退する。
 - 対応するパラメータが存在しないプレースホルダは置換せずそのまま残す。**例外を投げない**（表示中の画面を落とさない）。
 - 返り値は常に `string` である。マークアップを生成しない。呼び出し側は通常の JSX child として描画するため、外部由来文字列がマークアップとして解釈されることはない（1.6）。
 
@@ -482,7 +497,7 @@ export const formatMessage = (
 
 **Implementation Notes**
 
-- Integration: 複数形の分岐は日本語カタログでは一度も通らない。単体テストで分岐の動作を固定し、後続 spec が英語値を入れた時点で機能することを保証する。
+- Integration: 数量フォームの分岐は日本語カタログでは一度も通らない。単体テストで単一・複数 selector の動作を固定し、後続 spec が英語値を入れた時点で caller を変更せず機能することを保証する。復元完了の caller は既に `projectCount` / `partCount` / `currentBuildCount` を渡している。
 - Validation: プレースホルダ未解決時の挙動（そのまま残す）を単体テストで固定する。
 - Risks: 値に `{` が文字として含まれる場合の誤置換。現行の文言に `{` は存在しないことを移行時に確認する。
 
@@ -830,9 +845,10 @@ export const expectedText: MessageResolver;
 
 1. `formatMessage` が単純文字列のプレースホルダを置換し、未対応のプレースホルダをそのまま残すこと（1.4）。
 2. `formatMessage` が `PluralDefinition` に対し `count` でフォームを選び、`one` / `zero` 未定義時に `other` へ落ちること（4.5）。
-3. `createMessageResolver` が実在キーに対して値を返し、`resolveDescriptor` が未知キーに対してキー文字列を返すこと（1.2）。
-4. カタログの `category` 名前空間が `PartCategory` を網羅していること（5.4）。
-5. `persistenceError` の共有キーと feature 固有キーの値が、移行前の各 view の表と1件ずつ一致すること（5.5, 2.1）。
+3. `formatMessage` が `MultiPluralDefinition` の全 selector を `zero` / `one` / `other` に分類して組み合わせフォームを選び、selector 不足・未定義・誤記キーでは `other` へ落ちること。型検査では全 selector と全フォームのプレースホルダが必須になること（4.5, 10.4）。
+4. `createMessageResolver` が実在キーに対して値を返し、`resolveDescriptor` が未知キーに対してキー文字列を返すこと（1.2）。
+5. カタログの `category` 名前空間が `PartCategory` を網羅していること（5.4）。
+6. `persistenceError` の共有キーと feature 固有キーの値が、移行前の各 view の表と1件ずつ一致すること（5.5, 2.1）。
 
 ### Integration Tests
 
