@@ -4,7 +4,7 @@
 >
 > **転記の検証装置**: タスク群3・4では、テスト側の文言リテラルを**無改変のまま残す**。既存テストが緑であることが「表示文言が1文字も変わっていない」ことの証拠になる。期待値のカタログ化はタスク群5でのみ行う。
 
-- [ ] 1. 文言非依存の要素識別基盤とロケータ移行
+- [x] 1. 文言非依存の要素識別基盤とロケータ移行
 
 - [x] 1.1 (P) 候補管理の要素識別属性の付与とスタイル移行
   - `src/features/candidate-management/view.tsx` の該当要素へ `data-region` を付与する（`projects` / `project-form` / `candidate-list` / `candidate-form`）
@@ -54,7 +54,7 @@
   - _Requirements: 9.2, 9.4_
   - _Boundary: E2ELocatorHelpers_
 
-- [ ] 2. UIメッセージカタログ基盤
+- [x] 2. UIメッセージカタログ基盤
 
 - [x] 2.1 メッセージ契約と型基盤の定義
   - `src/ui-messages/contracts.ts` に `MessageDefinition` / `PluralDefinition` / `MessageParams` / `MessageNamespace` / `MessageDescriptor` を定義する
@@ -107,7 +107,7 @@
   - _Boundary: MessageReactContext_
   - _Depends: 2.4_
 
-- [ ] 3. 機能ごとのカタログ値投入と view 移行
+- [x] 3. 機能ごとのカタログ値投入と view 移行
 
 - [x] 3.1 (P) 現在構成のカタログ値投入と view 移行
   - `build` 名前空間へ現在構成の文言を転記し、`src/features/current-build/view.tsx` の文言リテラルを `useMessages()` 経由へ置き換える
@@ -178,7 +178,7 @@
   - _Boundary: FeatureViewAdapters_
   - _Depends: 3.6_
 
-- [ ] 4. アプリケーションシェルの契約変更と移行
+- [x] 4. アプリケーションシェルの契約変更と移行
 
 - [x] 4.1 シェル表示経路のメッセージ記述子化
   - `src/application-shell/contracts.ts` の `ShellViewState` / `ShellMaintenanceState` / `StartupError` / `SelectionError` / `CompositionError` の `message` を `MessageDescriptor` へ変更する
@@ -213,7 +213,7 @@
   - _Boundary: ShellMessageContracts, FeatureNavigationRegistrations_
   - _Depends: 4.1_
 
-- [ ] 5. 期待値のカタログ化・機械検査・最終検証
+- [x] 5. 期待値のカタログ化・機械検査・最終検証
 
 - [x] 5.1 単体・統合テストの文言期待値のカタログ化
   - 「特定の文言が表示されること」を検証しているアサーションの期待値を、公開入口の既定 resolver から解決した値へ置き換える
@@ -253,6 +253,10 @@
 
 ## Implementation Notes
 
+- remediation-1: `MessageDescriptor` は非公開 `unique symbol` による nominal brand を持ち、`message()` だけを型安全な生成経路とした。runtime bootstrap と shell view の表示値はカタログキーへ移し、公開 API を広げずロジック層から生の英語文言を渡せない境界を固定した。
+- remediation-2: 5本の E2E spec から生の `locator()` 組み立てを除去し、意味単位の識別手順を `e2e/locators.ts` へ集約した。`tests/tooling/e2e-locator-boundary.test.ts` が spec への locator 再混入を拒否する。
+- remediation-3: `validate:ui-text` は CJK に加えて英語の自然言語 literal を fail-closed で検査する。TypeScript AST は vanilla Node 子プロセスへ隔離し、定数・callback・spread・利用者向け属性を含む表示経路を拒否する。JSX entity は parser/scanner の OOM を避けるため `no-jsx-entity` として事前検出する。
+- 最終検証: カタログ移行後の日本語表示値は既存 resolver 期待値で固定し、識別子化後の production Playwright E2E 5件を再実行して全件成功した。今回の remediation は表示 DOM/CSS を変更せず、文言の生成境界・E2E locator・検査 tooling のみを強化している。
 - remediation-4: `MessageDefinition` は単純文字列・単一数量の `PluralDefinition`・複数数量の `MultiPluralDefinition` の3形とした。複数数量は selector 順の `zero|one|other` 組み合わせで完結文を選び、既存 caller の `projectCount` / `partCount` / `currentBuildCount` を変更せず将来 locale の表現を追加できる。旧実装では型が `count` 必須と誤判定され、実行時の複数 selector テスト2件も失敗する RED を確認した。
 - タスク1.3: `src/application-shell/shell-view.tsx` のナビゲーションボタンは現状 `data-feature-id` などの安定識別子を持たない（`data-feature-id` は選択中機能を表す `.shell-feature` セクション側にのみ存在し、ナビゲーションボタン自体には無い）。`e2e/locators.ts` の `navItem` は `.shell-navigation [data-feature-id="..."]` を前提に実装済みのため、タスク1.4でナビゲーションボタンへ `data-feature-id={item.id}` を追加する必要がある。
 - タスク3.2: キーのみの写像テーブル（`categoryLabels`→`categoryMessageKeys` 等）を `Readonly<Record<X, MessageKey>>` のように**広い** `MessageKey` へ型注釈すると、カタログにプレースホルダ付きキー（例: `compatibility.missingCategory`）が1つでも存在した時点で、そのテーブルからの参照 `messages(table[x])` が「パラメータ不足」の型エラーになる（`ParamsArgsFor` が MessageKey 全体の積集合を要求するため）。対策: テーブル宣言を `as const satisfies Record<X, MessageKey>` にして各値の literal 型を保持する（`: Record<X, MessageKey>` という直接注釈をしない）。複数フィールドを持つ入れ子テーブル（例: `RULE_LABEL_KEYS`）や `string` キーで引く `Partial<Record<string, ...>>` テーブルは、値の型を `MessageKey` ではなく実際に使う literal key の union（例: `type ReasonMessageKey = "compatibility.reasons.value-equal" | ...`）に絞る。以降のfeature移行タスク（3.3以降）でも同じ写像パターンを使う際はこの型を踏襲する。

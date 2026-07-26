@@ -367,10 +367,13 @@ export type DefinitionAt<T, K extends string> =
       ? T[K]
       : never;
 
-/** 記述子。ロジック層が表示層へ渡す唯一の形。 */
+declare const MESSAGE_DESCRIPTOR_BRAND: unique symbol;
+
+/** 記述子。ロジック層が表示層へ渡す唯一の形。message() だけが生成する。 */
 export interface MessageDescriptor {
   readonly key: string;
   readonly params?: MessageParams;
+  readonly [MESSAGE_DESCRIPTOR_BRAND]: true;
 }
 ```
 
@@ -382,6 +385,7 @@ export interface MessageDescriptor {
 
 - Integration: `noUncheckedIndexedAccess` 下でも安全なように、解決は動的な添字アクセスではなく型付きの経路探索で行う。実行時の探索は `unknown` 経由で受けて葉に到達したことを検査する。
 - Validation: `PlaceholderNames` によるパラメータ型導出はキーごとに `void` 引数（パラメータ無し）と必須オブジェクト引数を切り替える。パラメータ無しのキーに引数を渡す呼び出しは型エラーになる。
+- Validation: `MessageDescriptor` は非公開 `unique symbol` の nominal brand を持ち、`message()` 以外の構造的な直接生成を型検査で拒否する。brand は公開 API の値や runtime object へ露出しない。
 - Validation: `MultiPluralDefinition` は全 selector と全フォームのプレースホルダが呼び出し型で必須になることを型検査で固定する。組み合わせキーは可変長 selector に対する文字列契約とし、誤記・未定義のキーには到達せず `other` へ後退することを実行時テストで固定する。
 - Risks: 型レベル文字列処理のコンパイル負荷。キー数は約200・値は短文であり実害は小さい見込みだが、`pnpm typecheck` 所要時間を移行前後で比較する。
 
@@ -811,17 +815,17 @@ export const expectedText: MessageResolver;
 
 - Trigger: `pnpm validate:ui-text`。`validate:ci` の一部として `pnpm test` の前に実行する。
 - Input / validation:
-  - `src/features/*/view.tsx`、`src/features/*/registration.ts`、`src/features/*/react-root.tsx`、`src/application-shell/**/*.ts(x)` を TypeScript の `createScanner` でトークン化し、**文字列リテラル・テンプレートリテラルに自然言語（CJK）が含まれる場合を違反とする**。コメントと JSDoc はトークン走査により自然に除外される。
-  - `src/features/*/styles.css`、`src/application-shell/*.css` を走査し、**属性セレクタの値に自然言語が含まれる場合を違反とする**。
+  - `src/features/*/view.tsx`、`src/features/*/registration.ts`、`src/features/*/react-root.tsx`、`src/application-shell/**/*.ts(x)` を TypeScript scanner で走査し、**文字列リテラル・テンプレートリテラルに自然言語（CJK）が含まれる場合を違反とする**。加えて `.tsx` の表示面は TypeScript AST で英語の自然言語 literal も fail-closed に判定し、コメントと JSDoc は除外する。`registration.ts` の表示ラベルは `labelKey: MessageKey`、application-shell のロジック値は nominal `MessageDescriptor` により、生の表示文言を構築できない型境界を別途持つ。
+  - `src/features/*/styles.css`、`src/application-shell/*.css` を走査し、**利用者向け属性セレクタの値に自然言語（CJK または英語）が含まれる場合を違反とする**。
   - `src/features/*/view.tsx` が `ui-messages/catalog/index.js` を直接 import している場合を違反とする。
 - Output / destination: 違反があれば違反ごとにファイル・行・規則名を出力し、非ゼロ終了する。
 - Idempotency & recovery: 読み取り専用。冪等。
 
 **Implementation Notes**
 
-- Integration: 既存の `scripts/validate-boundaries.mjs` と同じ TypeScript scanner ベースの実装方式を踏襲する。
+- Integration: CJK literal と import 境界は既存の TypeScript scanner を全対象 `.ts` / `.tsx` で共有する。英語 literal は表示面を持つ `.tsx` で定数・callback・spread・JSX 属性を介する経路も逃さないよう AST で検査し、`tsx` loader との module 解決競合を避けて vanilla Node 子プロセスへ隔離する。非表示ロジック `.ts` の英語診断コード・安定識別子は AST 対象にせず、`MessageKey` / `MessageDescriptor` の型境界で表示文言の混入を防ぐ。
 - Validation: 走査対象外（`src/ui-messages/catalog/`、`src/features/product-capture/category-hint.ts`、`tests/`、`src/domain/`、`src/persistence/`）を明示的に除外し、除外理由をスクリプト内のコメントに残す。
-- Risks: 過検出により正当な日本語（`category-hint.ts` のキーワード辞書など）を弾く。除外リストを明示し、除外の追加には理由を要求する。
+- Risks: 過検出により正当な日本語（`category-hint.ts` のキーワード辞書など）や英語の安定識別子を弾く。除外リストとコード用途の許可文脈を明示し、追加には理由と回帰テストを要求する。JSX entity は TypeScript parser/scanner の過大メモリ消費を避けるため事前に `no-jsx-entity` として拒否し、そのファイルの追加診断は行わない。
 
 ## Error Handling
 
