@@ -6,9 +6,16 @@
 .application-shell {
   display: grid;
   min-height: 100vh;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   background: Canvas;
   color: CanvasText;
+}
+
+[data-region="shell-header"] {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.375rem;
+  border-block-end: 1px solid color-mix(in srgb, CanvasText 20%, Canvas);
 }
 
 .shell-navigation {

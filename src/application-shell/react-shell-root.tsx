@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root as ReactDomRoot } from "react-dom/client";
 
-import { MessageProvider } from "../ui-messages/public.js";
+import { LanguageProvider } from "../ui-language/public.js";
 import type { ShellViewState } from "./contracts.js";
 
 export interface ShellStateSource {
@@ -67,7 +67,7 @@ export function createReactShellRoot(
         if (active) {
           flushSync(() =>
             root.render(
-              createElement(MessageProvider, null, options.render(state)),
+              createElement(LanguageProvider, null, options.render(state)),
             ),
           );
         }

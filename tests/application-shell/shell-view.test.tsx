@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { afterEach, test } from "node:test";
 
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -9,11 +9,17 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import { ShellView } from "../../src/application-shell/shell-view.js";
+import { LanguageProvider } from "../../src/ui-language/public.js";
+import { resetUiLanguageForTest } from "../../src/ui-language/store.js";
 import {
   defaultMessageResolver,
   type MessageKey,
   message,
 } from "../../src/ui-messages/public.js";
+
+afterEach(() => {
+  resetUiLanguageForTest();
+});
 
 const plannerId = "planner" as FeatureId;
 const libraryId = "library" as FeatureId;
@@ -32,14 +38,16 @@ async function renderShell(
   const root = createRoot(container);
   await act(() => {
     root.render(
-      <ShellView
-        state={state}
-        navigation={navigation}
-        onNavigate={() => {}}
-        onRetry={onRetry}
-      >
-        {children}
-      </ShellView>,
+      <LanguageProvider>
+        <ShellView
+          state={state}
+          navigation={navigation}
+          onNavigate={() => {}}
+          onRetry={onRetry}
+        >
+          {children}
+        </ShellView>
+      </LanguageProvider>,
     );
   });
   return {
@@ -80,13 +88,15 @@ test("navigationと選択中featureを表示する", async () => {
   const root = createRoot(container);
   await act(() => {
     root.render(
-      <ShellView
-        state={{ kind: "ready", selected: plannerId }}
-        navigation={navigation}
-        onNavigate={(id) => selected.push(id)}
-      >
-        <p>構成画面</p>
-      </ShellView>,
+      <LanguageProvider>
+        <ShellView
+          state={{ kind: "ready", selected: plannerId }}
+          navigation={navigation}
+          onNavigate={(id) => selected.push(id)}
+        >
+          <p>構成画面</p>
+        </ShellView>
+      </LanguageProvider>,
     );
   });
   const buttons = container.querySelectorAll("nav button");
@@ -159,13 +169,15 @@ test("feature切替時にもerror boundaryをresetする", async () => {
   const root = createRoot(container);
   await act(() => {
     root.render(
-      <ShellView
-        state={{ kind: "ready", selected: plannerId }}
-        navigation={navigation}
-        onNavigate={() => {}}
-      >
-        <BrokenFeature />
-      </ShellView>,
+      <LanguageProvider>
+        <ShellView
+          state={{ kind: "ready", selected: plannerId }}
+          navigation={navigation}
+          onNavigate={() => {}}
+        >
+          <BrokenFeature />
+        </ShellView>
+      </LanguageProvider>,
     );
   });
   assert.match(
@@ -175,13 +187,15 @@ test("feature切替時にもerror boundaryをresetする", async () => {
 
   await act(() => {
     root.render(
-      <ShellView
-        state={{ kind: "ready", selected: libraryId }}
-        navigation={navigation}
-        onNavigate={() => {}}
-      >
-        <p>候補パーツ画面</p>
-      </ShellView>,
+      <LanguageProvider>
+        <ShellView
+          state={{ kind: "ready", selected: libraryId }}
+          navigation={navigation}
+          onNavigate={() => {}}
+        >
+          <p>候補パーツ画面</p>
+        </ShellView>
+      </LanguageProvider>,
     );
   });
   assert.match(container.textContent ?? "", /候補パーツ画面/);
@@ -191,4 +205,44 @@ test("feature切替時にもerror boundaryをresetする", async () => {
   );
   await act(() => root.unmount());
   container.remove();
+});
+
+test("読み込み中・通常・エラー・保守中の全状態で言語コントロールが描画される", async () => {
+  const states: ShellViewState[] = [
+    { kind: "loading" },
+    { kind: "ready", selected: plannerId },
+    {
+      kind: "error",
+      message: message("shell.startupFailed"),
+      recoverable: false,
+    },
+    {
+      kind: "maintenance",
+      selected: plannerId,
+      message: message("shell.maintenanceActive"),
+    },
+  ];
+  for (const state of states) {
+    const rendered = await renderShell(state);
+    const select = rendered.container.querySelector(
+      "[data-region='shell-header'] [data-region='language-select']",
+    );
+    assert.ok(select, `expected language control for state ${state.kind}`);
+    await rendered.cleanup();
+  }
+});
+
+test("言語コントロールの操作で表示文言が切り替わる", async () => {
+  const rendered = await renderShell({ kind: "loading" });
+  const select = rendered.container.querySelector<HTMLSelectElement>(
+    "[data-region='language-select']",
+  );
+  assert.ok(select);
+  const before = rendered.container.textContent;
+  await act(() => {
+    select.value = "en";
+    select.dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+  assert.notEqual(rendered.container.textContent, before);
+  await rendered.cleanup();
 });

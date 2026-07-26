@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LanguageSelectControl } from "../ui-language/public.js";
 import type { MessageKey } from "../ui-messages/public.js";
 import { message, useMessages } from "../ui-messages/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
@@ -114,6 +115,9 @@ export function ShellView({
   const selected = selectedFeature(state);
   return (
     <div className="application-shell">
+      <header data-region="shell-header">
+        <LanguageSelectControl />
+      </header>
       {state.kind === "loading" ? null : (
         <ShellNavigation
           items={navigation}

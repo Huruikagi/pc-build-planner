@@ -1,6 +1,5 @@
-/* Styles for the display-language switch control. Not yet linked from
-   side-panel.css — the shell placement task (ShellLanguageSurface) wires
-   this in when it mounts the control. */
+/* Styles for the display-language switch control, mounted in the shell's
+   header region (see shell-view.tsx's [data-region="shell-header"]). */
 [data-region="language-select"] {
   font: inherit;
 }
