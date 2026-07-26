@@ -1,11 +1,14 @@
 // @ts-nocheck 公開APIとfeature import境界を検証する。
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { validateFoundationPublicContract } from "../../scripts/validate-artifacts.mjs";
 import {
   findBoundaryViolations,
+  findStorageAccessViolations,
   validateBoundaryRoots,
 } from "../../scripts/validate-boundaries.mjs";
 
@@ -233,4 +236,67 @@ test("存在しないscan rootをfail closedに拒否する", async () => {
     validateBoundaryRoots(["src/features/__missing__"]),
     /boundary scan root does not exist/,
   );
+});
+
+test("chrome.storageへの到達を許可2ファイルへ限定する(StorageAccessGuard)", () => {
+  const violations = findStorageAccessViolations([
+    {
+      path: "src/persistence/chrome-storage-adapter.ts",
+      source: "export const readRoot = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/ui-language/preference-store.ts",
+      source: "export const read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "dist/foundation.js",
+      source: "var readRoot = () => chrome.storage.local.get();",
+    },
+    {
+      path: "dist/side-panel.js",
+      source: "var read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/features/mock/leak.ts",
+      source: "export const readCache = () => chrome.storage.local.get();",
+    },
+    {
+      path: "dist/service-worker.js",
+      source: "var readCache = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/features/mock/aliased-leak.ts",
+      source:
+        "const area = chrome.storage; export const readCache = () => area.local.get();",
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/mock/leak.ts: no-direct-storage-access",
+      "dist/service-worker.js: no-direct-storage-access",
+      "src/features/mock/aliased-leak.ts: no-direct-storage-access",
+    ],
+  );
+});
+
+test("validateBoundaryRootsはStorageAccessGuardの違反も返す", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "storage-access-guard-"));
+  try {
+    await mkdir(join(directory, "src", "features", "mock"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(directory, "src", "features", "mock", "leak.ts"),
+      "export const readCache = () => chrome.storage.local.get();",
+    );
+    const violations = await validateBoundaryRoots([directory]);
+    assert.deepEqual(
+      violations.map(({ rule }) => rule),
+      ["no-direct-storage", "no-direct-storage-access"],
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

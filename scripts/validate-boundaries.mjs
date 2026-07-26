@@ -259,6 +259,61 @@ export const findBoundaryViolations = (sources) =>
     return [...rules].map((rule) => ({ path, rule }));
   });
 
+// StorageAccessGuard (3.2, 3.4): `chrome.storage` reachability is confined to
+// the local data foundation's adapter and the display-language preference
+// port. In the pre-build source tree that means these exact two files; in the
+// bundled `dist/` output (where esbuild merges many source files into one
+// bundle per entry point) that means only the two bundles that legitimately
+// contain them.
+const ALLOWED_STORAGE_ACCESS_SOURCE_PATTERNS = [
+  /(?:^|\/)persistence\/chrome-storage-adapter\.ts$/,
+  /(?:^|\/)ui-language\/preference-store\.ts$/,
+];
+const ALLOWED_STORAGE_ACCESS_BUNDLE_BASENAMES = new Set([
+  "foundation.js",
+  "side-panel.js",
+]);
+
+/** @param {string} path */
+const isAllowedStorageAccessPath = (path) => {
+  const normalized = path.replaceAll("\\", "/");
+  if (
+    ALLOWED_STORAGE_ACCESS_SOURCE_PATTERNS.some((pattern) =>
+      pattern.test(normalized),
+    )
+  )
+    return true;
+  const basename = normalized.split("/").pop() ?? "";
+  return ALLOWED_STORAGE_ACCESS_BUNDLE_BASENAMES.has(basename);
+};
+
+/** @param {readonly SourceFile[]} sources @returns {BoundaryViolation[]} */
+export const findStorageAccessViolations = (sources) =>
+  sources.flatMap(({ path, source }) => {
+    if (isAllowedStorageAccessPath(path)) return [];
+    const tokens = tokenize(source);
+    const aliases = new Map();
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      if (token === undefined) continue;
+      const pathValue = memberPath(tokens, index, aliases);
+      if (
+        pathValue !== undefined &&
+        canonicalApiPath(pathValue.value).startsWith("chrome.storage")
+      )
+        return [{ path, rule: "no-direct-storage-access" }];
+      if (
+        token.kind === SyntaxKind.Identifier &&
+        tokens[index + 1]?.kind === SyntaxKind.EqualsToken
+      ) {
+        const assigned = memberPath(tokens, index + 2, aliases);
+        if (assigned !== undefined)
+          aliases.set(token.value, canonicalApiPath(assigned.value));
+      }
+    }
+    return [];
+  });
+
 /** @param {string} root @returns {Promise<SourceFile[]>} */
 const collectSources = async (root) => {
   const entry = await stat(root).catch(() => undefined);
@@ -282,8 +337,13 @@ const collectSources = async (root) => {
 };
 
 /** @param {readonly string[]} roots */
-export const validateBoundaryRoots = async (roots) =>
-  findBoundaryViolations((await Promise.all(roots.map(collectSources))).flat());
+export const validateBoundaryRoots = async (roots) => {
+  const sources = (await Promise.all(roots.map(collectSources))).flat();
+  return [
+    ...findBoundaryViolations(sources),
+    ...findStorageAccessViolations(sources),
+  ];
+};
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const roots = process.argv.slice(2);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createChromeLanguagePreferencePortIfAvailable,
   createInMemoryLanguagePreferencePort,
   createLanguagePreferencePort,
 } from "../../src/ui-language/preference-store.js";
@@ -95,4 +96,8 @@ test("インメモリ実装は書き込んだ値をそのまま読み戻す", as
 test("インメモリ実装はinitial値から開始できる", async () => {
   const port = createInMemoryLanguagePreferencePort("ja");
   assert.deepEqual(await port.read(), { ok: true, value: "ja" });
+});
+
+test("Chrome APIが存在しない実行環境ではundefinedを返す", () => {
+  assert.equal(createChromeLanguagePreferencePortIfAvailable(), undefined);
 });

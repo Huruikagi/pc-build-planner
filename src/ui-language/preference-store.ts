@@ -40,6 +40,19 @@ export const createLanguagePreferencePort = (
   },
 });
 
+/**
+ * Chrome拡張の実行環境でのみ実ポートを返す。Chrome APIが存在しない実行環境
+ * （DOMテストなど）では`undefined`を返し、呼び出し側がインメモリ実装へ
+ * フォールバックできるようにする。`chrome.storage`への到達点をこのファイルへ
+ * 限定するため、存在確認もこの関数の内側で行う（StorageAccessGuard, 3.2, 3.4）。
+ */
+export const createChromeLanguagePreferencePortIfAvailable = ():
+  | LanguagePreferencePort
+  | undefined =>
+  typeof chrome !== "undefined" && chrome.storage?.local !== undefined
+    ? createLanguagePreferencePort(chrome.storage.local)
+    : undefined;
+
 /** テストと非Chrome実行環境のための実装。値はプロセス内メモリにのみ保持する。 */
 export const createInMemoryLanguagePreferencePort = (
   initial?: SupportedLanguage,
