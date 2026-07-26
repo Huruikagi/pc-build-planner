@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:public-consumer": "tsc --noEmit -p tsconfig.public-consumer.json",
     "lint": "biome check .",
-    "test": "node --import tsx/esm --import ./tests/setup-dom.ts --test --test-isolation=none tests/**/*.test.ts tests/**/*.test.tsx",
+    "test": "node --import tsx --import ./tests/setup-dom.ts --test tests/**/*.test.ts tests/**/*.test.tsx",
     "install:e2e-browser": "playwright install chromium",
     "test:e2e": "pnpm build && playwright test",
     "build": "node scripts/build.mjs",

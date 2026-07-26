@@ -37,24 +37,5 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: DEBUG resolution diagnostics (temporary)
-        run: |
-          set -x
-          node -e "console.log(process.version, process.platform, process.arch)"
-          ls node_modules/.pnpm | grep -i "user-event\|react-dom@" || true
-          UE_DIR=$(find node_modules/.pnpm -maxdepth 1 -iname '@testing-library+user-event@*' | head -1)
-          echo "UE_DIR=$UE_DIR"
-          ls -la "$UE_DIR/node_modules/@testing-library/user-event/dist/esm/setup" || true
-          RD_DIR=$(find node_modules/.pnpm -maxdepth 1 -iname 'react-dom@*' | head -1)
-          echo "RD_DIR=$RD_DIR"
-          ls -la "$RD_DIR/node_modules/react-dom/cjs" | grep test-utils || true
-          echo "--- plain node require (no tsx) ---"
-          node -e "console.log(require.resolve('@testing-library/user-event'))" || true
-          node -e "require('react-dom/test-utils'); console.log('react-dom/test-utils OK via plain require')" || true
-          echo "--- via node --import tsx ---"
-          node --import tsx -e "import('@testing-library/user-event').then(m => console.log('user-event import OK', !!m.userEvent)).catch(e => console.log('user-event import FAILED', e.message))"
-          node --import tsx -e "try { require('react-dom/test-utils'); console.log('react-dom/test-utils OK via tsx'); } catch (e) { console.log('react-dom/test-utils FAILED via tsx', e.message); }"
-          set +x
-
       - name: Validate (no E2E)
         run: pnpm validate:ci
