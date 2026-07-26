@@ -1,4 +1,4 @@
-import type { PartCategory } from "../../domain/public.js";
+import type { PartCategory } from "../../../domain/public.js";
 
 /**
  * パーツカテゴリ12種の表示名。候補管理・現在構成・商品取り込みの3箇所に
