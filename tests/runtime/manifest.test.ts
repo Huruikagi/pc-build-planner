@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -86,6 +86,14 @@ test("remote code、動的評価、inline JavaScriptを生成物から拒否す�
       "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
     );
     await writeFile(join(directory, "service-worker.js"), "export {};\n");
+    await mkdir(join(directory, "_locales", "en"), { recursive: true });
+    await writeFile(
+      join(directory, "_locales", "en", "messages.json"),
+      JSON.stringify({
+        extensionName: { message: "PC Build Planner" },
+        extensionDescription: { message: "A synthetic fixture extension." },
+      }),
+    );
 
     for (const fixture of [
       {
@@ -159,6 +167,106 @@ test("remote code、動的評価、inline JavaScriptを生成物から拒否す�
       );
       await rm(join(directory, fixture.fileName));
     }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("__MSG_*を参照するのにdefault_localeが未宣言なら拒否する(ManifestLocaleGuard)", () => {
+  const { default_locale, ...withoutDefaultLocale } = validManifest;
+  assert.throws(
+    () => validateManifest(withoutDefaultLocale),
+    /default_locale must be declared/,
+  );
+});
+
+test("default_locale宣言済みだが資産が欠落していると拒否する(ManifestLocaleGuard)", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "locale-guard-"));
+  try {
+    await writeFile(
+      join(directory, "manifest.json"),
+      JSON.stringify(validManifest),
+    );
+    await writeFile(
+      join(directory, "side-panel.html"),
+      '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
+    );
+    await writeFile(
+      join(directory, "side-panel.js"),
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
+    );
+    await writeFile(join(directory, "service-worker.js"), "export {};\n");
+    // _locales/ is intentionally omitted.
+
+    await assert.rejects(
+      validateArtifactDirectory(directory),
+      /default locale catalog is missing/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("manifestが参照するキーが既定ロケールに無いと拒否する(ManifestLocaleGuard)", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "locale-guard-"));
+  try {
+    await writeFile(
+      join(directory, "manifest.json"),
+      JSON.stringify(validManifest),
+    );
+    await writeFile(
+      join(directory, "side-panel.html"),
+      '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
+    );
+    await writeFile(
+      join(directory, "side-panel.js"),
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
+    );
+    await writeFile(join(directory, "service-worker.js"), "export {};\n");
+    await mkdir(join(directory, "_locales", "en"), { recursive: true });
+    // extensionDescription is intentionally missing.
+    await writeFile(
+      join(directory, "_locales", "en", "messages.json"),
+      JSON.stringify({ extensionName: { message: "PC Build Planner" } }),
+    );
+
+    await assert.rejects(
+      validateArtifactDirectory(directory),
+      /references __MSG_extensionDescription__ but it is missing/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("既定ロケールの資産が正しく揃っていれば違反ゼロで通る(ManifestLocaleGuard)", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "locale-guard-"));
+  try {
+    await writeFile(
+      join(directory, "manifest.json"),
+      JSON.stringify(validManifest),
+    );
+    await writeFile(
+      join(directory, "side-panel.html"),
+      '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
+    );
+    await writeFile(
+      join(directory, "side-panel.js"),
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
+    );
+    await writeFile(join(directory, "service-worker.js"), "export {};\n");
+    for (const locale of ["en", "ja"]) {
+      await mkdir(join(directory, "_locales", locale), { recursive: true });
+      await writeFile(
+        join(directory, "_locales", locale, "messages.json"),
+        JSON.stringify({
+          extensionName: { message: "PC Build Planner" },
+          extensionDescription: { message: "A fixture description." },
+        }),
+      );
+    }
+
+    await assert.doesNotReject(validateArtifactDirectory(directory));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

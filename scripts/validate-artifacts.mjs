@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 
 const requiredCsp = "script-src 'self'; object-src 'self'";
@@ -8,6 +8,42 @@ const HtmlExtensions = new Set([".html", ".htm"]);
 /** @param {string} message @returns {never} */
 function fail(message) {
   throw new Error(`Artifact validation failed: ${message}`);
+}
+
+/** @param {string} path @returns {Promise<boolean>} */
+async function pathExists(path) {
+  return stat(path)
+    .then(() => true)
+    .catch(() => false);
+}
+
+// Two separate patterns rather than one shared `g`-flagged regex: `matchAll`
+// resumes from the passed regex's *current* `lastIndex`, so reusing the same
+// stateful regex object across `.test()` (existence checks) and `.matchAll()`
+// (key extraction) calls silently drops matches depending on call order.
+const MESSAGE_PLACEHOLDER = /__MSG_[A-Za-z0-9_@]+__/;
+const MESSAGE_PLACEHOLDER_GLOBAL = /__MSG_([A-Za-z0-9_@]+)__/g;
+
+/** @param {unknown} value @returns {boolean} */
+function containsMessagePlaceholder(value) {
+  if (typeof value === "string") return MESSAGE_PLACEHOLDER.test(value);
+  if (Array.isArray(value)) return value.some(containsMessagePlaceholder);
+  if (value !== null && typeof value === "object")
+    return Object.values(value).some(containsMessagePlaceholder);
+  return false;
+}
+
+/** @param {unknown} value @param {Set<string>} keys */
+function collectMessageKeys(value, keys) {
+  if (typeof value === "string") {
+    for (const match of value.matchAll(MESSAGE_PLACEHOLDER_GLOBAL)) {
+      if (match[1]) keys.add(match[1]);
+    }
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectMessageKeys(item, keys);
+  } else if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) collectMessageKeys(item, keys);
+  }
 }
 
 const allowedPermissions = new Set([
@@ -76,6 +112,12 @@ export function validateManifest(manifest) {
   }
   if (manifest.content_security_policy?.extension_pages !== requiredCsp) {
     fail("extension page CSP must allow only bundled scripts and objects");
+  }
+  if (
+    containsMessagePlaceholder(manifest) &&
+    typeof manifest.default_locale !== "string"
+  ) {
+    fail("default_locale must be declared when the manifest uses __MSG_*__");
   }
 }
 
@@ -249,12 +291,83 @@ function validateHtml(source, path) {
   return referencedScripts;
 }
 
+/**
+ * ManifestLocaleGuard (6.5, 6.6, 8.5): confirms manifest/`_locales/` consistency.
+ * `validateManifest` only checks the manifest's own internal shape (no FS
+ * access); the checks that require reading `_locales/` live here.
+ * @param {string} directory @param {Record<string, unknown>} manifest
+ */
+async function validateLocaleAssets(directory, manifest) {
+  const localesDirectory = join(directory, "_locales");
+  const hasLocalesDirectory = await pathExists(localesDirectory);
+  const defaultLocale = manifest.default_locale;
+
+  if (hasLocalesDirectory && typeof defaultLocale !== "string") {
+    fail("_locales/ exists but default_locale is not declared");
+  }
+  if (typeof defaultLocale !== "string") return;
+
+  const defaultCatalogPath = join(
+    localesDirectory,
+    defaultLocale,
+    "messages.json",
+  );
+  if (!(await pathExists(defaultCatalogPath))) {
+    fail(`default locale catalog is missing: ${defaultCatalogPath}`);
+  }
+
+  if (hasLocalesDirectory) {
+    for (const entry of await readdir(localesDirectory, {
+      withFileTypes: true,
+    })) {
+      if (!entry.isDirectory()) continue;
+      const catalogPath = join(localesDirectory, entry.name, "messages.json");
+      if (!(await pathExists(catalogPath))) continue;
+      const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
+      if (
+        catalog === null ||
+        typeof catalog !== "object" ||
+        Array.isArray(catalog)
+      ) {
+        fail(`locale catalog must be an object: ${catalogPath}`);
+      }
+      for (const [key, entryValue] of Object.entries(catalog)) {
+        if (
+          entryValue === null ||
+          typeof entryValue !== "object" ||
+          typeof (/** @type {{ message?: unknown }} */ (entryValue).message) !==
+            "string"
+        ) {
+          fail(
+            `locale catalog entry must declare a message: ${catalogPath}#${key}`,
+          );
+        }
+      }
+    }
+  }
+
+  const defaultCatalog = JSON.parse(await readFile(defaultCatalogPath, "utf8"));
+  const defaultKeysLower = new Set(
+    Object.keys(defaultCatalog).map((key) => key.toLowerCase()),
+  );
+  const referencedKeys = new Set();
+  collectMessageKeys(manifest, referencedKeys);
+  for (const key of referencedKeys) {
+    if (!defaultKeysLower.has(key.toLowerCase())) {
+      fail(
+        `manifest references __MSG_${key}__ but it is missing from the default locale catalog`,
+      );
+    }
+  }
+}
+
 /** @param {string} directory */
 export async function validateArtifactDirectory(directory) {
   const manifest = JSON.parse(
     await readFile(join(directory, "manifest.json"), "utf8"),
   );
   validateManifest(manifest);
+  await validateLocaleAssets(directory, manifest);
 
   const files = await artifactFiles(directory);
   const sidePanelPath = join(directory, "side-panel.html");
