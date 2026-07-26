@@ -12,6 +12,7 @@ import {
   navItem,
   region,
   restoreFileInput,
+  selectLanguage,
   submitButton,
 } from "./locators.js";
 
@@ -65,6 +66,9 @@ test("side panelからexportしたバックアップが実storageの全データ
     "data-runtime-state",
     "started",
   );
+  // This spec's assertions expect Japanese text; pin it explicitly rather
+  // than depending on the test machine's ambient browser locale (8.1, 8.2).
+  await selectLanguage(page, "ja");
   const candidateManagementRoot = featureRoot(page, "candidate-management");
   const backupRestoreRoot = featureRoot(page, "backupRestore");
 

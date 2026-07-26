@@ -1,6 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { defaultMessageResolver } from "../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  resolverFor,
+  type SupportedLanguage,
+} from "../src/ui-messages/public.js";
 
 type FormFieldName =
   | "attribute-memoryStandard"
@@ -20,6 +24,24 @@ type FormFieldName =
 
 /** Resolves catalog text for E2E expected-value assertions (design.md's E2ELocatorHelpers). */
 export const expectedText = defaultMessageResolver;
+
+/** Resolves catalog text for a specific display language, for language-switching E2E specs. */
+export const expectedTextFor = resolverFor;
+
+/** Locates the display-language switch control mounted in the shell header. */
+export const languageSelect = (page: Page): Locator =>
+  page.locator('[data-region="language-select"]');
+
+/**
+ * Switches the display language via the in-panel control (never the browser
+ * locale, launch flags, or a restart — 8.1, 8.2).
+ */
+export const selectLanguage = async (
+  page: Page,
+  language: SupportedLanguage,
+): Promise<void> => {
+  await languageSelect(page).selectOption(language);
+};
 
 /** Locates the application shell runtime root. */
 export const applicationShell = (page: Page): Locator =>

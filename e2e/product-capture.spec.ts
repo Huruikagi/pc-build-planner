@@ -11,6 +11,7 @@ import {
   formField,
   navItem,
   region,
+  selectLanguage,
   submitButton,
 } from "./locators.js";
 
@@ -78,6 +79,9 @@ test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回�
     "data-runtime-state",
     "started",
   );
+  // This spec's assertions expect Japanese text; pin it explicitly rather
+  // than depending on the test machine's ambient browser locale (8.1, 8.2).
+  await selectLanguage(sidePanel, "ja");
 
   // A project must exist before capture can save anywhere.
   await navItem(sidePanel, "candidate-management").click();
