@@ -14,9 +14,15 @@ import { createScanner, SyntaxKind } from "./typescript-scanner.mjs";
 //   natural-language source of truth.
 // - src/ui-messages/languages.ts: holds each language's own-language endonym
 //   (e.g. "日本語"), which is language-independent data, not translated text.
-// - src/features/product-capture/category-hint.ts: a keyword dictionary, not display text.
+// - src/features/product-capture/locale/: Japanese-locale capture-assist
+//   data (category keywords, price tokens), not display text (7.5).
 // - tests/: test fixtures and titles legitimately contain natural language.
 // - src/domain/, src/persistence/: no display layer, never render literal text.
+//
+// Deliberately NOT excluded (removed from this list, 7.5): category-hint.ts
+// and normalizer.ts now only hold matching/parsing logic that references the
+// locale/ data above — a reintroduced Japanese literal there is a mistake,
+// not translated data, so it must fail this check (see TS_SCAN_TARGETS below).
 const NATURAL_LANGUAGE = /[぀-ヿ㐀-鿿]/;
 const ENGLISH_DISPLAY_TEXT = /[A-Za-z]/;
 const USER_PERCEIVABLE_ATTRIBUTES = new Set([
@@ -37,6 +43,10 @@ const TS_SCAN_TARGETS = [
   { glob: /(?:^|\/)features\/[^/]+\/registration\.ts$/, label: "registration" },
   { glob: /(?:^|\/)features\/[^/]+\/react-root\.tsx$/, label: "react-root" },
   { glob: /(?:^|\/)application-shell\/.+\.tsx?$/, label: "application-shell" },
+  {
+    glob: /(?:^|\/)features\/product-capture\/(?:category-hint|normalizer)\.ts$/,
+    label: "product-capture-locale-logic",
+  },
 ];
 
 const CSS_SCAN_TARGETS = [

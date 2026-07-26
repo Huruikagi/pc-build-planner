@@ -435,7 +435,7 @@ test("英語のコード・診断・importと安定識別子は対象外のま�
       `,
     },
     {
-      path: "src/features/product-capture/category-hint.ts",
+      path: "src/features/product-capture/locale/ja-category-keywords.ts",
       source: 'export const x = "未分類";',
     },
     {
@@ -447,6 +447,35 @@ test("英語のコード・診断・importと安定識別子は対象外のま�
   ]);
 
   assert.deepEqual(violations, []);
+});
+
+test("category-hint.ts・normalizer.tsは推定ロジック側として日本語literalを拒否し、locale/データは除外のまま通す(7.5)", () => {
+  const violations = findUiTextViolations([
+    {
+      path: "src/features/product-capture/category-hint.ts",
+      source: 'export const leak = "未分類";',
+    },
+    {
+      path: "src/features/product-capture/normalizer.ts",
+      source: 'export const leak = "円";',
+    },
+    {
+      path: "src/features/product-capture/locale/ja-category-keywords.ts",
+      source: 'export const JA_CATEGORY_KEYWORDS = [["cpu", ["プロセッサ"]]];',
+    },
+    {
+      path: "src/features/product-capture/locale/ja-price-tokens.ts",
+      source: 'export const YEN_SYMBOL_CURRENCY = "JPY";',
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/product-capture/category-hint.ts: no-natural-language-literal",
+      "src/features/product-capture/normalizer.ts: no-natural-language-literal",
+    ],
+  );
 });
 
 test("view.tsxからのカタログ直接importを拒否する", () => {

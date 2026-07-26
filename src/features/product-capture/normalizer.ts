@@ -6,6 +6,10 @@ import type {
   ExtractionCandidate,
   NormalizedField,
 } from "./contracts.js";
+import {
+  YEN_SUFFIX_PATTERN,
+  YEN_SYMBOL_CURRENCY,
+} from "./locale/ja-price-tokens.js";
 
 export interface CaptureNormalizer {
   normalize(
@@ -48,7 +52,7 @@ const normalizeWhitespaceAndControlCharacters = (
 };
 
 const CURRENCY_SYMBOLS: Readonly<Record<string, string>> = {
-  "¥": "JPY",
+  "¥": YEN_SYMBOL_CURRENCY,
   $: "USD",
   "€": "EUR",
   "£": "GBP",
@@ -76,11 +80,11 @@ const parsePrice = (
       return { amount, currency };
   }
 
-  const yenMatch = trimmed.match(/^([\d,]+(?:\.\d+)?)\s*円$/);
+  const yenMatch = trimmed.match(YEN_SUFFIX_PATTERN);
   if (yenMatch) {
     const amount = Number(yenMatch[1]?.replaceAll(",", ""));
     if (Number.isFinite(amount) && amount >= 0)
-      return { amount, currency: "JPY" };
+      return { amount, currency: YEN_SYMBOL_CURRENCY };
   }
 
   return undefined;
