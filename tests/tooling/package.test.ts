@@ -8,8 +8,10 @@ import { packageExtension } from "../../scripts/package.mjs";
 
 const validManifest = {
   manifest_version: 3,
-  name: "Synthetic extension",
+  name: "__MSG_extensionName__",
+  description: "__MSG_extensionDescription__",
   version: "1.0.0",
+  default_locale: "en",
   minimum_chrome_version: "116",
   permissions: ["storage", "activeTab", "scripting", "sidePanel"],
   action: {},
@@ -20,12 +22,26 @@ const validManifest = {
   },
 };
 
+const syntheticLocaleCatalog = {
+  extensionName: { message: "Synthetic extension" },
+  extensionDescription: { message: "A synthetic fixture extension." },
+};
+
 async function writeValidBuildOutput(outputDirectory: string) {
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(
     join(outputDirectory, "manifest.json"),
     JSON.stringify(validManifest),
   );
+  for (const locale of ["en", "ja"]) {
+    await mkdir(join(outputDirectory, "_locales", locale), {
+      recursive: true,
+    });
+    await writeFile(
+      join(outputDirectory, "_locales", locale, "messages.json"),
+      JSON.stringify(syntheticLocaleCatalog),
+    );
+  }
   await writeFile(
     join(outputDirectory, "side-panel.html"),
     '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
@@ -278,4 +294,29 @@ test("破損したzipは明示的な検証エラーにする", async () => {
   await writeFile(zipPath, "not a zip archive");
 
   await assert.rejects(listZipEntries(zipPath), /Invalid ZIP/);
+});
+
+test("配布用アーカイブは両ロケールの資産を含む(BuildLocaleCopy)", async () => {
+  const root = await workspace();
+  const outputDirectory = join(root, "dist");
+  await writeValidBuildOutput(outputDirectory);
+
+  const result = await packageExtension({
+    outputDirectory,
+    releaseDirectory: join(root, "release"),
+    rootDirectory: root,
+  });
+
+  const entries = await listZipEntries(result.zipPath);
+  for (const locale of ["en", "ja"]) {
+    const relativePath = join("_locales", locale, "messages.json");
+    assert.ok(
+      result.includedFiles.includes(relativePath),
+      `expected ${relativePath} in includedFiles: ${result.includedFiles.join(",")}`,
+    );
+    assert.ok(
+      entries.includes(relativePath),
+      `expected ${relativePath} in zip entries: ${entries.join(",")}`,
+    );
+  }
 });
