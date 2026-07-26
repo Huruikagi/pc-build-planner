@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-MVP（v0.1.0）の全specが実装済みであり、`src/` にlocal data foundation、application shell、runtime composition、5つの業務feature（候補管理、現在構成、商品取り込み、互換性判定、backup/restore）が揃っている。新規実装は、承認済みの製品文書、roadmap、specに加え、既存コードで確立した公開境界とテスト配置を基準とする。
+MVP（v0.1.0）の全specが実装済みであり、`src/` にlocal data foundation、application shell、runtime composition、5つの業務feature（候補管理、現在構成、商品取り込み、互換性判定、backup/restore）が揃っている。新規実装は、承認済みの製品文書とspecに加え、既存コードで確立した公開境界とテスト配置を基準とする。
 
 仕様は `.kiro/specs/<feature-name>/` にfeature単位で配置し、feature名にはkebab-caseを使用する。ステアリングはパターンを保持し、個別ファイルの完全な一覧やspecの実装詳細を重複させない。
 
@@ -119,7 +119,7 @@ import type { CandidateQuery } from "../features/candidate-management/public.js"
 - 未信頼入力の検証は境界で行い、内部へ `unknown` やChrome固有payloadを拡散させない。
 - UI、feature、foundationのどこに置くか迷う処理は、その判断に必要な知識を所有する境界へ置く。
 - 新しいfeatureは共有入口を編集するのではなく、公開契約と登録portを追加してcompositionされる形にする。
-- 既存specに残る共有ファイルの共同編集案は旧方針であり、最新roadmapの単一所有権を優先する。
+- 既存specに残る共有ファイルの共同編集案は旧方針であり、単一所有権を優先する。
 
 ---
 _ファイルツリーではなく、新しいコードが同じ判断で配置・接続できるパターンを記録する。_

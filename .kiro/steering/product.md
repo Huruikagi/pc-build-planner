@@ -76,7 +76,7 @@ Webアプリ、バックエンド、アカウント、同期、他ブラウザ�
 
 ## 文書の優先関係
 
-MVPの製品判断は `docs/requirements-v0.1.0.md` を優先し、`docs/project-overview.md` を長期像として扱う。機能境界と実装順は `.kiro/steering/roadmap.md` および各specで具体化する。
+MVPの製品判断は `docs/requirements-v0.1.0.md` を優先し、`docs/project-overview.md` を長期像として扱う。機能境界と実装順は各specで具体化する。
 
 ---
 _機能一覧ではなく、プロダクトの目的と長期的に変わりにくい判断原則を記録する。_
