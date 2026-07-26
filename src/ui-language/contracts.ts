@@ -27,3 +27,17 @@ export interface LanguagePreferenceStorageApi {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
 }
+
+/** 現在の表示言語を保持し、購読者へ同期通知するReact外の単一ストア。 */
+export interface LanguageStore {
+  getSnapshot(): SupportedLanguage;
+  subscribe(listener: (language: SupportedLanguage) => void): () => void;
+  setLanguage(language: SupportedLanguage): void;
+}
+
+/** `initializeUiLanguage` が必要とする最小の環境面。 */
+export interface LanguagePlatform {
+  readonly preferences: LanguagePreferencePort;
+  /** `chrome.i18n.getUILanguage()` の呼び出し結果。取得できない環境ではundefined。 */
+  readonly browserUiLanguage: () => unknown;
+}
