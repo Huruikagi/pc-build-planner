@@ -258,15 +258,11 @@ class Store implements TransientActivationStore {
       record.stage === "pending"
         ? { ...record, stage: "received" as const }
         : record;
-    const activated =
-      advanced.stage === "received"
-        ? { ...advanced, stage: "activated" as const }
-        : advanced;
-    if (activated.stage !== "activated")
+    if (advanced.stage !== "received")
       return err({ kind: "invalid-stage-transition" });
-    const written = await this.#write({ ...loaded.value, record: activated });
+    const written = await this.#write({ ...loaded.value, record: advanced });
     return written.ok
-      ? ok({ kind: "authorized" as const, record: activated })
+      ? ok({ kind: "authorized" as const, record: advanced })
       : written;
   }
   async checkpoint(): Promise<Result<void, ActivationStoreError>> {

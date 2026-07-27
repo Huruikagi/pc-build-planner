@@ -18,7 +18,7 @@ const decision: ActivationAuthorization = {
     surfaceId: "capture" as never,
     tabId: 7 as never,
     seq: 1 as never,
-    stage: "activated",
+    stage: "received",
   },
 };
 

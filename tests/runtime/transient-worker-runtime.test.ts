@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { FeatureId } from "../../src/application-shell/contracts.js";
 import type { FeatureContribution } from "../../src/application-shell/feature-contribution-catalog.js";
-import type { ActivationId } from "../../src/application-shell/transient-surface-ports.js";
+import type {
+  ActivationId,
+  TargetTabId,
+} from "../../src/application-shell/transient-surface-ports.js";
+import { ok } from "../../src/domain/public.js";
 import { createChromeActivationFailureSignal } from "../../src/runtime/activation-failure-signal.js";
 import {
   createProductionTransientRuntimeBootstrap,
@@ -329,4 +333,93 @@ test("production compositionはgesture・tabs・watch-readyへ単一schedulerを
   assert.equal(onUpdated.size(), 0);
   assert.equal(onRemoved.size(), 0);
   assert.equal(messages.size(), 0);
+});
+
+test("action sourceとfeature-owned sourceは同じcanonical ingressとwatch-ready経路を使う", async () => {
+  const action = event<[{ id?: number }]>();
+  const onUpdated = event<[number, { status?: string }]>();
+  const onRemoved = event<[number]>();
+  const session = new Session();
+  const scheduler = createTransientActivationScheduler(
+    createTransientActivationStore(session),
+  );
+  const opened: number[] = [];
+  let contextEmit: ((tabId: TargetTabId) => void) | undefined;
+  let counter = 0;
+  const bootstrap = createTransientWorkerRuntimeBootstrap({
+    scheduler,
+    action: { onClicked: action },
+    tabs: { onUpdated, onRemoved },
+    sidePanel: {
+      async open({ tabId }) {
+        if (tabId !== undefined) opened.push(tabId);
+      },
+    },
+    failureSignal: {
+      async publish() {
+        return ok(undefined);
+      },
+      async onDurablePutSucceeded() {
+        return ok(undefined);
+      },
+      async onReadSucceeded() {
+        return ok(undefined);
+      },
+      async onPanelOpened() {
+        return ok(undefined);
+      },
+    },
+    surfaceId: "action-surface" as FeatureId,
+    gestureSources: [
+      {
+        id: "fixture-context-menu",
+        surfaceId: "context-surface" as FeatureId,
+        start(emit) {
+          contextEmit = emit;
+          return ok(() => {});
+        },
+      },
+    ],
+    createActivationId: () => `activation-${++counter}` as ActivationId,
+  });
+
+  action.emit({ id: 41 });
+  await settle();
+  const actionRecord = await scheduler.store.read();
+  assert.equal(
+    actionRecord.ok && actionRecord.value?.surfaceId,
+    "action-surface",
+  );
+  assert.equal(
+    (
+      await scheduler.authorizeAfterWatchReady(
+        actionRecord.ok && actionRecord.value
+          ? actionRecord.value.activationId
+          : ("missing" as ActivationId),
+      )
+    ).ok,
+    true,
+  );
+
+  contextEmit?.(42 as TargetTabId);
+  await settle();
+  const contextRecord = await scheduler.store.read();
+  assert.equal(
+    contextRecord.ok && contextRecord.value?.surfaceId,
+    "context-surface",
+  );
+  assert.ok(
+    contextRecord.ok &&
+      actionRecord.ok &&
+      contextRecord.value !== undefined &&
+      actionRecord.value !== undefined &&
+      contextRecord.value.seq > actionRecord.value.seq,
+  );
+  assert.deepEqual(opened, [41, 42]);
+
+  bootstrap();
+  contextEmit?.(43 as TargetTabId);
+  action.emit({ id: 43 });
+  await settle();
+  assert.deepEqual(opened, [41, 42]);
 });

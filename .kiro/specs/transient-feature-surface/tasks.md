@@ -99,7 +99,7 @@
   - _Requirements: 2.7, 3.10, 4.1, 4.2_
   - _Boundary: TransientActivationStore, TransientActivationScheduler_
 
-- [ ] 4. Chrome runtimeとの配送・監視adapterを構築する
+- [x] 4. Chrome runtimeとの配送・監視adapterを構築する
 - [x] 4.1 watch-readyをversioned typed transportで配送する
   - panel requestとworker responseをunknownから検証し、authorized／invalidated／typed errorをbooleanへ縮退させない。
   - worker側は自拡張panel senderだけを受理し、top-levelでlistenerを同期登録する。
@@ -131,7 +131,7 @@
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 3.1, 3.2, 4.3, 4.4_
   - _Boundary: ServiceWorkerComposition, TransientActivationScheduler_
 
-- [ ] 4.5 (P) panel watch-ready authorization adapterを実装する
+- [x] 4.5 (P) panel watch-ready authorization adapterを実装する
   - recordをread／subscribeしてもmountせず、固定tab watchを設置した後だけtyped authorizationを要求する。
   - authorized、invalidated、typed errorを保持して返し、invalidatedまたはerror時はcontrollerを起動しない。
   - panel購読とtab watchを一度だけ解除でき、watch-ready前失効を拒否するadapter testを通す。
@@ -139,7 +139,7 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.7, 3.1, 3.2, 4.3_
   - _Boundary: PanelActivationAdapter, TransientActivationPort, TabLifecyclePort_
 
-- [ ] 4.6 authorizationをcontroller起動とstage前進へ統合する
+- [x] 4.6 authorizationをcontroller起動とstage前進へ統合する
   - workerの同一schedulerで先行mutationを適用してrecordと墓標を最終照合し、authorized時だけcontrollerへ起動要求を渡す。
   - feature mount成功後だけrecordをactivatedへ進め、mount前失効またはinvalidated応答では一過性面を立てない。
   - watch-ready前後のnavigation／close、mount中失効、stage前進失敗を再現し、監視空白がないintegration testを通す。
@@ -147,7 +147,7 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.10, 4.2, 4.3_
   - _Boundary: ProductionMonitoringIntegration_
 
-- [ ] 4.7 feature-owned gesture sourceをcanonical ingressへ登録する
+- [x] 4.7 feature-owned gesture sourceをcanonical ingressへ登録する
   - source ID、surface ID、同期start／emit、対称cleanupを検証し、invalid、duplicate、source start失敗、runtime未開始を閉じた登録errorへ変換する。
   - `emit(TargetTabId)`を既存のactivation ID・sequence割当、scheduler、session store、failure signal、同一callback内panel openへ一度だけ接続し、sourceへwriterやsequence allocatorを公開しない。
   - 組み込みactionも同じregistrarへ移し、全sourceを解除してからschedulerを停止して、解除後callbackをno-opにする。
@@ -213,3 +213,8 @@
   - _Depends: 6.3_
   - _Requirements: 4.4, 4.5, 4.6_
   - _Boundary: ValidationGates_
+
+## Implementation Notes
+
+- watch-readyは`received`まで進め、`activated`への前進はcontroller mount成功後に限定する。panel側のasync処理はstart epochを各await後にも照合し、stop／restart後の旧世代完了をno-opにする。
+- gesture sourceは同期registrarからcanonical ingressへ接続し、sourceにはstore writer、sequence allocator、panel openerを公開しない。

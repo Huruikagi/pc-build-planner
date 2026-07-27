@@ -12,11 +12,14 @@ import {
 import {
   type ActivationId,
   parseTargetTabId,
+  type TransientGestureRegistrationPort,
+  type TransientGestureSource,
 } from "../application-shell/transient-surface-ports.js";
 import {
   type ActivationFailureSignal,
   createChromeActivationFailureSignal,
 } from "./activation-failure-signal.js";
+import { createCanonicalGestureIngress } from "./canonical-gesture-ingress.js";
 import {
   createChromeFoundationMessageTarget,
   type FoundationMessageRuntime,
@@ -25,6 +28,7 @@ import {
   type ChromeSidePanelOpenApi,
   createOpenSidePanelGestureHandler,
 } from "./open-side-panel.js";
+import { createActionGestureSource } from "./transient-action-gesture-source.js";
 import {
   type ChromeSessionArea,
   createChromeTransientSessionStorage,
@@ -33,6 +37,7 @@ import {
   type TransientActivationScheduler,
 } from "./transient-activation-store.js";
 import { registerTransientWatchReadyListener } from "./transient-activation-transport.js";
+import { createTransientGestureRegistrar } from "./transient-gesture-registration.js";
 
 const isActionMessage = (value: unknown, actionId: string): boolean =>
   typeof value === "object" &&
@@ -119,37 +124,43 @@ export interface TransientWorkerRuntimeDependencies {
   readonly sidePanel: ChromeSidePanelOpenApi;
   readonly failureSignal: ActivationFailureSignal;
   readonly surfaceId?: FeatureId;
+  readonly gestureSources?: readonly TransientGestureSource[];
   createActivationId(): ActivationId;
   reportDiagnostic?(code: string): void;
 }
 
 export const createTransientWorkerRuntimeBootstrap = (
   dependencies: TransientWorkerRuntimeDependencies,
-): (() => void) => {
+): (() => void) & {
+  readonly gestureRegistration: TransientGestureRegistrationPort;
+} => {
   let active = true;
   const report = dependencies.reportDiagnostic ?? (() => {});
-  const onClicked = (tab: { readonly id?: number }) => {
-    if (!active) return;
-    if (dependencies.surfaceId === undefined) return;
-    const parsed = parseTargetTabId(tab.id);
-    if (!parsed.ok) return;
-    const activationId = dependencies.createActivationId();
-    const persisted = dependencies.scheduler.put({
-      activationId,
-      surfaceId: dependencies.surfaceId,
-      tabId: parsed.value,
-    });
-    void dependencies.scheduler.enqueue(async () => {
-      const result = await persisted;
-      const signaled = result.ok
-        ? await dependencies.failureSignal.onDurablePutSucceeded()
-        : await dependencies.failureSignal.publish();
-      if (!signaled.ok) report(signaled.error.kind);
-    });
-    void dependencies.sidePanel
-      .open({ tabId: parsed.value })
-      .catch(() => report("side-panel-open-failed"));
-  };
+  const registrar = createTransientGestureRegistrar({
+    ingress: createCanonicalGestureIngress({
+      scheduler: dependencies.scheduler,
+      sidePanel: dependencies.sidePanel,
+      failureSignal: dependencies.failureSignal,
+      createActivationId: dependencies.createActivationId,
+      reportDiagnostic: report,
+    }),
+  });
+  registrar.start();
+  const sources = [
+    ...(dependencies.surfaceId === undefined
+      ? []
+      : [
+          createActionGestureSource({
+            action: dependencies.action,
+            surfaceId: dependencies.surfaceId,
+          }),
+        ]),
+    ...(dependencies.gestureSources ?? []),
+  ];
+  for (const source of sources) {
+    const registered = registrar.register(source);
+    if (!registered.ok) report(registered.error.kind);
+  }
   const invalidate = (tabId: number) => {
     if (!active) return;
     const parsed = parseTargetTabId(tabId);
@@ -165,18 +176,16 @@ export const createTransientWorkerRuntimeBootstrap = (
     if (changeInfo.status === "loading") invalidate(tabId);
   };
   const onRemoved = (tabId: number) => invalidate(tabId);
-  if (dependencies.surfaceId !== undefined)
-    dependencies.action.onClicked.addListener(onClicked);
   dependencies.tabs.onUpdated.addListener(onUpdated);
   dependencies.tabs.onRemoved.addListener(onRemoved);
-  return () => {
+  const cleanup = () => {
     if (!active) return;
     active = false;
-    if (dependencies.surfaceId !== undefined)
-      dependencies.action.onClicked.removeListener(onClicked);
+    registrar.stop();
     dependencies.tabs.onUpdated.removeListener(onUpdated);
     dependencies.tabs.onRemoved.removeListener(onRemoved);
   };
+  return Object.assign(cleanup, { gestureRegistration: registrar });
 };
 
 export interface ChromeProductionTransientRuntime
@@ -201,6 +210,7 @@ export const createProductionTransientRuntimeBootstrap = (
   catalog: readonly FeatureContribution[] = featureContributionCatalog,
 ): {
   readonly scheduler: TransientActivationScheduler;
+  readonly gestureRegistration: TransientGestureRegistrationPort;
   readonly hasTransientGesture: boolean;
   cleanup(): void;
 } => {
@@ -215,26 +225,26 @@ export const createProductionTransientRuntimeBootstrap = (
   const transient = catalog.find(
     ({ registration }) => registration.presentation === "transient",
   );
-  cleanups.push(
-    createTransientWorkerRuntimeBootstrap({
-      scheduler,
+  const runtimeBootstrap = createTransientWorkerRuntimeBootstrap({
+    scheduler,
+    action: chromeApis.action,
+    tabs: chromeApis.tabs,
+    sidePanel: chromeApis.sidePanel,
+    failureSignal: createChromeActivationFailureSignal({
       action: chromeApis.action,
-      tabs: chromeApis.tabs,
-      sidePanel: chromeApis.sidePanel,
-      failureSignal: createChromeActivationFailureSignal({
-        action: chromeApis.action,
-        runtime,
-      }),
-      ...(transient === undefined
-        ? {}
-        : { surfaceId: transient.registration.id }),
-      createActivationId: () => crypto.randomUUID() as ActivationId,
-      reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
+      runtime,
     }),
-  );
+    ...(transient === undefined
+      ? {}
+      : { surfaceId: transient.registration.id }),
+    createActivationId: () => crypto.randomUUID() as ActivationId,
+    reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
+  });
+  cleanups.push(runtimeBootstrap);
   let active = true;
   return {
     scheduler,
+    gestureRegistration: runtimeBootstrap.gestureRegistration,
     hasTransientGesture: transient !== undefined,
     cleanup() {
       if (!active) return;

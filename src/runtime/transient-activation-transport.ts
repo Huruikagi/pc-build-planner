@@ -90,7 +90,7 @@ const parseResponse = (
     if (
       (kind !== "authorized" && kind !== "invalidated") ||
       !isRecordShape(value.decision.record) ||
-      (kind === "authorized" && value.decision.record.stage !== "activated") ||
+      (kind === "authorized" && value.decision.record.stage !== "received") ||
       (kind === "invalidated" && value.decision.record.stage !== "invalidated")
     )
       return undefined;
