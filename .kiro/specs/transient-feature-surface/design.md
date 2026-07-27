@@ -4,7 +4,7 @@
 
 本specはapplication shellへ一過性featureの汎用契約を導入する。一過性featureは常設ナビゲーションへ並ばず、権限付与ジェスチャー由来の起動要求でだけ表示され、固定対象タブの文書世代が失効すると終了する。
 
-業務feature固有の状態やUIは所有しない。最初の利用者は下流spec `product-capture-transient-migration` であり、本specが公開する`ActivationId`、固定`TargetTabId`、`TransientSurfaceController`、`conclude`だけを利用する。
+業務feature固有の状態やUIは所有しない。最初の利用者は下流spec `product-capture-transient-migration` であり、本specが公開する`ActivationId`、固定`TargetTabId`、`TransientSurfaceLifecyclePort`だけを利用する。controller実体はshell内部に留める。
 
 ### Goals
 
@@ -40,6 +40,20 @@
 - capture/candidateの文言とE2Eロケータ
 - 永続データschema
 
+### Allowed Dependencies
+
+- application shellの既存registration、host transition、typed activation契約
+- canonical `Result<T, E>`と既存message catalog公開契約
+- shell/runtime専用adapter内に限定した`chrome.action`、`chrome.sidePanel`、`chrome.tabs`、`chrome.storage.session`、`chrome.runtime` message
+- 下流specは`application-shell/public.ts`の`TransientSurfaceLifecyclePort`だけを参照する
+
+### Revalidation Triggers
+
+- `ActivationId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`のshapeまたは意味の変更
+- `seq`割り当て、墓標優先、watch-ready最終許可の順序保証の変更
+- session媒体、worker単一write owner、タブ寿命イベントの変更
+- production E2Eの委譲先または実feature登録順の変更
+
 ### Dependency Direction
 
 ```text
@@ -47,7 +61,7 @@ application-shell contracts
     ↓
 transient controller ports
     ↓
-runtime adapters (chrome.storage.session / chrome.tabs / chrome.action)
+runtime adapters (chrome.storage.session / chrome.tabs / chrome.action / chrome.runtime)
 
 downstream feature
     → application-shell/public.ts
@@ -62,8 +76,9 @@ downstream feature
 ```mermaid
 graph TB
     Action["chrome.action gesture"] --> Store["TransientActivationStore"]
+    Action --> FailureSignal["ActivationFailureSignal"]
     Tabs["chrome.tabs lifecycle"] --> Store
-    Store --> Port["TransientActivationPort"]
+    Store --> Port["Typed runtime activation port"]
     Tabs --> TabPort["TabLifecyclePort"]
     Port --> Controller["TransientSurfaceController"]
     TabPort --> Controller
@@ -76,7 +91,9 @@ graph TB
 - **FeatureRegistry**: `presentation`を検証し、不正登録を隔離する
 - **SidePanelHost**: 同時に一つのfeatureだけをmountし、既存transition/rollbackを維持する
 - **TransientSurfaceController**: 起動世代、対象タブ、戻り先、監視解除を所有する
-- **TransientActivationStore**: worker再生成を跨ぐ起動要求と失効状態を保持する
+- **TransientActivationStore**: worker再生成を跨ぐ起動要求、単調増加順序、失効墓標を保持する
+- **TransientActivationPort**: panelのwatch-readyを型付きruntime messageでworkerの最終許可へ接続する
+- **ActivationFailureSignal**: 起動record書き込み失敗をsession媒体と独立したChrome action表示で通知する
 - **TabLifecycleAdapter**: ChromeイベントをURL非依存の寿命イベントへ変換する
 
 ## File Structure Plan
@@ -88,11 +105,15 @@ src/application-shell/
   side-panel-host.ts
   application-composition.ts
   shell-view.tsx
+  transient-surface-notice.ts            # new
   transient-surface-controller.ts       # new
   transient-surface-ports.ts            # new
   public.ts
 src/runtime/
   service-worker.ts
+  transient-activation-message.ts       # new
+  transient-activation-panel-port.ts    # new
+  transient-activation-failure-signal.ts # new
   transient-activation-store.ts         # new
   tab-lifecycle-rules.ts                # new
   tab-lifecycle-adapter.ts              # new
@@ -206,11 +227,23 @@ export interface TransientFeatureRuntimeDependencies {
 }
 
 createProductCaptureFeatureContribution({
-  transientSurface: controller,
+  transientSurface: lateBoundLifecycle.port,
 });
 ```
 
 具体feature名を知るのはcomposition rootだけであり、shell controllerはproduct-captureを知らない。
+
+### Late-Bound Composition
+
+現行compositionはfeature contributionをregistry/hostより先に生成するため、controller実体をfeature factoryへ直接渡さない。composition rootは既存`ShellNavigator`と同じlate-bound proxyを先に作り、次の順序で循環を解く。
+
+1. 未bind時に`not_started`を返す内部`TransientSurfaceLifecyclePort` proxyを生成する
+2. proxyだけを`FeatureCompositionContext`経由で一過性feature contribution factoryへ渡す
+3. registryとhost/integrationを構築してから`TransientSurfaceController`を生成する
+4. host start前にproxyをcontrollerへbindし、host start成功後にcontrollerをstartする
+5. cleanupではcontrollerをstopしてからproxyをunbindし、stale feature callbackを`not_started`へ閉じる
+
+proxyとbind操作はapplication composition内部契約であり、`application-shell/public.ts`へ公開しない。下流featureが利用する値は常に同じ`TransientSurfaceLifecyclePort`参照で、bind前に一過性featureがmountされる経路は作らない。
 
 ### Dismiss and Conclude
 
@@ -228,15 +261,34 @@ export type ActivationStage =
   | "pending"
   | "received"
   | "activated"
-  | "invalidated"
-  | "write-failed";
+  | "invalidated";
+
+export type ActivationSequence = number & {
+  readonly __brand: "ActivationSequence";
+};
 
 export interface TransientActivationRecord {
   readonly activationId: ActivationId;
   readonly surfaceId: FeatureId;
   readonly tabId: TargetTabId;
+  readonly seq: ActivationSequence;
   readonly stage: ActivationStage;
 }
+
+export interface TransientInvalidationTombstone {
+  readonly tabId: TargetTabId;
+  readonly seq: ActivationSequence;
+}
+
+export interface TransientActivationEnvelope {
+  readonly lastSequence: ActivationSequence;
+  readonly record?: TransientActivationRecord;
+  readonly tombstones: readonly TransientInvalidationTombstone[];
+}
+
+export type ActivationAuthorization =
+  | { readonly kind: "authorized"; readonly record: TransientActivationRecord }
+  | { readonly kind: "invalidated"; readonly record: TransientActivationRecord };
 
 export interface TransientActivationStore {
   put(record: TransientActivationRecord): Promise<Result<void, ActivationStoreError>>;
@@ -245,38 +297,79 @@ export interface TransientActivationStore {
     activationId: ActivationId,
     stage: "received" | "activated",
   ): Promise<Result<void, ActivationStoreError>>;
-  invalidate(tabId: TargetTabId): Promise<Result<void, ActivationStoreError>>;
+  invalidate(
+    tombstone: TransientInvalidationTombstone,
+  ): Promise<Result<void, ActivationStoreError>>;
+  authorizeAfterWatchReady(
+    activationId: ActivationId,
+  ): Promise<Result<ActivationAuthorization, ActivationStoreError>>;
   subscribe(listener: (record: TransientActivationRecord | undefined) => void): () => void;
 }
 ```
 
 媒体は`chrome.storage.session`とし、商品値、URL、生HTMLを保持しない。panelは読み出しと購読だけを行い、変更要求はworkerへ送り、store変更のownerをruntimeへ集約する。
 
+service workerは起動要求とタブ寿命イベントを単一スケジューラへ同期的にenqueueし、受信時点を論理順序の線形化点として単調増加`seq`を割り当てる。スケジューラは永続化mutationを`seq`順に直列適用する。worker再生成時はsession envelope内の最大`seq`から次値を復元してからcommandを適用し、workerメモリだけを順序の根拠にしない。`sidePanel.open()`自体はaction callback内で同期開始し、store完了は待たない。
+
+`invalidate`は対象recordの有無を問わず、tabごとの最新墓標を保存する。`put`適用時に`墓標.seq > record.seq`ならrecordを`invalidated`として着地させ、後から同条件の墓標が適用された場合も既存recordを`invalidated`へ進める。`invalidated`は終端であり、`requestAdvance`とactivation許可はこれを上書きできない。新しいジェスチャーは既存墓標より大きい`seq`を持つため、同じtabでも新世代として開始できる。
+
+### Typed Runtime Transport
+
+watch-readyは既存`WorkerRegistrationContext.addActionHandler`を流用しない。これはpayloadを持たず応答を`{ ok: boolean }`へ縮退させるためである。shell/runtime専用adapterが次のversioned messageを所有する。
+
+```typescript
+export interface TransientWatchReadyRequest {
+  readonly version: 1;
+  readonly kind: "transient-watch-ready";
+  readonly activationId: ActivationId;
+}
+
+export type TransientWatchReadyResponse =
+  | {
+      readonly version: 1;
+      readonly ok: true;
+      readonly decision: ActivationAuthorization;
+    }
+  | {
+      readonly version: 1;
+      readonly ok: false;
+      readonly code: "invalid-message" | "store-unavailable" | "not-started";
+    };
+
+export interface TransientActivationPort {
+  authorizeAfterWatchReady(
+    activationId: ActivationId,
+  ): Promise<Result<ActivationAuthorization, ActivationTransportError>>;
+}
+```
+
+panel adapterはrequestを送信し、`unknown` responseを上記unionへ検証してからcontrollerへ返す。worker adapterは既存`classifyCaller`規則で自拡張のpanel文脈だけを受理し、request shapeを検証して同じscheduler上の`authorizeAfterWatchReady`へ渡す。応答は`authorized | invalidated | typed error`を保持し、booleanへ縮退させない。listenerはservice workerのtop-level bootstrapで同期登録し、feature固有worker registrationへ委ねない。
+
 ### Monitoring Handoff
 
 監視責務は次の順で移管する。
 
-1. workerがジェスチャーを受け、起動要求の記録を開始する
-2. workerのトップレベル`tabs.onUpdated` / `onRemoved` listenerが未起動要求の失効を監視する
+1. workerがジェスチャーを受け、その受信順`seq`を割り当てて起動要求をenqueueし、同じcallback内でpanel openを同期開始する
+2. workerのトップレベル`tabs.onUpdated` / `onRemoved` listenerが、recordの有無を問わず後続`seq`の失効墓標をenqueueする
 3. panelはrecordを受け取るが、この時点では業務featureをmountしない
 4. panelが`TabLifecyclePort.watch`を設置し、watch-readyをworkerへ通知する
-5. workerが未失効であることを最終照合し、activation許可を返す
+5. workerがwatch-readyを同じスケジューラへenqueueし、それ以前に受信した全mutationを適用してからrecordと墓標を最終照合し、activation許可または`invalidated`を返す
 6. controllerがfeatureをmountし、成功後にrecordを`activated`へ進める
 7. 以後はpanel監視がcontrollerを撤収させる
 
-worker監視とpanel監視には重複期間を設け、監視の空白を作らない。`invalidated`は終端であり、activation許可後であってもmount成功前の失効通知はcontrollerを撤収させる。
+worker監視とpanel監視には重複期間を設け、監視の空白を作らない。workerがwatch-readyより前に受信した失効は墓標と最終照合で拒否し、watch設置後の失効はpanel監視でも捕捉する。recordが一時的に`pending`または`received`として観測されても実行可能ではなく、最終許可前にfeatureをmountしない。`invalidated`は終端であり、activation許可後であってもmount成功前の失効通知はcontrollerを撤収させる。
 
-### Known Open Design Risk
+### Store Failure Decision
 
-`sidePanel.open()`はジェスチャー内で同期開始する必要があり、起動recordの非同期書き込み完了を待てない。完全な`chrome.storage.session`障害時に「アイコン操作」と「Chrome UIからの直接open」を区別する保証は未確定である。
+`sidePanel.open()`はジェスチャー内で同期開始する必要があり、起動recordの非同期書き込み完了を待てない。panelの`read()`が`err`を返した場合は、ジェスチャー起因openかChrome UIからの直接openかを識別せず、「セッション領域が利用不能なため一過性面を開始できない」という再操作可能な理由を共通表示する。
 
-本specをGOにする前に、次のいずれかを決定する。
+2.7が要求するのは安全に成立しない理由の提示であり、起動契機の識別ではない。媒体障害では起動候補自体を安全に保持できないため、feature固有の失敗ではなくshellの保存領域障害として扱う。
 
-- storageと独立した失敗通知経路を提供する
-- Chrome UI側でジェスチャー起因openを識別可能にする
-- 完全媒体障害を要件上の明示的な受容リスクへ変更する
+受容する残余リスクは、利用者がChrome UIから直接panelを開いた時点でsession媒体も障害中だった場合、本来は常設表示だけでよい場面にも保存領域障害が表示されることである。誤って一過性面を立てるより安全側であり、復旧案内も同一なので許容する。この判断はshell契約で閉じ、capture移行specへ起動契機判定を要求しない。
 
-この論点はcapture移行specへ持ち込まず、shell契約内で解決する。
+起動recordの`put()`が`err`を返した場合は、同じsession媒体へ`write-failed` recordを書こうとしない。workerは`chrome.action`のbadgeを`!`へ、titleを安定した「起動情報を保存できません。拡張アイコンを再操作してください」案内へ設定する`ActivationFailureSignal`を使用する。これはstorageと独立し、追加permissionを要求せず、worker再生成後もChrome管理のaction表示として残る。次の起動record保存成功時にsignalをclearする。
+
+panelの`read()`失敗はglobalな`ShellViewState.error`へ遷移させない。`ready` / `maintenance`に選択中の常設featureと併存できる`transientNotice`を追加し、一過性面だけを開始せずsession媒体障害と再操作案内をbanner表示する。これによりChrome UIからの直接openで障害表示が出る受容リスクは維持しつつ、無関係な常設featureを失わない。
 
 ## Tab Lifecycle
 
@@ -303,17 +396,19 @@ export interface TabLifecyclePort {
 - **終了失敗**: 実行操作を隠した`dismiss-failed`として保持し再試行する
 - **引き渡し失敗**: 一過性面を維持し、呼び出しfeatureへ判別可能な失敗を返す
 - **store障害**: 商品値やURLをログせず、安定した媒体障害として提示する
+- **起動record書き込み失敗**: sessionへ再書き込みせずaction badge/titleで理由と再操作を提示する
+- **起動record読み出し失敗**: 常設面を維持した`transientNotice`として提示する
 
 ## Requirements Traceability
 
 | Requirement | Components | Verification |
 |---|---|---|
-| 1.1–1.6 | Registry, composition, host | contract/integration |
-| 2.1–2.7 | Store, controller, service worker | runtime integration/E2E |
-| 3.1–3.8 | Controller, host, tab adapter | unit/integration |
-| 3.9–3.10 | Controller, activation router | integration |
-| 4.1–4.4 | ports, in-memory adapters, existing shell fixtures | unit/integration |
-| 4.5 | production build extension | Playwright E2E |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | Registry, composition, host | contract/integration |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | Store, sequence/tombstone protocol, typed runtime port, failure signal, controller, service worker | runtime integration |
+| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8 | Controller, host, tab adapter | unit/integration |
+| 3.9, 3.10 | Controller, activation router | integration |
+| 4.1, 4.2, 4.3, 4.4 | ports, in-memory adapters, existing shell fixtures | unit/integration |
+| 4.5 | downstream production feature registration | `product-capture-transient-migration` Playwright E2E |
 | 4.6 | synthetic fixtures | fixture validation |
 
 ## Testing Strategy
@@ -323,22 +418,25 @@ export interface TabLifecyclePort {
 - `isPersistent`の既定値と不正登録隔離
 - controllerの起動、世代更新、3種のdismiss、conclude、stale callback
 - tab lifecycle ruleのtabIdフィルタと最大1回通知
-- `invalidated`終端と不正stage遷移拒否
+- 単調増加`seq`、record不在時の墓標、`invalidated`終端と不正stage遷移拒否
 
 ### Integration
 
 - panel閉状態・開状態の起動配送
+- `put()`保留中の失効が墓標に残り、watch-ready後の最終許可で拒否されること
+- runtime messageのsender/request/response検証と`authorized | invalidated | error`保持
 - watch-ready前後の遷移・閉鎖で一過性面が立たないこと
 - worker再生成後も未完了recordを回収すること
-- store障害が無反応にならないこと
+- `put()`失敗がaction signalを残し、次の成功でclearされること
+- `read()`失敗noticeと常設featureが同時に維持されること
 - persistent featureのナビ・選択・availability障害分離の非回帰
 - conclude成功で引き渡し先が保持され、失敗で一過性面がrollbackされること
 
-### E2E
+### Cross-Spec E2E
 
-- アイコン操作からsynthetic transient featureが立つ
-- 対象タブ遷移で直前の常設featureへ戻る
-- 常設ナビ選択で一過性面が終了する
+- 本specはproduction bundleへテスト専用の一過性featureを登録しない
+- shell単体ではin-memory registration fixtureによるcontract/runtime integrationまでを所有する
+- Chrome 116以降のproduction buildにおけるアイコン起動、対象タブ失効、常設復帰は、最初の実featureを登録する下流`product-capture-transient-migration`の5.5 E2Eで本specの4.5も合わせて検証する
 
 ## Security Considerations
 
@@ -354,8 +452,8 @@ export interface TabLifecyclePort {
 2. ナビと初期選択を常設限定へ変更する
 3. controllerとin-memory portsを実装する
 4. runtime storeとtab lifecycle adapterを実装する
-5. synthetic transient featureでshell契約を検証する
+5. production compositionから隔離したin-memory registration fixtureでshell契約を検証する
 6. 公開契約を`application-shell/public.ts`から提供する
 7. composition rootから下流feature factoryへ`TransientSurfaceLifecyclePort`を注入できるcontract fixtureを追加する
 
-業務featureへの適用は本spec完了後に`product-capture-transient-migration`で行う。
+業務featureへの適用とproduction MV3 E2Eは、本spec完了後に`product-capture-transient-migration`で行う。shell tasksはテスト専用featureをproduction catalogへ追加しない。

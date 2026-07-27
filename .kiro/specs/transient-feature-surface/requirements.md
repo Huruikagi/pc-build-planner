@@ -66,5 +66,5 @@
 2. The 一過性表示面 shall 遷移、更新、タブ閉鎖、常設選択、引き渡し成功・失敗の経路を自動検証可能にする
 3. The 一過性表示面 shall side panelが閉じている場合と既に開いている場合の起動経路を自動検証可能にする
 4. The 一過性表示面 shall 常設featureの登録、ナビゲーション、遷移、availability障害分離を回帰させない
-5. Where Chrome 116以降の未パッケージManifest V3拡張で実行される場合, the 一過性表示面 shall 起動から終了までの主要動線を提供する
+5. Where 本契約を利用する実featureがproduction buildへ登録される場合, the 一過性表示面 shall Chrome 116以降の未パッケージManifest V3拡張で起動から終了までの主要動線を検証可能にする
 6. The 一過性表示面 shall 実サイト由来のHTML、画像、商品データをテスト資産として必要としない

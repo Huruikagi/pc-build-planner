@@ -30,14 +30,14 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 - `ActivationId`
 - `TargetTabId`
 - `FeaturePresentation`
-- `TransientSurfaceController.conclude`
-- `TransientSurfaceController.isCurrent`
 - `TransientSurfaceLifecyclePort`
 - `FeatureActivationIntent`
 
 上流contractの値集合や意味を本specで再定義しない。
 
 captureはcontroller concrete classを取得しない。`createProductCaptureFeatureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。
+
+本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5 E2Eで一過性面のアイコン起動、対象タブ失効、常設復帰までを検証する。
 
 ### Existing Feature Contracts
 
@@ -130,6 +130,18 @@ composition rootだけが具体controllerとcapture contributionを知り、capt
 ### State
 
 ```typescript
+export type CaptureFailure =
+  | {
+      readonly kind: "execution";
+      readonly error: CaptureError;
+      readonly recoverable: boolean;
+    }
+  | {
+      readonly kind: "handoff";
+      readonly error: TransientSurfaceError;
+      readonly retainedIntent: FeatureActivationIntent;
+    };
+
 export type CaptureSessionState =
   | {
       readonly status: "idle";
@@ -146,12 +158,11 @@ export type CaptureSessionState =
       readonly status: "failed";
       readonly activationId: ActivationId;
       readonly tabId: TargetTabId;
-      readonly recoverable: boolean;
-      readonly error: CaptureError;
+      readonly failure: CaptureFailure;
     };
 ```
 
-`review`、`submitting`、`saved`は削除する。新しいactivationを受け取るたびに`idle`へ戻し、旧世代のstateを保持しない。
+`review`、`submitting`、`saved`は削除する。handoff失敗時だけ、検証済み`FeatureActivationIntent`を`failed.failure.retainedIntent`へ保持し、同じ現行activationから`conclude`を再試行できる。保持先はcapture stateだけであり、永続化しない。成功、新しいactivation、または一過性面の終了で破棄する。新しいactivationを受け取るたびに`idle`へ戻し、旧世代のstateを保持しない。
 
 ### Execution Rules
 
@@ -160,6 +171,7 @@ export type CaptureSessionState =
 - 起動だけではcontent script注入やページ解析を行わない
 - 抽出完了時に`isCurrent(activationId)`を確認する
 - staleなら結果を破棄し、stateと候補管理を変更しない
+- handoff失敗時は検証済みintentを`failed`へ保持し、再試行時にも`isCurrent(activationId)`を確認してから同じintentで`conclude`する
 - unmount/終了時に進行中requestを無効化し、後着完了を無視する
 
 ### View
@@ -170,6 +182,7 @@ export type CaptureSessionState =
 - 実行中表示
 - 制限ページ、権限失効、応答なし、予期せぬ失敗の案内
 - 候補ゼロ時に手入力へ進む案内
+- handoff失敗時の結果保持案内と、同じ現行世代での引き渡し再試行操作
 
 抽出結果の確認フォーム、project選択、保存、保存完了表示は削除する。
 
@@ -231,18 +244,18 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 - **injection-failed/timeout**: 永続状態を変更せず再実行案内を示す
 - **no candidate**: 空名の手入力編集へ進む選択肢を示す
 - **no project**: candidate-managementがproject作成の必要を返す
-- **handoff failure**: 結果を破棄せず一過性面に留まる
+- **handoff failure**: 検証済みintentをcapture stateへ保持し、一過性面に留まって再試行を提示する
 
 ## Requirements Traceability
 
 | Requirement | Components | Verification |
 |---|---|---|
-| 1.1–1.7 | capture state/view, editor navigation, conclude | unit/integration |
-| 2.1–2.7 | activation adapter, coordinator, generation check | unit/integration |
-| 3.1–3.5 | registration, state, coordinator | regression/E2E |
-| 4.1–4.5 | candidate contracts, pre-edit validation | type/contract/integration |
-| 5.1–5.4 | feature test suites | unit/integration |
-| 5.5 | production extension | Playwright E2E |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7 | capture state/view, editor navigation, conclude | unit/integration |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | activation adapter, coordinator, generation check | unit/integration |
+| 3.1, 3.2, 3.3, 3.4, 3.5 | registration, state, coordinator | regression/E2E |
+| 4.1, 4.2, 4.3, 4.4, 4.5 | candidate contracts, pre-edit validation | type/contract/integration |
+| 5.1, 5.2, 5.3, 5.4 | feature test suites | unit/integration |
+| 5.5 / upstream 4.5 | production product-capture registration | Playwright E2E |
 | 5.6 | synthetic fixtures | fixture validation |
 
 ## Testing Strategy
@@ -269,8 +282,11 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 
 - アイコン起動後にcapture面が立ち、利用者操作までは解析しない
 - 実行成功後に候補編集面へ遷移する
-- 対象タブ遷移後に古い結果を表示・保存しない
+- 対象タブ遷移で一過性面が終了して常設面へ戻り、古い結果を表示・保存しない
+- 常設ナビ選択で一過性面が終了する
 - product-captureが常設ナビへ存在しない
+
+このsuiteは実featureを含むproduction buildだけをロードし、上流shell spec 4.5と本spec 5.5を同じ主要動線で閉じる。
 
 ## Security Considerations
 

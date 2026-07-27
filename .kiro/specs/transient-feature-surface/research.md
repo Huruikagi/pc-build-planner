@@ -30,9 +30,32 @@
 - runtime: activation delivery、tab lifecycle event mapping
 - downstream feature: business payload、UI、実行状態
 
-## Open Design Question
+## Design Decisions
 
-完全な`chrome.storage.session`障害時に、ジェスチャー起因openとChrome UIからの直接openをどう識別して通知するかは未確定である。shell specのdesign validationで解決し、下流specへ持ち込まない。
+### Session媒体障害は起動契機を識別せずshell障害として提示する
+
+- `read()`が`err`なら「セッション領域が利用不能」という再操作可能な理由を提示する。
+- noticeは常設featureを置換するglobal errorではなく、常設面と併存する一過性起動bannerとして表示する。
+- `put()`が`err`なら同じ媒体へ失敗recordを書かず、storage非依存のChrome action badge/titleで理由を残す。
+- 2.7は安全に成立しない理由の提示を要求し、ジェスチャー起因かどうかの識別を要求しない。
+- Chrome UIからの直接openと媒体障害が重なると不要な障害表示が出る残余リスクを受容する。
+
+### 起動と失効は単調増加seqと墓標で順序付ける
+
+- workerの単一スケジューラがイベント受信時に`seq`を割り当て、session envelopeへ順序状態を保持する。
+- `invalidate`はrecord不在でも墓標を残し、後から適用される古いrecordを`invalidated`へ着地させる。
+- Promise chain内で後発commandが先発writeを追い越すとは仮定しない。watch-ready後の最終許可を同じschedulerへ通し、panel監視との重複期間で監視空白を閉じる。
+
+### production E2Eは最初の実featureへ委譲する
+
+- shell specはproduction bundleへテスト専用featureを混入させず、in-memory fixtureのcontract/runtime integrationを所有する。
+- Chrome 116以降の主要動線は`product-capture-transient-migration`の実product-capture登録と5.5 E2Eで、shell 4.5も合わせて検証する。
+
+### composition循環とwatch-ready transportはshell内部portで閉じる
+
+- feature factoryへは既存`ShellNavigator`と同型のlate-bound lifecycle proxyを渡し、host構築後にcontrollerへbindする。
+- watch-readyはpayloadなしの既存worker registrationを流用せず、versioned request/responseとsender検証を持つ専用runtime adapterで配送する。
+- controller concrete class、proxyのbind操作、Chrome message payloadは下流へ公開しない。
 
 ## Validation Focus
 
@@ -40,6 +63,10 @@
 - panel closed/open双方の配送
 - worker再生成
 - watch-ready前後の遷移・閉鎖
+- `put()`保留中の失効墓標と最終許可拒否
 - stale generation
 - conclude成功/rollback
 - storage errorの可視化
+- late-bound lifecycleのbind前・unbind後fail-closed
+- watch-ready runtime messageのsender/payload/response検証
+- production artifactへテスト専用featureが混入しないこと

@@ -31,6 +31,7 @@
 
 ## Validation Focus
 
+- 実product-capture登録による上流shell 4.5のproduction MV3 E2E
 - 起動だけでは解析しない
 - stale resultをhandoffしない
 - handoff成功/失敗の原子性
