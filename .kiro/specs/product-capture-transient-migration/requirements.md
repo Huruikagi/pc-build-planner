@@ -7,7 +7,7 @@
 ## 境界コンテキスト
 
 - **対象内**: product-captureの一過性登録、実行面への縮小、固定タブでの抽出、stale結果抑止、候補管理への引き渡し、project未解決draft、手入力開始、失敗案内、副作用抑止、capture/candidate非回帰。
-- **対象外**: 一過性feature基盤とruntime配送、抽出優先順位・正規化、候補の保存規則、複数ソース化、価格更新、設定画面。
+- **対象外**: 一過性feature基盤とruntime配送、抽出優先順位・正規化、候補の保存規則、default projectの自動作成・暗黙命名、複数ソース化、価格更新、設定画面。
 - **依存**: `transient-feature-surface` の公開契約が承認済みであること。
 
 ## 要件
@@ -59,10 +59,11 @@
 #### 受け入れ基準
 
 1. The 商品取り込み移行 shall projectIdを持たない解決前draftを公開契約として表現する
-2. When 候補編集面を開始する, the 商品取り込み移行 shall 候補管理側でprojectを解決してcanonical draftを構築する
+2. When 候補編集面を開始し利用可能なprojectが存在する, the 商品取り込み移行 shall 候補管理側でprojectを解決してcanonical draftを構築する
 3. When 商品名が空の手入力draftを受け取る, the 商品取り込み移行 shall 構造的整合だけを検証して編集開始を許可する
 4. When 空の商品名で保存しようとする, the 商品取り込み移行 shall 既存の保存時検証で拒否する
 5. The 商品取り込み移行 shall 仮project ID、unsafe cast、保存時validatorの重複定義を使用しない
+6. If 候補管理への引き渡し時にprojectが存在しない, the 商品取り込み移行 shall 抽出結果を候補管理の非一過性画面へ保持したままproject作成を促し、作成後に再抽出せず作成したprojectへdraftを解決する
 
 ### 要件5: 検証可能性と既存動線の非回帰
 

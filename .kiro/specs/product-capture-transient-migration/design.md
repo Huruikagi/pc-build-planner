@@ -2,7 +2,7 @@
 
 ## Overview
 
-product-captureを、常設ナビゲーション上で確認・保存まで担うfeatureから、一過性feature契約の実行面へ移行する。一過性面は`idle | extracting | failed`だけを持ち、抽出成功時は候補管理の非一過性編集面へ結果を引き渡す。
+product-captureを、常設ナビゲーション上で確認・保存まで担うfeatureから、一過性feature契約の実行面へ移行する。一過性面は`idle | extracting | failed`だけを持ち、抽出成功時は候補管理の非一過性編集面へ結果を引き渡す。projectが存在しない初回利用でも、候補管理が解決前draftを受理してproject作成後まで保持する。
 
 本specは上流`transient-feature-surface`の公開契約を利用し、登録・起動配送・タブ監視・戻り先を再定義しない。
 
@@ -13,13 +13,42 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 - stale世代の抽出結果を引き渡さない
 - 確認・補正・保存をcandidate-managementへ移す
 - project未解決・空名の編集開始を型安全に表現する
+- project未作成時も再抽出なしで編集を継続できる
 
 ### Non-Goals
 
 - shell/runtimeの一過性基盤
 - 抽出優先順位、ranker、normalizer
 - 候補保存規則の変更
+- default projectの自動作成、暗黙命名、project lifecycle規則の変更
 - 複数ソース化と価格更新
+
+## Boundary Commitments
+
+### This Spec Owns
+
+- product-captureの一過性登録、固定tab抽出、世代照合、実行状態、candidate-managementへのtyped handoff
+- candidate-managementの解決前draft契約、pre-edit validation、project-required state、既存projectまたは新規作成projectへの解決
+- 旧capture内保存・project選択・直接navigation依存の削除と、production E2Eによる移行検証
+
+### Out of Boundary
+
+- shell/runtimeのactivation配送、寿命、原子的`conclude`実装
+- projectの保存規則、default projectの自動作成・暗黙命名、候補保存時validation
+- 抽出優先順位、normalization、価格更新、複数ソース化
+
+### Allowed Dependencies
+
+- application-shellの`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`、activation識別子・固定tab型
+- product-capture既存の抽出runtime、normalizer、ranker
+- candidate-managementの公開intent factory、query/service、canonical candidate contract
+- local data foundationのcanonical `Result<T, E>`とdomain型
+
+### Revalidation Triggers
+
+- 上流`conclude`の成功条件、activation payload、固定tabまたは世代照合契約が変わる場合
+- candidate-managementのpre-edit受理、project作成戻り値、canonical `CandidateDraft`または保存validatorが変わる場合
+- project 0件を許容するdomain invariant、captureの直接保存非公開化、production E2E委譲範囲が変わる場合
 
 ## Dependencies
 
@@ -35,23 +64,25 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 
 上流contractの値集合や意味を本specで再定義しない。
 
-captureはcontroller concrete classを取得しない。`createProductCaptureFeatureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。
+captureはcontroller concrete classを取得しない。`createProductCaptureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。candidate-managementからはnavigationを直接実行するcallbackではなく、typed intentを組み立てる純粋なfactoryだけを利用する。
 
 本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5 E2Eで一過性面のアイコン起動、候補編集面への引き渡し、対象タブ失効または常設ナビ選択による終了・常設復帰までを検証する。
 
 ### Existing Feature Contracts
 
-- product-captureの抽出coordinatorとChrome runtime port
-- candidate-managementのactivation adapterと編集state
+- product-captureの抽出coordinatorと、固定`TargetTabId`へinjectするChrome runtime port
+- candidate-managementのtyped intent factory、activation adapter、編集state
 - canonical `CandidateDraft`と`validateCandidatePartContent`
 - canonical `Result<T, E>`
+
+移行後のproduct-capture contribution依存は、固定tab抽出runtime、`TransientSurfaceLifecyclePort`、candidate editor intent factoryの3つに限定する。直接保存用`CaptureCandidatePort`、capture内project選択用`listProjects`、shell navigationを即時実行する`openCandidateEditor` callbackは削除する。`CaptureCandidatePort`に他の公開consumerはないため、candidate-managementのpublic APIからも公開を削除し、保存serviceはcandidate-management内部に留める。
 
 ### Existing Spec Revisions
 
 - `product-page-capture` 要件4の簡易確認・補正はcapture面から候補管理の編集面へ移す
 - `product-page-capture` 要件5のproject選択・保存・完了表示はcandidate-managementの既存責務へ一本化する
 - `product-page-capture` 要件1.4 / 6.1 / 6.4の権限失効・遷移・再実行は、上流の表示寿命と新しい`ActivationId`に合わせて改訂する
-- `project-candidate-management` はproject未解決・空名のpre-edit activationを受け入れる
+- `project-candidate-management` はproject未解決・空名のpre-edit activationとproject-required stateを受け入れ、外部consumer向け`CaptureCandidatePort`を廃止する
 
 ## Architecture
 
@@ -69,7 +100,12 @@ sequenceDiagram
     Capture->>Shell: isCurrent(activationId)
     Capture->>Candidates: unresolved pre-edit intent
     Capture->>Shell: conclude(intent)
-    Shell->>Candidates: typed activation + mount
+    Shell->>Candidates: typed activation + accept pre-edit
+    alt project exists
+        Candidates->>Candidates: resolve project + open editor
+    else no project
+        Candidates->>Candidates: retain draft + prompt project creation
+    end
     Shell-->>Capture: handoff result
 ```
 
@@ -82,8 +118,11 @@ src/features/product-capture/
   state.ts
   view.tsx
   coordinator.ts
+  chrome-runtime-port.ts
+  draft-mapper.ts
   feature-contribution.ts
-  editor-navigation.ts
+  editor-handoff.ts                     # new; replaces editor-navigation.ts
+  editor-navigation.ts                  # remove
   public.ts
   submit-draft.ts                        # remove
   worker-registration.ts                 # remove
@@ -91,10 +130,19 @@ src/features/candidate-management/
   contracts.ts
   activation.ts
   pre-edit-validation.ts                 # new
+  state.ts
+  view.tsx
+  feature-contribution.ts
   public.ts
+src/application-shell/
+  side-panel-contributions.ts
 src/ui-messages/catalog/{ja,en}/
   nav.ts
   capture.ts
+  candidate.ts
+tests/features/product-capture/
+tests/features/candidate-management/
+tests/application-shell/
 e2e/
   product-capture.spec.ts
   locators.ts
@@ -116,16 +164,50 @@ export interface CaptureTransientActivation {
 ナビ構築と初期選択からの除外は上流shellが担う。captureはroot runtimeやshell内部を直接編集しない。
 
 ```typescript
-export interface ProductCaptureFeatureDependencies {
+export interface ProductCaptureContributionDependencies {
+  readonly runtime: CaptureRuntimePort;
   readonly transientSurface: TransientSurfaceLifecyclePort;
+  readonly createCandidateEditorIntent: (
+    prefill: CandidateEditorPrefill,
+  ) => FeatureActivationIntent;
 }
 
-export function createProductCaptureFeatureContribution(
-  dependencies: ProductCaptureFeatureDependencies,
+export function createProductCaptureContribution(
+  context: FeatureCompositionContext,
+  dependencies: ProductCaptureContributionDependencies,
 ): FeatureContribution;
 ```
 
 composition rootだけが具体controllerとcapture contributionを知り、capture内部は公開portだけへ依存する。
+
+`CaptureRuntimePort`は移行時にactive tab再解決を廃止し、activationで固定された`TargetTabId`を必須入力としてinjectする契約へ変更する。`createCandidateEditorIntent`はcandidate-managementの`public.ts`が公開し、payload生成だけを行ってnavigationやstate mutationを開始しない。captureはその戻り値を`conclude`へ渡す。
+
+```typescript
+export interface CaptureCoordinator {
+  captureTab(tabId: TargetTabId): Promise<Result<CaptureResult, CaptureError>>;
+}
+
+export interface CaptureRuntimePort {
+  getTab(tabId: TargetTabId): Promise<ActiveTabInfo | undefined>;
+  inject(
+    target: ActiveTabInfo,
+    requestId: RequestId,
+  ): Promise<Result<RawCapturePayload, CaptureInjectionFailure>>;
+}
+```
+
+`getActiveTab`と`captureCurrentTab`は削除する。`startCapture`はstateが保持する`tabId`を`captureTab`へ渡し、runtimeは`tabs.get(tabId)`相当で同じtabだけを解決する。URLとpayload照合は維持し、抽出完了後の`isCurrent`を最終handoff gateとする。
+
+```typescript
+export interface CandidateManagementPublicApi {
+  readonly query: CandidateQuery;
+  createCandidateEditorIntent(
+    prefill: CandidateEditorPrefill,
+  ): FeatureActivationIntent;
+}
+```
+
+candidate-management contributionは公開APIの`capture`と`openCandidateEditor`、registration dependencyの`capture`と`navigator`を削除する。composition rootは公開intent factoryをproduct-captureへ渡し、candidate-managementの保存serviceやproject queryをcaptureへ配線しない。
 
 ### State
 
@@ -210,6 +292,19 @@ export interface CandidateEditorPrefill {
 
 canonical `CandidateDraft`は変更しない。candidate-managementがprojectを解決して`projectId`を付与し、その後に既存保存契約へ接続する。
 
+### Candidate Pre-edit State
+
+```typescript
+export interface ManagementStateValue {
+  readonly pendingPreEdit: CandidateEditorPrefill | null;
+  readonly editor: CandidateEditor | null;
+}
+```
+
+shellは既存activation順序どおりcandidate-managementをmountし、`resetTransientState`とproject一覧の`load`が完了してからactivation adapterを呼ぶ。adapterは検証済みprefillをstateへ受理する。明示`projectId`が存在すればそのprojectを使用し、指定IDが存在しなければactivation失敗とする。未指定なら現在選択中、または一覧先頭の既存projectを解決する。projectが0件なら`pendingPreEdit`へ解決前draftを保持し、同じ常設面内にproject作成フォームを提示する。この受理はactivation成功であり、captureの一過性面を終了できる。すでにcandidate-managementがmount済みの場合も、直近のstate一覧だけを解決根拠とし、captureからproject queryを行わない。
+
+project作成成功時は`CandidateManagementService.createProject`が返す`Project.id`を保持中draftへ付与し、canonical `CandidateDraft`を構築して`editor`へ遷移する。`pendingPreEdit`はこの成功、利用者による明示取消、または新しいpre-edit activationでのみ置換・破棄し、capture面の終了では破棄しない。projectを自動作成または暗黙命名しない。
+
 ### Validation Stages
 
 ```typescript
@@ -230,9 +325,11 @@ export function validatePreEditDraft(
 1. 抽出成功または手入力選択で`UnresolvedCandidateDraft`を組み立てる
 2. `FeatureActivationIntent`としてcandidate-managementを指定する
 3. `controller.conclude(activationId, intent)`を呼ぶ
-4. candidate-managementがprojectを解決しpre-edit draftを検証する
-5. activation成功時だけ一過性面が終了し、候補編集面が主表示を引き取る
-6. 失敗時は抽出結果をcapture側に保持し、識別可能なnavigation errorを提示する
+4. candidate-managementがpre-edit draftを検証して自身の非一過性stateへ受理する
+5. projectが存在すればcanonical draftを構築してeditorを開き、0件なら解決前draftを保持してproject作成を提示する
+6. 受理成功時に一過性面が終了し、候補管理面が主表示を引き取る
+7. project作成後は作成結果の`Project.id`で保持中draftを解決し、再抽出せずeditorを開く
+8. 受理失敗時だけ抽出結果をcapture側に保持し、識別可能なnavigation errorを提示する
 
 captureはcandidate-managementのcomponentや内部stateをdeep importしない。
 
@@ -243,17 +340,17 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 - **tab-changed/stale generation**: 結果を引き渡さず表示終了へ従う
 - **injection-failed/timeout**: 永続状態を変更せず再実行案内を示す
 - **no candidate**: 空名の手入力編集へ進む選択肢を示す
-- **no project**: candidate-managementがproject作成の必要を返す
+- **no project**: activation失敗にせず、candidate-managementが解決前draftを非一過性stateへ保持し、同じ画面でproject作成を提示する。作成失敗時もdraftを保持して既存のproject作成errorを示す
 - **handoff failure**: 検証済みintentをcapture stateへ保持し、一過性面に留まって再試行を提示する
 
 ## Requirements Traceability
 
 | Requirement | Components | Verification |
 |---|---|---|
-| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7 | capture state/view, editor navigation, conclude | unit/integration |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7 | capture state/view, editor handoff, conclude | unit/integration |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | activation adapter, coordinator, generation check | unit/integration |
 | 3.1, 3.2, 3.3, 3.4, 3.5 | registration, state, coordinator | regression/E2E |
-| 4.1, 4.2, 4.3, 4.4, 4.5 | candidate contracts, pre-edit validation | type/contract/integration |
+| 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | candidate contracts, pre-edit validation, project-required state | type/contract/integration |
 | 5.1, 5.2, 5.3, 5.4 | feature test suites | unit/integration |
 | 5.5 / upstream 4.5 | production product-capture registration | Playwright E2E |
 | 5.6 | synthetic fixtures | fixture validation |
@@ -276,6 +373,9 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 - handoff失敗時に結果と一過性面を保持すること
 - 候補ゼロから空名手入力画面へ進むこと
 - project未指定時に現在選択中projectを解決すること
+- projectが0件でもhandoffを成功させ、capture終了後に解決前draftが候補管理へ保持されること
+- project作成成功時に返されたProjectIdで保持中draftを解決し、再抽出せずeditorを開くこと
+- project作成失敗時に保持中draftを失わないこと
 - 既存抽出と候補保存validatorの非回帰
 
 ### E2E
@@ -300,9 +400,11 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 
 1. 上流`transient-feature-surface`のGOと公開contractを確認する
 2. candidate-managementへunresolved/pre-edit契約を追加する
-3. capture registrationとactivation adapterを移行する
-4. capture state/viewを実行面へ縮小する
-5. handoffを`conclude`へ接続し旧submit経路を削除する
-6. catalog、locators、unit/integration/E2Eを更新する
+3. candidate-managementへproject-required stateとproject作成後の継続処理を追加する
+4. candidate-management public APIをtyped intent factoryへ縮小する
+5. capture registration、固定tab runtime、activation adapterを移行する
+6. capture state/viewを実行面へ縮小する
+7. handoffを`conclude`へ接続し旧submit・直接navigation経路を削除する
+8. composition、catalog、locators、unit/integration/E2Eを更新する
 
 本specのtasks生成は上流specのdesign承認後に行う。
