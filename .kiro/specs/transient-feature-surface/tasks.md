@@ -1,0 +1,202 @@
+# Implementation Plan
+
+- [ ] 1. 一過性表示面を受け入れるshell契約を整える
+- [ ] 1.1 表示区分と最小ライフサイクル契約を公開する
+  - 常設／一過性の表示区分、起動世代、固定対象タブ、起動要求、終了理由、最小の下流ライフサイクルportをcanonical shell契約として追加する。
+  - 表示区分未指定を常設として扱い、既存consumerが変更なしで型検査を通る状態にする。
+  - 不正な表示区分を境界で拒否でき、公開consumerがcontroller実体やChrome型を参照しないことを確認できる。
+  - _Requirements: 1.1, 1.3, 1.6, 2.4, 4.1, 4.4_
+  - _Boundary: CoreContracts, PublicAPI_
+
+- [ ] 1.2 登録区分を検証し不正登録を隔離する
+  - 表示区分の既定値と許容値をregistration境界で検証し、不正または不足した一過性登録をregistryから隔離する。
+  - 隔離された登録が他の常設featureのavailability、登録順、利用可否へ影響しないようにする。
+  - 既定の常設登録、正常な一過性登録、不正登録の各contract testが決定的に通る。
+  - _Requirements: 1.1, 1.3, 1.6, 4.4_
+  - _Boundary: FeatureRegistry_
+
+- [ ] 1.3 常設限定のnavigationと選択規則をshellへ統合する
+  - navigation構築、初期選択、availability fallback、通常選択を単一の常設判定へ統一する。
+  - 一過性featureは登録・主表示可能だがnavigationへ現れず、未起動時は常設featureだけが表示される。
+  - 常設／一過性を混在登録しても常設featureだけがnavigation・初期表示・fallbackの候補になるintegration testを通す。
+  - _Requirements: 1.2, 1.4, 1.5, 4.4_
+  - _Boundary: ApplicationComposition, SidePanelHost_
+
+- [ ] 1.4 (P) 常設面と併存する一過性起動noticeを追加する
+  - ready／maintenance stateへ任意noticeを追加し、選択中featureやnavigationから独立したbannerとして安全なtextで描画する。
+  - session read成功または有効activation受理だけでnoticeをclearし、global errorへ遷移させない。
+  - 媒体障害中も常設featureが表示・操作可能で、日英の安定した再操作案内が見えるDOM testを通す。
+  - _Depends: 1.1_
+  - _Requirements: 2.7, 3.5, 4.4_
+  - _Boundary: TransientSurfaceNotice, ShellPresentation, ShellView, MessageCatalog_
+
+- [ ] 2. 一過性surface controllerを実装する
+- [ ] 2.1 起動世代と単一主表示を管理する
+  - commandを直列化し、起動要求の表示区分・availability・世代を検証して、固定tabと直前の常設featureを保持する。
+  - 新しい同一tabジェスチャーを別世代として受理し、旧世代callbackを現行stateへ作用させない。
+  - 有効要求だけが一過性featureをmountし、snapshot購読からactive／inactive状態を観測できるunit testを通す。
+  - _Requirements: 1.4, 2.3, 2.4, 2.6, 3.6, 3.7, 3.10, 4.1_
+  - _Boundary: TransientSurfaceController_
+
+- [ ] 2.2 正常終了と安全な常設fallbackを実装する
+  - navigation、更新・遷移、tab閉鎖の終了理由を受理し、一過性面をunmountして記録した常設featureへ戻す。
+  - 戻り先不存在・利用不可時は利用可能な常設featureと理由を提示し、業務永続状態を変更しない。
+  - 3終了理由とfallbackで一過性面が消え、同時に一つの常設featureだけが表示されるintegration testを通す。
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.10, 4.2_
+  - _Boundary: TransientSurfaceController, SidePanelHost_
+
+- [ ] 2.3 終了失敗をfail-safe stateへ閉じて再試行可能にする
+  - unmountまたは常設復帰の失敗を、実行操作を隠したdismiss-failedとして同じ世代に保持する。
+  - dismiss-failed中は常設面と同時表示せず、旧世代callbackを無視して同一世代の終了だけを再試行可能にする。
+  - 失敗、再試行成功、stale再試行の各testで永続状態が変更されず単一主表示が維持される。
+  - _Depends: 2.2_
+  - _Requirements: 3.6, 3.7, 3.8, 3.10, 4.2_
+  - _Boundary: TransientSurfaceController_
+
+- [ ] 2.4 型付き引き渡しを既存host transitionへ接続する
+  - 現行世代の引き渡しだけを一回のtyped activationとして実行し、成功時は戻り先へ復帰せず引き渡し先を保持する。
+  - activation失敗時は既存rollbackで一過性面を維持し、旧世代の完了通知はno-opにする。
+  - 成功・失敗・staleの各経路で同時に一つのfeatureだけがmountされるintegration testを通す。
+  - _Requirements: 1.4, 3.8, 3.9, 3.10, 4.2_
+  - _Boundary: TransientSurfaceController, ActivationRouter, SidePanelHost_
+
+- [ ] 2.5 late-bound lifecycleをcompositionへ導入する
+  - feature contribution生成前にfail-closed proxyを用意し、host構築後・start前にcontrollerへbindする。
+  - cleanupではcontroller停止後にunbindし、bind前・unbind後のcallbackがnot-startedとして失敗する。
+  - 同じport参照が下流factoryへ注入され、production catalogへテスト専用featureを追加せず起動順と逆順cleanupを検証できる。
+  - _Requirements: 1.4, 2.1, 3.10, 4.1, 4.4, 4.5_
+  - _Boundary: ApplicationComposition, LateBoundLifecycle_
+
+- [ ] 3. 起動要求を順序保証付きsession storeへ保存する
+- [ ] 3.1 envelopeとstage遷移を境界検証する
+  - 起動record、最終sequence、tab別墓標をsession媒体へ保存し、unknown入力をversion／shape／stageで検証する。
+  - panelをread／subscribe専用、runtimeをmutation ownerとし、商品値・URL・HTMLを保存しない。
+  - 正常record、破損envelope、不正stage遷移がtyped resultになるunit testを通す。
+  - _Requirements: 2.2, 2.4, 2.7, 4.1, 4.6_
+  - _Boundary: TransientActivationStore_
+
+- [ ] 3.2 単一schedulerでsequenceとworker再生成を線形化する
+  - gesture、失効、stage前進、watch-readyを受信時点でenqueueし、単調sequence順にmutationを直列適用する。
+  - worker再生成時はsession envelopeの最大sequenceから次値を復元し、memoryだけを順序根拠にしない。
+  - 保留writeを後発commandが追い越さず、再生成後も新sequenceが単調増加するtestを通す。
+  - _Requirements: 2.2, 2.6, 3.10, 4.1, 4.2_
+  - _Boundary: TransientActivationScheduler, TransientActivationStore_
+
+- [ ] 3.3 record不在でも失効を残す墓標規則を実装する
+  - tabごとに最新墓標を保持し、墓標より古い後着recordをinvalidated終端へ着地させる。
+  - invalidatedをstage前進やactivation許可で上書きせず、新ジェスチャーは大きいsequenceで開始できる。
+  - put保留中の失効、失効後のlate put、同一tab再起動を決定的に再現するtestを通す。
+  - _Requirements: 2.2, 2.6, 3.1, 3.2, 3.10, 4.1, 4.2_
+  - _Boundary: TransientActivationStore_
+
+- [ ] 3.4 checkpoint付き墓標上限をfail-closedで実装する
+  - 全先行command commit済みのcheckpointでだけ、支配中でない古い墓標を全体128件以内へ剪定する。
+  - 支配墓標を保持したまま安全に剪定不能なら強制evictせずcapacity-exceededで新規起動を拒否する。
+  - tabごと最新1件、上限、支配墓標保持、破損状態拒否をunit testで観測できる。
+  - _Requirements: 2.7, 3.10, 4.1, 4.2_
+  - _Boundary: TransientActivationStore, TransientActivationScheduler_
+
+- [ ] 4. Chrome runtimeとの配送・監視adapterを構築する
+- [ ] 4.1 watch-readyをversioned typed transportで配送する
+  - panel requestとworker responseをunknownから検証し、authorized／invalidated／typed errorをbooleanへ縮退させない。
+  - worker側は自拡張panel senderだけを受理し、top-levelでlistenerを同期登録する。
+  - 不正sender、未知version、不正payload、store unavailable、capacity exceededを安定codeで返すruntime testを通す。
+  - _Requirements: 2.2, 2.7, 4.1, 4.3_
+  - _Boundary: TransientActivationPort, RuntimeTransport_
+
+- [ ] 4.2 (P) URL非依存のtab寿命監視を追加する
+  - 固定tabの更新開始とcloseだけを終了eventへ変換し、他tab eventを無視する。
+  - callbackはactivationIdを保持して最大1回通知し、解除後eventを伝播させない。
+  - URL参照や追加権限なしでnavigation／reload／closeを再現するadapter testを通す。
+  - _Depends: 2.1_
+  - _Requirements: 3.1, 3.2, 3.10, 4.1, 4.2_
+  - _Boundary: TabLifecycleRules, TabLifecycleAdapter_
+
+- [ ] 4.3 (P) storage非依存の起動失敗signalを追加する
+  - durable put失敗時にglobal action badgeと安定titleを設定し、通常titleの復元値をmanifestから解決する。
+  - 次のdurable put成功後だけclearし、read成功、notice表示、panel open、worker再生成ではclearしない。
+  - publish／clear失敗を安定codeで診断し、後発成功時にclearを再試行するtestを通す。
+  - _Depends: 3.2_
+  - _Requirements: 2.7, 4.1, 4.2_
+  - _Boundary: ActivationFailureSignal_
+
+- [ ] 4.4 workerのgesture・store・失効listenerを単一schedulerへ統合する
+  - action gestureとtab lifecycle eventの受信時にsequenceを同期割当してenqueueし、その受信順を線形化点にする。
+  - side panel openは同じaction callback内でstore完了を待たず同期開始し、top-level tab listenerはrecord有無に関係なく失効をenqueueする。
+  - failure signalのpublish／clearも同じscheduler順序へ載せ、panel閉／開、put失敗、worker再生成のruntime integration testを通す。
+  - _Depends: 3.4, 4.1, 4.2, 4.3_
+  - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 3.1, 3.2, 4.3, 4.4_
+  - _Boundary: ServiceWorkerComposition, TransientActivationScheduler_
+
+- [ ] 4.5 (P) panel watch-ready authorization adapterを実装する
+  - recordをread／subscribeしてもmountせず、固定tab watchを設置した後だけtyped authorizationを要求する。
+  - authorized、invalidated、typed errorを保持して返し、invalidatedまたはerror時はcontrollerを起動しない。
+  - panel購読とtab watchを一度だけ解除でき、watch-ready前失効を拒否するadapter testを通す。
+  - _Depends: 3.4, 4.1, 4.2_
+  - _Requirements: 2.2, 2.3, 2.4, 2.7, 3.1, 3.2, 4.3_
+  - _Boundary: PanelActivationAdapter, TransientActivationPort, TabLifecyclePort_
+
+- [ ] 4.6 authorizationをcontroller起動とstage前進へ統合する
+  - workerの同一schedulerで先行mutationを適用してrecordと墓標を最終照合し、authorized時だけcontrollerへ起動要求を渡す。
+  - feature mount成功後だけrecordをactivatedへ進め、mount前失効またはinvalidated応答では一過性面を立てない。
+  - watch-ready前後のnavigation／close、mount中失効、stage前進失敗を再現し、監視空白がないintegration testを通す。
+  - _Depends: 2.1, 4.4, 4.5_
+  - _Requirements: 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.10, 4.2, 4.3_
+  - _Boundary: ProductionMonitoringIntegration_
+
+- [ ] 5. shellとruntimeをproduction compositionへ統合する
+- [ ] 5.1 shellとcontrollerの起動停止をcompositionへ統合する
+  - host start前にlate-bound lifecycleをcontrollerへbindし、host start成功後だけcontrollerをstartする。
+  - cleanupはcontrollerをstopしてからproxyをunbindし、部分起動失敗でも逆順にresourceを解放する。
+  - start失敗、正常stop、二重stop、再startでcontrollerとproxyが一貫した状態になるintegration testを通す。
+  - _Depends: 2.5_
+  - _Requirements: 1.4, 2.1, 3.6, 3.8, 3.10, 4.1, 4.4_
+  - _Boundary: ApplicationComposition, TransientSurfaceController_
+
+- [ ] 5.2 runtimeとpanelの購読をproductionへ統合する
+  - store read／subscribe、panel watch、watch-ready、controller requestをproduction side panel起動へ接続する。
+  - 各resourceの取得済み範囲だけを逆順cleanupし、部分失敗後の再startでも購読・listenerを一度だけ生成する。
+  - store障害、watch失敗、authorization失敗、正常再startで常設featureへ安全に退避するintegration testを通す。
+  - _Depends: 4.4, 4.6, 5.1_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.6, 3.8, 3.10, 4.1, 4.3, 4.4_
+  - _Boundary: RuntimeComposition, PanelIntegration_
+
+- [ ] 5.3 公開境界とproduction artifactの制約を固定する
+  - 下流へは最小lifecycle portと必要型だけを公開し、controller、proxy bind、Chrome message、store concreteを公開しない。
+  - session storage到達点をruntime storeだけへ限定し、worker bundleをDOM／React非依存に保つ境界検査を更新する。
+  - 4権限固定、実データfixture不使用、production catalogへのsynthetic feature非混入を機械gateで観測できる。
+  - _Requirements: 3.7, 4.4, 4.5, 4.6_
+  - _Boundary: PublicAPI, StorageAccessGuard, ArtifactValidation_
+
+- [ ] 6. 決定的検証と下流handoff seamを完成させる
+- [ ] 6.1 shell controllerと常設feature非回帰を検証する
+  - registration既定値、不正隔離、navigation除外、初期選択、fallback、単一mountをcontract／integration testで覆う。
+  - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
+  - 全shell検証で既存persistent featureのnavigation・availability・typed activationが回帰しない。
+  - _Depends: 5.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 4.1, 4.2, 4.4_
+  - _Boundary: ShellContractTests, ControllerIntegrationTests_
+
+- [ ] 6.2 (P) runtimeの競合・障害・再生成を検証する
+  - put保留中失効、watch-ready前後失効、worker再生成、墓標上限をin-memory Chrome fixtureで再現する。
+  - put失敗signal、clear競合、read失敗notice、sender／message拒否を再現し、常設面が維持されることを確認する。
+  - panel closed／open双方で同じ要求が一度だけ許可または拒否され、全runtime testが決定的に通る。
+  - _Depends: 5.2_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.10, 4.1, 4.2, 4.3_
+  - _Boundary: RuntimeIntegrationTests, StoreRaceTests_
+
+- [ ] 6.3 下流production E2Eへ引き渡すcontract fixtureを整える
+  - 実featureをproductionへ追加せず、in-memory transient registrationで起動から終了・引き渡しまでを検証する。
+  - 下流consumerが同じlifecycle port参照を受け取れるcontract fixtureを追加し、product-capture E2Eがshell 4.5を閉じられるseamを固定する。
+  - production buildへsynthetic featureが混入せず、public consumer contract testが通る。
+  - _Depends: 5.3, 6.1, 6.2_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - _Boundary: ContractFixtures_
+
+- [ ] 6.4 最終validation gateを通す
+  - typecheck、public consumer、lint、unit／integration testを実行して全件成功させる。
+  - boundary、fixture、artifact、final buildの機械検査を実行し、権限・公開境界・synthetic資産の違反がないことを確認する。
+  - 本spec所有の全gateが成功し、production E2Eだけが承認済み下流specの責務として残る状態にする。
+  - _Depends: 6.3_
+  - _Requirements: 4.4, 4.5, 4.6_
+  - _Boundary: ValidationGates_
