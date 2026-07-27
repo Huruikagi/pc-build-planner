@@ -18,6 +18,7 @@ const SOURCE_PRIORITY: Readonly<Record<ExtractionSource, number>> = {
   breadcrumb: 2,
   table: 3,
   "definition-list": 3,
+  "domain-map": 4,
 };
 
 interface Ranked {

@@ -57,6 +57,7 @@ const sourceMessageKeys = {
   breadcrumb: "capture.sources.breadcrumb",
   table: "capture.sources.table",
   "definition-list": "capture.sources.definition-list",
+  "domain-map": "capture.sources.domain-map",
 } as const satisfies Record<ExtractionSource, MessageKey>;
 
 const errorMessageKeys = {

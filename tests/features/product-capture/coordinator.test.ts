@@ -187,6 +187,61 @@ test("形式不正なpayloadは不正payloadとして拒否する", async () => 
   assert.deepEqual(result, { ok: false, error: { kind: "invalid-payload" } });
 });
 
+test("domain-map由来のmanufacturer候補をruntime境界で受理する", async () => {
+  const h = harness();
+  h.setInjectResult(
+    ok({
+      requestId: REQUEST_ID,
+      tabId: TAB.tabId,
+      pageUrl: TAB.url,
+      candidates: [
+        {
+          field: "manufacturer",
+          rawValue: "架空メーカー",
+          source: "domain-map",
+          sourceLabel: "maker.example",
+        },
+      ],
+    }),
+  );
+
+  const result = await createCoordinator(h).captureCurrentTab();
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.draft.fields[0], {
+    field: "manufacturer",
+    normalizedValue: "架空メーカー",
+    rawValue: "架空メーカー",
+    source: "domain-map",
+    sourceLabel: "maker.example",
+  });
+});
+
+test("domain-mapをmanufacturer以外のfieldへ偽装したpayloadは拒否する", async () => {
+  const h = harness();
+  h.setInjectResult(
+    ok({
+      requestId: REQUEST_ID,
+      tabId: TAB.tabId,
+      pageUrl: TAB.url,
+      candidates: [
+        {
+          field: "name",
+          rawValue: "架空品",
+          source: "domain-map",
+          sourceLabel: "maker.example",
+        },
+      ],
+    }),
+  );
+
+  assert.deepEqual(await createCoordinator(h).captureCurrentTab(), {
+    ok: false,
+    error: { kind: "invalid-payload" },
+  });
+});
+
 test("requestIdが一致しない結果はタブ遷移として破棄する", async () => {
   const h = harness();
   h.setInjectResult(

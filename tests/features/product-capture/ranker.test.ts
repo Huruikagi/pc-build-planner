@@ -179,3 +179,29 @@ test("候補が一件もない場合はすべての既知項目が欠損にな�
     ["category", "manufacturer", "modelNumber", "name", "price", "url"].sort(),
   );
 });
+
+test("domain-mapはcollector順に関係なくmanufacturerの最下位候補になる", () => {
+  const domainCandidate = field({
+    field: "manufacturer",
+    normalizedValue: "domain版",
+    rawValue: "domain版",
+    source: "domain-map",
+    sourceLabel: "maker.example",
+  });
+  const pageCandidate = field({
+    field: "manufacturer",
+    normalizedValue: "ページ明示版",
+    rawValue: "ページ明示版",
+    source: "definition-list",
+    sourceLabel: "メーカー",
+  });
+
+  for (const candidates of [
+    [domainCandidate, pageCandidate],
+    [pageCandidate, domainCandidate],
+  ]) {
+    const draft = ranker.select(candidates);
+    assert.equal(draft.fields[0]?.normalizedValue, "ページ明示版");
+    assert.equal(draft.fields[0]?.source, "definition-list");
+  }
+});

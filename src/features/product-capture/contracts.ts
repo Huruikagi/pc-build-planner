@@ -14,7 +14,8 @@ export type ExtractionSource =
   | "heading"
   | "breadcrumb"
   | "table"
-  | "definition-list";
+  | "definition-list"
+  | "domain-map";
 
 export const CAPTURE_CORE_FIELDS = [
   "name",

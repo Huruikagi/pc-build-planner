@@ -1,11 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
+import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
 
 const parse = (html: string): Document =>
   new DOMParser().parseFromString(html, "text/html");
 
 const extractor = createGenericExtractor();
+
+const domainMapResult = createManufacturerDomainMap([
+  {
+    registrableDomain: "maker.example",
+    manufacturer: "架空メーカー",
+    evidenceUrl: "https://maker.example/about",
+    reviewedAt: "2026-07-28",
+    owner: "test-owner",
+  },
+]);
+assert.equal(domainMapResult.ok, true);
+if (!domainMapResult.ok) throw new Error("expected valid synthetic domain map");
+const extractorWithDomainMap = createGenericExtractor({
+  manufacturerDomainMap: domainMapResult.value,
+});
 
 const byField = (
   candidates: ReturnType<typeof extractor.extract>,
@@ -263,4 +279,125 @@ test("抽出候補は既定の上限件数を超えない", () => {
   );
 
   assert.ok(candidates.length <= 200);
+});
+
+test("manufacturer欠損時だけdomain map候補を最下位sourceとして追加する", () => {
+  const document = parse(
+    "<!doctype html><html><head><meta property='og:title' content='架空GPU'></head></html>",
+  );
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://store.maker.example/products/gpu",
+  );
+
+  assert.deepEqual(byField(candidates, "manufacturer"), [
+    {
+      field: "manufacturer",
+      rawValue: "架空メーカー",
+      source: "domain-map",
+      sourceLabel: "maker.example",
+    },
+  ]);
+});
+
+test("ページ由来manufacturerがある場合はdomain map候補を生成しない", () => {
+  const document = parse(
+    "<!doctype html><html><head><meta property='product:brand' content='ページ明示メーカー'></head></html>",
+  );
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://maker.example/products/gpu",
+  );
+
+  assert.deepEqual(byField(candidates, "manufacturer"), [
+    {
+      field: "manufacturer",
+      rawValue: "ページ明示メーカー",
+      source: "meta",
+      sourceLabel: 'meta[property="product:brand"]',
+    },
+  ]);
+});
+
+test("定義リストの共通メーカー項目を優先してdomain候補を生成しない", () => {
+  const document = parse(
+    "<!doctype html><html><body><dl><dt>メーカー</dt><dd>ページ明示メーカー</dd></dl></body></html>",
+  );
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://maker.example/products/gpu",
+  );
+
+  assert.deepEqual(byField(candidates, "manufacturer"), [
+    {
+      field: "manufacturer",
+      rawValue: "ページ明示メーカー",
+      source: "definition-list",
+      sourceLabel: "メーカー",
+    },
+  ]);
+  assert.equal(
+    candidates.some((candidate) => candidate.source === "domain-map"),
+    false,
+  );
+});
+
+test("表の共通manufacturer項目を優先してdomain候補を生成しない", () => {
+  const document = parse(
+    "<!doctype html><html><body><table><tr><th>Manufacturer</th><td>Page Maker</td></tr></table></body></html>",
+  );
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://maker.example/products/gpu",
+  );
+
+  assert.deepEqual(byField(candidates, "manufacturer"), [
+    {
+      field: "manufacturer",
+      rawValue: "Page Maker",
+      source: "table",
+      sourceLabel: "Manufacturer",
+    },
+  ]);
+  assert.equal(
+    candidates.some((candidate) => candidate.source === "domain-map"),
+    false,
+  );
+});
+
+test("未知domainではmanufacturerを推測しない", () => {
+  const document = parse(
+    "<!doctype html><html><body><h1>架空GPU</h1></body></html>",
+  );
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://retailer.example/products/gpu",
+  );
+
+  assert.deepEqual(byField(candidates, "manufacturer"), []);
+});
+
+test("候補上限へ達してもdomain mapのmanufacturer枠を確保する", () => {
+  const lists = Array.from({ length: 4 }, (_, listIndex) => {
+    const terms = Array.from(
+      { length: 50 },
+      (_, itemIndex) =>
+        `<dt>項目${listIndex}-${itemIndex}</dt><dd>値${itemIndex}</dd>`,
+    ).join("");
+    return `<dl>${terms}</dl>`;
+  }).join("");
+  const document = parse(`<!doctype html><html><body>${lists}</body></html>`);
+
+  const candidates = extractorWithDomainMap.extract(
+    document,
+    "https://maker.example/products/gpu",
+  );
+
+  assert.ok(candidates.length <= 200);
+  assert.equal(byField(candidates, "manufacturer")[0]?.source, "domain-map");
 });

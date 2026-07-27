@@ -21,23 +21,23 @@
   - _Requirements: 1.2, 1.3, 2.5, 3.3, 6.5, 7.1, 7.2, 7.4_
   - _Boundary: ProductCaptureReactAdapter, ProductCaptureRegistration, SecurityValidation_
 
-- [ ] 4. メーカーdomain mapを最下位抽出sourceとして追加する
+- [x] 4. メーカーdomain mapを最下位抽出sourceとして追加する
 
-- [ ] 4.1 domain map entryとeTLD+1照合を隔離する
+- [x] 4.1 domain map entryとeTLD+1照合を隔離する
   - メーカー公式eTLD+1、メーカー名、公開根拠、review日、ownerを持つローカルentryを専用moduleへ定義し、不正・重複entryを拒否する。
   - page URLのhostnameを正規化し、entryとの完全一致またはdot-boundary subdomain一致だけを許可して、未知domain、販売代理店、suffix類似domainを候補なしにする。
   - exact、subdomain、未知、誤suffix、不正URLのsynthetic unit testが決定的に通ることを完了条件とする。
   - _Requirements: 2.7, 2.9, 7.1, 7.3, 7.4_
   - _Boundary: ManufacturerDomainMap_
 
-- [ ] 4.2 (P) domain-map provenanceを抽出closed unionへ追加する
+- [x] 4.2 (P) domain-map provenanceを抽出closed unionへ追加する
   - `domain-map`を抽出source、runtime payload validation、取得元message mappingへ追加し、manufacturer以外のfieldでは拒否する。
   - 元表記、source label、normalized valueが既存候補と同じcontractを通り、ページ由来sourceへ偽装されないようにする。
   - synthetic payloadがruntime境界を通過し、不正field/source組合せが`invalid-payload`になるcontract testを完了条件とする。
   - _Requirements: 2.3, 2.10, 3.1, 3.4, 7.1, 7.3_
   - _Boundary: ProductCaptureContracts, CapturePayloadValidation, CaptureMessages_
 
-- [ ] 4.3 domain候補を既存extractorとrankerへ統合する
+- [x] 4.3 domain候補を既存extractorとrankerへ統合する
   - 汎用collectorでmanufacturerが欠損する場合だけdomain候補を加え、ページ明示候補がある場合は生成または採用しない。
   - rankerでも`domain-map`を全sourceの後へ置き、collector合成順が変わっても既存manufacturerを上書きしない。
   - 欠損補完、非上書き、未知domain、最下位順位がextractor/ranker testで観測できることを完了条件とする。

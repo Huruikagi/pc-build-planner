@@ -15,6 +15,7 @@ export const capture = {
     breadcrumb: "Breadcrumb",
     table: "Table",
     "definition-list": "Definition list",
+    "domain-map": "Official manufacturer domain",
   },
   sourceAttribution: "Source: {source} ({sourceLabel})",
   originalValueLabel: "Original: {value}",

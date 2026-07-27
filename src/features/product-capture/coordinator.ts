@@ -63,6 +63,7 @@ const EXTRACTION_SOURCES: ReadonlySet<ExtractionSource> = new Set([
   "breadcrumb",
   "table",
   "definition-list",
+  "domain-map",
 ]);
 
 const isExtractionCandidate = (value: unknown): value is ExtractionCandidate =>
@@ -72,7 +73,8 @@ const isExtractionCandidate = (value: unknown): value is ExtractionCandidate =>
   typeof value.rawValue === "string" &&
   typeof value.source === "string" &&
   EXTRACTION_SOURCES.has(value.source as ExtractionSource) &&
-  typeof value.sourceLabel === "string";
+  typeof value.sourceLabel === "string" &&
+  (value.source !== "domain-map" || value.field === "manufacturer");
 
 const decodeCapturePagePayload = (
   value: RawCapturePayload,

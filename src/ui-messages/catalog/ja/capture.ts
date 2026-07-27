@@ -20,6 +20,7 @@ export const capture = {
     breadcrumb: "パンくず",
     table: "表",
     "definition-list": "定義リスト",
+    "domain-map": "メーカー公式ドメイン",
   },
   /** `取得元: ${label}（${sourceLabel}）` の再設計。 */
   sourceAttribution: "取得元: {source}（{sourceLabel}）",

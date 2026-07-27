@@ -4,9 +4,17 @@ import type {
   ExtractionCandidate,
   ExtractionSource,
 } from "./contracts.js";
+import {
+  type ManufacturerDomainMap,
+  manufacturerDomainMap,
+} from "./manufacturer-domain-map.js";
 
 export interface GenericExtractor {
   extract(document: Document, pageUrl: string): readonly ExtractionCandidate[];
+}
+
+export interface GenericExtractorDependencies {
+  readonly manufacturerDomainMap?: ManufacturerDomainMap;
 }
 
 const MAX_CANDIDATES = 200;
@@ -37,6 +45,20 @@ const resolveUrl = (value: string, pageUrl: string): string => {
 
 const specField = (label: string): CaptureField =>
   `spec:${label.slice(0, MAX_LABEL_LENGTH)}` as CaptureField;
+
+const MANUFACTURER_LABELS: ReadonlySet<string> = new Set([
+  "manufacturer",
+  "brand",
+  "maker",
+  "メーカー",
+  "製造元",
+  "ブランド",
+]);
+
+const fieldForLabel = (label: string): CaptureField =>
+  MANUFACTURER_LABELS.has(label.trim().normalize("NFKC").toLowerCase())
+    ? "manufacturer"
+    : specField(label);
 
 const push = (
   sink: CandidateSink,
@@ -252,7 +274,7 @@ const collectDefinitionLists = (
           ? (definition.textContent?.trim() ?? undefined)
           : undefined;
       if (label && value)
-        push(sink, specField(label), value, "definition-list", label);
+        push(sink, fieldForLabel(label), value, "definition-list", label);
     }
   }
 };
@@ -268,7 +290,7 @@ const collectTables = (document: Document, sink: CandidateSink): void => {
     if (cells.length < 2) continue;
     const label = cells[0]?.textContent?.trim();
     const value = cells[1]?.textContent?.trim();
-    if (label && value) push(sink, specField(label), value, "table", label);
+    if (label && value) push(sink, fieldForLabel(label), value, "table", label);
   }
 };
 
@@ -283,7 +305,9 @@ const COLLECTORS: ReadonlyArray<
   collectTables,
 ];
 
-export const createGenericExtractor = (): GenericExtractor => ({
+export const createGenericExtractor = (
+  dependencies: GenericExtractorDependencies = {},
+): GenericExtractor => ({
   extract(document, pageUrl) {
     const sink: CandidateSink = { items: [], pageUrl };
     for (const collect of COLLECTORS) {
@@ -292,6 +316,21 @@ export const createGenericExtractor = (): GenericExtractor => ({
         collect(document, sink);
       } catch {
         // An unknown or malformed page structure must not fail other sources.
+      }
+    }
+    if (!sink.items.some((candidate) => candidate.field === "manufacturer")) {
+      const match = (
+        dependencies.manufacturerDomainMap ?? manufacturerDomainMap
+      ).findManufacturer(pageUrl);
+      if (match.ok && match.value !== undefined) {
+        if (isFull(sink)) sink.items.pop();
+        push(
+          sink,
+          "manufacturer",
+          match.value.manufacturer,
+          "domain-map",
+          match.value.sourceLabel,
+        );
       }
     }
     return Object.freeze(sink.items.slice(0, MAX_CANDIDATES));

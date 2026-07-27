@@ -211,6 +211,46 @@ test("reviewでは項目・取得元・元表記・欠損を表示し値を修�
   );
 });
 
+test("domain-map provenanceをページ由来sourceと区別して表示する", async () => {
+  const harness = createHarness();
+  harness.setCaptureResult(
+    ok(
+      captureResult({
+        draft: {
+          fields: [
+            {
+              field: "manufacturer",
+              normalizedValue: "架空メーカー",
+              rawValue: "架空メーカー",
+              source: "domain-map",
+              sourceLabel: "maker.example",
+            },
+          ],
+          missingCoreFields: [
+            "name",
+            "category",
+            "modelNumber",
+            "price",
+            "url",
+          ],
+        },
+      }),
+    ),
+  );
+  await harness.state.startCapture();
+  const rendered = await renderView(harness);
+
+  assert.match(
+    rendered.text(),
+    new RegExp(
+      defaultMessageResolver("capture.sourceAttribution", {
+        source: defaultMessageResolver("capture.sources.domain-map"),
+        sourceLabel: "maker.example",
+      }),
+    ),
+  );
+});
+
 test("カテゴリ行は入力欄ではなく推定と取得根拠を読み取り専用で表示する", async () => {
   const harness = createHarness();
   harness.setCaptureResult(
