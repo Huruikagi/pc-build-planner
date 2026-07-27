@@ -432,6 +432,24 @@ export interface ChromeSessionArea {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
 }
+
+export interface ChromeStorageChanges {
+  addListener(listener: (changes: unknown, areaName: string) => void): void;
+  removeListener(listener: (changes: unknown, areaName: string) => void): void;
+}
+
+export const resolveChromeTransientPanelStorage = ():
+  | {
+      readonly session: ChromeSessionArea;
+      readonly changes: ChromeStorageChanges;
+    }
+  | undefined =>
+  typeof chrome !== "undefined" &&
+  chrome.storage?.session &&
+  chrome.storage.onChanged
+    ? { session: chrome.storage.session, changes: chrome.storage.onChanged }
+    : undefined;
+
 export const createChromeTransientSessionStorage = (
   area: ChromeSessionArea,
 ): TransientSessionStorage => ({

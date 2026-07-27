@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -248,6 +249,65 @@ test("production contributionへ同じlate-bound lifecycle参照を一度だけ�
     ok: false,
     error: { kind: "not-started" },
   });
+});
+
+test("compositionはproxy bind→host start→controller startと逆順cleanupを固定する", async () => {
+  const source = await readFile(
+    "src/application-shell/application-composition.ts",
+    "utf8",
+  );
+  const bind = source.indexOf("lateBoundLifecycle.bind(controller)");
+  const hostStart = source.indexOf("await integration.start()", bind);
+  const controllerStart = source.indexOf("await controller.start()", hostStart);
+  assert.ok(bind >= 0 && bind < hostStart && hostStart < controllerStart);
+
+  const cleanup = source.indexOf("const cleanup = async");
+  const controllerStop = source.indexOf("await owned.stop()", cleanup);
+  const unbind = source.indexOf("lateBoundLifecycle.unbind()", controllerStop);
+  assert.ok(cleanup >= 0 && controllerStop < unbind);
+});
+
+test("session read noticeは常設表示と併存し成功通知まで保持する", async () => {
+  const h = harness();
+  let notices:
+    | { sessionReadFailed(): void; sessionReadSucceeded(): void }
+    | undefined;
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: () => ({
+      features: [{ key: "planner", registration: h.feature }] as const,
+      workerRegistrations: [],
+    }),
+    presentation: h.presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+    createTransientMonitoring: (_controller, value) => {
+      notices = value;
+      return {
+        async start() {
+          value.sessionReadFailed();
+          return { ok: true as const, value: undefined };
+        },
+        stop() {},
+      };
+    },
+  });
+  assert.equal((await root.start()).ok, true);
+  const failed = h.states.at(-1);
+  assert.equal(failed?.kind, "ready");
+  if (failed?.kind === "ready") {
+    assert.equal(failed.selected, id("planner"));
+    assert.ok(failed.transientNotice);
+  }
+  notices?.sessionReadFailed();
+  assert.ok(h.states.at(-1)?.kind === "ready");
+  notices?.sessionReadSucceeded();
+  const recovered = h.states.at(-1);
+  assert.equal(recovered?.kind, "ready");
+  if (recovered?.kind === "ready")
+    assert.equal("transientNotice" in recovered, false);
+  await root.stop();
 });
 
 test("startup rollback後も注入済みlifecycleをnot-startedへ戻す", async () => {

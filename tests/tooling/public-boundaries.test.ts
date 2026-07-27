@@ -284,6 +284,28 @@ test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAcc
   );
 });
 
+test("application shell公開入口はtransient concrete実装を公開しない", async () => {
+  const publicApi = await readFile("src/application-shell/public.ts", "utf8");
+  assert.match(publicApi, /TransientSurfaceLifecyclePort/);
+  assert.match(publicApi, /TransientGestureRegistrationPort/);
+  assert.match(publicApi, /TransientApplicationFeatureRegistration/);
+  assert.doesNotMatch(
+    publicApi,
+    /createTransientSurfaceController|TransientSurfaceController|createLateBoundLifecycle|createTransientGestureRegistrar|TransientWatchReadyRequest|TransientActivationStore/,
+  );
+});
+
+test("production side panelは許可store外からsession storageへ到達しない", async () => {
+  const sources = await Promise.all(
+    [
+      "src/runtime/side-panel.ts",
+      "src/runtime/production-transient-panel.ts",
+      "src/runtime/transient-activation-store.ts",
+    ].map(async (path) => ({ path, source: await readFile(path, "utf8") })),
+  );
+  assert.deepEqual(findStorageAccessViolations(sources), []);
+});
+
 test("validateBoundaryRootsはStorageAccessGuardの違反も返す", async () => {
   const directory = await mkdtemp(join(tmpdir(), "storage-access-guard-"));
   try {

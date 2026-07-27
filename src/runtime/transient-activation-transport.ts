@@ -49,6 +49,10 @@ export interface WatchReadyScheduler {
   authorizeAfterWatchReady(
     activationId: ActivationId,
   ): Promise<Result<ActivationAuthorization, ActivationStoreError>>;
+  advance?(
+    activationId: ActivationId,
+    stage: "activated",
+  ): Promise<Result<void, ActivationStoreError>>;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -120,26 +124,57 @@ export const registerTransientWatchReadyListener = (
 ): (() => void) => {
   const listener: RuntimeMessageListener = (message, sender, sendResponse) => {
     const request = parseRequest(message);
+    const stageRequest =
+      isRecord(message) &&
+      message.version === 1 &&
+      message.kind === "transient-stage-advance" &&
+      typeof message.activationId === "string" &&
+      message.stage === "activated"
+        ? (message as unknown as {
+            readonly activationId: ActivationId;
+            readonly stage: "activated";
+          })
+        : undefined;
     const trustedPanel =
       classifyCaller(runtime, sender).kind === "trusted-extension" &&
       isRecord(sender) &&
       sender.url === runtime.getURL("side-panel.html");
-    if (request === undefined || !trustedPanel) {
+    if (
+      (request === undefined && stageRequest === undefined) ||
+      !trustedPanel
+    ) {
       sendResponse({ version: 1, ok: false, code: "invalid-message" });
       return true;
     }
-    void Promise.resolve()
-      .then(() => scheduler.authorizeAfterWatchReady(request.activationId))
-      .then(
-        (result) =>
+    void (async () => {
+      try {
+        if (stageRequest) {
+          const result = scheduler.advance
+            ? await scheduler.advance(
+                stageRequest.activationId,
+                stageRequest.stage,
+              )
+            : err<ActivationStoreError>({ kind: "storage-unavailable" });
           sendResponse(
             result.ok
-              ? { version: 1, ok: true, decision: result.value }
+              ? { version: 1, ok: true }
               : { version: 1, ok: false, code: publicCode(result.error) },
-          ),
-        () =>
-          sendResponse({ version: 1, ok: false, code: "store-unavailable" }),
-      );
+          );
+          return;
+        }
+        if (!request) return;
+        const result = await scheduler.authorizeAfterWatchReady(
+          request.activationId,
+        );
+        sendResponse(
+          result.ok
+            ? { version: 1, ok: true, decision: result.value }
+            : { version: 1, ok: false, code: publicCode(result.error) },
+        );
+      } catch {
+        sendResponse({ version: 1, ok: false, code: "store-unavailable" });
+      }
+    })();
     return true;
   };
   runtime.onMessage.addListener(listener);
@@ -172,5 +207,27 @@ export const createTransientActivationPanelPort = (
     const response = parseResponse(raw);
     if (response === undefined) return err({ kind: "invalid-message" });
     return response.ok ? ok(response.decision) : err({ kind: response.code });
+  },
+});
+
+export const createTransientStagePanelPort = (
+  runtime: PanelMessageRuntime,
+) => ({
+  async advance(activationId: ActivationId, stage: "activated") {
+    try {
+      const response = await runtime.sendMessage({
+        version: 1,
+        kind: "transient-stage-advance",
+        activationId,
+        stage,
+      });
+      return isRecord(response) &&
+        response.version === 1 &&
+        response.ok === true
+        ? ok(undefined)
+        : err({ kind: "storage-unavailable" as const });
+    } catch {
+      return err({ kind: "storage-unavailable" as const });
+    }
   },
 });

@@ -156,8 +156,8 @@
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 4.1, 4.3, 4.4_
   - _Boundary: TransientGestureRegistration, CanonicalGestureIngress, ActionGestureSource_
 
-- [ ] 5. shellとruntimeをproduction compositionへ統合する
-- [ ] 5.1 shellとcontrollerの起動停止をcompositionへ統合する
+- [x] 5. shellとruntimeをproduction compositionへ統合する
+- [x] 5.1 shellとcontrollerの起動停止をcompositionへ統合する
   - host start前にlate-bound lifecycleをcontrollerへbindし、host start成功後だけcontrollerをstartする。
   - cleanupはcontrollerをstopしてからproxyをunbindし、部分起動失敗でも逆順にresourceを解放する。
   - start失敗、正常stop、二重stop、再startでcontrollerとproxyが一貫した状態になるintegration testを通す。
@@ -165,7 +165,7 @@
   - _Requirements: 1.4, 2.1, 3.6, 3.8, 3.10, 4.1, 4.4_
   - _Boundary: ApplicationComposition, TransientSurfaceController_
 
-- [ ] 5.2 runtimeとpanelの購読をproductionへ統合する
+- [x] 5.2 runtimeとpanelの購読をproductionへ統合する
   - store read／subscribe、panel watch、watch-ready、controller requestと登録済みgesture sourcesをproduction side panel／worker起動へ接続する。
   - 各resourceの取得済み範囲だけを逆順cleanupし、gesture sourceをscheduler停止前に解除して、部分失敗後の再startでも購読・listenerを一度だけ生成する。
   - store障害、watch失敗、authorization失敗、正常再startで常設featureへ安全に退避するintegration testを通す。
@@ -173,7 +173,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.6, 3.8, 3.10, 4.1, 4.3, 4.4_
   - _Boundary: RuntimeComposition, PanelIntegration_
 
-- [ ] 5.3 公開境界とproduction artifactの制約を固定する
+- [x] 5.3 公開境界とproduction artifactの制約を固定する
   - 下流へはregistration判別共用体とそのbranch型、`isPersistent`型述語、最小lifecycle port、gesture registration portと必要型だけを公開し、controller、proxy bind、gesture registrar concrete、Chrome message、store concreteを公開しない。
   - session storage到達点をruntime storeだけへ限定し、worker bundleをDOM／React非依存に保つ境界検査を更新する。
   - 4権限固定、実データfixture不使用、production catalogへのsynthetic feature非混入を機械gateで観測できる。
@@ -218,3 +218,4 @@
 
 - watch-readyは`received`まで進め、`activated`への前進はcontroller mount成功後に限定する。panel側のasync処理はstart epochを各await後にも照合し、stop／restart後の旧世代完了をno-opにする。
 - gesture sourceは同期registrarからcanonical ingressへ接続し、sourceにはstore writer、sequence allocator、panel openerを公開しない。
+- panelはsession storeをread／subscribe専用で利用し、`activated`前進はtyped runtime messageでworkerの単一schedulerへ委譲する。session read障害noticeは成功通知までcompositionのready／maintenance表示へ再投影する。

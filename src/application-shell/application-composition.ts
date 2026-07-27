@@ -45,6 +45,7 @@ import {
   createTransientSurfaceController,
   type TransientSurfaceController,
 } from "./transient-surface-controller.js";
+import { projectTransientNotice } from "./transient-surface-notice.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export interface ProductionFoundationHandle {
@@ -78,12 +79,26 @@ export interface ProductionApplicationCompositionOptions<
   readonly presentation: ShellPresentationAdapter;
   readonly workerContext: WorkerRegistrationContext;
   readonly reportError: (message: string) => void;
+  readonly createTransientMonitoring?: (
+    controller: Pick<TransientSurfaceController, "request" | "dismiss">,
+    notices: {
+      sessionReadFailed(): void;
+      sessionReadSucceeded(): void;
+    },
+  ) => {
+    start(): Promise<Result<void, { readonly kind: string }>>;
+    stop(): void;
+  };
 }
 
 const STARTUP_ERROR = message("shell.startupFailed");
 
 export function createProductionSidePanelComposition(
   shellContainer: HTMLElement,
+  extensions: Pick<
+    ProductionApplicationCompositionOptions<SidePanelFeatureContributions>,
+    "createTransientMonitoring"
+  > = {},
 ): ApplicationCompositionRoot<
   CompositionRootApi<SidePanelFeatureContributions>
 > {
@@ -120,6 +135,7 @@ export function createProductionSidePanelComposition(
       reportError: (message) => console.error(message),
     },
     reportError: (message) => console.error(message),
+    ...extensions,
   });
 }
 
@@ -199,6 +215,11 @@ export function createProductionApplicationComposition<
   let cleanupRequired = false;
   const lateBoundLifecycle = createLateBoundLifecycle();
   let transientController: TransientSurfaceController | undefined;
+  let transientMonitoring:
+    | ReturnType<NonNullable<typeof options.createTransientMonitoring>>
+    | undefined;
+  let latestShellState: ShellViewState | undefined;
+  let transientReadFailed = false;
 
   const diagnose = (message: string): void => {
     try {
@@ -227,6 +248,15 @@ export function createProductionApplicationComposition<
 
   const cleanup = async (): Promise<void> => {
     const failures: unknown[] = [];
+    if (transientMonitoring) {
+      const owned = transientMonitoring;
+      try {
+        owned.stop();
+        if (transientMonitoring === owned) transientMonitoring = undefined;
+      } catch (error: unknown) {
+        failures.push(error);
+      }
+    }
     if (stopWorkers) {
       const owned = stopWorkers;
       try {
@@ -454,6 +484,15 @@ export function createProductionApplicationComposition<
       }
 
       const publish = (state: ShellViewState): void => {
+        const projectedState = transientReadFailed
+          ? projectTransientNotice(state, {
+              kind: "session-read-failed",
+              message: message("shell.transientActivationUnavailable", {
+                detail: "retry",
+              }),
+            })
+          : state;
+        latestShellState = projectedState;
         const navigation = createdRegistry
           .snapshot()
           .filter(isPersistent)
@@ -465,10 +504,11 @@ export function createProductionApplicationComposition<
               : { icon: feature.navigation.icon }),
             available: feature.getAvailability().status === "available",
             selected:
-              (state.kind === "ready" || state.kind === "maintenance") &&
-              state.selected === feature.id,
+              (projectedState.kind === "ready" ||
+                projectedState.kind === "maintenance") &&
+              projectedState.selected === feature.id,
           }));
-        presentation?.publish(state, navigation);
+        presentation?.publish(projectedState, navigation);
       };
       integration = createApplicationShellIntegration({
         registry: createdRegistry,
@@ -528,6 +568,37 @@ export function createProductionApplicationComposition<
         publishError();
         await cleanup().catch(() => diagnose("controller rollback failed"));
         return err({ kind: "startup_failed", message: STARTUP_ERROR });
+      }
+      if (options.createTransientMonitoring) {
+        const projectNotice = (
+          kind: "session-read-failed" | "session-read-succeeded",
+        ) => {
+          if (!latestShellState) return;
+          transientReadFailed = kind === "session-read-failed";
+          latestShellState = projectTransientNotice(
+            latestShellState,
+            kind === "session-read-failed"
+              ? {
+                  kind,
+                  message: message("shell.transientActivationUnavailable", {
+                    detail: "retry",
+                  }),
+                }
+              : { kind },
+          );
+          publish(latestShellState);
+        };
+        const monitoring = options.createTransientMonitoring(controller, {
+          sessionReadFailed: () => projectNotice("session-read-failed"),
+          sessionReadSucceeded: () => projectNotice("session-read-succeeded"),
+        });
+        transientMonitoring = monitoring;
+        const monitoringStarted = await monitoring.start();
+        if (!monitoringStarted.ok) {
+          publishError();
+          await cleanup().catch(() => diagnose("monitoring rollback failed"));
+          return err({ kind: "startup_failed", message: STARTUP_ERROR });
+        }
       }
       const workers = composeWorkerContributions(
         [

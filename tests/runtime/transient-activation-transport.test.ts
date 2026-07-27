@@ -7,6 +7,7 @@ import type { RuntimeMessageListener } from "../../src/runtime/foundation-messag
 import type { ActivationAuthorization } from "../../src/runtime/transient-activation-store.js";
 import {
   createTransientActivationPanelPort,
+  createTransientStagePanelPort,
   registerTransientWatchReadyListener,
 } from "../../src/runtime/transient-activation-transport.js";
 
@@ -55,6 +56,30 @@ test("worker transport preserves authorized decisions for trusted extension pane
     );
   });
   assert.deepEqual(response, { version: 1, ok: true, decision });
+});
+
+test("activated stageはpanelからtrusted worker schedulerへ委譲する", async () => {
+  const { runtime, getListener } = fixture();
+  const advanced: string[] = [];
+  registerTransientWatchReadyListener(runtime, {
+    authorizeAfterWatchReady: async () => ok(decision),
+    advance: async (activationId, stage) => {
+      advanced.push(`${activationId}:${stage}`);
+      return ok(undefined);
+    },
+  });
+  const panel = createTransientStagePanelPort({
+    sendMessage: (message) =>
+      new Promise((resolve) =>
+        getListener()?.(
+          message,
+          { id: runtime.id, url: runtime.getURL("side-panel.html") },
+          resolve,
+        ),
+      ),
+  });
+  assert.equal((await panel.advance(id, "activated")).ok, true);
+  assert.deepEqual(advanced, [`${id}:activated`]);
 });
 
 test("worker transport rejects untrusted senders and malformed requests", async () => {
