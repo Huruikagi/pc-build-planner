@@ -26,11 +26,20 @@ export interface ApplicationShellIntegrationOptions {
 }
 
 export interface ApplicationShellIntegration
-  extends Omit<SidePanelHost, "activate"> {
+  extends Omit<
+    SidePanelHost,
+    "activate" | "getSelected" | "showTransient" | "restorePersistent"
+  > {
   readonly operationPolicy: MutationGate;
   activate?(
     intent: FeatureActivationIntent,
   ): Promise<Result<void, FeatureActivationError>>;
+  getSelected?(): FeatureId | null;
+  showTransient?(id: FeatureId): ReturnType<SidePanelHost["showTransient"]>;
+  restorePersistent?(
+    preferred: FeatureId | null,
+    reason: "navigated" | "tab-closed" | "persistent-selected",
+  ): ReturnType<SidePanelHost["restorePersistent"]>;
 }
 
 const STARTUP_FAILURE_MESSAGE = message("shell.maintenanceStartupFailed");
@@ -286,6 +295,13 @@ export function createApplicationShellIntegration(
     ): Promise<Result<void, FeatureActivationError>> {
       return host.activate(intent);
     },
+
+    getSelected: () => host.getSelected(),
+
+    showTransient: (id) => host.showTransient(id),
+
+    restorePersistent: (preferred, reason) =>
+      host.restorePersistent(preferred, reason),
 
     stop: stopIntegration,
   };

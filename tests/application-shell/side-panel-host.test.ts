@@ -103,6 +103,51 @@ test("開始時に決定順の利用可能featureだけを選び、切替はunmo
   assert.equal(states.at(-1)?.kind, "ready");
 });
 
+test("一過性面から利用不可の戻り先を避けて常設fallbackと理由noticeを提示する", async () => {
+  const events: string[] = [];
+  const unavailable = feature("previous", 0, events, {
+    availability: { status: "unavailable", reason: "準備中" },
+  });
+  const fallback = feature("fallback", 1, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      events.push("mount:capture");
+      return {
+        async unmount() {
+          events.push("unmount:capture");
+        },
+      };
+    },
+  };
+  const { host, states } = setup([unavailable, fallback, transient]);
+  await host.start();
+  await host.showTransient(transient.id);
+  assert.equal(
+    (await host.restorePersistent(unavailable.id, "navigated")).ok,
+    true,
+  );
+  assert.deepEqual(events.slice(-3), [
+    "mount:capture",
+    "unmount:capture",
+    "mount:fallback",
+  ]);
+  const state = states.at(-1);
+  assert.equal(state?.kind, "ready");
+  if (state?.kind === "ready") {
+    assert.equal(state.selected, fallback.id);
+    assert.deepEqual(state.transientNotice?.message, {
+      key: "shell.featureUnavailable",
+      params: { featureId: unavailable.id, reason: "準備中" },
+    });
+  }
+  await host.stop();
+});
+
 test("一過性featureを初期表示と通常選択の候補から除外する", async () => {
   const events: string[] = [];
   const persistent = feature("persistent", 10, events);

@@ -33,6 +33,22 @@ export type TransientSurfaceError =
   | { readonly kind: "surface-unavailable"; readonly surfaceId: FeatureId }
   | { readonly kind: "transition-failed" };
 
+export type TransientSurfaceState =
+  | { readonly kind: "inactive" }
+  | {
+      readonly kind: "active";
+      readonly activationId: ActivationId;
+      readonly surfaceId: FeatureId;
+      readonly tabId: TargetTabId;
+      readonly returnTo: FeatureId | null;
+    }
+  | {
+      readonly kind: "dismiss-failed";
+      readonly activationId: ActivationId;
+      readonly surfaceId: FeatureId;
+      readonly returnTo: FeatureId | null;
+    };
+
 export interface TransientSurfaceLifecyclePort {
   isCurrent(activationId: ActivationId): boolean;
   conclude(

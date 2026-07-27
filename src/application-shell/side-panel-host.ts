@@ -180,6 +180,93 @@ export function createSidePanelHost(
     return next;
   };
 
+  const performShowTransient = async (
+    id: FeatureId,
+  ): Promise<Result<void, SelectionError>> => {
+    const feature = find(id);
+    if (
+      feature === undefined ||
+      isPersistent(feature) ||
+      feature.getAvailability().status !== "available"
+    ) {
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    }
+    if (selected === id && mounted !== undefined) return ok(undefined);
+    const unmounted = await unmountCurrent();
+    if (!unmounted.ok) return unmounted;
+    const result = await mountFeature(feature);
+    return result.ok
+      ? ok(undefined)
+      : err({
+          kind: "mount_failed",
+          message: message("shell.featureMountFailed", { featureId: id }),
+        });
+  };
+
+  const enqueueShowTransient = (
+    id: FeatureId,
+  ): Promise<Result<void, SelectionError>> => {
+    const next = transition.then(
+      () => performShowTransient(id),
+      () => performShowTransient(id),
+    );
+    transition = next;
+    return next;
+  };
+
+  const restorePersistent = (
+    preferred: FeatureId | null,
+    reason: "navigated" | "tab-closed" | "persistent-selected",
+  ): Promise<Result<void, SelectionError>> => {
+    const candidate = preferred === null ? undefined : find(preferred);
+    const preferredAvailable =
+      candidate !== undefined &&
+      isPersistent(candidate) &&
+      candidate.getAvailability().status === "available";
+    const target = preferredAvailable
+      ? candidate
+      : firstAvailable(preferred ?? undefined);
+    if (target !== undefined) {
+      const restored = enqueueSelect(target.id);
+      if (preferred !== null && !preferredAvailable) {
+        return restored.then((result) => {
+          if (result.ok) {
+            const availability = candidate?.getAvailability();
+            publish({
+              kind: "ready",
+              selected: target.id,
+              transientNotice: {
+                message:
+                  availability?.status === "unavailable"
+                    ? message("shell.featureUnavailable", {
+                        featureId: preferred,
+                        reason: availability.reason,
+                      })
+                    : message("shell.featureUnregistered", {
+                        featureId: preferred,
+                      }),
+                recoverable: true,
+              },
+            });
+            reportDiagnostic(`transient-dismiss-fallback-${reason}`, preferred);
+          }
+          return result;
+        });
+      }
+      return restored;
+    }
+    const next = transition.then(async () => {
+      const released = await unmountCurrent();
+      if (released.ok) publish({ kind: "ready", selected: null });
+      return released;
+    });
+    transition = next;
+    return next;
+  };
+
   const mountFeature = async (
     feature: ApplicationFeatureRegistration,
     restoredState?: unknown,
@@ -395,6 +482,9 @@ export function createSidePanelHost(
     activate(intent) {
       return enqueueActivation(intent);
     },
+    getSelected: () => selected,
+    showTransient: enqueueShowTransient,
+    restorePersistent,
     async stop() {
       if (stopped && unsubscribeRegistry === undefined && mounted === undefined)
         return;

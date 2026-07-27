@@ -33,22 +33,22 @@
   - _Requirements: 2.7, 3.5, 4.4_
   - _Boundary: TransientSurfaceNotice, ShellPresentation, ShellView, MessageCatalog_
 
-- [ ] 2. 一過性surface controllerを実装する
-- [ ] 2.1 起動世代と単一主表示を管理する
+- [x] 2. 一過性surface controllerを実装する
+- [x] 2.1 起動世代と単一主表示を管理する
   - commandを直列化し、起動要求の表示区分・availability・世代を検証して、固定tabと直前の常設featureを保持する。
   - 新しい同一tabジェスチャーを別世代として受理し、旧世代callbackを現行stateへ作用させない。
   - 有効要求だけが一過性featureをmountし、snapshot購読からactive／inactive状態を観測できるunit testを通す。
   - _Requirements: 1.4, 2.3, 2.4, 2.6, 3.6, 3.7, 3.10, 4.1_
   - _Boundary: TransientSurfaceController_
 
-- [ ] 2.2 正常終了と安全な常設fallbackを実装する
+- [x] 2.2 正常終了と安全な常設fallbackを実装する
   - navigation、更新・遷移、tab閉鎖の終了理由を受理し、一過性面をunmountして記録した常設featureへ戻す。
   - 戻り先不存在・利用不可時は利用可能な常設featureと理由を提示し、業務永続状態を変更しない。
   - 3終了理由とfallbackで一過性面が消え、同時に一つの常設featureだけが表示されるintegration testを通す。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.10, 4.2_
   - _Boundary: TransientSurfaceController, SidePanelHost_
 
-- [ ] 2.3 終了失敗をfail-safe stateへ閉じて再試行可能にする
+- [x] 2.3 終了失敗をfail-safe stateへ閉じて再試行可能にする
   - unmountまたは常設復帰の失敗を、実行操作を隠したdismiss-failedとして同じ世代に保持する。
   - dismiss-failed中は常設面と同時表示せず、旧世代callbackを無視して同一世代の終了だけを再試行可能にする。
   - 失敗、再試行成功、stale再試行の各testで永続状態が変更されず単一主表示が維持される。
@@ -56,14 +56,14 @@
   - _Requirements: 3.6, 3.7, 3.8, 3.10, 4.2_
   - _Boundary: TransientSurfaceController_
 
-- [ ] 2.4 型付き引き渡しを既存host transitionへ接続する
+- [x] 2.4 型付き引き渡しを既存host transitionへ接続する
   - 現行世代の引き渡しだけを一回のtyped activationとして実行し、成功時は戻り先へ復帰せず引き渡し先を保持する。
   - activation失敗時は既存rollbackで一過性面を維持し、旧世代の完了通知はno-opにする。
   - 成功・失敗・staleの各経路で同時に一つのfeatureだけがmountされるintegration testを通す。
   - _Requirements: 1.4, 3.8, 3.9, 3.10, 4.2_
   - _Boundary: TransientSurfaceController, ActivationRouter, SidePanelHost_
 
-- [ ] 2.5 late-bound lifecycleをcompositionへ導入する
+- [x] 2.5 late-bound lifecycleをcompositionへ導入する
   - feature contribution生成前にfail-closed proxyを用意し、host構築後・start前にcontrollerへbindする。
   - cleanupではcontroller停止後にunbindし、bind前・unbind後のcallbackがnot-startedとして失敗する。
   - 同じport参照が下流factoryへ注入され、production catalogへテスト専用featureを追加せず起動順と逆順cleanupを検証できる。

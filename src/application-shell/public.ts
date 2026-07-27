@@ -54,5 +54,6 @@ export type {
   TransientGestureSource,
   TransientSurfaceError,
   TransientSurfaceLifecyclePort,
+  TransientSurfaceState,
 } from "./transient-surface-ports.js";
 export { parseTargetTabId } from "./transient-surface-ports.js";

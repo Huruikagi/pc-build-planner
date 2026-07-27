@@ -9,6 +9,7 @@ import type {
   ShellNavigator,
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
+import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
 
 export interface FeatureContribution<
   TKey extends string = string,
@@ -29,6 +30,8 @@ export interface FeatureCompositionContext {
   /** 置換・保守capabilityを含む完全port。backup-restore専用の依存であり、既定の絞り込みportとは別に供給する。 */
   readonly fullDataPort: FoundationDataPort;
   readonly navigator: ShellNavigator;
+  /** Production composition always supplies the stable late-bound reference. */
+  readonly transientSurface?: TransientSurfaceLifecyclePort;
 }
 
 export type FeatureContributionFactory<

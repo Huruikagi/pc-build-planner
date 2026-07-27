@@ -14,6 +14,10 @@ import type {
 import type { ShellPresentationAdapter } from "../../src/application-shell/shell-presentation.js";
 import type { ShellNavigationItem } from "../../src/application-shell/shell-view.js";
 import type {
+  ActivationId,
+  TransientSurfaceLifecyclePort,
+} from "../../src/application-shell/transient-surface-ports.js";
+import type {
   FoundationDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
@@ -196,6 +200,86 @@ test("常設と一過性の混在時もpresentation navigationと初期表示を
   assert.equal(h.states.at(-1)?.kind, "ready");
   assert.equal(h.events.includes("transient:mount"), false);
   await root.stop();
+});
+
+test("production contributionへ同じlate-bound lifecycle参照を一度だけ注入する", async () => {
+  const h = harness();
+  const seen: TransientSurfaceLifecyclePort[] = [];
+  let beforeBind:
+    | ReturnType<TransientSurfaceLifecyclePort["conclude"]>
+    | undefined;
+  const activationId = "fixture" as ActivationId;
+  const handoff = {
+    featureId: id("planner"),
+    target: "noop",
+    payload: {},
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: (context) => {
+      assert.ok(context.transientSurface);
+      seen.push(context.transientSurface);
+      beforeBind = context.transientSurface.conclude(activationId, handoff);
+      return {
+        features: [{ key: "planner", registration: h.feature }] as const,
+        workerRegistrations: [],
+      };
+    },
+    presentation: h.presentation,
+    workerContext: {
+      addActionHandler: () => () => undefined,
+      reportError() {},
+    },
+    reportError() {},
+  });
+  assert.equal((await root.start()).ok, true);
+  assert.equal(seen.length, 1);
+  assert.ok(beforeBind);
+  const stablePort = seen[0];
+  assert.ok(stablePort);
+  assert.deepEqual(await beforeBind, {
+    ok: false,
+    error: { kind: "not-started" },
+  });
+  assert.equal((await stablePort.conclude(activationId, handoff)).ok, true);
+  await root.stop();
+  assert.deepEqual(await stablePort.conclude(activationId, handoff), {
+    ok: false,
+    error: { kind: "not-started" },
+  });
+});
+
+test("startup rollback後も注入済みlifecycleをnot-startedへ戻す", async () => {
+  const h = harness({ workerFails: true });
+  let lifecycle: TransientSurfaceLifecyclePort | undefined;
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: (context) => {
+      lifecycle = context.transientSurface;
+      return {
+        features: [{ key: "planner", registration: h.feature }] as const,
+        workerRegistrations: [h.worker],
+      };
+    },
+    presentation: h.presentation,
+    workerContext: {
+      addActionHandler: () => () => undefined,
+      reportError() {},
+    },
+    reportError() {},
+  });
+  assert.equal((await root.start()).ok, false);
+  assert.ok(lifecycle);
+  assert.deepEqual(
+    await lifecycle.conclude("rollback" as ActivationId, {
+      featureId: id("planner"),
+      target: "noop",
+      payload: {},
+    }),
+    { ok: false, error: { kind: "not-started" } },
+  );
 });
 
 test("foundation→registry→presentation→feature host→workerの順で一度だけ開始し逆順停止する", async () => {

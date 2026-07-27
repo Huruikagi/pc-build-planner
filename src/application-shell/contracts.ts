@@ -215,6 +215,12 @@ export interface SidePanelHost {
   activate(
     intent: FeatureActivationIntent,
   ): Promise<Result<void, FeatureActivationError>>;
+  getSelected(): FeatureId | null;
+  showTransient(id: FeatureId): Promise<Result<void, SelectionError>>;
+  restorePersistent(
+    preferred: FeatureId | null,
+    reason: "navigated" | "tab-closed" | "persistent-selected",
+  ): Promise<Result<void, SelectionError>>;
   stop(): Promise<void>;
 }
 

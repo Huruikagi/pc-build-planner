@@ -30,6 +30,7 @@ import { isPersistent } from "./contracts.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import { getSidePanelContributions } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
+import { createLateBoundLifecycle } from "./late-bound-lifecycle.js";
 import { createPublicApiRegistry } from "./public-api-registry.js";
 import type {
   ShellPresentationAdapter,
@@ -40,6 +41,10 @@ import {
   createSidePanelFeatureContributions,
   type SidePanelFeatureContributions,
 } from "./side-panel-contributions.js";
+import {
+  createTransientSurfaceController,
+  type TransientSurfaceController,
+} from "./transient-surface-controller.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export interface ProductionFoundationHandle {
@@ -192,6 +197,8 @@ export function createProductionApplicationComposition<
   let stopPromise: Promise<void> | undefined;
   let lifecycleEpoch = 0;
   let cleanupRequired = false;
+  const lateBoundLifecycle = createLateBoundLifecycle();
+  let transientController: TransientSurfaceController | undefined;
 
   const diagnose = (message: string): void => {
     try {
@@ -228,6 +235,19 @@ export function createProductionApplicationComposition<
       } catch (error: unknown) {
         failures.push(error);
       }
+    }
+    if (transientController) {
+      const owned = transientController;
+      try {
+        await owned.stop();
+        if (transientController === owned) transientController = undefined;
+      } catch (error: unknown) {
+        failures.push(error);
+      } finally {
+        lateBoundLifecycle.unbind();
+      }
+    } else {
+      lateBoundLifecycle.unbind();
     }
     if (integration) {
       const owned = integration;
@@ -397,6 +417,7 @@ export function createProductionApplicationComposition<
         data: validatedFoundation.dataPort,
         fullDataPort: validatedFoundation.fullDataPort,
         navigator: shellNavigator,
+        transientSurface: lateBoundLifecycle.port,
       };
       let contributions: ApplicationRuntimeContributions<TFeatures>;
       try {
@@ -457,11 +478,55 @@ export function createProductionApplicationComposition<
         reportError: options.reportError,
       });
       navigationTarget = integration;
+      const controller = createTransientSurfaceController({
+        host: {
+          getSelected: () => integration?.getSelected?.() ?? null,
+          isTransientAvailable: (surfaceId) => {
+            const feature = createdRegistry
+              .snapshot()
+              .find(({ id }) => id === surfaceId);
+            return (
+              feature !== undefined &&
+              !isPersistent(feature) &&
+              feature.getAvailability().status === "available"
+            );
+          },
+          async showTransient(surfaceId) {
+            const result = await integration?.showTransient?.(surfaceId);
+            return result?.ok
+              ? ok(undefined)
+              : err({ kind: "transition-failed" });
+          },
+          async restorePersistent(preferred, reason) {
+            const result = await integration?.restorePersistent?.(
+              preferred,
+              reason,
+            );
+            return result?.ok
+              ? ok(undefined)
+              : err({ kind: "transition-failed" });
+          },
+          async activate(intent) {
+            const result = await integration?.activate?.(intent);
+            return result?.ok
+              ? ok(undefined)
+              : err({ kind: "transition-failed" });
+          },
+        },
+      });
+      transientController = controller;
+      lateBoundLifecycle.bind(controller);
       const hostStarted = await integration.start();
       if (stale()) return rollbackStaleStart();
       if (!hostStarted.ok) {
         publishError();
         await cleanup().catch(() => diagnose("host rollback failed"));
+        return err({ kind: "startup_failed", message: STARTUP_ERROR });
+      }
+      const controllerStarted = await controller.start();
+      if (!controllerStarted.ok) {
+        publishError();
+        await cleanup().catch(() => diagnose("controller rollback failed"));
         return err({ kind: "startup_failed", message: STARTUP_ERROR });
       }
       const workers = composeWorkerContributions(
