@@ -9,33 +9,23 @@
   - 公開seamが未実装またはshape不一致なら後続classifier/compositionへ進まず、このconsumer contract testが明確に失敗することを完了条件とする。
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 1.2 候補ソースentityとプライマリ参照をcanonical domain契約へ導入する
+- [ ] 1.2 schema 2の候補ソース契約・検証・移行を原子的にcutoverする
   - 候補ソース識別子、販売・メーカー紹介の種別、URL・サイト名・取得日時・任意価格を表現する。
   - 候補へソースcollectionと条件付きプライマリ参照を追加し、商品共通値から価格と単数取得元を除く。
   - sourceなし候補と、sourceが存在するときの唯一のprimary参照を型契約で明示する。
-  - domain contract testでsourceなし・複数source・取得元別価格の新しい形状が型安全に構築できることを完了条件とする。
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.5_
-
-- [ ] 1.3 複数ソースとプライマリの実行時検証を実装する
   - sourceの固定field集合、識別子、HTTP/HTTPS URL、UTC日時、価格、種別を未信頼入力として検証する。
   - source ID重複、source有無とprimary有無の不一致、存在しないprimary参照をpath付きで拒否する。
   - 生HTML、data URL、画像・binary相当payloadの既存fail-closed規約をsourceの全外部文字列へ適用する。
-  - 正常な欠損sourceと不正なsource collectionを区別するdomain testが成功することを完了条件とする。
-  - _Requirements: 1.2, 1.3, 1.4, 7.1, 7.2, 7.5_
-
-- [ ] 1.4 保存schema 1から2への決定的な移行をproduction経路へ登録する
   - 旧単数取得元と商品価格を一件のprimary sourceへ移し、片方だけ・両方なしも値損失なく変換する。
   - 旧候補IDを生成source IDとして再利用し、同じ入力から同じschema 2結果を生成する。
   - 現行schema定数をmigration registry、replacement、初期rootで一元参照し、限定したfoundation公開入口からbackup mapperへ供給してproduction runtimeへ1→2 stepを登録する。
-  - 移行失敗時に旧rootが書き換わらず、正常readがschema 2 snapshotを返すことを完了条件とする。
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
-
-- [ ] 1.5 foundation fixtureと保存経路のschema 2回帰を整備する
+  - domain型の切替で影響する既存consumerは、source操作など後続機能を先取りせず、schema 2の読書きに必要な最小shapeだけを同じcutoverで更新する。
   - 通常利用fixtureをsource collection形式へ更新し、schema 1 fixtureはmigration専用に分離する。
   - repository read、root transaction、replacement、write authorityが同じ現行schemaとvalidatorを使うことを検証する。
   - 破損旧root、未知の将来版、移行後primary不整合が既存データを上書きしないことを検証する。
-  - foundationのdomain・persistence contract test群がschema 2で成功することを完了条件とする。
-  - _Requirements: 6.4, 6.5, 6.6, 7.2, 7.4_
+  - domain contract、validator、migration、foundation回帰、型検査を途中で分割せず一回のレビューとコミットで成功させることを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.4, 7.5_
+  - _Boundary: CandidateSourceModel, CandidateSourceValidator, CandidateSourceMigration, schema 2 foundation cutover_
 
 - [ ] 2. 独立したソース能力と隣接形式を実装する
 - [ ] 2.1 (P) ソースcollection更新と代表値導出policyを実装する
@@ -72,7 +62,7 @@
   - format 1 migrationとformat 2 round tripのtestが、既存rootを置換する前の検証まで成功することを完了条件とする。
   - _Requirements: 6.1, 6.2, 8.2, 8.3, 8.4_
   - _Boundary: BackupExchangeV2_
-  - _Depends: 1.2, 1.3, 1.4_
+  - _Depends: 1.2_
 
 - [ ] 3. 候補管理serviceと公開source契約を統合する
 - [ ] 3.1 候補draft・summary・公開source catalog／mutation契約を複数ソース化する
@@ -169,7 +159,7 @@
   - exportした架空データを復元して再exportしたときsource意味が一致するintegration testが成功することを完了条件とする。
   - _Requirements: 6.1, 6.2, 6.5, 8.2, 8.3, 8.4_
   - _Boundary: BackupExchangeV2, CandidateSourceMigration_
-  - _Depends: 1.4, 2.4_
+  - _Depends: 1.2, 2.4_
 
 - [ ] 5.4 互換性判定と未変更consumerのschema 2回帰を整備する
   - source・取得元別価格だけを変えた候補が同じ正規化属性から同じ互換性結果を返すことを検証する。
