@@ -4,7 +4,7 @@
 
 本specはapplication shellへ一過性featureの汎用契約を導入する。一過性featureは常設ナビゲーションへ並ばず、権限付与ジェスチャー由来の起動要求でだけ表示され、固定対象タブの文書世代が失効すると終了する。
 
-業務feature固有の状態やUIは所有しない。最初の利用者は下流spec `product-capture-transient-migration` であり、本specが公開する`ActivationId`、固定`TargetTabId`、`TransientSurfaceLifecyclePort`だけを利用する。controller実体はshell内部に留める。
+業務feature固有の状態やUIは所有しない。下流featureは本specが公開する`ActivationId`、固定`TargetTabId`、`TransientSurfaceLifecyclePort`を利用し、feature固有の権限付与gestureを持つ場合は`TransientGestureRegistrationPort`へ登録する。controller、scheduler、store writerはshell/runtime内部に留める。
 
 ### Goals
 
@@ -13,12 +13,14 @@
 - 起動世代と対象タブを固定し、遷移・更新・閉鎖で確実に終了する
 - 戻り先と型付き引き渡しを単一主表示領域の契約として提供する
 - Chrome APIをruntime adapterへ閉じ、shellを決定的に検証する
+- feature固有gestureを既存のsequence・store・panel open経路へ同期登録できる最小portを提供する
 
 ### Non-Goals
 
 - product-captureの状態・UI・抽出処理
 - 候補管理のdraftと保存検証
 - コンテキストメニュー項目の実登録
+- gesture source固有のChrome API、item ID、表示条件、文言
 - 商品データの永続化
 
 ## Boundary Commitments
@@ -26,9 +28,10 @@
 ### This Spec Owns
 
 - `ApplicationFeatureRegistration.presentation`
-- `ActivationId`、`TargetTabId`、`TransientActivationRequest`
+- `ActivationId`、`TargetTabId`、未信頼なChrome tab IDをbrandへ変換する`parseTargetTabId`、`TransientActivationRequest`
 - `TransientSurfaceController`の起動、撤収、引き渡し、世代照合
 - 下流featureへ世代照合と引き渡しだけを公開する`TransientSurfaceLifecyclePort`
+- feature-owned gesture sourceをcanonical gesture ingressへ接続する`TransientGestureRegistrationPort`
 - 起動要求storeとタブ寿命adapter
 - 常設ナビ、初期選択、availability fallbackの一過性除外
 - shell/runtimeの診断、失敗通知、検証fixture
@@ -38,6 +41,7 @@
 - 一過性面の業務payloadの意味
 - 抽出結果の確認・補正・保存
 - capture/candidateの文言とE2Eロケータ
+- context menuなど各gesture sourceの登録内容とChrome API adapter
 - 永続データschema
 
 ### Allowed Dependencies
@@ -45,14 +49,16 @@
 - application shellの既存registration、host transition、typed activation契約
 - canonical `Result<T, E>`と既存message catalog公開契約
 - shell/runtime専用adapter内に限定した`chrome.action`、`chrome.sidePanel`、`chrome.tabs`、`chrome.storage.session`、`chrome.runtime` message
-- 下流specは`application-shell/public.ts`の`TransientSurfaceLifecyclePort`だけを参照する
+- 下流specは`application-shell/public.ts`の`TransientSurfaceLifecyclePort`または`TransientGestureRegistrationPort`と関連型だけを参照する
 
 ### Revalidation Triggers
 
-- `ActivationId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`のshapeまたは意味の変更
+- `ActivationId`、`TargetTabId`、`parseTargetTabId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`のshapeまたは意味の変更
+- `TransientGestureSource`、`TransientGestureRegistrationPort`、`TransientGestureRegistrationError`のshape、同期emit、cleanup保証の変更
 - `seq`割り当て、墓標優先、watch-ready最終許可の順序保証の変更
 - session媒体、worker単一write owner、タブ寿命イベントの変更
 - production E2Eの委譲先または実feature登録順の変更
+- gesture ingressの同期性またはworker composition ownerを変更した場合は`source-price-refresh`を再検証する
 
 ### Existing Spec Revision Touchpoints
 
@@ -71,6 +77,11 @@ runtime adapters (chrome.storage.session / chrome.tabs / chrome.action / chrome.
 
 downstream feature
     → application-shell/public.ts
+
+feature gesture source
+    → TransientGestureRegistrationPort
+    → canonical gesture ingress
+    → transient scheduler
 ```
 
 下流featureはshellの内部moduleやChrome APIへ到達しない。shellは下流featureのpayloadを`unknown`として扱い、対象featureのactivation validatorへ委ねる。
@@ -81,8 +92,12 @@ downstream feature
 
 ```mermaid
 graph TB
-    Action["chrome.action gesture"] --> Store["TransientActivationStore"]
-    Action --> FailureSignal["ActivationFailureSignal"]
+    Action["chrome.action source"] --> Registration["TransientGestureRegistrationPort"]
+    FeatureGesture["feature gesture source"] --> Registration
+    Registration --> Ingress["Canonical gesture ingress"]
+    Ingress --> Store["TransientActivationStore"]
+    Ingress --> FailureSignal["ActivationFailureSignal"]
+    Ingress --> PanelOpen["Side panel open"]
     Tabs["chrome.tabs lifecycle"] --> Store
     Store --> Port["Typed runtime activation port"]
     Tabs --> TabPort["TabLifecyclePort"]
@@ -98,6 +113,8 @@ graph TB
 - **SidePanelHost**: 同時に一つのfeatureだけをmountし、既存transition/rollbackを維持する
 - **TransientSurfaceController**: 起動世代、対象タブ、戻り先、監視解除を所有する
 - **TransientActivationStore**: worker再生成を跨ぐ起動要求、単調増加順序、失効墓標を保持する
+- **TransientGestureRegistrationPort**: feature-owned sourceを同期開始し、emitを唯一のgesture ingressへ接続して対称cleanupする
+- **Canonical gesture ingress**: activation IDとsequenceを割り当て、store commandをenqueueし、同じgesture callback内でpanel openを開始する
 - **TransientActivationPort**: panelのwatch-readyを型付きruntime messageでworkerの最終許可へ接続する
 - **ActivationFailureSignal**: 起動record書き込み失敗をsession媒体と独立したChrome action表示で通知する
 - **TabLifecycleAdapter**: ChromeイベントをURL非依存の寿命イベントへ変換する
@@ -117,6 +134,8 @@ src/application-shell/
   public.ts
 src/runtime/
   service-worker.ts
+  transient-gesture-registration.ts     # new
+  transient-action-gesture-source.ts    # new
   transient-activation-message.ts       # new
   transient-activation-panel-port.ts    # new
   transient-activation-failure-signal.ts # new
@@ -168,6 +187,14 @@ export const isPersistent = (
 ```typescript
 export type TargetTabId = number & { readonly __brand: "TargetTabId" };
 export type ActivationId = string & { readonly __brand: "ActivationId" };
+
+export type TargetTabIdValidationError = {
+  readonly kind: "invalid-target-tab";
+};
+
+export function parseTargetTabId(
+  value: unknown,
+): Result<TargetTabId, TargetTabIdValidationError>;
 
 export interface TransientActivationRequest {
   readonly activationId: ActivationId;
@@ -239,6 +266,38 @@ createProductCaptureFeatureContribution({
 
 具体feature名を知るのはcomposition rootだけであり、shell controllerはproduct-captureを知らない。
 
+### Gesture Registration
+
+```typescript
+export type TransientGestureRegistrationError =
+  | { readonly kind: "invalid-source" }
+  | { readonly kind: "duplicate-source" }
+  | { readonly kind: "source-start-failed" }
+  | { readonly kind: "not-started" };
+
+export interface TransientGestureSource {
+  readonly id: string;
+  readonly surfaceId: FeatureId;
+  start(
+    emit: (tabId: TargetTabId) => void,
+  ): Result<() => void, TransientGestureRegistrationError>;
+}
+
+export interface TransientGestureRegistrationPort {
+  register(
+    source: TransientGestureSource,
+  ): Result<() => void, TransientGestureRegistrationError>;
+}
+```
+
+`register`と`source.start`は同期契約である。登録成功時の戻り値はsource listenerを一度だけ解除するcleanupであり、同じ`id`の二重登録、空ID、不正surface、runtime開始前・停止後、source開始失敗を閉じたerror unionで返す。失敗したsourceをregistryへ残さない。
+
+sourceはChrome eventの未信頼tab IDを`parseTargetTabId`で検証し、正の安全な整数だけを`TargetTabId`へ昇格する。これにより下流adapterはbrandをunsafe castせず、不正・欠損tabをemit前に無視できる。
+
+`emit(tabId)`はsourceのChrome event callback内で同期実行される。concrete registrarはこの呼出しをcanonical gesture ingressへ直結し、その場でactivation IDとsequenceを割り当ててschedulerへenqueueすると同時に`sidePanel.open()`を開始する。`emit`はstore完了を待たず、sourceへstore writer、sequence allocator、panel openerを公開しない。durable put失敗とopen失敗の通知は既存`ActivationFailureSignal`と診断規則へ委譲する。
+
+組み込み`chrome.action`も`TransientGestureSource`として同じregistrarへ登録する。`source-price-refresh`など下流featureが所有するcontext menu adapterは、自身のitem登録・click検証だけを所有し、production worker compositionが公開portへsourceを登録する。cleanupでは全sourceを解除してからregistrarとschedulerを停止し、解除後に到着したcallbackはno-opにする。
+
 ### Late-Bound Composition
 
 現行compositionはfeature contributionをregistry/hostより先に生成するため、controller実体をfeature factoryへ直接渡さない。composition rootは既存`ShellNavigator`と同じlate-bound proxyを先に作り、次の順序で循環を解く。
@@ -259,6 +318,12 @@ proxyとbind操作はapplication composition内部契約であり、`application
 - 戻り先が利用不可なら利用可能な常設featureと理由を提示する
 
 ## Activation Delivery
+
+### Generic Gesture Ingress
+
+全gesture sourceはregistrarが所有する単一の内部callbackへ収束する。callbackは`surfaceId`と`TargetTabId`だけを受け、source固有payloadをactivation storeへ持ち込まない。組み込みactionと下流context menuは同じ順序で、activation ID生成、受信時sequence割当、`pending` recordのenqueue、同期的なpanel open開始を行う。
+
+registrarはsource IDごとのcleanupを保持するが、activation状態や永続順序を持たない。worker再生成時はsourceを冪等に再登録し、順序の復元は従来どおりsession envelopeとschedulerが担う。別sourceが同じtab・surfaceを起動した場合も新しいsequenceとactivation IDを割り当て、現行世代置換と墓標規則を変えない。
 
 ### Store Model
 
@@ -363,7 +428,7 @@ panel adapterはrequestを送信し、`unknown` responseを上記unionへ検証�
 
 監視責務は次の順で移管する。
 
-1. workerがジェスチャーを受け、その受信順`seq`を割り当てて起動要求をenqueueし、同じcallback内でpanel openを同期開始する
+1. 登録済みgesture sourceがeventを受け、同期`emit`を通じて受信順`seq`を割り当て、起動要求をenqueueし、同じcallback内でpanel openを同期開始する
 2. workerのトップレベル`tabs.onUpdated` / `onRemoved` listenerが、recordの有無を問わず後続`seq`の失効墓標をenqueueする
 3. panelはrecordを受け取るが、この時点では業務featureをmountしない
 4. panelが`TabLifecyclePort.watch`を設置し、watch-readyをworkerへ通知する
@@ -429,13 +494,15 @@ export interface TabLifecyclePort {
 - **起動record書き込み失敗**: sessionへ再書き込みせずaction badge/titleで理由と再操作を提示する
 - **起動record読み出し失敗**: 常設面を維持した`transientNotice`として提示する
 - **墓標容量を安全に剪定不能**: `capacity-exceeded`で起動を拒否し、再操作可能なstore障害として提示する
+- **gesture source登録失敗**: `invalid-source | duplicate-source | source-start-failed | not-started`を返し、listenerと登録entryを残さない
+- **解除後のgesture callback**: 新しいactivationを生成せずno-opにし、停止済みschedulerへcommandを渡さない
 
 ## Requirements Traceability
 
 | Requirement | Components | Verification |
 |---|---|---|
 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | Registry, composition, host | contract/integration |
-| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | Store, sequence/tombstone protocol, typed runtime port, failure signal, controller, service worker | runtime integration |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | Gesture registration/ingress, Store, sequence/tombstone protocol, typed runtime port, failure signal, controller, service worker | contract/runtime integration |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8 | Controller, host, tab adapter | unit/integration |
 | 3.9, 3.10 | Controller, activation router | integration |
 | 4.1, 4.2, 4.3, 4.4 | ports, in-memory adapters, existing shell fixtures | unit/integration |
@@ -452,6 +519,8 @@ export interface TabLifecyclePort {
 - 単調増加`seq`、record不在時の墓標、`invalidated`終端と不正stage遷移拒否
 - 墓標がtabごとに最新1件・全体128件以内で、安全checkpoint前の支配墓標を剪定しないこと
 - 安全に128件以内へ剪定できない破損状態を`capacity-exceeded`でfail closedにすること
+- `parseTargetTabId`の正の安全な整数受理と、欠損・0・負数・小数・非数値拒否
+- gesture sourceの正常登録、invalid/duplicate/start failure、cleanup一回性、解除後emitのno-op
 
 ### Integration
 
@@ -465,6 +534,8 @@ export interface TabLifecyclePort {
 - `read()`失敗noticeと常設featureが同時に維持されること
 - persistent featureのナビ・選択・availability障害分離の非回帰
 - conclude成功で引き渡し先が保持され、失敗で一過性面がrollbackされること
+- action sourceとfeature-owned sourceのemitが同じscheduler/store/open経路へ一度だけ入り、別writerや別sequence allocatorを作らないこと
+- public consumerが`TransientGestureRegistrationPort`だけでsourceを登録でき、runtime concreteをdeep importしないこと
 
 ### Cross-Spec E2E
 
@@ -487,7 +558,8 @@ export interface TabLifecyclePort {
 3. controllerとin-memory portsを実装する
 4. runtime storeとtab lifecycle adapterを実装する
 5. production compositionから隔離したin-memory registration fixtureでshell契約を検証する
-6. 公開契約を`application-shell/public.ts`から提供する
-7. composition rootから下流feature factoryへ`TransientSurfaceLifecyclePort`を注入できるcontract fixtureを追加する
+6. `TransientSurfaceLifecyclePort`と`TransientGestureRegistrationPort`を`application-shell/public.ts`から提供する
+7. 組み込みaction sourceをgeneric registrarへ移し、feature-owned sourceを同じworker ingressへ登録できるcontract fixtureを追加する
+8. composition rootから下流feature factoryへ`TransientSurfaceLifecyclePort`を注入できるcontract fixtureを追加する
 
-業務featureへの適用とproduction MV3 E2Eは、本spec完了後に`product-capture-transient-migration`で行う。shell tasksはテスト専用featureをproduction catalogへ追加しない。
+一過性surfaceへの最初の業務feature適用とicon起動E2Eは`product-capture-transient-migration`、feature-owned context menu sourceの実登録とE2Eは`source-price-refresh`で行う。shell tasksはテスト専用featureをproduction catalogへ追加しない。

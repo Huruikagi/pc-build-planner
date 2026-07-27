@@ -117,6 +117,35 @@
   - _Requirements: 3.6, 4.7, 4.8_
   - _Boundary: inferCategoryHint / CandidateEditorNavigation / CandidateEditorPrefill_
 
+- [ ] 8. 固定tabの価格抽出を公開consumerへ提供する
+
+- [ ] 8.1 price observationとtyped failureの公開契約を確立する
+  - 固定対象tabだけを入力に取り、page-derived URL、canonical取得時点、任意の根拠付きMoneyValueだけを返すread-only portを定義する。
+  - tab不存在、権限失効、制限ページ、tab遷移、注入失敗、payload不正をconsumerと同一の閉じたerror unionで表す。
+  - 価格欠損はページ観測成功と区別してoptional値で表し、source更新、URL照合、保存責務をportへ持ち込まない。
+  - product-capture public APIへport fieldを追加し、contract fixtureのtest doubleを一つだけ下流factoryへ依存注入できる形にする。
+  - 公開consumerが唯一のfeature公開入口から型とpublic API fieldをimportし、extractor、normalizer、ranker、runtime concreteへのdeep importなしでstrict型検査を通ることを完了条件とする。
+  - _Requirements: 1.1, 1.4, 1.5, 2.3, 3.2, 6.1, 6.2, 7.2_
+  - _Boundary: PagePriceExtractionPublicContract_
+
+- [ ] 8.2 固定tab runtimeを既存抽出・順位・正規化pipelineへ接続する
+  - activationで固定されたtabだけを解決・注入し、通常取り込みと同じunknown payload decoderでrequest、tab、page-derived URLを再検証する。
+  - URL不一致をtab遷移としてfail closedにし、注入target URLでpage URLを代用しない。
+  - 既存collectorのprice候補だけを既存normalizerとrankerへ通し、選択した元表記とMoneyValueを根拠付き値へ投影する。
+  - contribution factoryがproduction adapterを一度だけ組み立て、同じinstanceをproduct-capture public APIからcomposition rootへ公開する。
+  - 通常取り込みと公開portへ同じ架空候補集合を渡すcontract testで、同じpriceとprovenanceが選ばれ、他の商品fieldが返らないことを完了条件とする。
+  - _Depends: 8.1, product-capture-transient-migration 3.2, product-capture-transient-migration 5.1_
+  - _Requirements: 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.6, 3.1, 3.2, 3.4, 6.1, 6.2, 7.1, 7.2, 7.3_
+  - _Boundary: PagePriceExtractionAdapter, CaptureExtractionPipeline_
+
+- [ ] 8.3 公開境界・失敗・下流再検証を完成させる
+  - 6種のtyped failure、価格欠損、不正MoneyValue、page URL不一致、注入例外を架空runtimeで決定的に検証し、失敗時に永続化を呼ばない。
+  - URL、raw価格、HTML、例外objectをログ・session store・永続payloadへ出さず、新しい権限やworker DOM依存を追加しないことを境界／artifact gateで確認する。
+  - `source-price-refresh`のconsumer fixtureがport shape、optional price、error unionをそのまま受理し、public consumer、typecheck、関連unit／contract／fixture検査が全件成功することを完了条件とする。
+  - _Depends: 8.2_
+  - _Requirements: 1.2, 1.3, 2.3, 2.4, 2.5, 3.2, 3.3, 3.4, 6.2, 6.5, 7.1, 7.2, 7.3_
+  - _Boundary: PagePriceExtractionContractTests, PublicBoundaryValidation, SecurityLogging_
+
 ## Implementation Notes
 
 - Task 1: `scripts/validate-artifacts.mjs`のvalidateManifestは共有tooling（全specの`pnpm validate:final-build`から使われる）。permission許可listの拡張は`tests/tooling/final-validation-gate.test.ts`の合成manifest fixtureにも`action`/新permissionsを反映しないと既存成功系testが壊れる。

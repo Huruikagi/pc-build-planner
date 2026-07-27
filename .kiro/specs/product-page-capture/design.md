@@ -1,28 +1,31 @@
 # Design Document
 
-> **v0.3.0移行注記（未承認）**: 以下は実装済みv0.1.0の設計である。`product-capture-transient-migration` の承認後、capture所有の簡易確認・補正・project選択・保存状態は候補管理への即時typed handoffへ置換する。抽出器、ranker、normalizer、取得根拠は引き続き本specがcanonical ownerであり、移行specは再定義しない。
+> **v0.3.0移行注記（未承認）**: 以下は実装済みv0.1.0の設計である。`product-capture-transient-migration` の承認後、capture所有の簡易確認・補正・project選択・保存状態は候補管理への即時typed handoffへ置換する。抽出器、ranker、normalizer、取得根拠は引き続き本specがcanonical ownerであり、移行specは再定義しない。`PagePriceExtractionPort`はこのcanonical抽出ownershipに属する加算的なread-only seamであり、移行specのUI・state・handoff責務を吸収しない。
 
 ## Overview
 
 本機能は、閲覧中のPCパーツ商品ページから汎用的に情報を抽出し、利用者が根拠を確認・補正して既存プロジェクトへ候補登録する体験を提供する。actionの明示操作を入口に、注入された抽出器がDOM内で情報を収集し、service workerの調停を経てサイドパネルへ一時ドラフトを渡す。
 
-保存は`project-candidate-management`の`CaptureCandidatePort`へ委譲する。取り込み境界は抽出候補、取得根拠、正規化、確認状態だけを所有し、`local-data-foundation`の永続化や登録後の候補管理を重複実装しない。
+保存は`project-candidate-management`の`CaptureCandidatePort`へ委譲する。取り込み境界は抽出候補、取得根拠、正規化、確認状態に加え、固定tabから同じ規則で価格だけを観測する公開`PagePriceExtractionPort`を所有し、`local-data-foundation`の永続化や登録後の候補管理を重複実装しない。
 
 ### Goals
 - 一時権限とユーザージェスチャーに限定した現在ページ取り込みを提供する
 - 決定的な汎用抽出と取得根拠を備えた安全な確認ドラフトを生成する
 - 欠損や未分類を許容しつつ既存の候補作成契約へ一度だけ保存する
+- 下流consumerがdeep importや抽出規則の複製なしでpage-derived URL、取得時点、根拠付き価格を取得できるようにする
 
 ### Non-Goals
 - 常時監視、一括取得、サーバー・AI・画像・価格履歴
 - サイト別正式対応または取得率保証
 - 登録後候補の管理、現在構成、互換性判定
+- 保存済みsourceのURL照合、価格更新、取得履歴、source種別判定
 
 ## Boundary Commitments
 
 ### This Spec Owns
 - action起点の現在タブ取得要求と注入可否の判定
 - ページDOMからの汎用候補収集、順位付け、正規化、取得根拠
+- 固定tabのpage-derived URL、取得時点、同じ順位・正規化規則による価格だけを返す`PagePriceExtractionPort`
 - 取り込みセッションの簡易確認、補正、プロジェクト選択、失敗回復UI
 - 確認済みドラフトから`CaptureCandidatePort`入力への変換
 - 候補管理の型付きprefill作成と`ShellNavigator`を介した詳細編集要求
@@ -33,6 +36,7 @@
 - サイト別アダプター実装、互換性属性の意味判定、バックアップ
 - 生HTML、画像、未保存セッションの永続化
 - 候補編集activation payloadの最終検証、候補管理画面のmount/state適用
+- 抽出価格を保存済みsourceへ照合・反映するworkflowと原子的mutation
 
 ### Allowed Dependencies
 - Chrome 116以降の`action`、`activeTab`、`scripting`、`sidePanel`
@@ -40,6 +44,8 @@
 - Candidate managementの`CaptureCandidatePort`、`CandidateDraft`、`CandidateEditorPrefill`、`openCandidateEditor`
 - TypeScript strict、React 19系/React DOM、既存test基盤。UI以外のruntime依存は追加しない
 - application shellのfeature registration、worker registration、`FeatureMountContext`、`ShellNavigator`、operation policy、contract test kit
+- application shell公開の`TargetTabId`。固定tabの解決・注入は`product-capture-transient-migration`が確定する`CaptureRuntimePort`を再利用する
+- Foundation公開のcanonical `Result<T, E>`、`SourcedValue<MoneyValue>`、`UtcTimestamp`
 
 ### Revalidation Triggers
 - `CandidateDraft`、`CaptureCandidatePort`、カテゴリ、正規化属性、取得元契約の変更
@@ -47,6 +53,8 @@
 - action・side panel入口、権限、メッセージ送信者検証、依存方向の変更
 - 抽出優先順位、URL・価格正規化、未分類保存規則の変更
 - サイト別アダプター追加または抽出セッション永続化への変更
+- `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort`のshape、owner、公開入口の変更
+- page-derived URL照合、固定tab runtime、price provenanceの意味を変更した場合は`source-price-refresh`を再検証する
 
 ## Architecture
 
@@ -62,6 +70,9 @@ graph LR
     Coordinator --> Injector[Page injector]
     Injector --> Extractor[Generic extractor]
     Extractor --> Coordinator
+    Extractor --> PriceAdapter[Page price extraction adapter]
+    PriceAdapter --> PricePort[Page price extraction port]
+    PricePort --> PriceConsumer[source-price-refresh]
     Coordinator --> State[Capture state]
     State --> View[Capture view]
     State --> Mapper[Draft mapper]
@@ -73,7 +84,7 @@ graph LR
 ```
 
 - **Selected pattern**: 注入抽出パイプラインとfeature state。DOM所有、調停、表示、保存変換を分離する。
-- **Dependency direction**: `Shell/Foundation/Candidate contracts → Capture contracts → Extractor/Normalizer/Mapper → Coordinator/State → View/Registration`。保存は`CaptureCandidatePort`、詳細編集は`openCandidateEditor`だけを介する。
+- **Dependency direction**: `Shell/Foundation/Candidate contracts → Capture contracts → Extractor/Normalizer/Ranker/Mapper → Coordinator/PagePriceExtractionAdapter/State → View/Registration`。保存は`CaptureCandidatePort`、詳細編集は`openCandidateEditor`だけを介し、外部featureは`product-capture/public.ts`の価格抽出portだけを参照する。
 - **Existing patterns preserved**: `Result`、判別共用体、信頼済み保存境界、DOM text描画、feature service/state構成。
 - **New components rationale**: `GenericExtractor`はページDOM所有、`CaptureCoordinator`はChrome API所有、`CaptureState`は一時セッション所有、`CaptureDraftMapper`は上流契約変換だけを所有する。
 
@@ -92,7 +103,8 @@ graph LR
 ```text
 manifest.json                                  # action、activeTab、scripting権限を追加
 src/features/product-capture/contracts.ts      # 未信頼payload、候補、根拠、結果、エラー型
-src/features/product-capture/public.ts         # 取り込み公開契約の唯一の公開入口
+src/features/product-capture/public.ts         # price extraction型とProductCapturePublicApiの唯一の公開入口
+src/features/product-capture/page-price-extraction.ts # 固定tab抽出から価格観測だけを投影する公開port実装
 src/features/product-capture/registration.ts   # side panel feature registrationと依存組立
 src/features/product-capture/worker-registration.ts # action handlerをshellへ提供するworker registration port
 src/features/product-capture/extractor.ts      # JSON-LD、meta、文書構造の候補収集
@@ -109,6 +121,8 @@ tests/features/product-capture/extractor.test.ts
 tests/features/product-capture/normalizer.test.ts
 tests/features/product-capture/ranker.test.ts
 tests/features/product-capture/coordinator.test.ts
+tests/features/product-capture/page-price-extraction.test.ts
+tests/contracts/product-capture-price-extraction.test.ts
 tests/features/product-capture/state.test.ts
 tests/features/product-capture/view.test.ts
 tests/features/product-capture/integration.test.ts
@@ -119,6 +133,7 @@ tests/fixtures/product-capture/*.html           # 架空ページfixtureのみ
 ### Modified Files
 - `manifest.json` — action、`activeTab`、`scripting`を最小権限で宣言する。
 - 共有service worker、side panel runtime、root `src/index.ts`は変更しない。application shellが`registration.ts`、`worker-registration.ts`、`public.ts`をcompositionする。
+- `src/features/product-capture/public.ts` — `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort`と`ProductCapturePublicApi.pagePriceExtraction`だけを再公開し、extractor/normalizer/ranker/runtime concreteは公開しない。
 
 ## System Flows
 
@@ -142,17 +157,39 @@ sequenceDiagram
 
 `requestId`、`tabId`、開始時URLを照合し、遷移後の応答を破棄する。保存中は状態遷移を`submitting`へ固定し、同一ドラフトの二重送信を抑止する。
 
+### 公開portからの価格観測
+
+```mermaid
+sequenceDiagram
+    participant Consumer
+    participant PricePort
+    participant Runtime
+    participant Page
+    participant Pipeline
+    Consumer->>PricePort: extractPrice fixed tab
+    PricePort->>Runtime: getTab and inject
+    Runtime->>Page: bundled extractor
+    Page-->>Runtime: page-derived URL and candidates
+    Runtime-->>PricePort: untrusted payload
+    PricePort->>PricePort: validate tab and URL generation
+    PricePort->>Pipeline: normalize and rank price candidates
+    Pipeline-->>PricePort: sourced money or missing
+    PricePort-->>Consumer: page URL capturedAt price
+```
+
+`PagePriceExtractionPort`は固定`TargetTabId`以外を入力に取らない。注入前に同じtabを解決し、ページpayloadの`pageUrl`を注入先tabが報告したURLと照合する。URL不一致は`tab-changed`として破棄し、`target.url`でpage URLを代用しない。候補収集、payload decoder、normalizer、rankerは通常取り込みと同じ実装を共有し、価格以外の採用値や棄却値をconsumerへ返さない。
+
 ## Requirements Traceability
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1, 1.2, 1.3, 1.4, 1.5 | 明示操作と一時権限 | Coordinator、Runtime | CaptureRequest | 取り込み |
-| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 汎用抽出と根拠 | Extractor、Ranker | ExtractionCandidate | 取り込み |
-| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 正規化・未信頼入力 | Normalizer、Coordinator | RawCapturePayload、NormalizedField | 取り込み |
+| 1.1, 1.2, 1.3, 1.4, 1.5 | 明示操作と一時権限 | Coordinator、Runtime、PagePriceExtractionAdapter | CaptureRequest、PagePriceExtractionPort | 取り込み・価格観測 |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 汎用抽出と根拠 | Extractor、Ranker、PagePriceExtractionAdapter | ExtractionCandidate、PagePriceObservation | 取り込み・価格観測 |
+| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 正規化・未信頼入力 | Normalizer、Coordinator、PagePriceExtractionAdapter | RawCapturePayload、NormalizedField、PagePriceExtractionPort | 取り込み・価格観測 |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8 | 確認・補正・カテゴリ参考値 | CaptureState、CaptureView、CandidateEditorNavigation、inferCategoryHint | CaptureSessionState、CandidateEditorPrefill（categoryHint） | 確認・typed activation |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | project選択・保存 | State、DraftMapper | CaptureCandidatePort | 保存 |
-| 6.1, 6.2, 6.3, 6.4, 6.5 | 失敗・再試行 | Coordinator、State、View | CaptureError | 取り込み・保存 |
-| 7.1, 7.2, 7.3 | 架空資産による検証 | 全コンポーネント | Test fixtures | 全フロー |
+| 6.1, 6.2, 6.3, 6.4, 6.5 | 失敗・再試行 | Coordinator、State、View、PagePriceExtractionAdapter | CaptureError、PagePriceExtractionError | 取り込み・保存・価格観測 |
+| 7.1, 7.2, 7.3 | 架空資産による検証 | 全コンポーネント | Test fixtures、price extraction contract kit | 全フロー |
 
 ## Components and Interfaces
 
@@ -162,6 +199,7 @@ sequenceDiagram
 | CaptureNormalizer | Feature | 未信頼値を正規化 | 3.1–3.6, 7.1 | Contracts P0 | Service |
 | CandidateRanker | Feature | 候補を決定的に選択 | 2.2–2.4, 7.1 | Normalizer P0 | Service |
 | CaptureCoordinator | Runtime | action・注入・競合・失敗を調停 | 1.1–1.5, 6.1–6.4, 7.2 | Chrome P0 | Service |
+| PagePriceExtractionAdapter | Feature/runtime integration | 固定tabから同じ抽出規則で価格観測だけを返す | 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, 6.2, 7.1, 7.2, 7.3 | Fixed-tab runtime P0、Extractor P0、Normalizer P0、Ranker P0 | Service |
 | CaptureDraftMapper | Integration | 確認値を上流draftへ変換 | 3.5–3.6, 5.3–5.4 | Candidate contracts P0 | Service |
 | CandidateEditorNavigation | Integration | 確認sessionを型付きprefillとして候補管理へ遷移 | 4.2, 4.6 | Candidate public P0、ShellNavigator P0 | Service |
 | CaptureState | UI state | セッションと保存状態を管理 | 4.1–5.7, 6.3–6.4 | Port P0 | State |
@@ -248,6 +286,42 @@ interface CaptureCoordinator {
 
 actionのユーザージェスチャー内でside panelを開き、対象tabIdとURLを確定して抽出関数を注入する。戻り値は`unknown`として実行時検証し、requestIdと現在タブを再照合する。権限失効、制限URL、タブ遷移、注入失敗、payload不正を判別共用体へ正規化する。
 
+#### PagePriceExtractionAdapter
+
+`source-price-refresh`が消費する型と同一の公開契約を`product-capture/public.ts`から提供する。
+
+```typescript
+export interface PagePriceObservation {
+  readonly pageUrl: string;
+  readonly capturedAt: UtcTimestamp;
+  readonly price?: SourcedValue<MoneyValue>;
+}
+
+export type PagePriceExtractionError =
+  | { readonly kind: "tab-unavailable" }
+  | { readonly kind: "permission-lost" }
+  | { readonly kind: "restricted-page" }
+  | { readonly kind: "tab-changed" }
+  | { readonly kind: "injection-failed" }
+  | { readonly kind: "invalid-payload" };
+
+export interface PagePriceExtractionPort {
+  extractPrice(
+    tabId: TargetTabId,
+  ): Promise<Result<PagePriceObservation, PagePriceExtractionError>>;
+}
+
+export interface ProductCapturePublicApi {
+  readonly pagePriceExtraction: PagePriceExtractionPort;
+}
+```
+
+adapterは`product-capture-transient-migration`が確定する固定tab `CaptureRuntimePort.getTab(tabId)`と`inject(target, requestId)`を利用する。tab不存在を`tab-unavailable`、URL欠落を`permission-lost`、HTTP/HTTPS以外を`restricted-page`へ写像する。注入例外・runtime failureを`permission-lost | injection-failed`へ分類し、payload shape、request ID、tab ID、page-derived URLを通常captureと同じdecoderで検証する。
+
+有効payloadから`field === "price"`の候補だけを既存normalizerへ通し、既存rankerのsource priorityと文書順で一件を選ぶ。選択値が`MoneyValue`の場合だけ`{ original: rawValue, confirmed: normalizedValue }`として`price`へ載せる。有効な価格がない場合は成功したページ観測として`price`を省略し、consumerが`price-unavailable`へ写像できるようにする。`capturedAt`はpayload検証と順位付けが完了した時点のcanonical `UtcTimestamp`であり、URL・価格・HTMLを永続化またはログ出力しない。
+
+product-capture contribution factoryが内部依存からadapterを一度だけ組み立て、`ProductCapturePublicApi.pagePriceExtraction`として同じport instanceをcomposition rootへ渡す。下流feature factoryはこのinstanceを依存注入され、product-capture contributionやregistryを検索しない。公開面はport、observation、error、public API fieldに限定する。`GenericExtractor`、`CaptureNormalizer`、`CandidateRanker`、`CaptureRuntimePort` concrete、payload decoderを公開せず、通常取り込みと価格観測でdecoderまたは順位規則を分岐させない。
+
 #### CaptureState
 
 ```typescript
@@ -271,11 +345,14 @@ type CaptureSessionState =
 - `RawCapturePayload`: 注入側から返る未信頼の`unknown`。境界検証前はドメイン型として扱わない。
 - `NormalizedField`: field、normalizedValue、rawValue、source、sourceLabel、validation状態を持つ。
 - `CaptureSession`: requestId、tabId、pageUrl、capturedAt、採用値、棄却理由、ユーザー修正、project選択を持つ一時モデル。
+- `PagePriceObservation`: page-derived URL、取得時点、任意の`SourcedValue<MoneyValue>`だけを持つread-only一時値。永続modelではない。
 - `CandidateDraft`: 上流契約を再利用し、永続モデルを本仕様で追加しない。
 
 ## Error Handling
 
 `CaptureError`は`permission-lost`、`restricted-page`、`tab-changed`、`injection-failed`、`invalid-payload`、`no-candidate`、`validation`、`project-required`、`navigation`、`maintenance`、`storage`、`quota`、`unsupported-data`を区別する。取得エラーは永続化を呼ばず、保存・遷移エラーはドラフトを保持する。ログはエラー種別とrequestIdに限定し、商品値・完全URL・HTMLを記録しない。
+
+`PagePriceExtractionError`は固定tab取得に必要な6種だけに閉じる。ページ自体を安全に観測できたが有効価格がない場合はerrorではなく`price`欠損の`PagePriceObservation`を返し、保存済みsourceを更新するかどうかの判断をconsumerに委ねる。adapterは例外object、page URL、raw priceをerrorへ含めない。
 
 ## Testing Strategy
 
@@ -283,12 +360,18 @@ type CaptureSessionState =
 - **Runtime integration**: action以外で抽出しないこと、権限失効、制限URL、タブ遷移、payload不正をChrome API stubで検証する。
 - **State/UI integration**: 簡易確認、根拠表示、修正分離、空商品名、projectなし、二重送信、保存失敗時保持、詳細編集遷移を検証する。
 - **Contract integration**: 架空ページから`CandidateDraft`を生成し、保存では`CaptureCandidatePort`へ一度だけ渡す。詳細編集では`sourceInfo`と元表記を保持したprefillを`openCandidateEditor`へ一度だけ渡し、navigation失敗時のsession保持を検証する。
+- **Price extraction contract**: 固定tab、page-derived URL、6種のtyped failure、価格欠損、元表記と`MoneyValue`、既存priorityを架空payloadで検証する。同じ候補集合を通常取り込みとportへ渡し、同じprice provenanceが選ばれることを固定する。
+- **Public boundary**: `source-price-refresh`相当のconsumer fixtureが`product-capture/public.ts`だけからportと型をimportし、extractor/ranker/normalizer/runtimeへのdeep importなしでstrict型検査を通す。
 - **Assets**: fixtureは架空の最小HTMLだけを使用し、実サイトHTML・画像・取得データの混入を検査する。
 
 ## Security Considerations
 
 `activeTab`による一時権限だけで抽出し、メッセージ送信者、tabId、URL、requestId、payload形状を検証する。ページ入力は通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。保存APIをcontent scriptへ公開しない。Reactを含むUI codeと注入コードはビルド成果物へ同梱し、リモートコード、`eval`、インラインJavaScript、runtime JSX変換を使用しない。
 
+価格観測portも新しいhost permissionやcontent script常駐を追加せず、呼出元が明示gestureで固定したtabだけへ注入する。page-derived URLと価格は呼出結果以外へ保存せず、診断は`PagePriceExtractionError.kind`だけに限定する。
+
 ## Performance & Scalability
 
 DOM走査は対象セレクターと有界なJSON-LD再帰に限定し、候補数・文字列長へ上限を設ける。抽出はユーザー操作ごとに一度だけ実行し、生DOMをメッセージ化しない。上限到達時は部分結果を返し、UIを長時間待機させない。
+
+価格観測は通常取り込みと同じ一回の候補収集を再利用する。別のprice専用DOM走査や二重注入は追加せず、検証済み候補集合のfilter・normalize・rankだけを行う。

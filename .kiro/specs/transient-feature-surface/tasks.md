@@ -2,10 +2,11 @@
 
 - [ ] 1. 一過性表示面を受け入れるshell契約を整える
 - [ ] 1.1 表示区分と最小ライフサイクル契約を公開する
-  - 常設／一過性の表示区分、起動世代、固定対象タブ、起動要求、終了理由、最小の下流ライフサイクルportをcanonical shell契約として追加する。
+  - 常設／一過性の表示区分、起動世代、固定対象タブ、未信頼tab IDのbrand変換、起動要求、終了理由、最小の下流ライフサイクルportとgesture registration portをcanonical shell契約として追加する。
   - 表示区分未指定を常設として扱い、既存consumerが変更なしで型検査を通る状態にする。
-  - 不正な表示区分を境界で拒否でき、公開consumerがcontroller実体やChrome型を参照しないことを確認できる。
-  - _Requirements: 1.1, 1.3, 1.6, 2.4, 4.1, 4.4_
+  - gesture source、同期emit、cleanup、登録失敗を閉じた型で表し、公開consumerがcontroller、scheduler、store、Chrome型を参照しないことを確認できる。
+  - 欠損・0・負数・小数を固定tabへ昇格せず、不正な表示区分を境界で拒否でき、lifecycleとgestureの公開consumer fixtureがstrict型検査を通る。
+  - _Requirements: 1.1, 1.3, 1.6, 2.4, 2.5, 4.1, 4.4_
   - _Boundary: CoreContracts, PublicAPI_
 
 - [ ] 1.2 登録区分を検証し不正登録を隔離する
@@ -76,7 +77,7 @@
   - _Boundary: TransientActivationStore_
 
 - [ ] 3.2 単一schedulerでsequenceとworker再生成を線形化する
-  - gesture、失効、stage前進、watch-readyを受信時点でenqueueし、単調sequence順にmutationを直列適用する。
+  - 組み込みactionと登録済みfeature gesture、失効、stage前進、watch-readyを単一入口で受信時点にenqueueし、単調sequence順にmutationを直列適用する。
   - worker再生成時はsession envelopeの最大sequenceから次値を復元し、memoryだけを順序根拠にしない。
   - 保留writeを後発commandが追い越さず、再生成後も新sequenceが単調増加するtestを通す。
   - _Requirements: 2.2, 2.6, 3.10, 4.1, 4.2_
@@ -121,8 +122,8 @@
   - _Boundary: ActivationFailureSignal_
 
 - [ ] 4.4 workerのgesture・store・失効listenerを単一schedulerへ統合する
-  - action gestureとtab lifecycle eventの受信時にsequenceを同期割当してenqueueし、その受信順を線形化点にする。
-  - side panel openは同じaction callback内でstore完了を待たず同期開始し、top-level tab listenerはrecord有無に関係なく失効をenqueueする。
+  - generic gesture ingressとtab lifecycle eventの受信時にsequenceを同期割当してenqueueし、その受信順を線形化点にする。
+  - side panel openは登録済みgesture sourceの同じevent callback内でstore完了を待たず同期開始し、top-level tab listenerはrecord有無に関係なく失効をenqueueする。
   - failure signalのpublish／clearも同じscheduler順序へ載せ、panel閉／開、put失敗、worker再生成のruntime integration testを通す。
   - _Depends: 3.4, 4.1, 4.2, 4.3_
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 3.1, 3.2, 4.3, 4.4_
@@ -144,6 +145,15 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.10, 4.2, 4.3_
   - _Boundary: ProductionMonitoringIntegration_
 
+- [ ] 4.7 feature-owned gesture sourceをcanonical ingressへ登録する
+  - source ID、surface ID、同期start／emit、対称cleanupを検証し、invalid、duplicate、source start失敗、runtime未開始を閉じた登録errorへ変換する。
+  - `emit(TargetTabId)`を既存のactivation ID・sequence割当、scheduler、session store、failure signal、同一callback内panel openへ一度だけ接続し、sourceへwriterやsequence allocatorを公開しない。
+  - 組み込みactionも同じregistrarへ移し、全sourceを解除してからschedulerを停止して、解除後callbackをno-opにする。
+  - action sourceと架空context-menu sourceのcontract testで同じactivation recordとwatch-ready経路が生成され、別store writerが存在しないことを完了条件とする。
+  - _Depends: 3.2, 4.4_
+  - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 4.1, 4.3, 4.4_
+  - _Boundary: TransientGestureRegistration, CanonicalGestureIngress, ActionGestureSource_
+
 - [ ] 5. shellとruntimeをproduction compositionへ統合する
 - [ ] 5.1 shellとcontrollerの起動停止をcompositionへ統合する
   - host start前にlate-bound lifecycleをcontrollerへbindし、host start成功後だけcontrollerをstartする。
@@ -154,15 +164,15 @@
   - _Boundary: ApplicationComposition, TransientSurfaceController_
 
 - [ ] 5.2 runtimeとpanelの購読をproductionへ統合する
-  - store read／subscribe、panel watch、watch-ready、controller requestをproduction side panel起動へ接続する。
-  - 各resourceの取得済み範囲だけを逆順cleanupし、部分失敗後の再startでも購読・listenerを一度だけ生成する。
+  - store read／subscribe、panel watch、watch-ready、controller requestと登録済みgesture sourcesをproduction side panel／worker起動へ接続する。
+  - 各resourceの取得済み範囲だけを逆順cleanupし、gesture sourceをscheduler停止前に解除して、部分失敗後の再startでも購読・listenerを一度だけ生成する。
   - store障害、watch失敗、authorization失敗、正常再startで常設featureへ安全に退避するintegration testを通す。
-  - _Depends: 4.4, 4.6, 5.1_
+  - _Depends: 4.6, 4.7, 5.1_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 3.1, 3.2, 3.6, 3.8, 3.10, 4.1, 4.3, 4.4_
   - _Boundary: RuntimeComposition, PanelIntegration_
 
 - [ ] 5.3 公開境界とproduction artifactの制約を固定する
-  - 下流へは最小lifecycle portと必要型だけを公開し、controller、proxy bind、Chrome message、store concreteを公開しない。
+  - 下流へは最小lifecycle port、gesture registration portと必要型だけを公開し、controller、proxy bind、gesture registrar concrete、Chrome message、store concreteを公開しない。
   - session storage到達点をruntime storeだけへ限定し、worker bundleをDOM／React非依存に保つ境界検査を更新する。
   - 4権限固定、実データfixture不使用、production catalogへのsynthetic feature非混入を機械gateで観測できる。
   - _Requirements: 3.7, 4.4, 4.5, 4.6_
@@ -180,14 +190,15 @@
 - [ ] 6.2 (P) runtimeの競合・障害・再生成を検証する
   - put保留中失効、watch-ready前後失効、worker再生成、墓標上限をin-memory Chrome fixtureで再現する。
   - put失敗signal、clear競合、read失敗notice、sender／message拒否を再現し、常設面が維持されることを確認する。
-  - panel closed／open双方で同じ要求が一度だけ許可または拒否され、全runtime testが決定的に通る。
+  - actionとfeature-owned sourceのpanel closed／open双方で同じ要求が一度だけ許可または拒否され、duplicate登録、cleanup、worker再生成を含む全runtime testが決定的に通る。
   - _Depends: 5.2_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.10, 4.1, 4.2, 4.3_
   - _Boundary: RuntimeIntegrationTests, StoreRaceTests_
 
 - [ ] 6.3 下流production E2Eへ引き渡すcontract fixtureを整える
   - 実featureをproductionへ追加せず、in-memory transient registrationで起動から終了・引き渡しまでを検証する。
-  - 下流consumerが同じlifecycle port参照を受け取れるcontract fixtureを追加し、product-capture E2Eがshell 4.5を閉じられるseamを固定する。
+  - 下流consumerが同じlifecycle port参照を受け取れ、別consumerがfeature-owned gesture sourceを公開registration portへ登録できるcontract fixtureを追加する。
+  - product-capture E2Eがshell 4.5を閉じ、source-price-refreshがcontext menu sourceを同じschedulerへ接続できるseamを固定する。
   - production buildへsynthetic featureが混入せず、public consumer contract testが通る。
   - _Depends: 5.3, 6.1, 6.2_
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
@@ -196,7 +207,7 @@
 - [ ] 6.4 最終validation gateを通す
   - typecheck、public consumer、lint、unit／integration testを実行して全件成功させる。
   - boundary、fixture、artifact、final buildの機械検査を実行し、権限・公開境界・synthetic資産の違反がないことを確認する。
-  - 本spec所有の全gateが成功し、production E2Eだけが承認済み下流specの責務として残る状態にする。
+  - 本spec所有の全gateが成功し、`source-price-refresh`のgesture consumer contractを再検証済み、production E2Eだけが承認済み下流specの責務として残る状態にする。
   - _Depends: 6.3_
   - _Requirements: 4.4, 4.5, 4.6_
   - _Boundary: ValidationGates_
