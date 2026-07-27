@@ -1,4 +1,9 @@
 import type {
+  ActivationId,
+  TargetTabId,
+  TransientSurfaceLifecyclePort,
+} from "../../application-shell/public.js";
+import type {
   CandidatePartId,
   MoneyValue,
   ProjectId,
@@ -6,6 +11,21 @@ import type {
   SourcedValue,
   UtcTimestamp,
 } from "../../domain/public.js";
+
+/** Canonical shell-owned activation delivered to the transient capture consumer. */
+export interface CaptureTransientActivation {
+  readonly activationId: ActivationId;
+  readonly tabId: TargetTabId;
+}
+
+/**
+ * Consumer-only seam for the upstream transient surface contract. Capture
+ * depends on the public lifecycle port and never on the shell controller.
+ */
+export interface ProductCaptureTransientConsumerContract {
+  readonly activation: CaptureTransientActivation;
+  readonly lifecycle: TransientSurfaceLifecyclePort;
+}
 
 /** Where a candidate value was read from on the page, in fixed priority order. */
 export type ExtractionSource =

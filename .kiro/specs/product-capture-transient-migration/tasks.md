@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 公開契約と候補引き渡しの基礎を整える
-- [ ] 1.1 上流の一過性surfaceライフサイクル契約をconsumerへ導入する
+- [x] 1.1 上流の一過性surfaceライフサイクル契約をconsumerへ導入する
   - `application-shell/public.ts`の最小ライフサイクルport、固定対象tab、起動世代、終了理由をcapture側のcanonical依存として接続する。
   - controller実体やChrome型をfeature境界へ漏らさず、上流未実装時には型検査で失敗する明示的なconsumer契約にする。
   - capture contributionから上流portを参照でき、既存の常設feature登録が変化しないcontract testを通す。
@@ -9,7 +9,7 @@
   - _Requirements: 1.3, 2.1, 2.2, 4.1, 5.4_
   - _Boundary: ApplicationShellPublicAPI, ProductCaptureConsumerContract_
 
-- [ ] 1.2 project未解決draftとpre-edit検証契約を定義する
+- [x] 1.2 project未解決draftとpre-edit検証契約を定義する
   - 抽出済み商品情報をproject未解決のまま表現するdraft型と、境界で`unknown`を受ける構造検証をcandidate-managementへ追加する。
   - pre-editで許容する空名と、構造不正を表す閉じたerror集合を定義し、保存時の既存validatorとは段階を分ける。
   - 正常draft、欠落・不正型、保存時だけ拒否される値を区別するunit testを通す。
@@ -17,6 +17,7 @@
   - _Boundary: CandidateDraftContracts, CandidatePreEditValidation_
 
 - [ ] 1.3 副作用のないcandidate editor intent factoryを公開する
+  - _Blocked: canonical `sources: { catalog, mutations }` のownerである `candidate-source-bookmarks` 3.4が未完了で、`CandidateSourceCatalogPort`／`CandidateSourceMutationPort`がまだ公開実装されていないため、下流spec内で仮portを捏造せず上流完了を待つ_
   - project未解決draftからtyped activation intentを生成する純粋factoryをcandidate-managementのpublic APIへ追加する。
   - factoryはnavigation、state mutation、project照会、保存を開始せず、payload生成だけを担当する。
   - canonical公開APIの`query`と`sources: { catalog, mutations }`を維持し、captureは同名の縮小interfaceを再定義せず`createCandidateEditorIntent` facetだけを型参照する。

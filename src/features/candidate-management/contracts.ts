@@ -33,6 +33,23 @@ export type CandidateDraft = {
   };
 }[PartCategory];
 
+/** Editing-start draft whose project is intentionally unresolved. */
+export type UnresolvedCandidateDraft = {
+  readonly [Attributes in NormalizedAttributes as Attributes["category"]]: Omit<
+    CandidateDraftBase,
+    "projectId"
+  > & {
+    readonly category: Attributes["category"];
+    readonly normalizedAttributes: Attributes;
+  };
+}[PartCategory];
+
+export interface UnresolvedCandidateEditorPrefill {
+  readonly draft: UnresolvedCandidateDraft;
+  readonly projectId?: ProjectId;
+  readonly categoryHint?: PartCategory;
+}
+
 export interface CreateProjectInput {
   readonly name: string;
 }

@@ -23,8 +23,18 @@ export type {
   MutationContext,
   ProjectSummary,
   RenameProjectInput,
+  UnresolvedCandidateDraft,
+  UnresolvedCandidateEditorPrefill,
   UpdateCandidateInput,
 } from "./contracts.js";
+export type {
+  CandidateEditorPrefillError,
+  PreEditDraftError,
+} from "./pre-edit-validation.js";
+export {
+  validateCandidateEditorPrefill,
+  validatePreEditDraft,
+} from "./pre-edit-validation.js";
 
 /** Feature-local public boundary for downstream candidate-management contracts. */
 export interface CandidateManagementPublicApi {
