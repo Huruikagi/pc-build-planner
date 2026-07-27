@@ -10,6 +10,10 @@ import {
 } from "../../src/application-shell/public.js";
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
 import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
+import type {
+  ManufacturerDomainLookup,
+  ProductCapturePublicApi,
+} from "../../src/features/product-capture/public.js";
 import {
   type ApplicationApi,
   composeApplicationApi,
@@ -94,6 +98,13 @@ export const listAdoptedCandidateQuantities = async (
     quantity: item.quantity,
   }));
 };
+
+/** Candidate-management classifiers consume only product-capture's public lookup seam. */
+export const consumeManufacturerDomainLookup = (
+  capture: ProductCapturePublicApi,
+  pageUrl: string,
+): ReturnType<ManufacturerDomainLookup["findManufacturer"]> =>
+  capture.manufacturerDomains.findManufacturer(pageUrl);
 
 const publicFeatureBase = {
   publicApi: {},

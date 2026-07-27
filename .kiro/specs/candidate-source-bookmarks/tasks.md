@@ -3,7 +3,7 @@
 > **実装前提**: product-capture #8が、メーカー登録ドメインの照合をfeature公開入口から利用できる状態であること。マップデータやeTLD+1判定を本spec側へ複製しない。
 
 - [ ] 1. 上流公開前提と複数ソースのドメイン・保存schemaを確立する
-- [ ] 1.1 上流メーカー判定の公開seamをconsumer contractで固定する
+- [x] 1.1 上流メーカー判定の公開seamをconsumer contractで固定する
   - product-capture #8の公開入口だけからメーカー登録ドメイン照合をimportし、candidate-managementのclassifier adapterが依存できる最小shapeを型検査する。
   - product-capture内部map、eTLD+1実装、抽出componentをdeep importせず、一致・非一致を架空URLで呼び分けるcontract fixtureを追加する。
   - 公開seamが未実装またはshape不一致なら後続classifier/compositionへ進まず、このconsumer contract testが明確に失敗することを完了条件とする。

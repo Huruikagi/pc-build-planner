@@ -246,13 +246,20 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   assert.equal(container.textContent, "");
 });
 
-test("公開APIは他featureに公開する能力を持たない凍結済みの空objectである", () => {
+test("公開APIは凍結済みのメーカーdomain照合だけを公開する", () => {
   const registration = createProductCaptureFeatureRegistration({
     state: createState(),
   });
 
-  assert.deepEqual(registration.publicApi, {});
+  assert.equal(
+    typeof registration.publicApi.manufacturerDomains.findManufacturer,
+    "function",
+  );
   assert.equal(Object.isFrozen(registration.publicApi), true);
+  assert.equal(
+    Object.isFrozen(registration.publicApi.manufacturerDomains),
+    true,
+  );
 });
 
 test("navigation.labelKeyとorderは有効な値を持つ", () => {
