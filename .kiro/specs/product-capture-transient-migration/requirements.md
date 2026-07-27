@@ -63,7 +63,7 @@
 3. When 商品名が空の手入力draftを受け取る, the 商品取り込み移行 shall 構造的整合だけを検証して編集開始を許可する
 4. When 空の商品名で保存しようとする, the 商品取り込み移行 shall 既存の保存時検証で拒否する
 5. The 商品取り込み移行 shall 仮project ID、unsafe cast、保存時validatorの重複定義を使用しない
-6. If 候補管理への引き渡し時にprojectが存在しない, the 商品取り込み移行 shall 抽出結果を候補管理の非一過性画面へ保持したままproject作成を促し、作成後に再抽出せず作成したprojectへdraftを解決する
+6. If 候補管理への引き渡し時にprojectが存在しない, the 商品取り込み移行 shall 同一side panel session内で抽出結果を候補管理の非一過性画面へ保持したままproject作成を促し、作成後に再抽出せず作成したprojectへdraftを解決する
 
 ### 要件5: 検証可能性と既存動線の非回帰
 

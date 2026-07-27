@@ -24,6 +24,7 @@
 6. 抽出中の世代失効後に後着した結果を捨てるgeneration checkが必要である。
 7. 現行capture contributionの`capture`、`listProjects`、`openCandidateEditor`は、直接保存・capture内project選択・直接navigationの旧責務に属する。移行後は固定tab抽出runtime、lifecycle port、typed intent factoryだけが必要である。
 8. projectが0件のときにactivationを失敗させると、project作成のための常設navigationがcapture stateを終了させ、保持した抽出結果を失う。candidate-managementが解決前draftを先に受理する必要がある。
+9. Chromeの`tabs.Tab.url`はoptionalで、`activeTab`またはhost accessがある場合だけ利用でき、未commit時は空文字にもなり得る。固定tab化してもURLの存在を前提にせず、adapter境界でfail closedする必要がある。
 
 ## Selected Boundary
 
@@ -45,6 +46,18 @@
 - **棄却**: `CaptureCandidatePort`、`listProjects`、直接`openCandidateEditor`は旧保存・project選択・navigation責務をcaptureへ残すため削除する。
 - **帰結**: candidate-managementの保存authorityとproject解決を公開consumerへ漏らさず、handoffの原子性を上流`conclude`へ一本化できる。
 
+### 固定tabのURL欠落は注入前にfail closedする
+
+- **選択**: 現行activationをruntime呼出前に照合し、`getTab(tabId)`が非空URLを返した場合だけ`ActiveTabInfo`を構築する。URL欠落・空文字は`permission-lost`、tab不存在は`tab-changed`へ写像する。
+- **棄却**: cast、空文字、activation時に記録した推測URLで`ActiveTabInfo`を埋める案は、ページ由来`pageUrl`との出所照合を無効化するため採用しない。
+- **帰結**: `activeTab`失効時は取り込みが実行不能になるが、出所の取り違えを許容せず、アイコン再操作で新しい世代と権限を取得する。
+
+### pending pre-editの寿命をside panel sessionへ限定する
+
+- **選択**: capture lifecycle終了後もcandidate-managementのmemory stateで保持するが、side panel document破棄後の復元は行わない。
+- **棄却**: unsaved draftのsession/local storage永続化はschema、復元検証、破棄policyを新たに所有するため本移行へ含めない。
+- **帰結**: panel閉鎖後は再取り込みが必要になる。要件4.6の保証範囲を同一side panel session内へ限定する。
+
 ## Validation Focus
 
 - 実product-capture登録による上流shell 4.5のproduction MV3 E2E
@@ -53,5 +66,12 @@
 - handoff成功/失敗の原子性
 - 空名手入力の編集開始と保存拒否
 - project 0件でのpre-edit保持、project作成後の継続、作成失敗時の保持
+- activeTab有効時の固定tab URL取得と、URL欠落時の注入前fail-closed
+- pending pre-editのside panel session寿命
 - 既存抽出・候補保存の非回帰
 - 常設ナビからのcapture除去
+
+## References
+
+- https://developer.chrome.com/docs/extensions/develop/concepts/activeTab — `activeTab`の付与条件、URL参照能力、navigation/closeによる失効
+- https://developer.chrome.com/docs/extensions/reference/api/tabs — `tabs.Tab.url`のoptional性とhost access条件

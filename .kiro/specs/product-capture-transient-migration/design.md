@@ -187,8 +187,14 @@ export interface CaptureCoordinator {
   captureTab(tabId: TargetTabId): Promise<Result<CaptureResult, CaptureError>>;
 }
 
+export type CaptureTabLookupFailure =
+  | { readonly kind: "tab-unavailable" }
+  | { readonly kind: "url-unavailable" };
+
 export interface CaptureRuntimePort {
-  getTab(tabId: TargetTabId): Promise<ActiveTabInfo | undefined>;
+  getTab(
+    tabId: TargetTabId,
+  ): Promise<Result<ActiveTabInfo, CaptureTabLookupFailure>>;
   inject(
     target: ActiveTabInfo,
     requestId: RequestId,
@@ -196,7 +202,9 @@ export interface CaptureRuntimePort {
 }
 ```
 
-`getActiveTab`と`captureCurrentTab`は削除する。`startCapture`はstateが保持する`tabId`を`captureTab`へ渡し、runtimeは`tabs.get(tabId)`相当で同じtabだけを解決する。URLとpayload照合は維持し、抽出完了後の`isCurrent`を最終handoff gateとする。
+`getActiveTab`と`captureCurrentTab`は削除する。`startCapture`はstateが保持する`tabId`を`captureTab`へ渡し、runtimeは`tabs.get(tabId)`相当で同じtabだけを解決する。呼出前に`isCurrent(activationId)`を確認し、action gestureで付与された`activeTab` accessが現行世代に対して有効であることを前提とする。
+
+Chromeの`tabs.Tab.url`はoptionalであり、`activeTab`またはhost accessがない場合と未commit時には欠落または空文字になり得る。adapterは非空`url`を得た場合だけ`ActiveTabInfo`を構築する。tab不存在は`tab-unavailable`、URL欠落・空文字は`url-unavailable`を返し、coordinatorは前者を`tab-changed`、後者を`permission-lost`へ写像して注入前にfail closedする。cast、空文字、推測URLで型を満たさず、`payload.pageUrl === target.url`の比較を常に実行する。URLとpayload照合は維持し、抽出完了後の`isCurrent`を最終handoff gateとする。
 
 ```typescript
 export interface CandidateManagementPublicApi {
@@ -249,7 +257,9 @@ export type CaptureSessionState =
 ### Execution Rules
 
 - `startCapture`は`idle`または`failed`からのみ開始する
+- `startCapture`はruntimeを呼ぶ直前にも`isCurrent(activationId)`を確認し、現行世代でない場合は`getTab`もinjectも行わない
 - `tabs.query`で現在のactive tabを再解決せず、固定`tabId`へ実行する
+- `getTab`がURLを返さない場合は`permission-lost`として注入せず、`pageUrl`比較を迂回しない
 - 起動だけではcontent script注入やページ解析を行わない
 - 抽出完了時に`isCurrent(activationId)`を確認する
 - staleなら結果を破棄し、stateと候補管理を変更しない
@@ -294,24 +304,43 @@ canonical `CandidateDraft`は変更しない。candidate-managementがprojectを
 
 ### Candidate Pre-edit State
 
+次は既存`ManagementStateValue`を置き換える型ではなく、既存stateへ追加する差分契約である。project一覧、選択、候補一覧、既存`editor`、loading/error等のfieldは変更しない。
+
 ```typescript
-export interface ManagementStateValue {
+export interface CandidatePreEditState {
   readonly pendingPreEdit: CandidateEditorPrefill | null;
-  readonly editor: CandidateEditor | null;
 }
 ```
 
+`ManagementStateValue`へ`CandidatePreEditState.pendingPreEdit`を追加し、既存`editor` fieldはcanonical `CandidateDraft`だけを保持する契約のまま維持する。
+
 shellは既存activation順序どおりcandidate-managementをmountし、`resetTransientState`とproject一覧の`load`が完了してからactivation adapterを呼ぶ。adapterは検証済みprefillをstateへ受理する。明示`projectId`が存在すればそのprojectを使用し、指定IDが存在しなければactivation失敗とする。未指定なら現在選択中、または一覧先頭の既存projectを解決する。projectが0件なら`pendingPreEdit`へ解決前draftを保持し、同じ常設面内にproject作成フォームを提示する。この受理はactivation成功であり、captureの一過性面を終了できる。すでにcandidate-managementがmount済みの場合も、直近のstate一覧だけを解決根拠とし、captureからproject queryを行わない。
 
-project作成成功時は`CandidateManagementService.createProject`が返す`Project.id`を保持中draftへ付与し、canonical `CandidateDraft`を構築して`editor`へ遷移する。`pendingPreEdit`はこの成功、利用者による明示取消、または新しいpre-edit activationでのみ置換・破棄し、capture面の終了では破棄しない。projectを自動作成または暗黙命名しない。
+project作成成功時は`CandidateManagementService.createProject`が返す`Project.id`を保持中draftへ付与し、canonical `CandidateDraft`を構築して`editor`へ遷移する。`pendingPreEdit`はこの成功、利用者による明示取消、または新しいpre-edit activationでのみ置換・破棄し、capture面の終了では破棄しない。保持保証は同一side panel documentのsession内に限定し、side panel閉鎖・extension reload・browser終了でdocumentが破棄された場合は失われることを受容する。再open時に復元や自動再抽出は行わない。projectを自動作成または暗黙命名しない。
 
 ### Validation Stages
 
 ```typescript
+export type PreEditDraftError =
+  | { readonly kind: "invalid-draft-shape" }
+  | { readonly kind: "invalid-category" }
+  | { readonly kind: "category-mismatch" };
+
+export type CandidateEditorPrefillError =
+  | PreEditDraftError
+  | { readonly kind: "invalid-project-id" }
+  | { readonly kind: "invalid-category-hint" };
+
 export function validatePreEditDraft(
   draft: unknown,
-): Result<UnresolvedCandidateDraft, CandidateEditorPrefillError>;
+): Result<UnresolvedCandidateDraft, PreEditDraftError>;
+
+export function validateCandidateEditorPrefill(
+  value: unknown,
+): Result<CandidateEditorPrefill, CandidateEditorPrefillError>;
 ```
+
+`invalid-draft-shape`は必須fieldまたは値shapeの不正、`invalid-category`は未知category、`category-mismatch`はdraft categoryと`normalizedAttributes.category`の不一致を表す。outer prefill validatorは、指定された`projectId`の型・空文字を`invalid-project-id`、未知`categoryHint`を`invalid-category-hint`とする。いずれもactivation境界で`invalid_activation`へ写像し、未信頼値そのものをerrorへ含めない。project 0件は有効な`project-required` stateであり、このerror unionへ`no_project_available`を追加しない。形式が正しい明示`projectId`が永続project一覧に存在しない場合だけ、pre-edit validation後の解決段階で`activation_failed`とする。
 
 | Stage | Validation |
 |---|---|
@@ -364,6 +393,7 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 - 新世代でfailedがidleへ戻ること
 - stale抽出完了がstateを変更しないこと
 - unresolved draftのcategory整合とpre-edit validation
+- URL取得成功、tab不存在、URL欠落・空文字の各`getTab`境界と、URL欠落時にinjectしないこと
 - 空名は編集開始で通り保存時に拒否されること
 
 ### Integration
@@ -376,6 +406,7 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 - projectが0件でもhandoffを成功させ、capture終了後に解決前draftが候補管理へ保持されること
 - project作成成功時に返されたProjectIdで保持中draftを解決し、再抽出せずeditorを開くこと
 - project作成失敗時に保持中draftを失わないこと
+- side panel session内ではpending pre-editを保持し、panel document破棄後は復元しないこと
 - 既存抽出と候補保存validatorの非回帰
 
 ### E2E
@@ -391,6 +422,7 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 ## Security Considerations
 
 - ページ由来payloadを`unknown`として検証する
+- `activeTab` accessが有効な現行世代だけで固定tabのURLを取得し、URL欠落時は注入前にfail closedして出所照合を省略しない
 - URL、HTML、抽出値を診断ログへ出さない
 - 永続化mutationはcandidate-managementの既存write authority経由だけにする
 - 新しい権限やhost permissionを追加しない
