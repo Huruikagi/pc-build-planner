@@ -10,6 +10,7 @@
   - _Requirements: 4.1, 4.2, 4.3_
 
 - [ ] 1.2 schema 2の候補ソース契約・検証・移行を原子的にcutoverする
+  - _Blocked: canonical schema 2 cutoverにはcandidate editorの価格・取得元draft、product-capture handoff、backup mapperの意味変更が不可分だが、これらは現行Boundary外の後続feature task所有であり、最小shape更新だけでは型安全かつ回帰なしにcutoverできない_
   - 候補ソース識別子、販売・メーカー紹介の種別、URL・サイト名・取得日時・任意価格を表現する。
   - 候補へソースcollectionと条件付きプライマリ参照を追加し、商品共通値から価格と単数取得元を除く。
   - sourceなし候補と、sourceが存在するときの唯一のprimary参照を型契約で明示する。
