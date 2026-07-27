@@ -5,7 +5,10 @@ import type { FeatureId } from "../../src/application-shell/contracts.js";
 import type { FeatureContribution } from "../../src/application-shell/feature-contribution-catalog.js";
 import type { FoundationRuntimeContribution } from "../../src/persistence/public.js";
 import type { RuntimeMessageListener } from "../../src/runtime/foundation-message-target.js";
-import { createProductionServiceWorkerBootstrap } from "../../src/runtime/service-worker.js";
+import {
+  createProductionServiceWorkerBootstrap,
+  registerProductionTransientWatchReady,
+} from "../../src/runtime/service-worker.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
 
 test("runtime bootstrapはfoundationの具体initializerを直接importしない", async () => {
@@ -16,6 +19,33 @@ test("runtime bootstrapはfoundationの具体initializerを直接importしない
     source,
     /initializeProductionFoundationRuntimeContribution/,
   );
+});
+
+test("watch-ready bootstrapはruntimeとsessionの実Chrome階層を同期接続する", () => {
+  const listeners: RuntimeMessageListener[] = [];
+  const runtime = {
+    id: "extension-id",
+    getURL: (path: string) => `chrome-extension://extension-id/${path}`,
+    onMessage: {
+      addListener(listener: RuntimeMessageListener) {
+        listeners.push(listener);
+      },
+      removeListener(listener: RuntimeMessageListener) {
+        listeners.splice(listeners.indexOf(listener), 1);
+      },
+    },
+  };
+  const session = {
+    async get() {
+      return {};
+    },
+    async set() {},
+  };
+
+  const cleanup = registerProductionTransientWatchReady(runtime, session);
+  assert.equal(listeners.length, 1);
+  cleanup();
+  assert.equal(listeners.length, 0);
 });
 
 test("production bootstrapでfoundation handlerとcatalog actionを順序どおり共存させ逆順cleanupする", async () => {

@@ -316,6 +316,7 @@ export const createTransientActivationStore = (
 
 export interface TransientActivationScheduler {
   readonly store: TransientActivationStore;
+  enqueue<T>(operation: () => Promise<T>): Promise<T>;
   put(
     input: Omit<TransientActivationRecord, "seq" | "stage">,
   ): Promise<Result<void, ActivationStoreError>>;
@@ -337,8 +338,13 @@ export interface TransientActivationScheduler {
 class Scheduler implements TransientActivationScheduler {
   readonly store: TransientActivationStore;
   #tail: Promise<unknown> = Promise.resolve();
+  #sequenceBase:
+    | Promise<Result<ActivationSequence, ActivationStoreError>>
+    | undefined;
+  #reservedSequences = 0;
   constructor(store: TransientActivationStore) {
     this.store = store;
+    this.#sequenceBase = this.#loadSequenceBase();
   }
   #enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#tail.then(operation, operation);
@@ -348,7 +354,12 @@ class Scheduler implements TransientActivationScheduler {
     );
     return result;
   }
-  async #next(): Promise<Result<ActivationSequence, ActivationStoreError>> {
+  enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    return this.#enqueue(operation);
+  }
+  async #loadSequenceBase(): Promise<
+    Result<ActivationSequence, ActivationStoreError>
+  > {
     const loaded = await this.store.readEnvelope();
     if (!loaded.ok) return loaded;
     if (loaded.value.tombstones.length > MAX_TRANSIENT_TOMBSTONES) {
@@ -362,11 +373,30 @@ class Scheduler implements TransientActivationScheduler {
       current.value.record?.seq ?? 0,
       ...current.value.tombstones.map(({ seq }) => seq),
     );
-    return ok((maximum + 1) as ActivationSequence);
+    return ok(maximum as ActivationSequence);
+  }
+  #reserveSequence(): number {
+    this.#reservedSequences += 1;
+    return this.#reservedSequences;
+  }
+  async #resolveSequence(
+    reservation: number,
+  ): Promise<Result<ActivationSequence, ActivationStoreError>> {
+    const pending = this.#sequenceBase ?? this.#loadSequenceBase();
+    this.#sequenceBase = pending;
+    const base = await pending;
+    if (!base.ok && this.#sequenceBase === pending)
+      this.#sequenceBase = undefined;
+    return base.ok
+      ? ok((base.value + reservation) as ActivationSequence)
+      : base;
   }
   put(input: Omit<TransientActivationRecord, "seq" | "stage">) {
+    // The immutable reservation is the reception-time linearization point.
+    // Its durable sequence is the worker-start envelope base plus this ticket.
+    const reservation = this.#reserveSequence();
     return this.#enqueue(async () => {
-      const next = await this.#next();
+      const next = await this.#resolveSequence(reservation);
       return next.ok
         ? this.store.put({ ...input, seq: next.value, stage: "pending" })
         : next;
@@ -381,8 +411,9 @@ class Scheduler implements TransientActivationScheduler {
     );
   }
   invalidate(tabId: TargetTabId) {
+    const reservation = this.#reserveSequence();
     return this.#enqueue(async () => {
-      const next = await this.#next();
+      const next = await this.#resolveSequence(reservation);
       return next.ok ? this.store.invalidate({ tabId, seq: next.value }) : next;
     });
   }

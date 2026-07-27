@@ -100,14 +100,14 @@
   - _Boundary: TransientActivationStore, TransientActivationScheduler_
 
 - [ ] 4. Chrome runtimeとの配送・監視adapterを構築する
-- [ ] 4.1 watch-readyをversioned typed transportで配送する
+- [x] 4.1 watch-readyをversioned typed transportで配送する
   - panel requestとworker responseをunknownから検証し、authorized／invalidated／typed errorをbooleanへ縮退させない。
   - worker側は自拡張panel senderだけを受理し、top-levelでlistenerを同期登録する。
   - 不正sender、未知version、不正payload、store unavailable、capacity exceededを安定codeで返すruntime testを通す。
   - _Requirements: 2.2, 2.7, 4.1, 4.3_
   - _Boundary: TransientActivationPort, RuntimeTransport_
 
-- [ ] 4.2 (P) URL非依存のtab寿命監視を追加する
+- [x] 4.2 (P) URL非依存のtab寿命監視を追加する
   - 固定tabの更新開始とcloseだけを終了eventへ変換し、他tab eventを無視する。
   - callbackはactivationIdを保持して最大1回通知し、解除後eventを伝播させない。
   - URL参照や追加権限なしでnavigation／reload／closeを再現するadapter testを通す。
@@ -115,7 +115,7 @@
   - _Requirements: 3.1, 3.2, 3.10, 4.1, 4.2_
   - _Boundary: TabLifecycleRules, TabLifecycleAdapter_
 
-- [ ] 4.3 (P) storage非依存の起動失敗signalを追加する
+- [x] 4.3 (P) storage非依存の起動失敗signalを追加する
   - durable put失敗時にglobal action badgeと安定titleを設定し、通常titleの復元値をmanifestから解決する。
   - 次のdurable put成功後だけclearし、read成功、notice表示、panel open、worker再生成ではclearしない。
   - publish／clear失敗を安定codeで診断し、後発成功時にclearを再試行するtestを通す。
@@ -123,7 +123,7 @@
   - _Requirements: 2.7, 4.1, 4.2_
   - _Boundary: ActivationFailureSignal_
 
-- [ ] 4.4 workerのgesture・store・失効listenerを単一schedulerへ統合する
+- [x] 4.4 workerのgesture・store・失効listenerを単一schedulerへ統合する
   - generic gesture ingressとtab lifecycle eventの受信時にsequenceを同期割当してenqueueし、その受信順を線形化点にする。
   - side panel openは登録済みgesture sourceの同じevent callback内でstore完了を待たず同期開始し、top-level tab listenerはrecord有無に関係なく失効をenqueueする。
   - failure signalのpublish／clearも同じscheduler順序へ載せ、panel閉／開、put失敗、worker再生成のruntime integration testを通す。

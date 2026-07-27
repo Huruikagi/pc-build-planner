@@ -61,7 +61,10 @@ const isUrlUnderRoot = (candidate: string, root: string): boolean => {
   }
 };
 
-const classifyCaller = (runtime: FoundationMessageRuntime, sender: unknown) => {
+export const classifyCaller = (
+  runtime: FoundationMessageRuntime,
+  sender: unknown,
+) => {
   try {
     if (!isRecord(sender) || sender.id !== runtime.id)
       return { kind: "web-page" } as const;

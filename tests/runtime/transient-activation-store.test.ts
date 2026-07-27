@@ -152,6 +152,39 @@ test("worker再生成時はrecordと墓標を含むenvelope最大sequenceから�
   );
 });
 
+test("初期sequence base読出し失敗後も同じworker内の再操作で復旧する", async () => {
+  const session = new MemorySession();
+  let failReads = true;
+  const scheduler = createTransientActivationScheduler(
+    createTransientActivationStore({
+      async get() {
+        if (failReads) throw new Error("unavailable");
+        return session.get();
+      },
+      set: (value) => session.set(value),
+    }),
+  );
+  assert.deepEqual(
+    await scheduler.put({
+      activationId: activationId("first"),
+      surfaceId: featureId,
+      tabId: tabId(1),
+    }),
+    { ok: false, error: { kind: "storage-unavailable" } },
+  );
+  failReads = false;
+  assert.equal(
+    (
+      await scheduler.put({
+        activationId: activationId("retry"),
+        surfaceId: featureId,
+        tabId: tabId(1),
+      })
+    ).ok,
+    true,
+  );
+});
+
 test("late putを墓標でinvalidatedにし同一tabの新世代は許可する", async () => {
   const session = new MemorySession();
   const scheduler = createTransientActivationScheduler(
