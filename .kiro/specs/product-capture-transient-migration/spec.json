@@ -1,13 +1,13 @@
 {
   "feature_name": "product-capture-transient-migration",
   "created_at": "2026-07-27T08:15:00+09:00",
-  "updated_at": "2026-07-27T10:07:09+09:00",
+  "updated_at": "2026-07-27T11:06:32+09:00",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "requirements-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": true
+      "approved": false
     },
     "design": {
       "generated": true,

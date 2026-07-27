@@ -54,6 +54,12 @@
 - session媒体、worker単一write owner、タブ寿命イベントの変更
 - production E2Eの委譲先または実feature登録順の変更
 
+### Existing Spec Revision Touchpoints
+
+- `application-shell` 1.1 / 1.5 / 2.1を、常設featureだけをナビゲーション・初期選択・availability fallback・通常`select()`の対象にし、一過性featureを同じ単一主表示領域へ型付き登録できる契約へ改訂する
+- `application-shell` 4.3 / 4.4を、常設featureを維持したまま一過性起動障害を安全なテキストの`transientNotice`で提示できる共通状態表示へ改訂する
+- `application-shell` 7のtyped activationは`conclude`の引き渡し先として再利用し、既存rollback保証を変更しない
+
 ### Dependency Direction
 
 ```text
@@ -286,6 +292,8 @@ export interface TransientActivationEnvelope {
   readonly tombstones: readonly TransientInvalidationTombstone[];
 }
 
+export const MAX_TRANSIENT_TOMBSTONES = 128;
+
 export type ActivationAuthorization =
   | { readonly kind: "authorized"; readonly record: TransientActivationRecord }
   | { readonly kind: "invalidated"; readonly record: TransientActivationRecord };
@@ -313,6 +321,8 @@ service workerは起動要求とタブ寿命イベントを単一スケジュー
 
 `invalidate`は対象recordの有無を問わず、tabごとの最新墓標を保存する。`put`適用時に`墓標.seq > record.seq`ならrecordを`invalidated`として着地させ、後から同条件の墓標が適用された場合も既存recordを`invalidated`へ進める。`invalidated`は終端であり、`requestAdvance`とactivation許可はこれを上書きできない。新しいジェスチャーは既存墓標より大きい`seq`を持つため、同じtabでも新世代として開始できる。
 
+墓標はtabごとに最新1件、envelope全体で最大128件に制限する。剪定はscheduler checkpointで、それ以前の`seq`を持つ全commandがcommit済みであることを確認してからだけ行う。現在recordより新しく、そのrecordがまだ`invalidated`へ着地していない間は支配中の墓標を保持し、それ以外を古い`seq`から除去する。checkpoint後に到着する`put`は必ず剪定対象より大きい`seq`を持つため、古い失効を復活させない。破損envelopeなどで支配墓標を保持したまま上限内へ剪定できなければ、古い墓標を強制evictせず`capacity-exceeded`として新規起動をfail closedにする。この上限と安全条件をstore unit testで固定する。
+
 ### Typed Runtime Transport
 
 watch-readyは既存`WorkerRegistrationContext.addActionHandler`を流用しない。これはpayloadを持たず応答を`{ ok: boolean }`へ縮退させるためである。shell/runtime専用adapterが次のversioned messageを所有する。
@@ -333,7 +343,11 @@ export type TransientWatchReadyResponse =
   | {
       readonly version: 1;
       readonly ok: false;
-      readonly code: "invalid-message" | "store-unavailable" | "not-started";
+      readonly code:
+        | "invalid-message"
+        | "store-unavailable"
+        | "capacity-exceeded"
+        | "not-started";
     };
 
 export interface TransientActivationPort {
@@ -367,9 +381,25 @@ worker監視とpanel監視には重複期間を設け、監視の空白を作ら
 
 受容する残余リスクは、利用者がChrome UIから直接panelを開いた時点でsession媒体も障害中だった場合、本来は常設表示だけでよい場面にも保存領域障害が表示されることである。誤って一過性面を立てるより安全側であり、復旧案内も同一なので許容する。この判断はshell契約で閉じ、capture移行specへ起動契機判定を要求しない。
 
-起動recordの`put()`が`err`を返した場合は、同じsession媒体へ`write-failed` recordを書こうとしない。workerは`chrome.action`のbadgeを`!`へ、titleを安定した「起動情報を保存できません。拡張アイコンを再操作してください」案内へ設定する`ActivationFailureSignal`を使用する。これはstorageと独立し、追加permissionを要求せず、worker再生成後もChrome管理のaction表示として残る。次の起動record保存成功時にsignalをclearする。
+起動recordの`put()`が`err`を返した場合は、同じsession媒体へ`write-failed` recordを書こうとしない。workerは`chrome.action`のbadgeを`!`へ、titleを安定した「起動情報を保存できません。拡張アイコンを再操作してください」案内へ設定する`ActivationFailureSignal`を使用する。これはstorageと独立し、追加permissionを要求せず、worker再生成後もChrome管理のaction表示として残る。
+
+signalはglobalなChrome action状態とし、publishとclearを起動mutationと同じschedulerへ載せる。次の起動recordがdurable `put()`に成功した後だけ、badgeを空文字へ戻し、titleを`chrome.runtime.getManifest().action.default_title`または拡張名から解決した通常値へ復元する。panelの`read()`成功、notice表示、side panel open成功、worker再生成はclear条件にしない。clear失敗は起動成功を巻き戻さず安定コードで診断し、次のdurable `put()`成功時に再試行する。
 
 panelの`read()`失敗はglobalな`ShellViewState.error`へ遷移させない。`ready` / `maintenance`に選択中の常設featureと併存できる`transientNotice`を追加し、一過性面だけを開始せずsession媒体障害と再操作案内をbanner表示する。これによりChrome UIからの直接openで障害表示が出る受容リスクは維持しつつ、無関係な常設featureを失わない。
+
+```typescript
+export interface TransientNotice {
+  readonly message: MessageDescriptor;
+  readonly recoverable: true;
+}
+
+// application-shell改訂後の差分。loading/errorの意味は変更しない。
+type NoticeCapableShellState =
+  | { readonly kind: "ready"; readonly selected: FeatureId | null; readonly transientNotice?: TransientNotice }
+  | { readonly kind: "maintenance"; readonly selected: FeatureId | null; readonly message: MessageDescriptor; readonly transientNotice?: TransientNotice };
+```
+
+`ShellPresentation.publish`はnoticeをnavigation・feature slotと独立したbannerへ渡し、`ShellView`は通常のJSX textとして描画する。session `read()`由来noticeは後続read成功または新しい有効activationの受理でclearするが、Chrome action signalのclear lifecycleとは結合しない。
 
 ## Tab Lifecycle
 
@@ -398,6 +428,7 @@ export interface TabLifecyclePort {
 - **store障害**: 商品値やURLをログせず、安定した媒体障害として提示する
 - **起動record書き込み失敗**: sessionへ再書き込みせずaction badge/titleで理由と再操作を提示する
 - **起動record読み出し失敗**: 常設面を維持した`transientNotice`として提示する
+- **墓標容量を安全に剪定不能**: `capacity-exceeded`で起動を拒否し、再操作可能なstore障害として提示する
 
 ## Requirements Traceability
 
@@ -419,6 +450,8 @@ export interface TabLifecyclePort {
 - controllerの起動、世代更新、3種のdismiss、conclude、stale callback
 - tab lifecycle ruleのtabIdフィルタと最大1回通知
 - 単調増加`seq`、record不在時の墓標、`invalidated`終端と不正stage遷移拒否
+- 墓標がtabごとに最新1件・全体128件以内で、安全checkpoint前の支配墓標を剪定しないこと
+- 安全に128件以内へ剪定できない破損状態を`capacity-exceeded`でfail closedにすること
 
 ### Integration
 
@@ -427,7 +460,8 @@ export interface TabLifecyclePort {
 - runtime messageのsender/request/response検証と`authorized | invalidated | error`保持
 - watch-ready前後の遷移・閉鎖で一過性面が立たないこと
 - worker再生成後も未完了recordを回収すること
-- `put()`失敗がaction signalを残し、次の成功でclearされること
+- `put()`失敗がglobal action signalを残し、次のdurable `put()`成功後だけclearされること
+- 古いpanelのread/notice完了やworker再生成が後発signalをclearしないこと
 - `read()`失敗noticeと常設featureが同時に維持されること
 - persistent featureのナビ・選択・availability障害分離の非回帰
 - conclude成功で引き渡し先が保持され、失敗で一過性面がrollbackされること

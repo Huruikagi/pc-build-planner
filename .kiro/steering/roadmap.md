@@ -51,7 +51,7 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 - [ ] product-page-capture -- #8: ドメイン→メーカー名マップを最下位優先度の collector（`ExtractionSource: "domain-map"`）として追加し、メーカー自社サイトでの `manufacturer` 欠損を補完する。マップは `manufacturer-domain-map.ts` に分離し eTLD+1 で照合。Dependencies: none
 - [ ] product-page-capture -- product-capture-transient-migration に合わせ、要件4（簡易確認・補正）と要件5（project選択・保存）を候補管理への即時引き渡しへ改訂し、要件1.4 / 6.1 / 6.4の権限失効・遷移・再実行を一過性面の寿命と新世代起動へ合わせる。Dependencies: product-capture-transient-migration
-- [ ] application-shell -- 要件1.1 / 1.5 / 2.1 / 要件7 の改訂（ナビに載らない一過性 feature 種別の受け入れ）。Dependencies: transient-feature-surface
+- [ ] application-shell -- 要件1.1 / 1.5 / 2.1 / 4.3 / 4.4 / 要件7 の改訂（ナビ・初期選択・fallbackに載らない一過性feature種別、単一主表示領域、安全なテキストとして常設面と併存する`transientNotice`、既存typed activationの受け入れ）。Dependencies: transient-feature-surface
 - [ ] project-candidate-management -- project未解決・空名のpre-edit activationと、編集開始/保存時検証の分離を受け入れる。Dependencies: product-capture-transient-migration
 - [ ] ui-message-catalog -- 一過性起動失敗・失効案内と、product-captureのナビ除去・権限再付与案内を日本語/英語で反映する。Dependencies: transient-feature-surface, product-capture-transient-migration
 - [ ] backup-restore -- #19: 独立タブから設定画面内セクションへの再配置に伴う registration / navigation の改訂。Dependencies: settings-screen

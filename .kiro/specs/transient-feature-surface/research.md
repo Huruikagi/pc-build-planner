@@ -37,6 +37,7 @@
 - `read()`が`err`なら「セッション領域が利用不能」という再操作可能な理由を提示する。
 - noticeは常設featureを置換するglobal errorではなく、常設面と併存する一過性起動bannerとして表示する。
 - `put()`が`err`なら同じ媒体へ失敗recordを書かず、storage非依存のChrome action badge/titleで理由を残す。
+- action signalはglobal状態とし、同じscheduler上の次のdurable保存成功後だけclearする。panel read/notice完了は後発signalを消し得るためclear条件にしない。
 - 2.7は安全に成立しない理由の提示を要求し、ジェスチャー起因かどうかの識別を要求しない。
 - Chrome UIからの直接openと媒体障害が重なると不要な障害表示が出る残余リスクを受容する。
 
@@ -45,6 +46,7 @@
 - workerの単一スケジューラがイベント受信時に`seq`を割り当て、session envelopeへ順序状態を保持する。
 - `invalidate`はrecord不在でも墓標を残し、後から適用される古いrecordを`invalidated`へ着地させる。
 - Promise chain内で後発commandが先発writeを追い越すとは仮定しない。watch-ready後の最終許可を同じschedulerへ通し、panel監視との重複期間で監視空白を閉じる。
+- 墓標はtabごとに最新1件・全体128件へ制限し、全先行commandのcommitを確認したscheduler checkpointでだけ、支配中でない古い墓標を剪定する。安全に上限内へ収められない破損状態は`capacity-exceeded`でfail closedにする。
 
 ### production E2Eは最初の実featureへ委譲する
 

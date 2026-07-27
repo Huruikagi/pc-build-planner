@@ -37,7 +37,7 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 
 captureはcontroller concrete classを取得しない。`createProductCaptureFeatureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。
 
-本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5 E2Eで一過性面のアイコン起動、対象タブ失効、常設復帰までを検証する。
+本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5 E2Eで一過性面のアイコン起動、候補編集面への引き渡し、対象タブ失効または常設ナビ選択による終了・常設復帰までを検証する。
 
 ### Existing Feature Contracts
 
