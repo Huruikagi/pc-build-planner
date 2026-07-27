@@ -475,9 +475,15 @@ export interface SourcePriceRefreshTransientActivation {
   readonly activationId: ActivationId;
   readonly tabId: TargetTabId;
 }
+
+export type SourcePriceRefreshFeatureRegistration =
+  TransientApplicationFeatureRegistration<
+    SourcePriceRefreshPublicApi,
+    SourcePriceRefreshTransientActivation
+  >;
 ```
 
-registrationは `presentation: "transient"`、feature ID `source-price-refresh` とする。activation payloadを境界検証し、mount時にstateへ渡す。menu gesture以外から同じsurfaceIdを起動できても、正しいactivationId/tabIdがなければfail closedにする。
+registrationはcanonical `TransientApplicationFeatureRegistration`を消費し、`presentation: "transient"`、feature ID `source-price-refresh`を明示する。navigation propertyは渡さず、常設navigation metadata/keyを持たない。activation payloadを境界検証し、mount時にstateへ渡す。menu gesture以外から同じsurfaceIdを起動できても、正しいactivationId/tabIdがなければfail closedにする。
 
 production UIへの登録は `side-panel-contributions.ts` だけが行い、source-price-refreshの `feature-contribution.ts` からregistration factory、public API、CSSをside panel module graphへ取り込む。`feature-contribution-catalog.ts` はこのUI factoryをimportせず、service workerから `side-panel-contributions.ts` へ到達する経路を作らない。
 
@@ -563,7 +569,7 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 - catalog → match → updateSourceをin-memory portsで接続し、一回のmutationで対象sourceだけが変わることを検証する（4.1–4.4）。
 - duplicate-product-merge consumer fixtureがcandidate scopeでmatchし、同一URLをsource追加せず `refreshCapturedPrice` へ渡すことを検証する（6.3）。
 - `TransientGestureRegistrationPort` contract kitでmenu emitが既存activation schedulerへ一度だけ届き、別store writerを作らないことを検証する（1.1、6.6）。
-- side panel contribution contractでUI registrationが `side-panel-contributions.ts` から取得でき、worker catalogにはmenu registrationだけが存在することを検証する（1.1、1.2、6.6）。
+- side panel contribution contractでUI registrationがcanonical transient branchとして`presentation: "transient"`を持ちnavigation不在のまま `side-panel-contributions.ts` から取得でき、worker catalogにはmenu registrationだけが存在することを検証する（1.1、1.2、6.6）。
 - public consumer型検査でfeature内部deep importとfoundation root readが不要なことを検証する。
 
 ### Runtime / DOM / E2E tests
@@ -592,7 +598,7 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 
 1. 承認済み上流3portのowner、公開入口、exact signatureをpublic consumer contract testへ固定する。
 2. URL identity、locator、public refresh use caseを確定済み契約のin-memory portで実装する。
-3. `product-page-capture` 8.2完了後に公開price extraction portへ接続する。
+3. `product-page-capture` 6.3完了後に公開price extraction portへ接続する。
 4. transient registration、state、viewを実装し、UI contributionを `side-panel-contributions.ts` へ登録する。
 5. `transient-feature-surface` 6.3完了後に、context menu sourceのworker registrationだけをworker-safe catalogから上流gesture registration portへ接続する。
 6. `manifest.json` とartifact permission gateを同時に更新する。

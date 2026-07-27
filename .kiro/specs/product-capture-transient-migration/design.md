@@ -41,7 +41,7 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 
 - application-shellの`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`、activation識別子・固定tab型
 - product-capture既存の抽出runtime、normalizer、ranker
-- candidate-managementの公開intent factory、query/service、canonical candidate contract
+- candidate-managementのcanonical `CandidateManagementPublicApi`（`query`、intent factory、`sources` facet）とcanonical candidate contract。product-captureが利用するのはintent factory facetだけとする
 - local data foundationのcanonical `Result<T, E>`とdomain型
 
 ### Revalidation Triggers
@@ -152,7 +152,7 @@ e2e/
 
 ### Registration
 
-product-capture registrationへ`presentation: "transient"`を指定し、activation adapterで次のpayloadを検証する。
+product-capture registrationはapplication-shellが公開するcanonical `ApplicationFeatureRegistration` discriminated unionの一過性memberをそのまま満たす。`presentation: "transient"`とactivation adapterを指定し、`navigation` metadataは申告しない。したがって`nav.productCapture`も要求・参照しない。activation adapterは次のpayloadを検証する。
 
 ```typescript
 export interface CaptureTransientActivation {
@@ -161,15 +161,22 @@ export interface CaptureTransientActivation {
 }
 ```
 
-ナビ構築と初期選択からの除外は上流shellが担う。captureはroot runtimeやshell内部を直接編集しない。
+一過性memberに`navigation`を持たせない型制約と、ナビ構築・初期選択・fallbackからの除外は上流shellが担う。captureは登録unionを再定義せず、`application-shell/public.ts`からimportした型にregistration objectを適合させる。root runtimeやshell内部は直接編集しない。registrationのactivation、mount/unmount、`TransientSurfaceLifecyclePort`による世代照合と原子的handoffは維持する。
 
 ```typescript
+import type { TransientApplicationFeatureRegistration } from "../../application-shell/public.js";
+import type { CandidateManagementPublicApi } from "../candidate-management/public.js";
+import type { ProductCapturePublicApi } from "./public.js";
+
+type ProductCaptureTransientRegistration = TransientApplicationFeatureRegistration<
+  ProductCapturePublicApi,
+  CaptureTransientActivation
+>;
+
 export interface ProductCaptureContributionDependencies {
   readonly runtime: CaptureRuntimePort;
   readonly transientSurface: TransientSurfaceLifecyclePort;
-  readonly createCandidateEditorIntent: (
-    prefill: CandidateEditorPrefill,
-  ) => FeatureActivationIntent;
+  readonly createCandidateEditorIntent: CandidateManagementPublicApi["createCandidateEditorIntent"];
 }
 
 export function createProductCaptureContribution(
@@ -178,9 +185,11 @@ export function createProductCaptureContribution(
 ): FeatureContribution;
 ```
 
-composition rootだけが具体controllerとcapture contributionを知り、capture内部は公開portだけへ依存する。
+canonical unionのbranch型`TransientApplicationFeatureRegistration`も同じ公開entry pointからtype-only importし、product-captureのregistration objectを直接適合させる。このbranchの`presentation: "transient"`と`navigation?: never`を変更せず、runtime objectではproperty自体を渡さない。composition rootだけが具体controllerとcapture contributionを知り、capture内部は公開portだけへ依存する。
 
-`CaptureRuntimePort`は移行時にactive tab再解決を廃止し、activationで固定された`TargetTabId`を必須入力としてinjectする契約へ変更する。`createCandidateEditorIntent`はcandidate-managementの`public.ts`が公開し、payload生成だけを行ってnavigationやstate mutationを開始しない。captureはその戻り値を`conclude`へ渡す。
+`CandidateManagementPublicApi`はcandidate-managementの`public.ts`からtype-only importし、product-capture側で同名interfaceを再定義しない。canonical公開面は`query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog, mutations }`の全facetを保持する。captureはindexed access typeでintent factory facetだけを依存注入し、他facetが存在しない、または削除対象であるとは扱わない。
+
+`CaptureRuntimePort`は移行時にactive tab再解決を廃止し、activationで固定された`TargetTabId`を必須入力としてinjectする契約へ変更する。`createCandidateEditorIntent`はpayload生成だけを行ってnavigationやstate mutationを開始しない。captureはその戻り値を`conclude`へ渡す。
 
 ```typescript
 export interface CaptureCoordinator {
@@ -206,16 +215,7 @@ export interface CaptureRuntimePort {
 
 Chromeの`tabs.Tab.url`はoptionalであり、`activeTab`またはhost accessがない場合と未commit時には欠落または空文字になり得る。adapterは非空`url`を得た場合だけ`ActiveTabInfo`を構築する。tab不存在は`tab-unavailable`、URL欠落・空文字は`url-unavailable`を返し、coordinatorは前者を`tab-changed`、後者を`permission-lost`へ写像して注入前にfail closedする。cast、空文字、推測URLで型を満たさず、`payload.pageUrl === target.url`の比較を常に実行する。URLとpayload照合は維持し、抽出完了後の`isCurrent`を最終handoff gateとする。
 
-```typescript
-export interface CandidateManagementPublicApi {
-  readonly query: CandidateQuery;
-  createCandidateEditorIntent(
-    prefill: CandidateEditorPrefill,
-  ): FeatureActivationIntent;
-}
-```
-
-candidate-management contributionは公開APIの`capture`と`openCandidateEditor`、registration dependencyの`capture`と`navigator`を削除する。composition rootは公開intent factoryをproduct-captureへ渡し、candidate-managementの保存serviceやproject queryをcaptureへ配線しない。
+candidate-management contributionは公開APIの旧`capture`と`openCandidateEditor`、registration dependencyの`capture`と`navigator`を削除する一方、canonical `query`と`sources: { catalog, mutations }`を維持する。composition rootは公開intent factoryだけをproduct-captureへ渡し、candidate-managementの保存service、project query、source catalog／mutationをcaptureへ配線しない。
 
 ### State
 
@@ -433,7 +433,7 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 1. 上流`transient-feature-surface`のGOと公開contractを確認する
 2. candidate-managementへunresolved/pre-edit契約を追加する
 3. candidate-managementへproject-required stateとproject作成後の継続処理を追加する
-4. candidate-management public APIをtyped intent factoryへ縮小する
+4. candidate-management public APIをcanonical `query`・typed intent factory・`sources` facetへ統一し、captureはintent factory facetだけを利用する
 5. capture registration、固定tab runtime、activation adapterを移行する
 6. capture state/viewを実行面へ縮小する
 7. handoffを`conclude`へ接続し旧submit・直接navigation経路を削除する

@@ -78,7 +78,7 @@
   - 下流契約は、全candidateまたは指定candidateのsource参照を返す `listSourceReferences` と、`candidateId + sourceId` で現行参照を返す `getSourceReference` の2操作に限定される。
   - 必要な投影は `candidateId`、`sourceId`、任意 `pageUrl`、任意 `kind`、`isPrimary` だけであり、price、siteName、capturedAt、root revision、保存root全体は不要である。
   - URL正規化、retail eligibility、0件・1件・複数件の一致判定と `ambiguous-match` は `source-price-refresh` のStoredSourceLocatorが所有する。catalogが重複sourceを除外または配列順で選ぶと、下流のfail-closed規則を壊す。
-  - candidate-managementの既存公開APIはqueryとcaptureをfeature registrationで合成するため、同じfeature-owned compositionにcatalogとmutationを一つのsource facetとして追加できる。
+  - candidate-managementのcanonical公開APIは `query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog, mutations }` である。本specはcatalog/mutation facetを所有し、product-captureはsource付きprefillをtyped intent factoryへ渡してhandoffするため、queryやmutationを直接呼ばない。
 - **設計への影響**: `CandidateSourceCatalogPort` と `CandidateSourceReference` をcandidate-management契約として定義し、`public.ts` だけからexportする。列挙はsource順を保った完全な参照集合を返し、未知candidate/sourceは既存 `ManagementError` の識別可能な `not-found` とする。
 
 ## アーキテクチャパターン評価

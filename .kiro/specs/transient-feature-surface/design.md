@@ -27,7 +27,7 @@
 
 ### This Spec Owns
 
-- `ApplicationFeatureRegistration.presentation`
+- `ApplicationFeatureRegistration`を構成する常設／一過性registration判別共用体と`isPersistent`型述語
 - `ActivationId`、`TargetTabId`、未信頼なChrome tab IDをbrandへ変換する`parseTargetTabId`、`TransientActivationRequest`
 - `TransientSurfaceController`の起動、撤収、引き渡し、世代照合
 - 下流featureへ世代照合と引き渡しだけを公開する`TransientSurfaceLifecyclePort`
@@ -123,8 +123,8 @@ graph TB
 
 ```text
 src/application-shell/
-  contracts.ts
-  feature-registry.ts
+  contracts.ts                            # explicit presentationとnavigation有無を相関させる判別共用体
+  feature-registry.ts                     # branch相関のruntime検証とsnapshot複製
   side-panel-host.ts
   application-composition.ts
   shell-view.tsx
@@ -155,19 +155,11 @@ tests/runtime/
 ### Feature Registration
 
 ```typescript
-export type FeaturePresentation = "persistent" | "transient";
-
-export interface ApplicationFeatureRegistration<
+export interface FeatureRegistrationBase<
   TPublic extends object = object,
   TActivation = never,
 > {
   readonly id: FeatureId;
-  readonly presentation?: FeaturePresentation;
-  readonly navigation: {
-    readonly labelKey: MessageKey;
-    readonly order: number;
-    readonly icon?: string;
-  };
   readonly publicApi: TPublic;
   getAvailability(): Availability;
   subscribeAvailability(listener: (value: Availability) => void): () => void;
@@ -175,12 +167,42 @@ export interface ApplicationFeatureRegistration<
   readonly activation?: FeatureActivationAdapter<TActivation>;
 }
 
-export const isPersistent = (
-  registration: ApplicationFeatureRegistration,
-): boolean => (registration.presentation ?? "persistent") === "persistent";
+export interface ShellNavigationMetadata {
+  readonly labelKey: MessageKey;
+  readonly order: number;
+  readonly icon?: string;
+}
+
+export interface PersistentApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "persistent";
+  readonly navigation: ShellNavigationMetadata;
+}
+
+export interface TransientApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "transient";
+  readonly navigation?: never;
+}
+
+export type ApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> =
+  | PersistentApplicationFeatureRegistration<TPublic, TActivation>
+  | TransientApplicationFeatureRegistration<TPublic, TActivation>;
+
+export const isPersistent = <TPublic extends object, TActivation>(
+  registration: ApplicationFeatureRegistration<TPublic, TActivation>,
+): registration is PersistentApplicationFeatureRegistration<TPublic, TActivation> =>
+  registration.presentation === "persistent";
 ```
 
-`isPersistent`をナビ構築、初期選択、fallback、controller検証の単一判定点とする。
+共通baseは既存のmount、availability、public API、任意のtyped activationを保持するため、transient lifecycle／activation配送をnavigation契約から分離できる。全producerは`presentation`を明示する。常設branchだけが`MessageKey`で型付けされたnavigation metadataを持ち、一過性branchではproperty自体を渡さない。runtime境界は未知／欠損presentation、常設navigation欠損、一過性navigation混入を拒否し、snapshot複製でもbranchを維持する。`isPersistent`をnavigation catalog構築、通常選択、初期選択、fallback、controller検証の単一型述語とする。
 
 ### Transient Controller
 
@@ -513,7 +535,7 @@ export interface TabLifecyclePort {
 
 ### Unit
 
-- `isPersistent`の既定値と不正登録隔離
+- 判別共用体の常設navigation必須・一過性navigation禁止、`isPersistent`の型絞り込み、未知／欠損presentationとbranch矛盾の不正登録隔離
 - controllerの起動、世代更新、3種のdismiss、conclude、stale callback
 - tab lifecycle ruleのtabIdフィルタと最大1回通知
 - 単調増加`seq`、record不在時の墓標、`invalidated`終端と不正stage遷移拒否
@@ -553,7 +575,7 @@ export interface TabLifecyclePort {
 
 ## Migration Strategy
 
-1. `presentation`と`isPersistent`を追加し既存常設featureの非回帰を通す
+1. navigation相関を持つ`presentation`判別共用体と`isPersistent`型述語を追加し、既存常設featureへ`presentation: "persistent"`を明示して非回帰を通す
 2. ナビと初期選択を常設限定へ変更する
 3. controllerとin-memory portsを実装する
 4. runtime storeとtab lifecycle adapterを実装する

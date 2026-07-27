@@ -16,7 +16,7 @@
   - _Boundary: RuntimeAdapters_
 
 - [x] 1.3 Feature registrationと共通shell stateの契約を定義する
-  - feature識別子、navigation metadata、availability、mount/unmount、operation policy、型付きerrorを表現する
+  - 当初の常設featureについて、feature識別子、navigation metadata、availability、mount/unmount、operation policy、型付きerrorを表現する。常設／一過性の判別共用体への移行はtask 6.1で扱う
   - featureが共有service worker入口を編集せずaction handler等を提供できるworker registration契約を表現する
   - foundation公開の`MaintenanceSnapshot`と`MaintenanceSnapshotSource`をcanonical契約として利用し、shell内で同等portを再定義しない
   - maintenanceの表示用stateとroot public contract合成の型制約を表現する
@@ -247,23 +247,65 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.7_
   - _Boundary: MutationGate, CoreContracts, ContractTestKit_
 
-- [ ] 6. 表示言語対応の受け入れを検証する
-- [ ] 6.1 ナビゲーションラベルの表示言語追随を検証する
-  - `ui-message-catalog`が提供する`labelKey`/`useMessages()`解決経路を前提に、ナビゲーションラベルが選択中の表示言語に応じた文字列で表示されることを確認する
-  - 実装（`ApplicationFeatureRegistration.navigation.labelKey`化、`ShellView`の解決処理）は`ui-message-catalog`が所有し、本タスクはapplication-shell側の受け入れ観点での回帰追加に限定する
-  - 完了時、表示言語を切り替えた統合テストでナビゲーションラベルの表示文字列が追随することを観測できる
-  - _Depends: ui-message-catalog 4.1, ui-message-catalog 4.3_
-  - _Requirements: 1.6_
-  - _Boundary: ShellView_
+- [ ] 6. 一過性featureを既存shell契約へ統合する
+- [ ] 6.1 常設／一過性の登録区分と選択規則を受け入れ検証する
+  - `ApplicationFeatureRegistration`を、`presentation: "persistent"`と型付きnavigationを必須にする常設branch、および`presentation: "transient"`とnavigation不在を必須にする一過性branchの判別共用体として公開する。共通baseのmount、availability、public API、任意のtyped activationは維持する。
+  - registryのunknown入力検証、snapshot複製、contribution catalog、navigation catalog生成を同じ相関へ合わせ、常設navigation欠損、一過性navigation混入、未知／欠損presentationを隔離する。既存registration producerは常設／一過性を明示して移行する。
+  - `isPersistent`を常設branchへ絞り込む型述語として、navigation、通常選択、初期選択、availability fallbackの単一判定にし、一過性featureはtyped activationまたは上流controllerからだけ表示する。
+  - 完了時、public consumerのcompile fixtureが常設navigation必須・一過性navigation禁止を証明し、persistent／transient混在fixtureで一過性featureがnavigationとfallbackへ現れず、同じ主表示領域へ一つだけmountされることを観測できる。
+  - _Depends: transient-feature-surface 1.2, transient-feature-surface 1.3_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
+  - _Boundary: CoreContracts, FeatureRegistry, FeatureContributionCatalog, ApplicationComposition, SidePanelHost, PublicConsumerContracts_
 
-- [ ] 6.2 表示言語コントロールの設置面を検証する
-  - `ui-internationalization`が提供する共通ヘッダ領域と言語コントロールの配置を前提に、読み込み中・通常・エラー・保守中の全状態で操作可能であることを確認する
-  - 実装（ヘッダ領域の追加、`react-shell-root.tsx`のProvider差し替え）は`ui-internationalization`が所有し、本タスクはapplication-shell側の受け入れ観点での回帰追加に限定する
-  - 設置面の追加によって選択中featureが再mountされず、入力途中の状態が保持されることを確認する
-  - 完了時、4状態での操作可能性とfeature非再mountが統合テストで観測できる
-  - _Depends: ui-internationalization 5.1_
-  - _Requirements: 8.1, 8.2_
+- [ ] 6.2 (P) 一過性noticeの常設面との安全な併存を検証する
+  - `transient-feature-surface`がready／maintenance状態へ追加する一過性noticeを、navigationとfeature slotから独立したbannerとしてshell受け入れ回帰へ固定する
+  - noticeの外部由来文字列をHTMLとして解釈せず、notice障害時も選択中の常設featureとその操作を維持する
+  - 完了時、危険な文字列を含むnoticeがテキストだけで表示され、常設featureのmount identityが変化しないDOM testが成功する
+  - _Depends: transient-feature-surface 1.4_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
+  - _Boundary: ShellView, ShellPresentation_
+
+- [ ] 6.3 一過性featureのtyped activationと引き渡しを既存rollbackで受け入れ検証する
+  - 上流変更後、navigationを持たない一過性featureへの有効なactivationが一度だけ配送され、同一feature再activationでは不要なunmountがないことをcontract testへ固定する
+  - 一過性featureから常設featureへの引き渡し成功で引き渡し先だけを保持し、検証・mount・適用・cleanup失敗では既存の状態復元と単一表示保証を維持することを確認する
+  - 完了時、成功・失敗・stale completionのcontract testで二重表示や二重配送が発生しないことを観測できる
+  - _Depends: 6.1, transient-feature-surface 2.4_
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
+  - _Boundary: ActivationRouter, SidePanelHost_
+
+- [ ] 7. Settingsを常設shell表示へ統合する
+- [ ] 7.1 header撤去と状態別settings回復表示を受け入れ検証する
+  - `settings-screen`による変更後、ready、maintenance、feature-local failureでpersistent navigationが維持されsettingsへ到達できることをshell DOM回帰へ固定する
+  - loadingとglobal startup errorで操作不能な言語controlがなく、「設定 / Settings」と利用可能なretryが同じstatusへ提示されることを確認する
+  - 完了時、全shell状態のDOM testでheader selectが存在せず、navigation利用可否に応じた到達または二言語案内が一意に表示される
+  - _Depends: settings-screen 1.2_
+  - _Requirements: 4.6, 4.7, 8.1, 8.2, 8.3_
   - _Boundary: ShellView, ReactShellRoot_
+
+- [ ] 7.2 Settings contributionと表示言語追随のproduction compositionを受け入れ検証する
+  - `settings-screen`が合成するsettingsを常設featureとしてnavigation、初期選択、fallbackへ一度だけ含み、独立backup navigationと一過性product-captureを常設集合へ含めないことを確認する
+  - 言語変更時はnavigation labelと状態文言を同じ言語へ更新し、mount中のsettings feature rootを再mountしない
+  - 完了時、production-shaped catalogとroot API snapshotでsettingsが一意に存在し、backup独立entryがなく、言語変更前後でsettings mount identityが保持される
+  - _Depends: 6.1, 7.1, settings-screen 3.2_
+  - _Requirements: 1.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 8.1, 8.2, 8.4_
+  - _Boundary: ApplicationComposition, SidePanelFeatureContributions, ReactShellRoot_
+
+- [ ] 8. 境界とproduction回帰を完成する
+- [ ] 8.1 (P) UI contributionとworker-safe catalogの分離を固定する
+  - settingsと一過性viewをside panel専用graphへ閉じ、service worker catalogにはworker registrationとworker-safe metadataだけを載せる
+  - source-price-refreshのfeature-owned gesture sourceが上流登録portへ接続できる一方、worker bundleからDOM、React、feature UIへ到達できないことを境界検査する
+  - 完了時、public consumer型検査とproduction worker bundle検査が成功し、UI moduleの混入を意図的fixtureで拒否できる
+  - _Depends: transient-feature-surface 4.7_
+  - _Requirements: 3.6, 6.1, 6.3, 6.4_
+  - _Boundary: ProductionWorkerComposition, FeatureContributionCatalog_
+
+- [ ] 8.2 Shellの状態・navigation・activation回帰を統合検証する
+  - persistent／transient混在、settings fallback、safe-text notice、maintenance、feature failure、typed handoffの契約とcleanup順をproduction-shaped fixtureで覆う
+  - Chrome 116以降相当で有効なgesture文脈、side panel bootstrap、settings到達、一過性面終了後の常設復帰を表示文言非依存で確認する
+  - 完了時、関連unit／contract／DOM／runtime／E2Eと公開境界・型・build gateがすべて成功し、実サイト由来fixtureを必要としない
+  - _Depends: 6.2, 6.3, 7.2, 8.1, settings-screen 4.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4_
+  - _Boundary: ContractTestKit, RuntimeAdapters, ShellIntegration_
 
 ## Implementation Notes
 

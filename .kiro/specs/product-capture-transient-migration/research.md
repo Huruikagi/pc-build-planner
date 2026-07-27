@@ -25,6 +25,8 @@
 7. 現行capture contributionの`capture`、`listProjects`、`openCandidateEditor`は、直接保存・capture内project選択・直接navigationの旧責務に属する。移行後は固定tab抽出runtime、lifecycle port、typed intent factoryだけが必要である。
 8. projectが0件のときにactivationを失敗させると、project作成のための常設navigationがcapture stateを終了させ、保持した抽出結果を失う。candidate-managementが解決前draftを先に受理する必要がある。
 9. Chromeの`tabs.Tab.url`はoptionalで、`activeTab`またはhost accessがある場合だけ利用でき、未commit時は空文字にもなり得る。固定tab化してもURLの存在を前提にせず、adapter境界でfail closedする必要がある。
+10. application-shellのcanonical registrationはpersistent／transientのdiscriminated unionであり、transient memberは`navigation` metadataを持たない。product-captureが旧registration shapeを再掲すると、`nav.productCapture`と常設navigationの前提を再混入させる。
+11. candidate-managementのcanonical公開APIは`query`、副作用のない`createCandidateEditorIntent`、`sources: { catalog, mutations }`を共存させる。captureが利用するfacetだけで同名interfaceを再定義すると、source consumerの公開契約を欠落させる。
 
 ## Selected Boundary
 
@@ -45,6 +47,12 @@
 - **選択**: 固定tab抽出runtime、`TransientSurfaceLifecyclePort`、candidate-management所有のtyped intent factoryだけを注入する。
 - **棄却**: `CaptureCandidatePort`、`listProjects`、直接`openCandidateEditor`は旧保存・project選択・navigation責務をcaptureへ残すため削除する。
 - **帰結**: candidate-managementの保存authorityとproject解決を公開consumerへ漏らさず、handoffの原子性を上流`conclude`へ一本化できる。
+
+### canonical registration unionと候補管理公開型をconsumer側で再定義しない
+
+- **選択**: product-capture registrationはapplication-shell公開unionのtransient memberへ直接適合させ、`presentation: "transient"`、activation、mount lifecycleだけを申告して`navigation`を持たせない。candidate-managementはcanonical `CandidateManagementPublicApi`をtype-only importし、indexed access typeで`createCandidateEditorIntent` facetだけを注入する。
+- **棄却**: transient登録へ空または未使用の`navigation` metadataを残す案は、`nav.productCapture`と常設面への復帰を許す。captureが必要な`query`とintent factoryだけで同名APIを再定義する案は、既存`sources` facetを欠落させる。
+- **帰結**: registrationのactivation／lifecycle／handoffを維持したまま、shellとcandidate-managementを唯一の公開契約ownerにできる。exact-shape型検査とstale key scanをconsumer gateにする。
 
 ### 固定tabのURL欠落は注入前にfail closedする
 

@@ -8,6 +8,7 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 2. 表示言語設定の保存先の選択肢と、`tech.md` の「単一 write authority」規約との関係
 3. `manifest.json` / `_locales/` / ビルド・パッケージ経路と、既存の機械検査への影響
 4. 英語UIを E2E で検証する手段と、ブラウザUI言語への依存を持ち込まない方法
+5. `settings-screen` と更新済み `application-shell` の公開契約、および言語状態の所有境界を変えずに操作面だけを移す方法
 
 ## 調査記録
 
@@ -17,7 +18,8 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 - `MessageCatalogShape` は「キー集合を平坦化した Record」であり、「後続 spec が `en` を追加する際にキー不足を型検査で検出させるための接合面」として設計されている。
 - `PluralDefinition` は `forms.other / one? / zero?` を持ち、`count` パラメータで単一数量のフォームを選ぶ。加えて `MultiPluralDefinition` は明示した複数 selector の `zero / one / other` 組み合わせで完結文を選び、未定義時は `forms.other` へ後退する。日本語カタログでは数量フォームを使わず、単体テストで両契約の挙動が固定されている。
 - カタログは名前空間ごとに1ファイル、`catalog/index.ts` だけが集約する。
-- **含意**: 言語次元の追加は「`catalog/` を `catalog/ja/` と `catalog/en/` の2系統へ分け、集約点を言語レジストリへ拡張する」形が最小の歪みで収まる。`MessageProvider` / `useMessages` / `MessageDescriptor` の公開シグネチャは変更しない。
+- v0.3.0契約では`settings`が11番目の名前空間として追加され、ja/enのキー・placeholder parityとlocaleファイルは`ui-message-catalog`がcanonical ownerとして管理する。
+- **含意**: 本specはカタログのディレクトリ構造やlocaleファイルを所有せず、`src/ui-messages/public.ts` が公開する `MessageKey`、`MessageResolver`、`MessageProvider`、`useMessages` 等の型付き契約だけを消費する。言語状態とProvider差し替えは本specが所有するが、11名前空間のキー・値・ファイル・parity gateは上流へ委ねる。
 
 ### 2. 表示言語の保存先（`src/persistence/`、`.kiro/specs/backup-restore/`、`tech.md`）
 
@@ -45,6 +47,14 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 - **含意**: E2E は言語切り替えUIの操作だけで英語表示を検証する。`chrome.i18n.getUILanguage()` を読む初期値決定ロジックの検証は、純関数の単体テストへ寄せる（実ブラウザ起動を伴わない）。
 - `launchPersistentContext` はプロファイルを跨いで保持するため、同一 context 内でサイドパネルを開き直せば永続化の検証も E2E で行える。
 
+### 5. settings-screen / application-shell 統合契約
+
+- `settings-screen` はpersistent feature `settings` の `SettingsView` に `data-region="language"` を設け、`ui-language/public.ts` の `LanguageSelectControl` をそこへ一度だけ配置する。settingsは言語code、store、保存結果を複製せず、配置とlifecycle合成だけを所有する。
+- `SettingsReactRoot` は `LanguageProvider` 配下でsettings viewを描画し、言語変更でsettings rootと埋め込みsection hostを再mount・置換しない。これが入力途中の値とスクロール位置を保持する接合条件である。
+- 更新済み `application-shell` は `ReactShellRoot` の `LanguageProvider` を維持する一方、headerの `LanguageSelectControl` を撤去する。ready／maintenance／feature-local failureではpersistent settings navigationを維持し、loading／global startup errorでは操作不能なselectを描画せず「設定 / Settings」の二言語案内を表示する。
+- 現行実装では `src/application-shell/shell-view.tsx` がまだheader controlを描画しており、`src/features/settings/` は未実装である。したがって既存の `ui-language` state／save契約を変更せず、上流settings実装後のplacement／identity／E2Eを受け入れる移行タスクが必要である。
+- **含意**: 依存方向は `settings-screen -> ui-language/public.ts` と `application-shell -> ui-language/public.ts` のままにし、`ui-language` からsettingsまたはshellへ逆参照しない。新しい設定portや共有state抽象は不要である。
+
 ## アーキテクチャパターンの評価
 
 | 案 | 内容 | 判断 |
@@ -65,9 +75,9 @@ React root が6本に分かれているため、Context だけでは状態を共
 
 理由は上記「調査記録 2」のとおり。write authority の対象は `LocalDataRoot` であり、UI 設定はドメインデータではない。ルートへ入れた場合の実害（交換形式への混入・保守中の変更不可・容量監視前提の変化）が具体的であり、外へ出す判断の根拠になる。非違反性は機械検査で担保する。
 
-### D-3. キー集合の一致は型で、パラメータ名の一致も型で保証する
+### D-3. キー集合の一致は型で、パラメータ名の一致は単体テストで保証する
 
-キー集合は `Record<MessageKey, ...>` の網羅性（欠落）と `satisfies` の余剰プロパティ検査（過剰）で双方向に塞ぐ。プレースホルダ名は `PlaceholderNames<S>` が**union** を返すため、`[A] extends [B] ? [B] extends [A] ? ...` の双方向条件型で順序非依存に比較できる。実行時テストではなくコンパイル時に落とせる。
+キー集合の双方向網羅と、プレースホルダ名・数量別フォーム・複数selectorの名称・順序のparityは`ui-message-catalog`の公開型とparity gateを正本とする。本specは11名前空間を列挙し直さず、公開consumer型検査とresolver契約テストでその保証を受け入れる。内部カタログや`catalog/{ja,en}/*.ts`への直接importを境界検査で拒否する。
 
 ### D-4. `Intl.PluralRules` は導入しない
 
@@ -81,9 +91,9 @@ React root が6本に分かれているため、Context だけでは状態を共
 
 固定値を残すと「静的な既定言語」という誤った事実が生まれ、要件 5.3 に反する。属性を持たない状態で出荷し、bootstrap が最初の描画前に同期的に設定する（`chrome.i18n.getUILanguage()` は同期 API）。「`<html>` に `lang` がハードコードされていないこと」を既存の HTML 検査テストへ追加し、退行を機械的に防ぐ。
 
-### D-7. 言語切り替えUIの所有権を「振る舞い」と「配置」に分ける
+### D-7. 言語切り替えUIの所有権を「振る舞い」と「settings配置」に分ける
 
-コントロールの振る舞い（選択肢の列挙・現在値の提示・切り替えの発火）は言語境界が所有し、画面上のどこへ置くかは `application-shell` が所有する。これにより shell は言語の意味を知らずに配置だけを決められ、`FeatureMountContext` にも mount/unmount 契約にも触れない。
+コントロールの振る舞い（選択肢の列挙・現在値の提示・切り替えの発火）は言語境界が所有し、画面上の配置は `settings-screen` の表示言語区画が所有する。`application-shell` は `LanguageProvider`、persistent settings navigation、状態別の到達または二言語案内だけを所有する。これによりsettingsとshellは言語の意味・保存を知らず、`ui-language` はsettings／shellのlifecycleを知らない。
 
 ## 統合レンズの適用結果
 
@@ -95,8 +105,10 @@ React root が6本に分かれているため、Context だけでは状態を共
 
 | リスク | 影響 | 緩和 |
 |---|---|---|
-| 型レベルのプレースホルダ照合がコンパイル時間を悪化させる | `pnpm typecheck` の遅延 | 上流と同じく移行前後で所要時間を比較し、悪化時は照合を単体テストへ後退させる（設計上の代替経路を明記） |
+| 型レベルのキー集合照合がコンパイル時間を悪化させる | `pnpm typecheck` の遅延 | 移行前後で所要時間を比較し、プレースホルダ照合は複雑な条件型へ載せず単体テストに閉じる |
 | `catalog/` のディレクトリ移動が上流の機械検査（`validate-ui-text.mjs`）の除外パスとずれる | CJK リテラル検査が誤検出・検出漏れを起こす | 除外パスの更新を同一タスクで行い、意図的に日本語を戻して検査が落ちることを確認する |
 | 言語切り替え時に feature の React root が再マウントされる | 入力途中の内容が消える | ストア購読による再レンダーのみで、root の生成・破棄を伴わないことを contract テストで固定する |
+| header撤去後にsettings rootまたは埋め込みsectionが言語変更で再mountされる | 設定中の入力・結果・スクロール位置が消える | `SettingsReactRoot` とsection hostのidentityをDOM／production-shaped統合テストで固定する |
+| 上流カタログへ名前空間が追加された後もconsumerが旧名前空間数を前提にする | `settings`文言の未解決または型付き契約からの逸脱 | 公開consumer型検査で11名前空間のja/en resolverを受け入れ、旧固定数の記述とcatalog deep importを検証gateで拒否する |
 | `_locales/` の追加で既存の manifest 完全一致テストが落ちる | 検証フローの赤 | 同一タスクでテストを更新し、`default_locale` と `__MSG_*` の整合を新しい機械検査へ格上げする |
 | 保存値の読み取り失敗で起動が止まる | 拡張が使えない | 保存ポートは失敗を `Result` で返し、初期値決定は保存値なしと同じ経路へ落ちる |

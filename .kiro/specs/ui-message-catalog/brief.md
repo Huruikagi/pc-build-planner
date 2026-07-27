@@ -100,3 +100,15 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
 - TypeScript strict、`any` 禁止。カタログのキーは型で保護し、存在しないキーの参照がコンパイルエラーになること
 - MV3 / CSP 制約により、カタログは静的にバンドルへ含める
 - 検証は既存の `pnpm validate` フロー（型検査・build・test・E2E）に乗せる
+
+## v0.3.0 Merge Update
+
+初回のカタログ化と英語対応は実装済みである。本更新では既存の型付きresolverと文言非依存のconsumer契約を維持し、次の差分だけをcatalog ownerとして取り込む。
+
+- 一過性featureの起動失敗・失効、product-captureの権限再付与・新世代起動・handoff再試行をja/enで追加する。
+- 11番目の`settings`名前空間、`nav.settings`、表示言語・backup区画、loading/startup failure時の固定二言語回復案内をja/enで追加する。
+- transient化したproduct-captureの`nav.productCapture`とsettingsへ統合されたbackupの`nav.backupRestore`をaliasなしで削除する。
+- message key/value、placeholder parity、dead key removalは本specが所有する。producer specsは表示意味、発火条件、consumer、layout、feature lifecycleを所有する。
+- 言語state、settings layout、transient activation、capture handoff、backup処理は対象外とする。
+
+初回の横断レビューでは、`ui-internationalization`に残っていた「10名前空間」前提を検出した。この不整合は同specを11名前空間の公開consumer契約へ改訂して解消済みであり、今後も`settings`を別namespaceへaliasして不整合を隠さない。

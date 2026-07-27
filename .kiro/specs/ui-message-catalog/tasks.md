@@ -202,9 +202,9 @@
   - _Depends: 4.1_
 
 - [x] 4.3 ナビゲーションラベルのキー申告への一括移行
-  - `ApplicationFeatureRegistration.navigation.label` を `labelKey: MessageKey` へ変更し、`ShellNavigationItem` も同様に変更する
-  - 5つの feature の `registration.ts` を同時に `nav` 名前空間のキー申告へ移す。`order` と `icon` は変更しない
-  - `feature-registry.ts` の `navigation` 検証を `labelKey` に合わせる
+  - canonical判別共用体を再定義せず、`PersistentApplicationFeatureRegistration.navigation.label`だけを`labelKey: MessageKey`へ変更し、常設branchから導出する`ShellNavigationItem`も同様に変更する
+  - 当時の5つの常設featureの`registration.ts`を同時に`nav`名前空間のキー申告へ移す。`order`と`icon`は変更せず、一過性branchにはnavigation metadata/keyを持たせない
+  - `feature-registry.ts` はcanonical discriminantで常設branchへ絞り込んで`labelKey`を検証し、一過性branchのnavigation不在を維持する
   - `shell-view.tsx` が表示直前にキーを解決し、ラベル・順序・アクセシブル名を現行と同一に保つ
   - 未定義キーの申告が型検査で失敗することを、失敗する最小例で確認する
   - 部分適用状態を作らず、契約と全登録を一括で切り替える
@@ -250,6 +250,72 @@
   - 完了条件: `pnpm validate` が全段成功し、表示上の差分がゼロであることが確認できている
   - _Requirements: 1.5, 2.1, 2.2, 2.3, 2.4, 8.4, 10.5_
   - _Depends: 5.3_
+
+- [ ] 6. v0.3.0のcatalog dataを追加する
+
+- [ ] 6.1 canonical settings名前空間と設定navigationを加算的に追加する
+  - 日本語・英語へ11番目の`settings`名前空間を追加し、画面見出し、表示言語区画、バックアップ・復元区画の見出しと説明をcanonical key contractどおりに定義する
+  - `nav.settings`を両言語へ追加し、consumer移行が完了する7.2までは旧navigation keyを削除しない
+  - 既存のresolver、記述子、Provider、言語stateの公開signatureを変更せず、11名前空間を集約する
+  - 完了条件: `settings.*`の5キーと`nav.settings`がja/enの両resolverで解決でき、既存10名前空間も同じ公開契約で解決できる
+  - _Requirements: 1.1, 1.5, 7.5, 10.1, 10.2, 11.5_
+  - _Boundary: V03CatalogMigration_
+
+- [ ] 6.2 shellの一過性・settings回復messageを追加する
+  - `shell.transientActivationFailed`と`shell.transientActivationExpired`へ、新しい付与gestureと新世代起動を案内するja/en値を追加する
+  - `shell.settingsRecoveryLoading`と`shell.settingsRecoveryStartupFailed`へ、どちらの表示言語でも「設定 / Settings」と回復操作を判別できる固定二言語値を追加する
+  - noticeの発火、clear、state遷移、retry callbackをcatalogへ持ち込まず、固定文言だけを所有する
+  - 完了条件: 4キーが両resolverから安全な`MessageDescriptor`として解決され、locale間のキー集合が一致する
+  - _Depends: 6.1_
+  - _Requirements: 1.1, 1.5, 10.1, 10.2, 11.1, 11.2, 11.6_
+  - _Boundary: V03CatalogMigration_
+
+- [ ] 6.3 product-captureの権限・新世代・handoff回復messageを追加する
+  - `capture.errors.permission-lost`を、ページ再表示後に拡張アイコンを再操作して権限を付与し直すja/en案内へ改訂する
+  - `capture.newGenerationHint`、`capture.handoffRetainedNotice`、`capture.retryHandoffAction`をexact key contractどおりに追加する
+  - capture state、抽出、handoff、activation寿命を変更せず、外部由来値を固定文言へ取り込まない
+  - 完了条件: 4キーがja/enで同じplaceholder契約を持ち、現行世代の再試行と新世代による置換を区別して解決できる
+  - _Depends: 6.2_
+  - _Requirements: 1.1, 1.4, 5.6, 10.1, 10.2, 10.6, 11.3, 11.4_
+  - _Boundary: V03CatalogMigration_
+
+- [ ] 7. parity、legacy key削除、横断受入を完成する
+
+- [ ] 7.1 追加キーの移行前parityとexact-key contractを固定する
+  - 11名前空間のja/en双方向キー網羅、全message formのplaceholder集合、4つのshell key、4つのcapture key、settings key集合を検査する
+  - この移行前gateでは旧navigation keyの存在を許容し、dead-key不在の検査はconsumer切替後の7.2だけで有効化する
+  - 意図的なキー欠落・余剰、placeholder不一致、二言語hintの片言語欠落が検査を失敗させるfixtureを追加する
+  - 完了条件: 新規keyとplaceholderのparity gateがgreenで、旧navigation keyを一時的に保持した加算状態もgreenになる
+  - _Depends: 6.1, 6.2, 6.3_
+  - _Requirements: 1.2, 1.3, 10.1, 10.2, 10.4, 10.6, 11.8_
+  - _Boundary: CatalogParityGate_
+
+- [ ] 7.2 legacy navigation keyをconsumer移行後に原子的に削除する
+  - producer-owned consumerが移行済みであることを前提に、`nav.productCapture`と`nav.backupRestore`をja/enからaliasなしで同時削除する
+  - catalog、`src/`、`tests/`、`e2e/`を対象にdead keyとdead consumerを検出し、product-captureを常設navigationへ戻す参照と独立backup navigation参照を拒否する
+  - producerのstate、view layout、activation、backup処理は編集せず、catalog dataと検査だけを変更する
+  - 完了条件: settingsは`nav.settings`だけを申告し、transient product-captureと埋め込みbackupにはnavigation keyがなく、dead-key gateがgreenになる
+  - _Depends: product-capture-transient-migration 5.2, settings-screen 3.2, backup-restore 6.2, 7.1_
+  - _Requirements: 2.1, 7.5, 7.6, 11.7, 11.8_
+  - _Boundary: V03CatalogMigration, CatalogParityGate_
+
+- [ ] 7.3 producer-owned表示状態をread-onlyの横断受入として再検証する
+  - 本specではcatalog-owned contract testと公開consumer fixtureだけを更新し、shell、capture、settings、languageのstate、view、layout、発火条件または業務処理を編集しない
+  - producer suiteとE2Eを実行し、一過性起動失敗・失効、権限再付与、新世代起動、handoff再試行、settings両区画、loading/startup hintが公開`MessageKey`または`MessageDescriptor`だけでja/en表示されることを受け入れ検証する
+  - Providerによる言語切り替え、安全なtext描画、文言非依存locatorを確認し、driftがあれば該当producer ownerへ差し戻す
+  - 完了条件: catalog側の公開consumer検証と各producerの既存受入suiteが成功し、本spec所有外のコード差分がない
+  - _Depends: application-shell 7.1, product-page-capture 5.4, settings-screen 4.2, ui-internationalization 9.1, 9.3, 7.2_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.3, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
+  - _Boundary: UiMessagesPublicEntry, CrossSpecAcceptance_
+
+- [ ] 7.4 完全検証gateとtask群のtraceabilityを確認する
+  - typecheck、public consumer、lint、ui-text、boundary、fixture、final build、unit・integration・DOM、Playwright E2Eをfreshに実行する
+  - 既存完了task 1〜5と追加task 6〜7を合わせたcoverage matrixが64受け入れ基準を欠落なく追跡することを確認し、このtask自身は列挙したgate要件だけを直接検証する
+  - 配布物への静的同梱、権限・CSP不変、実サイトfixture不在、承認済みcatalog migration以外の差分不在を確認する
+  - 完了条件: 全gateがfreshに成功し、spec metadataと差分検査が実装準備済み状態を示す
+  - _Depends: 7.3_
+  - _Requirements: 1.5, 2.4, 8.4, 9.4, 10.2, 11.8_
+  - _Boundary: ValidationGate_
 
 ## Implementation Notes
 

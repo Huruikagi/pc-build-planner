@@ -19,8 +19,9 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 ## 境界コミットメント
 
 ### このspecが所有するもの
-- `ApplicationFeatureRegistration`とshell lifecycle契約。
-- shellヘッダ領域内での言語切替コントロール（`ui-language`所有）の配置点、および`ui-messages`が解決した表示文字列（ナビゲーションラベル・共通状態文言）の描画。
+- `application-shell/public.ts`に現れる常設／一過性区分、常設だけをnavigation・初期選択・fallbackへ載せるsteady-state shell lifecycle、およびその受け入れ回帰。`presentation`導入と一過性controller実装は`transient-feature-surface`が所有する。
+- `transientNotice`を常設navigationと併存させ安全なテキストとして描画するsteady-state受け入れ。notice導入実装は`transient-feature-surface`が所有する。
+- `ui-messages`が解決したナビゲーションラベル・共通状態文言の描画、およびsettingsを常設featureとして受け入れるhost契約。settings回復案内・header撤去・具体composition変更は`settings-screen`が所有する。
 - `ShellNavigator`、feature-neutralな`FeatureActivationIntent`、activation配送順序と失敗分離。
 - side panel host、ナビゲーション、共通loading/error/maintenance React viewとroot adapter。
 - `ApplicationCompositionRoot`とroot公開APIの合成。
@@ -36,8 +37,9 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - Storage API、Repository、復元、商品抽出、互換性判定。
 - feature公開契約の内容そのもの。
 - feature固有のactivation payload、targetの意味、payloadからfeature stateへの変換。
+- 一過性featureの起動世代、固定tab、寿命監視、gesture ingressおよびstore。これらは`transient-feature-surface`が所有する。
 - Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleだけを利用する。
-- 表示言語の意味・保存・解決、メッセージカタログの内容と言語別値（`ui-messages`/`ui-language`所有）。
+- 表示言語の意味・保存・解決、言語control、settings画面layout、backup区画、メッセージカタログの内容と言語別値（`settings-screen`、`ui-messages`、`ui-language`、`backup-restore`所有）。shellヘッダへ言語controlを配置しない。
 
 ### 許可する依存
 - local data foundationの公開型、canonical `Result<T, E>`、query契約、および完了済み`local-data-foundation` task 5.5が公開するread-only `MaintenanceSnapshotSource`。
@@ -49,7 +51,9 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `src/runtime/service-worker.ts`はproduction worker compositionとChrome message target adapterだけを所有し、Storage、Repository、foundation内部、DOM、Reactをimportしない。
 - production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 - `ui-messages`の公開型`MessageKey`・`MessageDescriptor`と解決契約`useMessages()`（`src/ui-messages/public.ts`）。ナビゲーションラベルと共通状態文言（`ShellViewState`/`ShellMaintenanceState`のmessage）の表示文字列化にだけ使用し、カタログの内部実装・言語別値へdeep importしない。
-- `ui-language`の公開component`LanguageSelectControl`とProvider`LanguageProvider`（`src/ui-language/public.ts`）。shellはヘッダ領域へ配置しProviderを差し替えるだけであり、言語状態・永続化・解決ロジックへdeep importしない。
+- `ui-language`の公開Provider`LanguageProvider`（`src/ui-language/public.ts`）。shellはProviderを組み込むが、`LanguageSelectControl`の配置はsettings featureへ委ね、言語状態・永続化・解決ロジックへdeep importしない。
+- `transient-feature-surface`が確定した`PersistentApplicationFeatureRegistration`／`TransientApplicationFeatureRegistration`判別共用体、`isPersistent`型述語、`TransientNotice`、typed activation連携。shellは表示区分を解釈してhostへ投影するが、起動世代やChrome gestureを再実装しない。
+- `settings-screen`が提供するpersistent settings contribution。shellはcompositionとnavigation到達だけを所有し、settings内部の言語・backup能力を解釈しない。
 
 ### 再検証トリガー
 - registration、mount context、availability、activation、public API registryの型変更。
@@ -57,8 +61,9 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - root entry、side panel起動順序、`sidePanel.open()` gesture入口の変更。
 - shellとfeature間のファイル所有権または依存方向の変更。
 - foundationの`MaintenanceSnapshot`または`MaintenanceSnapshotSource`公開契約、`local-data-foundation` task 5.5の完了状態が変更された場合。
-- shell presentation handle、feature slot生成時点、navigation command、production contribution一覧の変更。
-- `ui-messages`の`MessageKey`/`MessageDescriptor`/`useMessages()`公開契約、または`ui-language`の`LanguageSelectControl`/`LanguageProvider`公開契約の変更。
+- shell presentation handle、feature slot生成時点、persistent navigation判定、初期選択・fallback、`transientNotice`、production contribution一覧の変更。
+- `ui-messages`の`MessageKey`/`MessageDescriptor`/`useMessages()`公開契約、`ui-language`の`LanguageProvider`公開契約、またはsettings回復案内の配置状態の変更。
+- worker-safe `feature-contribution-catalog.ts`とUI専用`side-panel-contributions.ts`の分離、または`TransientGestureRegistrationPort`のworker composition接続を変更する場合は`source-price-refresh`を再検証する。
 
 ## アーキテクチャ
 
@@ -114,14 +119,14 @@ graph TB
 side-panel.html                         # shellが所有するside panel document
 src/
 ├── application-shell/
-│   ├── contracts.ts                   # registration、mount、availability、maintenance型（navigation.labelKeyはui-messagesのMessageKey、message系はMessageDescriptor）
-│   ├── feature-registry.ts            # 登録検証、一意性、snapshotと購読
+│   ├── contracts.ts                   # 常設／一過性registration判別共用体、mount、availability、maintenance、transientNotice型
+│   ├── feature-registry.ts            # 区分別登録検証、一意性、snapshotと購読
 │   ├── maintenance-projection.ts      # 世代付き状態の単調projection
 │   ├── mutation-gate.ts               # UI操作種別とmaintenance抑止判定
 │   ├── activation-router.ts            # feature-neutral intentの対象解決と一回配送
 │   ├── side-panel-host.ts             # navigationとfeature lifecycle調停
 │   ├── worker-composition.ts          # feature提供worker registrationの一回限り合成
-│   ├── shell-view.tsx                  # loading/error/maintenance/navigationのReact表示。全状態で描画する共通ヘッダ領域（言語切替コントロールの配置点）を含み、labelKey/message記述子をuseMessages()で解決する
+│   ├── shell-view.tsx                  # loading/error/maintenance/navigation/transientNoticeのReact表示。loading/startup errorでは二言語settings回復案内を描画する
 │   ├── react-shell-root.tsx            # shell用React rootとcleanup adapter。ProviderはLanguageProvider（MessageProviderを内包）
 │   ├── error-boundary.tsx              # component描画失敗のfeature単位隔離
 │   ├── composition-root.ts            # foundation、feature、hostの一回限り合成
@@ -142,7 +147,7 @@ tests/
 └── integration/application-shell.test.ts # bootstrap、遷移、障害、maintenance統合
 ```
 
-既存の`react-shell-root.tsx`、`shell-view.tsx`、`composition-root.ts`、`runtime/side-panel.ts`、`runtime/service-worker.ts`はproduction接続のため変更し、`shell-presentation.tsx`、`application-composition.ts`、`feature-contribution-catalog.ts`、`side-panel-contributions.ts`を追加する。`src/domain/`と`src/persistence/`の実装は変更対象外であり、完了済み`local-data-foundation` task 5.5の公開portと task 6.11の絞り込みdata portを利用する。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
+既存の`react-shell-root.tsx`、`shell-view.tsx`、`shell-view.css`、`feature-registry.ts`、`side-panel-host.ts`、`shell-presentation.tsx`、`application-composition.ts`を常設／一過性混在とsettings回復表示へ改訂する。`feature-contribution-catalog.ts`はworker registrationだけを含められるworker-safe graphを維持し、`side-panel-contributions.ts`だけがsettingsを含むUI contributionを参照する。`src/domain/`と`src/persistence/`の実装は変更対象外である。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
 
 #### Feature contribution composition
 
@@ -156,11 +161,16 @@ interface FeatureCompositionContext {
   readonly navigator: ShellNavigator;        // application-shell所有（遅延bind）
 }
 
-type FeatureContributionFactory<TKey extends string, TPublic extends object> =
-  (context: FeatureCompositionContext) => FeatureContribution<TKey, TPublic>;
+type FeatureContributionFactory<
+  TKey extends string,
+  TPublic extends object,
+  TActivation = unknown,
+> = (context: FeatureCompositionContext) =>
+  FeatureContribution<TKey, TPublic, TActivation>;
 ```
 
 - `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker contributionだけを持つworker安全なcatalogを所有する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
+- `side-panel-contributions.ts`はUI contributionを具体合成する唯一の面とし、settingsをpersistent、product-capture等をtransientとして受け入れる。source-price-refreshのcontext menu worker contributionはここへ混在させない。
 - `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。
 - `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
 - `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
@@ -193,29 +203,29 @@ sequenceDiagram
 
 | 要件 | 概要 | Components | Interfaces / Flows |
 |---|---|---|---|
-| 1.1, 1.2, 1.3, 1.4, 1.5 | hostとnavigation | SidePanelHost, ShellView, ReactShellRoot | RegistrySnapshot, FeatureMount |
-| 1.6 | ナビゲーションラベルの表示言語追随 | ShellView | `ShellNavigationItem.labelKey`, `useMessages()` | — |
-| 2.1, 2.2, 2.3, 2.4, 2.5 | feature登録 | FeatureRegistry | ApplicationFeatureRegistration |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8 | 常設navigationと単一主表示 | FeatureRegistry, SidePanelHost, ShellView, ReactShellRoot | `ApplicationFeatureRegistration.presentation`, RegistrySnapshot, FeatureMount |
+| 1.6 | ナビゲーションラベルの表示言語追随 | ShellView | `ShellNavigationItem.labelKey`, `useMessages()` |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 区分とnavigationの整合が型で閉じた常設／一過性feature登録 | FeatureRegistry | ApplicationFeatureRegistration discriminated union, isPersistent |
 | 3.1, 3.2, 3.3, 3.4 | compositionと公開API | CompositionRoot, PublicApiRegistry | start, composePublicApi |
 | 3.5, 3.6, 3.7 | feature contribution合成、worker bundle分離、catalog由来の公開API型 | ProductionWorkerComposition, PublicApiRegistry | FeatureCompositionContext, feature-contribution-catalog.ts, composeApplicationApi |
-| 4.1, 4.2, 4.3, 4.4 | 共通状態と障害分離 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState |
+| 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7 | 共通状態、notice、settings回復案内 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState, TransientNotice |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | maintenance抑止とmutation可否変化の購読 | MaintenanceProjection, MutationGate | MaintenanceSnapshotSource, OperationPolicy.subscribe |
 | 6.1, 6.2, 6.3, 6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
-| 7.1, 7.2, 7.3, 7.4, 7.5 | feature間activation | ActivationRouter, SidePanelHost | FeatureActivationIntent, ShellNavigator, FeatureActivationAdapter |
-| 8.1 | 全状態で使える言語切替の設置面 | ShellView, ReactShellRoot | header領域, `LanguageSelectControl`, `LanguageProvider` | — |
-| 8.2 | 設置面追加によるfeature再mount回避 | ReactShellRoot | Provider差し替え（root構造は不変） | — |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8 | 常設／一過性feature間activation | ActivationRouter, SidePanelHost | FeatureActivationIntent, ShellNavigator, FeatureActivationAdapter, TransientSurfaceLifecyclePort |
+| 8.1, 8.2 | persistent settingsの選択・到達 | FeatureRegistry, SidePanelHost, ShellView | PersistentApplicationFeatureRegistration, ShellNavigator |
+| 8.3, 8.4 | header撤去とsettings非再mount | ShellView, ReactShellRoot | LanguageProvider, persistent navigation |
 
 ## Components and Interfaces
 
 | Component | Layer | Intent | 要件 | 主な依存 | 契約 |
 |---|---|---|---|---|---|
-| FeatureRegistry | Core | 登録の検証・一意性・変更通知 | 2.1–2.5 | contracts P0 | Service, State |
+| FeatureRegistry | Core | 判別共用体に沿う登録の検証・一意性・変更通知 | 2.1–2.6 | contracts P0 | Service, State |
 | MaintenanceProjection | Core | 世代付き状態を単調に投影 | 5.1, 5.4–5.6 | foundation P0 | Service, State |
 | MutationGate | Core | 操作分類から可否を判定し、可否変化を再mountなしで購読者へ通知する | 5.2–5.3, 5.7 | projection P0 | Service |
-| SidePanelHost | UI orchestration | navigationとmount lifecycle | 1.1–1.5, 2.4, 4.2–4.3 | registry P0, ReactShellRoot P0 | Service, State |
+| SidePanelHost | UI orchestration | persistent navigation、一過性起動、単一mount lifecycle | 1.1–1.5, 1.7–1.8, 2.4, 4.2–4.5, 8.1–8.2 | registry P0, ReactShellRoot P0 | Service, State |
 | WorkerComposition | Runtime composition | feature worker registrationを共有service workerへ合成 | 3.1, 3.3, 3.4, 6.1–6.4 | worker registrations P0 | Service |
-| ShellView | UI | 共通状態をReactで安全に描画し、`labelKey`/文言記述子を現在の表示言語で解決する | 1.6, 4.1–4.4, 5.1–5.3, 8.1 | React P0, ui-messages `useMessages()` P0 | State |
-| ReactShellRoot | UI adapter | shell stateをReact rootへ接続しcleanupする。Providerを`LanguageProvider`へ差し替える | 1.1–1.5, 4.1–4.4, 8.1–8.2 | React DOM P0, Host P0, ui-language `LanguageProvider` P0 | Service |
+| ShellView | UI | navigation、共通状態、safe-text notice、二言語settings回復案内を描画する | 1.6, 4.1–4.7, 5.1–5.3, 8.2–8.3 | React P0, ui-messages `useMessages()` P0 | State |
+| ReactShellRoot | UI adapter | shell stateをReact rootへ接続し、header controlなしでcleanupする | 1.1–1.8, 4.1–4.7, 8.4 | React DOM P0, Host P0, ui-language `LanguageProvider` P0 | Service |
 | ShellErrorBoundary | UI | component描画失敗をfeature単位で隔離する | 4.2–4.4 | React P0 | State |
 | CompositionRoot | Composition | 一度だけ全依存を合成 | 3.1, 3.3–3.4 | 全component P0 | Service |
 | PublicApiRegistry | Composition | feature公開契約をrootへ合成 | 3.2, 3.4 | feature public P0 | Service |
@@ -223,7 +233,7 @@ sequenceDiagram
 | ShellPresentation | UI adapter | shell stateとnavigationを描画しfeature専用slotを公開 | 1.1–1.5, 4.1–4.4, 5.1 | ReactShellRoot P0 | Service, State |
 | ApplicationComposition | Composition | canonical foundationと公開registrationをproduction runtimeへ一度だけ接続 | 2.1, 3.1–3.4, 5.6, 6.1 | Foundation/feature public P0 | Service |
 | ProductionWorkerComposition | Runtime composition | worker contextでfoundation command handlerとcatalog worker contributionを一度だけ接続 | 3.1, 3.3, 3.4, 6.1–6.4 | Foundation public P0, catalog P0, Chrome message target P0 | Service |
-| ActivationRouter | UI orchestration | feature-neutral intentを対象registrationへ検証付きで一度配送 | 7.1–7.5 | FeatureRegistry P0, SidePanelHost P0 | Service |
+| ActivationRouter | UI orchestration | feature-neutral intentを常設／一過性registrationへ検証付きで一度配送 | 7.1–7.8 | FeatureRegistry P0, SidePanelHost P0 | Service |
 
 ### Core contracts
 
@@ -262,18 +272,51 @@ interface ShellNavigator {
   activate(intent: FeatureActivationIntent): Promise<Result<void, FeatureActivationError>>;
 }
 
-interface ApplicationFeatureRegistration<
+interface FeatureRegistrationBase<
   TPublic extends object = object,
   TActivation = never,
 > {
   readonly id: FeatureId;
-  readonly navigation: { readonly labelKey: MessageKey; readonly order: number };
   readonly publicApi: TPublic;
   getAvailability(): Availability;
   subscribeAvailability(listener: (value: Availability) => void): () => void;
-  mount(context: FeatureMountContext): Promise<{ unmount(): Promise<void> }>;
+  mount(context: FeatureMountContext): Promise<FeatureMountHandle>;
   readonly activation?: FeatureActivationAdapter<TActivation>;
 }
+
+interface ShellNavigationMetadata {
+  readonly labelKey: MessageKey;
+  readonly order: number;
+  readonly icon?: string;
+}
+
+interface PersistentApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "persistent";
+  readonly navigation: ShellNavigationMetadata;
+}
+
+interface TransientApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "transient";
+  readonly navigation?: never;
+}
+
+type ApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> =
+  | PersistentApplicationFeatureRegistration<TPublic, TActivation>
+  | TransientApplicationFeatureRegistration<TPublic, TActivation>;
+
+const isPersistent = <TPublic extends object, TActivation>(
+  registration: ApplicationFeatureRegistration<TPublic, TActivation>,
+): registration is PersistentApplicationFeatureRegistration<TPublic, TActivation> =>
+  registration.presentation === "persistent";
 
 interface ApplicationWorkerRegistration {
   readonly id: FeatureId;
@@ -290,13 +333,15 @@ type RegistrationError =
   | { readonly kind: "duplicate_feature_id"; readonly id: FeatureId };
 
 interface FeatureRegistry {
-  register<TPublic extends object>(feature: ApplicationFeatureRegistration<TPublic>): Result<void, RegistrationError>;
+  register<TPublic extends object, TActivation>(
+    feature: ApplicationFeatureRegistration<TPublic, TActivation>,
+  ): Result<void, RegistrationError>;
   snapshot(): readonly ApplicationFeatureRegistration[];
   subscribe(listener: () => void): () => void;
 }
 ```
 
-`Result<T, E>`はlocal data foundationが所有するcanonical型を利用し、shell内で再定義しない。`MessageKey`は`ui-messages`が所有するcanonical型を利用し、shell内で再定義しない。登録順序は`navigation.order`、同値時は`id`で決定的に並べる。listener解除とview unmountは複数回呼んでも安全である。
+`Result<T, E>`はlocal data foundationが所有するcanonical型を利用し、shell内で再定義しない。`MessageKey`は`ui-messages`が所有するcanonical型を利用し、shell内で再定義しない。常設navigationは`isPersistent`で絞り込んだ後に`navigation.order`、同値時は`id`で決定的に並べる。一過性registrationのsnapshot順は`id`で決定し、navigation metadataを参照しない。listener解除とview unmountは複数回呼んでも安全である。
 
 worker registrationは同じfeature idで一意にし、共有`src/runtime/service-worker.ts`をfeatureから編集させずcomposition rootだけが登録する。登録解除は冪等で、途中失敗時は登録済みhandlerを逆順に解除する。
 
@@ -340,6 +385,8 @@ interface OperationPolicy {
 interface MutationGate extends OperationPolicy {}
 ```
 
+全registrationは`presentation`を明示する。常設branchだけが`navigation`を必須とし、一過性branchは`navigation` property自体を許可しない。runtime validatorもこの相関を検証し、常設のnavigation欠損、一過性のnavigation混入、未知presentationを隔離する。`isPersistent`をnavigation catalog生成、通常`select()`、初期選択、availability fallbackの単一型述語にし、transient registrationはtyped activationまたは上流の一過性controllerからのみ表示する。`ApplicationWorkerRegistration`はUI registrationとは独立したままにし、worker-safe catalogからDOM、React、side panel contributionへ到達させない。
+
 - `(generation, revision)`を辞書順の単調cursorとして比較し、現在cursor以下の通知を無視する。foundationはmaintenance開始・更新・終了ごとにrevisionを増加させるため、同一generationの正当な終了と遅延した開始通知を決定的に区別できる。generationまたはrevisionが負、あるいは有限整数でない通知は契約違反として拒否する。
 - gateは`read`を常に許可し、`mutation`をactive中だけ拒否する。shellはdomain側の最終的なwrite拒否を代替しない。
 - shellはmaintenance遷移でfeatureを再mountしないため、gateはmount中のfeatureが観測できる唯一の可否source of truthである。よってgateは値の提供だけでなく変更通知も所有する。`subscribe`はprojectionの購読を内部に隠し、`isAllowed("mutation")`の結果が実際に変化したときだけ通知する。同一generationのrevision前進などで可否が変わらない通知は購読者へ伝播させない。最初の購読でprojectionへ接続し、最後の解除で切断する冪等なlifecycleを持つ。
@@ -352,9 +399,14 @@ interface MutationGate extends OperationPolicy {}
 ```typescript
 type ShellViewState =
   | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly selected: FeatureId | null }
-  | { readonly kind: "maintenance"; readonly selected: FeatureId | null; readonly message: string }
+  | { readonly kind: "ready"; readonly selected: FeatureId | null; readonly transientNotice?: TransientNotice }
+  | { readonly kind: "maintenance"; readonly selected: FeatureId | null; readonly message: string; readonly transientNotice?: TransientNotice }
   | { readonly kind: "error"; readonly message: string; readonly recoverable: boolean };
+
+interface TransientNotice {
+  readonly message: MessageDescriptor;
+  readonly recoverable: true;
+}
 
 interface SidePanelHost {
   start(): Promise<Result<void, { readonly kind: "startup_failed"; readonly message: string }>>;
@@ -364,13 +416,15 @@ interface SidePanelHost {
 }
 ```
 
-ShellViewと各feature viewは外部由来文字列を通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。ReactShellRootはside panel host containerへ`createRoot`し、停止時に`root.unmount()`を一度だけ呼ぶ。`FeatureMountContext`と`ApplicationFeatureRegistration.mount/unmount`の公開契約は変更せず、各feature registrationのUI adapterが受け取ったcontainerへReact rootを作成・破棄する。選択中featureが不可になった場合はunmountし、次の利用可能featureを決定順で選ぶ。該当がなければ理由付きempty stateを表示する。
+ShellViewと各feature viewは外部由来文字列を通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。ReactShellRootはside panel host containerへ`createRoot`し、停止時に`root.unmount()`を一度だけ呼ぶ。`FeatureMountContext`と`ApplicationFeatureRegistration.mount/unmount`の公開契約は変更せず、各feature registrationのUI adapterが受け取ったcontainerへReact rootを作成・破棄する。選択中featureが不可になった場合はunmountし、利用可能なpersistent featureだけから次を決定する。transient featureをfallbackへ選ばない。該当がなければ理由付きempty stateを表示する。
 
 `ShellView`は`useMessages()`を用い、`ShellNavigationItem.labelKey`と`ShellViewState`/`ShellMaintenanceState`のmessage記述子を、現在の表示言語の文字列へ解決してから描画する（1.6）。カタログ自体の内容・言語別値には関与せず、解決契約を呼び出すだけである。
 
-`ShellView`はナビゲーション領域とは別に、`data-region="shell-chrome"`を持つ共通ヘッダ領域を`loading`/`ready`/`error`/`maintenance`の全状態で描画する。この領域には`ui-language`の公開component`LanguageSelectControl`を配置するだけであり、シェルは言語の意味・保存・解決を知らない（8.1）。ナビゲーションが`loading`時に非表示になるのに対し、ヘッダ領域は状態に関わらず常に描画される。
+`ShellView`は共通ヘッダ領域と`LanguageSelectControl`を撤去する。ready、maintenance、feature-local failureではpersistent navigationを維持し、settingsへ到達させる。loadingとglobal startup errorでは操作不能なselectを描画せず、status内にカタログ解決済みの「設定 / Settings」案内と既存retryを表示する（4.6、4.7、8.1–8.3）。
 
-`ReactShellRoot`のProviderは`ui-messages`の`MessageProvider`から`ui-language`の`LanguageProvider`へ置き換える。`LanguageProvider`は内部で`MessageProvider`を包む後方互換の実装であり、React rootの生成・破棄・`FeatureMountContext`の公開契約は変更しない。表示言語の切り替えはProviderが供給するcontext値の更新として伝播し、shell React rootの再mountを発生させない。したがって切り替え操作自体は、選択中featureの表示・入力状態に影響しない（8.2）。
+`transientNotice`はready／maintenanceにだけ付加でき、navigation・主表示slotと独立したbannerへ解決済みテキストとして描画する。noticeは一過性起動障害を示しても選択中のpersistent featureを置き換えず、外部値をmarkupとして解釈しない（4.5）。
+
+`ReactShellRoot`は`LanguageProvider`を維持し、表示言語変更をcontext更新としてnavigationと状態文言へ反映する。言語controlはsettings featureが所有するため、shell rootはその配置を知らない。Provider更新でsettingsを含む選択中feature rootを再mountしない（8.4）。
 
 ### CompositionRoot and PublicApiRegistry
 
@@ -469,29 +523,32 @@ interface ProductionWorkerComposition {
 - 不正・重複登録: 該当featureを隔離し型付きdiagnosticを返す。
 - 必須foundation初期化失敗: hostをerror stateにしてfeatureをmountしない。
 - feature mount/unmount失敗: 安全なテキストmessageを表示し、他featureのnavigationを維持する。
+- 一過性起動情報の読出し失敗: persistent表示を維持し、`transientNotice`だけをsafe-text bannerとして提示する。
+- startup failure: settingsを利用可能と偽らず、「設定 / Settings」と既存retryを同じstatusへ提示する。
 - stale maintenance通知: stateを変更せず診断hookへ記録する。
 - runtime終了: unsubscribe/unmountをbest-effortで全件実行し、複数失敗を一つの失敗で隠さない。
 
 ## テスト戦略
 
 ### Unit Tests
-- FeatureRegistryの不正値、重複、決定的順序、購読解除（2.1–2.4）。
+- FeatureRegistryの不正値、重複、未知／欠損presentation、常設navigation欠損、一過性navigation混入、常設だけの決定的navigation順序、購読解除（1.1, 1.7, 2.1–2.6）。
 - MaintenanceProjectionの世代前進・stale拒否・終了反映（5.1, 5.4–5.5）。
 - MutationGateのread維持とmutation抑止（5.2–5.3）。
-- ShellViewが外部文字列を通常のJSX textとして描画し、危険なHTML APIを使用しないこと（4.4）。
+- ShellViewが外部文字列と`transientNotice`を通常のJSX textとして描画し、危険なHTML APIを使用しないこと（4.4–4.5）。
 - ReactShellRootとfeature adapterが再mount、切替、停止時にReact rootと購読を確実にcleanupすること（1.2–1.5, 6.4）。
 - ShellViewが`labelKey`と`message`記述子を`useMessages()`経由で現在の表示言語の文字列へ解決して描画すること（1.6）。
-- ShellViewが`loading`/`ready`/`error`/`maintenance`の全状態で共通ヘッダ領域を描画すること（8.1）。
+- ShellViewがheader言語controlを描画せず、loading／startup errorで二言語settings案内、ready／maintenance／feature failureでpersistent navigationを維持すること（4.6–4.7, 8.1–8.3）。
 
 ### Integration Tests
 - compositionが一回だけ実行され、root APIがfeature単位で合成される（3.1–3.4）。
-- feature切替でunmount→mount順序となり同時表示が発生しない（1.2–1.5）。
+- persistent／transient混在時もfeature切替でunmount→mount順序となり同時表示が発生せず、transientをnavigation・初期選択・fallbackへ載せない（1.1–1.5, 1.7–1.8）。
 - mount失敗後も別featureへ遷移できる（4.2–4.3）。
 - maintenance通知が全navigationへ反映され、readは維持されmutationが無効になる（5.1–5.5）。
 - foundation通知portの初期snapshot、順序逆転、購読解除を模擬し、shellがStorage APIを直接参照しないことをcontract/boundary testで確認する（5.1, 5.4, 5.5, 5.6）。
 - production-shaped fixtureでshell React rootとfeature outletが別DOM要素であること、2つの模擬featureが独立rootを切替時にunmountすること、navigation clickがhost selectionへ届くことを確認する（1.1–1.5, 3.1, 6.1, 6.4）。
-- 共通ヘッダ領域への言語コントロール配置後、Provider差し替え（`LanguageProvider`）が選択中featureのReact rootを再mountせず、入力途中の状態を保持したまま表示が更新されることを確認する（8.2）。
-- side panelとservice workerが同じcontribution catalogを利用しつつ、worker bundleへDOM/React依存を含めないことを確認する（2.1, 3.1, 3.4, 6.3）。
+- settingsでの言語変更時に`LanguageProvider`がnavigationを更新し、選択中settings feature rootを再mountしないことを確認する（8.4）。
+- side panelのUI contributionとservice workerのworker-safe catalogを分離し、worker bundleへsettings、feature UI、DOM、React依存を含めないことを確認する（2.1, 3.1, 3.4, 3.6, 6.3）。
+- 既存typed activationが一過性featureをnavigationなしで起動でき、一過性から常設へのhandoff成功時は引き渡し先だけを保持し、失敗時は既存rollbackを維持することを確認する（7.1–7.8）。
 - 実service worker入口がno-arg foundation factoryをworker contextで初期化し、foundation command handlerとcatalog workerを順序どおり登録すること、sender classification、途中rollback、停止の逆順cleanupをproduction-shaped testで確認する（3.1, 3.3, 3.4, 6.1, 6.3, 6.4）。
 
 ### E2E / Runtime
@@ -500,6 +557,7 @@ interface ProductionWorkerComposition {
 - package outputにremote script、inline script、dynamic evaluationがないことを検査する（6.3）。
 - production bundleへReact/React DOMが同梱され、MV3の`script-src 'self'`でside panelが起動することを検査する（6.1, 6.3）。
 - contract test kitで模擬featureの登録、availability変更、失敗、cleanupを決定的に観測する（6.4）。
+- production-shaped catalogでsettingsがpersistent navigation・初期選択・fallbackに入り、product-capture等のtransient featureと独立backup navigationが入らないことを検証する（1.1, 1.7, 8.1–8.3）。
 - artifact/boundary検査でdummy inactive maintenance source、noop shell state observer、下流featureから共有runtime/root entryへのimportを拒否する。空production catalogは許可し、empty stateと型付き空root APIが成立することを検証する（1.1, 3.1, 3.2, 3.4, 5.6, 6.3）。
 
 ## セキュリティ考慮事項

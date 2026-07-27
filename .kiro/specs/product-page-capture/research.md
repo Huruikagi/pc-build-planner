@@ -1,105 +1,123 @@
 # Research & Design Decisions
 
 ## Summary
+
 - **Feature**: `product-page-capture`
-- **Discovery Scope**: Extension（上流2仕様への複合統合）
+- **Discovery Scope**: Extension（既存抽出pipelineへのdomain map追加と、一過性handoff契約への移行）
 - **Key Findings**:
-  - Foundationはページ入力を未信頼として扱い、保存を信頼済み拡張コンテキストのRepositoryに限定する。
-  - Candidate managementは`CaptureCandidatePort.createCandidate`を公開し、商品名以外の欠損と未分類を許容する。
-  - 抽出処理はDOMを利用できる注入側で完結し、service workerは一時的な調停だけを担う必要がある。
-  - `source-price-refresh`は同じ価格順位・正規化・provenanceを必要とするが、現行`public.ts`は空APIであり、内部moduleをdeep importせず固定tab価格を観測するseamがない。
+  - 既存extractor / normalizer / rankerは根拠付き候補を分離しており、domain mapはmanufacturer専用の候補供給源として追加できる。
+  - `product-capture-transient-migration`はcapture面を`idle | extracting | failed`へ縮小し、project未解決pre-editを`TransientSurfaceLifecyclePort.conclude`でcandidate-managementへ渡す契約を確定している。
+  - `PagePriceExtractionPort`は`source-price-refresh`の確定済みconsumer契約であり、domain mapやhandoff移行後もshapeを維持する必要がある。
+  - `candidate-source-bookmarks/design.md`には廃止予定の`CaptureCandidatePort`参照が残り、実装前のcross-spec remediationが必要である。
 
 ## Research Log
 
-### 上流データ・保存契約
-- **Context**: 取り込み側と保存側の責任重複を避ける必要がある。
-- **Sources Consulted**: `local-data-foundation`、`project-candidate-management` の requirements/design/tasks。
-- **Findings**: `CandidatePart`は`confirmed`、`sourceSnapshot`、`sourceInfo`を分離する。候補作成は単一projectId、商品名必須、任意項目欠損可である。
-- **Implications**: 本仕様は永続化を所有せず、確認済み`CandidateDraft`を既存ポートへ渡す。
+### 一過性surfaceとcapture責務
 
-### Chrome実行境界
-- **Context**: 明示操作、一時権限、MV3ライフサイクル制約を両立する必要がある。
-- **Sources Consulted**: roadmap、brief、Foundationのruntime設計。
-- **Findings**: `activeTab`と`scripting`をactionのユーザージェスチャーに結び付け、DOM解析は注入関数で行う。service workerの長寿命状態へ依存できない。
-- **Implications**: action調停、ページ抽出、サイドパネル状態を分離し、要求IDとタブURLを使って古い結果を破棄する。
+- **Context**: 要件1.4、4、5、6.1、6.4を、常設capture UIから新しい一過性surface寿命へ合わせる必要がある。
+- **Sources Consulted**: `transient-feature-surface`、`product-capture-transient-migration`、`project-candidate-management`のrequirements/design/tasks、既存product-capture state/view/coordinator。
+- **Findings**:
+  - activationは`ActivationId`と固定`TargetTabId`を持ち、tab遷移・更新・閉鎖または世代置換で終了する。
+  - captureの実行状態は`idle | extracting | failed`だけで、`review | submitting | saved`はcandidate-managementへ移る。
+  - project未解決・空名は`UnresolvedCandidateDraft`としてpre-editで受理し、保存時validationと分離する。
+  - handoffは直接navigationではなくtyped intentを`conclude`へ渡す原子的transitionである。
+- **Implications**: product-captureはproject query、`CaptureCandidatePort`、save service、直接navigation callbackへ依存しない。stale確認は抽出前とhandoff直前に行う。
 
-### 汎用抽出戦略
-- **Context**: サイト別アダプターなしで説明可能な抽出を行う。
-- **Sources Consulted**: briefで確定した優先順位と公開範囲。
-- **Findings**: JSON-LD、OGP等、見出し・パンくず、表・定義リスト、項目名辞書の順が境界条件である。取得元を値ごとに保持する必要がある。
-- **Implications**: extractorは複数候補を収集し、deterministicなrankerが採用候補とprovenanceを返す。
+### メーカーdomain mapと取得ポリシー
+
+- **Context**: メーカー公式サイトでページmetadataにmanufacturerがない場合だけ、domainから欠損を補完したい。
+- **Sources Consulted**: `web-content-acquisition.md`、roadmap #8、既存`extractor.ts`、`contracts.ts`、`ranker.ts`、`coordinator.ts`、関連synthetic tests。
+- **Findings**:
+  - domain mapはネットワーク到達、所有証明、利用許可、サイト固有DOM抽出の有効化を意味しない。
+  - ページの明示metadataを上書きせず、最下位priorityでmanufacturerだけを供給する必要がある。
+  - 任意hostnameから汎用的にeTLD+1を導出するにはpublic suffix知識が必要だが、現在stackにその依存はない。
+  - entry自体を審査済みeTLD+1として保持し、hostnameの完全一致またはdot-boundary subdomain一致を行えば、未知suffixを推測せず要件を満たせる。
+- **Implications**: `manufacturer-domain-map.ts`へentryと純粋照合を隔離し、`ExtractionSource`へ`"domain-map"`を追加する。entryにはevidence、review date、ownerを持たせ、unknownは候補なしとする。
 
 ### 価格だけを再利用する公開seam
-- **Context**: `source-price-refresh`が保存済み販売ページの価格を再取得する際、product-captureと同じ抽出順位・normalizerを再利用し、page URLの出所を保持する必要がある。
-- **Sources Consulted**: `source-price-refresh/design.md`、`source-price-refresh/tasks.md`、`product-capture-transient-migration/design.md`、既存`extractor.ts`、`normalizer.ts`、`ranker.ts`、`coordinator.ts`、`chrome-runtime-port.ts`。
+
+- **Context**: `source-price-refresh`が通常取り込みと同じ価格順位・normalizer・provenanceを使う。
+- **Sources Consulted**: `source-price-refresh/design.md`、既存product-capture design、`chrome-runtime-port.ts`、`coordinator.ts`、`public.ts`。
 - **Findings**:
-  - consumerは`extractPrice(TargetTabId)`から`pageUrl`、`capturedAt`、任意の`SourcedValue<MoneyValue>`と6種のtyped failureを期待する。
-  - 既存runtimeはpage側`location.href`をpayloadへ載せ、注入前target URLとの不一致を`tab-changed`にできる。
-  - 価格の元表記は`NormalizedField.rawValue`、確認値は`normalizedValue: MoneyValue`に既に分離されている。
-- **Implications**: 固定tab runtimeと共通payload decoderの上に薄い`PagePriceExtractionAdapter`を追加し、価格候補だけを既存normalizer/rankerへ通す。価格更新、URL identity、永続化はconsumer側へ残す。
+  - consumerは`extractPrice(TargetTabId)`からpage-derived URL、canonical取得時点、任意の`SourcedValue<MoneyValue>`と6 failureを期待する。
+  - target URLは注入先照合に使うが、page URLの代用にはできない。
+  - domain mapはmanufacturerだけを供給するためprice selectionへ影響しない。
+- **Implications**: `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort`、`ProductCapturePublicApi.pagePriceExtraction`を維持し、同じpayload decoder / normalizer / rankerを共有する。
+
+### Cross-spec contract drift
+
+- **Context**: source model移行とcapture transient移行が同じcandidate作成seamを異なる時点の設計で参照している。
+- **Sources Consulted**: `candidate-source-bookmarks/design.md` Existing Architecture Analysis、Requirements Traceability、CaptureSourceMapper component、`product-capture-transient-migration/design.md` Existing Feature Contracts / Existing Spec Revisions。
+- **Findings**:
+  - `candidate-source-bookmarks/design.md`はproduct-captureがcandidate-management公開の`CaptureCandidatePort`へdraftを渡す前提を記載する。
+  - `product-capture-transient-migration/design.md`は`CaptureCandidatePort`に他の公開consumerがないとして公開APIから削除し、`UnresolvedCandidateDraft`、candidate-managementのtyped intent factory、`TransientSurfaceLifecyclePort.conclude`へ置換する。
+  - 同じsource初期化責務が旧save portと新pre-edit handoffの両方を前提にすると、production compositionと公開境界が矛盾する。
+- **Implications**: `candidate-source-bookmarks`は実装前にcapture source初期化の入力点を新handoff経路へ再検証する必要がある。本spec外のため編集せず、designのRevalidation Triggersへexact contract名と証拠を記録する。
 
 ## Architecture Pattern Evaluation
 
-| Option | Description | Strengths | Risks / Limitations | Notes |
+| Option | Description | Strengths | Risks / Limitations | Decision |
 |---|---|---|---|---|
-| 注入関数＋調停サービス | DOM内で抽出し型付き結果だけを返す | MV3制約と最小権限に整合 | ページ遷移競合の管理が必要 | 採用 |
-| 常駐content script | 継続的にページを観測 | 再取得が速い | 明示操作・最小権限方針に不適合 | 不採用 |
-| サーバー抽出 | URLを外部へ送信 | DOM差異を中央管理可能 | オフライン・プライバシー・scopeに不適合 | 不採用 |
+| 候補pipelineへdomain source追加 | manufacturer欠損時だけ根拠付き候補を加える | 既存rank/normalizerを再利用、決定的 | closed union追従が必要 | 採用 |
+| extractor後にmanufacturerを直接上書き | 最終draftへdomain値を代入 | 実装が短い | provenanceとpriorityを迂回 | 不採用 |
+| public suffix library導入 | 任意hostnameのeTLD+1を計算 | 一般性が高い | runtime依存、更新、現scopeに過剰 | 不採用 |
+| entry eTLD+1とのboundary一致 | 審査済みentryにだけexact/subdomain match | 未知domainを推測しない、依存なし | entry整備が必要 | 採用 |
+| capture内で確認・保存を継続 | 旧state/viewを維持 | 移行量が少ない | 一過性寿命と欺瞞的操作が残る | 不採用 |
+| typed intent + conclude | candidate pre-editへ原子的handoff | 権限寿命と編集寿命を分離 | 上流contract実装が前提 | 採用 |
 
 ## Design Decisions
 
-### Decision: 候補集合と順位付けを分離する
-- **Context**: 同一項目が複数ソースに現れ、取得根拠を残す必要がある。
-- **Alternatives Considered**: 最初に見つけた値を採用、サイト別ルール、候補集合をrankerへ渡す。
-- **Selected Approach**: extractorが根拠付き候補集合を返し、rankerが固定優先順位で採用する。
-- **Rationale**: 決定的にテストでき、将来のサイト別アダプターも候補供給口へ限定できる。
-- **Trade-offs**: 中間型は増えるが、採用理由が可視化できる。
+### Decision: domain mapを最下位の候補供給源にする
 
-### Decision: 保存モデルを増やさない
-- **Context**: 取り込み途中状態の永続化はFoundationの容量とスキーマを広げる。
-- **Selected Approach**: 抽出セッションはサイドパネル内の一時状態とし、確定時だけ`CaptureCandidatePort`を呼ぶ。
-- **Rationale**: service worker寿命への依存を避けつつ、保存責任を上流へ集約できる。
-- **Trade-offs**: サイドパネルを閉じた未保存ドラフトは復元しない。
+- **Context**: manufacturer欠損だけを補い、ページ明示値を尊重する。
+- **Alternatives Considered**: 最終draft上書き、rank weightなしのcollector、根拠付き最下位候補。
+- **Selected Approach**: `ExtractionSource: "domain-map"`を追加し、manufacturer候補がない場合だけ生成する。rankerでも全sourceの後へ置く。
+- **Rationale**: collector合成順とrank順の二重防御で非上書きを固定し、provenanceを失わない。
+- **Trade-offs**: contracts、payload validator、message mapping、testsのclosed union更新が必要。
+- **Follow-up**: entry追加時にevidence、owner、review triggerを確認する。
 
-### Decision: 外部抽出ライブラリを導入しない
-- **Context**: 必要対象はJSON-LD、meta、DOM表であり、リモートコードは禁止される。
-- **Selected Approach**: ブラウザー標準DOM APIと小さな型付き抽出器を同梱する。
-- **Rationale**: 対象範囲に対し最小で、CSPとビルド依存を増やさない。
+### Decision: eTLD+1は審査済みentry側を基準に照合する
 
-### Decision: price専用抽出器を作らず既存pipelineを投影する
-- **Context**: price refreshのためだけにDOM collector、parser、priorityを複製すると通常取り込みと結果がずれる。
-- **Alternatives Considered**:
-  1. product-capture内部moduleをconsumerがdeep importする — 公開境界違反。
-  2. price専用content scriptとparserを新設する — ownershipと規則が二重化する。
-  3. product-captureが狭いread-only portを公開する — 採用。
-- **Selected Approach**: `PagePriceExtractionPort.extractPrice(TargetTabId)`がpage-derived URL、canonical取得時点、任意の`SourcedValue<MoneyValue>`だけを返す。固定tab解決・注入、payload validation、normalizer、rankerは既存実装を共有し、組立済みinstanceを`ProductCapturePublicApi.pagePriceExtraction`からcomposition rootへ渡す。
-- **Rationale**: `source-price-refresh`の型と一致し、通常取り込みと同じ優先順位・元表記・MoneyValueを保証しながら、他の商品fieldとruntime concreteを非公開にできる。
-- **Trade-offs**: 有効価格がないページも観測自体は成功するため`price`はoptionalである。更新可否と`price-unavailable`表示はconsumerが判断する。
-- **Follow-up**: `product-capture-transient-migration`が固定tab runtime契約を確定した後にadapterを接続し、同specのUI/state/handoff変更は本specへ取り込まない。
+- **Context**: unknown hostnameを誤ってメーカーへ結び付けず、依存を増やさない。
+- **Selected Approach**: entryにcanonical registrable domainを保持し、hostnameのexactまたはdot-boundary subdomain一致だけを許可する。
+- **Rationale**: public suffixを推測せず、対象範囲がentryに閉じる。
+- **Trade-offs**: 新しい地域domainは個別entryと審査が必要。
+
+### Decision: captureはpre-editを保存可能draftへ昇格しない
+
+- **Context**: project未作成・空名でも編集を開始し、保存規則をcandidate-managementへ一本化する。
+- **Selected Approach**: project未解決の`UnresolvedCandidateDraft`をtyped intentへ載せて`conclude`する。
+- **Rationale**: captureからproject query、save validation、repository dependencyを除去できる。
+- **Trade-offs**: candidate-managementのpre-edit受理がproduction integrationの前提になる。
+
+### Decision: price portを変更しない
+
+- **Context**: 下流`source-price-refresh`が既に確定shapeを参照する。
+- **Selected Approach**: fixed tab、page-derived URL、capturedAt、optional price、6 failureを維持する。
+- **Rationale**: domain mapとhandoff変更は価格観測のconsumer concernを変えない。
+- **Trade-offs**: product-captureのcomposition変更時に同じport instanceを再配線する必要がある。
+
+## Synthesis Outcomes
+
+- **Generalization**: domain mapをmanufacturerへの特別な後処理にせず、既存`ExtractionCandidate`のsource追加として一般化した。実装scopeはmanufacturerだけに制限する。
+- **Build vs Adopt**: 外部public suffix libraryは採用せず、審査済みentry基準の照合を構築する。未知suffixの一般解析は要求されない。
+- **Simplification**: capture-owned review/save state、direct editor navigation、save portを設計から除去し、extract → typed handoffへ縮小した。
 
 ## Risks & Mitigations
-- ページ遷移後に古い結果が返る — tabId、URL、requestIdを照合して破棄する。
-- 悪意ある巨大・実行可能値 — 長さ制限、制御文字除去、URL/価格検証、通常のJSX childによる描画を行う。
-- JSON-LD形状の多様性 — 再帰走査を有界化し、未知形状は欠損として扱う。
-- 上流契約変更 — `CandidateDraft`、カテゴリ、source contract変更を再検証トリガーにする。
-- price port drift — `PagePriceObservation`、error union、固定tab/pageUrl照合、price provenance変更時に`source-price-refresh` consumer contractを再検証する。
+
+- suffix誤一致 — exactまたはdot-boundary一致だけを許可し、synthetic negative caseを固定する。
+- domain所有変更 — evidence、owner、review dateをentryに持ち、変更triggerで再審査する。
+- domain mapが権限として誤用される — map moduleは候補生成だけを公開し、runtime/permission判断へimportしない。
+- stale activationからhandoff — 抽出前後の`isCurrent`と`conclude`でfail closedにする。
+- price port drift — public consumer contract testでshapeと同一pipelineを固定する。
+- source bookmark設計の旧save port依存 — cross-spec remediation triggerとして明示し、実装前に再検証する。
 
 ## References
-- `.kiro/specs/product-page-capture/brief.md`
-- `.kiro/steering/roadmap.md`
-- `.kiro/specs/local-data-foundation/design.md`
-- `.kiro/specs/project-candidate-management/design.md`
 
-### 2026-07-19 React UI方針更新
-- **背景**: 抽出確認、根拠表示、補正、project選択、失敗回復の状態分岐を宣言的に扱う必要がある。
-- **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
-- **境界**: CaptureState、抽出器、runtime coordinator、portはframework非依存を維持する。ページ由来値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
-- **統合**: featureはside panel registration、worker registration、`public.ts`を所有し、共有side panel/service worker入口とroot barrelを編集しない。
-- **検証**: React DOMで安全な描画と往復編集を検証し、unmount時の購読解除を確認する。
-- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)
-
-### 2026-07-20 Typed candidate editor activation追従
-- **Sources Consulted**: `application-shell/design.md`、`project-candidate-management/design.md`、`roadmap.md`
-- **Findings**: shellはfeature-neutral intentの配送だけを所有し、候補管理は`CandidateEditorPrefill`のruntime検証とstate適用を所有する。
-- **Decision**: captureはshell intentを直接構築せず、候補管理の`openCandidateEditor`へ型付きprefillを渡す。保存と詳細編集は同じ`CaptureDraftMapper`規則を再利用する。
-- **Implications**: navigation失敗、候補側payload拒否、mount失敗ではCaptureSessionを維持し、保存処理やFoundation mutationを呼ばない。
+- `.kiro/steering/web-content-acquisition.md`
+- `.kiro/steering/{product,tech,structure,security,testing}.md`
+- `.kiro/specs/product-capture-transient-migration/{requirements,design,tasks}.md`
+- `.kiro/specs/transient-feature-surface/{requirements,design}.md`
+- `.kiro/specs/project-candidate-management/{requirements,design}.md`
+- `.kiro/specs/candidate-source-bookmarks/design.md`
+- `.kiro/specs/source-price-refresh/design.md`

@@ -2,11 +2,11 @@
 
 ## Summary
 - **Feature**: `backup-restore`
-- **Discovery Scope**: Extension / Complex Integration
+- **Discovery Scope**: Extension / Light Integration Update
 - **Key Findings**:
   - Foundationは全データを単一の`LocalDataRoot`として検証・保存し、候補所属と現在構成参照の整合性を既に保証する。
   - バックアップ交換形式は保存スキーマと別版にし、復元時だけ現行`LocalDataRoot`へ変換すれば内部変更をファイルへ直接露出せずに済む。
-  - Web標準のFile、Blob、TextEncoderと既存Repository境界で要件を満たせるため、新規ライブラリは不要である。
+  - Web標準のFile、Blob、TextEncoderと既存Foundation公開portで要件を満たせるため、新規ライブラリは不要である。
 
 ## Research Log
 
@@ -14,7 +14,7 @@
 - **Context**: 全データの範囲と安全な置換単位を確定した。
 - **Sources Consulted**: `local-data-foundation`、`project-candidate-management`、`current-build-management`のrequirements、design、tasks、research、およびroadmap。
 - **Findings**: `LocalDataRoot`は`schemaVersion`、`projects`、`parts`、`currentBuilds`を持つ。Repositoryは読取検証、直列更新、容量判定を所有し、候補と構成は同じプロジェクト内だけを参照する。
-- **Implications**: 復元は個別CRUDの繰り返しではなく、検証済みルートの単一置換としてRepositoryへ追加する。候補・構成の業務規則を再実装しない。
+- **Implications**: 復元は個別CRUDの繰り返しではなく、Foundationが既に公開する`assessReplacement`、`replaceRoot`、`runMaintenance`を消費する。Repositoryへ新しい書込経路を追加せず、候補・構成の業務規則を再実装しない。
 
 ### extension pageでのファイル処理
 - **Context**: MV3 service workerの寿命へ依存しない入出力方法を確認した。
@@ -47,12 +47,12 @@
 - **Trade-offs**: 形式変更時に交換Migrationが必要になる。
 - **Follow-up**: fixtureで往復同値性と旧形式変換を検証する。
 
-### Decision: 原子的置換をRepositoryの明示契約にする
+### Decision: Foundationの既存原子的置換契約を消費する
 - **Context**: 個別CRUDでは途中失敗時に混在状態が残る。
 - **Alternatives Considered**: UIでロールバック、個別CRUD、単一ルート置換。
-- **Selected Approach**: 検証済み`LocalDataRoot`だけを受ける`replaceRoot`をRepositoryへ追加し、一括書込する。
-- **Rationale**: 保存所有境界内で直列化、容量、検証、失敗正規化を一貫させられる。
-- **Trade-offs**: Foundation公開契約の追加となり、上流回帰テストが必要になる。
+- **Selected Approach**: 保存root候補を`unknown`として既存`FoundationDataPort.assessReplacement`へ渡し、maintenance fence取得後に既存`replaceRoot`で一括置換する。
+- **Rationale**: 保存所有境界内の既存実装で直列化、容量、検証、失敗正規化を一貫させられる。
+- **Trade-offs**: Foundationのassessment token、revision、maintenance generationへ正確に追従する必要がある。
 - **Follow-up**: 書込失敗前後の保存値同一性を統合テストする。
 
 ### Decision: 新規依存を追加しない
@@ -75,10 +75,18 @@
 - `.kiro/specs/project-candidate-management/design.md` — プロジェクト・候補所有境界。
 - `.kiro/specs/current-build-management/design.md` — 現在構成と候補参照契約。
 
+### 2026-07-27 settings-screen統合のlight discovery
+- **Context**: GitHub issue #19に対応し、独立ナビゲーションから設定画面内区画へ配置だけを変更する既存仕様更新。
+- **Sources Consulted**: `.kiro/specs/settings-screen/{brief,requirements,design,tasks}.md`、更新済み`.kiro/specs/application-shell/{requirements,design,tasks}.md`、`ui-internationalization`、`ui-message-catalog`、既存`src/features/backup-restore/`、全steering。
+- **Findings**: `settings-screen`は正確な公開境界として`BackupRestoreSectionMount.mount(context: FeatureMountContext): Promise<FeatureMountHandle>`を定義し、composition ownerだけがfactoryへ完全`FoundationDataPort`を渡す。settingsはsection handleだけを保持し、backup state、service、maintenance capabilityを所有しない。現行実装の`registration.ts`と`feature-contribution.ts`、`nav.backupRestore`は移行対象である一方、exchange、service、state、file gateway、React viewは再利用できる。
+- **Decision**: `backup-restore`は独立feature registration/contributionを廃止し、`section-mount.ts`と`public.ts`から正確な`BackupRestoreSectionMount`とfactoryだけを公開する。設定layout、navigation、言語区画、shell compositionは`settings-screen`/`application-shell`へ委ねる。
+- **Risks & Mitigations**: composition切替中の二重表示は旧registrationと新sectionを同時にproduction catalogへ載せない統合gateで防ぐ。部分mount失敗と二重cleanupはsection contract testで固定する。言語変更による不要な再mountとbackup state喪失はsettings側のstable host contractで検証し、backup側は通常のhandle lifecycleだけを提供する。
+- **Synthesis**: 新しい抽象化や依存は不要で、既存feature mount lifecycleをsection境界として再利用するのが最小変更である。交換形式、maintenance generation、atomic restore、分類済みerror、公開操作の意味は一切変更しない。
+
 ### 2026-07-19 React UI方針更新
 - **背景**: export、file選択、preview、置換確認、処理中lock、結果表示を一貫した画面状態として扱う必要がある。
 - **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
 - **境界**: BackupRestoreState、service、交換契約、FileGatewayはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
-- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtime、HTML host、root barrelを編集しない。復元時はFoundationの永続maintenance fenceを取得し、shellは同じ状態のread-only projectionから全feature mutationを抑止する。
+- **統合**: featureは`public.ts`と`section-mount.ts`から埋め込み可能なmount契約だけを公開し、独立registration/contributionはsettings composition切替後に削除する。共有side panel runtime、settings registration、HTML host、root barrelは編集しない。復元時はFoundationの永続maintenance fenceを取得し、shellは同じ状態のread-only projectionから全feature mutationを抑止する。
 - **検証**: React DOM表示、確認操作、Blob URLとReact rootのcleanupを統合testで確認する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)

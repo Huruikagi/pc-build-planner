@@ -10,6 +10,8 @@
   - 一覧、フォーム、確認、失敗回復を横断するUI規模を踏まえ、React 19系を宣言的な表示adapterとして採用する。
   - React DOMの`createRoot`と`root.unmount()`は既存のcontainerベースmount/unmount契約を変更せず統合できる。
   - MV3のCSPを維持するため、React runtimeとUI codeはproduction bundleへ同梱し、runtime JSX変換やremote codeを使用しない。
+  - 現行実装は全registrationへnavigationを必須化して全件をnavigationへ投影し、`ShellView`がheaderへ`LanguageSelectControl`を直置きしている。常設／一過性をnavigation有無まで相関させる判別共用体、常設判定の単一化、settingsへの配置移行が必要である。
+  - `source-price-refresh`が依存するworker-safe catalogとUI contributionの分離は、shell更新後も維持する必要がある。
   - 現行runtime baselineは同じDOM containerをshell React rootとfeature mountへ割り当て、仮のinactive maintenance sourceを共有entryで生成しているためproduction compositionへ進めない。空feature catalog自体は下流feature実装前の正規状態として扱える。
 
 ## 調査ログ
@@ -133,6 +135,34 @@
 - **選択**: canonical foundation sourceが利用可能なら空catalogでもproduction shellを起動し、navigationなしのempty stateと型付き空root APIを提供する。
 - **理由**: 要件は登録済みfeatureの表示を求めており、未登録featureの存在を要求しない。既存のempty state設計とも一致する。
 - **トレードオフ**: application-shell単独では業務機能を提供しないが、後続specの依存循環を解消し、placeholderを不要にする。
+
+### 判断: 常設判定をregistration presentationへ一本化する
+- **背景**: transient featureは同じ主表示領域とtyped activationを利用するが、navigation、通常選択、初期選択、fallbackへ現れてはならない。
+- **代替案**:
+  1. 全registrationへnavigationを必須のまま残し、一過性側で未使用値を埋める — 型上は一過性をnavigation catalogへ誤投入できるため不採用。
+  2. navigationを全体でoptionalにする — 常設側の欠損まで許し、consumerごとのnon-null判定へ責務が分散するため不採用。
+  3. `presentation`を必須discriminantとし、常設branchだけnavigationを必須、一過性branchではproperty自体を禁止する — 採用。
+- **選択**: `PersistentApplicationFeatureRegistration | TransientApplicationFeatureRegistration`をcanonical `ApplicationFeatureRegistration`とする。共通baseには既存のpublic API、availability、mount、任意の`FeatureActivationAdapter`を保持する。`isPersistent`は常設branchへ絞り込むtype predicateとし、navigation catalog生成、通常選択、初期選択、fallbackで共用する。
+- **理由**: navigation metadataの存在条件をcompile timeとruntime validationの両方で一意にし、typed activation／一過性lifecycleを失わず業務feature IDをshellへ持ち込まない。
+- **移行**: 既存feature registrationは`presentation: "persistent"`を明示する。一過性featureは`presentation: "transient"`を明示しnavigation propertyを持たない。presentationの暗黙default互換分岐は残さない。
+- **Follow-up**: public consumer型検査で一過性navigation混入と常設navigation欠損をcompile failure fixtureへ固定し、runtime unknown入力でも同じ相関を拒否する。persistent／transient混在fixtureでnavigation、初期選択、fallback、typed activationを一括検証する。
+
+### 判断: 言語controlはsettingsへ委ね、shellは到達と回復案内だけを合成する
+- **背景**: shell headerを撤去しても、loading／startup errorではsettings navigationへ到達できない。
+- **選択**: ready／maintenance／feature-local failureではpersistent settings navigationを維持し、loading／global errorでは二言語案内と既存retryだけをstatusへ描画する。
+- **理由**: 言語の意味・保存・control配置を`ui-internationalization`／`settings-screen`に残し、shellはhost責務だけを持つ。
+- **トレードオフ**: startup error中は言語変更を利用可能と偽らず、二言語で回復経路を示す。
+
+### 判断: UI contributionとworker-safe contributionの分離を維持する
+- **背景**: `source-price-refresh`はcontext menu gestureをworkerへ追加する一方、settingsや一過性viewはReact UIを含む。
+- **選択**: `side-panel-contributions.ts`だけがUI registrationを、`feature-contribution-catalog.ts`はworker registrationとworker-safe metadataだけを合成する。
+- **理由**: service worker bundleのDOM／React非依存を維持し、gesture sourceをcanonical `TransientGestureRegistrationPort`へ接続するownerを変えない。
+- **Follow-up**: module graphとproduction worker bundleのboundary testでsettings／feature UI importを拒否する。
+
+### 追加リスクと緩和
+- transient registrationのnavigation漏れ／persistent registrationのnavigation欠損 — 判別共用体、runtime相関検証、`isPersistent`型述語、混在contract testで防ぐ。
+- header撤去後の回復経路喪失 — loading／startup errorの二言語案内と状態別DOM testで固定する。
+- worker bundleへのUI混入 — UI／worker catalog分離とartifact boundary gateで拒否する。
 
 ## 参照
 - `.kiro/steering/roadmap.md`

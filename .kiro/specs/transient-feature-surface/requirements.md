@@ -20,10 +20,10 @@
 
 1. The 一過性表示面 shall featureを常設または一過性の表示区分で登録できる
 2. When 一過性featureが登録される, the 一過性表示面 shall そのfeatureを常設ナビゲーションへ提示しない
-3. When 表示区分が未指定の既存featureが登録される, the 一過性表示面 shall 常設featureとして既存の表示と選択動作を維持する
+3. When 既存の常設featureが新しい登録契約へ移行される, the 一過性表示面 shall 常設の表示区分とナビゲーション情報を明示した登録として既存の表示と選択動作を維持する
 4. The 一過性表示面 shall 同時に一つのfeatureだけを主表示領域へ提示する
 5. If 一過性featureが起動されていない, the 一過性表示面 shall 主表示領域へ常設featureだけを提示する
-6. If 一過性featureの登録情報が不正または不足している, the 一過性表示面 shall その登録を隔離し他のfeatureの利用を継続する
+6. If 一過性featureがナビゲーション情報を含む、または常設featureがナビゲーション情報を欠く場合, the 一過性表示面 shall 表示区分と矛盾する登録を隔離し他のfeatureの利用を継続する
 
 ### 要件2: ジェスチャーによる起動
 

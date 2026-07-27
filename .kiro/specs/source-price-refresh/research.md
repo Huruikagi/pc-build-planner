@@ -31,7 +31,7 @@
   - 下流featureはactivation payloadとして `activationId + tabId` を受け、`TransientSurfaceLifecyclePort.isCurrent` でstale世代を拒否する。
   - `TransientGestureSource.start(emit)` と `TransientGestureRegistrationPort.register(source)` は同期 `Result<() => void, TransientGestureRegistrationError>` として確定し、`parseTargetTabId` が未信頼なChrome tab IDを固定tabへ昇格する。
   - `emit` はChrome event callback内でcanonical gesture ingressへ同期接続され、activation ID/sequence、scheduler、store、panel open、失敗signalをproducer内部に保つ。
-- **設計への影響**: 価格更新側は `application-shell/public.ts` の確定済みregistration portへcontext menu sourceを登録するだけで、sequence、store、side panel open、失効墓標を所有しない。同期emit、cleanup、error unionが変わる場合はgesture integrationとE2Eを再検証する。
+- **設計への影響**: 価格更新UIは`application-shell/public.ts`のcanonical `TransientApplicationFeatureRegistration`を消費し、`presentation: "transient"`を明示してnavigationを持たない。これとは別に、worker側は同じ公開入口のregistration portへcontext menu sourceだけを登録し、UI registration、sequence、store、side panel open、失効墓標を所有しない。同期emit、cleanup、error union、または常設／一過性branch相関が変わる場合はgesture integrationとE2Eを再検証する。
 
 ### 価格抽出の再利用
 

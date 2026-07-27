@@ -1,32 +1,30 @@
 # Implementation Plan
 
-> **順序の意図**: カタログへ言語次元を入れる型基盤（タスク群1）と言語ランタイム（タスク群2）を先に確定させる。英語の値の投入（タスク群4）は名前空間単位で並行実行できるが、型基盤が無いと「キーが揃っているか」を機械的に確認できないため後段へ置く。
+> **順序の意図**: `ui-message-catalog`の公開型付き契約を消費する基盤（タスク群1）と言語ランタイム（タスク群2）を先に確定させる。英語表示の受入検証（タスク群4）は機能面単位で並行実行できるが、公開resolverの選択経路が無いとja/enの追随を確認できないため後段へ置く。
 >
 > **振る舞い不変の証拠**: 日本語表示は本 spec の前後で1文字も変わらない。既存の DOM テスト・E2E を無改変で通し続けることがその証拠になる。ロケール固有データの隔離（タスク群7）も同様に、`product-capture` の既存テストを無改変で通すことを完了条件とする。
 
-- [x] 1. カタログへの言語次元の導入と型による整合保証
+- [x] 1. 公開カタログ契約の消費と型による整合保証
 
-- [x] 1.1 カタログの言語別ディレクトリ分割と日本語カタログの移設
-  - 既存の10名前空間ファイルを日本語カタログのディレクトリへ移し、日本語側の集約点を確定させる
-  - 英語カタログ側にも同一の10ファイル構成の器と集約点を作る。値は空のまま置き、以降のタスクが自分のファイルだけを編集できる状態にする
-  - 文言リテラル検査の除外パスを、分割後の両言語のカタログディレクトリへ更新する
-  - 完了条件: 値の内容を1文字も変えないまま `pnpm typecheck` と `pnpm test` が成功し、日本語表示が現行と同一である
-  - _Requirements: 9.5_
-  - _Boundary: EnglishCatalog, UiTextGuardExclusions_
+- [x] 1.1 11名前空間の公開型付き契約を受け入れる
+  - `settings`を含む11名前空間のja/en resolverを`src/ui-messages/public.ts`だけから取得し、カタログ内部、localeファイル、parity実装を直接参照しない
+  - 公開consumer型検査で`MessageKey`、`MessageResolver`、`MessageProvider`、`useMessages`の接合を固定し、上流契約の不整合を型検査で検出する
+  - 完了条件: ja/en双方で11名前空間の代表keyを解決でき、catalog deep importが境界検査で拒否される
+  - _Requirements: 4.1, 4.2, 9.1, 9.2, 9.5_
+  - _Boundary: UiMessagesPublicContract, LanguageCatalogConsumer_
 
-- [x] 1.2 言語間キー整合の型基盤の実装
-  - 平坦化した言語別カタログ型を定義し、キーの欠落をマップ型の網羅性で、キーの余剰を余剰プロパティ検査で双方向に検出できるようにする
-  - 各言語カタログの宣言直後に置くコンパイル時表明を用意する
-  - プレースホルダ名の言語間一致は型では扱わない。単体テストでの検証はタスク4.6が担う
-  - 完了条件: キーを1件落とすと型検査が失敗することを最小例で確認できている
+- [x] 1.2 言語別resolver選択のconsumer型基盤を実装する
+  - 対応言語から公開`MessageResolver`を選ぶ契約を定義し、キー集合・placeholder・数量定義のparityをconsumer側で複製しない
+  - 上流公開契約を不整合にした最小consumer例が型検査で失敗することを確認する
+  - 完了条件: 公開型以外を参照せず、選択言語ごとに同じ`MessageResolver`契約をProviderへ供給できる
   - _Requirements: 4.1, 9.2_
-  - _Boundary: CatalogParityTypes_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.1_
 
 - [x] 1.3 対応言語レジストリと公開面の確定
   - 対応言語の集合、その型、ソース言語、フォールバック言語、各言語の原語表記を単一の定義として持つモジュールを新設する
   - 言語ごとの解決器を1つずつ生成して同一参照で返す関数を用意し、既定の解決器がソース言語の解決器と一致することを保つ
-  - カタログ境界の公開入口へ、対応言語の型・集合・原語表記・言語別解決器の取得を追加する。既存の供給経路と記述子の形は変更しない
+  - ui-languageの公開入口へ、対応言語の型・集合・原語表記・言語別resolverの取得を追加する。ui-message-catalogの供給経路と記述子の形は変更しない
   - 原語表記を含むモジュールを文言リテラル検査の除外へ加える
   - 完了条件: 対応言語を1つ増やして原語表記を書かないと型検査が失敗し、既存の全テストが無改変で成功する
   - _Requirements: 1.6, 4.1, 4.3, 9.1, 9.3, 9.5_
@@ -94,67 +92,60 @@
   - _Boundary: LanguageSelectControl_
   - _Depends: 3.1_
 
-- [x] 4. 英語カタログの値の投入
+- [x] 4. 公開カタログ契約による英語表示の受入検証
 
-- [x] 4.1 (P) 共有名前空間の英語値
-  - 機能横断の短語、パーツカテゴリ表示名、永続化失敗、ナビゲーションラベル、シェルの状態表示の各名前空間へ英語の値を投入する
-  - パーツカテゴリ名は機能をまたいで単一の英語表記に揃える
-  - 外部由来文字列を受けるパラメータは翻訳せずそのまま通す形を保つ
-  - 完了条件: 対象名前空間の全キーが埋まり、キー集合の型表明が通る
+- [x] 4.1 (P) 共有・settings名前空間の英語resolverを受け入れる
+  - 共有語彙、navigation、shell、settingsを含む公開resolverの英語結果を検証し、consumer側へ値表やaliasを作らない
+  - 外部由来文字列が公開resolverを通しても変化しないことを確認する
+  - 完了条件: ja/enの11名前空間を公開契約から解決でき、`settings.title`と`nav.settings`が選択言語へ追随する
   - _Requirements: 4.1, 4.2, 4.3, 4.6, 4.7, 9.4_
-  - _Boundary: EnglishCatalog_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.3_
 
-- [x] 4.2 (P) 候補管理の英語値
-  - 候補管理のフォームラベル、属性ラベル、フィールドエラー、削除確認、一覧項目、編集フォームの英語値を投入する
-  - 名称や項目名をパラメータで受ける文は、英語として自然な語順の1文にする。断片の連結を行わない
-  - 完了条件: 当該名前空間の全キーが埋まり、型表明が通る
+- [x] 4.2 (P) 候補管理の英語resolver結果を受け入れる
+  - 候補管理のフォーム、エラー、確認文を公開resolverだけから解決し、consumer側で断片を連結しない
+  - 完了条件: 候補管理の代表keyとパラメータ付き文が英語で解決される
   - _Requirements: 4.1, 4.2, 4.3, 4.7, 9.4_
-  - _Boundary: EnglishCatalog_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.3_
 
-- [x] 4.3 (P) 現在構成と互換性確認の英語値
-  - 現在構成の画面文言と、互換性確認の規則名・理由・集約結果・不足時の文言の英語値を投入する
-  - 部位名をパラメータで受ける文は、英語として完結した1文にする
-  - 完了条件: 両名前空間の全キーが埋まり、型表明が通る
+- [x] 4.3 (P) 現在構成と互換性確認の英語resolver結果を受け入れる
+  - 現在構成と互換性確認の代表keyを公開resolverだけから解決する
+  - 完了条件: 部位名を含む文が英語の完結文として解決される
   - _Requirements: 4.1, 4.2, 4.3, 4.7, 9.4_
-  - _Boundary: EnglishCatalog_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.3_
 
-- [x] 4.4 (P) 商品取り込みの英語値
-  - 取り込みの各フェーズ画面、フィールドラベル、取得元種別、カテゴリ推定、失敗文言の英語値を投入する
-  - カテゴリ表示名は共有名前空間を参照し、重複定義を作らない
-  - 完了条件: 当該名前空間の全キーが埋まり、型表明が通る
+- [x] 4.4 (P) 商品取り込みの英語resolver結果を受け入れる
+  - 取り込み各フェーズと失敗文言を公開resolverだけから解決し、共有カテゴリ語彙をconsumer側で重複定義しない
+  - 完了条件: 商品取り込みの代表keyが英語で解決される
   - _Requirements: 4.1, 4.2, 4.3, 4.6, 4.7, 9.4_
-  - _Boundary: EnglishCatalog_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.3_
 
-- [x] 4.5 (P) バックアップ復元の英語値と件数を含む文の英語化
-  - バックアップ・復元の画面文言と診断メッセージの英語値を投入する
-  - 単一の件数を含むメッセージは数量別フォームで表現し、単数と複数を書き分ける
-  - 複数種類の件数を1文に含む復元完了通知は、数の一致を要求しないラベル併記形の1文として表現する。件数ごとの部分文を合成しない
-  - 完了条件: 当該名前空間の全キーが埋まり、復元完了通知が英語の1文として読める形になっている
+- [x] 4.5 (P) バックアップ復元の数量resolver結果を受け入れる
+  - バックアップ・復元の代表keyと件数を含む文を公開resolverから解決し、consumer側で数量フォームや部分文を再構成しない
+  - 完了条件: 単一件数と複数種類の件数を含む復元完了通知が英語の1文として解決される
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 9.4_
-  - _Boundary: EnglishCatalog_
+  - _Boundary: LanguageCatalogConsumer_
   - _Depends: 1.3_
 
-- [x] 4.6 カタログ整合の実行時検証
-  - 全キーについて、言語間でプレースホルダ名の集合が一致することを検証するテストを `catalog-parity.test.ts` として追加する。これがプレースホルダ整合の唯一の検証手段である。数量別フォームの各フォーム間の一致も対象にする
-  - 数量別フォームを持つキーについて、件数 0・1・2 に対する英語の出力を検証する
-  - 型検査の所要時間を移行前後で比較し、キー集合の型保証（タスク1.2）が顕著な悪化を与えていないことを確認する
-  - 完了条件: 整合テストが全件成功し、型検査の所要時間に顕著な悪化がないことを確認できている
+- [x] 4.6 上流parity gateとconsumer契約を統合検証する
+  - `ui-message-catalog`所有のja/en parity gateを実行し、本specでは公開resolverの件数0・1・2と複数件数文だけをconsumer契約として検証する
+  - 完了条件: 上流parity gate、公開consumer型検査、resolver契約テストが成功する
   - _Requirements: 4.2, 4.4_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
 
 - [x] 5. アプリケーションへの統合
 
-- [x] 5.1 シェルへの言語コントロールの配置
-  - シェルの共通ヘッダ領域を追加し、読み込み中・通常・エラー・保守中の全ての状態で言語コントロールを描画する
+- [x] 5.1 初期shell headerへの言語コントロール配置（完了履歴）
+  - この完了項目は初回国際化時の配置履歴であり、現行の配置要件ではない。settings-screenへの移設とheader撤去はタスク9で扱う
+  - 当時のシェル共通ヘッダ領域を追加し、読み込み中・通常・エラー・保守中の全ての状態で言語コントロールを描画した
   - シェルの供給点を言語対応のコンポーネントへ置き換える。シェルの状態型・ナビゲーション項目の形・エラー境界・機能搭載コンテナの構造は変更しない
   - ヘッダ領域のスタイルを文言に依存しないセレクタで定義する
   - 完了条件: 4つの状態それぞれでコントロールが描画され操作できることが DOM テストで確認でき、シェルの既存テストが無改変で成功する
   - _Requirements: 1.1, 1.5_
-  - _Boundary: ShellLanguageSurface_
+  - _Boundary: HistoricalShellHeaderLanguageSurface_
   - _Depends: 3.3_
 
 - [x] 5.2 起動経路での言語ランタイムの初期化
@@ -228,7 +219,7 @@
 
 - [x] 8.1 英語UIの操作起点での検証
   - 言語コントロールのロケータと、言語別に期待値を解決する手段を E2E の共有ヘルパへ追加する
-  - 英語へ切り替えたうえで5つの機能画面を順に表示し、主要文言が英語カタログの解決値と一致することを検証する仕様を追加する。ブラウザ再起動・ロケール環境変数・起動オプションを一切使わない
+  - 英語へ切り替えたうえで5つの機能画面を順に表示し、主要文言が公開英語resolverの解決値と一致することを検証する仕様を追加する。ブラウザ再起動・ロケール環境変数・起動オプションを一切使わない
   - 英語へ切り替えた後にサイドパネルを開き直しても英語のまま表示されることを検証する
   - 完了条件: 追加した E2E が既定の実行環境で成功し、実行環境の言語設定に依存する記述がどこにもない
   - _Requirements: 1.1, 3.1, 4.3, 8.1, 8.2_
@@ -249,6 +240,48 @@
   - 完了条件: 全段が成功し、日本語表示に差分がなく、英語表示に日本語の取り残しがない
   - _Requirements: 4.3, 8.6_
   - _Depends: 8.2, 6.2, 6.4, 7.1, 4.6_
+
+- [ ] 9. 言語コントロールをsettings配置へ移行する
+
+- [ ] 9.1 ui-language公開契約をsettingsの埋め込み利用者として固定する
+  - 公開言語Providerとcontrolがsettingsからpublic entryだけを通じて利用でき、言語code、store、保存portをpropsまたはsettings stateへ複製しない契約を検証する
+  - controlの選択肢、原語表記、現在値、保存失敗時のin-memory継続を既存owner内に維持し、settingsまたはshellへの逆依存を境界検査で拒否する
+  - `settings`を含む11名前空間のja/en resolverを`src/ui-messages/public.ts`の型付き契約だけから消費し、ui-language、settings、shellからcatalog localeファイルへ直接到達しないことを検証する
+  - 完了条件: public consumer型検査、11名前空間resolver契約、control単体検証、公開境界検査が成功し、settingsが言語の意味・初期値・保存・catalogを所有せずcontrolを配置できる
+  - _Requirements: 1.1, 1.6, 3.5, 4.1, 4.2, 9.1, 9.2, 9.3_
+  - _Boundary: UiLanguagePublicEntry, LanguageSelectControl, LanguageCatalogConsumer_
+
+- [ ] 9.2 settings lifecycleでの表示言語追随を受け入れ検証する
+  - settings表示言語区画に公開controlが一度だけ存在し、言語変更時にsettings root、表示中の区画、埋め込みsection host、入力途中の値、スクロール位置を保持することを確認する
+  - maintenance中はoperation policyによるデータ変更制限と独立して切り替えを受け付け、保存失敗時もsettingsと埋め込みsectionの状態を失わない既存契約を受け入れる
+  - 完了条件: settings-screenが提供するDOM／integration testとui-languageのstore／Provider testが成功し、settings側に複製された言語stateが存在しない
+  - _Depends: 9.1, settings-screen 3.3_
+  - _Requirements: 1.2, 1.3, 1.5, 3.5, 4.3_
+  - _Boundary: SettingsLanguageIntegration, LanguageReactBinding_
+
+- [ ] 9.3 shell状態ごとのsettings到達と文言追随を受け入れ検証する
+  - shell header、loading、global startup errorに言語controlが存在せず、ready／maintenance／feature-local failureではpersistent settings navigationが維持されることを確認する
+  - settingsでの言語変更後、shell navigationと状態文言が同じresolverへ追随し、loading／global startup errorでは「設定 / Settings」と既存回復操作が提示されることを確認する
+  - 完了条件: application-shellのDOM／production-shaped統合testが成功し、旧header controlへのproduction期待が残らず、shellが言語stateや保存を所有しない
+  - _Depends: 9.2, application-shell 7.2_
+  - _Requirements: 1.2, 1.7, 1.8, 4.3_
+  - _Boundary: SettingsLanguageIntegration_
+
+- [ ] 9.4 移行済みsettings経路で国際化固有のE2Eを受け入れ検証する
+  - `settings-screen 4.3` が所有するsettings locator、経路移行、再open、backup／transient検証を再実装せず、その成果を前提として既存の国際化E2Eを実行する
+  - settingsで英語へ切り替えた後の全対象面の英語表示、候補の作成・編集・削除結果の不変、文書言語属性の追随という本spec固有のassertionを維持する
+  - 完了条件: 国際化固有のPlaywright specが成功し、ブラウザ再起動・環境ロケール・起動オプションやheader構造へ依存しない
+  - _Depends: 9.3, settings-screen 4.3_
+  - _Requirements: 1.4, 4.3, 5.1, 5.2, 8.1, 8.2_
+  - _Boundary: LanguageE2ESpec_
+
+- [ ] 9.5 settings配置移行の完全検証gateを通す
+  - 型、公開consumer、静的検査、catalog parity、公開境界、fixture、文言、final build、単体／統合／DOM、Playwrightの全段を実行する
+  - 対象specとproduction graphを検索し、旧header配置への参照が完了履歴と撤去検証以外に残らず、旧名前空間数の固定記述、catalog localeファイルの所有・deep import、settings／shellからui-language内部moduleへの参照が残らないことを確認する
+  - 完了条件: 全gateが成功し、11名前空間のja/en公開resolver、表示言語の保存値、domain data、backup交換形式、manifest権限に意図しない差分がない
+  - _Depends: 9.4_
+  - _Requirements: 3.2, 3.4, 3.6, 8.5, 8.6, 9.5_
+  - _Boundary: ValidationGate_
 
 ## Implementation Notes
 

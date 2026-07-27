@@ -1,7 +1,5 @@
 # Design Document
 
-> **v0.3.0移行注記（未承認）**: 以下は実装済みv0.1.0の設計である。`product-capture-transient-migration` の承認後、typed activationへ`UnresolvedCandidateDraft`と`validatePreEditDraft`を追加し、project解決後にcanonical `CandidateDraft`を構築する。既存`validateCandidatePartContent`は保存時検証として維持する。
-
 ## Overview
 
 本機能はPC構成を検討する利用者へ、プロジェクトと候補パーツをサイドパネル内で整理・補正する管理体験を提供する。`local-data-foundation` が提供する型、query、原子的root mutationを利用し、管理固有のコマンド規則、カテゴリ別参照契約、typed activation、フォーム状態、画面を追加する。
@@ -22,6 +20,8 @@
 - プロジェクト別・カテゴリ別の候補照会と分類済み候補参照契約
 - サイドパネルのプロジェクト・候補管理UI、確認、エラー表示
 - `CandidateDraft`、候補編集prefill、候補管理activationの検証とstate適用
+- `UnresolvedCandidateDraft`、pre-edit構造検証、project解決、`pendingPreEdit`と`project-required`状態
+- 候補管理公開APIの`query`とtyped intent factory。`candidate-source-bookmarks`が追加する`sources` facetと共存する公開境界
 - feature切替rollback向けの管理画面state snapshotとrestore
 
 ### Out of Boundary
@@ -30,6 +30,8 @@
 - 元表記から確認値を推測する処理
 - navigation lifecycle、候補変更時のCurrentBuild参照修復、root全体のcommit
 - snapshotの永続化、snapshot内容のshell側解釈、他featureのstate復元
+- 一過性面の起動世代・固定tab・`conclude`・失敗時intent保持
+- source entity・catalog・mutationの実装、および重複候補の照合・統合判断
 
 ### Allowed Dependencies
 - `local-data-foundation` のDomainModel、Result、`FoundationDataPort`、原子的root mutation契約
@@ -38,6 +40,8 @@
 - application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
 - application shellの`ShellNavigator`、`FeatureActivationIntent`、activation adapter契約
 - application shellのopaque state snapshot／restore lifecycle契約
+- `product-capture-transient-migration` が利用する現行世代確認済み`FeatureActivationIntent`と`TransientSurfaceLifecyclePort.conclude`のtyped result
+- `candidate-source-bookmarks` が同じ公開APIへ合成する`CandidateSourceCatalogPort`と`CandidateSourceMutationPort`
 
 ### Revalidation Triggers
 - `Project`、`CandidatePart`、`SourceInfo`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
@@ -45,6 +49,8 @@
 - サイドパネル入口、保存責任、依存方向の変更
 - shell activation envelope、候補変更時の参照修復policy、revision競合規則の変更
 - FeatureMountContextの復元state、capture／restore失敗、activation rollback規則の変更
+- `CandidateEditorPrefill`、`UnresolvedCandidateDraft`、pre-edit error、project解決順序、`pendingPreEdit`寿命の変更
+- 候補管理公開APIの`query`、`createCandidateEditorIntent`、`sources` facetの変更
 
 ## Architecture
 
@@ -54,13 +60,15 @@
 graph LR
     UI[Management UI] --> VM[Management state]
     VM --> Service[Candidate management service]
-    Capture[Product capture] --> Service
+    Capture[Product capture] --> Intent[Candidate editor intent]
     Build[Current build] --> Query[Candidate query]
     Service --> Data[Foundation data port]
     Query --> Data
-    Capture --> Navigator[Shell navigator]
-    Navigator --> Activation[Candidate activation]
+    Intent --> Transient[Transient conclude]
+    Transient --> Activation[Candidate activation]
     Activation --> VM
+    VM --> PreEdit[Pending pre edit]
+    PreEdit --> Service
 ```
 
 - **Selected pattern**: feature serviceとUI state。入力規則と永続化連携をUIから分離する。
@@ -75,19 +83,20 @@ graph LR
 | Language | TypeScript 7.x strict | コマンド・状態・属性の型安全性 |
 | UI | React 19系 / React DOM / CSS | MV3サイドパネル管理画面 |
 | Data | FoundationDataPort | 検証済みqueryと原子的root mutation |
-| Test | Vitest 3.x | サービス、状態、DOM統合検証 |
+| Test | Node test runner / jsdom / Playwright | サービス、状態、DOM統合、production E2E検証 |
 
 ## File Structure Plan
 
 ```text
 src/features/candidate-management/contracts.ts # コマンド、表示用モデル、公開照会契約
-src/features/candidate-management/public.ts    # 後続feature向け作成・照会契約の唯一の公開入口
+src/features/candidate-management/public.ts    # query、typed intent factory、sources facetの唯一の公開入口
 src/features/candidate-management/feature-contribution.ts # shell compositionへ渡すcontribution factoryの唯一の公開入口
 src/features/candidate-management/registration.ts # shellへ渡すfeature registrationと依存組立
-src/features/candidate-management/activation.ts # 候補編集intentの検証とManagementStateへの適用
+src/features/candidate-management/activation.ts # unresolved pre-edit検証、project解決、typed activation適用
+src/features/candidate-management/pre-edit-validation.ts # unresolved draft/prefillの段階別runtime検証
 src/features/candidate-management/state-snapshot.ts # 管理UI stateのopaque snapshot検証・capture・restore
 src/features/candidate-management/service.ts   # CRUD、分類変更、下流照会
-src/features/candidate-management/state.ts     # 読込、フォーム、保存、エラー状態
+src/features/candidate-management/state.ts     # 読込、pendingPreEdit、project-required、フォーム、保存、エラー状態
 src/features/candidate-management/view.tsx     # 一覧、フォーム、確認のReact component
 src/features/candidate-management/react-root.tsx # FeatureMountContextとReact rootの接続・cleanup
 src/features/candidate-management/styles.css   # 管理画面レイアウトと状態表現
@@ -97,6 +106,8 @@ tests/features/candidate-management/view.test.ts
 tests/features/candidate-management/registration.test.ts
 tests/features/candidate-management/activation.test.ts
 tests/features/candidate-management/state-snapshot.test.ts
+tests/features/candidate-management/pre-edit-validation.test.ts
+tests/features/candidate-management/pre-edit-handoff.integration.test.ts
 ```
 
 ### Modified Files
@@ -135,7 +146,8 @@ sequenceDiagram
 | 3.1, 3.2, 3.3, 3.4, 3.5 | カテゴリ別表示 | CandidateQuery、View | CandidateListQuery | 読込 |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | 安全な編集 | Service、State、View | UpdateCandidateCommand | 保存 |
 | 5.1, 5.2, 5.3, 5.4 | 候補削除 | State、View、Service | DeleteCandidateCommand | 削除 |
-| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 復元と下流契約 | Service、CandidateQuery、CandidateActivation、State | CaptureCandidatePort、CandidateQuery、openCandidateEditor | 読込・保存・activation |
+| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 復元と下流契約 | Service、CandidateQuery、CandidateActivation、State | CandidateQuery、createCandidateEditorIntent、sources facet | 読込・保存・activation |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10 | 解決前pre-editと検証段階 | CandidateActivation、PreEditValidation、ManagementState、ManagementView | CandidateEditorPrefill、validatePreEditDraft、FeatureActivationAdapter | pre-edit handoff・project解決 |
 
 ## Components and Interfaces
 
@@ -143,10 +155,11 @@ sequenceDiagram
 |---|---|---|---|---|---|
 | CandidateManagementService | Feature | 管理コマンドと規則 | 1.1–2.5, 4.2–4.6, 5.2, 6.2–6.5 | FoundationDataPort P0 | Service |
 | CandidateQuery | Feature | 絞込済み候補参照 | 3.1–3.5, 6.3–6.5 | FoundationDataPort P0 | Service |
-| CandidateActivation | Feature adapter | 候補編集prefillの検証とstate適用 | 4.1–4.6, 6.6 | ShellNavigator P0、ManagementState P0 | Service |
-| ManagementState | UI state | 編集、失敗回復、activation rollback state復元 | 1.3–1.5, 2.3–2.5, 4.5, 5.1–5.4, 6.1–6.2 | Service P0、FeatureMountContext P1 | State |
-| ManagementView | UI | 一覧、フォーム、確認 | 1.1–5.4 | State P0 | State |
-| CandidateFeatureRegistration | UI adapter | state/view/public APIとsnapshot codecをshell登録契約へ接続 | 1.1–6.6 | ApplicationFeatureRegistration P0、ManagementView P0、ManagementStateSnapshotCodec P1 | Service, State |
+| PreEditValidation | Feature contract | project未解決draftの構造検証 | 7.1, 7.5–7.8 | Foundation domain validators P0 | Service |
+| CandidateActivation | Feature adapter | 候補編集prefillの検証、project解決、state適用 | 4.1–4.6, 6.6, 7.1–7.9 | Application shell activation P0、ManagementState P0 | Service |
+| ManagementState | UI state | 編集、pending pre-edit、project-required、失敗回復、activation rollback state復元 | 1.3–1.5, 2.3–2.5, 4.5, 5.1–5.4, 6.1–6.2, 7.1–7.10 | Service P0、FeatureMountContext P1 | State |
+| ManagementView | UI | 一覧、フォーム、project-required、確認 | 1.1–5.4, 7.2–7.7, 7.9 | State P0 | State |
+| CandidateFeatureRegistration | UI adapter | state/view/public APIとsnapshot codecをshell登録契約へ接続 | 1.1–7.10 | ApplicationFeatureRegistration P0、ManagementView P0、ManagementStateSnapshotCodec P1 | Service, State |
 
 ### Feature Layer
 
@@ -184,43 +197,88 @@ interface CandidateQuery {
   getCandidateDraft(id: CandidatePartId): Promise<Result<CandidateDraft, ManagementError>>;
 }
 
-interface CaptureCandidatePort {
-  createCandidate(input: CandidateDraft): Promise<Result<CandidatePart, ManagementError>>;
-}
 ```
 
 `listCandidates`は必ずprojectIdで限定し、任意のcategoryで絞る。`listBuildEligible`は`unclassified`を除外する。`CandidateSummary`は比較用の要約であり、カテゴリ属性・取得元・元表記を持たないため編集draftを復元できない。既存候補の編集はUIから`getCandidateDraft`を呼び、保存済み値から完全なdraftを取得してから開始する。
 
-#### CandidateActivation
+#### PreEditValidation and CandidateActivation
 
 ```typescript
+type UnresolvedCandidateDraft = {
+  readonly [Attributes in NormalizedAttributes as Attributes["category"]]: Omit<
+    CandidateDraftBase,
+    "projectId"
+  > & {
+    readonly category: Attributes["category"];
+    readonly normalizedAttributes: Attributes;
+  };
+}[PartCategory];
+
 interface CandidateEditorPrefill {
-  readonly projectId: ProjectId;
-  readonly draft: CandidateDraft;
+  readonly draft: UnresolvedCandidateDraft;
+  readonly projectId?: ProjectId;
+  readonly categoryHint?: PartCategory;
 }
 
 interface CandidateManagementPublicApi {
   readonly query: CandidateQuery;
-  readonly capture: CaptureCandidatePort;
-  openCandidateEditor(prefill: CandidateEditorPrefill): Promise<Result<void, FeatureActivationError>>;
+  readonly sources: {
+    readonly catalog: CandidateSourceCatalogPort;
+    readonly mutations: CandidateSourceMutationPort;
+  };
+  createCandidateEditorIntent(prefill: CandidateEditorPrefill): FeatureActivationIntent;
 }
+
+type PreEditDraftError =
+  | { readonly kind: "invalid-draft-shape" }
+  | { readonly kind: "invalid-category" }
+  | { readonly kind: "category-mismatch" };
+
+type CandidateEditorPrefillError =
+  | PreEditDraftError
+  | { readonly kind: "invalid-project-id" }
+  | { readonly kind: "invalid-category-hint" };
+
+function validatePreEditDraft(
+  draft: unknown,
+): Result<UnresolvedCandidateDraft, PreEditDraftError>;
+
+function validateCandidateEditorPrefill(
+  value: unknown,
+): Result<CandidateEditorPrefill, CandidateEditorPrefillError>;
 ```
 
-`openCandidateEditor`は型付きprefillからshellの`FeatureActivationIntent`を構築して`ShellNavigator`へ渡す。失敗はshellの`FeatureActivationError`で表し、activation経路に固有のerror型を重複定義しない。registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。projectが存在しない、不正payload、未知targetでは現在の画面とドラフトを変更しない。shellがmutationを禁止していて編集画面を開けなかった場合も、成功を返さず`activation_failed`とする。
+`createCandidateEditorIntent`は型付きprefillからshellの`FeatureActivationIntent`を構築するだけで、navigation、query、state mutationを開始しない。product captureはこの戻り値を現行`activationId`とともに`TransientSurfaceLifecyclePort.conclude`へ渡す。候補管理は起動世代を受け取らず、世代の現行性、stale結果破棄、handoff失敗時のintent保持を再実装しない。`conclude`が返す`Promise<Result<void, TransientSurfaceError>>`では、候補管理adapterの`activate`が成功した場合だけhandoff成功となる。
 
-payload検証はfoundation公開の`validateCandidatePartContent`へ委譲するCandidateDraft専用validatorに限定する。`LocalDataRoot`、`CurrentBuild`、`maintenance`、`requestDedupe`を偽造してroot全体検証へ通す実装は、このfeatureが所有しないaggregateへの依存を作るため採用しない。
+registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。adapterの型付き境界は既存どおり`validate(intent): Result<CandidateEditorPrefill, FeatureActivationError>`と`activate(prefill): Promise<Result<void, FeatureActivationError>>`である。payload構造不正は`invalid_activation`、形式が正しい明示`projectId`が直近project一覧に存在しない場合は`activation_failed`へ写像し、未信頼値をerror detailへ含めない。
+
+project未指定時は、直近stateの現在選択中project、一覧先頭の順で解決する。projectが存在すれば`projectId`を付与してcanonical `CandidateDraft`を構築しeditorへ遷移する。projectが0件ならactivation成功として`pendingPreEdit`へprefillを保持し、`project-required`を表示する。captureはcandidate queryを呼ばず、候補管理が自身の直近stateだけを解決根拠とする。
+
+`invalid-draft-shape`は必須field/value shape、`invalid-category`は未知category、`category-mismatch`はdraft categoryと`normalizedAttributes.category`の不一致を表す。任意`projectId`の型・空文字は`invalid-project-id`、未知`categoryHint`は`invalid-category-hint`とする。project 0件はerror unionへ追加しない。編集開始検証はcategory・normalized attributes・payload shapeだけを対象にして空名を許可し、保存時は既存`validateCandidatePartContent`を適用して空名を拒否する。仮project ID、unsafe cast、root全体の偽造、保存validatorの重複定義を使用しない。
+
+`sources` facetは`candidate-source-bookmarks`が同じ公開APIへ加える既承認の拡張であり、この移行で削除・平坦化しない。`duplicate-product-merge`は`query.listCandidates`と`sources.mutations`だけを公開入口から利用し、pre-edit内部stateやvalidatorへ依存しない。
 
 ### UI Layer
 
 #### ManagementState
 
-永続スナップショット、選択project/category、編集ドラフト、確認ダイアログ、操作状態、表示エラーを保持する。同一操作の二重送信を抑止し、失敗時はドラフトを保持する。
+永続スナップショット、選択project/category、編集ドラフト、`pendingPreEdit`、`project-required`、確認ダイアログ、操作状態、表示エラーを保持する。同一操作の二重送信を抑止し、失敗時はドラフトを保持する。
+
+```typescript
+interface CandidatePreEditState {
+  readonly pendingPreEdit: CandidateEditorPrefill | null;
+}
+```
+
+`ManagementStateValue`へ`pendingPreEdit`を追加するが、既存`editor`はproject解決済みcanonical `CandidateDraft`だけを保持する。project作成成功時は`CandidateManagementService.createProject`が返す`Project.id`を保持中draftへ付与してeditorへ遷移する。作成失敗ではpendingを保持する。pendingはproject作成成功、利用者の明示取消、新しいpre-edit activationでのみ置換・破棄し、capture面の終了、通常のfeature切替、`resetTransientState`では破棄しない。
+
+pendingの寿命は同一side panel document sessionに限定し、長寿命の`ManagementState` instanceが保持する。opaque rollback snapshot、永続root、session storage、Chrome Storage、backupへ含めない。side panel閉鎖、extension reload、browser終了後の再openでは復元も自動再抽出もしない。source editor stateを追加する`candidate-source-bookmarks`のsnapshot version 2契約は維持し、pendingをその永続化対象へ混入させない。
 
 feature registrationのmounted handleは、未保存の管理画面stateをopaque snapshotとしてcaptureできる。snapshotは選択project/category、編集対象、検証済みdraft、削除確認、表示エラーを含み、永続rootや保存中request、購読handle、React objectを含まない。rollbackによる再mount時は`FeatureMountContext`から受け取った`unknown`をfeature内で検証してから復元する。不正snapshotまたはrestore失敗では既存永続状態を変更せず、読み込み可能な初期画面と識別可能なエラーを表示する。shellはsnapshotの構造・候補値を解釈しない。
 
 ```typescript
 interface ManagementStateSnapshot {
-  readonly version: 1;
+  readonly version: 2;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   readonly editor: CandidateEditorSnapshot | null;
@@ -254,7 +312,7 @@ interface ManagementStateSnapshotCodec {
 
 `CandidateFeatureRegistration`はmount時にshellが提供する復元候補をcodecへ渡し、成功時だけ`ManagementState`へ適用する。mounted handleは同じcodecでcaptureしたJSON直列化可能な値だけをshellへ返す。snapshot versionが未知、projectまたはcandidate IDが現在の永続rootに存在しない、draftが検証不能である場合は復元を拒否し、初期表示へ退避する。保存操作・subscription・React rootは新規mountで作成し直す。
 
-`ManagementState`は単一mountより長く生存するため、mount開始時に編集draft、削除確認、表示エラーを破棄してから永続データを読み込む。shellはrollback時だけ`restoredState`を渡すので、通常のfeature切替で前回の未保存画面が検証済みsnapshotを経ずに再表示されることはない。
+`ManagementState`は単一mountより長く生存するため、mount開始時に通常の編集draft、削除確認、表示エラーを破棄してから永続データを読み込む。ただし受理済み`pendingPreEdit`は同一document sessionで維持する。shellはrollback時だけ`restoredState`を渡すので、通常の編集draftが検証済みsnapshotを経ずに再表示されることはない。
 
 shellがmount contextで渡す`OperationPolicy`は`ManagementState`の依存として保持し、`isAllowed("mutation")`が偽の間はプロジェクト作成・改名・削除、候補作成・更新・削除をUI上で開始不能にし、serviceを呼ばない。Foundation側のfail-closedな拒否は最終防壁として維持し、UI抑止をその代替にしない。読取とナビゲーションはmaintenance中も維持する。
 
@@ -262,13 +320,15 @@ shellはmaintenance遷移でfeatureを再mountしないため、policyを一度�
 
 #### ManagementView
 
-プロジェクトナビゲーション、カテゴリタブ、候補一覧、編集フォーム、削除確認を描画する。欠損は「未入力」、元表記は読み取り専用の別領域として表示する。
+プロジェクトナビゲーション、カテゴリタブ、候補一覧、編集フォーム、`project-required`のproject作成案内、削除確認を描画する。欠損は「未入力」、元表記は読み取り専用の別領域として表示する。`project-required`では保持中draftの内容を失わず、projectを自動作成・暗黙命名しない。
 
 候補一覧には、選択中プロジェクトへ新規候補を作成する導線と、各候補の編集を開始する導線をアクセシブルな名前付きで置く。編集導線は`getCandidateDraft`で保存済みdraftを取得してから編集画面を開く。テストはこれらのDOM操作を通して要件を検証し、`beginCreate()`／`beginEdit()`を直接呼んでUI導線を迂回しない。
 
 ## Data Models
 
 - `CandidateDraft`: 必須の商品名、projectId、categoryと、欠損可能な共通項目・カテゴリ属性・`sourceInfo`・`sourceSnapshot`・確認値。`sourceInfo`は取得URL・取得日時、`sourceSnapshot`は元表記を表し、相互に代用しない。
+- `UnresolvedCandidateDraft`: `CandidateDraft`からprojectIdだけを除いたcategory判別共用体。空名を含むpre-editの構造的整合を表し、保存可能性を意味しない。
+- `CandidateEditorPrefill`: unresolved draftと任意のprojectId/categoryHintを持つactivation payload。永続entityではない。
 - `CandidateSummary`: id、商品名、カテゴリ、価格、メーカー、型番、欠損状態。
 - `ManagementError`: UIが次の行動を選べる判別共用体。
 - 保存上の`Project`と`CandidatePart`はFoundation契約をそのまま利用し、重複モデルを作らない。
@@ -290,6 +350,8 @@ shellはmaintenance遷移でfeatureを再mountしないため、policyを一度�
 | `validation` | 入力内容の問題（項目単位に表示） |
 | `snapshot-restore-failed` | 直前の画面状態を復元できなかった |
 
+pre-editのpayload不正はshellの`invalid_activation`、明示project不在は`activation_failed`へ写像する。project 0件は失敗ではなく`project-required`状態であり、既存のproject作成validation/storage errorを表示する。handoff失敗時のintent保持と再試行表示はproduct captureが所有する。
+
 `ManagementError`の`validation`は`fields`にfield pathをキーとする理由を持つ。serviceは`validateCandidatePartContent`が返す`ValidationError.path`を`product.name`、`sourceInfo.pageUrl`、`sourceInfo.capturedAt`、`normalizedAttributes.<属性名>`のようなdraft相対キーへ正規化し、Viewは対応する入力欄へ`aria-invalid`と`aria-describedby`で結び付けたメッセージを表示する（Requirement 4.5）。項目エラー時も入力内容と既存一覧は保持する。
 
 ## Testing Strategy
@@ -301,6 +363,9 @@ shellはmaintenance遷移でfeatureを再mountしないため、policyを一度�
 - Contract integration: 候補削除・カテゴリ変更が単一mutationとなり、Foundationの参照修復後に一度だけcommitされることを、CurrentBuild参照を含むroot上でrevision増分とcommit回数まで検証する。
 - Production E2E: 実artifactを読み込んだChromeで、候補管理navigationの表示、画面到達、プロジェクト作成、候補作成、既存候補編集、再読込後の復元、boot時のconsole/runtime error不在を検証する。空shellがstartedになるだけのsmokeをfeature完成の証拠にしない。
 - Activation integration: 正常prefill、未知target、不正payload、存在しないproject、同一feature再activation、失敗時の入力元状態保持を検証する。
+- Pre-edit contract: project未指定の選択中→先頭解決、0件の`project-required`成功、project作成後のdraft解決、作成失敗時保持、明示project不在、category不整合、空名の編集開始成功と保存失敗を検証する。
+- Handoff/generation integration: 現行世代の`conclude`だけがintentを配送し、candidate-management受理成功で一過性面が終了することを検証する。stale世代とhandoff失敗intent保持は上流fixtureで検証し、候補管理へ世代stateを追加しない。
+- Public consumer contract: `query`、`createCandidateEditorIntent`、`sources: { catalog, mutations }`が同じ`public.ts`から利用でき、`CaptureCandidatePort`、`openCandidateEditor`、内部validatorへのdeep importが存在しないことを型検査する。
 - State snapshot integration: 未保存draft・選択・確認ダイアログをcaptureし、target mount／activation失敗後のrestoreで同じ管理画面stateが復元されること、不正snapshotが保存や候補一覧を変更しないことを検証する。
 
 ## Security & Performance

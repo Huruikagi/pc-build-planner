@@ -41,7 +41,7 @@
   - 言語カタログの英語版（`en`）の追加。`ui-message-catalog` が確立したキー体系をそのまま使う
   - 言語解決の仕組み（React Context + フック）と、カタログの静的 import
   - 表示言語の永続化（`chrome.storage.local`）と、初期値の決定（永続値 > `chrome.i18n.getUILanguage()` を ja/en へ正規化）
-  - サイドパネル内の言語切り替えUI
+  - 設定画面の表示言語区画に配置する言語切り替えUI
   - `_locales/{ja,en}/messages.json` の新設（`name` / `description` のみの最小構成）、`manifest.json` への `default_locale` 追加と `__MSG_*` 化
   - `side-panel.html` の `lang` 属性の動的化
   - 複数形・助数詞を含む文言の英語対応（`復元が完了しました（プロジェクト{n}件、候補{n}件、現在構成{n}件）` 等）
@@ -62,7 +62,7 @@
 - **言語の永続化と初期値決定**（`chrome.storage.local` へのアクセス、`chrome.i18n.getUILanguage()` の正規化）と、**それを消費する表示層**
 - **アプリ内文言の国際化**（自前カタログ）と、**manifest / ストア掲載の国際化**（`_locales/` + `chrome.i18n`）。両者は目的も仕組みも独立しており、混同すると設計が壊れる
 - **翻訳対象の文言**と、**翻訳対象外のロケール別データ**（`category-hint.ts` の日本語キーワード辞書、`円` パーサ）
-- **言語切り替えUI の配置**（`application-shell` が所有する UI composition の面）と、**言語状態そのもの**
+- **言語切り替えUI の配置**（`settings-screen` が所有する表示言語区画）と、**言語状態そのもの**（本specの `ui-language` 公開契約）
 
 ## Out of Boundary
 
@@ -77,8 +77,9 @@
 
 - **Upstream**:
   - `ui-message-catalog` — **硬い依存**。カタログのキー体系が確定していることが着手条件
-  - `application-shell` — 言語切り替えUIの設置面。UI composition と `FeatureMountContext` の境界を越えないこと
-  - `local-data-foundation` — 言語設定を `chrome.storage.local` へ永続化する経路。**単一の write authority という原則に反しないか要確認**。言語設定はドメインデータではないため保存ルートの外に置くべきか、foundation 経由にすべきかは設計フェーズの判断事項
+  - `settings-screen` — 言語切り替えUIの設置面。公開 `LanguageSelectControl` を表示言語区画へ配置し、言語状態や保存を所有しないこと
+  - `application-shell` — 設定への常設navigationと `LanguageProvider` の設置面。headerへ言語controlを置かず、UI composition と `FeatureMountContext` の境界を越えないこと
+  - `local-data-foundation` — ドメインデータの単一write authorityを維持する。言語設定は解決済み方針どおり `LocalDataRoot` 外の専用キーへ保存し、foundation、交換形式、容量監視へ混入させない
 - **Downstream**:
   - `ci-release-workflow` — v0.2.0 リリース時に `_locales/` と `default_locale` を含むパッケージが正しくビルドされること
   - 将来の言語追加（3言語目以降）。本 spec が確立した基盤の上に載る
@@ -86,7 +87,8 @@
 ## Existing Spec Touchpoints
 
 - **Extends**:
-  - `application-shell` — 言語切り替えUIという新しい UI 面を追加する。shell の requirements に反映が必要（roadmap の `## Existing Spec Updates` に記載）
+  - `settings-screen` — 公開 `LanguageSelectControl` を表示言語区画へ配置する。settings は配置とlifecycle合成だけを所有し、言語状態・保存・文言解決は本specが引き続き所有する
+  - `application-shell` — `LanguageProvider` と表示言語追随を維持しつつ、headerの言語controlを撤去してsettingsへの到達または二言語案内を提供する
 - **Adjacent**:
   - `product-page-capture` — `category-hint.ts` と `normalizer.ts` に触れるが、抽出・正規化の**振る舞いは変更しない**。日本語固有のロジックを構造上分離するのみ
   - `backup-restore` — 複数形・助数詞を含む文言（`プロジェクト{n}件、候補{n}件、現在構成{n}件`）の再設計対象。バックアップ形式や復元の振る舞いは変更しない

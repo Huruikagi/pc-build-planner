@@ -2,16 +2,16 @@
 
 ## Overview
 
-**Purpose**: 本 spec は、`ui-message-catalog` が確定させたキー体系の上へ **言語という次元** を追加する。英語カタログ、対応言語の単一定義、言語状態の保持と解決、サイドパネル内の切り替えUI、文書の言語属性、拡張マニフェストのロケール別 `name` / `description` を導入し、利用者がブラウザや OS の設定を変えずに日本語と英語を行き来できる状態にする。
+**Purpose**: 本 spec は、`ui-message-catalog` が確定させた11名前空間のja/en公開型付き契約へ **言語という次元** を接続する。対応言語の単一定義、言語状態の保持とresolver選択、設定画面へ埋め込める切り替えUI、文書の言語属性、拡張マニフェストのロケール別 `name` / `description` を導入し、利用者がブラウザや OS の設定を変えずに日本語と英語を行き来できる状態にする。
 
 **Users**: 直接の利用者は日本語話者と非日本語話者の拡張利用者である。二次的な利用者として、3言語目を追加する開発者と、Chrome Web Store へロケール別掲載情報を入稿するリリース担当者がいる。
 
-**Impact**: `src/ui-messages/` はカタログを言語別に分岐させ、対応言語のレジストリを持つ境界へ拡張される。新しい葉の境界 `src/ui-language/` が言語状態・永続化・初期値決定・切り替えUIを所有する。`application-shell` は切り替えUIの**配置**だけを引き受ける。`src/features/product-capture/` は日本語ロケール固有データを `locale/` へ隔離する。ビルド・パッケージ・マニフェスト検査は `_locales/` を配布物へ運ぶために拡張される。
+**Impact**: `src/ui-language/` が、`ui-message-catalog` の11名前空間を公開型付き契約だけから消費し、言語状態・永続化・初期値決定・resolver選択・切り替えUIの公開能力を所有する。`settings-screen` は公開コントロールを表示言語区画へ配置し、`application-shell` は `LanguageProvider` とsettings navigationへの追随だけを維持する。`src/features/product-capture/` は日本語ロケール固有データを `locale/` へ隔離する。ビルド・パッケージ・マニフェスト検査は `_locales/` を配布物へ運ぶために拡張される。
 
 ### Goals
 
 - 表示言語をアプリ内状態として持ち、ブラウザ再起動・ロケール環境変数の操作なしに切り替えられるようにする。
-- ja / en のカタログが同一のキー集合と同一のパラメータ名を持つことを、実行時ではなくコンパイル時に保証する。
+- `settings`を含む11名前空間でja/en parityを保証する上流の公開型付き契約を消費し、内部カタログへ依存しない。
 - 表示言語の設定を、利用者のドメインデータおよびバックアップ交換形式から構造的に分離する。
 - 拡張の `name` / `description` を Chrome の表示言語へ追従させ、ストア掲載のロケール別入稿を可能にする。
 - 日本語ロケール向けの取り込み支援データ・ロジックを、翻訳対象の文言と構造上・機械検査上で区別する。
@@ -32,8 +32,8 @@
 ### This Spec Owns
 
 - **対応言語の単一定義** — `SUPPORTED_LANGUAGES` とその型、原語表記（endonym）、ソース言語とフォールバック言語の指定。
-- **英語カタログ** — `ui-message-catalog` が確定させた全キーに対する英語の値。既存キーの追加・改称は行わない。
-- **カタログの言語間整合の保証** — キー集合の双方向一致は型で、プレースホルダ名の一致は単体テストで検証する。
+- **カタログ公開契約の消費** — `ui-message-catalog` が公開する `MessageKey`、`MessageResolver`、`MessageProvider`、`useMessages` 等を唯一の接合面とし、11名前空間のja/en resolverを選択・供給する。
+- **consumer側の契約検証** — 公開consumer型検査とresolver契約テストにより、`settings`を含む11名前空間のparity保証を受け入れ、内部カタログへの直接参照を拒否する。
 - **言語状態** — 現在の表示言語、その変更、変更の通知。React 外の単一ストアとして所有する。
 - **言語の初期値決定** — 保存値とブラウザ表示言語からの純関数的な解決。
 - **言語設定の永続化** — `chrome.storage.local` のルート外専用キー1つに閉じた読み書き。
@@ -45,10 +45,11 @@
 
 ### Out of Boundary
 
-- **カタログのキー体系そのもの** — キー名、名前空間分割、`MessageDescriptor` の形、`useMessages()` の参照経路。`ui-message-catalog` が所有し、本 spec は変更しない。
+- **カタログの内容と構造** — キー、値、11名前空間の分割、`catalog/{ja,en}`配下のlocaleファイル、集約点、parity型・parityテスト、`MessageDescriptor` の形、`useMessages()` の参照経路。`ui-message-catalog` が所有し、本 spec は変更しない。
 - **`MessageProvider` / `useMessages` の公開シグネチャ** — 変更しない。言語切り替えは Provider へ渡す resolver の差し替えだけで達成する。
 - **`FeatureMountContext` と mount/unmount ライフサイクル** — 言語状態をこの経路で供給しない。上流の禁止事項をそのまま継承する。
-- **画面上のどこに切り替えUIを置くか以外の UI composition** — `application-shell` が所有し続ける。本 spec はシェルへ配置点を1つ追加するだけで、ナビゲーション・機能搭載・エラー境界の責務へ触れない。
+- **切り替えUIの配置とsettings lifecycle** — `settings-screen` が表示言語区画への配置を、`application-shell` がpersistent navigation・機能搭載・エラー境界を所有する。本 spec は公開 `LanguageSelectControl` / `LanguageProvider` の契約だけを供給し、settings stateやshell stateを所有しない。
+- **shell headerと状態別回復表示** — headerからのcontrol撤去、ready／maintenance／feature-local failureでのsettings到達、loading／global errorでの二言語案内は `settings-screen` と `application-shell` の責務である。本specは統合結果を受け入れ検証する。
 - **`LocalDataRoot` と write authority** — 表示言語はルートへ入らない。`src/persistence/` に変更を加えない。
 - **バックアップ交換形式** — `backup-restore` が所有する。表示言語は交換形式に現れない。
 - **取り込み・正規化の振る舞い** — 抽出結果を1件も変えない。`locale/` への移動は配置の変更に限る。
@@ -58,7 +59,8 @@
 
 - `src/ui-messages/` → `src/domain/public.js`（型のみ、上流のまま）、React 19（`createContext` / `useContext`）。
 - `src/ui-language/` → `src/ui-messages/public.js`（唯一の経路）、React 19（`useSyncExternalStore` を含む）、`chrome.storage.local` / `chrome.i18n.getUILanguage`（**アダプタ1ファイルに限定**）。
-- `src/application-shell/` → `src/ui-language/public.js`（切り替えコントロールの配置と bootstrap のためだけ）。
+- `src/features/settings/` → `src/ui-language/public.js`（`LanguageProvider` と `LanguageSelectControl` の公開能力を表示言語区画へ配置するためだけ）。
+- `src/application-shell/` → `src/ui-language/public.js`（`LanguageProvider` と bootstrap のためだけ。`LanguageSelectControl` をheaderへ配置しない）。
 - `src/features/*/react-root.tsx`、`src/features/current-build/registration.ts` → `src/ui-language/public.js`（Provider の設置のみ）。
 - `e2e/`、`tests/` → `src/ui-language/public.js`、`src/ui-messages/public.js`。
 - **禁止**: `src/ui-messages/` → `src/ui-language/`。言語状態はカタログより下流であり、逆流させない。
@@ -73,8 +75,10 @@
 - 言語設定の保存キー名、保存値の形式の変更。
 - `default_locale` の変更、`_locales/` のキー追加・改称（Chrome Web Store の入稿内容へ波及する）。
 - 言語切り替えコントロールの識別属性の変更（`styles.css` と E2E ヘルパへ波及する）。
-- カタログのディレクトリ配置の変更（`scripts/validate-ui-text.mjs` の除外パスへ波及する）。
+- `settings-screen` の表示言語区画、`SettingsReactRoot` のmount identity、または `application-shell` のProvider設置点の変更。
+- 上流カタログの公開入口または内部配置の変更（公開consumer型検査とdeep import拒否規則を再検証する。内部配置そのものは本specで変更しない）。
 - 上流 `MessageDefinition` の形状、`MultiPluralDefinition.selectors`、または selector 組み合わせキー構文の変更（英語カタログとカタログ整合テストへ波及する）。
+- 上流の公開名前空間集合の増減、特にcanonical 11名前空間からの変更（公開consumer型検査、resolver契約、settings統合へ波及する）。
 
 ## Architecture
 
@@ -91,12 +95,7 @@
 ```mermaid
 graph TB
     Domain[domain public types]
-    CatalogJa[ui-messages catalog ja]
-    CatalogEn[ui-messages catalog en]
-    Parity[ui-messages catalog parity types]
-    Registry[ui-messages language registry]
-    Resolver[ui-messages resolver]
-    MsgPublic[ui-messages public entry]
+    MsgPublic[ui-messages typed public contract]
 
     LangContracts[ui-language contracts]
     LangResolve[ui-language resolution]
@@ -107,7 +106,8 @@ graph TB
     DocLang[ui-language document language sync]
     LangPublic[ui-language public entry]
 
-    ShellView[application shell view]
+    SettingsView[settings language section]
+    ShellProvider[application shell provider]
     Bootstrap[runtime bootstrap]
     FeatureRoots[feature react roots]
 
@@ -115,14 +115,7 @@ graph TB
     BuildScript[build and package scripts]
     ManifestGuard[manifest locale guard]
 
-    Domain --> CatalogJa
-    CatalogJa --> Parity
-    CatalogEn --> Parity
-    CatalogJa --> Registry
-    CatalogEn --> Registry
-    Registry --> Resolver
-    Resolver --> MsgPublic
-    Registry --> MsgPublic
+    Domain --> MsgPublic
 
     MsgPublic --> LangContracts
     LangContracts --> LangResolve
@@ -136,7 +129,8 @@ graph TB
     LangSelect --> LangPublic
     DocLang --> LangPublic
 
-    LangPublic --> ShellView
+    LangPublic --> SettingsView
+    LangPublic --> ShellProvider
     LangPublic --> Bootstrap
     LangPublic --> FeatureRoots
 
@@ -147,9 +141,9 @@ graph TB
 **Architecture Integration**:
 
 - **Selected pattern**: React 外の単一ストア + root ごとの Provider による表示直前解決。上流が用意した「Provider の resolver を差し替える」という唯一の接合点を、ストア購読で駆動する。
-- **Domain/feature boundaries**: `ui-messages`（言語別の値と対応言語の定義）と `ui-language`（言語状態・永続化・初期値決定・切り替えUI）を分ける。前者は「何を表示するか」、後者は「いま何語か」を所有する。feature は後者から Provider を受け取るだけで、いずれの内部も知らない。
+- **Domain/feature boundaries**: `ui-message-catalog`はキー・値・11名前空間・ja/en parityを所有し、`ui-language`はその公開型付き契約を消費して言語状態・永続化・初期値決定・resolver選択・切り替えUIを所有する。settings feature は公開Providerとcontrolを配置するだけで言語stateを複製せず、shellと他featureはProviderを受け取るだけで内部を知らない。
 - **Existing patterns preserved**: 公開入口を `public.ts` に限定する規約、React を表示 adapter に限定する方針、React 外 state + `useSyncExternalStore` の購読、規約を `scripts/validate-*.mjs` で機械化する慣行、`FeatureMountContext` を経由しない Provider 設置。
-- **New components rationale**: `ui-language` は「言語状態」という新しい責務の canonical owner を確定させるために必要である。`ui-messages` 側の言語レジストリは、対応言語の集合とカタログの網羅性を1箇所へ束ねるために必要である。両者を1つにまとめると、カタログ（純粋データ）に Chrome API 依存が混入する。
+- **New components rationale**: `ui-language` は「言語状態」という新しい責務の canonical owner を確定させるために必要である。カタログ内部を再構成せず公開resolver契約を選択することで、カタログ（純粋データ）へ Chrome API 依存を混入させない。
 - **Steering compliance**: 永続化ルートと write authority に触れない（`tech.md`）。`chrome.storage` への到達点をアダプタに限定し機械検査で守る（`security.md`）。翻訳リソースは静的 import でバンドルへ含める（MV3 / CSP）。`any` を使わず、境界からの値は `unknown` として受けて検証する。
 
 ### Dependency Direction
@@ -157,11 +151,11 @@ graph TB
 ```text
 domain public types (型のみ)
     ↓
-ui-messages: contracts → catalog(ja|en) → parity → language registry → resolver → react context → public.ts
+ui-message-catalog public typed contract: MessageKey / MessageResolver / MessageProvider / useMessages
     ↓
 ui-language: contracts → resolution / preference store → store → react binding → select control / document sync → public.ts
     ↓
-application shell (shell view / runtime bootstrap) / feature react roots
+settings language section / application shell provider and runtime bootstrap / feature react roots
     ↓
 styles.css / tests / e2e
 ```
@@ -191,23 +185,8 @@ _locales/                              # 新規。manifest とストア掲載の
 └── ja/messages.json                   # 日本語の name / description
 
 src/
-├── ui-messages/                       # 既存境界の拡張（上流所有の契約は変更しない）
-│   ├── languages.ts                   # 新規。SUPPORTED_LANGUAGES / SupportedLanguage /
-│   │                                  #   SOURCE_LANGUAGE / FALLBACK_LANGUAGE / endonym /
-│   │                                  #   resolverFor(language)
-│   ├── catalog-parity.ts              # 新規。キー集合の型レベル整合検査
-│   ├── catalog/
-│   │   ├── index.ts                   # 変更。ja / en の集約と言語レジストリへの供給
-│   │   ├── ja/                        # 移動。既存10名前空間ファイルをそのまま格納
-│   │   │   ├── index.ts               # ja の集約。カタログの「形」の源
-│   │   │   └── {common,category,persistence-error,nav,shell,
-│   │   │      candidate,build,compatibility,capture,backup}.ts
-│   │   └── en/                        # 新規。ja と同一のファイル分割
-│   │       ├── index.ts
-│   │       └── {同上10ファイル}
-│   └── public.ts                      # 変更。言語レジストリ関連の公開面を追加
-├── ui-language/                       # 新規境界。言語状態の canonical owner
-│   ├── contracts.ts                   # 言語設定ポート、解決入力、ストアの型
+├── ui-language/                       # 新規境界。言語状態とProvider選択の canonical owner
+│   ├── contracts.ts                   # 対応言語、原語表記、言語設定ポート、解決入力、ストアの型
 │   ├── resolve.ts                     # 純関数。言語タグ正規化と初期値決定
 │   ├── preference-store.ts            # 専用キー1つに閉じた chrome.storage.local アダプタ
 │   ├── store.ts                       # React 外の単一ストア。購読と初期化
@@ -226,9 +205,8 @@ e2e/
 
 tests/
 ├── ui-language/                       # 新規。解決・保存・ストア・Provider・コントロール
-│   └── {resolve,preference-store,store,react,language-select}.test.ts(x)
-└── ui-messages/
-    └── catalog-parity.test.ts         # 新規。パラメータ名と複数形定義の言語間整合
+│   ├── {resolve,preference-store,store,react,language-select}.test.ts(x)
+│   └── public-consumer.test.ts        # 11名前空間の公開resolver契約とdeep import禁止を検証
 ```
 
 ### Modified Files
@@ -237,10 +215,12 @@ tests/
 |---|---|
 | `manifest.json` | `name` を `__MSG_extensionName__`、`description` を `__MSG_extensionDescription__` として追加、`default_locale: "en"` を追加 |
 | `side-panel.html` | `<html lang="ja">` から `lang` 属性を除去する。値は bootstrap が設定する |
-| `src/ui-messages/catalog/index.ts` | ja / en の2系統を集約し、言語レジストリへ渡す形へ変更 |
-| `src/ui-messages/public.ts` | `SupportedLanguage` / `SUPPORTED_LANGUAGES` / `languageEndonym` / `resolverFor` を追加公開。`MessageProvider` / `useMessages` / `MessageDescriptor` の形は変更しない |
-| `src/application-shell/shell-view.tsx` | シェルの共通ヘッダ領域を追加し、全状態（読み込み中・エラー・保守中・通常）で言語コントロールを描画する |
-| `src/application-shell/shell-view.css` | ヘッダ領域とコントロール配置のスタイル。文言に依存しないセレクタのみ |
+| `src/ui-language/contracts.ts` / `src/ui-language/public.ts` | 対応言語・原語表記・resolver選択を公開し、`src/ui-messages/public.ts`の型付き契約だけを消費する。カタログ内部を再公開しない |
+| `src/ui-language/react.ts` | 選択言語に対応する公開`MessageResolver`を`MessageProvider`へ渡し、11名前空間を透過的に解決する |
+| `src/features/settings/view.tsx` | `settings-screen` 所有の表示言語区画へ公開 `LanguageSelectControl` を一度だけ配置する。言語stateを複製しない |
+| `src/features/settings/react-root.tsx` | `LanguageProvider` 配下にsettings viewを描画し、言語変更でsettings rootとsection hostのidentityを保持する |
+| `src/application-shell/shell-view.tsx` | `settings-screen` / `application-shell` 契約に従いheaderの言語controlを撤去する。navigation不能時は操作不能selectを描画せず「設定 / Settings」案内を表示する |
+| `src/application-shell/shell-view.css` | 旧header control配置規則を除去し、状態別settings案内を文言非依存セレクタで扱う |
 | `src/application-shell/react-shell-root.tsx` | シェル root の Provider を `MessageProvider` から `LanguageProvider` へ置き換える |
 | `src/runtime/side-panel.ts` | シェル起動前に言語ランタイムを初期化し、文書の言語属性同期を開始する |
 | `src/features/{candidate-management,product-capture,compatibility,backup-restore}/react-root.tsx` | Provider を `LanguageProvider` へ置き換える |
@@ -251,10 +231,10 @@ tests/
 | `scripts/validate-artifacts.mjs` | `__MSG_*` と `default_locale` と `_locales/` の整合を検査する規則を追加 |
 | `scripts/validate-boundaries.mjs` | `chrome.storage` への到達点を許可2ファイルへ限定する規則を追加する |
 | `tests/setup-dom.ts` および DOM テストハーネス | Provider を `LanguageProvider` へ置き換え、`afterEach` で言語ストアを初期状態へ戻す |
-| `scripts/validate-ui-text.mjs` | 除外パスを `src/ui-messages/catalog/`（ja / en 両方）、`src/ui-messages/languages.ts`、`src/features/product-capture/locale/` へ更新し、`category-hint.ts` を除外から外す |
+| `scripts/validate-ui-text.mjs` | 本spec所有範囲では原語表記を持つ`src/ui-language/contracts.ts`と`src/features/product-capture/locale/`だけを除外へ追加し、`category-hint.ts`を除外から外す。catalog除外は`ui-message-catalog`所有のまま変更しない |
 | `tests/runtime/manifest.test.ts` | 完全一致対象へ `description` / `default_locale` / `__MSG_*` を反映。`_locales/` の実在と全キー充足、`<html>` の `lang` 非固定を検査 |
 | `tests/tooling/package.test.ts` | 合成配布物へ `_locales/` を含め、配布 zip へロケール資産が入ることを検査 |
-| `e2e/locators.ts` | 言語コントロールのロケータと、言語別の期待値解決（`resolverFor`）を追加 |
+| `e2e/locators.ts` | 言語コントロールのロケータと、公開型付き契約による言語別の期待値解決を追加 |
 | `package.json` | 変更不要（新しい script を追加しない）。検査は既存 `validate:artifacts` / `validate:ui-text` の内部で強化する |
 
 ## System Flows
@@ -288,10 +268,10 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User as user
-    participant Select as language select
+    participant Select as settings language select
     participant Store as language store
     participant Pref as preference store
-    participant Roots as six react roots
+    participant Roots as application react roots
     participant Doc as document
 
     User->>Select: choose language
@@ -327,11 +307,12 @@ graph LR
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1, 1.6 | 全状態で使える切り替え操作面、原語表記と現在値の提示 | LanguageSelectControl, ShellLanguageSurface, LanguageRegistry | `useLanguage()`, `languageEndonym` | 言語切り替えの伝播 |
+| 1.1, 1.6 | settings表示言語区画の切り替え操作面、原語表記と現在値の提示 | LanguageSelectControl, SettingsLanguageIntegration, LanguageRegistry | `useLanguage()`, `languageEndonym` | 言語切り替えの伝播 |
 | 1.2 | 再起動なしの即時反映 | LanguageStore, LanguageReactBinding | `subscribe` / `getSnapshot` | 言語切り替えの伝播 |
-| 1.3 | 機能・選択・入力・スクロール位置の保持 | LanguageReactBinding, FeatureRootLanguageBinding | `LanguageProvider` | 言語切り替えの伝播 |
+| 1.3 | settings root・区画・入力・スクロール位置の保持 | LanguageReactBinding, SettingsLanguageIntegration | `LanguageProvider`, `SettingsReactRoot` | 言語切り替えの伝播 |
 | 1.4 | 保存データと判定結果の不変 | LanguagePreferenceStore | 専用キーのみの読み書き | — |
-| 1.5 | 保守中・エラー時も切り替え可能 | ShellLanguageSurface | シェル共通ヘッダ領域 | — |
+| 1.5 | maintenance中のsettingsで切り替え可能 | SettingsLanguageIntegration | `LanguageSelectControl`, `OperationPolicy`から独立した言語state | 言語切り替えの伝播 |
+| 1.7, 1.8 | header非常設と到達不能時の二言語案内 | SettingsLanguageIntegration | settings navigation, shell status message | — |
 | 2.1, 2.2, 2.6 | 保存値優先、無ければブラウザ表示言語 | LanguageResolution, LanguageStore | `resolveInitialLanguage` | 起動時の言語決定 |
 | 2.3 | 地域付きタグの正規化 | LanguageResolution | `normalizeLanguageTag` | 起動時の言語決定 |
 | 2.4 | 未対応言語は英語へ | LanguageResolution | `FALLBACK_LANGUAGE` | 起動時の言語決定 |
@@ -339,35 +320,35 @@ graph LR
 | 3.1 | 再起動をまたぐ保持 | LanguagePreferenceStore, LanguageStore | `LanguagePreferencePort` | 言語切り替えの伝播 |
 | 3.2, 3.3, 3.4, 3.6 | ドメインデータからの分離 | LanguagePreferenceStore, StorageAccessGuard | 専用キー定数、到達点の機械検査 | — |
 | 3.5 | 保存失敗でも操作を中断しない | LanguageStore | 保存結果を表示へ反映しない | 言語切り替えの伝播 |
-| 4.1 | キー集合の言語間一致（型検査） | CatalogParityTypes, EnglishCatalog | `LocalizedCatalog`, `AssertCatalogParity` | 言語追加時の波及 |
-| 4.2 | パラメータ名の言語間一致（単体テスト） | EnglishCatalog | `catalog-parity.test.ts` | 言語追加時の波及 |
-| 4.3, 4.6, 4.7 | 全画面の英語表示、共有語彙、外部由来文字列の非翻訳 | EnglishCatalog, LanguageRegistry | `resolverFor` | 言語切り替えの伝播 |
-| 4.4 | 単一件数の単複表現 | EnglishCatalog | `PluralDefinition` | — |
-| 4.5 | 複数件数を含む1文 | EnglishCatalog | ラベル併記形の文型、必要時の `MultiPluralDefinition` | — |
+| 4.1 | 11名前空間のja/enキーparityを持つ公開契約の消費 | UiMessagesPublicContract, LanguageCatalogConsumer | `MessageKey`, `MessageResolver` | 言語追加時の波及 |
+| 4.2 | パラメータparity済み公開resolverだけを利用 | UiMessagesPublicContract, LanguageCatalogConsumer | `MessageResolver` | 言語追加時の波及 |
+| 4.3, 4.6, 4.7 | 全画面の英語表示、共有語彙、外部由来文字列の非翻訳 | LanguageCatalogConsumer, LanguageRegistry | `resolverFor` | 言語切り替えの伝播 |
+| 4.4 | 単一件数の単複表現を公開resolverから受け入れる | LanguageCatalogConsumer | `MessageResolver` | — |
+| 4.5 | 複数件数を含む1文を公開resolverから受け入れる | LanguageCatalogConsumer | `MessageResolver` | — |
 | 5.1, 5.2, 5.3 | 文書の言語属性 | DocumentLanguageSync, LanguageRuntimeBootstrap | `syncDocumentLanguage` | 起動時の言語決定 / 言語切り替えの伝播 |
 | 6.1, 6.2, 6.3, 6.4 | manifest とストア掲載の国際化 | ExtensionLocaleAssets | `_locales/{en,ja}/messages.json`, `default_locale` | — |
 | 6.5, 6.6 | ロケール整合と既存セキュリティ検査の維持 | ManifestLocaleGuard | `validateManifest` 拡張 | — |
 | 7.1, 7.2 | 翻訳対象外データの構造上・文書上の明示 | JapaneseLocaleData | `locale/` 配下の専用モジュール | — |
 | 7.3, 7.4 | 抽出結果の不変と言語非依存 | JapaneseLocaleData | 既存の抽出関数シグネチャ | — |
 | 7.5 | 誤って文言扱いされた場合の検出 | UiTextGuardExclusions | `validate:ui-text` | — |
-| 8.1, 8.2 | ブラウザ言語に依存しない英語UI検証 | LanguageE2ESpec | `e2e/locators.ts` | 言語切り替えの伝播 |
+| 8.1, 8.2 | settings経由で行うブラウザ言語非依存の英語UI検証 | LanguageE2ESpec | `e2e/locators.ts` | 言語切り替えの伝播 |
 | 8.3 | 初期値決定は実ブラウザ非依存の検証 | LanguageResolution | 純関数の単体テスト | 起動時の言語決定 |
 | 8.4 | 配布物へのロケール資産同梱 | BuildLocaleCopy | `scripts/build.mjs` | — |
 | 8.5, 8.6 | 検査の受け入れと検証フロー全段の成功 | ManifestLocaleGuard, ExtensionLocaleAssets | `pnpm validate` | — |
 | 9.1 | 参照側を触らない言語追加 | LanguageRegistry, LanguageReactBinding | `resolverFor` | 言語追加時の波及 |
-| 9.2 | キー不足の型検査失敗 | CatalogParityTypes | `LocalizedCatalog` | 言語追加時の波及 |
+| 9.2 | キー不足を上流公開型で検出 | UiMessagesPublicContract, LanguageCatalogConsumer | 公開consumer型検査 | 言語追加時の波及 |
 | 9.3 | 対応言語の単一定義からの導出 | LanguageRegistry, LanguageSelectControl, LanguageResolution | `SUPPORTED_LANGUAGES` | 言語追加時の波及 |
-| 9.4 | 翻訳データを追加しない | EnglishCatalog | — | — |
+| 9.4 | 本specで翻訳データを追加しない | LanguageCatalogConsumer | — | — |
 | 9.5 | 静的同梱 | LanguageRegistry | 静的 import のみ | — |
 
 ## Components and Interfaces
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |---|---|---|---|---|---|
-| LanguageRegistry | ui-messages | 対応言語の単一定義と言語別 resolver の供給 | 1.6, 4.3, 9.1, 9.3, 9.5 | MessageResolver (P0), EnglishCatalog (P0) | Service, State |
-| EnglishCatalog | ui-messages | 全キーに対する英語の値 | 4.1〜4.7, 9.4 | CatalogParityTypes (P0) | State |
-| CatalogParityTypes | ui-messages | キー集合の言語間一致を型で保証。パラメータ名の一致は単体テストの責務 | 4.1, 9.2 | MessageContracts (P0) | State |
-| LanguageContracts | ui-language | 言語状態・保存ポート・解決入力の型 | 2.1, 3.1, 9.3 | LanguageRegistry (P0) | State |
+| UiMessagesPublicContract | ui-message-catalog（外部所有） | 11名前空間のキー・ja/en値・parity済みresolverを型付きで公開 | 4.1, 4.2, 9.1, 9.2 | — | Service |
+| LanguageCatalogConsumer | ui-language | 公開契約から言語別resolverを選択しProviderへ供給。catalog内部を参照しない | 4.1〜4.7, 9.1, 9.2, 9.4, 9.5 | UiMessagesPublicContract (P0) | Service |
+| LanguageRegistry | ui-language | 対応言語の単一定義と言語別 resolver の選択 | 1.6, 4.3, 9.1, 9.3, 9.5 | LanguageCatalogConsumer (P0) | Service, State |
+| LanguageContracts | ui-language | 言語状態・保存ポート・解決入力の型 | 2.1, 3.1, 9.3 | UiMessagesPublicContract (P0) | State |
 | LanguageResolution | ui-language | 言語タグ正規化と初期値決定の純関数 | 2.1〜2.6, 8.3, 9.3 | LanguageContracts (P0) | Service |
 | LanguagePreferenceStore | ui-language | ルート外専用キーへの読み書き | 1.4, 2.5, 3.1〜3.6 | LanguageContracts (P0), chrome.storage.local (P0) | Service |
 | LanguageStore | ui-language | React 外の単一ストアと初期化 | 1.2, 2.1, 2.6, 3.1, 3.5 | LanguageResolution (P0), LanguagePreferenceStore (P0) | Service, State |
@@ -375,7 +356,7 @@ graph LR
 | LanguageSelectControl | ui-language | 切り替えコントロールの振る舞い | 1.1, 1.6, 9.3 | LanguageReactBinding (P0), LanguageRegistry (P0) | — |
 | DocumentLanguageSync | ui-language | 文書の言語属性の同期 | 5.1, 5.2, 5.3 | LanguageStore (P0) | Service |
 | UiLanguagePublicEntry | ui-language | 境界の唯一の公開入口 | 9.1 | 上記全て (P0) | Service |
-| ShellLanguageSurface | application-shell | コントロールの配置点をシェルへ1つ追加 | 1.1, 1.5 | UiLanguagePublicEntry (P0) | — |
+| SettingsLanguageIntegration | settings-screen / application-shell | 公開controlをsettingsだけへ配置し、shellのProvider追随・状態別到達を受け入れる統合seam | 1.1, 1.3, 1.5〜1.8 | UiLanguagePublicEntry (P0), settings-screen public contract (P0), application-shell public contract (P0) | State |
 | LanguageRuntimeBootstrap | runtime / application-shell | 起動前の初期化と文書同期の開始 | 2.1, 2.6, 5.1 | LanguageStore (P0), DocumentLanguageSync (P0) | Service |
 | FeatureRootLanguageBinding | features | 5本の feature root の Provider 置き換え | 1.2, 1.3 | UiLanguagePublicEntry (P0) | — |
 | JapaneseLocaleData | features / product-capture | 翻訳対象外の日本語ロケールデータの隔離 | 7.1〜7.4 | — | State |
@@ -384,9 +365,9 @@ graph LR
 | BuildLocaleCopy | scripts | 配布物へのロケール資産同梱 | 8.4 | ExtensionLocaleAssets (P0) | Batch |
 | UiTextGuardExclusions | scripts | 除外パスの更新と翻訳対象外データの保護 | 7.5 | JapaneseLocaleData (P0) | Batch |
 | StorageAccessGuard | scripts | `chrome.storage` 到達点の限定 | 3.2, 3.4 | LanguagePreferenceStore (P0) | Batch |
-| LanguageE2ESpec | e2e | 切り替え操作による英語UI検証 | 8.1, 8.2 | LanguageSelectControl (P0) | — |
+| LanguageE2ESpec | e2e | settings表示言語区画の切り替え操作による英語UI検証 | 8.1, 8.2 | LanguageSelectControl (P0), SettingsLanguageIntegration (P0) | — |
 
-### ui-messages
+### ui-message-catalog公開契約のconsumer
 
 #### LanguageRegistry
 
@@ -401,12 +382,12 @@ graph LR
 - **ソース言語**（`SOURCE_LANGUAGE = "ja"`）と**フォールバック言語**（`FALLBACK_LANGUAGE = "en"`）を別々の概念として持つ。前者はカタログの「形」の源であり上流の既定 resolver と一致する。後者は初期値決定で対応言語へ対応付けられなかった場合の帰着先である。両者が異なる理由をモジュール内へ明記する。
 - 原語表記（`日本語` / `English`）は翻訳対象ではない。言語に依存しないデータとして本モジュールが持ち、カタログのキーにはしない。**本ファイルは `validate:ui-text` の除外対象へ加える**（CJK リテラルを含むため）。
 - resolver は言語ごとにモジュール生成時に1つだけ作り、以後は同一参照を返す。切り替えのたびに resolver を作り直さない。
-- カタログは全言語とも静的 import で束ねる。動的読み込みを行わない。
+- resolverは`src/ui-messages/public.ts`から静的importし、カタログ内部やlocaleファイルをimportしない。動的読み込みを行わない。
 
 **Dependencies**
 
-- Outbound: MessageResolver（P0、`createMessageResolver`）、JapaneseCatalog / EnglishCatalog（P0）
-- Inbound: UiMessagesPublicEntry, LanguageContracts, LanguageStore, LanguageSelectControl
+- Outbound: UiMessagesPublicContract（P0、`MessageResolver` / 公開resolver factory）
+- Inbound: LanguageContracts, LanguageStore, LanguageSelectControl
 
 **Contracts**: Service [x] / State [x]
 
@@ -439,104 +420,80 @@ export const resolverFor: (language: SupportedLanguage) => MessageResolver;
 
 - Integration: 上流の `defaultMessageResolver` は `resolverFor(SOURCE_LANGUAGE)` と同一の resolver を指すようにし、Provider 未設置時の表示が現行と変わらないことを維持する。
 - Validation: `languageEndonym` を `Record<SupportedLanguage, string>` として定義し、言語追加時に欠落が型エラーになることを最小例で確認する。
-- Risks: `SUPPORTED_LANGUAGES` の重複定義がどこかに生まれると 9.3 が崩れる。公開入口からのみ参照させ、`ui-language` 側で再定義しない。
+- Risks: `SUPPORTED_LANGUAGES` の重複定義がどこかに生まれると 9.3 が崩れる。`ui-language/public.ts`からのみ参照させ、settingsやshellで再定義しない。
 
-#### EnglishCatalog
+#### UiMessagesPublicContract
 
 | Field | Detail |
 |---|---|
-| Intent | 上流が確定させた全キーに対する英語の値を保持する |
+| Intent | 上流が所有する11名前空間のja/enメッセージを型付きresolverとして受け取る |
 | Requirements | 4.1〜4.7, 9.4 |
 
 **Responsibilities & Constraints**
 
-- ファイル分割は日本語カタログと**同一の10名前空間**に揃える。差分レビューが名前空間単位で成立する状態を保つ。
-- **キーの追加・改称・削除を行わない**。英語化のために文構造の変更が必要になった場合も、上流が用意したパラメータの範囲で解く。
-- **単一件数のメッセージ**は `PluralDefinition` を用い、`one` / `other` を定義する。日本語側は単純文字列のままとし、フォームを作らない。
-- **複数件数を1文に含むメッセージ**（復元完了通知）は、数の一致を要求しないラベル併記形の文型で解く。断片の連結や、件数ごとの部分メッセージの合成を行わない。
-- 上流の `MultiPluralDefinition` は利用可能な契約として保持する。復元完了通知は現要件ではラベル併記形の単純文字列を採用してよいが、将来数量別の完結文が必要になれば `selectors: ["projectCount", "partCount", "currentBuildCount"]` と組み合わせフォームへ置き換える。caller は既に3件数を渡すため変更しない。
-- パーツカテゴリ名など共有名前空間の語彙は、機能をまたいで単一の英語表記を用いる。
-- 外部由来文字列（商品名、プロジェクト名、取得元、ファイル位置）はパラメータであり、英語カタログでも翻訳しない。
-- 文面は日本語の直訳ではなく、英語として自然な表現を採る。ただし上流が確定させた**意味**は変えない。
+- canonical集合は`common`、`category`、`persistenceError`、`nav`、`shell`、`candidate`、`build`、`compatibility`、`capture`、`backup`、`settings`の11名前空間である。
+- キー、値、localeファイル、名前空間集約、ja/en parityは`ui-message-catalog`が所有する。本specはそれらを追加・改称・削除しない。
+- `MessageKey`、`MessageResolver`、`MessageProvider`、`useMessages`等の公開型付き契約だけを利用し、`src/ui-messages/catalog/**`を直接importしない。
+- 単複表現、複数件数を含む文、共有語彙、外部由来文字列は公開resolverの結果として受け入れ、consumer側で文片を再構成しない。
 
 **Dependencies**
 
-- Outbound: CatalogParityTypes（P0）、MessageContracts（P0）
-- Inbound: LanguageRegistry
+- Outbound: `src/ui-messages/public.ts`（P0）
+- Inbound: LanguageRegistry, LanguageReactBinding
 
-**Contracts**: State [x]
+**Contracts**: Service [x]
 
-##### State Management
+##### Service Interface
 
 ```typescript
-// src/ui-messages/catalog/en/index.ts
-export const EN_MESSAGES = {
-  common: { /* ... */ },
-  category: { /* ... */ },
-  // ja と同一の10名前空間
-} as const satisfies LocalizedCatalogInput;
+type CatalogResolverFor = (language: SupportedLanguage) => MessageResolver;
 ```
 
-- Preconditions: `as const satisfies` により、リテラル型を保ったままキーの欠落と余剰が検出される。
-- Postconditions: 平坦化した結果が `LocalizedCatalog`（`Record<MessageKey, MessageDefinition>`）を満たす。
-- Invariants: モジュール定数であり実行時に変更されない。
+- Preconditions: 上流の型検査とparity gateが11名前空間のja/en一致を保証している。
+- Postconditions: consumerは選択言語に対応する`MessageResolver`だけを受け取り、カタログ実体を露出しない。
+- Invariants: catalog内部へのdeep importは行わない。
 
 **Implementation Notes**
 
-- Integration: 名前空間ごとに独立して投入できるため、機能単位の並行作業が可能である。集約点（`catalog/en/index.ts`）だけは先に確定させる。
-- Validation: 単複が必要なキーの一覧を単体テストで固定し、`count` の 0 / 1 / 2 に対する英語の出力を検証する。言語間の整合検証はキーと全フォームのプレースホルダに加え、複数数量フォームでは selector 名・順序も比較する。
-- Risks: 直訳による不自然な英語。レビューでは「日本語との1対1対応」ではなく「英語として読めるか」を判断基準にする。
+- Integration: `LanguageProvider`は選択言語の公開resolverを`MessageProvider`へ渡すだけとする。
+- Validation: 公開consumer型検査で11名前空間のja/en resolverを利用できることを確認し、`settings.title`等のsettings keyが選択言語で解決されることを契約テストで固定する。
+- Risks: 上流の名前空間追加をconsumerが固定列挙で隠すこと。旧固定数の記述とcatalog deep importを完全検証gateで拒否する。
 
-#### CatalogParityTypes
+#### LanguageCatalogConsumer
 
 | Field | Detail |
 |---|---|
-| Intent | 言語間のキー集合の一致をコンパイル時に保証する。プレースホルダ名の一致は単体テストの責務とし、この型には含めない。 |
+| Intent | 上流のparity済み公開契約からresolverを選択し、言語stateに応じてProviderへ供給する |
 | Requirements | 4.1, 9.2 |
 
 **Responsibilities & Constraints**
 
-- **キー集合の一致は双方向に塞ぐ**。欠落はマップ型 `Record<MessageKey, ...>` の網羅性で、余剰は `satisfies` の余剰プロパティ検査で検出する。
-- **プレースホルダ名と複数数量 selector の一致は型で扱わない。** union の双方向条件型（`[A] extends [B] ? [B] extends [A] : ...`)は、不一致時の型エラーメッセージが実用に耐えず、`pnpm typecheck` の所要時間も悪化させる。パラメータ名と個数、全フォームのプレースホルダ集合、`MultiPluralDefinition.selectors` の名称と順序の言語間一致（要件4.2）は `catalog-parity.test.ts`（単体テスト）が唯一の検証手段とする。
-- キー集合の不一致は「どのキーが不一致か」を型として表出させ、コンパイルエラーのメッセージから対象キーを特定できるようにする。
+- キー集合・placeholder・数量定義のparityを再実装しない。上流の公開型が不成立ならconsumer型検査を失敗させる。
+- `settings`を含む11名前空間を公開resolverから透過的に解決し、名前空間ごとのswitchやaliasを持たない。
+- `MessageProvider`へresolverを渡し、カタログ定数・localeファイル・parity型を公開または保持しない。
 
 **Dependencies**
 
-- Outbound: MessageContracts（P0、`MessageKeyOf` / `DefinitionAt`）
-- Inbound: EnglishCatalog, LanguageRegistry
+- Outbound: UiMessagesPublicContract（P0）
+- Inbound: LanguageRegistry, LanguageReactBinding
 
-**Contracts**: State [x]
+**Contracts**: Service [x]
 
-##### State Management
+##### Service Interface
 
 ```typescript
-/** 平坦化した言語別カタログ。キーの欠落は型エラーになる。 */
-export type LocalizedCatalog = {
-  readonly [K in MessageKey]: MessageDefinition;
-};
-
-/** 名前空間の入れ子のまま受ける入力形。平坦化前の宣言に使う。 */
-export type LocalizedCatalogInput = MessageNamespace;
-
-/** 不一致のキーだけを union として残す。全て一致していれば never。 */
-export type CatalogParityViolations<TTarget extends LocalizedCatalog> = {
-  [K in MessageKey]: TTarget[K] extends DefinitionAt<SourceCatalog, K> ? never : K;
-}[MessageKey];
-
-/** 各言語カタログの宣言直後に置くコンパイル時表明。 */
-export type AssertCatalogParity<TTarget extends LocalizedCatalog> =
-  [CatalogParityViolations<TTarget>] extends [never] ? true : CatalogParityViolations<TTarget>;
+export const resolverFor: (language: SupportedLanguage) => MessageResolver;
 ```
 
-- Preconditions: 両言語のカタログが `as const` でリテラル型を保持していること。
-- Postconditions: キー集合に不一致がある限り表明の型が `true` に解決されず、コンパイルが失敗する。プレースホルダ名の不一致はこの表明では検出されない。
-- Invariants: 型は値を持たない。実行時コストはゼロである。
+- Preconditions: `language`は`SupportedLanguage`であり、上流公開契約が型検査を通過している。
+- Postconditions: ja/enのどちらでも11名前空間を解決できるresolverを返す。
+- Invariants: resolver以外のcatalog実体をconsumerへ漏らさない。
 
 **Implementation Notes**
 
-- Integration: 表明は言語カタログの集約点に置く。言語が増えるたびに同じ表明を1行追加する。
-- Validation: 意図的にキーを1件落とし、型検査が失敗することを最小例で確認する。プレースホルダ名の不一致は `catalog-parity.test.ts` で検証する（要件4.2、全フォーム間の一致を含む）。複数数量フォームは selector 名・順序の不一致も同テストで検出する。
-- Risks: プレースホルダ名の不一致は型検査ではなく単体テストの実行時にしか検出されない。CI がテストを必ず実行することが前提になる。
+- Integration: `LanguageReactBinding`が現在言語に対応するresolverを取得し、各rootの`MessageProvider`へ供給する。
+- Validation: `public-consumer.test.ts`でja/en双方の`settings.title`を含む代表keyを解決し、公開consumer型検査と境界検査を通す。
+- Risks: catalog内部型をconsumer側に複製すると所有権が分裂するため、公開型以外のimportを違反とする。
 
 ### ui-language
 
@@ -747,7 +704,7 @@ export const resetUiLanguageForTest: () => void;
 **Dependencies**
 
 - Outbound: LanguageStore（P0）、MessageReactContext（P0、上流）、LanguageRegistry（P0）
-- Inbound: FeatureRootLanguageBinding, ShellLanguageSurface, LanguageSelectControl
+- Inbound: FeatureRootLanguageBinding, SettingsLanguageIntegration, application-shell ReactShellRoot, LanguageSelectControl
 
 **Contracts**: Service [x]
 
@@ -792,6 +749,7 @@ export const useLanguage: () => LanguageSelection;
 - コントロール自身のアクセシブル名は**カタログ由来**とする（`common` 名前空間の既存キーを使い、無ければ上流のキー体系に沿った1キーを追加する）。原語表記だけが翻訳対象外である。
 - 要素の識別は上流が確立した `data-region` / `data-action` の規約に従い、文言に依存しない属性で行う。`styles.css` と E2E ヘルパはこの属性を使う。
 - 状態を自前で持たない。`useLanguage().setLanguage` を呼ぶだけの薄い表示 adapter とする。
+- `src/ui-language/public.ts` から公開し、`settings-screen` の `SettingsView` が唯一のproduction配置consumerとなる。settings側へpropsで言語codeや保存portを渡さない。
 
 #### DocumentLanguageSync
 
@@ -823,19 +781,21 @@ export const syncDocumentLanguage: (
 
 ### application-shell / runtime
 
-#### ShellLanguageSurface
+#### SettingsLanguageIntegration
 
 | Field | Detail |
 |---|---|
-| Intent | 言語コントロールの配置点をシェルへ1つ追加する |
-| Requirements | 1.1, 1.5 |
+| Intent | ui-languageの公開能力をsettings表示言語区画へだけ配置し、shellとsettingsのlifecycleを変更せず言語追随させる |
+| Requirements | 1.1, 1.3, 1.5, 1.6, 1.7, 1.8 |
 
 **Implementation Notes**
 
-- `shell-view.tsx` にシェル共通のヘッダ領域を追加し、**全ての状態**（`loading` / `ready` / `error` / `maintenance`）で描画する。現行のナビゲーションは `loading` 時に非表示になるため、ヘッダ領域はナビゲーションと別の領域として設ける（1.5）。
-- シェルは `LanguageSelect` を**配置するだけ**であり、言語の意味・保存・解決を知らない。`ShellViewState` と `ShellNavigationItem` の形を変更しない。
-- `react-shell-root.tsx` の Provider を `LanguageProvider` へ置き換える。シェルのエラー境界と feature mount コンテナの構造は変更しない。
-- スタイルは `shell-view.css` に閉じ、`data-region` セレクタのみを使う。文言に依存するセレクタを作らない。
+- `settings-screen` の `SettingsView` が `src/ui-language/public.js` の `LanguageSelectControl` を `data-region="language"` 区画へ一度だけ配置する。settings側へ言語code、store、保存結果を複製しない。
+- `SettingsReactRoot` は `LanguageProvider` 配下でviewを描画し、切り替え時にsettings root、表示中の区画、backup section hostを再mount・置換しない。言語controlの状態はcanonical `LanguageStore` だけから得る。
+- `application-shell` の `ReactShellRoot` は `LanguageProvider` を維持し、navigationと状態文言を同じresolverへ追随させる。Provider更新でmount中のsettings feature rootを再mountしない。
+- shell headerから `LanguageSelectControl` を撤去する。ready／maintenance／feature-local failureではpersistent settings navigationを維持し、loading／global startup errorでは操作不能なselectを描画せず、catalog解決済みの「設定 / Settings」案内と既存回復操作を同じstatusへ表示する。
+- settings-screenは配置とlifecycle合成、application-shellはnavigationとProvider設置、本specは言語state・保存・公開controlをそれぞれ単独で所有する。相互の内部moduleをimportしない。
+- DOM／E2E locatorはsettings root配下の `data-region="language-select"` を用い、自然言語やheader構造に依存しない。
 
 #### LanguageRuntimeBootstrap
 
@@ -960,7 +920,7 @@ export const syncDocumentLanguage: (
 **Implementation Notes**
 
 - **BuildLocaleCopy**: `scripts/build.mjs` が `_locales/` を `dist/` へ再帰コピーする。`scripts/package.mjs` は `dist` 全体をステージングし、除外は basename が `.` で始まるものだけであるため、追加変更は不要である。この事実をタスクで実測して確認する（8.4）。
-- **UiTextGuardExclusions**: `scripts/validate-ui-text.mjs` の除外パスを更新する。除外へ加えるのは `src/ui-messages/catalog/`（ja / en 両方）、`src/ui-messages/languages.ts`（原語表記のため）、`src/features/product-capture/locale/`。除外から**外す**のは `src/features/product-capture/category-hint.ts`（辞書を移設したためロジックのみが残り、日本語リテラルがあってはならない）。除外の追加・削除の理由をスクリプト内のコメントへ残す（7.5）。
+- **UiTextGuardExclusions**: 本spec所有範囲では、`scripts/validate-ui-text.mjs`の除外へ原語表記を持つ`src/ui-language/contracts.ts`と`src/features/product-capture/locale/`だけを加える。`src/features/product-capture/category-hint.ts`は除外から外す。catalog除外は`ui-message-catalog`所有の既存規則として変更せず、追加・削除の理由をコメントへ残す（7.5）。
 - **StorageAccessGuard**: `chrome.storage` への到達を `src/persistence/chrome-storage-adapter.ts` と `src/ui-language/preference-store.ts` の2ファイルに限定する検査を、既存の `scripts/validate-boundaries.mjs` へ規則として追加する。生成物側にも同じ検査が効くことを確認する（3.2, 3.4）。
 - Validation: 3つとも「意図的に違反を1件作ると非ゼロ終了する」ことを確認する。
 - Risks: 除外リストが緩むと 7.5 と 3.4 の保証が空洞化する。除外の追加には理由コメントを必須とする。
@@ -997,8 +957,8 @@ export const syncDocumentLanguage: (
 ### Integration Tests
 
 1. `LanguageProvider` の下で言語を切り替えると、`useMessages()` の解決結果が同一の React ツリー内で英語へ切り替わること（1.2）。
-2. 言語切り替えで React root が再マウントされず、入力途中のフォーム値と選択状態が保持されること（1.3）。
-3. シェルの `loading` / `error` / `maintenance` / `ready` の全状態で言語コントロールが描画され、操作できること（1.1, 1.5）。
+2. settings表示言語区画で切り替えても `SettingsReactRoot` とbackup section hostが再マウントされず、表示中の区画、入力途中の値、選択状態、スクロール位置が保持されること（1.3）。
+3. 言語コントロールがsettings表示言語区画だけに存在し、maintenance中も操作できること。shell header、loading、global errorにはcontrolがなく、後二者では「設定 / Settings」案内が表示されること（1.1, 1.5, 1.7, 1.8）。
 4. `syncDocumentLanguage` が初期設定と切り替え追随の双方で `documentElement.lang` を更新すること（5.1, 5.2）。
 5. 起動経路が言語の解決を待ってからシェルを起動し、解決に失敗しても起動が続行すること（2.1, 2.6）。
 6. `category-hint.ts` / `normalizer.ts` の移設前後で、既存テストを無改変のまま抽出結果が一致すること（7.3, 7.4）。
@@ -1007,8 +967,8 @@ export const syncDocumentLanguage: (
 
 ### E2E Tests
 
-1. 言語コントロールで英語へ切り替えると、ナビゲーションと表示中の機能画面が英語カタログの解決値と一致すること。**ブラウザ再起動・ロケール環境変数・起動オプションを一切用いない**（8.1, 8.2, 4.3）。
-2. 英語のまま5機能を順に表示し、各画面の主要文言が英語で表示されること（Provider 張り忘れの検出を兼ねる）（4.3）。
+1. persistent navigationからsettingsへ移動し、表示言語区画のコントロールで英語へ切り替えると、settings、ナビゲーション、状態文言が英語カタログの解決値と一致すること。**ブラウザ再起動・ロケール環境変数・起動オプションを一切用いない**（8.1, 8.2, 4.3）。
+2. 英語のまま全対象面を順に表示し、各画面の主要文言が英語で表示されること（Provider 張り忘れの検出を兼ねる）（4.3）。
 3. 英語へ切り替えた後にサイドパネルを開き直すと、英語のまま表示されること（3.1）。
 4. 英語表示のままバックアップから復元し、復元完了通知が英語の1文として表示され、復元の前後で表示言語が変わらないこと（3.3, 4.5）。
 5. 言語切り替え後も候補の作成・編集・削除が現行と同じ結果になること（1.4）。

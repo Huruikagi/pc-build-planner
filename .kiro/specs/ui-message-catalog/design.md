@@ -2,44 +2,52 @@
 
 ## Overview
 
-**Purpose**: 本 spec は、UI に表示される全ての文言を単一のカタログから解決する構造へ移行し、あわせて文言が担っていた「スタイルの識別子」「テストの識別子」という役割を剥がす。振る舞い不変のリファクタであり、利用者から見た表示・操作結果は一切変化しない。
+**Purpose**: 本 spec は、UI に表示される全ての文言を単一の型付きカタログから解決する構造を維持し、v0.3.0 の一過性表示面と設定画面が必要とする日本語・英語文言、および廃止キーの移行契約を確定する。
 
-**Users**: 直接の利用者は拡張の開発者である。エンドユーザーにとって本変更は不可視でなければならない。
+**Users**: 拡張の利用者は新しい回復案内と設定画面文言を表示言語で読み、開発者は同じ型付きキー契約を参照する。
 
-**Impact**: `src/ui-messages/` を新しい境界として追加し、5つの feature view・アプリケーションシェルの view とロジック層・5つの機能登録・2つのスタイルシート・4つの E2E 仕様・単体/統合テスト群が参照側として追随する。`ApplicationFeatureRegistration.navigation` と `ShellViewState` 系の型が契約変更を受ける。
+**Impact**: 既存 `src/ui-messages/` の10名前空間へ11番目の `settings` を追加し、`nav`、`shell`、`capture`を更新する。`nav.productCapture`と`nav.backupRestore`を削除し、`nav.settings`へ移行する。参照側は既存の`MessageKey`、`MessageDescriptor`、`useMessages()`を変更せず利用する。
 
 ### Goals
 
 - 表示文言の唯一の定義箇所を `src/ui-messages/` に確定する。
-- 参照方法（キー体系・パラメータ表現・解決経路）を、後続 `ui-internationalization` 導入後と同一の形にする。参照箇所を二度触らない。
+- 日本語・英語のキー集合とプレースホルダを同一に保つ。
+- 一過性起動失敗・失効、権限再付与、新世代起動、handoff再試行、settings区画、shell回復案内のcanonical keyを確定する。
+- 廃止された常設product-captureと独立backup-restore navigationのdead keyを残さない。
 - スタイル定義とテストから、表示文言を識別子として使う構造を除去する。
-- 上記を、表示文言・DOM 構造・操作結果を1文字も変えずに達成する。
+- 承認済みfeature変更以外の表示・操作結果を回帰させずに達成する。
 - 「文言が view に戻ってくる」ことを機械検査で恒久的に防ぐ。
 
 ### Non-Goals
 
-- 言語の追加、翻訳、言語切り替え、言語の永続化。カタログは完了時点で日本語1言語のみを持つ。
+- 言語state、言語切り替え、言語の永続化、初期値決定。
 - `_locales/`、`chrome.i18n`、拡張マニフェストの国際化。
 - ロケール別の日付・数値・通貨フォーマット。
 - 表示文言の文面改善（誤字修正・言い回し・表記ゆれの統一を含む）。
 - 商品カテゴリ推定のキーワード辞書、価格表記のパースロジック。ロケール別データ・ロジックであり文言ではない。
 - ドメイン層および互換性判定ルールへの変更。既に列挙コードで結果を返しており文言を持たない。
+- 一過性featureのactivation配送・寿命、product-captureの抽出・handoff、settings layout・mount、backup/restore処理。
 
 ## Boundary Commitments
 
 ### This Spec Owns
 
-- `src/ui-messages/` 境界の全て — メッセージ値の型、キー空間、日本語のメッセージ値、プレースホルダ展開、複数形選択、メッセージ記述子、React Context による供給。
+- `src/ui-messages/` 境界の全て — メッセージ値の型、キー空間、日本語・英語のメッセージ値、プレースホルダ整合、複数形選択、メッセージ記述子、React Context による供給。
+- 11番目の`settings`名前空間と、`nav`・`shell`・`capture`に追加・削除するv0.3.0 key集合。
+- `nav.productCapture`と`nav.backupRestore`の削除、`nav.settings`への置換、およびdead consumer検査。
+- `settings-screen`などproducerが定めた表示意味を受け取り、exact key、ja/en値、placeholder、parity、削除checkpointへ写像すること。producerは意味要件・consumer・layoutだけを所有し、catalog dataを共同所有しない。
 - 表示文言の参照側の書き換え — 5つの feature view、シェル view、シェルのロジック層、5つの機能登録。
 - 表示経路のメッセージ表現の契約 — `ShellViewState`、`ShellMaintenanceState`、`StartupError`、`SelectionError`、`CompositionError` が運ぶ値の形。
-- ナビゲーションラベルの契約 — `ApplicationFeatureRegistration.navigation` が文言ではなくキーを持つこと。
+- ナビゲーションラベルの契約 — canonical `ApplicationFeatureRegistration`判別共用体の常設branchだけが必須navigation metadataに文言ではなくキーを持ち、一過性branchはnavigation metadataを持たないこと。
 - 文言に依存しない要素識別の規約 — `data-region` / `data-action` の命名と付与範囲、それを用いる `styles.css` の書き換え。
 - E2E の要素特定ヘルパ `e2e/locators.ts`。
 - 文言リテラルの再混入を検出する機械検査 `scripts/validate-ui-text.mjs` と、その `validate:ci` への組み込み。
 
 ### Out of Boundary
 
-- 言語解決層、ロケール選択、言語切り替え UI、言語の永続化 — 全て `ui-internationalization` が所有する。本 spec はそれらを載せられる形を用意するだけで、実装しない。
+- ロケール選択、言語切り替え UI、言語の永続化 — `ui-internationalization` が所有する。本 spec はロケール値とparityだけを所有する。
+- transient lifecycle、capture state、settings view/layout、backup section mount、shell state遷移。各producer specが所有し、本specはmessage keyを供給するだけである。
+- `settings-screen`が定める区画名の意味、表示場所、見出し階層、回復状態の発火条件。`settings-screen`のcatalog作業記述は本specのkey/valueを消費・受け入れ検証する意味であり、catalog file/valueの実装ownershipを持たない。
 - 各 feature の機能要件・受け入れ条件・ドメインロジック・永続化契約。触るのは表示文言と要素識別属性のみ。
 - `FeatureMountContext` および mount/unmount ライフサイクルの責務。**カタログを `FeatureMountContext` 経由で供給しない**。
 - `Result<T, E>` の定義。エラーのメッセージ識別子化にあたって同等型を再定義しない。
@@ -63,7 +71,9 @@
 - キーの命名規約、名前空間の分割方針の変更。
 - プレースホルダ構文（`{name}`）または `MessageDefinition` の3形状（単純文字列・単一数量・複数数量）と selector 組み合わせ構文の変更。本設計で `MultiPluralDefinition` を追加したため、下流 `ui-internationalization` のカタログ整合検証を再確認する。
 - `MessageResolver` / `MessageDescriptor` / `MessageProvider` の公開シグネチャの変更。
-- `ApplicationFeatureRegistration.navigation` の形状変更。
+- `transient-feature-surface`のnotice分類、`product-page-capture`のfailure union、`settings-screen`の区画構成・回復状態の変更。
+- `nav.settings`、`settings.*`、または削除対象navigation keyのconsumer変更。
+- canonical `PersistentApplicationFeatureRegistration.navigation`、または常設／一過性branchの相関変更。
 - `data-region` / `data-action` の命名規約の変更（`styles.css` と E2E ヘルパの双方へ波及する）。
 
 ## Architecture
@@ -142,7 +152,7 @@ styles.css / tests / e2e （識別属性とカタログを参照する側）
 | Frontend | React 19（`createContext` / `useContext`） | カタログの供給と表示直前解決 | 新規依存なし。既存の React をそのまま利用 |
 | Frontend | TypeScript 7（`strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`） | キーとパラメータの型による保護 | 定数オブジェクトからのキー union 導出とテンプレートリテラル型を使用 |
 | Infrastructure / Runtime | esbuild による静的バンドル | カタログを配布物へ同梱 | MV3/CSP により動的読み込みは不可。全て静的 import |
-| Tooling | Node 標準テストランナー、testing-library、Playwright | 振る舞い不変性の検証 | 既存構成のまま。新しいテストツールを追加しない |
+| Tooling | Node 標準テストランナー、testing-library、Playwright | 既存非回帰と承認済み新導線の検証 | 既存構成のまま。新しいテストツールを追加しない |
 | Tooling | `scripts/validate-ui-text.mjs`（TypeScript `createScanner`） | 文言リテラル再混入の機械検査 | 既存の `validate-*.mjs` と同じトークン走査方式 |
 
 ## File Structure Plan
@@ -151,15 +161,17 @@ styles.css / tests / e2e （識別属性とカタログを参照する側）
 
 ```
 src/
-├── ui-messages/                 # 新規境界。表示文言の canonical owner
+├── ui-messages/                 # 既存境界。表示文言の canonical ownerをv0.3へ拡張
 │   ├── contracts.ts             # メッセージ値・パラメータ・記述子の型、キー導出の型ユーティリティ
-│   ├── catalog/                 # 名前空間ごとに1ファイル。並行編集の衝突面を作らない
-│   │   ├── index.ts             # 10個の名前空間を束ねる唯一の集約点
+│   ├── catalog/                 # ja/enで同じ名前空間・キー集合を保持する
+│   │   ├── ja/index.ts          # 11個の名前空間を束ねるソース形状
+│   │   ├── en/index.ts          # jaと同じ11名前空間を束ねる
 │   │   ├── common.ts            # 機能横断の短語
 │   │   ├── category.ts          # パーツカテゴリ表示名（PartCategory を網羅）
 │   │   ├── persistence-error.ts # 永続化失敗の文言
 │   │   ├── nav.ts               # ナビゲーションラベル
 │   │   ├── shell.ts             # シェルの状態表示と起動・搭載失敗
+│   │   ├── settings.ts          # 設定画面、言語区画、backup区画の見出し・説明
 │   │   ├── candidate.ts         # 候補管理
 │   │   ├── build.ts             # 現在構成
 │   │   ├── compatibility.ts     # 互換性確認
@@ -170,24 +182,34 @@ src/
 │   ├── react.tsx                # MessageProvider と useMessages
 │   └── public.ts                # 唯一の公開入口
 scripts/
-└── validate-ui-text.mjs         # 新規。文言リテラルの再混入と文言依存セレクタを検出
+└── validate-ui-text.mjs         # 既存。dead keyと追加consumer検査へ追随
 e2e/
-└── locators.ts                  # 新規。data-* に基づく要素特定ヘルパを集約
+└── locators.ts                  # 既存。settings/transientの識別子をconsumer specで追加
 ```
 
-### Modified Files
+### New Files
+
+- `src/ui-messages/catalog/ja/settings.ts` — 日本語のsettings画面・表示言語区画・backup区画のcanonical値。
+- `src/ui-messages/catalog/en/settings.ts` — 日本語側と同じキー・placeholderを持つ英語値。
+
+### Modified Files (Existing)
 
 | ファイル | 変更内容 |
 |---|---|
 | `src/features/candidate-management/view.tsx` | 文言リテラル（約60件）と `categoryLabels` / `errorMessages` / `fieldErrorMessages` の表をカタログ参照へ。`data-region` の付与。テンプレート合成の文単位メッセージ化 |
 | `src/features/current-build/view.tsx` | 同上（`categoryLabels` / `errorMessages` を含む）。`data-region` の付与 |
 | `src/features/product-capture/view.tsx` | 同上（`FIELD_LABELS` / `CATEGORY_HINT_LABELS` / `SOURCE_LABELS` / 失敗文言表を含む） |
+| `src/ui-messages/catalog/{ja,en}/nav.ts` | `nav.settings`を追加し、`nav.productCapture`と`nav.backupRestore`を削除 |
+| `src/ui-messages/catalog/{ja,en}/shell.ts` | 一過性起動失敗・失効noticeとloading/startup failure時の二言語settings回復案内を追加 |
+| `src/ui-messages/catalog/{ja,en}/capture.ts` | 権限再付与、新世代起動、handoff結果保持・再試行の案内を追加または既存失敗文言から改訂 |
+| `src/ui-messages/catalog/{ja,en}/index.ts` | `settings`を11番目の名前空間として集約し、ja/en parityを維持 |
+| `src/ui-messages/catalog-parity.ts` / `tests/ui-messages/catalog-parity.test.ts` | 追加キーの双方向網羅、プレースホルダ一致、廃止キー不在を検証 |
 | `src/features/compatibility/view.tsx` | 同上（`RULE_LABELS` / `REASON_LABELS` / `AGGREGATE_LABELS` / `EMPTY_MESSAGES` / `FAILURE_MESSAGES`、および助詞連結2箇所） |
 | `src/features/backup-restore/view.tsx` | 同上（診断メッセージ表、件数を含む完了メッセージ） |
 | `src/features/{candidate-management,product-capture,compatibility,backup-restore}/react-root.tsx` | `MessageProvider` で view を包む |
 | `src/features/current-build/registration.ts` | `mountBuildView` で `MessageProvider` を張る。`navigation` をキー申告へ |
 | `src/features/{candidate-management,product-capture,compatibility,backup-restore}/registration.ts` | `navigation` をキー申告へ |
-| `src/application-shell/contracts.ts` | `ShellViewState` / `ShellMaintenanceState` / `StartupError` / `SelectionError` / `CompositionError` の `message` を `MessageDescriptor` へ。`ApplicationFeatureRegistration.navigation.label` を `labelKey` へ |
+| `src/application-shell/contracts.ts` | `ShellViewState` / `ShellMaintenanceState` / `StartupError` / `SelectionError` / `CompositionError` の `message` を `MessageDescriptor` へ。canonical unionの常設branchにある `navigation.label` を `labelKey` へ |
 | `src/application-shell/shell-view.tsx` | 状態表示・再試行ラベルをカタログ参照へ。記述子とナビゲーションキーを解決 |
 | `src/application-shell/react-shell-root.tsx` | シェルの React root に `MessageProvider` を張る |
 | `src/application-shell/side-panel-host.ts` | 表示経路を記述子化。診断経路を安定コードへ |
@@ -199,6 +221,38 @@ e2e/
 | `e2e/{backup-restore,candidate-management,current-build,product-capture}.spec.ts` | 文言ロケータを `e2e/locators.ts` 経由の識別子ベースへ。文言の期待値はカタログ解決へ |
 | `tests/**` | ロケータと期待値の追随（`tests/application-shell/side-panel-host.test.ts` の診断文字列を含む） |
 | `package.json` | `validate:ci` に `validate:ui-text` を追加 |
+
+### v0.3.0 Canonical Message Key Contract
+
+catalog ownerとして、producerが要求する利用者向け状態を次のexact keyへ固定する。producerはこのキーを`MessageKey`または`MessageDescriptor`として参照し、同義aliasやfeature内メッセージ定数を作らない。
+
+| Key | jaの意味 | enの意味 | Producer / Consumer |
+|---|---|---|---|
+| `nav.settings` | 設定 | Settings | settings registration / shell navigation |
+| `settings.title` | 設定画面見出し | Settings page heading | settings view |
+| `settings.language.title` | 表示言語区画 | Display language section | settings view |
+| `settings.language.description` | 表示言語変更の説明 | Display language guidance | settings view |
+| `settings.backupRestore.title` | バックアップ・復元区画 | Backup and restore section | settings view |
+| `settings.backupRestore.description` | ローカルデータ退避・復旧の説明 | Local data backup and recovery guidance | settings view |
+| `shell.transientActivationFailed` | 新しい付与ジェスチャーで再起動する案内 | Retry with a new granting gesture | transient notice |
+| `shell.transientActivationExpired` | 旧面を再実行せず新世代を起動する案内 | Start a new generation instead of retrying stale UI | transient notice |
+| `shell.settingsRecoveryLoading` | loading中の固定二言語「設定 / Settings」案内 | Same bilingual loading hint | shell status |
+| `shell.settingsRecoveryStartupFailed` | startup failure時の固定二言語案内とretry誘導 | Same bilingual startup recovery hint | shell status |
+| `capture.errors.permission-lost` | ページ再表示後に拡張アイコンを再操作して権限再付与 | Reload page and click extension icon again | capture failure mapping |
+| `capture.newGenerationHint` | 新しいアイコン操作は旧失敗・保持結果を置換する | A new icon gesture replaces stale failure or retained result | capture failure view |
+| `capture.handoffRetainedNotice` | 現行世代に結果を保持している案内 | Result retained for current generation | capture handoff failure view |
+| `capture.retryHandoffAction` | 同世代でhandoffだけを再試行 | Retry handoff in current generation | capture action |
+
+次のキーは原子的に削除する。
+
+- `nav.productCapture`: product-captureはtransient registrationとなり、常設navigation labelを申告しない。
+- `nav.backupRestore`: backup-restoreはsettings内sectionとなり、独立registrationを持たない。
+
+`shell.settingsRecoveryLoading`と`shell.settingsRecoveryStartupFailed`は、現在のresolverがja/enのどちらでも「設定 / Settings」の両方を含む固定二言語値とする。言語stateやretry callbackは含めない。`settings.*`は表示内容だけを所有し、section layout、heading level、mount lifecycleはsettings-screenが所有する。
+
+#### Cross-Spec Revalidation Result
+
+横断レビューで検出した旧「10名前空間」前提は、`ui-internationalization`を11名前空間の公開consumer契約へ改訂して解消した。`settings-screen`も意味要件・consumer・layoutだけを所有し、catalog data・parity・dead key削除は本specへ委譲する境界へ改訂済みである。今後も`settings`キーを`common`や`shell`へaliasせず、この所有権と11名前空間を再検証する。
 
 ## System Flows
 
@@ -221,7 +275,7 @@ sequenceDiagram
     Resolver-->>View: display string
 ```
 
-ロジック層は文言を組み立てない。解決は表示の直前に一度だけ行われるため、後続 spec が Provider の値を差し替えるだけで表示言語が切り替わる。
+ロジック層は文言を組み立てない。解決は表示の直前に一度だけ行われ、現在の言語resolverの差し替えで表示言語が切り替わる。
 
 ### 移行順序と検証の関係
 
@@ -239,7 +293,7 @@ graph LR
     P4 --> P5
 ```
 
-P1 を先に済ませることで、テストの修正が「ロケータ」と「期待値」で二度重ならない。P3 の時点でテストの**文言リテラルは無改変のまま残す**。これが緑であることが「表示文言が1文字も変わっていない」ことの証拠になる（下記「転記の検証装置」）。証拠を得たあとで P4 が期待値をカタログ解決へ置き換える。
+初回カタログ移行ではP1からP5の順序で文言非依存化を完了している。本更新はその基盤上で、ja/enへの加算、consumer切替、dead key削除、parity検証を一つのmigration checkpointとして実行する。承認済みfeature変更以外の既存期待値を維持することで非回帰を確認する。
 
 ## Requirements Traceability
 
@@ -251,32 +305,36 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 | 2.1, 2.2, 2.3 | 表示・DOM・操作結果の同一性 | 全参照側コンポーネント | — | 移行順序と検証の関係 |
 | 2.4 | 検証フローの成功 | UiTextGuard, 既存 validate フロー | `pnpm validate` | — |
 | 2.5 | 文面改善を行わない | MessageCatalog | — | — |
-| 3.1, 3.2, 3.5 | view のテキストと属性値のカタログ化 | FeatureViewAdapters, MessageReactContext | `useMessages()` | 表示文言の解決経路 |
+| 3.1, 3.2, 3.5, 3.6, 3.7 | feature、settings、一過性viewのテキストと属性値のカタログ化 | FeatureViewAdapters, MessageReactContext, V03CatalogMigration | `useMessages()` | 表示文言の解決経路 |
 | 3.3 | シェル状態表示のカタログ化 | ShellViewAdapter | `useMessages()` | 表示文言の解決経路 |
 | 3.4 | view に文言が残っていないことの検出 | UiTextGuard | `validate:ui-text` | — |
 | 4.1, 4.2, 4.3, 4.4 | 文単位メッセージへの再設計 | MessageCatalog, FeatureViewAdapters | `ParamsFor` | — |
 | 4.5 | 単一または複数の件数を含む文 | MessageContracts, MessageFormatter | `PluralDefinition`, `MultiPluralDefinition` | — |
-| 5.1, 5.2, 5.3, 5.4, 5.5 | 重複定義の単一化 | MessageCatalog | `CategoryLabelMap` の網羅型 | — |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | 意味・文面・回復操作に基づく重複定義の単一化 | MessageCatalog | `CategoryLabelMap` の網羅型 | — |
 | 6.1, 6.2, 6.3, 6.5 | ロジック層のメッセージ識別子化 | ShellMessageContracts, ShellMessageEmitters, ShellViewAdapter | `MessageDescriptor` | 表示文言の解決経路 |
 | 6.4 | 診断への機微値の非混入 | ShellMessageEmitters | 安定コードのみ | — |
-| 7.1, 7.2, 7.3, 7.4 | ナビゲーションラベルのカタログ化 | FeatureNavigationRegistrations, ShellMessageContracts, ShellViewAdapter | `navigation.labelKey` | — |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6 | `nav.settings`へのnavigation移行とdead key削除 | FeatureNavigationRegistrations, ShellMessageContracts, ShellViewAdapter, V03CatalogMigration | `navigation.labelKey` | — |
 | 8.1, 8.2, 8.3, 8.4 | スタイルの文言非依存化 | ElementIdentityConvention | `data-region` | — |
 | 8.5 | 文言依存セレクタの検出 | UiTextGuard | `validate:ui-text` | — |
 | 9.1, 9.5 | E2E の識別子化 | E2ELocatorHelpers | `e2e/locators.ts` | 移行順序と検証の関係 |
 | 9.2, 9.3, 9.4 | 単体・統合テストの追随 | E2ELocatorHelpers, MessageResolver | `createMessageResolver` | 移行順序と検証の関係 |
-| 10.1, 10.2, 10.3, 10.4 | 国際化への前方互換性 | MessageContracts, MessageCatalog, MessageReactContext | `MessageCatalog` 型, `MessageProvider` | 表示文言の解決経路 |
-| 10.5 | 単一言語に留める | MessageCatalog | — | — |
+| 10.1, 10.2, 10.3, 10.4, 10.6 | ja/enのキー・プレースホルダ・数量定義のparity | MessageContracts, MessageCatalog, MessageReactContext, CatalogParityGate | `LocalizedCatalog`, `MessageProvider` | 表示文言の解決経路 |
+| 10.5 | 言語stateを所有しない | MessageCatalog | — | — |
+| 11.1, 11.2, 11.3, 11.4 | 一過性起動・失効、権限再付与、handoff回復案内 | V03CatalogMigration | canonical exact keys | — |
+| 11.5, 11.6, 11.7, 11.8 | settings文言、二言語shell回復、legacy key撤去、parity | V03CatalogMigration, CatalogParityGate | canonical exact keys | — |
 
 ## Components and Interfaces
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |---|---|---|---|---|---|
 | MessageContracts | ui-messages | メッセージ値・パラメータ・記述子の型とキー導出 | 1.1, 1.2, 1.3, 4.5, 10.1, 10.2, 10.4 | domain public types (P1) | State |
-| MessageCatalog | ui-messages | 全キーと日本語の値を単一定義として保持 | 1.1, 1.5, 2.5, 4.1, 4.4, 5.1〜5.5, 10.5 | MessageContracts (P0) | State |
+| MessageCatalog | ui-messages | 全キーとja/enの値を同じ形で保持 | 1.1, 1.5, 2.5, 4.1, 4.4, 5.1〜5.6, 10.1, 10.2, 10.6 | MessageContracts (P0) | State |
 | MessageFormatter | ui-messages | プレースホルダ展開と複数形選択 | 1.4, 1.6, 4.5 | MessageContracts (P0) | Service |
 | MessageResolver | ui-messages | カタログと記述子から表示文字列を得る | 1.2, 1.3, 9.3, 10.3 | MessageCatalog (P0), MessageFormatter (P0) | Service |
 | MessageReactContext | ui-messages | 表示直前解決のための供給経路 | 3.1, 3.5, 10.3 | MessageResolver (P0), React (P0) | Service |
 | UiMessagesPublicEntry | ui-messages | 唯一の公開入口 | 1.1, 3.5 | 上記全て (P0) | Service |
+| V03CatalogMigration | ui-messages catalog | settings、一過性、capture回復キーの追加とlegacy navigation key削除 | 2.1〜2.5, 3.6, 3.7, 5.6, 7.5, 7.6, 11.1〜11.8 | MessageCatalog (P0), producer specs (P0) | State |
+| CatalogParityGate | ui-messages tooling | ja/enの双方向キー・placeholder parityとdead key不在を検証 | 10.1, 10.2, 10.6, 11.8 | MessageContracts (P0), V03CatalogMigration (P0) | Batch |
 | ShellMessageContracts | application-shell | 表示経路が運ぶ値とナビゲーション申告の形 | 6.1, 7.1, 7.4 | MessageContracts (P0) | State |
 | ShellMessageEmitters | application-shell | ロジック層が記述子と安定コードを出す | 6.1, 6.3, 6.4, 6.5, 5.3 | ShellMessageContracts (P0) | Service |
 | ShellViewAdapter | application-shell | シェルの表示文言解決とナビゲーション描画 | 3.3, 6.2, 7.2, 7.3 | MessageReactContext (P0), ShellMessageContracts (P0) | — |
@@ -287,6 +345,14 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 | UiTextGuard | scripts | 文言リテラルと文言依存セレクタの機械検査 | 2.4, 3.4, 8.5 | — | Batch |
 
 ### ui-messages
+
+#### V03CatalogMigration
+
+`catalog/{ja,en}/settings.ts`を同時追加し、`nav.ts`、`shell.ts`、`capture.ts`を上記canonical tableどおりに更新する。既存resolverと公開型は変更しない。navigation migrationは、先に`nav.settings`を加算してconsumer移行を可能にし、producer consumer切替後のcheckpointで2 dead keyをja/enからaliasなしで同時削除する。producerのfeature stateやlayoutをimportせず、各consumerは`ui-messages/public.ts`の`MessageKey`だけで参照する。
+
+#### CatalogParityGate
+
+型検査は11名前空間のja/en双方向網羅を、unit testは全formのplaceholder集合を検証する。gateは二段階とし、移行前checkpointでは追加キーとplaceholder parityだけを検証して旧navigation keyを許容する。consumer切替後checkpointでcatalogと`src/`のconsumerを検索し、`nav.productCapture`と`nav.backupRestore`が残る場合に失敗する。削除済みキーを互換aliasとして保持しない。
 
 #### MessageContracts
 
@@ -300,7 +366,7 @@ P1 を先に済ませることで、テストの修正が「ロケータ」と�
 - 値の表現を「単純文字列」「単一数量フォーム」「複数数量フォーム」の判別可能な3形とする。構造化フォームは `forms` の有無で単純文字列と区別し、複数数量フォームは `selectors` の有無で単一数量フォームと区別する。
 - プレースホルダ構文を `{name}` に固定する。`name` は英字始まりの英数字とする。
 - カタログ定数から、ドット区切りのキー union と、キーごとの必須パラメータ型を導出する。
-- **言語を型に持ち込まない。** カタログの「形」（キー集合とパラメータ）は言語から独立した型として定義し、言語ごとの値集合はその型を満たす実体として与える。後続 spec は同じ型を満たす `en` の実体を追加するだけでよく、キーの不足は型検査で失敗する。
+- **言語をキー型に持ち込まない。** カタログの「形」（キー集合とパラメータ）は言語から独立した型として定義し、ja/enの値集合は同じ型を満たす実体として与える。キーの不足・余剰はparity gateで失敗する。
 
 **Dependencies**
 
@@ -455,7 +521,7 @@ export const MESSAGES = {
 
 export type MessageKey = MessageKeyOf<typeof MESSAGES>;
 
-/** 言語から独立した「カタログの形」。後続 spec の en はこの型を満たす。 */
+/** 言語から独立したカタログの形。ja/enの双方がこの型を満たす。 */
 export type MessageCatalogShape = {
   readonly [K in MessageKey]: MessageDefinition;
 };
@@ -466,7 +532,7 @@ export type MessageCatalogShape = {
 **Implementation Notes**
 
 - Integration: 値の転記は feature 単位で行い、その feature の既存テスト（文言リテラルを含むもの）を無改変で通すことを完了条件にする。
-- Validation: `MessageCatalogShape` は「キー集合を平坦化した Record」であり、後続 spec が `en` を追加する際にキー不足を型検査で検出させるための接合面である。
+- Validation: `MessageCatalogShape` はキー集合を平坦化したRecordであり、ja/enどちらかのキー不足・余剰を型検査で検出させる接合面である。
 - Risks: 統合の誤り（文面が異なるものを統合する）は表示の変更を招く。統合対象は上表に限定し、それ以外は個別キーとする。
 
 #### MessageFormatter
@@ -501,7 +567,7 @@ export const formatMessage = (
 
 **Implementation Notes**
 
-- Integration: 数量フォームの分岐は日本語カタログでは一度も通らない。単体テストで単一・複数 selector の動作を固定し、後続 spec が英語値を入れた時点で caller を変更せず機能することを保証する。復元完了の caller は既に `projectCount` / `partCount` / `currentBuildCount` を渡している。
+- Integration: 数量フォームは英語カタログで利用される。単体テストで単一・複数selectorとja/enのplaceholder parityを固定する。復元完了のcallerは`projectCount` / `partCount` / `currentBuildCount`を渡す。
 - Validation: プレースホルダ未解決時の挙動（そのまま残す）を単体テストで固定する。
 - Risks: 値に `{` が文字として含まれる場合の誤置換。現行の文言に `{` は存在しないことを移行時に確認する。
 
@@ -549,12 +615,12 @@ export const message = <K extends MessageKey>(
 
 | Field | Detail |
 |---|---|
-| Intent | 表示直前解決のための供給経路。後続 spec の言語切り替えの唯一の差し替え点 |
+| Intent | 表示直前解決のための供給経路。言語切り替えの唯一のresolver差し替え点 |
 | Requirements | 3.1, 3.5, 10.3 |
 
 **Responsibilities & Constraints**
 
-- 既定値は同梱カタログに対する resolver とする。Provider を張り忘れても現行と同じ表示になるが、**Provider を張ることを規約とする**（後続 spec の差し替え点を確保するため）。
+- 既定値はソース言語カタログに対するresolverとする。全React rootで`LanguageProvider`経由のresolver供給を維持する。
 - Provider は各 React root の生成箇所で張る。シェル1箇所、feature 5箇所。**`FeatureMountContext` を経由して供給しない。**
 
 **Contracts**: Service [x]
@@ -578,7 +644,7 @@ export const useMessages: () => MessageResolver;
 
 - Integration: 各 feature の root 生成箇所（`react-root.tsx` 4件と `current-build/registration.ts` の `mountBuildView`）で `MessageProvider` を張る。DOM テストの `render` も同様に包む必要があるため、`testing.md` の `renderView` ハーネスに Provider を組み込む。
 - Validation: Provider を張った状態と張らない状態で同一の表示になることを DOM テストで確認する。
-- Risks: 張り忘れが後続 spec で初めて顕在化する。機械検査で「React root 生成箇所に Provider があること」までは検査せず、移行タスクのチェック項目として扱う。
+- Risks: Provider脱落は一方の言語でだけ顕在化しうるため、ja/enのDOM testとE2Eで全rootを覆う。
 
 #### UiMessagesPublicEntry
 
@@ -604,7 +670,8 @@ export const useMessages: () => MessageResolver;
 **Responsibilities & Constraints**
 
 - 表示経路の `message: string` を `MessageDescriptor` へ置き換える。対象は `ShellViewState`（`error` / `maintenance`）、`ShellMaintenanceState`（`active`）、`StartupError`、`SelectionError`、`CompositionError`。
-- `ApplicationFeatureRegistration.navigation` の `label: string` を `labelKey: MessageKey` へ置き換える。`order` と `icon` は変更しない。
+- canonical `PersistentApplicationFeatureRegistration.navigation` の `label: string` を `labelKey: MessageKey` へ置き換える。`order` と `icon` は変更せず、常設branchではnavigationを必須のまま維持する。
+- `TransientApplicationFeatureRegistration`はcanonical unionをそのまま参照し、navigation propertyもnavigation keyも持たせない。product-captureなど一過性consumerへlabel keyを合成しない。
 - `ShellNavigationItem` も同様に `labelKey` を持つ。
 - **変更しないもの**: `FeatureActivationError.detail`、`FeatureMountContext.reportError`、`WorkerRegistrationContext.reportError`。いずれも描画経路を持たない診断であり、表示文言ではない。
 
@@ -650,24 +717,15 @@ export type CompositionError = {
   readonly message: MessageDescriptor;
 };
 
-export interface ApplicationFeatureRegistration<
-  TPublic extends object = object,
-  TActivation = never,
-> {
-  readonly id: FeatureId;
-  readonly navigation: {
-    readonly labelKey: MessageKey;
-    readonly order: number;
-    readonly icon?: string;
-  };
-  // 以下は現行のまま
-}
+// 登録型はapplication-shell/public.tsのcanonical判別共用体を参照する。
+// PersistentApplicationFeatureRegistration.navigation.labelKeyだけを
+// ui-message-catalogのMessageKeyへ移行し、union自体は本specで再定義しない。
 ```
 
 **Implementation Notes**
 
-- Integration: この契約変更は全 feature の `registration.ts` と `feature-registry.ts` の検証ロジックに同時に波及する。部分適用状態を作らず、単一の統合タスクとして適用する。
-- Validation: `feature-registry.ts` の `navigation` 検証は `labelKey` が空でない文字列であることの検査へ置き換える。
+- Integration: この契約変更は常設featureの `registration.ts` と `feature-registry.ts` の常設branch検証ロジックに同時に波及する。部分適用状態を作らず、単一の統合タスクとして適用する。一過性featureはnavigation consumerではない。
+- Validation: `feature-registry.ts` はcanonical discriminantで常設branchへ絞り込んだ後に、必須navigationの`labelKey`が空でない文字列であることを検査する。一過性branchではnavigation不在を検査する。
 - Risks: `tests/contracts/application-shell-contract-kit.test.ts` が契約形状を検証している。同時に更新する。
 
 #### ShellMessageEmitters
@@ -740,8 +798,8 @@ export interface ApplicationFeatureRegistration<
 
 **Implementation Notes**
 
-- `navigation: { label: "候補管理", ... }` を `navigation: { labelKey: "nav.candidateManagement", ... }` へ置き換える。`order` と `icon` は変更しない。
-- `ShellMessageContracts` の契約変更と同時に適用する。契約と全登録が同期する単一の統合タスクとする。
+- 常設branchの`navigation: { label: "候補管理", ... }`を`navigation: { labelKey: "nav.candidateManagement", ... }`へ置き換える。`order`と`icon`は変更しない。
+- `ShellMessageContracts` の契約変更と同時に適用する。契約と常設登録が同期する単一の統合タスクとし、一過性product-captureにはnavigation metadata/keyを追加しない。
 
 #### ElementIdentityConvention
 

@@ -52,19 +52,19 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 - [x] candidate-source-bookmarks -- `source-price-refresh` の実装前提として、candidate-management の `public.ts` が所有する読み取り専用 `CandidateSourceCatalogPort` を追加し、保存rootや編集draftを公開せず全source／候補限定の列挙とID指定の現行source再取得を提供する。利用者は `source-price-refresh`。Dependencies: source-price-refresh
 - [x] transient-feature-surface -- `source-price-refresh` の実装前提として、application shell の `public.ts` が所有する `TransientGestureRegistrationPort` を追加し、feature-owned gesture sourceを既存scheduler／store／side panel open経路へ同期登録できるようにする。利用者は `source-price-refresh`。Dependencies: source-price-refresh
 - [x] product-page-capture -- `source-price-refresh` の実装前提として、product-capture の `public.ts` が所有する読み取り専用 `PagePriceExtractionPort` を追加し、固定tabからpage-derived URL・取得時点・既存抽出規則によるprice provenanceだけを返す。利用者は `source-price-refresh`。Dependencies: source-price-refresh
-- [ ] product-page-capture -- #8: ドメイン→メーカー名マップを最下位優先度の collector（`ExtractionSource: "domain-map"`）として追加し、メーカー自社サイトでの `manufacturer` 欠損を補完する。マップは `manufacturer-domain-map.ts` に分離し eTLD+1 で照合。Dependencies: none
-- [ ] product-page-capture -- product-capture-transient-migration に合わせ、要件4（簡易確認・補正）と要件5（project選択・保存）を候補管理への即時引き渡しへ改訂し、要件1.4 / 6.1 / 6.4の権限失効・遷移・再実行を一過性面の寿命と新世代起動へ合わせる。Dependencies: product-capture-transient-migration
-- [ ] application-shell -- 要件1.1 / 1.5 / 2.1 / 4.3 / 4.4 / 要件7 の改訂（ナビ・初期選択・fallbackに載らない一過性feature種別、単一主表示領域、安全なテキストとして常設面と併存する`transientNotice`、既存typed activationの受け入れ）。Dependencies: transient-feature-surface
-- [ ] application-shell -- `settings-screen` に合わせ、shellヘッダの言語セレクタ配置責務を削除して設定画面へ移し、`settings` の常設navigation／表示面とloading・startup error時の二言語回復案内をshellの状態表示・compositionへ統合する。Dependencies: settings-screen
-- [ ] project-candidate-management -- project未解決・空名のpre-edit activationと、編集開始/保存時検証の分離を受け入れる。Dependencies: product-capture-transient-migration
-- [ ] ui-message-catalog -- 一過性起動失敗・失効案内と、product-captureのナビ除去・権限再付与案内を日本語/英語で反映する。Dependencies: transient-feature-surface, product-capture-transient-migration
-- [ ] ui-message-catalog -- `settings-screen` に合わせ、`nav.settings`、settingsの言語／backup区画、shell回復案内の日本語／英語messageを追加・更新し、`nav.backupRestore`の廃止とshellヘッダからの言語切替・独立backup navigationからの配置移動をcatalog契約へ反映する。Dependencies: settings-screen
-- [ ] backup-restore -- #19: 独立タブから設定画面内セクションへの再配置に伴う registration / navigation の改訂。Dependencies: settings-screen
-- [ ] ui-internationalization -- #19: 言語セレクタの設置面が shell ヘッダから設定画面へ移ることに伴う改訂。Dependencies: settings-screen
+- [x] product-page-capture -- #8: ドメイン→メーカー名マップを最下位優先度の collector（`ExtractionSource: "domain-map"`）として追加し、メーカー自社サイトでの `manufacturer` 欠損を補完する。マップは `manufacturer-domain-map.ts` に分離し eTLD+1 で照合。Dependencies: none
+- [x] product-page-capture -- product-capture-transient-migration に合わせ、要件4（簡易確認・補正）と要件5（project選択・保存）を候補管理への即時引き渡しへ改訂し、要件1.4 / 6.1 / 6.4の権限失効・遷移・再実行を一過性面の寿命と新世代起動へ合わせる。Dependencies: product-capture-transient-migration
+- [x] application-shell -- 要件1.1 / 1.5 / 2.1 / 4.3 / 4.4 / 要件7 の改訂（ナビ・初期選択・fallbackに載らない一過性feature種別、単一主表示領域、安全なテキストとして常設面と併存する`transientNotice`、既存typed activationの受け入れ）。Dependencies: transient-feature-surface
+- [x] application-shell -- `settings-screen` に合わせ、shellヘッダの言語セレクタ配置責務を削除して設定画面へ移し、`settings` の常設navigation／表示面とloading・startup error時の二言語回復案内をshellの状態表示・compositionへ統合する。Dependencies: settings-screen
+- [x] project-candidate-management -- project未解決・空名のpre-edit activationと、編集開始/保存時検証の分離を受け入れる。Dependencies: product-capture-transient-migration
+- [x] ui-message-catalog -- 一過性起動失敗・失効案内と、product-captureのナビ除去・権限再付与案内を日本語/英語で反映する。Dependencies: transient-feature-surface, product-capture-transient-migration
+- [x] ui-message-catalog -- `settings-screen` に合わせ、`nav.settings`、settingsの言語／backup区画、shell回復案内の日本語／英語messageを追加・更新し、`nav.backupRestore`の廃止とshellヘッダからの言語切替・独立backup navigationからの配置移動をcatalog契約へ反映する。Dependencies: settings-screen
+- [x] backup-restore -- #19: 独立タブから設定画面内セクションへの再配置に伴う registration / navigation の改訂。Dependencies: settings-screen
+- [x] ui-internationalization -- #19: 言語セレクタの設置面が shell ヘッダから設定画面へ移ることに伴う改訂。Dependencies: settings-screen
 
 ## Direct Implementation Candidates
 
-- [ ] #14 抽出の規約・法務ポリシーを steering に明記 -- `.kiro/steering/` への追記のみで実装を伴わない。ユーザー操作起点・閲覧中ページ限定、robots / 各サイト規約の尊重、汎用構造化データを基本としサイト固有 DOM 抽出は例外、サイト固有ロジックはサイト単位オプトインで規約確認を記録、定期巡回は行わない。#8 のマップ運用および将来のサイト固有ロジック追加の可否判断の前提になる
+- [x] #14 抽出の規約・法務ポリシーを steering に明記 -- `.kiro/steering/web-content-acquisition.md` に、ユーザー操作起点・閲覧中ページ限定、robots / 各サイト規約の尊重、汎用構造化データ優先、サイト固有 DOM 抽出のオプトイン審査、domain map の非権限性、再審査・撤去基準を明文化した。
 
 ## Specs (dependency order)
 

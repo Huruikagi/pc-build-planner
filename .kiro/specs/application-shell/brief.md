@@ -25,7 +25,7 @@ application shellだけが共有runtime入口、ナビゲーション、公開AP
 
 ## Boundary Candidates
 
-- `ApplicationFeatureRegistration`: feature id、navigation metadata、mount/unmount、利用可能状態を受け渡す安定port。
+- `ApplicationFeatureRegistration`: feature id、明示的な常設／一過性区分、常設だけに必須のnavigation metadata、mount/unmount、利用可能状態、typed activationを受け渡す判別共用体port。
 - `ApplicationCompositionRoot`: foundationとfeature公開契約を一度だけ組み立てるruntime入口。
 - `MaintenancePresentationPort`: foundationが所有するmaintenance stateをshell表示と操作可否へ写像するread-only port。
 - `PublicApiRegistry`: featureごとの `public.ts` をroot exportへ合成し、root barrelの所有を一元化する。

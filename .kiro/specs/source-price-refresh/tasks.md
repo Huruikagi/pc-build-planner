@@ -86,9 +86,9 @@
   - _Depends: 2.2, 3.1_
 
 - [ ] 3.3 一過性featureのUI contributionとReact lifecycleを構築する
-  - featureを `source-price-refresh` のtransient presentationとして登録し、activationIdとfixed tabIdを境界検証する。
+  - featureをcanonical `TransientApplicationFeatureRegistration`として登録し、`presentation: "transient"`を明示してnavigation propertyを持たせず、activationIdとfixed tabIdを境界検証する。
   - mount時にstateの自動workflowを開始し、unmountでReact root、subscription、後着callbackをcleanupする。
-  - UI contribution factoryをfeature-owned公開入口として用意し、side panel専用集約点からだけ取り込める契約にする。worker-safe catalog向けの入口からfeature UI、DOM、Reactへ到達するimport経路を作らない。
+  - navigationを持たないUI contribution factoryをfeature-owned公開入口として用意し、side panel専用集約点からだけ取り込める契約にする。worker-safe catalog向けの入口からfeature UI registration、DOM、Reactへ到達するimport経路を作らない。
   - 拡張アイコン通常起動や常設navigationから価格更新を選択できず、不正activationでは実行を開始しない。
   - side panel contract fixtureへ渡したregistrationが単一主表示領域で進行・結果viewを表示し、tab失効または常設選択で上流規則どおり終了することを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.5, 1.6, 5.5, 6.5, 6.6_
@@ -104,7 +104,7 @@
   - source-price-refreshがproduct-capture内部へdeep importせず、既存商品取り込みと同じ架空price fixtureで同じ結果を得ることを完了条件とする。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6, 6.4, 6.7_
   - _Boundary: PagePriceExtractionPortIntegration_
-  - _Depends: product-page-capture 8.2_
+  - _Depends: product-page-capture 6.3_
 
 - [ ] 4.2 candidate source catalogとmutationへ接続する
   - `candidate-source-bookmarks` で定義済みの `sources.catalog` から全sourceまたは候補内sourceの限定参照だけを取得し、同じsource facetの `sources.mutations` を更新に利用する。

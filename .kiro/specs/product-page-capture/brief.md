@@ -1,51 +1,45 @@
 # Brief: product-page-capture
 
-> **v0.3.0移行注記（未承認）**: 本briefは実装済みv0.1.0の責務を記録している。`product-capture-transient-migration` が承認された時点で、要件4の簡易確認・補正と要件5のproject選択・保存はcandidate-managementの編集面へ移り、captureは抽出実行と取得根拠の生成だけを所有する。正式な要件改訂はroadmapのExisting Spec Updatesで行う。
-
 ## Problem
 
-閲覧中の商品ページからカテゴリ、メーカー、商品名、型番、URL、価格、主要スペックを手作業で転記する負担が大きい。
+閲覧中の商品ページからカテゴリ、メーカー、商品名、型番、URL、価格、主要スペックを手作業で転記する負担が大きい。ページにメーカー表記がないメーカー公式サイトでは、他の情報を取得できてもメーカーだけが欠損する。また、対象ページの一時権限に結び付いた取り込み面で確認・保存まで続けると、ページ遷移後に実行不能な操作を残してしまう。
 
 ## Current State
 
-商品候補の保存先となるプロジェクトモデルは計画されているが、ページを読み取り、取得結果を確認・補正して保存する導線はない。
+汎用抽出、正規化、取得根拠、候補管理への連携はv0.1.0で実装済みである。v0.3.0では一過性surface契約と候補管理のpre-edit契約が承認され、取り込み面を抽出実行だけへ縮小できる。固定tabから価格だけを観測する`PagePriceExtractionPort`も下流`source-price-refresh`向けの確定契約として本specに属する。
 
 ## Desired Outcome
 
-ユーザーが明示的に拡張を実行すると、現在のページから取得可能な情報がローカルで抽出され、サイドパネルの簡易表示または詳細編集を経て、情報が不足したままでも選択したプロジェクトへ保存できる。
+利用者が明示操作で起動した一過性面から現在ページを抽出すると、結果が候補管理の非一過性編集面へ直ちに引き渡される。確認・補正・project解決・保存はページ権限の寿命から切り離される。メーカー公式domainと確認できるページでメーカーだけが欠損する場合は、ローカルなdomain mapが最下位優先度で補完する。
 
 ## Approach
 
-JSON-LD、OGP等のメタ情報、タイトル・パンくず、表・定義リスト、共通項目名辞書の順で汎用抽出する。ページ由来の値を未信頼入力として正規化・検証し、自動抽出値とユーザー確認値を区別して候補作成契約へ渡す。
+JSON-LD、OpenGraph等のメタ情報、タイトル・パンくず、表・定義リスト、共通項目名辞書の順で汎用抽出し、最後にeTLD+1で照合するメーカーdomain mapを候補供給源として適用する。ページ由来の値を未信頼入力として正規化・検証し、抽出成功後はproject未解決draftとして候補管理へ原子的に引き渡す。
 
 ## Scope
 
-- **In**: action起点の現在タブ取得、汎用抽出器、抽出元表記、カテゴリ・主要属性の候補化、サイドパネル簡易表示、詳細編集への遷移、プロジェクト選択、未分類保存、権限失効・制限ページ・抽出失敗の扱い。
-- **Out**: 常時監視、一括取得、サーバーアクセス、AI、価格履歴、商品画像、実サイトfixture、価格.com専用またはその他サイト別アダプター。
+- **In**: 現行世代の固定タブ取得、汎用抽出、domain mapによるメーカー欠損補完、取得元、正規化、候補管理への即時handoff、stale結果抑止、固定tab価格観測port。
+- **Out**: 常時監視、一括取得、サーバーアクセス、AI、画像、サイト固有DOM抽出、取り込み面での確認・補正・project選択・保存、保存済みsource更新、実サイトfixture。
 
 ## Boundary Candidates
 
-- ユーザー操作と一時タブ権限
-- ページ内の汎用情報抽出
-- 抽出結果の確認・補正と候補登録
-- 将来のサイト別アダプター差し替え口
+- product-capture所有の抽出候補、順位、正規化、provenance
+- application shell所有の一過性起動世代、固定タブ、寿命、原子的handoff
+- candidate-management所有のpre-edit受理、project解決、確認・補正、保存
+- product-capture公開のread-only価格観測port
 
 ## Out of Boundary
 
-- 登録後候補の一覧管理
+- 登録後候補とsourceの管理
 - 現在構成と互換性判定
+- domain mapを権限・サイト固有抽出許可・所有証明として扱うこと
 - 対象サイトへの正式対応や取得率保証
 
 ## Upstream / Downstream
 
-- **Upstream**: local-data-foundation、project-candidate-management。
-- **Downstream**: 登録された候補を利用するcurrent-build-management。
-
-## Existing Spec Touchpoints
-
-- **Extends**: なし。
-- **Adjacent**: project-candidate-managementの候補作成・編集契約を再利用し、保存ロジックを重複させない。
+- **Upstream**: `transient-feature-surface`、`product-capture-transient-migration`、`project-candidate-management`、local data foundation。
+- **Downstream**: `candidate-source-bookmarks`（domain map参照）、`source-price-refresh`（`PagePriceExtractionPort`利用）。
 
 ## Constraints
 
-`activeTab` と `scripting` を基本とし、取り込み操作を権限付与につながる明確なユーザージェスチャーへ結び付ける。DOM処理は注入側で行い、service workerにDOMや長寿命状態を要求しない。リモートコードを使用しない。
+`activeTab`と`scripting`を明示的な付与ジェスチャーへ結び付け、恒久的host permissionを追加しない。取得対象は起動時に固定した現在ページだけとし、生HTML・画像・完全URL・抽出値を永続化またはログ出力しない。domain mapは公開根拠とownerを持つメーカー公式domainだけを含め、サイト固有DOM抽出の有効化には使用しない。

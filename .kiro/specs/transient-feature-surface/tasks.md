@@ -2,24 +2,26 @@
 
 - [ ] 1. 一過性表示面を受け入れるshell契約を整える
 - [ ] 1.1 表示区分と最小ライフサイクル契約を公開する
-  - 常設／一過性の表示区分、起動世代、固定対象タブ、未信頼tab IDのbrand変換、起動要求、終了理由、最小の下流ライフサイクルportとgesture registration portをcanonical shell契約として追加する。
-  - 表示区分未指定を常設として扱い、既存consumerが変更なしで型検査を通る状態にする。
+  - mount、availability、public API、任意のtyped activationを共通baseに置き、`presentation: "persistent"`と型付きnavigationを必須にする常設branch、および`presentation: "transient"`とnavigation不在を必須にする一過性branchをcanonical registration判別共用体として公開する。
+  - 既存consumerは`presentation: "persistent"`を明示して移行し、一過性consumerはnavigation propertyを持たず、`isPersistent`が常設branchへ型を絞り込む状態にする。
+  - 起動世代、固定対象タブ、未信頼tab IDのbrand変換、起動要求、終了理由、最小の下流ライフサイクルportとgesture registration portをcanonical shell契約として追加する。
   - gesture source、同期emit、cleanup、登録失敗を閉じた型で表し、公開consumerがcontroller、scheduler、store、Chrome型を参照しないことを確認できる。
-  - 欠損・0・負数・小数を固定tabへ昇格せず、不正な表示区分を境界で拒否でき、lifecycleとgestureの公開consumer fixtureがstrict型検査を通る。
+  - 欠損・0・負数・小数を固定tabへ昇格せず、公開consumer compile fixtureが常設navigation必須・一過性navigation禁止を証明し、lifecycleとgestureの適合consumerがstrict型検査を通る。
   - _Requirements: 1.1, 1.3, 1.6, 2.4, 2.5, 4.1, 4.4_
   - _Boundary: CoreContracts, PublicAPI_
 
 - [ ] 1.2 登録区分を検証し不正登録を隔離する
-  - 表示区分の既定値と許容値をregistration境界で検証し、不正または不足した一過性登録をregistryから隔離する。
+  - explicit presentationとnavigation有無の相関をregistration境界で検証し、未知／欠損presentation、常設navigation欠損、一過性navigation混入をregistryから隔離する。
+  - snapshot複製がdiscriminantとbranch固有fieldを保ち、一過性registrationへnavigationを合成しないようにする。
   - 隔離された登録が他の常設featureのavailability、登録順、利用可否へ影響しないようにする。
-  - 既定の常設登録、正常な一過性登録、不正登録の各contract testが決定的に通る。
+  - 明示的な常設登録、正常な一過性登録、各branch矛盾を持つ不正登録のcontract testが決定的に通る。
   - _Requirements: 1.1, 1.3, 1.6, 4.4_
   - _Boundary: FeatureRegistry_
 
 - [ ] 1.3 常設限定のnavigationと選択規則をshellへ統合する
-  - navigation構築、初期選択、availability fallback、通常選択を単一の常設判定へ統一する。
+  - registry snapshotとfeature contribution catalogをbranch-safeな決定順へ合わせ、navigation catalog構築、初期選択、availability fallback、通常選択を常設branchへ絞り込む単一の型述語へ統一する。
   - 一過性featureは登録・主表示可能だがnavigationへ現れず、未起動時は常設featureだけが表示される。
-  - 常設／一過性を混在登録しても常設featureだけがnavigation・初期表示・fallbackの候補になるintegration testを通す。
+  - 常設／一過性を混在登録してもnavigation metadataを読むconsumerが常設branchだけを受け、常設featureだけがnavigation・初期表示・fallbackの候補になるintegration testを通す。
   - _Requirements: 1.2, 1.4, 1.5, 4.4_
   - _Boundary: ApplicationComposition, SidePanelHost_
 
@@ -172,7 +174,7 @@
   - _Boundary: RuntimeComposition, PanelIntegration_
 
 - [ ] 5.3 公開境界とproduction artifactの制約を固定する
-  - 下流へは最小lifecycle port、gesture registration portと必要型だけを公開し、controller、proxy bind、gesture registrar concrete、Chrome message、store concreteを公開しない。
+  - 下流へはregistration判別共用体とそのbranch型、`isPersistent`型述語、最小lifecycle port、gesture registration portと必要型だけを公開し、controller、proxy bind、gesture registrar concrete、Chrome message、store concreteを公開しない。
   - session storage到達点をruntime storeだけへ限定し、worker bundleをDOM／React非依存に保つ境界検査を更新する。
   - 4権限固定、実データfixture不使用、production catalogへのsynthetic feature非混入を機械gateで観測できる。
   - _Requirements: 3.7, 4.4, 4.5, 4.6_
@@ -180,7 +182,7 @@
 
 - [ ] 6. 決定的検証と下流handoff seamを完成させる
 - [ ] 6.1 shell controllerと常設feature非回帰を検証する
-  - registration既定値、不正隔離、navigation除外、初期選択、fallback、単一mountをcontract／integration testで覆う。
+  - explicit persistent producerへの移行、常設navigation欠損／一過性navigation混入の型・runtime拒否、不正隔離、navigation除外、初期選択、fallback、単一mountをpublic consumer／contract／integration testで覆う。
   - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
   - 全shell検証で既存persistent featureのnavigation・availability・typed activationが回帰しない。
   - _Depends: 5.1_

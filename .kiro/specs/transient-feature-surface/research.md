@@ -17,7 +17,7 @@
 
 ## Key Findings
 
-1. 登録済みfeatureと常設ナビ項目が1:1であり、一過性区分を表現できない。
+1. 登録済みfeatureと常設ナビ項目が1:1であり、全registrationへnavigationが必須なため一過性区分を安全に表現できない。
 2. `sidePanel.open()`は有効なジェスチャー内で同期開始する必要がある。
 3. MV3 workerのメモリや長命portの存在だけを配送保証にできない。
 4. `chrome.tabs.onUpdated` / `onRemoved`はURLを読まなければ追加`tabs`権限なしで利用できる。
@@ -33,6 +33,18 @@
 - downstream gesture source: source固有のChrome event登録とtab ID検証だけ。activation ID、sequence、store、panel openはshell/runtimeが所有する
 
 ## Design Decisions
+
+### registrationはnavigation optional化ではなく判別共用体にする
+
+- **Context**: transient featureは同じmount、availability、typed activation契約を使うが、navigation metadataを持ってはならない。現行の全registration必須navigationではcatalogへの漏出を型で防げない。
+- **Alternatives Considered**:
+  1. 全registrationでnavigationを必須のままにする — transientへ偽のlabel/orderを要求し、誤投影を許す。
+  2. navigationを全体でoptionalにする — persistentの欠損まで許しconsumerごとの曖昧な分岐を増やす。
+  3. explicit `presentation`をdiscriminantにし、persistentだけnavigation必須、transientはproperty禁止にする — 採用。
+- **Selected Approach**: mount、availability、public API、任意の`FeatureActivationAdapter`を共通baseに置き、`PersistentApplicationFeatureRegistration | TransientApplicationFeatureRegistration`をcanonical aliasにする。`isPersistent`はpersistent branchへ絞るtype predicateとする。
+- **Rationale**: navigation catalog、通常選択、初期選択、fallbackの入力をcompile timeでpersistentだけに限定しつつ、transientのtyped activationとlifecycle injectionを維持できる。
+- **Migration**: 既存producerは`presentation: "persistent"`を明示し、transient producerはnavigation propertyを削除する。暗黙defaultは残さない。unknown runtime入力にも同じ相関を検証する。
+- **Follow-up**: public consumer compile fixture、registry runtime rejection、snapshot、catalog、activation parityを同じunion shapeで検証する。
 
 ### Session媒体障害は起動契機を識別せずshell障害として提示する
 
@@ -75,7 +87,8 @@
 
 ## Validation Focus
 
-- persistent featureの非回帰
+- explicit persistent registrationへ移行した既存featureの非回帰
+- persistent navigation欠損／transient navigation混入のcompile-time・runtime拒否
 - panel closed/open双方の配送
 - worker再生成
 - watch-ready前後の遷移・閉鎖

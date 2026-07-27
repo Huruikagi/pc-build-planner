@@ -6,9 +6,9 @@
 
 ## Boundary Context
 
-- **In scope**: プロジェクトCRUD、候補パーツCRUD、カテゴリ別表示、未分類補正、共通項目・カテゴリ別属性・元表記・価格・取得日時の編集、削除確認。
+- **In scope**: プロジェクトCRUD、候補パーツCRUD、カテゴリ別表示、未分類補正、共通項目・カテゴリ別属性・元表記・価格・取得日時の編集、削除確認、project未解決・空名pre-editの受理とsession内保持、project解決後の編集継続、編集開始と保存時の検証分離。
 - **Out of scope**: ページ抽出、現在構成への採用、互換性判定、共通ライブラリ、複製・ステータス、画像。
-- **Adjacent expectations**: `local-data-foundation` の保存契約を利用し、後続の取り込み機能へ候補作成契約、構成管理へ候補参照契約を提供する。
+- **Adjacent expectations**: `local-data-foundation` の保存契約を利用し、商品取り込みから候補編集intentを受け取る。後続の取り込み機能へ候補編集intent作成契約、構成管理へ候補参照契約を提供する。複数出典のcatalog・mutation能力は `candidate-source-bookmarks` が同じ候補管理公開境界へ追加し、重複商品の保存前判断は `duplicate-product-merge` がその公開契約を利用する。
 
 ## Requirements
 
@@ -71,4 +71,19 @@
 3. The 候補管理機能 shall 後続の商品取り込みが単一プロジェクトへ候補を作成できる契約を提供する
 4. The 候補管理機能 shall 後続の構成管理がプロジェクト別・カテゴリ別に候補を参照できる契約を提供する
 5. While 候補が未分類である, the 候補管理機能 shall 後続の現在構成で利用可能な候補として公開しない
-6. When 後続機能が検証可能な候補編集内容を指定して詳細編集を要求する, the 候補管理機能 shall 指定プロジェクトと入力内容を保持した編集画面を開く
+6. When 後続機能が候補編集内容を指定して詳細編集を要求する, the 候補管理機能 shall project解決結果と入力内容を保持した編集画面またはproject作成案内を開く
+
+### Requirement 7: 解決前pre-editの受理と検証段階
+**Objective:** As a 商品取り込みから編集を継続する利用者, I want projectや商品名が未解決でも抽出結果を候補管理へ引き継ぎたい, so that 再抽出や仮データ作成をせず常設画面で補正と保存を完了できる
+
+#### Acceptance Criteria
+1. When 候補編集activationがprojectIdを持たない構造的に有効なpre-edit draftを配送する, the 候補管理機能 shall 現在選択中のproject、一覧先頭のprojectの順に解決して編集を開始する
+2. When 構造的に有効なpre-edit draftを受け取りprojectが一件も存在しない, the 候補管理機能 shall activationを成功として受理し、同一side panel session内で入力内容を保持した`project-required`状態とproject作成案内を表示する
+3. When `project-required`状態から有効なprojectを作成する, the 候補管理機能 shall 作成されたprojectへ保持中draftを割り当て、再抽出せず候補編集を開始する
+4. If `project-required`状態でproject作成に失敗する, the 候補管理機能 shall 保持中draftを失わず作成失敗を示して再試行可能にする
+5. If 明示されたprojectIdが存在しない, the 候補管理機能 shall 現在の画面と入力内容を変更せずactivation失敗を返す
+6. When 商品名が空でcategoryと正規化属性が整合するpre-edit draftを受け取る, the 候補管理機能 shall 編集開始を許可して商品名の入力を求める
+7. If 利用者が空の商品名のまま保存しようとする, the 候補管理機能 shall 既存の保存時検証で拒否し編集内容を保持する
+8. If pre-edit payloadの必須形状、category、正規化属性とのcategory整合、任意projectIdまたはcategory hintが不正である, the 候補管理機能 shall 未信頼値を表示せずactivationを拒否する
+9. While pre-edit draftを受理済みである, the 候補管理機能 shall 候補管理への引き渡し元が終了しても保持を継続し、project作成成功、利用者の明示取消または新しい検証済みpre-edit activationでのみ置換または破棄する
+10. If side panel documentが閉鎖、extension reloadまたはbrowser終了で破棄される, the 候補管理機能 shall pre-edit draftを永続復元または自動再抽出しない

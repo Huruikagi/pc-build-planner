@@ -1,7 +1,5 @@
 # Brief: project-candidate-management
 
-> **v0.3.0移行注記（未承認）**: `product-capture-transient-migration` が承認された時点で、候補編集activationはproject未解決・空名のpre-edit draftを受け入れ、編集開始の構造検証と保存時検証を分離する。canonical `CandidateDraft`と保存規則は本specが引き続き所有し、正式な要件改訂はroadmapのExisting Spec Updatesで行う。
-
 ## Problem
 
 ユーザーは複数サイトで見つけたパーツ候補をPC構成の検討単位ごとに整理したいが、現在はスプレッドシートへ手作業で転記している。
@@ -12,7 +10,7 @@
 
 ## Desired Outcome
 
-ユーザーがプロジェクトを管理し、欠損を許容する候補パーツをプロジェクトへ直接所属させ、カテゴリ別に確認・編集・削除できる。未分類の商品も後から補正して利用可能にできる。
+ユーザーがプロジェクトを管理し、欠損を許容する候補パーツをプロジェクトへ直接所属させ、カテゴリ別に確認・編集・削除できる。未分類の商品も後から補正して利用可能にできる。商品取り込みからproject未解決または空名の編集内容を受け取った場合も、保存可能な候補と混同せず常設画面へ保持し、project作成後または入力補正後に同じ編集を継続できる。
 
 ## Approach
 
@@ -20,7 +18,7 @@
 
 ## Scope
 
-- **In**: プロジェクトCRUD、候補パーツCRUD、カテゴリ別一覧、未分類管理、共通項目とカテゴリ別互換性属性の詳細編集、価格と取得日時、欠損値、削除確認。
+- **In**: プロジェクトCRUD、候補パーツCRUD、カテゴリ別一覧、未分類管理、共通項目とカテゴリ別互換性属性の詳細編集、価格と取得日時、欠損値、削除確認、project未解決・空名pre-editの受理とsession内保持、編集開始と保存時の検証段階分離。
 - **Out**: ページからの自動抽出、現在構成への選択、互換性結果、共通パーツライブラリ、プロジェクト複製・ステータス、商品画像。
 
 ## Boundary Candidates
@@ -28,6 +26,7 @@
 - プロジェクトのライフサイクル
 - 候補パーツとカテゴリ分類
 - 共通項目・正規化属性・元表記の編集
+- 解決前pre-edit draft、project解決、保存可能なcanonical draftへの遷移
 
 ## Out of Boundary
 
@@ -38,7 +37,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: local-data-foundation。
-- **Downstream**: product-page-capture、current-build-management、backup-restore。
+- **Downstream**: product-page-capture、product-capture-transient-migration、current-build-management、candidate-source-bookmarks、duplicate-product-merge、backup-restore。
 
 ## Existing Spec Touchpoints
 

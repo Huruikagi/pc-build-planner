@@ -19,7 +19,8 @@
 - [ ] 1.3 副作用のないcandidate editor intent factoryを公開する
   - project未解決draftからtyped activation intentを生成する純粋factoryをcandidate-managementのpublic APIへ追加する。
   - factoryはnavigation、state mutation、project照会、保存を開始せず、payload生成だけを担当する。
-  - 同じ入力から同じintentが生成され、非公開実装へのdeep importなしでconsumerが型検査を通るcontract testを追加する。
+  - canonical公開APIの`query`と`sources: { catalog, mutations }`を維持し、captureは同名の縮小interfaceを再定義せず`createCandidateEditorIntent` facetだけを型参照する。
+  - 同じ入力から同じintentが生成され、全facetを含む公開型とcapture consumerの双方が非公開実装へのdeep importなしで型検査を通るcontract testが成功することを完了条件とする。
   - _Requirements: 1.2, 1.7, 4.1, 5.4_
   - _Boundary: CandidateManagementPublicAPI, CandidateEditorIntentFactory_
 
@@ -62,9 +63,9 @@
 
 - [ ] 3. product-captureを固定tabの一過性featureへ移行する
 - [ ] 3.1 (P) transient contributionとactivationを登録する
-  - product-captureをnavigationに出ない一過性featureとして登録し、上流portから起動世代と固定TargetTabIdを受け取る。
+  - product-captureをcanonical persistent／transient registration unionの一過性memberとして登録し、`presentation: "transient"`とactivationを申告して`navigation` metadataと`nav.productCapture`を持たせず、上流portから起動世代と固定TargetTabIdを受け取る。
   - activationごとに新しい実行contextを構築し、未起動時や常設navigationから直接mountされないようにする。
-  - 正常activation、不正activation、再activationのregistration testを通す。
+  - exact-shape型検査と正常activation、不正activation、再activationのregistration testを通し、mount/unmount、世代照合、handoff lifecycleが維持されることを確認する。
   - _Depends: 1.1_
   - _Requirements: 2.1, 2.2, 2.7, 3.1, 3.2, 3.3, 5.1_
   - _Boundary: ProductCaptureRegistration, TransientFeatureContribution_
@@ -122,7 +123,7 @@
 - [ ] 5.1 capture contributionを3依存だけで構成する
   - production compositionをruntime、TransientSurfaceLifecyclePort、candidate editor intent factoryの3依存へ切り替える。
   - capture／candidate-managementの登録順をlate-bound shell契約へ合わせ、起動前・cleanup後はfail closedにする。
-  - production factoryが正確に3依存だけを受け、テスト専用featureなしで型検査を通るcomposition testを追加する。
+  - production factoryが正確に3依存だけを受け、テスト専用featureなしで型検査を通るcomposition testが成功することを完了条件とする。
   - _Depends: 2.5, 3.4, 4.2_
   - _Requirements: 1.2, 1.3, 1.7, 3.3, 5.4_
   - _Boundary: ApplicationComposition, ProductCaptureDependencies_
@@ -135,16 +136,17 @@
   - _Requirements: 1.1, 1.7, 3.2, 3.3, 3.4, 5.1, 5.4_
   - _Boundary: ProductCaptureFeature, ProductCaptureLegacyRemoval_
 
-- [ ] 5.3 candidate-managementの公開APIを最小化する
+- [ ] 5.3 candidate-managementのcanonical公開APIを保全する
   - capture専用の`CaptureCandidatePort`、`listProjects`、direct open callbackを公開面から外し、保存serviceをcandidate-management内部へ戻す。
-  - query契約と純粋intent factoryだけを必要なconsumerへ公開し、production compositionの配線を更新する。
-  - 全consumerのtypecheckと公開API contract testで削除済みsymbolやdeep importがないことを確認する。
+  - 公開面をcanonical `query`、純粋`createCandidateEditorIntent`、`sources: { catalog, mutations }`のexact shapeへ統一し、captureにはintent factory facetだけを配線する。
+  - 全consumerのtypecheckと公開API contract testで全facetのparity、削除済みsymbol不在、同名縮小interface不在、deep import不在を確認する。
   - _Depends: 5.1_
   - _Requirements: 1.2, 1.7, 4.1, 5.4_
   - _Boundary: CandidateManagementPublicAPI, CandidateManagementInternalServices_
 
 - [ ] 5.4 (P) message catalogとE2E locatorを移行する
   - captureの抽出・失敗・再試行、candidate-managementのproject-required・取消・作成失敗に安定した日英message keyを割り当てる。
+  - transient product-captureはnavigation keyを申告せず、consumer移行後に`nav.productCapture`がcatalog、fixture、locatorへ残らない状態にする。
   - icon起動、editor到達、project-required、常設復帰、navigation終了をrole／label／test idで観測できるlocatorへ揃える。
   - legacy保存statusや不安定な文言依存がfixtureとE2Eから消えるcatalog／locator testを通す。
   - _Depends: 2.4, 3.4_
@@ -154,7 +156,7 @@
 - [ ] 5.5 公開境界とdeep-import gateを更新する
   - shell、capture、candidate-management間の許可依存をboundary validatorへ反映し、公開entry point以外の横断importを拒否する。
   - 削除したcapture専用portと旧navigation callbackをfixture・test doubleを含む全consumerから除去する。
-  - `validate-boundaries`とpublic API snapshotが新しい依存方向だけで通る状態にする。
+  - transient registrationの`navigation`／`nav.productCapture`と、不完全な`CandidateManagementPublicApi`再定義を拒否する検索gateを加え、`validate-boundaries`、exact public API contract、snapshotが新しい依存方向だけで通る状態にする。
   - _Depends: 5.2, 5.3_
   - _Requirements: 1.7, 3.5, 5.4, 5.6_
   - _Boundary: BoundaryValidation, PublicAPIArtifacts_
@@ -193,9 +195,9 @@
   - _Boundary: ProductCaptureStateTests, CaptureHandoffTests_
 
 - [ ] 6.4 production compositionと公開契約のtestを完成する
-  - capture factoryの依存が正確に3つで、shell lifecycleとcandidate intentの公開entry pointだけを使うことを検証する。
+  - capture factoryの依存が正確に3つで、transient registrationにnavigation metadataがなく、shell lifecycleとcandidate intentの公開entry pointだけを使うことを検証する。
   - start前、正常起動、cleanup後のlifecycleと全consumer typecheckをproduction compositionで確認する。
-  - boundary／public API regression suiteが削除symbolなしで通る。
+  - candidate-management公開APIの`query`、intent factory、`sources: { catalog, mutations }` exact parityを確認し、boundary／public API regression suiteが削除symbolと`nav.productCapture`なしで通る。
   - _Depends: 5.5, 5.6, 6.1, 6.2, 6.3_
   - _Requirements: 1.7, 3.3, 3.5, 5.4, 5.6_
   - _Boundary: ApplicationCompositionTests, PublicContractTests_

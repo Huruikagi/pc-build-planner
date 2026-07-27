@@ -177,3 +177,50 @@
 - `.kiro/steering/structure.md` — 縦割りと canonical owner の規約、公開入口の規約
 - `.kiro/steering/security.md` — ログへ出すのは安定したエラーコードに限る、機械検査で規約を守る
 - `.kiro/steering/testing.md` — `node:test` + testing-library、`data-*` を `querySelector` で引く既存の書き方
+
+## v0.3.0 Merge Discovery (2026-07-27)
+
+### Summary
+
+- **Discovery Scope**: Extension / integration-focused light discovery
+- **Key Findings**:
+  - 現行実装はja/enの10名前空間、型付き`MessageKey`、`MessageDescriptor`、resolver、placeholder parityを既に持つ。新しいresolverやalias layerは不要である。
+  - `settings-screen`は`catalog/{ja,en}/settings.ts`と`nav.settings`を明示し、`nav.backupRestore`削除を要求する。product-captureはtransient化により`nav.productCapture`を申告しない。
+  - 初回横断レビューでは`ui-internationalization`の10名前空間前提と`settings-screen`のcatalog ownership重複を検出した。両specは11名前空間の公開consumer契約と、意味/consumer/layout対key/value/parity/removalの一意な所有権へ改訂済みである。
+
+### Producer / Consumer Contract Reconciliation
+
+- **Sources Consulted**: `transient-feature-surface`、`product-capture-transient-migration`、更新済み`product-page-capture`、`application-shell`、`settings-screen`、更新済み`backup-restore`、更新済み`ui-internationalization`のrequirements/design/tasks、および`src/ui-messages/`とmessage consumer。
+- **Findings**:
+  - producerがexact keyとして固定しているのは`nav.settings`だけである。settingsの見出し・説明、一過性notice、capture回復案内のキー命名はcatalog ownerへ委ねられている。
+  - 一過性noticeはshellのready/maintenanceと併存する`MessageDescriptor`であり、feature stateや自由文字列aliasではない。
+  - product-captureの権限失効は、旧「ページを表示し直して再実行」から「ページ再表示後に拡張アイコンを再操作し、新しい付与世代を得る」へ意味が変わる。
+  - loading/global startup failureのsettings案内は、現在のresolverがどちらでも`設定 / Settings`を認識できる固定二言語値でなければならない。
+- **Implications**:
+  - exact keyを`nav`、新規`settings`、`shell`、`capture`の4領域に限定し、feature behaviorやlanguage stateをcatalogへ持ち込まない。
+  - `settings`を`common`や`shell`へaliasせず、11番目のcanonical namespaceとして追加する。
+  - `nav.productCapture`と`nav.backupRestore`はcompatibility aliasを残さず、consumer切替と同じcheckpointで削除する。
+
+### Decision: 既存resolverを維持しdata-only migrationにする
+
+- **Alternatives Considered**:
+  1. featureごとにmessage moduleを追加する — canonical ownerとja/en parityが分散する。
+  2. 旧navigation keyをaliasとして残す — stale registrationを型検査で検出できなくなる。
+  3. 既存catalogへexact keyを追加・削除する — 現行の型・resolver・Providerを再利用できる。
+- **Selected Approach**: 3。新規抽象を作らず、ja/enの静的catalogデータ、集約点、parity testだけを拡張する。
+- **Rationale**: build-vs-adoptの観点で既存基盤が要件を満たし、変更面と実装順を最小化できる。
+- **Trade-offs**: navigation consumerの切替とdead key削除を原子的に行う必要がある。
+
+### Risks & Mitigations
+
+- 10名前空間前提やcatalog共同所有が再混入する — 11名前空間の公開consumer契約とowner別file planをcross-spec reviewで再検証し、catalog側でaliasを作らない。
+- ja/enの一方だけに新キーやplaceholderが入る — 型による双方向網羅と`catalog-parity.test.ts`のplaceholder集合検査を両方通す。
+- 旧navigation keyがtest fixtureやsnapshotに残る — catalogだけでなく`src/`、`tests/`、`e2e/`のdead consumer検索gateを設ける。
+- 一過性noticeがfeature behaviorを所有してしまう — catalogは固定文言だけを持ち、noticeの発火・clear・寿命はproducer specへ委ねる。
+
+### Canonical Registration Union Reconciliation
+
+- `ApplicationFeatureRegistration`は`application-shell/public.ts`が公開するcanonical判別共用体を参照し、本specでは再定義しない。
+- `PersistentApplicationFeatureRegistration`は`presentation: "persistent"`とnavigationを必須とし、その`navigation.labelKey`だけがcatalog key consumerになる。
+- `TransientApplicationFeatureRegistration`は`presentation: "transient"`を明示しnavigationを持たない。transient product-captureにはnavigation metadataも`nav.productCapture`も提供しない。
+- 未知／欠損presentationとbranch矛盾はproducer側のcanonical registry検証へ委ね、catalog側に登録解釈を追加しない。

@@ -93,7 +93,7 @@
   - _Requirements: 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: BackupRestoreView_
 
-- [x] 4.4 React root adapterとfeature registrationを実装する
+- [x] 4.4 React root adapterと初期の独立feature registrationを実装する（task 6でsection境界へ移行）
   - `view`をframework非依存のBackupRestoreState/Service/FileGateway portへ接続し、`public`入口とregistration moduleをfeature内で所有する
   - registration契約が置換・保守可能なscoped portを受け取れる形にし、application shellの`FeatureMountContext`へReact rootをmountする
   - 切替・停止時に`root.unmount()`と購読解除を一度だけ行い、shell contract test kitで登録、operation policy、公開API、cleanupが適合する
@@ -102,7 +102,7 @@
   - _Boundary: BackupRestoreFeatureRegistration, ReactRootAdapter_
 
 - [x] 5. side panel統合と全体回帰を完成する
-- [x] 5.1 バックアップ・復元機能を既存管理画面とFoundation portへ統合する
+- [x] 5.1 初期の独立画面をFoundation portへ統合する（task 6でsettings配下へ移行）
   - application shellがfeatureの`registration`と`public`をcompositionし、置換・保守capabilityを含むscoped portを本機能へ供給する（既定の最小権限portは置換・保守を外すため専用供給とする）
   - 共有runtime入口、HTML host、root barrelをfeature側から編集せず、RestoreServiceの保守acquire/renew/release/abortと置換をFoundationへ接続する
   - shellのread-only maintenance projectionとMutationGateが復元中の全feature mutationを抑止し、read-only navigationを維持したまま成功・失敗・取消後に現行generation終了でmutationを復帰する
@@ -121,6 +121,41 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: Backup restore acceptance and regression tests_
 
+- [ ] 6. バックアップ・復元をsettings-owned section境界へ移行する
+- [ ] 6.1 埋め込み可能な公開section mountを追加する
+  - 既存のbackup service、restore service、state、file gateway、React rootを再利用し、完全data portをfactory依存として受けるsection adapterを追加する
+  - `FeatureMountContext`を受けて`FeatureMountHandle`を返す正確な公開mount契約と、data・任意stateを受けるfactoryだけを公開入口へ加える
+  - operation policyをそのまま利用し、mount失敗時は取得済みresourceを解放し、正常終了と二重終了では購読とDOMを一度だけcleanupする
+  - 完了時、任意containerで既存のexport、preflight、確認、復元、分類済みerrorを実行でき、mount失敗・正常cleanup・二重cleanupのcontract testが成功する
+  - _Requirements: 1.1, 1.5, 3.1, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
+  - _Boundary: BackupRestoreSectionMount, ReactRootAdapter_
+
+- [ ] 6.2 settings composition切替後に独立registrationを撤去する
+  - settings側が公開section mountだけを利用する状態になった後、独立feature registration、feature contribution、feature ID、navigation metadata、空public APIの公開を削除する
+  - backup内部のservice、state、交換形式、maintenance generation、atomic restore、分類済みerrorは変更せず、settingsやshellの内部実装をbackup側へ取り込まない
+  - 完了時、production catalogとbackup公開入口に独立`backupRestore` navigation/registrationが残らず、公開consumer型検査とboundary検査が成功する
+  - _Depends: 6.1, settings-screen 3.2_
+  - _Requirements: 4.3, 5.1, 5.2, 6.1, 6.7_
+  - _Boundary: BackupRestore public surface, legacy registration removal_
+
+- [ ] 6.3 section lifecycleと利用者操作の回帰を固定する
+  - 架空データをsectionへmountし、export、ファイル検証、preview、取消、確認、成功・失敗後の再試行を既存state/view契約のまま検証する
+  - operation policyによる処理中抑止と安全な診断表示を確認し、商品値・完全URL・ファイル本文がsectionの表示やログへ出ないことを固定する
+  - unmount後の再mountでは一時選択とticketが未選択状態へ戻り、同じcontainerへ購読やReact rootが重複しないことを確認する
+  - 完了時、section lifecycleとDOM操作の対象testが連続成功し、設定画面へ埋め込んでも既存の操作状態と案内が維持される
+  - _Depends: 6.1_
+  - _Requirements: 1.1, 1.3, 1.5, 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
+  - _Boundary: BackupRestoreSectionMount acceptance, BackupRestoreView_
+
+- [ ] 6.4 交換形式・原子的復元・maintenanceのdomain回帰を固定する
+  - 10MB上限、非対応版、参照不整合、stale assessment、容量・保存失敗で書込前データが保持され、部分置換や交換形式の差分がないことを既存Foundation port統合で確認する
+  - 30秒leaseのacquireから再評価・置換・releaseまたはabortまでを検証し、cleanup失敗時もread-only操作を維持してlease失効後に通常mutationと再試行が回復することを確認する
+  - 復元後も通常query・CRUD・再backupが成功し、候補所属、確認値、現在構成参照、数量が配置変更前と一致することを確認する
+  - 完了時、exchange、service、domain integration、公開境界の対象testが連続成功し、section化による交換形式・atomic restore・error ownershipの回帰がない
+  - _Depends: 6.1, 6.2_
+  - _Requirements: 1.1, 1.2, 1.4, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.3, 3.4, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 6.5, 6.7_
+  - _Boundary: Exchange and restore acceptance, FoundationDataPort integration_
+
 ## Implementation Notes
 
 - 1.1: 現行交換形式版は1が初出のため、対応対象の旧版fixtureは存在しない。`tests/fixtures/backup.ts`は現行版・空データ・将来版(2)のfixtureのみを提供する。旧版fixtureは形式版2以降を追加する時点で用意する。
@@ -134,3 +169,4 @@
 - 4.4: `FeatureMountContext`に`data`は含まれない。`FoundationDataPort`（または`FoundationScopedDataPort`）はregistration factory自身のconstructor依存として渡し、`mount()`内のclosureで使う（candidate-management/current-buildと同じ既存パターン）。styles.cssをまだ`side-panel.css`へ@importしていないため（4.3のnote参照）、実際のside panel mount配線・stylesheet追加は5.1で行う。backup-restoreは`captureState`/`activation`を一切公開せず、画面再生成のたびに新しいidle状態のBackupRestoreStateから始まる（Requirement 6.6）。
 - feature validation後の追補: design.mdのTesting Strategyが挙げるE2Eを`e2e/backup-restore.spec.ts`として追加した（export→ファイル保存→データ改変→取消→確認→復元→reload→復元後CRUDと再backup）。またvalidation中に上流`application-shell`の実バグを1件検出・修正した: `MaintenanceProjection`の初期cursor`{generation:0, revision:0}`は「未受信」を表す暫定値なのに実snapshotと`compareCursor`で比較されており、空ストレージ起動時（実snapshotも`{0,0}`）は初回観測が構造的に必ず`stale_ignored`となって起動のたびに診断エラーを出していた。projectionへ未受信フラグを持たせ最初のacceptだけ比較をスキップするよう修正済み。
 - 5.1: `FeatureCompositionContext`/`ProductionFoundationHandle`へ`fullDataPort`を追加した（既定の`data`は引き続きscoped port）。real Foundationを使う統合testで初めて判明した実バグ2件を修正: (1) `RestoreService.commit`はacquire自体がrevisionを進めるため、preflight時のassessmentをそのままreplaceRootへ渡すと必ずstale-assessmentになる — acquire後にassessReplacementを再実行してから渡すよう修正。(2) replaceRoot自体もrevisionを進めるため、releaseにacquire時のfenceをそのまま渡すとstale-fenceで黙って失敗し保守が解放されないまま残る — replaceRootが返す新revisionをfenceへ反映してからreleaseするよう修正。単体testのfake portだけでは検出できない類のバグで、実Foundationを使う結合testの価値を示す例。
+- 6.1–6.4: task 4.4と5.1で完成した独立feature registrationは移行元としてのみ残る。section contractを先に加算し、`settings-screen`のcomposition切替後にだけ旧registration/contributionを削除する。これにより移行途中の実装可能性を保ちながら、最終状態では独立navigationと二重mountを残さない。

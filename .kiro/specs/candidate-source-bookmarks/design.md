@@ -31,7 +31,7 @@
 - 代表ソース・代表価格・代表URLの導出規則と候補ソースmutation規則。
 - 保存schema 1→2 migration、現行root検証、移行失敗時の非破壊性。
 - candidate-management内のソース一覧、追加・編集・削除・プライマリ変更・再訪UI/state/service。
-- candidate-managementの `public.ts` から公開する読み取り専用 `CandidateSourceCatalogPort`、source参照DTO、列挙・ID再取得・not-found規則。
+- candidate-managementの `public.ts` から公開する読み取り専用 `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`sources: { catalog, mutations }` facet、source参照DTO、列挙・ID再取得・not-found規則。
 - `chrome.tabs.create`を隔離する再訪portとHTTP/HTTPS検証。
 - backup交換形式2と交換形式1→2 migration。
 - product-captureが新候補へ初期ソースを渡すためのdraft contract更新。
@@ -44,11 +44,13 @@
 - ドメイン→メーカー名マップ、eTLD+1照合、抽出時manufacturer補完はproduct-capture #8が所有する。
 - compatibility-checkingは正規化属性だけを参照し、本specのsource contractへ依存しない。
 - application shellはChrome handleの注入だけを行い、sourceの意味・保存判断・URL選択を持たない。
+- `createCandidateEditorIntent`、`FeatureActivationIntent`、activation adapter、起動世代、stale抑止、`conclude`とhandoff失敗時のintent保持はproject-candidate-management、application-shell、product-capture側の所有であり、本specは再実装しない。
 
 ### 許可する依存
 
 - local data foundationのUUID、UTC timestamp、`Result<T, E>`、validator、migration registry、単一write authority、atomic root mutation。
-- project-candidate-managementの既存候補CRUD、draft、query、React mount/state lifecycle。
+- project-candidate-managementの既存候補CRUD、`CandidateEditorPrefill`、`CandidateManagementPublicApi.query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、React mount/state lifecycle。
+- product-capture-transient-migrationの現行世代確認と `TransientSurfaceLifecyclePort.conclude` によるtyped intent配送。
 - product-capture #8が `public.ts` から公開するメーカー登録ドメイン照合。内部mapへのdeep importは禁止する。
 - backup-restoreの交換形式versioning、preflight、atomic replacement。
 - Chrome 116以降の `chrome.tabs.create`。`tabs`・host・optional permissionの追加は禁止する。
@@ -61,7 +63,7 @@
 - backup format version、保存schema version、migration registryの登録方式が変わる場合。
 - Chrome Tabs APIの権限要件またはside panelからのAPI注入経路が変わる場合。
 - downstreamの `source-price-refresh` / `duplicate-product-merge` がsourceを候補外aggregateとして扱う提案をする場合。
-- `CandidateSourceCatalogPort`、`CandidateSourceReference`、列挙scope、not-found規則またはcandidate-management公開API内のsource facetが変わる場合。
+- `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`CandidateSourceReference`、列挙scope、not-found規則、またはcanonical `CandidateManagementPublicApi` の `query`・typed intent factory・`sources` facetが変わる場合。
 
 ## アーキテクチャ
 
@@ -69,7 +71,7 @@
 
 - local data foundationが `LocalDataRoot` 全体の実行時検証、migration、revision付きmutation、replacementを所有する。featureからstorage adapterへの直接到達はない。
 - candidate-managementは候補draftをserviceで検証し、一回のroot mutationで保存する。stateはReact外、viewは表示adapterである。
-- product-captureはcandidate-managementの公開 `CaptureCandidatePort` にdraftを渡す。新しいsource初期化もこの依存方向を維持する。
+- product-captureは取得結果をsource付き `CandidateEditorPrefill` へ写像し、candidate-management公開APIの `createCandidateEditorIntent(prefill): FeatureActivationIntent` でtyped intentを生成して一過性surfaceの`conclude`へ渡す。candidate queryやsource mutationへ直接到達せず、新しいsource初期化もこの依存方向を維持する。
 - backup-restoreは保存schemaを交換形式へ直接公開せず、独立したformatVersionとmapperを持つ。
 - application shellだけがfeature contributionへ具体Chrome APIを注入する。
 
@@ -78,8 +80,11 @@
 ```mermaid
 graph TB
     Capture[Product capture] --> CaptureMapper[Capture source mapper]
+    CaptureMapper --> IntentFactory[Candidate editor intent factory]
+    IntentFactory --> TransientLifecycle[Transient surface conclude]
+    TransientLifecycle --> CandidateActivation[Candidate activation adapter]
     ManufacturerMap[Manufacturer domain public lookup] --> KindAdapter[Source kind classifier]
-    CaptureMapper --> CandidateService[Candidate management service]
+    CandidateActivation --> CandidateService[Candidate management service]
     KindAdapter --> CandidateService
     CandidateView[Candidate source view] --> CandidateState[Candidate management state]
     CandidateState --> CandidateService
@@ -102,6 +107,7 @@ graph TB
 - 依存方向は `domain types → validation/migration/policy → service → state → view` とし、platform adapterはport実装としてcompositionから注入する。
 - foundationからproduct-captureへは依存させない。旧migrationの種別は任意のまま保持し、feature側classifierが表示・新規作成時に解決する。
 - source catalogはcandidate-managementが保存snapshotから最小参照を投影する。URLの正規化・一致判定・重複排除を行わず、sourceの完全な候補集合を下流へ渡す。
+- candidate-managementのcanonical公開APIは `query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog, mutations }` の三facetである。本specはcatalog/mutation facetだけを所有し、typed intent factoryとactivation適用はproject-candidate-management、一過性世代と`conclude`はproduct-capture側の契約を利用する。
 - 新規libraryは追加しない。標準URL、既存Result/UUID/migration、Chrome native APIを採用する。
 
 ### 技術スタック
@@ -145,7 +151,7 @@ src/
 │   │   ├── feature-contribution.ts    # classifier・page port注入
 │   │   └── public.ts                  # downstream向けsource catalog・mutation facet公開
 │   ├── product-capture/
-│   │   └── draft-mapper.ts            # 初期sourceとprimaryを生成し価格をsourceへ配置
+│   │   └── draft-mapper.ts            # 初期sourceとprimaryを持つCandidateEditorPrefillを生成
 │   └── backup-restore/
 │       ├── contracts.ts               # BackupCandidatePart v2契約
 │       └── exchange.ts                # format 1→2 migrationとv2 mapper
@@ -176,7 +182,7 @@ e2e/
 - `src/domain/validation.ts` — source配列、重複ID、種別、価格、primary参照、schema 2を検証する。
 - `src/persistence/schema.ts`、`runtime-contribution.ts`、`public.ts`、`replacement.ts` — 現行版2とmigration登録を一元化し、backup mapperへ限定公開する。
 - `src/features/candidate-management/contracts.ts`、`source-catalog.ts`、`service.ts`、`state.ts`、`state-snapshot.ts`、`view.tsx`、`styles.css`、`public.ts`、`feature-contribution.ts` — 候補管理のsource catalog・mutation能力を公開し、sourceを保存・表示する。
-- `src/features/product-capture/draft-mapper.ts` — 価格と取得元を一件の初期sourceへ写像する。
+- `src/features/product-capture/draft-mapper.ts` — 価格と取得元を一件の初期sourceへ写像した `CandidateEditorPrefill` を生成する。
 - `src/features/backup-restore/contracts.ts`、`exchange.ts` — format 2と旧format移行を実装する。
 - `src/application-shell/side-panel-contributions.ts` — source classifierとChrome tab portだけをcompositionする。
 - `src/ui-messages/catalog/{ja,en}/candidate.ts` — 既存message schemaを両言語で同時更新する。
@@ -249,7 +255,7 @@ flowchart TD
 | 5.1, 5.2, 5.3, 5.4, 5.5 | 安全な再訪 | SourcePagePort、CandidateManagementState、CandidateSourceView | `SourcePagePort.open` | 再訪 |
 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 非破壊移行 | CandidateSourceMigration、CandidateSourceValidator | `MigrationStep<1, 2>` | schema移行 |
 | 7.1, 7.2, 7.3, 7.4, 7.5 | 検証と原子性 | CandidateSourceValidator、CandidateManagementService、SourcePagePort | `validateCandidatePartContent`、foundation mutation | 全フロー |
-| 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 | 既存workflow・下流参照整合 | CaptureSourceMapper、BackupExchangeV2、CandidateSourceModel、CandidateSourceCatalog | `CaptureCandidatePort`、`ExchangeMapper`、`CandidateSourceCatalogPort` | 取り込み・backup・下流参照 |
+| 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 | 既存workflow・下流参照整合 | CaptureSourceMapper、BackupExchangeV2、CandidateSourceModel、CandidateSourceCatalog | `createCandidateEditorIntent`、`FeatureActivationIntent`、`ExchangeMapper`、`CandidateSourceCatalogPort` | 取り込みhandoff・backup・下流参照 |
 
 ## コンポーネントとインターフェース
 
@@ -265,7 +271,7 @@ flowchart TD
 | CandidateSourceView | UI | source一覧、種別、代表、再訪を表示 | 3.1, 3.2, 3.3, 3.4, 3.5, 4.4, 4.5, 5.1, 5.2, 5.3, 7.5 | state、messages | State |
 | SourcePagePort | Runtime adapter | 安全なURLだけを新規タブで開く | 5.1, 5.2, 5.3, 5.4, 5.5 | Chrome Tabs API | Service |
 | SourceKindClassifier | Integration adapter | 上流mapから初期種別を解決 | 4.1, 4.2, 4.3, 4.4 | product-capture public | Service |
-| CaptureSourceMapper | Integration | capture値を初期primary sourceへ変換 | 8.1 | capture session、source model | Service |
+| CaptureSourceMapper | Integration | capture値を初期primary source付きprefillへ変換 | 8.1 | capture session、CandidateEditorPrefill | Service |
 | BackupExchangeV2 | Integration | source関係を交換形式で往復・移行 | 8.2, 8.3, 8.4 | source model、foundation replacement | Batch |
 
 ### Domain / Persistence
@@ -393,7 +399,7 @@ interface CandidateSourcePolicy {
 
 **依存**
 
-- Inbound: ManagementState、CaptureCandidatePort、downstream source consumer（P0）
+- Inbound: ManagementState、公開 `sources.mutations` facetを利用するdownstream source consumer（P0）
 - Outbound: CandidateSourcePolicy、SourceKindClassifier、FoundationScopedDataPort（P0）
 
 **契約**: Service [x]
@@ -508,7 +514,7 @@ interface SourceKindClassifier {
 
 #### CaptureSourceMapper
 
-summary-only component。capture sessionのpageUrl、capturedAt、取得priceを一件のsourceへ移し、そのIDをprimaryに設定する。商品共通値にはpriceを含めない。kindはcandidate serviceのclassifierに委ね、元表記 `sourceSnapshot` は候補単位で保持する。
+summary-only component。capture sessionのpageUrl、capturedAt、取得priceを一件のsourceへ移し、そのIDをprimaryに設定した `CandidateEditorPrefill` を構築する。商品共通値にはpriceを含めず、kindは未指定のまま候補serviceのclassifierに委ね、元表記 `sourceSnapshot` は候補単位で保持する。product-captureはこのprefillを `CandidateManagementPublicApi.createCandidateEditorIntent` に渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送する。mapperはcandidate query、`sources.mutations`、candidate serviceを直接呼ばない。
 
 #### BackupExchangeV2
 
@@ -555,7 +561,7 @@ erDiagram
 
 ### データ契約と統合
 
-- candidate-management public APIは既存query/captureに `sources: { catalog: CandidateSourceCatalogPort; mutations: CandidateSourceMutationPort }` を追加する。feature contributionが両portを受け取り `public.ts` のsource facetへ合成し、application shellは完成した公開APIを登録するだけでsource queryやmutationを実装しない。
+- candidate-managementのcanonical公開契約は `query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog: CandidateSourceCatalogPort; mutations: CandidateSourceMutationPort }` である。本specはcatalogとmutation port、およびfeature contributionが構築する `sources` facetを所有する。project-candidate-managementがこのfacetをqueryとtyped intent factoryへ合成し、application shellは完成した公開APIを登録するだけでsource query、mutation、intent factoryを実装しない。
 - `CandidateSourceReference` はsource探索用のread-only DTOであり、保存entityまたはeditor draftとして再利用しない。feature外consumerは `candidate-management/public.ts` からだけ型とportをimportする。
 - `CandidateSummary`は `primarySource` とそこから導出した `price` をread-onlyで返す。consumerが商品共通priceを再保存してはならない。
 - downstreamはsource IDを更新対象識別子として使い、URL一致や配列indexを永続識別子にしない。

@@ -97,12 +97,12 @@
   - validation・conflict・maintenance・quota・storage失敗で旧候補が残り、成功時だけ対象sourceが変わるintegration testが成功することを完了条件とする。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 7.3, 7.4_
 
-- [ ] 3.4 feature公開APIへsource catalogとmutationを合成する
-  - feature contributionがread-only catalogとmutation portを一つのsource facetとして受け取り、`public.ts` から型と契約を限定exportする。
+- [ ] 3.4 candidate-management公開API用のsource facetを実装する
+  - feature contributionがread-only catalogとmutation portを `sources: { catalog, mutations }` facetとして構築し、`public.ts` から型と契約を限定exportする。
   - 公開source portの各操作に新しいrequest IDと読取時点revisionをfeature内で付与する。
-  - 既存query・capture・editor activationを維持したままsource catalogとmutationを公開APIへ追加し、catalog呼出しではmutation contextを作成しない。
+  - 本taskはsource facetだけを所有し、project-candidate-managementが所有する `query` と `createCandidateEditorIntent(prefill): FeatureActivationIntent` を再実装・変更しない。canonical公開APIに旧capture write portを残さない。
   - 競合時にlost updateせず型付きconflictを返し、feature外consumerがfoundationへ直接到達しないことを検証する。
-  - 公開API contract testでcatalogがread portへ、全source変更がserviceへ一度だけ配送されることを完了条件とする。
+  - 公開API contract fixtureで `query`、typed intent factory、`sources` facetが共存し、catalogがread portへ、全source変更がserviceへ一度だけ配送されることを完了条件とする。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 7.3, 7.4, 8.6, 8.7_
 
 - [ ] 4. 候補管理stateとReact UIへソース操作を追加する
@@ -152,14 +152,14 @@
   - _Depends: 1.1, 2.2, 2.3_
 
 - [ ] 5.2 (P) 商品取り込みから候補保存までの初期source統合を検証する
-  - 更新済み候補draft契約に合わせ、取り込みページURL、取得日時、取得価格を一件のsourceへ写像してそのIDをprimaryにする。
+  - 更新済み候補draft契約に合わせ、取り込みページURL、取得日時、取得価格を一件のsourceへ写像し、そのIDをprimaryにした `CandidateEditorPrefill` を構築する。
   - 商品共通値へ価格を残さず、元表記snapshotと他の確認済み商品値を維持し、種別未指定は候補serviceのclassifierへ委ねる。
-  - 架空商品ページの取得値が一件のprimary sourceとしてcandidate serviceへ渡ることを検証する。
-  - 取得価格がsourceだけに保存され、種別が上流map一致・非一致で解決されることを検証する。
-  - 取り込み失敗・候補保存失敗で部分的なsourceが残らないことを検証する。
-  - mapper unit testとcaptureから候補一覧の代表価格・URLまでのintegration testが成功することを完了条件とする。
+  - product-captureがprefillを公開 `createCandidateEditorIntent` へ渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送することを検証する。candidate query、source mutation、candidate serviceを直接呼ばない。
+  - handoff後に利用者が保存した候補では取得価格がsourceだけに保存され、種別が上流map一致・非一致で解決されることを検証する。
+  - 取り込み失敗・handoff失敗・候補保存失敗で部分的なsourceが残らず、失敗時のintent保持と世代管理はproduct-capture側の契約に委ねる。
+  - mapper unit testとtyped intent handoffから候補一覧の代表価格・URLまでのintegration testが成功することを完了条件とする。
   - _Requirements: 1.5, 2.1, 4.1, 4.2, 4.3, 7.3, 7.4, 8.1_
-  - _Boundary: CaptureSourceMapper, CandidateManagementService_
+  - _Boundary: CaptureSourceMapper_
   - _Depends: 1.1, 3.1, 3.4, 5.1_
 
 - [ ] 5.3 (P) backup復元とfoundation置換の複数source統合を検証する

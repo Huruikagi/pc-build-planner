@@ -28,11 +28,10 @@ settings featureは配置とlifecycle合成だけを所有する。表示言語�
 
 - `settings` persistent featureのregistration、navigation、画面layout、mount/unmount
 - 言語区画とbackup-restore区画の配置、および区画間で状態を破棄しないlifecycle
-- backup-restoreを画面区画としてmountする最小公開port
+- backup-restoreが公開するsection mount契約を受け入れ、設定画面内でhostとlifecycleを提供するconsumer境界
 - shellヘッダの言語control撤去と、loading/startup error用の二言語案内
-- `nav.settings`、settings namespace、shell案内のja/en値
-- `backupRestore`独立registration、navigation key、E2E locator、空public keyから`settings`への移行
-- 関連するapplication-shell、ui-internationalization、backup-restore、ui-message-catalog既存specの配置契約改訂
+- 設定画面で必要となるメッセージの意味要件、表示場所、状態別の案内内容、および文言非依存locator
+- application-shellが所有するproduction composition上の参照を、独立backup面から`settings`へ切り替えること
 
 本specは利用者設定データを新たに所有しない。settingsは既存ownerの公開能力を配置するcomposition featureである。
 
@@ -42,14 +41,16 @@ settings featureは配置とlifecycle合成だけを所有する。表示言語�
 - `BackupService`、`RestoreService`、`BackupRestoreState`、交換Envelope、file gateway
 - `FoundationDataPort`の意味、schema version、atomic replacement、maintenance fencing
 - `FeaturePresentation`、transient controller、product-captureの登録・起動・終了
+- `BackupRestoreSectionMount`の実装、factory、backup内部root／state構築、および旧backup registration／contributionファイルの削除
+- メッセージのexact key名、ja/en値、namespace shape、placeholder、parity、fallback、廃止key削除
 - manifest権限、Chrome Storage key、runtime message、外部依存
 
 ### Allowed Dependencies
 
-- `settings`は`application-shell/public.ts`のregistration／mount型、`ui-language/public.ts`の`LanguageProvider`と`LanguageSelectControl`、`backup-restore/public.ts`の`BackupRestoreSectionMount`だけを利用する
+- `settings`は`application-shell/public.ts`のregistration／mount型、`ui-language/public.ts`の`LanguageProvider`と`LanguageSelectControl`、`backup-restore/public.ts`の`BackupRestoreSectionMount`、`ui-messages/public.ts`の型付きresolver／key契約だけを利用する
 - `backup-restore`は既存どおり専用`FoundationDataPort`と自身の内部service/state/viewを利用する
 - application shellのcomposition ownerだけが具体settings contributionとbackup section factoryを組み立てる
-- `transient-feature-surface`完了後の`presentation`既定値persistentと、`product-capture-transient-migration`完了後の常設navigation集合を実装前提とする
+- `transient-feature-surface`完了後の明示的な常設／一過性判別共用体と、`product-capture-transient-migration`完了後の常設navigation集合を実装前提とする
 - cross-feature deep import、DOM eventによる暗黙連携、settingsからstorage／Foundationへの直接到達を禁止する
 
 ### Revalidation Triggers
@@ -57,6 +58,7 @@ settings featureは配置とlifecycle合成だけを所有する。表示言語�
 - `FeatureMountContext`、`FeatureMountHandle`、`FeaturePresentation`のshapeまたはmount失敗契約の変更
 - `LanguageSelectControl`または`LanguageProvider`の公開契約、言語変更時のroot更新方式の変更
 - `BackupRestoreSectionMount`を通さずbackup componentまたはstateを外部利用する変更
+- `ui-message-catalog`が公開する設定／shell案内のkey、namespace、placeholder、fallback、parityまたは廃止key checkpointの変更
 - settings以外の常設面へ言語controlを再配置する変更
 - `settings`または`backupRestore` feature idを永続化する新しい機能の追加
 - backup sectionのstateをReact root外へ移す変更、または復元時にside panel documentを再生成する変更
@@ -71,7 +73,7 @@ settings featureは配置とlifecycle合成だけを所有する。表示言語�
 - backup-restoreは独立registrationが専用`fullDataPort`を受け、state/service/file gatewayとReact rootを内部で構成する。
 - feature外のconsumerは`public.ts`だけを利用し、各React rootは自身の`root.unmount()`を所有する。
 
-変更はこの構造を一般化せず、backup registrationのmount責務を公開section portへ抽出し、settings registrationが2つの表示能力を合成する形に限定する。
+変更はこの構造を一般化せず、`backup-restore`が抽出する公開section portをsettings registrationが受け入れ、2つの表示能力を合成する形に限定する。
 
 ### Architecture Pattern & Boundary Map
 
@@ -134,14 +136,12 @@ src/features/settings/
   view.tsx                      # SettingsView
   styles.css                    # settings区画layout
   public.ts                     # settings idとfactoryの公開入口
-src/features/backup-restore/
-  section-mount.ts              # BackupRestoreSectionMount
 tests/features/settings/
   registration.test.tsx
   view.test.tsx
   integration.test.tsx
 e2e/
-  settings-screen.spec.ts       # SettingsCatalogAndLocatorContractの主要E2E
+  settings-screen.spec.ts       # SettingsMessageConsumerAndLocatorContractの主要E2E
 ```
 
 ### Modified Files
@@ -150,30 +150,16 @@ e2e/
 - `src/application-shell/shell-view.tsx` — headerの`LanguageSelectControl`を撤去し、`ShellLanguageRecoverySurface`をloading/errorへ表示する
 - `src/application-shell/shell-view.css` — 空header行を除去し、二言語案内のstatus layoutを定義する
 - `src/application-shell/nav-icons.tsx` — settings用の同梱gear glyphを追加する
-- `src/features/backup-restore/public.ts` — `BackupRestoreSectionMount`とfactoryだけを外部へ公開する
-- `src/features/backup-restore/react-root.tsx` — 独立画面ではなくsection rootとしての命名とcleanup契約を明確にする
-- `src/features/backup-restore/view.tsx` — settingsの見出し階層へ合わせるが、export／restore区画と状態表示は変更しない
-- `src/features/backup-restore/styles.css` — 独立画面前提の外側padding／heightをsettings hostへ移し、内部区画styleだけを保持する
-- `src/features/backup-restore/registration.ts` — 独立registrationを削除し、state構築責務を`section-mount.ts`へ移す
-- `src/features/backup-restore/feature-contribution.ts` — 独立contributionを削除する
-- `src/ui-messages/catalog/ja/settings.ts`, `src/ui-messages/catalog/en/settings.ts` — settings title、区画見出し、説明文を同じkey集合で追加する
-- `src/ui-messages/catalog/ja/nav.ts`, `src/ui-messages/catalog/en/nav.ts` — `nav.backupRestore`を`nav.settings`へ置換する
-- `src/ui-messages/catalog/ja/shell.ts`, `src/ui-messages/catalog/en/shell.ts` — 同一の二言語recovery hintを追加する
-- `src/ui-messages/catalog/ja/index.ts`, `src/ui-messages/catalog/en/index.ts` — settings namespaceをcatalogへ組み込む
 - `e2e/locators.ts` — settings root／section locatorを追加し、`languageSelect`をsettings scopeへ変更する
 - `e2e/backup-restore.spec.ts` — settings navigation経由へ変更する
 - `e2e/english-ui.spec.ts` — settingsで言語変更し、独立backup feature期待を削除する
 - `e2e/language-behavior-invariance.spec.ts` — settings mount維持とbackup state維持を検証する
 - `tests/application-shell/shell-view.test.tsx` — header撤去、状態別案内、settings navigation到達を固定する
 - `tests/application-shell/feature-contribution-catalog.test.ts` — persistent/transient混在後のsettings orderを固定する
-- `tests/features/backup-restore/registration.test.tsx` — section mount contract testへ置換する
-- `tests/features/backup-restore/backup-restore-flow.integration.test.tsx` — settings内mount経路へ変更する
 - `tests/runtime/root-public-api.test.ts`, `tests/tooling/build-smoke.test.ts` — root key／production catalogを`settings`へ更新する
 - `scripts/validate-boundaries.mjs` — settingsから許可する公開依存とbackup deep import拒否を検証する
-- `.kiro/specs/application-shell/requirements.md`, `.kiro/specs/application-shell/design.md` — 要件8を状態別到達／案内へ改訂する
-- `.kiro/specs/ui-internationalization/requirements.md`, `.kiro/specs/ui-internationalization/design.md` — 言語controlの設置面と例外状態保証を改訂する
-- `.kiro/specs/backup-restore/requirements.md`, `.kiro/specs/backup-restore/design.md` — 独立tabからsettings sectionへの配置契約を改訂する
-- `.kiro/specs/ui-message-catalog/requirements.md`, `.kiro/specs/ui-message-catalog/design.md` — `nav.settings`とsettings namespaceを現行catalog契約へ反映する
+
+`BackupRestoreSectionMount`の実装・公開と旧backup registration／contributionの削除は`backup-restore`のFile Structure Planが所有する。catalog dataとその検証ファイルは`ui-message-catalog`のFile Structure Planが所有し、本specのfile planへ重複計上しない。
 
 ## System Flows
 
@@ -221,40 +207,40 @@ registration、settings root、backup rootは再生成しない。backup host DO
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1 | settings navigation | SettingsFeatureContribution, SettingsFeatureRegistration, SettingsCatalogAndLocatorContract | ApplicationFeatureRegistration | Settings Mount |
-| 1.2 | 2区画の同一画面 | SettingsView, BackupRestoreSectionMount | SettingsViewProps, BackupRestoreSectionMount | Settings Mount |
+| 1.1 | settings navigation | SettingsFeatureContribution, SettingsFeatureRegistration, SettingsMessageConsumerAndLocatorContract | ApplicationFeatureRegistration | Settings Mount |
+| 1.2 | 2区画の同一画面 | SettingsView, SettingsFeatureRegistration | SettingsViewProps, BackupRestoreSectionMount | Settings Mount |
 | 1.3 | header control撤去 | ShellLanguageRecoverySurface | ShellViewProps | State Presentation |
 | 1.4 | backup独立nav撤去 | SettingsFeatureContribution | SidePanelFeatureContributions | Settings Mount |
-| 1.5 | 区画見出し | SettingsView, SettingsCatalogAndLocatorContract | MessageKey | Settings Mount |
+| 1.5 | 区画見出し | SettingsView, SettingsMessageConsumerAndLocatorContract | MessageKey | Settings Mount |
 | 2.1 | ja/en選択 | SettingsView | LanguageSelectControl | Language Change |
 | 2.2 | endonymと選択状態 | SettingsView | LanguageSelectControl | Language Change |
-| 2.3 | 即時文言反映 | SettingsView, SettingsCatalogAndLocatorContract | LanguageStore subscription | Language Change |
-| 2.4 | settings非再mount | SettingsReactRootAdapter, BackupRestoreSectionMount | FeatureMountHandle | Language Change |
+| 2.3 | 即時文言反映 | SettingsView, SettingsMessageConsumerAndLocatorContract | LanguageStore subscription | Language Change |
+| 2.4 | settings非再mount | SettingsReactRootAdapter, SettingsFeatureRegistration | FeatureMountHandle | Language Change |
 | 2.5 | 業務データ不変 | SettingsFeatureRegistration | read-only language integration | Language Change |
 | 2.6 | 保存失敗時継続 | SettingsView | ui-language public behavior | Language Change |
 | 3.1 | ready／maintenance到達 | SettingsFeatureContribution, ShellLanguageRecoverySurface | persistent navigation | State Presentation |
-| 3.2 | maintenance中の言語変更 | SettingsView, BackupRestoreSectionMount | OperationPolicy | Language Change |
+| 3.2 | maintenance中の言語変更 | SettingsView, SettingsFeatureRegistration | OperationPolicy | Language Change |
 | 3.3 | feature failureから移動 | ShellLanguageRecoverySurface | ShellNavigation | State Presentation |
-| 3.4 | loadingの二言語案内 | ShellLanguageRecoverySurface, SettingsCatalogAndLocatorContract | MessageKey | State Presentation |
-| 3.5 | startup error案内 | ShellLanguageRecoverySurface, SettingsCatalogAndLocatorContract | MessageKey, retry callback | State Presentation |
+| 3.4 | loadingの二言語案内 | ShellLanguageRecoverySurface, SettingsMessageConsumerAndLocatorContract | MessageKey | State Presentation |
+| 3.5 | startup error案内 | ShellLanguageRecoverySurface, SettingsMessageConsumerAndLocatorContract | MessageKey, retry callback | State Presentation |
 | 3.6 | 無効control非表示 | ShellLanguageRecoverySurface | ShellViewState | State Presentation |
-| 4.1 | 既存backup操作 | BackupRestoreSectionMount | BackupRestoreSectionMount | Settings Mount |
-| 4.2 | backup契約不変 | BackupRestoreSectionMount | FoundationDataPort | Settings Mount |
-| 4.3 | maintenance可否維持 | BackupRestoreSectionMount | OperationPolicy | Settings Mount |
-| 4.4 | 既存errorと再試行 | BackupRestoreSectionMount | BackupRestoreState | Settings Mount |
-| 4.5 | 復元後の言語保持 | SettingsReactRootAdapter, BackupRestoreSectionMount | LanguageStore subscription | Language Change |
-| 4.6 | backup state保持 | SettingsReactRootAdapter, BackupRestoreSectionMount | FeatureMountHandle | Language Change |
-| 5.1 | 既存データ互換 | SettingsFeatureContribution, BackupRestoreSectionMount | unchanged storage contracts | Settings Mount |
-| 5.2 | navigation非重複 | SettingsFeatureContribution, SettingsCatalogAndLocatorContract | SidePanelFeatureContributions | Settings Mount |
-| 5.3 | navigationと画面の同一言語 | SettingsView, SettingsCatalogAndLocatorContract | MessageResolver | Language Change |
-| 5.4 | ja/en能力同等 | SettingsView, BackupRestoreSectionMount, SettingsCatalogAndLocatorContract | catalog parity | Language Change |
+| 4.1 | 既存backup操作 | SettingsFeatureRegistration | BackupRestoreSectionMount | Settings Mount |
+| 4.2 | backup契約不変 | SettingsFeatureRegistration | BackupRestoreSectionMount | Settings Mount |
+| 4.3 | maintenance可否維持 | SettingsFeatureRegistration | OperationPolicy | Settings Mount |
+| 4.4 | 既存errorと再試行 | SettingsFeatureRegistration | BackupRestoreSectionMount | Settings Mount |
+| 4.5 | 復元後の言語保持 | SettingsReactRootAdapter, SettingsFeatureRegistration | LanguageStore subscription | Language Change |
+| 4.6 | backup state保持 | SettingsReactRootAdapter, SettingsFeatureRegistration | FeatureMountHandle | Language Change |
+| 5.1 | 既存データ互換 | SettingsFeatureContribution, SettingsFeatureRegistration | unchanged public contracts | Settings Mount |
+| 5.2 | navigation非重複 | SettingsFeatureContribution, SettingsMessageConsumerAndLocatorContract | SidePanelFeatureContributions | Settings Mount |
+| 5.3 | navigationと画面の同一言語 | SettingsView, SettingsMessageConsumerAndLocatorContract | MessageResolver | Language Change |
+| 5.4 | ja/en能力同等 | SettingsView, SettingsFeatureRegistration, SettingsMessageConsumerAndLocatorContract | catalog public contract | Language Change |
 | 5.5 | persistent扱い | SettingsFeatureRegistration | FeaturePresentation | Settings Mount |
-| 6.1 | stable locator | SettingsCatalogAndLocatorContract | data-region, data-feature-id | E2E |
-| 6.2 | 言語E2E | SettingsCatalogAndLocatorContract, SettingsView | E2E locators | Language Change |
-| 6.3 | backup E2E | SettingsCatalogAndLocatorContract, BackupRestoreSectionMount | E2E locators | Settings Mount |
-| 6.4 | 非再mount統合検証 | SettingsReactRootAdapter, BackupRestoreSectionMount | test mount handles | Language Change |
+| 6.1 | stable locator | SettingsMessageConsumerAndLocatorContract | data-region, data-feature-id | E2E |
+| 6.2 | 言語E2E | SettingsMessageConsumerAndLocatorContract, SettingsView | E2E locators | Language Change |
+| 6.3 | backup E2E | SettingsMessageConsumerAndLocatorContract, SettingsFeatureRegistration | E2E locators | Settings Mount |
+| 6.4 | 非再mount統合検証 | SettingsReactRootAdapter, SettingsFeatureRegistration | test mount handles | Language Change |
 | 6.5 | shell状態検証 | ShellLanguageRecoverySurface | ShellViewState | State Presentation |
-| 6.6 | 完全gate | SettingsCatalogAndLocatorContract | validation scripts | 全flow |
+| 6.6 | 完全gate | SettingsMessageConsumerAndLocatorContract | validation scripts | 全flow |
 
 ## Components and Interfaces
 
@@ -264,9 +250,8 @@ registration、settings root、backup rootは再生成しない。backup host DO
 | SettingsFeatureRegistration | Feature lifecycle | persistent settings registrationと協調mountを所有する | 1.1, 2.4, 2.5, 3.1, 5.5 | SettingsReactRootAdapter P0, BackupRestoreSectionMount P0 | Service, State |
 | SettingsReactRootAdapter | UI adapter | layout rootとbackup hostを同期renderしcleanupする | 2.4, 4.5, 4.6, 6.4 | React DOM P0, SettingsView P0 | Service |
 | SettingsView | Presentation | 言語区画、backup区画、stable hostを描画する | 1.2, 1.5, 2.1, 2.2, 2.3, 2.6, 3.2, 5.3, 5.4 | ui-language public P0, ui-messages public P0 | State |
-| BackupRestoreSectionMount | Backup adapter | 既存backup能力を公開section lifecycleとして提供する | 1.2, 3.2, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.4 | FoundationDataPort P0, backup internals P0 | Service, State |
 | ShellLanguageRecoverySurface | Shell presentation | header撤去と状態別の到達／二言語案内を提供する | 1.3, 3.1, 3.3, 3.4, 3.5, 3.6, 6.5 | ShellViewState P0, MessageResolver P1 | State |
-| SettingsCatalogAndLocatorContract | Localization and validation | ja/en parityと文言非依存識別子を固定する | 1.5, 2.3, 3.4, 3.5, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.6 | ui-messages P0, Playwright P1 | API |
+| SettingsMessageConsumerAndLocatorContract | Presentation and validation | semantic message要件・consumer位置・observable guidanceと文言非依存識別子を固定する | 1.5, 2.3, 3.4, 3.5, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.6 | ui-messages public P0, Playwright P1 | API |
 
 ### Composition Layer
 
@@ -274,20 +259,20 @@ registration、settings root、backup rootは再生成しない。backup host DO
 
 | Field | Detail |
 |---|---|
-| Intent | composition ownerがfullDataPortをbackup ownerへだけ渡し、settings contributionを返す |
+| Intent | composition ownerからcanonical backup section mountを受け取り、settings contributionを返す |
 | Requirements | 1.1, 1.4, 5.1, 5.2 |
 
 **Responsibilities & Constraints**
 
-- `createBackupRestoreSectionMount({ data: context.fullDataPort })`を構成し、結果だけをsettings registrationへ注入する。
-- settings内部へ`FoundationDataPort`を公開しない。
+- application compositionが`backup-restore/public.ts`から構成した`BackupRestoreSectionMount`を依存として受け取り、settings registrationへ注入する。
+- settings feature内へ`FoundationDataPort`、backup factory依存、backup stateを公開しない。
 - contribution key、registration id、root public keyを`settings`へ統一する。
 - 上流移行後のproduct-capture contributionはtupleに残すが、transientであるためnavigation期待へ含めない。
 
 **Dependencies**
 
-- Inbound: ApplicationComposition — concrete catalog構築（P0）
-- Outbound: BackupRestore public — section factory（P0）
+- Inbound: ApplicationComposition — concrete catalogと公開section mountの構築（P0）
+- Outbound: BackupRestore public — section mount contract（P0）
 - Outbound: SettingsFeatureRegistration — registration factory（P0）
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
@@ -305,7 +290,7 @@ export function createSettingsContribution(
 ): SettingsContribution;
 ```
 
-- Preconditions: `context.fullDataPort`はproduction compositionが検証済みである。
+- Preconditions: 注入されたsection mountは`backup-restore` task 6.1の公開contract testを通過している。
 - Postconditions: settingsだけがorder 60のpersistent navigationとしてbackup能力を提示する。
 - Invariants: backup capabilityはsettings public APIへ露出しない。
 
@@ -318,8 +303,8 @@ export function createSettingsContribution(
 
 **Responsibilities & Constraints**
 
-- `id: settings`、`navigation.labelKey: nav.settings`、`order: 60`、`icon: settings`を返す。
-- `presentation`は省略して上流契約のpersistent既定値を利用し、transient lifecycle portへ依存しない。
+- `id: settings`、`presentation: "persistent"`、`navigation: { labelKey: "nav.settings", order: 60, icon: "settings" }`を明示して返す。
+- canonical `PersistentApplicationFeatureRegistration`を直接消費し、transient lifecycle portへ依存しない。
 - settings rootを同期renderし、取得したhostへbackup section mountをawaitする。
 - backup mount失敗時はsettings rootをcleanupして失敗をshellへ伝播する。
 - 正常unmountはbackup handle、settings rootの順で一度だけ行う。
@@ -345,7 +330,7 @@ export interface SettingsRegistrationDependencies {
 
 export function createSettingsFeatureRegistration(
   dependencies: SettingsRegistrationDependencies,
-): ApplicationFeatureRegistration<SettingsPublicApi>;
+): PersistentApplicationFeatureRegistration<SettingsPublicApi>;
 ```
 
 **State Management**
@@ -401,48 +386,14 @@ export function mountSettingsReactRoot(
 
 summary-only presentation componentとする。`data-region="settings"`、`language`、`backup-restore`、`backup-restore-host`を固定し、自然言語をselectorへ使わない。見出し階層はsettings titleを`h2`、区画を`h3`とし、backup内部のexport／restore見出しは一段下げる。`LanguageSelectControl`以外の設定stateを持たない。
 
-### Backup Feature Boundary
+### Backup Feature Public Contract Consumption
 
-#### BackupRestoreSectionMount
+`BackupRestoreSectionMount`の型、factory、内部state/root構築、mount失敗時cleanupは`backup-restore`がcanonical ownerとして定義・実装する。本specは`backup-restore/public.ts`から提供されたmount objectを受け取り、空の`backupRestoreHost`と既存`FeatureMountContext`を渡し、返された`FeatureMountHandle`をsettings lifecycleの一資源として保持するだけである。
 
-| Field | Detail |
-|---|---|
-| Intent | backup-restoreの内部構成を漏らさず任意のfeature-owned containerへmountする |
-| Requirements | 1.2, 3.2, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.4 |
-
-**Responsibilities & Constraints**
-
-- 既存`BackupService`、`RestoreService`、`BackupRestoreState`、`fileGateway`を自身のfactory内で構成する。
-- `FeatureMountContext.operationPolicy`をそのまま利用し、settings独自のmutation判定を導入しない。
-- 既存viewのexport、restore、confirmation、result、classified errorを維持する。
-- 公開するのはmount methodとfactoryだけで、React component、state、service、FoundationDataPortを公開しない。
-
-**Dependencies**
-
-- Inbound: SettingsFeatureRegistration — section hostとoperation policy（P0）
-- Outbound: FoundationDataPort — backup／atomic restore（P0）
-- Outbound: backup内部service/state/root — canonical behavior（P0）
-
-**Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
-
-```typescript
-export interface BackupRestoreSectionMount {
-  mount(context: FeatureMountContext): Promise<FeatureMountHandle>;
-}
-
-export interface BackupRestoreSectionDependencies {
-  readonly data: FoundationDataPort;
-  readonly state?: BackupRestoreState;
-}
-
-export function createBackupRestoreSectionMount(
-  dependencies: BackupRestoreSectionDependencies,
-): BackupRestoreSectionMount;
-```
-
-- Preconditions: containerは空でsettings rootの寿命に従属する。
-- Postconditions: mount成功時にbackup rootが一つ存在し、handleが全購読とDOMをcleanupする。
-- Invariants: 交換形式、data transaction、maintenance generation、language persistenceを変更しない。
+- Preconditions: `backup-restore` task 6.1が公開mount契約とcontract testを完成していること。
+- Postconditions: settings mount成功時は公開sectionがhost内に一つ存在し、settings unmountは返されたhandleをsettings rootより先に一度だけ解放する。
+- Invariants: settingsはbackupのfactory依存、`FoundationDataPort`、state、service、error code、交換形式を解釈・再実装しない。
+- Cleanup ownership: settings composition切替後の旧backup registration／contribution削除は`backup-restore` task 6.2が行う。
 
 ### Shell and Validation
 
@@ -455,18 +406,19 @@ export function createBackupRestoreSectionMount(
 
 summary-only shell presentationとする。header領域そのものを削除し、navigation利用可能時は既存persistent navigationからsettingsへ到達させる。loadingとglobal error status内だけに`設定 / Settings`を含むcatalog messageを表示する。feature-local error boundaryではnavigationを維持する。selectはsettings view以外にrenderしない。
 
-#### SettingsCatalogAndLocatorContract
+#### SettingsMessageConsumerAndLocatorContract
 
 | Field | Detail |
 |---|---|
-| Intent | 表示文言とテスト識別子を独立させ、ja/enで同じ能力を保証する |
+| Intent | 設定画面が必要とする意味・表示場所・状態別案内を定め、公開catalog契約と文言非依存識別子を利用する |
 | Requirements | 1.5, 2.3, 3.4, 3.5, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.6 |
 
 **Responsibilities & Constraints**
 
-- ja/enへ同じsettings key集合を追加し、catalog parityの型・testを通す。
-- `nav.backupRestore`を削除し`nav.settings`へ置換する。backup本文namespaceは維持する。
-- recovery hintは両catalogで同じ短い二言語表現とし、翻訳後にも両言語の手掛かりを失わない。
+- settings title、表示言語区画、backup区画、navigation label、loading／startup failure案内というsemantic message要件とconsumer位置を定める。
+- viewとshell surfaceは`ui-messages/public.ts`の型付きkey／resolverだけを利用し、catalog定数、ja/en値、namespace構造を直接importしない。
+- exact key名、ja/en値、namespace shape、placeholder、parity、fallback、legacy key削除は`ui-message-catalog`の公開契約と検証結果を受け入れる。
+- recovery guidanceは現在言語にかかわらず「設定 / Settings」と利用可能な回復操作を判別できることをDOM上で検証する。
 - E2Eは`data-feature-id="settings"`と`data-region`／`data-action`だけで要素を特定する。
 
 **Contracts**: Service [ ] / API [x] / Event [ ] / Batch [ ] / State [ ]
@@ -515,10 +467,10 @@ summary-only shell presentationとする。header領域そのものを削除し�
 
 ### Unit and Contract Tests
 
-1. `SettingsFeatureRegistration`がid `settings`、order 60、gear icon、persistent既定、空public APIを返し、availability購読を透過すること（1.1, 5.5）。
-2. `BackupRestoreSectionMount`が既存service/state/file gatewayを構成し、mount/unmountを一度だけ行うこと（4.1, 4.2, 4.3）。
+1. `SettingsFeatureRegistration`がid `settings`、`presentation: "persistent"`、`nav.settings`、order 60、gear icon、空public APIを返し、availability購読を透過すること（1.1, 5.5）。
+2. `SettingsFeatureRegistration`が公開`BackupRestoreSectionMount`へhost付きcontextを渡し、返されたhandleをsettings rootより先に一度だけcleanupすること（4.1, 4.2, 4.3）。
 3. backup mount失敗時にsettings rootがcleanupされ、成功handleが返らないこと（6.4）。
-4. ja/en catalogがsettings key、placeholder、recovery hintでparityを保ち、`nav.backupRestore`が残らないこと（5.2, 5.4）。
+4. `ui-message-catalog`の公開resolverがsettings各consumerのsemantic messageと二言語recovery guidanceを解決でき、同specのparity／dead-key gateを再実行して成功すること（5.2, 5.4）。
 5. boundary validatorがsettingsからbackup内部へのdeep import、storage、Foundation直接参照を拒否すること（5.1, 6.6）。
 
 ### DOM Tests
@@ -532,7 +484,7 @@ summary-only shell presentationとする。header領域そのものを削除し�
 ### Integration Tests
 
 1. productionと同じside panel contributionsがcandidate、current-build、transient capture、compatibility、settingsを組み立て、persistent navigationにsettingsを一度だけ含むこと（1.1, 1.4, 5.2, 5.5）。
-2. settings mountがfullDataPortをbackup ownerだけへ渡し、export／preflight／confirm／restoreを既存Foundationへ接続すること（4.1〜4.4）。
+2. application compositionがcanonical backup section factoryへだけfullDataPortを渡し、settingsへは完成済みmount contractだけを注入してexport／preflight／confirm／restoreへ到達できること（4.1〜4.4）。
 3. maintenance中もsettingsへ移動して言語変更でき、backup mutation可否は既存OperationPolicyに従うこと（3.1, 3.2, 4.3）。
 4. settingsから別persistent featureまたはtransient surfaceへ移動すると、backup rootとsettings rootが逆順cleanupされ購読が残らないこと（5.5, 6.4）。
 5. root public API snapshotとbuild smokeが`settings`を含み、`backupRestore`独立entryを含まないこと（5.2, 6.6）。
@@ -562,10 +514,10 @@ summary-only shell presentationとする。header領域そのものを削除し�
 schemaまたは利用者データmigrationはない。実装順をcontract migrationとして管理する。
 
 1. 上流`transient-feature-surface`と`product-capture-transient-migration`のapproved contractを実装前提として確認する。
-2. 既存specの配置契約をsettings中心へ改訂する。
-3. backup section mount portを追加し、独立registrationと同じ挙動をcontract testで固定する。
-4. settings featureを追加してcomposition tupleを切り替える。
-5. shell header、catalog、locator、E2Eを一括で新navigationへ移行する。
-6. `backupRestore`の独立registration、public key、dead message key、旧locatorを削除し、検索・snapshot・完全gateで残存がないことを確認する。
+2. `backup-restore` task 6.1でsection mount portを追加し、独立registrationと同じ挙動をcontract testで固定する。
+3. `ui-message-catalog`がsemantic message要件をexact key、ja/en値、namespace、placeholder／parity契約へ写像し、公開resolverから利用可能にする。
+4. settings featureを追加し、shell header／navigation／locator／E2Eのsettings-owned consumerとcomposition参照を切り替える。
+5. `backup-restore` task 6.2で、settings composition切替後にbackup-owned独立registration／contribution／公開surfaceを削除する。
+6. catalog ownerのdead-key gate、application composition snapshot、root API、完全gateを再実行し、legacy consumerが残らないことを確認する。
 
-rollbackが必要な場合は同一commit単位でnavigation、composition、catalog、locatorを旧構成へ戻す。storageとbackupデータは変更しないためデータrollbackは不要である。
+依存順は`backup-restore 6.1` → `settings-screen consumer/composition` → `backup-restore 6.2 cleanup`で固定し、settingsから6.2への先行依存は置かない。rollbackが必要な場合は各ownerの変更単位でconsumer composition、catalog contract、backup legacy surfaceを整合するcheckpointへ戻す。storageとbackupデータは変更しないためデータrollbackは不要である。

@@ -8,6 +8,9 @@
   - 候補は単一プロジェクトへ所属し、プロジェクト削除は上流Repositoryが所属データを同一更新内で除去する。
   - 新規外部依存は不要で、業務サービスとサイドパネルUIを上流ポートへ接続する最小構成が適切である。
   - 最新Foundationは候補変更とCurrentBuild参照修復を同一root mutationで完了し、application shellはfeature-neutralなtyped activationを配送する。
+  - `product-capture-transient-migration` は保存portや直接navigationを廃止し、candidate-management所有のtyped intent factoryと解決前pre-edit契約へ移行する。
+  - project 0件はactivation失敗ではなく候補管理の`project-required`状態であり、空名は編集開始検証では許可し既存保存時検証で拒否する。
+  - 候補管理公開APIは`query`、`createCandidateEditorIntent`、`sources: { catalog, mutations }`を共存させ、`duplicate-product-merge`の公開consumer境界を維持する。
 
 ## Research Log
 
@@ -55,7 +58,7 @@
 - **Sources Consulted**: `local-data-foundation/design.md`、`application-shell/design.md`、`roadmap.md`、`cross-spec-review.md`
 - **Findings**: Foundationは`FoundationDataPort.mutate`内で参照修復、root検証、revision更新、単一保存を行う。shellはfeature ID、target、`unknown` payloadを配送し、対象featureがpayloadを検証する。
 - **Implications**: 候補管理はRepository直接writeと成功後のbuild reconcileを要求せず、`RootMutationCommand`の利用側になる。候補編集prefillは`public.ts`の型付きAPIとregistrationのruntime validatorを対にする。
-- **Decision**: `openCandidateEditor`はDOMやhostを直接操作せず`ShellNavigator`へintentを渡す。`CandidateDraft`は`sourceInfo`と`sourceSnapshot`を別フィールドとして正式公開する。
+- **Decision（2026-07-27に置換）**: 当時の`openCandidateEditor`直接navigation判断はtyped handoff移行で廃止し、現在は副作用のない`createCandidateEditorIntent`を公開する。`CandidateDraft`の保存規則は引き続き候補管理が所有する。
 - **Risk Mitigation**: activation payload、project存在、targetを適用前に検証し、失敗時は入力元と候補管理双方の既存stateを保持する。
 
 ### 2026-07-20 Shell rollback snapshot契約への追従
@@ -63,3 +66,24 @@
 - **Findings**: shellはfeature固有stateを復元できないため、cross-feature activationの入力元はopaque state snapshotを提供する必要がある。cleanup失敗時はshellがtarget handleを保持し、sourceを同時にmountしない。
 - **Decision**: 候補管理は選択、未保存draft、確認ダイアログ、表示エラーをfeature-local snapshotとしてcapture／restoreする。永続root、request、購読、React objectはsnapshot対象外とする。
 - **Implications**: state snapshotのruntime validationはcandidate managementが所有し、shellへ候補値やフォーム構造を漏らさない。restore不能時は保存済みデータを変えず初期表示へ退避する。
+
+### 2026-07-27 transient product capture移行への追従
+- **Sources Consulted**: `product-capture-transient-migration/{requirements.md,design.md}`、`transient-feature-surface/design.md`、`application-shell/design.md`、候補管理の既存コード。
+- **Findings**: captureは`CandidateManagementPublicApi.createCandidateEditorIntent`でpayloadを作り、現行`activationId`とともに`TransientSurfaceLifecyclePort.conclude`へ渡す。候補管理は世代を所有せず、`FeatureActivationAdapter`のvalidate/activate結果だけを返す。project未指定は候補管理の直近stateで解決し、0件なら有効な`project-required`受理となる。
+- **Implications**: 旧`CaptureCandidatePort`、`openCandidateEditor`、capture側project queryを公開契約から除去する。`pendingPreEdit`は長寿命ManagementStateへsession限定で保持し、永続root・backup・opaque snapshotへ含めない。
+
+### 2026-07-27 下流source・duplicate契約の保全
+- **Sources Consulted**: `candidate-source-bookmarks/design.md`、`duplicate-product-merge/design.md`。
+- **Findings**: source specは候補管理公開APIへ`sources: { catalog, mutations }`を追加し、duplicate consumerは`CandidateQuery.listCandidates`とsource mutation portを利用する。一部文書に旧`capture`表記が残るが、transient migrationのcanonical契約とは両立しない。
+- **Implications**: 本specの最終公開APIは`query`、`createCandidateEditorIntent`、`sources` facetとする。source/duplicate能力をpre-edit内部へ統合せず、公開portの共存だけを保証する。旧`capture`参照は横断spec修復対象として報告する。
+
+## 2026-07-27 Design Synthesis
+
+### Generalization
+- project解決済み編集とproject未解決pre-editを一つの保存draftへ無理に統合せず、`UnresolvedCandidateDraft`からcanonical `CandidateDraft`へ一方向に解決する。
+
+### Build vs. Adopt
+- 世代管理と原子的handoffは`transient-feature-surface`、typed activation envelopeはapplication shell、保存validationはFoundationの既存契約を採用する。候補管理独自のgeneration、navigator、validatorを作らない。
+
+### Simplification
+- 公開操作をintent factoryへ縮小し、capture向けwrite portと直接navigation methodを削除する。`pendingPreEdit`は既存ManagementStateへの一field追加とし、別storeや永続schemaを導入しない。
