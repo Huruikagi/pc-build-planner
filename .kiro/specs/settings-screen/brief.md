@@ -28,7 +28,7 @@ v0.2.0 の `ui-internationalization` で言語切り替え UI を導入したが
 
 `src/features/settings/` を新設し、設定画面として言語切り替えとバックアップ・復元を集約する。shell ヘッダからは `LanguageSelectControl` を撤去する。
 
-**`transient-feature-surface`（#6）の完了後に着手する。** 両者は狭いサイドパネルの同じナビ面を触る（一方は product-capture を外し、一方は settings を足して backup-restore を畳む）ため、順序を決めないと E2E ロケータとカタログキーを二度触ることになる。capture を外した後の常設ナビ構成が見えている状態で設計する。
+**`transient-feature-surface` と `product-capture-transient-migration`（#6）の完了後に着手する。** 後者と本specは狭いサイドパネルの同じナビ面を触るため、captureを外した後の常設ナビ構成が見えている状態で設計する。
 
 **application-shell 要件8 の扱いが最大の設計判断になる。** 「どの画面状態でも言語を切り替えられる」という要件を、設定画面という一箇所へ集約する形とどう両立させるか。読み込み中・エラー表示中に設定画面へ到達できるのか、要件8 の意図（操作方法に迷わない）を別の形で満たすのか、要件そのものを緩めるのかを設計フェーズで決める。
 
@@ -60,11 +60,11 @@ v0.2.0 の `ui-internationalization` で言語切り替え UI を導入したが
 - 表示言語の意味・保存・解決（`ui-language` / `ui-internationalization` が所有）
 - メッセージカタログの構造（`ui-message-catalog` が所有）
 - バックアップの形式・maintenance lease（`backup-restore` / `local-data-foundation` が所有）
-- 常設ナビからの product-capture 除去（`transient-feature-surface` が所有）
+- 常設ナビからの product-capture 除去（`product-capture-transient-migration` が所有）
 
 ## Upstream / Downstream
 
-- **Upstream**: `transient-feature-surface`（先行して常設ナビ構成を確定させる）、`application-shell`（feature 登録・ナビ）、`ui-internationalization` / `ui-language`（言語コントロール）、`backup-restore`（再配置対象）、`ui-message-catalog`（文言）
+- **Upstream**: `transient-feature-surface`（一過性登録契約）、`product-capture-transient-migration`（先行して常設ナビからcaptureを除去）、`application-shell`（feature登録・ナビ）、`ui-internationalization` / `ui-language`（言語コントロール）、`backup-restore`（再配置対象）、`ui-message-catalog`（文言）
 - **Downstream**: UI 全面刷新（次リリース）が設定画面の存在を前提にできる
 
 ## Existing Spec Touchpoints
@@ -75,7 +75,8 @@ v0.2.0 の `ui-internationalization` で言語切り替え UI を導入したが
   - `backup-restore` -- 独立タブから設定画面内セクションへの再配置に伴う registration / navigation の改訂
   - `ui-message-catalog` -- `nav.settings` の追加と `nav.backupRestore` の整理
 - **Adjacent**:
-  - `transient-feature-surface` -- 同じナビ面を触る。**本 spec より先に確定させる**
+  - `transient-feature-surface` -- 一過性登録契約を提供する
+  - `product-capture-transient-migration` -- 同じナビ面を触る。**本specより先に確定させる**
 
 ## Constraints
 

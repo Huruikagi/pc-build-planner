@@ -1,5 +1,7 @@
 # Design Document
 
+> **v0.3.0移行注記（未承認）**: 以下は実装済みv0.1.0の設計である。`product-capture-transient-migration` の承認後、typed activationへ`UnresolvedCandidateDraft`と`validatePreEditDraft`を追加し、project解決後にcanonical `CandidateDraft`を構築する。既存`validateCandidatePartContent`は保存時検証として維持する。
+
 ## Overview
 
 本機能はPC構成を検討する利用者へ、プロジェクトと候補パーツをサイドパネル内で整理・補正する管理体験を提供する。`local-data-foundation` が提供する型、query、原子的root mutationを利用し、管理固有のコマンド規則、カテゴリ別参照契約、typed activation、フォーム状態、画面を追加する。

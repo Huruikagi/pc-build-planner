@@ -1,5 +1,7 @@
 # Design Document
 
+> **v0.3.0移行注記（未承認）**: 以下は実装済みv0.1.0の設計である。`product-capture-transient-migration` の承認後、capture所有の簡易確認・補正・project選択・保存状態は候補管理への即時typed handoffへ置換する。抽出器、ranker、normalizer、取得根拠は引き続き本specがcanonical ownerであり、移行specは再定義しない。
+
 ## Overview
 
 本機能は、閲覧中のPCパーツ商品ページから汎用的に情報を抽出し、利用者が根拠を確認・補正して既存プロジェクトへ候補登録する体験を提供する。actionの明示操作を入口に、注入された抽出器がDOM内で情報を収集し、service workerの調停を経てサイドパネルへ一時ドラフトを渡す。

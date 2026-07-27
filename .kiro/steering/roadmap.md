@@ -37,11 +37,11 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 - **Why this split**:
   - **shell の表示契約**（一過性 feature をどう登録し、いつ畳むか）と、**ドメインのデータ構造**（1商品 : N ソース）は互いに独立しており、並行して着手できる。この2本を土台に置くことで、後続3本（価格更新・統合・設定画面）は「既に確定した契約の利用者」として設計できる。
-  - `transient-feature-surface` は shell の登録契約変更を含むため、application-shell の既存 spec を改訂するのではなく**新規 spec に契約ごと所有させる**。application-shell 側は touchpoint として要件を改訂する。理由は、契約の追加と最初の利用者（product-capture）への適用を同一 spec 内で閉じて検証したいため。
+  - `transient-feature-surface` は shell/runtime の登録・起動・寿命契約だけを所有し、最初の利用者への適用は `product-capture-transient-migration` が所有する。旧案は両責務を一つのspecへ閉じたが、設計が約900行へ拡大し、runtime配送の競合レビューとcapture/candidate移行のレビューが互いに干渉したため分割した。
   - #8（ドメイン→メーカー名マップ）は既存の collector 構造に1つ足すだけの加算的変更であり、`product-page-capture` の既存 spec 更新として扱う。新規 spec を立てる境界には満たない。
   - #14 は steering 文書の追記のみで、実装を伴わないため spec 化しない。
 - **Shared seams to watch**:
-  - **サイドパネルのナビ面**: `transient-feature-surface`（capture を外す）と `settings-screen`（settings を足し backup-restore を畳む）が同じ面を触る。**E を先に確定させてから #19 に着手する**ことで、settings の設計時に最終形のナビが見えている状態にする。E2E ロケータ（`e2e/locators.ts`）とカタログキー（`src/ui-messages/catalog/{ja,en}/nav.ts`）の二度触りを避ける。
+  - **サイドパネルのナビ面**: `product-capture-transient-migration`（captureを外す）と `settings-screen`（settingsを足しbackup-restoreを畳む）が同じ面を触る。shell契約を先に確定し、capture移行後にsettingsへ進むことで、E2Eロケータとナビカタログの二度触りを避ける。
   - **`SourceInfo` / `price` の所有**: `candidate-source-bookmarks` が per-source 化の canonical owner。`source-price-refresh` と `duplicate-product-merge` はその契約の利用者であり、価格の置き場所を再定義しない。
   - **ドメイン→メーカー名マップの利用先**: #8 のマップは `product-page-capture` が所有し、#11 のソース種別自動判定はそれを**参照する**（マップを二重に持たない）。
   - **付与ジェスチャー経路**: `transient-feature-surface` が起動口（アイコン / コンテキストメニュー）の契約を所有し、`source-price-refresh` は「価格更新」メニュー項目をその契約に登録する形にする。service worker 側で経路を再実装しない。
@@ -50,20 +50,22 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 ## Existing Spec Updates
 
 - [ ] product-page-capture -- #8: ドメイン→メーカー名マップを最下位優先度の collector（`ExtractionSource: "domain-map"`）として追加し、メーカー自社サイトでの `manufacturer` 欠損を補完する。マップは `manufacturer-domain-map.ts` に分離し eTLD+1 で照合。Dependencies: none
-- [ ] product-page-capture -- transient-feature-surface による要件1.4 / 要件6.1 の改訂（付与失効時の案内・遷移時の扱いが「ビューを畳む」へ変わる）。Dependencies: transient-feature-surface
+- [ ] product-page-capture -- product-capture-transient-migration に合わせ、要件4（簡易確認・補正）と要件5（project選択・保存）を候補管理への即時引き渡しへ改訂し、要件1.4 / 6.1 / 6.4の権限失効・遷移・再実行を一過性面の寿命と新世代起動へ合わせる。Dependencies: product-capture-transient-migration
 - [ ] application-shell -- 要件1.1 / 1.5 / 2.1 / 要件7 の改訂（ナビに載らない一過性 feature 種別の受け入れ）。Dependencies: transient-feature-surface
+- [ ] project-candidate-management -- project未解決・空名のpre-edit activationと、編集開始/保存時検証の分離を受け入れる。Dependencies: product-capture-transient-migration
+- [ ] ui-message-catalog -- 一過性起動失敗・失効案内と、product-captureのナビ除去・権限再付与案内を日本語/英語で反映する。Dependencies: transient-feature-surface, product-capture-transient-migration
 - [ ] backup-restore -- #19: 独立タブから設定画面内セクションへの再配置に伴う registration / navigation の改訂。Dependencies: settings-screen
 - [ ] ui-internationalization -- #19: 言語セレクタの設置面が shell ヘッダから設定画面へ移ることに伴う改訂。Dependencies: settings-screen
 
 ## Direct Implementation Candidates
 
 - [ ] #14 抽出の規約・法務ポリシーを steering に明記 -- `.kiro/steering/` への追記のみで実装を伴わない。ユーザー操作起点・閲覧中ページ限定、robots / 各サイト規約の尊重、汎用構造化データを基本としサイト固有 DOM 抽出は例外、サイト固有ロジックはサイト単位オプトインで規約確認を記録、定期巡回は行わない。#8 のマップ運用および将来のサイト固有ロジック追加の可否判断の前提になる
-- [ ] #6-C `permission-lost` メッセージの文言修正 -- `src/features/product-capture/view.tsx:62` の「ページを表示し直してから再実行してください」は誤誘導（リロードでは直らない）。「拡張アイコンをもう一度クリックしてください」へ。他ピースの方針に依存せず即着手可能。transient-feature-surface 完了後は出番が激減するが、それまでの期間の誤誘導を消す価値がある
 
 ## Specs (dependency order)
 
-- [ ] transient-feature-surface -- shell に「ナビへ常設せず、付与ジェスチャーで起動し付与失効で自動的に畳まれる一過性 feature」の登録・起動・終了契約を導入し、product-capture をその最初の利用者として移行する（#6）。Dependencies: none
+- [ ] transient-feature-surface -- shell/runtime に「ナビへ常設せず、付与ジェスチャーで起動し付与失効で自動的に畳まれる一過性feature」の登録・起動・終了・汎用引き渡し契約を導入する（#6、基盤部分）。Dependencies: none
+- [ ] product-capture-transient-migration -- product-captureを一過性featureの最初の利用者へ移行し、実行面と候補編集・保存面を分離する（#6、業務移行部分）。Dependencies: transient-feature-surface
 - [ ] candidate-source-bookmarks -- 1商品に複数の取得元ページを束ねる構造へ移行し（`sourceInfo` の 1:N 化・価格の per-source 化・プライマリ導出・`schemaVersion` 移行）、取得元ページへの再訪導線とソース種別（販売 / メーカー紹介）を提供する（#10, #9, #11）。Dependencies: product-page-capture 更新（#8, 種別自動判定のマップ参照のみ）
-- [ ] settings-screen -- 設定画面 feature を新設し、表示言語切り替え（shell ヘッダから移設）とバックアップ・復元を集約する（#19）。Dependencies: transient-feature-surface
+- [ ] settings-screen -- 設定画面 feature を新設し、表示言語切り替え（shell ヘッダから移設）とバックアップ・復元を集約する（#19）。Dependencies: transient-feature-surface, product-capture-transient-migration
 - [ ] source-price-refresh -- ブックマーク済みページを再訪した状態で価格を再取得し、URL 突き合わせで特定したソースの価格・取得日時へ反映する（#12）。Dependencies: transient-feature-surface, candidate-source-bookmarks
 - [ ] duplicate-product-merge -- 取り込み時にプロジェクト内の既存候補との一致を検知し、新規候補として保存する代わりに既存パーツの別ソースとして統合する導線を提供する（#13）。Dependencies: candidate-source-bookmarks

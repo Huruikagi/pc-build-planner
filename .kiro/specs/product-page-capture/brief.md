@@ -1,5 +1,7 @@
 # Brief: product-page-capture
 
+> **v0.3.0移行注記（未承認）**: 本briefは実装済みv0.1.0の責務を記録している。`product-capture-transient-migration` が承認された時点で、要件4の簡易確認・補正と要件5のproject選択・保存はcandidate-managementの編集面へ移り、captureは抽出実行と取得根拠の生成だけを所有する。正式な要件改訂はroadmapのExisting Spec Updatesで行う。
+
 ## Problem
 
 閲覧中の商品ページからカテゴリ、メーカー、商品名、型番、URL、価格、主要スペックを手作業で転記する負担が大きい。

@@ -1,5 +1,7 @@
 # Brief: project-candidate-management
 
+> **v0.3.0移行注記（未承認）**: `product-capture-transient-migration` が承認された時点で、候補編集activationはproject未解決・空名のpre-edit draftを受け入れ、編集開始の構造検証と保存時検証を分離する。canonical `CandidateDraft`と保存規則は本specが引き続き所有し、正式な要件改訂はroadmapのExisting Spec Updatesで行う。
+
 ## Problem
 
 ユーザーは複数サイトで見つけたパーツ候補をPC構成の検討単位ごとに整理したいが、現在はスプレッドシートへ手作業で転記している。

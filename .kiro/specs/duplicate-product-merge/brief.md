@@ -57,7 +57,7 @@
 - **照合ロジック**（純粋関数として分離したい）: 候補集合と取り込み値を受け取り、一致候補を確信度つきで返す。UI と永続化から独立させてテストする。
 - **正規化**: `product-capture/normalizer.ts` の正規化との関係。同じ規則を再実装するのではなく canonical owner を決めて共有する。
 - **統合実行**: 既存パーツへのソース追加。`candidate-source-bookmarks` が提供する契約を呼ぶだけにし、ドメイン操作を本 spec で再実装しない。
-- **提示 UI**: 取り込みフロー内（product-capture 側）に出すか、候補管理側に出すか。取り込みの一過性ビュー（`transient-feature-surface`）の中で完結させるかも判断点。
+- **提示 UI**: 取り込みフロー内（product-capture側）に出すか、候補管理側に出すか。`product-capture-transient-migration`後の実行面と編集面の責務分割を前提に判断する。
 
 ## 設計で詰めるべき論点（issue より）
 
@@ -86,7 +86,8 @@
   - `project-candidate-management` -- 要件2（候補の作成と所属）、要件6.3（取り込みが単一プロジェクトへ候補を作成できる契約）
 - **Adjacent**:
   - `source-price-refresh` -- 同一 URL 再取り込みの振り分け先。責任分界を揃える
-  - `transient-feature-surface` -- 統合提示 UI を一過性ビュー内で完結させる場合、その表示制約を踏まえる
+  - `transient-feature-surface` -- 一過性表示面の寿命・引き渡し契約を参照する
+  - `product-capture-transient-migration` -- 統合提示UIを実行面と候補編集面のどちらへ置くか、その責務分割を踏まえる
 
 ## Constraints
 
