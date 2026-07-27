@@ -15,12 +15,12 @@ import { createFeatureRegistry } from "../../src/application-shell/feature-regis
 import type {
   ActivationId,
   TargetTabId,
-  TransientActivationRequest,
   TransientGestureRegistrationPort,
   TransientSurfaceLifecyclePort,
 } from "../../src/application-shell/public.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
 import { createTransientSurfaceController } from "../../src/application-shell/transient-surface-controller.js";
+import type { TransientActivationRequest } from "../../src/application-shell/transient-surface-ports.js";
 import { err, ok, type Result } from "../../src/domain/public.js";
 import { createTransientGestureRegistrar } from "../../src/runtime/transient-gesture-registration.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";

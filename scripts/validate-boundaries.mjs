@@ -60,7 +60,8 @@ const memberPath = (tokens, start, aliases) => {
   let end = start + 1;
   while (end < tokens.length) {
     if (
-      tokens[end]?.kind === SyntaxKind.DotToken &&
+      (tokens[end]?.kind === SyntaxKind.DotToken ||
+        tokens[end]?.kind === SyntaxKind.QuestionDotToken) &&
       tokens[end + 1]?.kind === SyntaxKind.Identifier
     ) {
       value += `.${tokens[end + 1]?.value}`;

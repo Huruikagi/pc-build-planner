@@ -136,12 +136,14 @@ src/runtime/
   service-worker.ts
   transient-gesture-registration.ts     # new
   transient-action-gesture-source.ts    # new
-  transient-activation-message.ts       # new
-  transient-activation-panel-port.ts    # new
-  transient-activation-failure-signal.ts # new
-  transient-activation-store.ts         # new
-  tab-lifecycle-rules.ts                # new
-  tab-lifecycle-adapter.ts              # new
+  canonical-gesture-ingress.ts           # new: 全gesture sourceの単一入口
+  transient-activation-transport.ts      # new: versioned worker/panel transport
+  panel-activation-adapter.ts            # new: watch-ready後のauthorization
+  activation-failure-signal.ts           # new: storage非依存のaction通知
+  transient-activation-store.ts          # new: session到達、store、scheduler
+  tab-lifecycle-adapter.ts               # new: URL非依存rulesとChrome listener
+  production-monitoring-integration.ts   # new: watch→authorize→controller handoff
+  production-transient-panel.ts          # new: production panel composition
 scripts/
   validate-boundaries.mjs
 tests/application-shell/
@@ -405,6 +407,8 @@ export interface TransientActivationStore {
 媒体は`chrome.storage.session`とし、商品値、URL、生HTMLを保持しない。panelは読み出しと購読だけを行い、変更要求はworkerへ送り、store変更のownerをruntimeへ集約する。
 
 service workerは起動要求とタブ寿命イベントを単一スケジューラへ同期的にenqueueし、受信時点を論理順序の線形化点として単調増加`seq`を割り当てる。スケジューラは永続化mutationを`seq`順に直列適用する。worker再生成時はsession envelope内の最大`seq`から次値を復元してからcommandを適用し、workerメモリだけを順序の根拠にしない。`sidePanel.open()`自体はaction callback内で同期開始し、store完了は待たない。
+
+スケジューラはworker compositionの停止時に`close()`される。`close()`は新しいcommandを拒否したうえで既に受理済みのtailをdrainし、完了後は旧compositionからsessionへ書き込みが残らないことを保証する。cleanupはwatch-ready、gesture source、tab listenerをbest-effortで全解除してからscheduler closeを待ち、個別cleanup例外が後続resourceの解除を妨げない。
 
 `invalidate`は対象recordの有無を問わず、tabごとの最新墓標を保存する。`put`適用時に`墓標.seq > record.seq`ならrecordを`invalidated`として着地させ、後から同条件の墓標が適用された場合も既存recordを`invalidated`へ進める。`invalidated`は終端であり、`requestAdvance`とactivation許可はこれを上書きできない。新しいジェスチャーは既存墓標より大きい`seq`を持つため、同じtabでも新世代として開始できる。
 

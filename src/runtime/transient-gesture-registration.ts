@@ -59,8 +59,18 @@ export const createTransientGestureRegistrar = (options: {
     },
     stop() {
       if (!started) return;
-      for (const cleanup of [...registrations.values()].reverse()) cleanup();
       started = false;
+      const errors: unknown[] = [];
+      for (const cleanup of [...registrations.values()].reverse()) {
+        try {
+          cleanup();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      registrations.clear();
+      if (errors.length > 0)
+        throw new AggregateError(errors, "transient gesture cleanup failed");
     },
   };
 };

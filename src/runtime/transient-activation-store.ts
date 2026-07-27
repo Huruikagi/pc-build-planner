@@ -313,6 +313,7 @@ export const createTransientActivationStore = (
 export interface TransientActivationScheduler {
   readonly store: TransientActivationStore;
   enqueue<T>(operation: () => Promise<T>): Promise<T>;
+  close(): Promise<void>;
   put(
     input: Omit<TransientActivationRecord, "seq" | "stage">,
   ): Promise<Result<void, ActivationStoreError>>;
@@ -334,6 +335,7 @@ export interface TransientActivationScheduler {
 class Scheduler implements TransientActivationScheduler {
   readonly store: TransientActivationStore;
   #tail: Promise<unknown> = Promise.resolve();
+  #closed = false;
   #sequenceBase:
     | Promise<Result<ActivationSequence, ActivationStoreError>>
     | undefined;
@@ -343,6 +345,8 @@ class Scheduler implements TransientActivationScheduler {
     this.#sequenceBase = this.#loadSequenceBase();
   }
   #enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.#closed)
+      return Promise.reject(new TransientActivationSchedulerClosedError());
     const result = this.#tail.then(operation, operation);
     this.#tail = result.then(
       () => undefined,
@@ -352,6 +356,13 @@ class Scheduler implements TransientActivationScheduler {
   }
   enqueue<T>(operation: () => Promise<T>): Promise<T> {
     return this.#enqueue(operation);
+  }
+  close(): Promise<void> {
+    this.#closed = true;
+    return this.#tail.then(
+      () => undefined,
+      () => undefined,
+    );
   }
   async #loadSequenceBase(): Promise<
     Result<ActivationSequence, ActivationStoreError>
@@ -428,6 +439,13 @@ export const createTransientActivationScheduler = (
   store: TransientActivationStore,
 ): TransientActivationScheduler => new Scheduler(store);
 
+class TransientActivationSchedulerClosedError extends Error {
+  override readonly name = "TransientActivationSchedulerClosedError";
+  constructor() {
+    super("transient activation scheduler is closed");
+  }
+}
+
 export interface ChromeSessionArea {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
@@ -448,6 +466,16 @@ export const resolveChromeTransientPanelStorage = ():
   chrome.storage?.session &&
   chrome.storage.onChanged
     ? { session: chrome.storage.session, changes: chrome.storage.onChanged }
+    : undefined;
+
+export const resolveChromeTransientWorkerSession = ():
+  | ChromeSessionArea
+  | undefined =>
+  typeof chrome !== "undefined" &&
+  chrome.storage?.session &&
+  typeof chrome.storage.session.get === "function" &&
+  typeof chrome.storage.session.set === "function"
+    ? chrome.storage.session
     : undefined;
 
 export const createChromeTransientSessionStorage = (

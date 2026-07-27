@@ -83,3 +83,37 @@ test("invalid/duplicate/start failureを閉じたerrorへ変換しentryを残さ
     true,
   );
 });
+
+test("stopはcleanup例外を隔離して全sourceを解除し停止状態を確定する", () => {
+  const stopped: string[] = [];
+  const registrar = createTransientGestureRegistrar({ ingress() {} });
+  registrar.start();
+  assert.equal(
+    registrar.register(
+      source("first", () =>
+        ok(() => {
+          stopped.push("first");
+        }),
+      ),
+    ).ok,
+    true,
+  );
+  assert.equal(
+    registrar.register(
+      source("broken", () =>
+        ok(() => {
+          stopped.push("broken");
+          throw new Error("cleanup failed");
+        }),
+      ),
+    ).ok,
+    true,
+  );
+
+  assert.throws(() => registrar.stop(), AggregateError);
+  assert.deepEqual(stopped, ["broken", "first"]);
+  assert.deepEqual(registrar.register(source("late", () => ok(() => {}))), {
+    ok: false,
+    error: { kind: "not-started" },
+  });
+});

@@ -121,7 +121,7 @@ test("gesture callback内でpanel openを同期開始し同じschedulerへputす
   const record = await scheduler.store.read();
   assert.equal(record.ok && record.value?.activationId, "activation-1");
   assert.deepEqual(signalCalls, ["badge:", "title:Planner"]);
-  cleanup();
+  await cleanup();
   assert.equal(action.size(), 0);
   assert.equal(onUpdated.size(), 0);
   assert.equal(onRemoved.size(), 0);
@@ -328,7 +328,7 @@ test("production compositionはgesture・tabs・watch-readyへ単一schedulerを
     (response as { decision?: { kind?: string } }).decision?.kind,
     "authorized",
   );
-  composition.cleanup();
+  await composition.cleanup();
   assert.equal(action.size(), 0);
   assert.equal(onUpdated.size(), 0);
   assert.equal(onRemoved.size(), 0);
@@ -417,9 +417,71 @@ test("action sourceとfeature-owned sourceは同じcanonical ingressとwatch-rea
   );
   assert.deepEqual(opened, [41, 42]);
 
-  bootstrap();
+  await bootstrap();
   contextEmit?.(43 as TargetTabId);
   action.emit({ id: 43 });
   await settle();
   assert.deepEqual(opened, [41, 42]);
+});
+
+test("cleanup例外時も全sourceとtab listenerを解除してschedulerをcloseする", async () => {
+  const action = event<[{ id?: number }]>();
+  const onUpdated = event<[number, { status?: string }]>();
+  const onRemoved = event<[number]>();
+  const scheduler = createTransientActivationScheduler(
+    createTransientActivationStore(new Session()),
+  );
+  let healthyCleanup = 0;
+  const bootstrap = createTransientWorkerRuntimeBootstrap({
+    scheduler,
+    action: { onClicked: action },
+    tabs: { onUpdated, onRemoved },
+    sidePanel: { async open() {} },
+    failureSignal: {
+      async publish() {
+        return ok(undefined);
+      },
+      async onDurablePutSucceeded() {
+        return ok(undefined);
+      },
+      async onReadSucceeded() {
+        return ok(undefined);
+      },
+      async onPanelOpened() {
+        return ok(undefined);
+      },
+    },
+    gestureSources: [
+      {
+        id: "healthy",
+        surfaceId: "healthy" as FeatureId,
+        start() {
+          return ok(() => {
+            healthyCleanup += 1;
+          });
+        },
+      },
+      {
+        id: "broken",
+        surfaceId: "broken" as FeatureId,
+        start() {
+          return ok(() => {
+            throw new Error("cleanup failed");
+          });
+        },
+      },
+    ],
+    createActivationId: () => "activation" as ActivationId,
+  });
+
+  await assert.rejects(bootstrap(), AggregateError);
+  assert.equal(healthyCleanup, 1);
+  assert.equal(onUpdated.size(), 0);
+  assert.equal(onRemoved.size(), 0);
+  await assert.rejects(
+    scheduler.enqueue(async () => undefined),
+    {
+      name: "TransientActivationSchedulerClosedError",
+    },
+  );
 });

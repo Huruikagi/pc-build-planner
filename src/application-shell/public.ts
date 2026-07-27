@@ -47,13 +47,10 @@ export type {
   ActivationId,
   TargetTabId,
   TargetTabIdValidationError,
-  TransientActivationRequest,
-  TransientDismissReason,
   TransientGestureRegistrationError,
   TransientGestureRegistrationPort,
   TransientGestureSource,
   TransientSurfaceError,
   TransientSurfaceLifecyclePort,
-  TransientSurfaceState,
 } from "./transient-surface-ports.js";
 export { parseTargetTabId } from "./transient-surface-ports.js";

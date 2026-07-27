@@ -119,6 +119,33 @@ test("schedulerは保留writeを追い越さず再生成後もsequenceを増加�
   assert.equal((session.value as TransientActivationEnvelope).lastSequence, 3);
 });
 
+test("scheduler closeは保留commandをdrainし停止後のenqueueを拒否する", async () => {
+  const session = new DeferredFirstWriteSession();
+  const scheduler = createTransientActivationScheduler(
+    createTransientActivationStore(session),
+  );
+  const pending = scheduler.put({
+    activationId: activationId("pending"),
+    surfaceId: featureId,
+    tabId: tabId(1),
+  });
+  await session.firstWriteStarted;
+
+  const closing = scheduler.close();
+  await assert.rejects(
+    scheduler.put({
+      activationId: activationId("late"),
+      surfaceId: featureId,
+      tabId: tabId(2),
+    }),
+    { name: "TransientActivationSchedulerClosedError" },
+  );
+  session.release();
+  assert.equal((await pending).ok, true);
+  await closing;
+  assert.equal(session.writes.length, 1);
+});
+
 test("worker再生成時はrecordと墓標を含むenvelope最大sequenceから復元する", async () => {
   const session = new MemorySession();
   session.value = {

@@ -180,7 +180,7 @@
   - _Requirements: 3.7, 4.4, 4.5, 4.6_
   - _Boundary: PublicAPI, StorageAccessGuard, ArtifactValidation_
 
-- [ ] 6. 決定的検証と下流handoff seamを完成させる
+- [x] 6. 決定的検証と下流handoff seamを完成させる
 - [x] 6.1 shell controllerと常設feature非回帰を検証する
   - explicit persistent producerへの移行、常設navigation欠損／一過性navigation混入の型・runtime拒否、不正隔離、navigation除外、初期選択、fallback、単一mountをpublic consumer／contract／integration testで覆う。
   - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
@@ -219,3 +219,4 @@
 - watch-readyは`received`まで進め、`activated`への前進はcontroller mount成功後に限定する。panel側のasync処理はstart epochを各await後にも照合し、stop／restart後の旧世代完了をno-opにする。
 - gesture sourceは同期registrarからcanonical ingressへ接続し、sourceにはstore writer、sequence allocator、panel openerを公開しない。
 - panelはsession storeをread／subscribe専用で利用し、`activated`前進はtyped runtime messageでworkerの単一schedulerへ委譲する。session read障害noticeは成功通知までcompositionのready／maintenance表示へ再投影する。
+- worker cleanupは個別source／listenerの失敗を隔離して全resourceを解除し、schedulerをcloseして受理済みtailをdrainする。停止後commandは拒否し、旧compositionのsession writeを残さない。

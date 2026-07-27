@@ -273,6 +273,10 @@ test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAcc
       source:
         "const area = chrome.storage; export const readCache = () => area.local.get();",
     },
+    {
+      path: "src/runtime/optional-leak.ts",
+      source: "export const readSession = () => chrome.storage?.session.get();",
+    },
   ]);
 
   assert.deepEqual(
@@ -280,6 +284,7 @@ test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAcc
     [
       "src/features/mock/leak.ts: no-direct-storage-access",
       "src/features/mock/aliased-leak.ts: no-direct-storage-access",
+      "src/runtime/optional-leak.ts: no-direct-storage-access",
     ],
   );
 });
@@ -291,7 +296,7 @@ test("application shell公開入口はtransient concrete実装を公開しない
   assert.match(publicApi, /TransientApplicationFeatureRegistration/);
   assert.doesNotMatch(
     publicApi,
-    /createTransientSurfaceController|TransientSurfaceController|createLateBoundLifecycle|createTransientGestureRegistrar|TransientWatchReadyRequest|TransientActivationStore/,
+    /createTransientSurfaceController|TransientSurfaceController|createLateBoundLifecycle|createTransientGestureRegistrar|TransientWatchReadyRequest|TransientActivationStore|TransientActivationRequest|TransientDismissReason|TransientSurfaceState/,
   );
 });
 
@@ -304,6 +309,17 @@ test("production side panelは許可store外からsession storageへ到達しな
     ].map(async (path) => ({ path, source: await readFile(path, "utf8") })),
   );
   assert.deepEqual(findStorageAccessViolations(sources), []);
+});
+
+test("production workerもstore以外からsession storageへ到達しない", async () => {
+  const sources = await Promise.all(
+    [
+      "src/runtime/service-worker.ts",
+      "src/runtime/transient-activation-store.ts",
+    ].map(async (path) => ({ path, source: await readFile(path, "utf8") })),
+  );
+  assert.deepEqual(findStorageAccessViolations(sources), []);
+  assert.doesNotMatch(sources[0]?.source ?? "", /\bchrome\.storage\b/);
 });
 
 test("validateBoundaryRootsはStorageAccessGuardの違反も返す", async () => {

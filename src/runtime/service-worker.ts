@@ -34,6 +34,7 @@ import {
   createChromeTransientSessionStorage,
   createTransientActivationScheduler,
   createTransientActivationStore,
+  resolveChromeTransientWorkerSession,
   type TransientActivationScheduler,
 } from "./transient-activation-store.js";
 import { registerTransientWatchReadyListener } from "./transient-activation-transport.js";
@@ -131,7 +132,7 @@ export interface TransientWorkerRuntimeDependencies {
 
 export const createTransientWorkerRuntimeBootstrap = (
   dependencies: TransientWorkerRuntimeDependencies,
-): (() => void) & {
+): (() => Promise<void>) & {
   readonly gestureRegistration: TransientGestureRegistrationPort;
 } => {
   let active = true;
@@ -178,12 +179,27 @@ export const createTransientWorkerRuntimeBootstrap = (
   const onRemoved = (tabId: number) => invalidate(tabId);
   dependencies.tabs.onUpdated.addListener(onUpdated);
   dependencies.tabs.onRemoved.addListener(onRemoved);
-  const cleanup = () => {
+  const cleanup = async () => {
     if (!active) return;
     active = false;
-    registrar.stop();
-    dependencies.tabs.onUpdated.removeListener(onUpdated);
-    dependencies.tabs.onRemoved.removeListener(onRemoved);
+    const errors: unknown[] = [];
+    const release = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    release(() => registrar.stop());
+    release(() => dependencies.tabs.onUpdated.removeListener(onUpdated));
+    release(() => dependencies.tabs.onRemoved.removeListener(onRemoved));
+    try {
+      await dependencies.scheduler.close();
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length > 0)
+      throw new AggregateError(errors, "transient worker cleanup failed");
   };
   return Object.assign(cleanup, { gestureRegistration: registrar });
 };
@@ -212,16 +228,14 @@ export const createProductionTransientRuntimeBootstrap = (
   readonly scheduler: TransientActivationScheduler;
   readonly gestureRegistration: TransientGestureRegistrationPort;
   readonly hasTransientGesture: boolean;
-  cleanup(): void;
+  cleanup(): Promise<void>;
 } => {
   const scheduler = createTransientWorkerScheduler(chromeApis.storage.session);
-  const cleanups = [
-    registerProductionTransientWatchReady(
-      runtime,
-      chromeApis.storage.session,
-      scheduler,
-    ),
-  ];
+  const watchReadyCleanup = registerProductionTransientWatchReady(
+    runtime,
+    chromeApis.storage.session,
+    scheduler,
+  );
   const transient = catalog.find(
     ({ registration }) => registration.presentation === "transient",
   );
@@ -240,16 +254,27 @@ export const createProductionTransientRuntimeBootstrap = (
     createActivationId: () => crypto.randomUUID() as ActivationId,
     reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
   });
-  cleanups.push(runtimeBootstrap);
   let active = true;
   return {
     scheduler,
     gestureRegistration: runtimeBootstrap.gestureRegistration,
     hasTransientGesture: transient !== undefined,
-    cleanup() {
+    async cleanup() {
       if (!active) return;
       active = false;
-      for (const cleanup of [...cleanups].reverse()) cleanup();
+      const errors: unknown[] = [];
+      for (const cleanup of [watchReadyCleanup, runtimeBootstrap]) {
+        try {
+          await cleanup();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length > 0)
+        throw new AggregateError(
+          errors,
+          "production transient runtime cleanup failed",
+        );
     },
   };
 };
@@ -284,6 +309,7 @@ export const createActionClickSidePanelBootstrap = (
 };
 
 const runtime = typeof chrome !== "undefined" ? chrome.runtime : undefined;
+const transientWorkerSession = resolveChromeTransientWorkerSession();
 let productionTransientGestureRegistered = false;
 if (
   runtime &&
@@ -296,9 +322,7 @@ if (
 ) {
   if (
     typeof chrome !== "undefined" &&
-    chrome.storage?.session &&
-    typeof chrome.storage.session.get === "function" &&
-    typeof chrome.storage.session.set === "function" &&
+    transientWorkerSession &&
     chrome.action &&
     typeof chrome.action.onClicked?.addListener === "function" &&
     typeof chrome.action.onClicked?.removeListener === "function" &&
@@ -315,7 +339,7 @@ if (
   ) {
     productionTransientGestureRegistered =
       createProductionTransientRuntimeBootstrap(runtime, {
-        storage: { session: chrome.storage.session },
+        storage: { session: transientWorkerSession },
         action: chrome.action,
         tabs: chrome.tabs,
         sidePanel: chrome.sidePanel,
