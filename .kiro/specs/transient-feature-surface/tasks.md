@@ -70,29 +70,29 @@
   - _Requirements: 1.4, 2.1, 3.10, 4.1, 4.4, 4.5_
   - _Boundary: ApplicationComposition, LateBoundLifecycle_
 
-- [ ] 3. 起動要求を順序保証付きsession storeへ保存する
-- [ ] 3.1 envelopeとstage遷移を境界検証する
+- [x] 3. 起動要求を順序保証付きsession storeへ保存する
+- [x] 3.1 envelopeとstage遷移を境界検証する
   - 起動record、最終sequence、tab別墓標をsession媒体へ保存し、unknown入力をversion／shape／stageで検証する。
   - panelをread／subscribe専用、runtimeをmutation ownerとし、商品値・URL・HTMLを保存しない。
   - 正常record、破損envelope、不正stage遷移がtyped resultになるunit testを通す。
   - _Requirements: 2.2, 2.4, 2.7, 4.1, 4.6_
   - _Boundary: TransientActivationStore_
 
-- [ ] 3.2 単一schedulerでsequenceとworker再生成を線形化する
+- [x] 3.2 単一schedulerでsequenceとworker再生成を線形化する
   - 組み込みactionと登録済みfeature gesture、失効、stage前進、watch-readyを単一入口で受信時点にenqueueし、単調sequence順にmutationを直列適用する。
   - worker再生成時はsession envelopeの最大sequenceから次値を復元し、memoryだけを順序根拠にしない。
   - 保留writeを後発commandが追い越さず、再生成後も新sequenceが単調増加するtestを通す。
   - _Requirements: 2.2, 2.6, 3.10, 4.1, 4.2_
   - _Boundary: TransientActivationScheduler, TransientActivationStore_
 
-- [ ] 3.3 record不在でも失効を残す墓標規則を実装する
+- [x] 3.3 record不在でも失効を残す墓標規則を実装する
   - tabごとに最新墓標を保持し、墓標より古い後着recordをinvalidated終端へ着地させる。
   - invalidatedをstage前進やactivation許可で上書きせず、新ジェスチャーは大きいsequenceで開始できる。
   - put保留中の失効、失効後のlate put、同一tab再起動を決定的に再現するtestを通す。
   - _Requirements: 2.2, 2.6, 3.1, 3.2, 3.10, 4.1, 4.2_
   - _Boundary: TransientActivationStore_
 
-- [ ] 3.4 checkpoint付き墓標上限をfail-closedで実装する
+- [x] 3.4 checkpoint付き墓標上限をfail-closedで実装する
   - 全先行command commit済みのcheckpointでだけ、支配中でない古い墓標を全体128件以内へ剪定する。
   - 支配墓標を保持したまま安全に剪定不能なら強制evictせずcapacity-exceededで新規起動を拒否する。
   - tabごと最新1件、上限、支配墓標保持、破損状態拒否をunit testで観測できる。

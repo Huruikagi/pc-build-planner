@@ -268,10 +268,12 @@ export const findBoundaryViolations = (sources) =>
 const ALLOWED_STORAGE_ACCESS_SOURCE_PATTERNS = [
   /(?:^|\/)persistence\/chrome-storage-adapter\.ts$/,
   /(?:^|\/)ui-language\/preference-store\.ts$/,
+  /(?:^|\/)runtime\/transient-activation-store\.ts$/,
 ];
 const ALLOWED_STORAGE_ACCESS_BUNDLE_BASENAMES = new Set([
   "foundation.js",
   "side-panel.js",
+  "service-worker.js",
 ]);
 
 /** @param {string} path */

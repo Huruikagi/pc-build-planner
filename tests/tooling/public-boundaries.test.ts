@@ -238,7 +238,7 @@ test("存在しないscan rootをfail closedに拒否する", async () => {
   );
 });
 
-test("chrome.storageへの到達を許可2ファイルへ限定する(StorageAccessGuard)", () => {
+test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAccessGuard)", () => {
   const violations = findStorageAccessViolations([
     {
       path: "src/persistence/chrome-storage-adapter.ts",
@@ -247,6 +247,10 @@ test("chrome.storageへの到達を許可2ファイルへ限定する(StorageAcc
     {
       path: "src/ui-language/preference-store.ts",
       source: "export const read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/runtime/transient-activation-store.ts",
+      source: "export const read = () => chrome.storage.session.get();",
     },
     {
       path: "dist/foundation.js",
@@ -275,7 +279,6 @@ test("chrome.storageへの到達を許可2ファイルへ限定する(StorageAcc
     violations.map(({ path, rule }) => `${path}: ${rule}`),
     [
       "src/features/mock/leak.ts: no-direct-storage-access",
-      "dist/service-worker.js: no-direct-storage-access",
       "src/features/mock/aliased-leak.ts: no-direct-storage-access",
     ],
   );
