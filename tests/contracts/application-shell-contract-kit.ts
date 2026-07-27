@@ -12,8 +12,17 @@ import type {
 } from "../../src/application-shell/contracts.js";
 import { isPersistent } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
+import type {
+  ActivationId,
+  TargetTabId,
+  TransientActivationRequest,
+  TransientGestureRegistrationPort,
+  TransientSurfaceLifecyclePort,
+} from "../../src/application-shell/public.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
+import { createTransientSurfaceController } from "../../src/application-shell/transient-surface-controller.js";
 import { err, ok, type Result } from "../../src/domain/public.js";
+import { createTransientGestureRegistrar } from "../../src/runtime/transient-gesture-registration.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
 
 export interface ContractFixtureObservations {
@@ -59,6 +68,158 @@ export interface ActivationLifecycleFixture {
 }
 
 const fixtureId = "contract-fixture" as FeatureId;
+
+export function createTransientHandoffContractFixture() {
+  const activation: TransientActivationRequest = {
+    activationId: "contract-transient-activation" as ActivationId,
+    surfaceId: "contract-transient" as FeatureId,
+    tabId: 17 as TargetTabId,
+  };
+  const handoffIntent: FeatureActivationIntent = {
+    featureId: "contract-handoff-target" as FeatureId,
+    target: "accept-transient-handoff",
+    payload: Object.freeze({ fixture: true }),
+  };
+  const observations = {
+    requested: [] as TransientActivationRequest[],
+    concluded: [] as FeatureActivationIntent[],
+    gestureEmits: [] as TargetTabId[],
+    activeGestureSources: 0,
+    maximumMounted: 0,
+  };
+  let mounted = 0;
+  const registration = (
+    id: FeatureId,
+    presentation: "persistent" | "transient",
+    activationTarget = false,
+  ): ApplicationFeatureRegistration<object, unknown> => ({
+    id,
+    ...(presentation === "persistent"
+      ? {
+          presentation,
+          navigation: {
+            labelKey: id as MessageKey,
+            order: activationTarget ? 1 : 0,
+          },
+        }
+      : { presentation }),
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => {},
+    async mount(context) {
+      mounted += 1;
+      observations.maximumMounted = Math.max(
+        observations.maximumMounted,
+        mounted,
+      );
+      context.container.textContent = id;
+      return {
+        async captureState() {
+          return ok({ id });
+        },
+        async unmount() {
+          mounted -= 1;
+          context.container.textContent = "";
+        },
+      };
+    },
+    ...(activationTarget
+      ? {
+          activation: {
+            validate: () => ok({ fixture: true }),
+            async activate() {
+              observations.concluded.push(handoffIntent);
+              return ok(undefined);
+            },
+          },
+        }
+      : {}),
+  });
+  const registry = createFeatureRegistry();
+  const planner = registration("contract-planner" as FeatureId, "persistent");
+  const transient = registration(activation.surfaceId, "transient");
+  const target = registration(handoffIntent.featureId, "persistent", true);
+  for (const feature of [planner, transient, target])
+    registry.register(feature);
+  const host = createSidePanelHost({
+    registry,
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    onStateChange() {},
+    reportError() {},
+  });
+  const controller = createTransientSurfaceController({
+    host: {
+      getSelected: host.getSelected,
+      isTransientAvailable: (id) => id === transient.id,
+      async showTransient(id) {
+        const result = await host.showTransient(id);
+        return result.ok ? ok(undefined) : err({ kind: "transition-failed" });
+      },
+      async restorePersistent(preferred, reason) {
+        const result = await host.restorePersistent(preferred, reason);
+        return result.ok ? ok(undefined) : err({ kind: "transition-failed" });
+      },
+      async activate(intent) {
+        const result = await host.activate(intent);
+        return result.ok ? ok(undefined) : err({ kind: "transition-failed" });
+      },
+    },
+  });
+  const lifecycle: TransientSurfaceLifecyclePort = controller;
+  let ingressTask: Promise<unknown> = Promise.resolve();
+  const registrar = createTransientGestureRegistrar({
+    ingress(surfaceId, tabId) {
+      observations.gestureEmits.push(tabId);
+      observations.requested.push({ ...activation, surfaceId, tabId });
+      ingressTask = controller.request({ ...activation, surfaceId, tabId });
+    },
+  });
+  registrar.start();
+  const gestures: TransientGestureRegistrationPort = registrar;
+  let emit: ((tabId: TargetTabId) => void) | undefined;
+  const registered = gestures.register({
+    id: "contract-feature-gesture",
+    surfaceId: activation.surfaceId,
+    start(next) {
+      observations.activeGestureSources += 1;
+      emit = next;
+      return ok(() => {
+        emit = undefined;
+        observations.activeGestureSources -= 1;
+      });
+    },
+  });
+  if (!registered.ok) throw new Error("contract gesture fixture failed");
+  return {
+    activation,
+    handoffIntent,
+    lifecycle,
+    gestures,
+    captureConsumer: { lifecycle },
+    handoffConsumer: { lifecycle },
+    gestureConsumer: {
+      registration: gestures,
+      emit: () => emit?.(activation.tabId),
+    },
+    observations,
+    async start() {
+      const hostStarted = await host.start();
+      if (!hostStarted.ok) return err({ kind: "transition-failed" as const });
+      return controller.start();
+    },
+    async settle() {
+      await ingressTask;
+    },
+    async dispose() {
+      registered.value();
+      registrar.stop();
+      await controller.stop();
+      await host.stop();
+      registry.dispose?.();
+    },
+  };
+}
 
 export function createFeatureContractFixture(
   options: FeatureContractFixtureOptions = {},

@@ -13,7 +13,38 @@ import {
   composeWorkerRegistrations,
   createActivationLifecycleFixture,
   createFeatureContractFixture,
+  createTransientHandoffContractFixture,
 } from "./application-shell-contract-kit.js";
+
+test("下流consumerは同一lifecycle portと公開gesture registration seamを共有できる", async () => {
+  const fixture = createTransientHandoffContractFixture();
+
+  assert.equal(fixture.captureConsumer.lifecycle, fixture.lifecycle);
+  assert.equal(fixture.handoffConsumer.lifecycle, fixture.lifecycle);
+  assert.equal(fixture.gestureConsumer.registration, fixture.gestures);
+
+  const started = await fixture.start();
+  assert.equal(started.ok, true);
+  fixture.gestureConsumer.emit();
+  await fixture.settle();
+  const concluded = await fixture.handoffConsumer.lifecycle.conclude(
+    fixture.activation.activationId,
+    fixture.handoffIntent,
+  );
+  assert.equal(concluded.ok, true);
+
+  assert.deepEqual(fixture.observations, {
+    requested: [fixture.activation],
+    concluded: [fixture.handoffIntent],
+    gestureEmits: [fixture.activation.tabId],
+    activeGestureSources: 1,
+    maximumMounted: 1,
+  });
+
+  await fixture.dispose();
+  await fixture.dispose();
+  assert.equal(fixture.observations.activeGestureSources, 0);
+});
 
 test("activation対応下流featureはvalidatorと適用を各一回だけ実行できる", async () => {
   const fixture = createFeatureContractFixture({ activation: true });

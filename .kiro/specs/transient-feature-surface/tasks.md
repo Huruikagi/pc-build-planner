@@ -181,7 +181,7 @@
   - _Boundary: PublicAPI, StorageAccessGuard, ArtifactValidation_
 
 - [ ] 6. 決定的検証と下流handoff seamを完成させる
-- [ ] 6.1 shell controllerと常設feature非回帰を検証する
+- [x] 6.1 shell controllerと常設feature非回帰を検証する
   - explicit persistent producerへの移行、常設navigation欠損／一過性navigation混入の型・runtime拒否、不正隔離、navigation除外、初期選択、fallback、単一mountをpublic consumer／contract／integration testで覆う。
   - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
   - 全shell検証で既存persistent featureのnavigation・availability・typed activationが回帰しない。
@@ -189,7 +189,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 4.1, 4.2, 4.4_
   - _Boundary: ShellContractTests, ControllerIntegrationTests_
 
-- [ ] 6.2 (P) runtimeの競合・障害・再生成を検証する
+- [x] 6.2 (P) runtimeの競合・障害・再生成を検証する
   - put保留中失効、watch-ready前後失効、worker再生成、墓標上限をin-memory Chrome fixtureで再現する。
   - put失敗signal、clear競合、read失敗notice、sender／message拒否を再現し、常設面が維持されることを確認する。
   - actionとfeature-owned sourceのpanel closed／open双方で同じ要求が一度だけ許可または拒否され、duplicate登録、cleanup、worker再生成を含む全runtime testが決定的に通る。
@@ -197,7 +197,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.10, 4.1, 4.2, 4.3_
   - _Boundary: RuntimeIntegrationTests, StoreRaceTests_
 
-- [ ] 6.3 下流production E2Eへ引き渡すcontract fixtureを整える
+- [x] 6.3 下流production E2Eへ引き渡すcontract fixtureを整える
   - 実featureをproductionへ追加せず、in-memory transient registrationで起動から終了・引き渡しまでを検証する。
   - 下流consumerが同じlifecycle port参照を受け取れ、別consumerがfeature-owned gesture sourceを公開registration portへ登録できるcontract fixtureを追加する。
   - product-capture E2Eがshell 4.5を閉じ、source-price-refreshがcontext menu sourceを同じschedulerへ接続できるseamを固定する。
