@@ -206,7 +206,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
   - _Boundary: ContractFixtures_
 
-- [ ] 6.4 最終validation gateを通す
+- [x] 6.4 最終validation gateを通す
   - typecheck、public consumer、lint、unit／integration testを実行して全件成功させる。
   - boundary、fixture、artifact、final buildの機械検査を実行し、権限・公開境界・synthetic資産の違反がないことを確認する。
   - 本spec所有の全gateが成功し、`source-price-refresh`のgesture consumer contractを再検証済み、production E2Eだけが承認済み下流specの責務として残る状態にする。
