@@ -32,6 +32,7 @@ function feature<TPublic extends object>(value: string, publicApi: TPublic) {
   let availabilityCleanup = 0;
   const registration: ApplicationFeatureRegistration<TPublic> = {
     id: id(value),
+    presentation: "persistent",
     navigation: { labelKey: value as MessageKey, order: 0 },
     publicApi,
     getAvailability: () => ({ status: "available" }),

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. 一過性表示面を受け入れるshell契約を整える
-- [ ] 1.1 表示区分と最小ライフサイクル契約を公開する
+- [x] 1. 一過性表示面を受け入れるshell契約を整える
+- [x] 1.1 表示区分と最小ライフサイクル契約を公開する
   - mount、availability、public API、任意のtyped activationを共通baseに置き、`presentation: "persistent"`と型付きnavigationを必須にする常設branch、および`presentation: "transient"`とnavigation不在を必須にする一過性branchをcanonical registration判別共用体として公開する。
   - 既存consumerは`presentation: "persistent"`を明示して移行し、一過性consumerはnavigation propertyを持たず、`isPersistent`が常設branchへ型を絞り込む状態にする。
   - 起動世代、固定対象タブ、未信頼tab IDのbrand変換、起動要求、終了理由、最小の下流ライフサイクルportとgesture registration portをcanonical shell契約として追加する。
@@ -10,7 +10,7 @@
   - _Requirements: 1.1, 1.3, 1.6, 2.4, 2.5, 4.1, 4.4_
   - _Boundary: CoreContracts, PublicAPI_
 
-- [ ] 1.2 登録区分を検証し不正登録を隔離する
+- [x] 1.2 登録区分を検証し不正登録を隔離する
   - explicit presentationとnavigation有無の相関をregistration境界で検証し、未知／欠損presentation、常設navigation欠損、一過性navigation混入をregistryから隔離する。
   - snapshot複製がdiscriminantとbranch固有fieldを保ち、一過性registrationへnavigationを合成しないようにする。
   - 隔離された登録が他の常設featureのavailability、登録順、利用可否へ影響しないようにする。
@@ -18,14 +18,14 @@
   - _Requirements: 1.1, 1.3, 1.6, 4.4_
   - _Boundary: FeatureRegistry_
 
-- [ ] 1.3 常設限定のnavigationと選択規則をshellへ統合する
+- [x] 1.3 常設限定のnavigationと選択規則をshellへ統合する
   - registry snapshotとfeature contribution catalogをbranch-safeな決定順へ合わせ、navigation catalog構築、初期選択、availability fallback、通常選択を常設branchへ絞り込む単一の型述語へ統一する。
   - 一過性featureは登録・主表示可能だがnavigationへ現れず、未起動時は常設featureだけが表示される。
   - 常設／一過性を混在登録してもnavigation metadataを読むconsumerが常設branchだけを受け、常設featureだけがnavigation・初期表示・fallbackの候補になるintegration testを通す。
   - _Requirements: 1.2, 1.4, 1.5, 4.4_
   - _Boundary: ApplicationComposition, SidePanelHost_
 
-- [ ] 1.4 (P) 常設面と併存する一過性起動noticeを追加する
+- [x] 1.4 (P) 常設面と併存する一過性起動noticeを追加する
   - ready／maintenance stateへ任意noticeを追加し、選択中featureやnavigationから独立したbannerとして安全なtextで描画する。
   - session read成功または有効activation受理だけでnoticeをclearし、global errorへ遷移させない。
   - 媒体障害中も常設featureが表示・操作可能で、日英の安定した再操作案内が見えるDOM testを通す。

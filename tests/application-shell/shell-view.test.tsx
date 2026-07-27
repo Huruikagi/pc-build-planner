@@ -109,6 +109,66 @@ test("navigationと選択中featureを表示する", async () => {
   container.remove();
 });
 
+test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで併存表示する", async () => {
+  const unsafe = '<img src=x onerror="globalThis.compromised=true">';
+  for (const state of [
+    {
+      kind: "ready" as const,
+      selected: plannerId,
+      transientNotice: {
+        message: message("shell.transientActivationUnavailable", {
+          detail: unsafe,
+        }),
+        recoverable: true as const,
+      },
+    },
+    {
+      kind: "maintenance" as const,
+      selected: plannerId,
+      message: message("shell.maintenanceActive"),
+      transientNotice: {
+        message: message("shell.transientActivationUnavailable", {
+          detail: unsafe,
+        }),
+        recoverable: true as const,
+      },
+    },
+  ]) {
+    const rendered = await renderShell(
+      state,
+      <button type="button">常設操作</button>,
+    );
+    assert.ok(
+      rendered.container.querySelector("[data-region='transient-notice']"),
+    );
+    const language = rendered.container.querySelector<HTMLSelectElement>(
+      "[data-region='language-select']",
+    );
+    assert.ok(language);
+    await act(() => {
+      language.value = "ja";
+      language.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    assert.match(
+      rendered.container.querySelector("[data-region='transient-notice']")
+        ?.textContent ?? "",
+      /拡張アイコンを再操作してください/,
+    );
+    assert.match(rendered.container.textContent ?? "", /常設操作/);
+    assert.equal(rendered.container.querySelector("img"), null);
+    await act(() => {
+      language.value = "en";
+      language.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    assert.match(
+      rendered.container.querySelector("[data-region='transient-notice']")
+        ?.textContent ?? "",
+      /Use the extension icon again/,
+    );
+    await rendered.cleanup();
+  }
+});
+
 test("外部由来error messageをmarkupではなくテキストとして表示する", async () => {
   const unsafeReason = '<img src=x onerror="globalThis.compromised=true">';
   const rendered = await renderShell({

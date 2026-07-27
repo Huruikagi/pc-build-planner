@@ -1,9 +1,9 @@
 import type {
-  ApplicationFeatureRegistration,
   Availability,
   FeatureMountContext,
   FeatureMountHandle,
   OperationPolicy,
+  PersistentApplicationFeatureRegistration,
   ShellNavigator,
 } from "../../application-shell/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
@@ -90,7 +90,7 @@ const mountUnavailable: CandidateManagementMount = async () => {
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<
+): PersistentApplicationFeatureRegistration<
   CandidateManagementPublicApi,
   CandidateEditorPrefill
 > => {
@@ -114,6 +114,7 @@ export const createCandidateFeatureRegistration = (
 
   return {
     id: candidateManagementFeatureId,
+    presentation: "persistent",
     navigation: {
       labelKey: "nav.candidateManagement",
       order: 20,

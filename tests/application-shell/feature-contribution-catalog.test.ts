@@ -5,6 +5,7 @@ import type {
   ApplicationWorkerRegistration,
   FeatureId,
 } from "../../src/application-shell/contracts.js";
+import { isPersistent } from "../../src/application-shell/contracts.js";
 import {
   type FeatureContribution,
   featureContributionCatalog,
@@ -35,6 +36,7 @@ function contribution<const TKey extends string, TPublic extends object>(
 ): FeatureContribution<TKey, TPublic> {
   const registration: ApplicationFeatureRegistration<TPublic> = {
     id: id(featureId),
+    presentation: "persistent",
     navigation: { labelKey: featureId as MessageKey, order },
     publicApi,
     getAvailability: () => ({ status: "available" }),
@@ -103,6 +105,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
+  assert.ok(isPersistent(candidateManagement.registration));
   assert.equal(
     defaultMessageResolver.resolveDescriptor(
       navigationMessage(candidateManagement.registration.navigation.labelKey),
@@ -114,6 +117,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     "function",
   );
   assert.equal(currentBuild.registration.id, "currentBuild");
+  assert.ok(isPersistent(currentBuild.registration));
   assert.equal(
     defaultMessageResolver.resolveDescriptor(
       navigationMessage(currentBuild.registration.navigation.labelKey),
@@ -125,6 +129,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     "function",
   );
   assert.equal(compatibility.registration.id, "compatibility");
+  assert.ok(isPersistent(compatibility.registration));
   assert.equal(
     defaultMessageResolver.resolveDescriptor(
       navigationMessage(compatibility.registration.navigation.labelKey),
@@ -183,4 +188,26 @@ test("worker入力はworker registrationだけを同じ決定順で提供する"
 
   assert.deepEqual(selected, [firstWorker, secondWorker]);
   assert.equal(Object.isFrozen(selected), true);
+});
+
+test("一過性contributionをnavigation順へ混入させずbranch-safeに整列する", () => {
+  const persistent = contribution("persistent", "persistent", 10, {});
+  const transient: FeatureContribution<"transient", object> = {
+    key: "transient",
+    registration: {
+      id: id("transient"),
+      presentation: "transient",
+      publicApi: {},
+      getAvailability: () => ({ status: "available" }),
+      subscribeAvailability: () => () => undefined,
+      mount: async () => ({ unmount: async () => undefined }),
+    },
+  };
+
+  assert.deepEqual(
+    getSidePanelContributions([transient, persistent]).map(
+      ({ registration }) => registration.id,
+    ),
+    ["persistent", "transient"],
+  );
 });

@@ -17,6 +17,8 @@ export const shell = {
   missingDependency: "必須の依存関係がありません",
   maintenanceActive: "メンテナンス中です。変更操作は利用できません。",
   maintenanceStartupFailed: "メンテナンス状態を取得できませんでした",
+  transientActivationUnavailable:
+    "一過性の表示を開始できませんでした。拡張アイコンを再操作してください。{detail}",
   hostStopped: "side panel host は停止しています",
   runtimeHostUnavailable: "Application shell host is unavailable.",
   runtimeStartupFailed: "Application shell failed to start.",

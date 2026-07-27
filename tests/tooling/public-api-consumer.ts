@@ -1,3 +1,13 @@
+import {
+  type ApplicationFeatureRegistration,
+  type FeatureId,
+  isPersistent,
+  type PersistentApplicationFeatureRegistration,
+  parseTargetTabId,
+  type TransientApplicationFeatureRegistration,
+  type TransientGestureRegistrationPort,
+  type TransientSurfaceLifecyclePort,
+} from "../../src/application-shell/public.js";
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
 import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
 import {
@@ -19,6 +29,7 @@ import {
   createMaintenanceSnapshotSource,
   initializeProductionFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
+import type { MessageKey } from "../../src/ui-messages/public.js";
 
 export interface MockFoundationConsumer {
   readonly data: FoundationDataPort;
@@ -82,4 +93,51 @@ export const listAdoptedCandidateQuantities = async (
     candidatePartId: item.candidatePartId,
     quantity: item.quantity,
   }));
+};
+
+const publicFeatureBase = {
+  publicApi: {},
+  getAvailability: () => ({ status: "available" as const }),
+  subscribeAvailability: () => () => undefined,
+  mount: async () => ({ unmount: async () => undefined }),
+};
+
+export const publicPersistent: PersistentApplicationFeatureRegistration = {
+  ...publicFeatureBase,
+  id: "public-persistent" as FeatureId,
+  presentation: "persistent",
+  navigation: { labelKey: "Public" as MessageKey, order: 1 },
+};
+
+export const publicTransient: TransientApplicationFeatureRegistration = {
+  ...publicFeatureBase,
+  id: "public-transient" as FeatureId,
+  presentation: "transient",
+};
+
+export const consumeTransientShellPorts = (
+  feature: ApplicationFeatureRegistration,
+  lifecycle: TransientSurfaceLifecyclePort,
+  gestures: TransientGestureRegistrationPort,
+) => ({
+  navigation: isPersistent(feature) ? feature.navigation : null,
+  lifecycle,
+  gestures,
+  tab: parseTargetTabId(1),
+});
+
+// @ts-expect-error persistent registrations require navigation
+const invalidPersistent: PersistentApplicationFeatureRegistration = {
+  ...publicFeatureBase,
+  id: "invalid-persistent" as FeatureId,
+  presentation: "persistent",
+};
+void invalidPersistent;
+
+export const invalidTransient: TransientApplicationFeatureRegistration = {
+  ...publicFeatureBase,
+  id: "invalid-transient" as FeatureId,
+  presentation: "transient",
+  // @ts-expect-error transient registrations cannot expose navigation
+  navigation: { labelKey: "Invalid" as MessageKey, order: 0 },
 };

@@ -19,6 +19,7 @@ function feature(
 ): ApplicationFeatureRegistration<object, { readonly value: string }> {
   return {
     id: featureId,
+    presentation: "persistent",
     navigation: { labelKey: featureId as unknown as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: () => availability,

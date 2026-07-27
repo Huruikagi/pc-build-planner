@@ -22,11 +22,15 @@ export type {
   FeatureMountHandle,
   OperationKind,
   OperationPolicy,
+  PersistentApplicationFeatureRegistration,
   PreparedFeatureActivation,
   RegistrationError,
+  ShellNavigationMetadata,
   ShellNavigator,
+  TransientApplicationFeatureRegistration,
   WorkerRegistrationContext,
 } from "./contracts.js";
+export { isPersistent } from "./contracts.js";
 export type {
   FeatureCompositionContext,
   FeatureContribution,
@@ -39,3 +43,16 @@ export type {
   SidePanelBootstrapResult,
 } from "./runtime-bootstrap.js";
 export { createSidePanelBootstrap } from "./runtime-bootstrap.js";
+export type {
+  ActivationId,
+  TargetTabId,
+  TargetTabIdValidationError,
+  TransientActivationRequest,
+  TransientDismissReason,
+  TransientGestureRegistrationError,
+  TransientGestureRegistrationPort,
+  TransientGestureSource,
+  TransientSurfaceError,
+  TransientSurfaceLifecyclePort,
+} from "./transient-surface-ports.js";
+export { parseTargetTabId } from "./transient-surface-ports.js";

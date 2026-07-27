@@ -1,9 +1,9 @@
 import type {
-  ApplicationFeatureRegistration,
   Availability,
   FeatureId,
   FeatureMountContext,
   FeatureMountHandle,
+  PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import type { FoundationDataPort } from "../../persistence/public.js";
 import { fileGateway } from "./file-gateway.js";
@@ -29,7 +29,7 @@ export interface BackupRestoreFeatureRegistrationDependencies {
 /** 唯一の入口。application shellだけがこのfactoryを呼びfeatureを合成する。 */
 export const createBackupRestoreFeatureRegistration = (
   dependencies: BackupRestoreFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<BackupRestorePublicApi> => {
+): PersistentApplicationFeatureRegistration<BackupRestorePublicApi> => {
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
   const subscribeAvailability =
@@ -37,6 +37,7 @@ export const createBackupRestoreFeatureRegistration = (
 
   return {
     id: backupRestoreFeatureId,
+    presentation: "persistent",
     navigation: { labelKey: "nav.backupRestore", order: 60, icon: "archive" },
     publicApi: {},
     getAvailability,

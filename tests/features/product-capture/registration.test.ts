@@ -130,6 +130,7 @@ test("商品取り込みが表示中でも、shellは他featureへのactivation�
   const targetId = "target" as FeatureId;
   const target: ApplicationFeatureRegistration<object, { value: string }> = {
     id: targetId,
+    presentation: "persistent",
     navigation: { labelKey: "target" as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: () => ({ status: "available" }),

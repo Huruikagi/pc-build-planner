@@ -12,6 +12,7 @@ import type {
   ShellViewState,
 } from "../../src/application-shell/contracts.js";
 import type { ShellPresentationAdapter } from "../../src/application-shell/shell-presentation.js";
+import type { ShellNavigationItem } from "../../src/application-shell/shell-view.js";
 import type {
   FoundationDataPort,
   FoundationScopedDataPort,
@@ -64,6 +65,7 @@ function harness(options?: {
 }) {
   const events: string[] = [];
   const states: ShellViewState[] = [];
+  const navigationSnapshots: (readonly ShellNavigationItem[])[] = [];
   const shellContainer = document.createElement("div");
   const featureContainer = document.createElement("div");
   shellContainer.append(featureContainer);
@@ -74,8 +76,9 @@ function harness(options?: {
         ok: true,
         value: {
           featureContainer,
-          publish(state) {
+          publish(state, navigation) {
             states.push(state);
+            navigationSnapshots.push(navigation);
           },
           stop() {
             events.push("presentation:stop");
@@ -88,6 +91,7 @@ function harness(options?: {
     readonly ping: () => string;
   }> = {
     id: id("planner"),
+    presentation: "persistent",
     navigation: { labelKey: "Planner" as MessageKey, order: 1 },
     publicApi: { ping: () => "pong" },
     getAvailability: () => ({ status: "available" }),
@@ -143,6 +147,7 @@ function harness(options?: {
   return {
     events,
     states,
+    navigationSnapshots,
     shellContainer,
     presentation,
     feature,
@@ -151,6 +156,47 @@ function harness(options?: {
     foundationStarts: () => foundationStarts,
   };
 }
+
+test("常設と一過性の混在時もpresentation navigationと初期表示を常設限定にする", async () => {
+  const h = harness();
+  const transient: ApplicationFeatureRegistration = {
+    id: id("transient"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      h.events.push("transient:mount");
+      return { async unmount() {} };
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: () => ({
+      features: [
+        { key: "transient", registration: transient },
+        { key: "planner", registration: h.feature },
+      ] as const,
+      workerRegistrations: [],
+    }),
+    presentation: h.presentation,
+    workerContext: {
+      addActionHandler: () => () => undefined,
+      reportError() {},
+    },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, true);
+  assert.deepEqual(
+    h.navigationSnapshots.at(-1)?.map(({ id }) => id),
+    [id("planner")],
+  );
+  assert.equal(h.states.at(-1)?.kind, "ready");
+  assert.equal(h.events.includes("transient:mount"), false);
+  await root.stop();
+});
 
 test("foundation→registry→presentation→feature host→workerの順で一度だけ開始し逆順停止する", async () => {
   const h = harness();

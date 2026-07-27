@@ -13,6 +13,7 @@ import type {
   ShellViewState,
   SidePanelHost,
 } from "./contracts.js";
+import { isPersistent } from "./contracts.js";
 
 export interface SidePanelHostOptions {
   readonly registry: FeatureRegistry;
@@ -62,6 +63,7 @@ export function createSidePanelHost(
       .snapshot()
       .find(
         (feature) =>
+          isPersistent(feature) &&
           feature.id !== excluded &&
           feature.getAvailability().status === "available",
       );
@@ -97,6 +99,12 @@ export function createSidePanelHost(
     }
     const feature = find(id);
     if (feature === undefined) {
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    }
+    if (!isPersistent(feature)) {
       return err({
         kind: "unavailable",
         message: message("shell.featureNotRegistered", { featureId: id }),

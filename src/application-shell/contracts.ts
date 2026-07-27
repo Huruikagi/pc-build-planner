@@ -57,23 +57,54 @@ export interface FeatureActivationAdapter<TActivation> {
   activate(input: TActivation): Promise<Result<void, FeatureActivationError>>;
 }
 
-export interface ApplicationFeatureRegistration<
+export interface FeatureRegistrationBase<
   TPublic extends object = object,
   TActivation = never,
 > {
   readonly id: FeatureId;
-  readonly navigation: {
-    readonly labelKey: MessageKey;
-    readonly order: number;
-    /** Semantic icon key rendered by the shell navigation (falls back to label). */
-    readonly icon?: string;
-  };
   readonly publicApi: TPublic;
   getAvailability(): Availability;
   subscribeAvailability(listener: (value: Availability) => void): () => void;
   mount(context: FeatureMountContext): Promise<FeatureMountHandle>;
   readonly activation?: FeatureActivationAdapter<TActivation>;
 }
+
+export interface ShellNavigationMetadata {
+  readonly labelKey: MessageKey;
+  readonly order: number;
+  /** Semantic icon key rendered by the shell navigation (falls back to label). */
+  readonly icon?: string;
+}
+
+export interface PersistentApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "persistent";
+  readonly navigation: ShellNavigationMetadata;
+}
+
+export interface TransientApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> extends FeatureRegistrationBase<TPublic, TActivation> {
+  readonly presentation: "transient";
+  readonly navigation?: never;
+}
+
+export type ApplicationFeatureRegistration<
+  TPublic extends object = object,
+  TActivation = never,
+> =
+  | PersistentApplicationFeatureRegistration<TPublic, TActivation>
+  | TransientApplicationFeatureRegistration<TPublic, TActivation>;
+
+export const isPersistent = <TPublic extends object, TActivation>(
+  registration: ApplicationFeatureRegistration<TPublic, TActivation>,
+): registration is PersistentApplicationFeatureRegistration<
+  TPublic,
+  TActivation
+> => registration.presentation === "persistent";
 
 export interface PreparedFeatureActivation {
   readonly feature: ApplicationFeatureRegistration;
@@ -146,17 +177,27 @@ export interface MutationGate extends OperationPolicy {}
 
 export type ShellViewState =
   | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly selected: FeatureId | null }
+  | {
+      readonly kind: "ready";
+      readonly selected: FeatureId | null;
+      readonly transientNotice?: TransientNotice;
+    }
   | {
       readonly kind: "maintenance";
       readonly selected: FeatureId | null;
       readonly message: MessageDescriptor;
+      readonly transientNotice?: TransientNotice;
     }
   | {
       readonly kind: "error";
       readonly message: MessageDescriptor;
       readonly recoverable: boolean;
     };
+
+export interface TransientNotice {
+  readonly message: MessageDescriptor;
+  readonly recoverable: true;
+}
 
 export type StartupError = {
   readonly kind: "startup_failed";

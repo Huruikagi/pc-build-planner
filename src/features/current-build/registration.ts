@@ -2,12 +2,12 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import type {
-  ApplicationFeatureRegistration,
   Availability,
   FeatureId,
   FeatureMountContext,
   FeatureMountHandle,
   OperationPolicy,
+  PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import type { ProjectId } from "../../domain/public.js";
 import { LanguageProvider } from "../../ui-language/public.js";
@@ -117,7 +117,7 @@ const mountUnavailable: CurrentBuildMount = async () => {
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCurrentBuildFeatureRegistration = (
   dependencies: CurrentBuildFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<CurrentBuildPublicApi> => {
+): PersistentApplicationFeatureRegistration<CurrentBuildPublicApi> => {
   const mount =
     dependencies.mount ??
     (dependencies.state === undefined
@@ -131,6 +131,7 @@ export const createCurrentBuildFeatureRegistration = (
 
   return {
     id: currentBuildFeatureId,
+    presentation: "persistent",
     navigation: { labelKey: "nav.currentBuild", order: 30, icon: "cpu" },
     publicApi,
     getAvailability,

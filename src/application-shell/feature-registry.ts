@@ -6,6 +6,7 @@ import type {
   FeatureRegistry,
   RegistrationError,
 } from "./contracts.js";
+import { isPersistent } from "./contracts.js";
 
 interface RegisteredFeature {
   registration: ApplicationFeatureRegistration;
@@ -134,26 +135,62 @@ function validateRegistrationShape(value: unknown): RegistrationError | null {
     return invalidRegistration(
       "registration.id: non-empty feature id is required",
     );
-  if (!isRecord(value.navigation))
+  if (value.presentation !== "persistent" && value.presentation !== "transient")
+    return invalidRegistration(
+      "registration.presentation: known presentation is required",
+    );
+  if (value.presentation === "transient") {
+    if ("navigation" in value)
+      return invalidRegistration(
+        "registration.navigation: transient registration must omit navigation",
+      );
+  } else if (!isRecord(value.navigation)) {
+    return invalidRegistration("registration.navigation: object is required");
+  }
+  if (value.presentation === "transient") {
+    if (!isRecord(value.publicApi))
+      return invalidRegistration("registration.publicApi: object is required");
+    if (typeof value.getAvailability !== "function")
+      return invalidRegistration(
+        "registration.getAvailability: function is required",
+      );
+    if (typeof value.subscribeAvailability !== "function")
+      return invalidRegistration(
+        "registration.subscribeAvailability: function is required",
+      );
+    if (typeof value.mount !== "function")
+      return invalidRegistration("registration.mount: function is required");
+    if (
+      value.activation !== undefined &&
+      (!isRecord(value.activation) ||
+        typeof value.activation.validate !== "function" ||
+        typeof value.activation.activate !== "function")
+    )
+      return invalidRegistration(
+        "registration.activation: validate and activate functions are required",
+      );
+    return null;
+  }
+  const navigation = value.navigation;
+  if (!isRecord(navigation))
     return invalidRegistration("registration.navigation: object is required");
   if (
-    typeof value.navigation.labelKey !== "string" ||
-    value.navigation.labelKey.trim().length === 0
+    typeof navigation.labelKey !== "string" ||
+    navigation.labelKey.trim().length === 0
   )
     return invalidRegistration(
       "registration.navigation.labelKey: non-empty label key is required",
     );
   if (
-    typeof value.navigation.order !== "number" ||
-    !Number.isFinite(value.navigation.order)
+    typeof navigation.order !== "number" ||
+    !Number.isFinite(navigation.order)
   )
     return invalidRegistration(
       "registration.navigation.order: finite order is required",
     );
   if (
-    value.navigation.icon !== undefined &&
-    (typeof value.navigation.icon !== "string" ||
-      value.navigation.icon.trim().length === 0)
+    navigation.icon !== undefined &&
+    (typeof navigation.icon !== "string" || navigation.icon.trim().length === 0)
   )
     return invalidRegistration(
       "registration.navigation.icon: non-empty icon key is required when present",
@@ -210,9 +247,9 @@ function createSnapshotRegistration(
   entry: RegisteredFeature,
 ): ApplicationFeatureRegistration {
   const source = entry.registration;
-  return Object.freeze({
+  const common = {
     id: source.id,
-    navigation: Object.freeze({ ...source.navigation }),
+    presentation: source.presentation,
     publicApi: source.publicApi,
     getAvailability: () => copyAvailability(entry.availability),
     subscribeAvailability(listener: (value: Availability) => void) {
@@ -226,7 +263,16 @@ function createSnapshotRegistration(
     },
     mount: source.mount.bind(source),
     ...(source.activation ? { activation: source.activation } : {}),
-  });
+  };
+  return Object.freeze(
+    isPersistent(source)
+      ? {
+          ...common,
+          presentation: "persistent" as const,
+          navigation: Object.freeze({ ...source.navigation }),
+        }
+      : { ...common, presentation: "transient" as const },
+  );
 }
 
 function notifyAvailability(entry: RegisteredFeature): void {
@@ -243,7 +289,12 @@ function compareRegistration(
   left: ApplicationFeatureRegistration,
   right: ApplicationFeatureRegistration,
 ): number {
-  const byOrder = left.navigation.order - right.navigation.order;
+  if (isPersistent(left) !== isPersistent(right))
+    return isPersistent(left) ? -1 : 1;
+  const byOrder =
+    isPersistent(left) && isPersistent(right)
+      ? left.navigation.order - right.navigation.order
+      : 0;
   if (byOrder !== 0) return byOrder;
   if (left.id < right.id) return -1;
   if (left.id > right.id) return 1;

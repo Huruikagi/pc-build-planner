@@ -18,6 +18,7 @@ function feature(
   const listeners = new Set<(value: Availability) => void>();
   const registration: ApplicationFeatureRegistration = {
     id: id as FeatureId,
+    presentation: "persistent",
     navigation: { labelKey: `Feature ${id}` as MessageKey, order },
     publicApi: {},
     getAvailability: () => availability,
@@ -42,6 +43,41 @@ function feature(
     },
   };
 }
+
+test("presentationとnavigationの矛盾を隔離し正常registrationを維持する", () => {
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(feature("healthy", 1).registration).ok, true);
+
+  const invalidCandidates = [
+    { ...feature("missing", 2).registration, presentation: undefined },
+    { ...feature("unknown", 2).registration, presentation: "floating" },
+    { ...feature("persistent-no-nav", 2).registration, navigation: undefined },
+    {
+      ...feature("transient-with-nav", 2).registration,
+      presentation: "transient",
+    },
+  ];
+  for (const candidate of invalidCandidates) {
+    assert.equal(registry.register(candidate as never).ok, false);
+    assert.deepEqual(
+      registry.snapshot().map(({ id }) => id),
+      ["healthy"],
+    );
+  }
+
+  const transient: ApplicationFeatureRegistration = {
+    id: "transient" as FeatureId,
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    mount: async () => ({ unmount: async () => undefined }),
+  };
+  assert.equal(registry.register(transient).ok, true);
+  const snapshot = registry.snapshot();
+  assert.equal(snapshot[1]?.presentation, "transient");
+  assert.equal("navigation" in (snapshot[1] ?? {}), false);
+});
 
 test("登録をorder、同順位ではid順の決定的snapshotにする", () => {
   const registry = createFeatureRegistry();

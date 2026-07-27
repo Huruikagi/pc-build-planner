@@ -10,6 +10,7 @@ import type {
   RegistrationError,
   WorkerRegistrationContext,
 } from "../../src/application-shell/contracts.js";
+import { isPersistent } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
 import { err, ok, type Result } from "../../src/domain/public.js";
@@ -79,6 +80,7 @@ export function createFeatureContractFixture(
 
   const feature: ApplicationFeatureRegistration<object, unknown> = {
     id: options.invalid ? ("" as FeatureId) : fixtureId,
+    presentation: "persistent",
     navigation: {
       labelKey: (options.invalid ? "" : "Contract fixture") as MessageKey,
       order: options.invalid ? Number.NaN : 10,
@@ -227,6 +229,7 @@ export function createActivationLifecycleFixture(): ActivationLifecycleFixture {
   const available = () => ({ status: "available" as const });
   const source: ApplicationFeatureRegistration<object, unknown> = {
     id: sourceId,
+    presentation: "persistent",
     navigation: { labelKey: "Activation source" as MessageKey, order: 0 },
     publicApi: {},
     getAvailability: available,
@@ -247,6 +250,7 @@ export function createActivationLifecycleFixture(): ActivationLifecycleFixture {
   };
   const target: ApplicationFeatureRegistration<object, unknown> = {
     id: targetId,
+    presentation: "persistent",
     navigation: { labelKey: "Activation target" as MessageKey, order: 1 },
     publicApi: {},
     getAvailability: available,
@@ -325,12 +329,16 @@ export async function collectFeatureContractViolations(
   const violations: string[] = [];
   if (feature.id.trim().length === 0)
     violations.push("registration.id: non-empty feature id is required");
-  if (feature.navigation.labelKey.trim().length === 0)
-    violations.push(
-      "registration.navigation.labelKey: non-empty label key is required",
-    );
-  if (!Number.isFinite(feature.navigation.order))
-    violations.push("registration.navigation.order: finite order is required");
+  if (isPersistent(feature)) {
+    if (feature.navigation.labelKey.trim().length === 0)
+      violations.push(
+        "registration.navigation.labelKey: non-empty label key is required",
+      );
+    if (!Number.isFinite(feature.navigation.order))
+      violations.push(
+        "registration.navigation.order: finite order is required",
+      );
+  }
 
   try {
     const availability = feature.getAvailability();

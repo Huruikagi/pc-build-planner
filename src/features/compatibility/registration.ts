@@ -1,10 +1,10 @@
 import type {
-  ApplicationFeatureRegistration,
   Availability,
   FeatureId,
   FeatureMountContext,
   FeatureMountHandle,
   OperationPolicy,
+  PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import type { ProjectId } from "../../domain/public.js";
 import type { CompatibilityQuery } from "./contracts.js";
@@ -81,7 +81,7 @@ const mountUnavailable: CompatibilityMount = async () => {
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createCompatibilityFeatureRegistration = (
   dependencies: CompatibilityFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<CompatibilityPublicApi> => {
+): PersistentApplicationFeatureRegistration<CompatibilityPublicApi> => {
   const mount =
     dependencies.mount ??
     (dependencies.state === undefined
@@ -98,6 +98,7 @@ export const createCompatibilityFeatureRegistration = (
 
   return {
     id: compatibilityFeatureId,
+    presentation: "persistent",
     navigation: { labelKey: "nav.compatibility", order: 50, icon: "puzzle" },
     publicApi,
     getAvailability,

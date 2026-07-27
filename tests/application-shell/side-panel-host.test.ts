@@ -26,6 +26,7 @@ function feature(
   const listeners = new Set<(value: Availability) => void>();
   return {
     id: featureId(id),
+    presentation: "persistent",
     navigation: { labelKey: id as MessageKey, order },
     publicApi: {},
     getAvailability: () => availability,
@@ -102,6 +103,31 @@ test("開始時に決定順の利用可能featureだけを選び、切替はunmo
   assert.equal(states.at(-1)?.kind, "ready");
 });
 
+test("一過性featureを初期表示と通常選択の候補から除外する", async () => {
+  const events: string[] = [];
+  const persistent = feature("persistent", 10, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("transient"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      events.push("mount:transient");
+      return { async unmount() {} };
+    },
+  };
+  const { container, host } = setup([transient, persistent]);
+
+  assert.equal((await host.start()).ok, true);
+  assert.equal(
+    container.querySelector("[data-feature]")?.getAttribute("data-feature"),
+    "persistent",
+  );
+  assert.equal((await host.select(transient.id)).ok, false);
+  assert.deepEqual(events, ["mount:persistent"]);
+});
+
 test("利用不可featureの理由を返し、選択中が不可なら安全な遷移先へ移る", async () => {
   const events: string[] = [];
   let availability: Availability = { status: "available" };
@@ -115,7 +141,18 @@ test("利用不可featureの理由を返し、選択中が不可なら安全な�
       return () => listeners.delete(listener);
     },
   };
-  const { diagnostics, host } = setup([first, dynamic]);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("transient-fallback"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      events.push("mount:transient-fallback");
+      return { async unmount() {} };
+    },
+  };
+  const { diagnostics, host } = setup([transient, first, dynamic]);
   await host.start();
 
   availability = { status: "unavailable", reason: "同期が必要です" };

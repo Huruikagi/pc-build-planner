@@ -126,6 +126,16 @@ export function ShellView({
         />
       )}
       <main className="shell-main">
+        {(state.kind === "ready" || state.kind === "maintenance") &&
+        state.transientNotice ? (
+          <aside
+            aria-live="polite"
+            className="shell-status shell-status--notice"
+            data-region="transient-notice"
+          >
+            <p>{messages.resolveDescriptor(state.transientNotice.message)}</p>
+          </aside>
+        ) : null}
         {state.kind === "loading" ? (
           <p aria-live="polite" className="shell-status">
             {messages("shell.loading")}

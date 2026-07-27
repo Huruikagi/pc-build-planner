@@ -72,6 +72,7 @@ test("production bootstrapでfoundation handlerとcatalog actionを順序どお�
       key: "feature",
       registration: {
         id: "feature" as FeatureId,
+        presentation: "persistent",
         navigation: { labelKey: "Feature" as MessageKey, order: 1 },
         publicApi: {},
         getAvailability: () => ({ status: "available" }),

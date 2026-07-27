@@ -13,6 +13,8 @@ export const shell = {
   missingDependency: "A required dependency is missing",
   maintenanceActive: "Maintenance is in progress. Changes aren't available.",
   maintenanceStartupFailed: "Couldn't retrieve maintenance status",
+  transientActivationUnavailable:
+    "The temporary view couldn't start. Use the extension icon again. {detail}",
   hostStopped: "The side panel host has stopped",
   runtimeHostUnavailable: "Application shell host is unavailable.",
   runtimeStartupFailed: "Application shell failed to start.",

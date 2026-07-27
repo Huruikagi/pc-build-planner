@@ -26,6 +26,7 @@ import type {
   ShellViewState,
   WorkerRegistrationContext,
 } from "./contracts.js";
+import { isPersistent } from "./contracts.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import { getSidePanelContributions } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
@@ -432,17 +433,20 @@ export function createProductionApplicationComposition<
       }
 
       const publish = (state: ShellViewState): void => {
-        const navigation = createdRegistry.snapshot().map((feature) => ({
-          id: feature.id,
-          labelKey: feature.navigation.labelKey,
-          ...(feature.navigation.icon === undefined
-            ? {}
-            : { icon: feature.navigation.icon }),
-          available: feature.getAvailability().status === "available",
-          selected:
-            (state.kind === "ready" || state.kind === "maintenance") &&
-            state.selected === feature.id,
-        }));
+        const navigation = createdRegistry
+          .snapshot()
+          .filter(isPersistent)
+          .map((feature) => ({
+            id: feature.id,
+            labelKey: feature.navigation.labelKey,
+            ...(feature.navigation.icon === undefined
+              ? {}
+              : { icon: feature.navigation.icon }),
+            available: feature.getAvailability().status === "available",
+            selected:
+              (state.kind === "ready" || state.kind === "maintenance") &&
+              state.selected === feature.id,
+          }));
         presentation?.publish(state, navigation);
       };
       integration = createApplicationShellIntegration({

@@ -1,9 +1,9 @@
 import type {
-  ApplicationFeatureRegistration,
   Availability,
   FeatureMountContext,
   FeatureMountHandle,
   OperationPolicy,
+  PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import { ok } from "../../domain/public.js";
 import {
@@ -91,7 +91,7 @@ const mountUnavailable: CaptureMount = async () => {
 /** Connects only feature-owned composition dependencies to the application shell. */
 export const createProductCaptureFeatureRegistration = (
   dependencies: CaptureFeatureRegistrationDependencies,
-): ApplicationFeatureRegistration<ProductCapturePublicApi> => {
+): PersistentApplicationFeatureRegistration<ProductCapturePublicApi> => {
   const mount =
     dependencies.mount ??
     (dependencies.state === undefined
@@ -109,6 +109,7 @@ export const createProductCaptureFeatureRegistration = (
 
   return {
     id: productCaptureFeatureId,
+    presentation: "persistent",
     navigation: { labelKey: "nav.productCapture", order: 40, icon: "download" },
     publicApi,
     getAvailability,
