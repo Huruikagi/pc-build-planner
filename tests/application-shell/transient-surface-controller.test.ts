@@ -63,6 +63,9 @@ function harness() {
     failHandoff: () => {
       failHandoff = true;
     },
+    recoverHandoff: () => {
+      failHandoff = false;
+    },
   };
 }
 
@@ -131,6 +134,201 @@ test("3終了理由はいずれも記録した常設面へ復帰する", async (
   }
 });
 
+test("常設選択はreturnToではなく選択targetへ終了しcontrollerをinactive化する", async () => {
+  const h = harness();
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("selected"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+
+  assert.equal(
+    (await controller.selectPersistent(featureId("compatibility"))).ok,
+    true,
+  );
+  assert.equal(h.selected(), featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+
+  await controller.dismiss(activationId("selected"), "navigated");
+  assert.equal(h.selected(), featureId("compatibility"));
+});
+
+test("deferred showTransient中の後発navが選択targetを保持する", async () => {
+  const h = harness();
+  let releaseShow!: () => void;
+  const showPending = new Promise<void>((resolve) => {
+    releaseShow = resolve;
+  });
+  const originalShow = h.host.showTransient;
+  h.host.showTransient = async (...args) => {
+    await showPending;
+    return originalShow(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  const request = controller.request({
+    activationId: activationId("pending-show"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  await Promise.resolve();
+  const navigation = controller.selectPersistent(featureId("compatibility"));
+  assert.equal(controller.getSnapshot().kind, "closing");
+  releaseShow();
+  assert.equal((await request).ok, true);
+  assert.equal((await navigation).ok, true);
+  assert.equal(h.selected(), featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+});
+
+test("deferred conclude中の後発navがhandoff完了より優先される", async () => {
+  const h = harness();
+  let releaseActivate!: () => void;
+  const activatePending = new Promise<void>((resolve) => {
+    releaseActivate = resolve;
+  });
+  const originalActivate = h.host.activate;
+  h.host.activate = async (...args) => {
+    await activatePending;
+    return originalActivate(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("pending-conclude"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const conclusion = controller.conclude(activationId("pending-conclude"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  await Promise.resolve();
+  const navigation = controller.selectPersistent(featureId("compatibility"));
+  assert.equal(controller.getSnapshot().kind, "closing");
+  releaseActivate();
+  assert.equal((await conclusion).ok, true);
+  assert.equal((await navigation).ok, true);
+  assert.equal(h.selected(), featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+});
+
+test("deferred conclude中の同世代handoffは最初の受付だけがhostを起動する", async () => {
+  const h = harness();
+  let releaseActivate!: () => void;
+  const activatePending = new Promise<void>((resolve) => {
+    releaseActivate = resolve;
+  });
+  let activateCount = 0;
+  const originalActivate = h.host.activate;
+  h.host.activate = async (...args) => {
+    activateCount += 1;
+    await activatePending;
+    return originalActivate(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("single-owner"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+
+  const first = controller.conclude(activationId("single-owner"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  await Promise.resolve();
+  const duplicate = controller.conclude(activationId("single-owner"), {
+    featureId: featureId("planner"),
+    target: "edit",
+    payload: {},
+  });
+
+  assert.equal(controller.isCurrent(activationId("single-owner")), false);
+  releaseActivate();
+  assert.equal((await first).ok, true);
+  assert.equal((await duplicate).ok, true);
+  assert.equal(activateCount, 1);
+  assert.equal(h.selected(), featureId("candidates"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+});
+
+test("nav受付後の新世代requestだけがnavをsupersedeする", async () => {
+  const h = harness();
+  let releaseRestore!: () => void;
+  const restorePending = new Promise<void>((resolve) => {
+    releaseRestore = resolve;
+  });
+  const originalRestore = h.host.restorePersistent;
+  h.host.restorePersistent = async (...args) => {
+    await restorePending;
+    return originalRestore(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("old"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const navigation = controller.selectPersistent(featureId("compatibility"));
+  const nextRequest = controller.request({
+    activationId: activationId("new"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  releaseRestore();
+  assert.equal((await navigation).ok, true);
+  assert.equal((await nextRequest).ok, true);
+  assert.equal(h.selected(), featureId("capture"));
+  assert.equal(controller.isCurrent(activationId("new")), true);
+  assert.equal(controller.getSnapshot().kind, "active");
+});
+
+test("終了pending中は現行世代の実行操作とhandoffを拒否する", async () => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const h = harness();
+  const originalRestore = h.host.restorePersistent;
+  h.host.restorePersistent = async (...args) => {
+    await pending;
+    return originalRestore(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("closing"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+
+  const snapshots: string[] = [];
+  controller.subscribe((state) => snapshots.push(state.kind));
+  const dismissal = controller.selectPersistent(featureId("planner"));
+  assert.equal(controller.isCurrent(activationId("closing")), false);
+  assert.equal(controller.getSnapshot().kind, "closing");
+  assert.deepEqual(snapshots, ["closing"]);
+  const conclusion = controller.conclude(activationId("closing"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  release();
+  assert.equal((await dismissal).ok, true);
+  assert.equal((await conclusion).ok, true);
+  assert.equal(
+    h.events.some((event) => event === "activate:candidates"),
+    false,
+  );
+});
+
 test("終了失敗を同一世代のdismiss-failedに保ち再試行できる", async () => {
   const h = harness();
   const controller = createTransientSurfaceController({ host: h.host });
@@ -158,6 +356,36 @@ test("終了失敗を同一世代のdismiss-failedに保ち再試行できる", 
     h.events.filter((event) => event.startsWith("restore:")).length,
     2,
   );
+});
+
+test("常設選択失敗はtargetとreasonを保持し同じcommandを再試行する", async () => {
+  const h = harness();
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("retry-selection"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  h.failDismiss();
+  assert.equal(
+    (await controller.selectPersistent(featureId("compatibility"))).ok,
+    false,
+  );
+  assert.deepEqual(controller.getSnapshot(), {
+    kind: "dismiss-failed",
+    activationId: activationId("retry-selection"),
+    surfaceId: featureId("capture"),
+    returnTo: featureId("planner"),
+    target: featureId("compatibility"),
+    reason: "persistent-selected",
+  });
+  await controller.dismiss(activationId("retry-selection"), "navigated");
+  assert.equal(controller.getSnapshot().kind, "dismiss-failed");
+  h.recoverDismiss();
+  assert.equal((await controller.retryDismiss()).ok, true);
+  assert.equal(h.selected(), featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
 });
 
 test("dismiss-failed後の新世代は旧世代retryをno-opにする", async () => {
@@ -235,6 +463,225 @@ test("typed handoff成功時は引き渡し先を保持し失敗時は一過性�
   );
   assert.equal(failure.selected(), featureId("capture"));
   assert.equal(failed.getSnapshot().kind, "active");
+  assert.equal(failed.isCurrent(activationId("a2")), true);
+  failure.recoverHandoff();
+  assert.equal(
+    (
+      await failed.conclude(activationId("a2"), {
+        featureId: featureId("candidates"),
+        target: "edit",
+        payload: {},
+      })
+    ).ok,
+    true,
+  );
+  assert.equal(failure.selected(), featureId("candidates"));
+  assert.deepEqual(failed.getSnapshot(), { kind: "inactive" });
+});
+
+test("stale conclude失敗は後発navと新世代claimを復活させない", async () => {
+  const h = harness();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const originalActivate = h.host.activate;
+  let activateCount = 0;
+  h.host.activate = async (...args) => {
+    activateCount += 1;
+    if (activateCount === 1) {
+      await pending;
+      return { ok: false, error: { kind: "transition-failed" } };
+    }
+    return originalActivate(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("old"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const stale = controller.conclude(activationId("old"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  await Promise.resolve();
+  const navigation = controller.selectPersistent(featureId("compatibility"));
+  assert.equal(controller.getSnapshot().kind, "closing");
+  release();
+  assert.equal((await stale).ok, false);
+  assert.notEqual(controller.getSnapshot().kind, "active");
+  assert.equal((await navigation).ok, true);
+  assert.equal(h.selected(), featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+
+  await controller.request({
+    activationId: activationId("new"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const first = controller.conclude(activationId("new"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  const duplicate = controller.conclude(activationId("new"), {
+    featureId: featureId("planner"),
+    target: "edit",
+    payload: {},
+  });
+  assert.equal((await first).ok, true);
+  assert.equal((await duplicate).ok, true);
+  assert.equal(activateCount, 2);
+  assert.equal(h.selected(), featureId("candidates"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+});
+
+test("stopはpending concludeのclaimを捨てrestart後の同一IDを一度だけ受理する", async () => {
+  const h = harness();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const originalActivate = h.host.activate;
+  let activateCount = 0;
+  h.host.activate = async (...args) => {
+    activateCount += 1;
+    if (activateCount === 1) await pending;
+    return originalActivate(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("reused"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const old = controller.conclude(activationId("reused"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  await Promise.resolve();
+  const stopping = controller.stop();
+  release();
+  await old;
+  await stopping;
+  await controller.start();
+  await controller.request({
+    activationId: activationId("reused"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const next = controller.conclude(activationId("reused"), {
+    featureId: featureId("planner"),
+    target: "edit",
+    payload: {},
+  });
+  const duplicate = controller.conclude(activationId("reused"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+  assert.equal((await next).ok, true);
+  assert.equal((await duplicate).ok, true);
+  assert.equal(activateCount, 2);
+  assert.equal(h.selected(), featureId("planner"));
+});
+
+test("pending dismiss中の同一callbackはrestoreを重複せず次commandを受理する", async () => {
+  const h = harness();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const originalRestore = h.host.restorePersistent;
+  let restoreCount = 0;
+  h.host.restorePersistent = async (...args) => {
+    restoreCount += 1;
+    await pending;
+    return originalRestore(...args);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("dismiss"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  const first = controller.dismiss(activationId("dismiss"), "navigated");
+  const duplicate = controller.dismiss(activationId("dismiss"), "navigated");
+  release();
+  assert.equal((await first).ok, true);
+  assert.equal((await duplicate).ok, true);
+  assert.equal(restoreCount, 1);
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+  await controller.request({
+    activationId: activationId("after-dismiss"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  assert.equal(controller.isCurrent(activationId("after-dismiss")), true);
+});
+
+test("start前requestはghost claimを残さずstart後は通常受理する", async () => {
+  const h = harness();
+  const controller = createTransientSurfaceController({ host: h.host });
+  const rejected = await controller.request({
+    activationId: activationId("before-start"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+  await controller.start();
+  const navigation = controller.selectPersistent(featureId("compatibility"));
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+  assert.equal((await navigation).ok, true);
+  assert.equal(h.selected(), featureId("compatibility"));
+  await controller.request({
+    activationId: activationId("after-start"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+  assert.equal(controller.isCurrent(activationId("after-start")), true);
+});
+
+test("起動要求の検証・表示失敗はghost pendingを残さない", async () => {
+  for (const failure of [
+    "unavailable",
+    "show-failed",
+    "show-rejected",
+  ] as const) {
+    const h = harness();
+    if (failure === "show-failed") {
+      h.host.showTransient = async () => ({
+        ok: false,
+        error: { kind: "transition-failed" },
+      });
+    }
+    if (failure === "show-rejected") {
+      h.host.showTransient = async () => {
+        throw new Error("fixture show rejection");
+      };
+    }
+    const controller = createTransientSurfaceController({ host: h.host });
+    await controller.start();
+    const requested = await controller.request({
+      activationId: activationId(failure),
+      surfaceId: featureId(failure === "unavailable" ? "missing" : "capture"),
+      tabId: tabId(1),
+    });
+    assert.equal(requested.ok, false);
+    assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+
+    const navigation = controller.selectPersistent(featureId("compatibility"));
+    assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+    assert.equal((await navigation).ok, true);
+    assert.equal(h.selected(), featureId("compatibility"));
+  }
 });
 
 test("実hostとのhandoffは成功・rollback・staleの全経路で単一mountを保つ", async () => {

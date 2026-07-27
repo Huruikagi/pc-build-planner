@@ -170,6 +170,7 @@ export function ShellView({
         <section
           className="shell-feature"
           data-feature-id={selected ?? undefined}
+          hidden={state.kind === "error"}
         >
           <ShellErrorBoundary
             renderFallback={(resetBoundary) => (

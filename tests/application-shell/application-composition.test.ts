@@ -251,6 +251,106 @@ test("production contributionへ同じlate-bound lifecycle参照を一度だけ�
   });
 });
 
+test("production nav commandは終了失敗をUI retryし選択targetと遅延eventを一貫管理する", async () => {
+  const h = harness();
+  let presentationInput:
+    | Parameters<ShellPresentationAdapter["mount"]>[0]
+    | undefined;
+  let controller:
+    | Parameters<
+        NonNullable<
+          Parameters<
+            typeof createProductionApplicationComposition
+          >[0]["createTransientMonitoring"]
+        >
+      >[0]
+    | undefined;
+  let failUnmount = true;
+  const transient: ApplicationFeatureRegistration = {
+    id: id("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      return {
+        async unmount() {
+          if (failUnmount) {
+            failUnmount = false;
+            throw new Error("fixture dismiss failure");
+          }
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration = {
+    ...h.feature,
+    id: id("compatibility"),
+    navigation: { labelKey: "Compatibility" as MessageKey, order: 2 },
+  };
+  const presentation: ShellPresentationAdapter = {
+    mount(input) {
+      presentationInput = input;
+      return h.presentation.mount(input);
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: () => ({
+      features: [
+        { key: "planner", registration: h.feature },
+        { key: "capture", registration: transient },
+        { key: "compatibility", registration: target },
+      ] as const,
+      workerRegistrations: [],
+    }),
+    presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+    createTransientMonitoring(value) {
+      controller = value;
+      return {
+        async start() {
+          return { ok: true as const, value: undefined };
+        },
+        stop() {},
+      };
+    },
+  });
+
+  assert.equal((await root.start()).ok, true);
+  const activation = "nav-selection" as ActivationId;
+  assert.equal(
+    (
+      await controller?.request({
+        activationId: activation,
+        surfaceId: transient.id,
+        tabId: 1 as never,
+      })
+    )?.ok,
+    true,
+  );
+  presentationInput?.onNavigate(target.id);
+  await new Promise((resolve) => setImmediate(resolve));
+  const failedState = h.states.at(-1);
+  assert.equal(failedState?.kind, "error");
+  if (failedState?.kind === "error")
+    assert.equal(failedState.recoverable, true);
+  presentationInput?.onRetry();
+  await new Promise((resolve) => setImmediate(resolve));
+  const selectedAfterRetry = h.states.at(-1);
+  assert.equal(selectedAfterRetry?.kind, "ready");
+  if (selectedAfterRetry?.kind === "ready")
+    assert.equal(selectedAfterRetry.selected, target.id);
+
+  await controller?.dismiss(activation, "navigated");
+  const selectedAfterLateEvent = h.states.at(-1);
+  if (selectedAfterLateEvent?.kind === "ready")
+    assert.equal(selectedAfterLateEvent.selected, target.id);
+  await root.stop();
+});
+
 test("compositionはproxy bind→host start→controller startと逆順cleanupを固定する", async () => {
   const source = await readFile(
     "src/application-shell/application-composition.ts",

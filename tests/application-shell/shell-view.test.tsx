@@ -185,6 +185,34 @@ test("外部由来error messageをmarkupではなくテキストとして表示�
   await rendered.cleanup();
 });
 
+test("recoverable errorはfeature操作を隠して再試行操作だけを提示する", async () => {
+  const retryCalls: string[] = [];
+  const rendered = await renderShell(
+    {
+      kind: "error",
+      message: message("shell.featureUnmountFailed", {
+        featureId: "capture",
+      }),
+      recoverable: true,
+    },
+    <button data-action="transient-operation" type="button">
+      一過性操作
+    </button>,
+    () => retryCalls.push("retry"),
+  );
+  const feature =
+    rendered.container.querySelector<HTMLElement>(".shell-feature");
+  assert.ok(feature);
+  assert.equal(feature.hidden, true);
+  const retry = rendered.container.querySelector<HTMLButtonElement>(
+    "[data-action='retry']",
+  );
+  assert.ok(retry);
+  await act(() => retry.click());
+  assert.deepEqual(retryCalls, ["retry"]);
+  await rendered.cleanup();
+});
+
 test("feature render failureを隔離しnavigationと再試行を維持する", async () => {
   const retryCalls: string[] = [];
   let shouldFail = true;

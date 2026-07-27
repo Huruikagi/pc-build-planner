@@ -341,9 +341,18 @@ export function createProductionApplicationComposition<
     const mounted = options.presentation.mount({
       shellContainer: options.shellContainer,
       onNavigate(id: FeatureId) {
+        const controller = transientController;
+        if (controller) {
+          void controller.selectPersistent(id);
+          return;
+        }
         void navigationTarget?.select(id);
       },
       onRetry() {
+        if (transientController?.getSnapshot().kind === "dismiss-failed") {
+          void transientController.retryDismiss();
+          return;
+        }
         void navigationTarget?.start();
       },
     });

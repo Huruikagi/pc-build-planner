@@ -216,6 +216,10 @@
 
 ## Implementation Notes
 
+- final validation再監査で、requestのavailability／表示失敗時にpending activationを解放し、dismiss失敗のrecoverable error中はfeature slotを隠して実DOMのretry操作だけを提示する回帰を追加した。
+- validation remediation retry 2で、start前requestがaccepted activationを残すghost claimを除去した。stale conclude失敗後のnavigation／新世代、stop／restart時のclaim reset、重複dismissのsingle restoreを決定的controller testで固定した。
+- validation remediation retryで`conclude`受付時のactivation単位single-owner claimを追加し、同世代の重複handoffを抑止した。最新handoffの失敗時だけclaimを解放し、rollbackされたtransientから再試行できる。
+- final validation remediationで常設navigationをcontroller-aware commandへ統合し、closing gate、target/reason保持retry、application-shell境界scanを追加した。
 - watch-readyは`received`まで進め、`activated`への前進はcontroller mount成功後に限定する。panel側のasync処理はstart epochを各await後にも照合し、stop／restart後の旧世代完了をno-opにする。
 - gesture sourceは同期registrarからcanonical ingressへ接続し、sourceにはstore writer、sequence allocator、panel openerを公開しない。
 - panelはsession storeをread／subscribe専用で利用し、`activated`前進はtyped runtime messageでworkerの単一schedulerへ委譲する。session read障害noticeは成功通知までcompositionのready／maintenance表示へ再投影する。

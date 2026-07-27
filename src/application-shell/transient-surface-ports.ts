@@ -47,6 +47,16 @@ export type TransientSurfaceState =
       readonly activationId: ActivationId;
       readonly surfaceId: FeatureId;
       readonly returnTo: FeatureId | null;
+      readonly target: FeatureId | null;
+      readonly reason: TransientDismissReason;
+    }
+  | {
+      readonly kind: "closing";
+      readonly activationId: ActivationId;
+      readonly surfaceId: FeatureId;
+      readonly returnTo: FeatureId | null;
+      readonly target: FeatureId | null;
+      readonly reason: TransientDismissReason;
     };
 
 export interface TransientSurfaceLifecyclePort {

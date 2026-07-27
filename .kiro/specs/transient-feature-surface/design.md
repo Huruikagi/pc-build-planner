@@ -58,6 +58,7 @@
 - `seq`割り当て、墓標優先、watch-ready最終許可の順序保証の変更
 - session媒体、worker単一write owner、タブ寿命イベントの変更
 - production E2Eの委譲先または実feature登録順の変更
+- 常設navigation command、`closing` / `dismiss-failed`の意味、retry target保持、monitoring cleanup ownerの変更
 - gesture ingressの同期性またはworker composition ownerを変更した場合は`source-price-refresh`を再検証する
 
 ### Existing Spec Revision Touchpoints
@@ -102,7 +103,8 @@ graph TB
     Store --> Port["Typed runtime activation port"]
     Tabs --> TabPort["TabLifecyclePort"]
     Port --> Controller["TransientSurfaceController"]
-    TabPort --> Controller
+    TabPort --> Monitoring["ProductionMonitoringIntegration"]
+    Monitoring --> Controller
     Controller --> Host["SidePanelHost"]
     Host --> Registry["FeatureRegistry"]
 ```
@@ -111,7 +113,8 @@ graph TB
 
 - **FeatureRegistry**: `presentation`を検証し、不正登録を隔離する
 - **SidePanelHost**: 同時に一つのfeatureだけをmountし、既存transition/rollbackを維持する
-- **TransientSurfaceController**: 起動世代、対象タブ、戻り先、監視解除を所有する
+- **TransientSurfaceController**: 起動世代、対象タブ、戻り先、常設選択target、終了epochを所有する
+- **ProductionMonitoringIntegration**: panel監視callbackをcontrollerへ引き渡し、取得したwatch cleanupを停止時に所有・解除する
 - **TransientActivationStore**: worker再生成を跨ぐ起動要求、単調増加順序、失効墓標を保持する
 - **TransientGestureRegistrationPort**: feature-owned sourceを同期開始し、emitを唯一のgesture ingressへ接続して対称cleanupする
 - **Canonical gesture ingress**: activation IDとsequenceを割り当て、store commandをenqueueし、同じgesture callback内でpanel openを開始する
@@ -127,6 +130,8 @@ src/application-shell/
   feature-registry.ts                     # branch相関のruntime検証とsnapshot複製
   side-panel-host.ts
   application-composition.ts
+  late-bound-lifecycle.ts                 # new: feature factoryへ安定参照を渡すfail-closed proxy
+  shell-presentation.tsx                  # navigation / retry commandをproduction viewへ結線
   shell-view.tsx
   transient-surface-notice.ts            # new
   transient-surface-controller.ts       # new
@@ -241,10 +246,20 @@ export type TransientSurfaceState =
       readonly returnTo: FeatureId | null;
     }
   | {
+      readonly kind: "closing";
+      readonly activationId: ActivationId;
+      readonly surfaceId: FeatureId;
+      readonly returnTo: FeatureId | null;
+      readonly target: FeatureId | null;
+      readonly reason: TransientDismissReason;
+    }
+  | {
       readonly kind: "dismiss-failed";
       readonly activationId: ActivationId;
       readonly surfaceId: FeatureId;
       readonly returnTo: FeatureId | null;
+      readonly target: FeatureId | null;
+      readonly reason: TransientDismissReason;
     };
 
 export interface TransientSurfaceController {
@@ -254,6 +269,8 @@ export interface TransientSurfaceController {
     activationId: ActivationId,
     reason: TransientDismissReason,
   ): Promise<Result<void, TransientSurfaceError>>;
+  selectPersistent(target: FeatureId): Promise<Result<void, TransientSurfaceError>>;
+  retryDismiss(): Promise<Result<void, TransientSurfaceError>>;
   conclude(
     activationId: ActivationId,
     handoff: FeatureActivationIntent,
@@ -274,7 +291,7 @@ export interface TransientSurfaceLifecyclePort {
 }
 ```
 
-controllerは自身のcommandをpromise chainで直列化する。全command入口で`activationId`を照合し、旧世代由来の終了、抽出完了、監視callbackをno-opにする。
+controllerは自身のcommandをpromise chainで直列化する。各intentの受付時に単調なcommand epochを割り当て、await後のstate確定は最新epochだけに許可する。これにより先行`request` / `conclude`の遅延完了より後発navigationが勝ち、navigation後に受理した新世代`request`だけがnavigationを置換できる。`conclude`は受付時にactivation単位のsingle-owner claimを同期取得し、host副作用前にclaimと最新epochを照合する。同じactivationでhost handoffを開始できるownerは最大1件とし、最新intentのhandoff失敗時だけclaimを解放してrollback済みtransientを再試行可能に戻す。終了開始時に同期的に`closing`へ進め、`isCurrent()`をfalseにして同世代の`conclude`をno-opにする。全command入口で`activationId`を照合し、旧世代由来の終了、抽出完了、監視callbackをno-opにする。
 
 `TransientSurfaceController`は`TransientSurfaceLifecyclePort`を実装する。`application-shell/public.ts`が型だけを公開し、composition rootが具体instanceを次の形で注入する。
 
@@ -337,6 +354,8 @@ proxyとbind操作はapplication composition内部契約であり、`application
 ### Dismiss and Conclude
 
 - `dismiss`: 一過性面をunmountし、記録した常設featureへ戻る
+- `selectPersistent`: production navigationの単一commandとして、一過性active / dismiss-failedなら選択targetを保持して終了し、inactiveなら同じtargetを通常選択する
+- `retryDismiss`: `dismiss-failed`に保持したtargetとreasonで同じ終了commandを再実行する。production shellのretry操作はこのstateを優先する
 - `conclude`: 引き渡し先へのtyped activationをhostの一回のtransitionで実行し、戻り先へは戻らない
 - activation失敗時はhostの既存rollbackで一過性面を維持する
 - 戻り先が利用不可なら利用可能な常設featureと理由を提示する
@@ -460,7 +479,7 @@ panel adapterはrequestを送信し、`unknown` responseを上記unionへ検証�
 4. panelが`TabLifecyclePort.watch`を設置し、watch-readyをworkerへ通知する
 5. workerがwatch-readyを同じスケジューラへenqueueし、それ以前に受信した全mutationを適用してからrecordと墓標を最終照合し、activation許可または`invalidated`を返す
 6. controllerがfeatureをmountし、成功後にrecordを`activated`へ進める
-7. 以後はpanel監視がcontrollerを撤収させる
+7. 以後は`ProductionMonitoringIntegration`がpanel監視callbackをcontrollerへ渡し、停止時にwatch cleanupを解除する。controllerはmonitoring resourceを所有しない
 
 worker監視とpanel監視には重複期間を設け、監視の空白を作らない。workerがwatch-readyより前に受信した失効は墓標と最終照合で拒否し、watch設置後の失効はpanel監視でも捕捉する。recordが一時的に`pending`または`received`として観測されても実行可能ではなく、最終許可前にfeatureをmountしない。`invalidated`は終端であり、activation許可後であってもmount成功前の失効通知はcontrollerを撤収させる。
 
@@ -514,7 +533,8 @@ export interface TabLifecyclePort {
 - **記録なし**: Chrome UIから直接開かれた場合は常設表示に留まり通知しない
 - **失効済み**: 一過性面を立てず再操作を案内する
 - **起動拒否**: 常設表示に留まり安定コードで診断する
-- **終了失敗**: 実行操作を隠した`dismiss-failed`として保持し再試行する
+- **終了中**: `closing`へ進めて`isCurrent` / `conclude`を無効化し、対象tabへの実行操作を許可しない
+- **終了失敗**: 実行操作を隠した`dismiss-failed`として選択targetとreasonを保持する。hostのrecoverable error投影はfeature slotを非表示にしてretry操作を提示し、production compositionはその操作を同じcontroller commandへ戻す
 - **引き渡し失敗**: 一過性面を維持し、呼び出しfeatureへ判別可能な失敗を返す
 - **store障害**: 商品値やURLをログせず、安定した媒体障害として提示する
 - **起動record書き込み失敗**: sessionへ再書き込みせずaction badge/titleで理由と再操作を提示する
