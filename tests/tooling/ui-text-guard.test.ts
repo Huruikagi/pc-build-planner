@@ -45,7 +45,9 @@ test("テンプレートリテラルの穴({})に囲まれた日本語も、入�
       path: "src/features/mock/view.tsx",
       // Fixture TS source being scanned as text, not a real template string.
       source:
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template syntax inside fixture source text.
         "export const label = `${prefix}未分類${suffix}`;\n" +
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional nested template syntax inside fixture source text.
         "export const nested = `${a + `${b}未確認`}末尾`;",
     },
   ]);
@@ -71,6 +73,7 @@ test("テンプレートの穴を閉じる`}`の後段にある実コードを�
       path: "src/features/mock/view.tsx",
       // Fixture TS source being scanned as text, not a real template string.
       source:
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional template syntax inside fixture source text.
         "export const id = `${field}-error`;\n" +
         'export const laterLiteral = "未分類";',
     },
