@@ -202,7 +202,7 @@
   - _Requirements: 1.7, 3.3, 3.5, 5.4, 5.6_
   - _Boundary: ApplicationCompositionTests, PublicContractTests_
 
-- [ ] 6.5 extractor・保存・navigationの非回帰testを完成する
+- [x] 6.5 extractor・保存・navigationの非回帰testを完成する
   - 既存extractorの検証、candidate-management内部の保存、常設feature navigationが移行後も単独で動作することを確認する。
   - product-captureから保存serviceを直接呼ばず、candidate editor保存時だけ既存validatorと永続化が実行されることをassertする。
   - 関連unit／integration suiteとlegacy fixture除去後の回帰testを通す。
