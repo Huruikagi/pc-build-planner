@@ -319,6 +319,7 @@ export class ManagementState {
 
   public async createProject(name: string): Promise<void> {
     if (this.#value.isSaving || this.#mutationsDisabled()) return;
+    const pendingAtStart = this.#value.pendingPreEdit;
     this.#set({
       isSaving: true,
       displayError: null,
@@ -328,7 +329,37 @@ export class ManagementState {
       { name },
       await this.dependencies.createMutationContext(),
     );
+    if (this.#value.pendingPreEdit !== pendingAtStart) {
+      this.#set({ isSaving: false });
+      return;
+    }
     if (!result.ok) return this.#mutationFailure(result.error);
+    if (pendingAtStart !== null) {
+      const resolvedDraft: CandidateDraft = {
+        ...pendingAtStart.draft,
+        projectId: result.value.id,
+      };
+      this.#set({
+        projects: [
+          ...this.#value.projects,
+          {
+            id: result.value.id,
+            name: result.value.name,
+            updatedAt: result.value.updatedAt,
+          },
+        ],
+        candidates: [],
+        selectedProjectId: result.value.id,
+        editor: {
+          mode: "create",
+          projectId: result.value.id,
+          draft: resolvedDraft,
+        },
+        pendingPreEdit: null,
+        isSaving: false,
+      });
+      return;
+    }
     this.#set({ isSaving: false, pendingPreEdit: null });
     await this.load();
   }

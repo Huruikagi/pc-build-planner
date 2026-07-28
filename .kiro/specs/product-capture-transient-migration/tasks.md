@@ -39,7 +39,7 @@
   - _Requirements: 1.3, 1.4, 1.6, 4.6_
   - _Boundary: CandidateManagementState, PendingPreEdit_
 
-- [ ] 2.3 project作成結果でpending draftをeditorへ移す
+- [x] 2.3 project作成結果でpending draftをeditorへ移す
   - project作成serviceが返したProjectIdをそのままpending draftへ適用し、再一覧取得や名前照合を行わずeditor stateへ遷移する。
   - 作成失敗時はdraftと入力を保持して再試行可能にし、成功時だけpending stateをclearする。
   - 成功、失敗、再試行、新しいactivationとの競合を決定的に検証するintegration testを通す。
