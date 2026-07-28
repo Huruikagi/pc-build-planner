@@ -1,11 +1,13 @@
 import {
+  type CandidateSourceId,
+  createUuid,
   err,
   type MoneyValue,
   ok,
   type Result,
   type SourcedValue,
 } from "../../domain/public.js";
-import type { CaptureCandidatePort } from "../candidate-management/contracts.js";
+import type { CandidateSourceDraft } from "../candidate-management/contracts.js";
 import type {
   CaptureCoreField,
   CaptureError,
@@ -15,7 +17,7 @@ import type {
 import { createCaptureNormalizer } from "./normalizer.js";
 
 const normalizer = createCaptureNormalizer();
-type CandidateDraft = Parameters<CaptureCandidatePort["createCandidate"]>[0];
+type CandidateDraft = CandidateSourceDraft;
 
 const fieldEntry = (session: CaptureSession, field: CaptureCoreField) =>
   session.fields.find((candidate) => candidate.field === field);
@@ -91,12 +93,13 @@ export const toCandidateDraft = (
     return err({ kind: "validation", fields: { name: "required" } });
   }
 
-  const sourceSnapshot = Object.fromEntries(
-    session.fields.map((field) => [field.field, field.value.original]),
-  );
   const manufacturer = sourcedText(session, "manufacturer");
   const modelNumber = sourcedText(session, "modelNumber");
   const price = sourcedPrice(session);
+  const sourceId = createUuid() as CandidateSourceId;
+  const sourceSnapshot = Object.fromEntries(
+    session.fields.map((field) => [field.field, field.value.original]),
+  );
 
   return ok({
     projectId: session.projectId,
@@ -108,9 +111,16 @@ export const toCandidateDraft = (
       },
       ...(manufacturer === undefined ? {} : { manufacturer }),
       ...(modelNumber === undefined ? {} : { modelNumber }),
-      ...(price === undefined ? {} : { price }),
     },
-    sourceInfo: { pageUrl: session.pageUrl, capturedAt: session.capturedAt },
+    sources: [
+      {
+        id: sourceId,
+        pageUrl: session.pageUrl,
+        capturedAt: session.capturedAt,
+        ...(price === undefined ? {} : { price }),
+      },
+    ],
+    primarySourceId: sourceId,
     sourceSnapshot,
     normalizedAttributes: { category: "uncategorized" },
   });

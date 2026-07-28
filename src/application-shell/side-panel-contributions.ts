@@ -5,6 +5,10 @@ import {
 import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
+  createChromeSourcePagePort,
+  createSourceKindClassifier,
+  type SourcePagePort,
+  type TabsCreatePort,
 } from "../features/candidate-management/feature-contribution.js";
 import {
   type CompatibilityContribution,
@@ -22,6 +26,7 @@ import {
   createProductCaptureContribution,
   type ProductCaptureContribution,
 } from "../features/product-capture/feature-contribution.js";
+import { createProductCapturePublicApi } from "../features/product-capture/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 
 /**
@@ -40,6 +45,10 @@ export type SidePanelFeatureContributions = readonly [
 export interface SidePanelChromeApis {
   readonly tabs: ChromeTabsApi;
   readonly scripting: ChromeScriptingApi;
+}
+
+export interface SidePanelCandidateFactories {
+  readonly createSourcePagePort?: (tabs?: TabsCreatePort) => SourcePagePort;
 }
 
 /**
@@ -64,8 +73,19 @@ const inertCaptureRuntimePort: CaptureRuntimePort = {
 export const createSidePanelFeatureContributions = (
   context: FeatureCompositionContext,
   chromeApis?: SidePanelChromeApis,
+  factories: SidePanelCandidateFactories = {},
 ): SidePanelFeatureContributions => {
-  const candidateManagement = createCandidateManagementContribution(context);
+  const productCapturePublic = createProductCapturePublicApi();
+  const candidateManagement = createCandidateManagementContribution(context, {
+    classifier: createSourceKindClassifier(
+      productCapturePublic.manufacturerDomains,
+    ),
+    sourcePage: (factories.createSourcePagePort ?? createChromeSourcePagePort)(
+      chromeApis?.tabs.create === undefined
+        ? undefined
+        : { create: chromeApis.tabs.create.bind(chromeApis.tabs) },
+    ),
+  });
   const currentBuild = createCurrentBuildContribution(context, {
     candidates: candidateManagement.registration.publicApi.query,
   });

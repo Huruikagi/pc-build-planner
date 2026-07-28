@@ -144,7 +144,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.4, 4.5, 5.1, 5.2, 5.4, 7.5_
 
 - [ ] 5. compositionと隣接featureを新しいsource契約へ接続する
-- [ ] 5.1 application shellからclassifierとChrome tab portを注入する
+- [x] 5.1 application shellからclassifierとChrome tab portを注入する
   - side panel compositionがproduct-capture公開照合をcandidate classifierへ渡し、内部mapを直接importしないようにする。
   - 既存Chrome tabs handleの最小shapeを新規タブ作成へ拡張し、candidate page portへ注入する。
   - Chrome API不在のtest環境には安全に失敗するinert portを供給し、production以外でglobalへ直接到達しない。
@@ -153,6 +153,7 @@
   - _Depends: 1.1, 2.2, 2.3_
 
 - [ ] 5.2 (P) 商品取り込みから候補保存までの初期source統合を検証する
+  - _Blocked: product-capture-transient-migration の一過性登録・ActivationId伝播・現行世代gateが未実装で、公開intentを transient conclude へ配送する必須契約を CaptureSourceMapper 境界内では実装できない_
   - 更新済み候補draft契約に合わせ、取り込みページURL、取得日時、取得価格を一件のsourceへ写像し、そのIDをprimaryにした `CandidateEditorPrefill` を構築する。
   - 商品共通値へ価格を残さず、元表記snapshotと他の確認済み商品値を維持し、種別未指定は候補serviceのclassifierへ委ねる。
   - product-captureがprefillを公開 `createCandidateEditorIntent` へ渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送することを検証する。candidate query、source mutation、candidate serviceを直接呼ばない。
@@ -163,7 +164,7 @@
   - _Boundary: CaptureSourceMapper_
   - _Depends: 1.1, 3.1, 3.4, 5.1_
 
-- [ ] 5.3 (P) backup復元とfoundation置換の複数source統合を検証する
+- [x] 5.3 (P) backup復元とfoundation置換の複数source統合を検証する
   - format 2 backupをversioned schema 2 validatorによるpreflightまで通し、全source関係を復元候補へ写像する。foundation atomic replacementへの結線は5.6が所有する。
   - format 1 backupも移行後に同じprimary source規則へ到達することを検証する。
   - 不正sourceまたはprimary参照を持つbackupが既存rootを置き換えないことを検証する。

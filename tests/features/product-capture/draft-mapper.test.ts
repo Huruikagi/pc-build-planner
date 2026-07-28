@@ -80,13 +80,13 @@ test("採用値からuncategorizedのCandidateDraftを生成する", () => {
     original: "架空メーカー",
     confirmed: "架空メーカー",
   });
-  assert.deepEqual(result.value.product.price, {
+  assert.deepEqual(result.value.sources[0]?.price, {
     original: "42800 JPY",
     confirmed: { amount: 42800, currency: "JPY" },
   });
 });
 
-test("取得元URLはproductへ含めずsourceInfo.pageUrlだけを使う", () => {
+test("取得元URLはproductへ含めず唯一のprimary sourceへ写像する", () => {
   const result = toCandidateDraft(session());
 
   assert.equal(result.ok, true);
@@ -95,8 +95,9 @@ test("取得元URLはproductへ含めずsourceInfo.pageUrlだけを使う", () =
     (result.value.product as unknown as Record<string, unknown>).url,
     undefined,
   );
-  assert.equal(result.value.sourceInfo?.pageUrl, session().pageUrl);
-  assert.equal(result.value.sourceInfo?.capturedAt, CAPTURED_AT);
+  assert.equal(result.value.sources[0]?.pageUrl, session().pageUrl);
+  assert.equal(result.value.sources[0]?.capturedAt, CAPTURED_AT);
+  assert.equal(result.value.primarySourceId, result.value.sources[0]?.id);
 });
 
 test("欠損項目は元表記を保持しつつproductへ含めない", () => {
@@ -105,14 +106,16 @@ test("欠損項目は元表記を保持しつつproductへ含めない", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.product.modelNumber, undefined);
-  assert.equal(result.value.sourceSnapshot?.modelNumber, undefined);
+  assert.equal(result.value.sources[0]?.price?.original, "42800 JPY");
 });
 
-test("全項目の元表記をsourceSnapshotへ保持する", () => {
+test("確認済み商品値とsource価格と候補snapshotは元表記を保持する", () => {
   const result = toCandidateDraft(session());
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
+  assert.equal(result.value.product.name.original, " 架空CPU X100 ");
+  assert.equal(result.value.sources[0]?.price?.original, "42800 JPY");
   assert.equal(result.value.sourceSnapshot?.name, " 架空CPU X100 ");
   assert.equal(
     result.value.sourceSnapshot?.url,
@@ -139,7 +142,7 @@ test("価格の修正文字列は分離可能な時だけ確認値へ反映す�
   );
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
-  assert.deepEqual(parsed.value.product.price, {
+  assert.deepEqual(parsed.value.sources[0]?.price, {
     original: "42800 JPY",
     confirmed: { amount: 12800, currency: "JPY" },
   });
@@ -149,7 +152,7 @@ test("価格の修正文字列は分離可能な時だけ確認値へ反映す�
   );
   assert.equal(unparsable.ok, true);
   if (!unparsable.ok) return;
-  assert.deepEqual(unparsable.value.product.price, {
+  assert.deepEqual(unparsable.value.sources[0]?.price, {
     original: "42800 JPY",
   });
 });
@@ -182,14 +185,15 @@ test("projectId未選択のセッションはproject-requiredになる", () => {
   assert.deepEqual(result, { ok: false, error: { kind: "project-required" } });
 });
 
-test("CaptureDraftMapperは確認済みセッションからtoCandidateDraftと同じ結果を返す", () => {
+test("CaptureDraftMapperは確認済みセッションを一件のprimary sourceへ変換する", () => {
   const mapper = createCaptureDraftMapper();
   const confirmed = session() as ConfirmedCaptureSession;
 
-  assert.deepEqual(
-    mapper.toCandidateDraft(confirmed),
-    toCandidateDraft(confirmed),
-  );
+  const result = mapper.toCandidateDraft(confirmed);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.sources.length, 1);
+  assert.equal(result.value.primarySourceId, result.value.sources[0]?.id);
 });
 
 test("CaptureDraftMapperは欠損を含む有効セッションを型安全な候補ドラフトへ変換する", () => {

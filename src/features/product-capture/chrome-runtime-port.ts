@@ -12,6 +12,7 @@ export interface ChromeTabsApi {
     readonly active: true;
     readonly currentWindow: true;
   }): Promise<ReadonlyArray<{ readonly id?: number; readonly url?: string }>>;
+  create?(details: { readonly url: string }): Promise<unknown>;
 }
 
 export interface ChromeScriptingInjection {

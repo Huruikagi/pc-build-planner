@@ -104,6 +104,7 @@ const isSourceDraft = (value: unknown): value is CandidateSourceDraft => {
       "normalizedAttributes",
       "sources",
       "primarySourceId",
+      "sourceSnapshot",
     ]) ||
     !isRecord(value.product) ||
     !isRecord(value.product.name)

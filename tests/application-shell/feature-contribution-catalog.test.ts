@@ -142,6 +142,80 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
 });
 
+test("side panel compositionはtabs.createを候補再訪portへ注入する", async () => {
+  let injectedTabs:
+    | { create(details: { readonly url: string }): Promise<unknown> }
+    | undefined;
+  const context = {
+    data: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    fullDataPort: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+      async assessReplacement() {
+        return { ok: true, value: {} } as never;
+      },
+      async replaceRoot() {
+        return { ok: true, value: {} } as never;
+      },
+      async runMaintenance() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    navigator: {
+      async activate() {
+        return { ok: true, value: undefined };
+      },
+    },
+  };
+  const contributions = createSidePanelFeatureContributions(
+    context as never,
+    {
+      tabs: {
+        async query() {
+          return [];
+        },
+        async create({ url }) {
+          return { url };
+        },
+      },
+      scripting: {
+        async executeScript() {
+          return [];
+        },
+      },
+    },
+    {
+      createSourcePagePort(tabs) {
+        injectedTabs = tabs;
+        return {
+          async open() {
+            return { ok: false, error: { kind: "runtime-unavailable" } };
+          },
+        };
+      },
+    },
+  );
+  assert.equal(contributions[0].registration.id, "candidate-management");
+  assert.ok(injectedTabs);
+  assert.deepEqual(
+    await injectedTabs.create({ url: "https://shop.example.invalid/item" }),
+    {
+      url: "https://shop.example.invalid/item",
+    },
+  );
+});
+
 test("複数contributionを決定順でside panel・public API入力へ型付き提供する", () => {
   const builds = contribution("builds", "builds", 20, { count: () => 2 });
   const catalog = contribution("catalog", "catalog", 10, {

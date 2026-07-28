@@ -12,7 +12,19 @@ import {
   type CandidateSourceDataPort,
   unavailableCandidateSourceDataPort,
 } from "./source-data-port.js";
+import type { SourceKindClassifier } from "./source-kind-classifier.js";
+import type { SourcePagePort } from "./source-page-port.js";
 import { createManagementState } from "./state.js";
+
+export {
+  createSourceKindClassifier,
+  type SourceKindClassifier,
+} from "./source-kind-classifier.js";
+export {
+  createChromeSourcePagePort,
+  type SourcePagePort,
+  type TabsCreatePort,
+} from "./source-page-port.js";
 
 export const candidateManagementContributionKey = "candidateManagement";
 
@@ -31,17 +43,32 @@ export type CandidateManagementContribution = FeatureContribution<
   >;
 };
 
+export interface CandidateManagementContributionDependencies {
+  readonly sourceData?: CandidateSourceDataPort;
+  readonly classifier?: SourceKindClassifier;
+  readonly sourcePage?: SourcePagePort;
+}
+
 /**
  * Assembles the feature from the shell-provided composition context only.
  * Persistence is reached exclusively through the injected scoped data port.
  */
 export const createCandidateManagementContribution = (
   context: FeatureCompositionContext,
-  sourceData: CandidateSourceDataPort = unavailableCandidateSourceDataPort,
+  input:
+    | CandidateManagementContributionDependencies
+    | CandidateSourceDataPort = {},
 ): CandidateManagementContribution => {
+  const dependencies: CandidateManagementContributionDependencies =
+    "query" in input ? { sourceData: input } : input;
+  const sourceData =
+    dependencies.sourceData ?? unavailableCandidateSourceDataPort;
   const service = createCandidateManagementService({
     data: context.data,
     sourceData,
+    ...(dependencies.classifier === undefined
+      ? {}
+      : { classifier: dependencies.classifier }),
   });
   const catalog = createCandidateSourceCatalog({ data: sourceData });
 
@@ -68,6 +95,9 @@ export const createCandidateManagementContribution = (
     query: service,
     service,
     createMutationContext,
+    ...(dependencies.sourcePage === undefined
+      ? {}
+      : { sourcePage: dependencies.sourcePage }),
   });
 
   const legacyCapture = {

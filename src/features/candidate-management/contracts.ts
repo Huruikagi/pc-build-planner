@@ -46,6 +46,7 @@ type CandidateSourceDraftBase = {
   readonly product: CandidateProductValuesV2 & {
     readonly name: SourcedValue<string>;
   };
+  readonly sourceSnapshot?: SourceSnapshot;
 } & CandidateSourceState;
 
 /** Canonical schema-2 editor contract exposed to adjacent features. */

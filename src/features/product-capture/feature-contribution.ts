@@ -4,8 +4,8 @@ import type {
   FeatureContribution,
 } from "../../application-shell/public.js";
 import type { Result } from "../../domain/public.js";
-import type { LegacyCandidateEditorPrefill as CandidateEditorPrefill } from "../candidate-management/activation.js";
 import type { CaptureCandidatePort } from "../candidate-management/contracts.js";
+import type { CandidateEditorPrefill } from "../candidate-management/public.js";
 import {
   type CaptureRuntimePort,
   createCaptureCoordinator,
