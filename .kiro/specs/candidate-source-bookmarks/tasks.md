@@ -18,7 +18,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.5_
   - _Boundary: CandidateSourceModel_
 
-- [ ] 1.3 schema 2候補とprimaryの独立validatorを実装する
+- [x] 1.3 schema 2候補とprimaryの独立validatorを実装する
   - sourceの固定field集合、識別子、HTTP/HTTPS URL、UTC日時、価格、種別を未信頼入力として検証する。
   - source ID重複、source有無とprimary有無の不一致、存在しないprimary参照をpath付きで拒否する。
   - 生HTML、data URL、画像・binary相当payloadの既存fail-closed規約をsourceの全外部文字列へ適用する。
@@ -27,7 +27,7 @@
   - _Boundary: CandidateSourceValidator_
   - _Depends: 1.2_
 
-- [ ] 1.4 schema 1から2への純粋migration stepを実装する
+- [x] 1.4 schema 1から2への純粋migration stepを実装する
   - 旧単数取得元と商品価格を一件のprimary sourceへ移し、片方だけ・両方なしも値損失なく変換する。
   - 旧候補IDを生成source IDとして再利用し、同じ入力から同じschema 2結果を生成する。
   - production registryへはまだ登録せず、schema 2専用validatorまでの純粋変換と入力非変更をtestする。
