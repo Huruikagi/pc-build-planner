@@ -6,6 +6,7 @@ import {
   type Result,
 } from "../../domain/public.js";
 import type { CandidateManagementPublicApi } from "../candidate-management/public.js";
+import { inferCategoryHint } from "./category-hint.js";
 import type {
   CaptureError,
   CaptureResult,
@@ -17,12 +18,30 @@ type CandidateEditorIntentFactory =
   CandidateManagementPublicApi["createCandidateEditorIntent"];
 type UnresolvedCandidateDraft =
   Parameters<CandidateEditorIntentFactory>[0]["draft"];
+type UnresolvedCandidateEditorPrefill =
+  Parameters<CandidateEditorIntentFactory>[0];
 export const createCaptureDraftMapper = (): UnresolvedCaptureDraftMapper => ({
   toUnresolvedDraft(value) {
     const result = decodeCaptureResult(value);
     return result === undefined
       ? err({ kind: "invalid-payload" })
-      : ok(unresolvedDraftFromFields(result.draft.fields));
+      : ok(unresolvedDraftFromResult(result));
+  },
+  toEditorPrefill(value) {
+    const result = decodeCaptureResult(value);
+    if (result === undefined) return err({ kind: "invalid-payload" });
+    const category = result.draft.fields.find(
+      (field) => field.field === "category",
+    );
+    const categoryHint = inferCategoryHint(
+      typeof category?.normalizedValue === "string"
+        ? category.normalizedValue
+        : undefined,
+    );
+    return ok({
+      draft: unresolvedDraftFromResult(result),
+      ...(categoryHint === undefined ? {} : { categoryHint }),
+    });
   },
   toManualDraft() {
     return unresolvedDraftFromFields([]);
@@ -168,10 +187,30 @@ const unresolvedDraftFromFields = (
   };
 };
 
+const unresolvedDraftFromResult = (
+  result: CaptureResult,
+): UnresolvedCandidateDraft => ({
+  ...unresolvedDraftFromFields(result.draft.fields),
+  sourceInfo: {
+    pageUrl: result.pageUrl,
+    capturedAt: result.capturedAt,
+  },
+  sourceSnapshot: Object.fromEntries(
+    result.draft.fields.flatMap((field) => [
+      [field.field, field.rawValue],
+      [`${field.field}:source`, field.source],
+      [`${field.field}:sourceLabel`, field.sourceLabel],
+    ]),
+  ),
+});
+
 export interface UnresolvedCaptureDraftMapper {
   toUnresolvedDraft(
     result: unknown,
   ): Result<UnresolvedCandidateDraft, CaptureError>;
+  toEditorPrefill(
+    result: unknown,
+  ): Result<UnresolvedCandidateEditorPrefill, CaptureError>;
   toManualDraft(): UnresolvedCandidateDraft;
 }
 

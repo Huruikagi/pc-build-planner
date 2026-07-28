@@ -44,11 +44,81 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
       },
     },
     normalizedAttributes: { category: "uncategorized" },
+    sourceInfo: {
+      pageUrl: "https://shop.example.invalid/product",
+      capturedAt: "2026-07-28T00:00:00.000Z",
+    },
+    sourceSnapshot: {
+      name: "  架空CPU  ",
+      "name:source": "heading",
+      "name:sourceLabel": "h1",
+      manufacturer: "架空メーカー",
+      "manufacturer:source": "meta",
+      "manufacturer:sourceLabel": "og:brand",
+    },
   });
   assert.equal("projectId" in mapped.value, false);
-  assert.equal("pageUrl" in mapped.value, false);
-  assert.equal("sourceInfo" in mapped.value, false);
-  assert.equal("sourceSnapshot" in mapped.value, false);
+  assert.deepEqual(mapped.value.sourceInfo, {
+    pageUrl: "https://shop.example.invalid/product",
+    capturedAt: "2026-07-28T00:00:00.000Z",
+  });
+  assert.deepEqual(mapped.value.sourceSnapshot, {
+    name: "  架空CPU  ",
+    "name:source": "heading",
+    "name:sourceLabel": "h1",
+    manufacturer: "架空メーカー",
+    "manufacturer:source": "meta",
+    "manufacturer:sourceLabel": "og:brand",
+  });
+});
+
+test("通常sourceとdomain-mapのprovenanceを公開pre-edit契約へ保持する", () => {
+  const mapped = createCaptureDraftMapper().toEditorPrefill(
+    captureResult([
+      {
+        field: "name",
+        normalizedValue: "架空CPU",
+        rawValue: "架空CPU",
+        source: "heading",
+        sourceLabel: "h1",
+      },
+      {
+        field: "manufacturer",
+        normalizedValue: "架空メーカー",
+        rawValue: "架空メーカー",
+        source: "domain-map",
+        sourceLabel: "maker.example",
+      },
+    ]),
+  );
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  assert.deepEqual(mapped.value.draft.sourceSnapshot, {
+    name: "架空CPU",
+    "name:source": "heading",
+    "name:sourceLabel": "h1",
+    manufacturer: "架空メーカー",
+    "manufacturer:source": "domain-map",
+    "manufacturer:sourceLabel": "maker.example",
+  });
+});
+
+test("カテゴリは確定せずcandidate editorの参考値へ写像する", () => {
+  const mapped = createCaptureDraftMapper().toEditorPrefill(
+    captureResult([
+      {
+        field: "category",
+        normalizedValue: "CPUクーラー",
+        rawValue: "PCパーツ > CPUクーラー",
+        source: "breadcrumb",
+        sourceLabel: "breadcrumb",
+      },
+    ]),
+  );
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  assert.equal(mapped.value.draft.category, "uncategorized");
+  assert.equal(mapped.value.categoryHint, "cpu-cooler");
 });
 
 test("候補ゼロの手入力開始では空の商品名を保持する", () => {

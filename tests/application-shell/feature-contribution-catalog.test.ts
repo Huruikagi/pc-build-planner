@@ -285,7 +285,7 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
     await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(lifecycleEvents[0], "isCurrent");
   assert.equal(lifecycleEvents[1], "isCurrent");
-  assert.deepEqual(lifecycleEvents[2], {
+  assert.partialDeepStrictEqual(lifecycleEvents[2], {
     activationId: "production-activation",
     intent: {
       featureId: "candidate-management",

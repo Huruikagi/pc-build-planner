@@ -45,9 +45,9 @@
   - _Requirements: 2.2, 2.4, 2.7, 2.8, 2.9, 2.10, 3.5, 7.1, 7.3, 7.4_
   - _Boundary: GenericExtractor, CandidateRanker_
 
-- [ ] 5. 一過性surfaceからcandidate pre-editへの即時handoffへ移行する
+- [x] 5. 一過性surfaceからcandidate pre-editへの即時handoffへ移行する
 
-- [ ] 5.1 activation固定tabと世代gateを取り込みcoordinatorへ適用する
+- [x] 5.1 activation固定tabと世代gateを取り込みcoordinatorへ適用する
   - active tabの再検索を廃止し、activationで配送された固定tabだけを抽出runtimeへ渡す。
   - 抽出前と完了後に現行activationを照合し、tab遷移・更新・閉鎖または世代置換後の結果をhandoffしない。
   - stale時にruntimeまたはcandidate-managementへ後続副作用がなく、新gestureで新しい固定tabのidle状態へ戻るintegration testを完了条件とする。
@@ -55,7 +55,7 @@
   - _Requirements: 1.1, 1.4, 1.5, 4.3, 6.1, 6.2, 6.4, 7.2_
   - _Boundary: ProductCaptureTransientActivation, CaptureCoordinator_
 
-- [ ] 5.2 抽出結果をproject未解決pre-editへ写像する
+- [x] 5.2 抽出結果をproject未解決pre-editへ写像する
   - 検証済み商品情報、元表記、provenance、取得日時、カテゴリ参考値を、project IDを作らずcandidate-management公開pre-editへ写像する。
   - 候補ゼロでは空の商品名を許容して手入力を開始し、保存可能性やproject存在をcapture側で判定しない。
   - 通常結果、空名、カテゴリ参考値、余剰値除外がcandidate public contract testで観測できることを完了条件とする。
@@ -63,7 +63,7 @@
   - _Requirements: 3.5, 3.6, 4.1, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.6, 7.2_
   - _Boundary: CaptureDraftMapper, CandidatePreEditConsumerContract_
 
-- [ ] 5.3 typed intentを原子的にhandoffし現行世代だけで再試行する
+- [x] 5.3 typed intentを原子的にhandoffし現行世代だけで再試行する
   - candidate-management公開factoryでintentを生成し、直接navigationではなく一過性lifecycleの`conclude`へ渡す。
   - 成功時はsurfaceを終了し、失敗時は検証済みintentを現行activation内だけで保持して再試行可能にする。
   - success、rejected、retry、new-generation replacement、no-project受理がintegration testで観測できることを完了条件とする。
@@ -71,7 +71,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 5.1, 5.2, 5.3, 5.5, 5.6, 6.3, 6.4, 7.2_
   - _Boundary: CandidateEditorHandoff, TransientSurfaceLifecyclePort_
 
-- [ ] 5.4 capture state・view・compositionから旧確認保存責務を除去する
+- [x] 5.4 capture state・view・compositionから旧確認保存責務を除去する
   - stateを`idle | extracting | failed`へ縮小し、review、submitting、saved、project選択、修正、save操作を削除する。
   - viewには実行、実行中、失効・抽出・handoff失敗、同世代handoff再試行だけを残す。
   - `CaptureCandidatePort`、project query、直接editor navigation、save service、feature-owned worker registrationがproduct-captureの公開依存とproduction compositionから消え、DOMに旧formが存在しないことを完了条件とする。

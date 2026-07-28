@@ -50,9 +50,9 @@ export const createProductCaptureContribution = (
     isCurrent: (activationId) =>
       dependencies.transientSurface.isCurrent(activationId),
     createHandoffIntent(result) {
-      const mapped = createCaptureDraftMapper().toUnresolvedDraft(result);
+      const mapped = createCaptureDraftMapper().toEditorPrefill(result);
       return mapped.ok
-        ? ok(dependencies.createCandidateEditorIntent({ draft: mapped.value }))
+        ? ok(dependencies.createCandidateEditorIntent(mapped.value))
         : mapped;
     },
     createManualIntent: () =>
