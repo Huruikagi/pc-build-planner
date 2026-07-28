@@ -185,6 +185,16 @@ function validateJavaScript(source, path) {
   }
 }
 
+/** Reject capture diagnostics that can disclose untrusted page state. */
+/** @param {string} source @param {string} path */
+export function validateCaptureDiagnosticSource(source, path) {
+  const diagnostic =
+    /console\s*\.\s*(?:log|info|warn|error|debug)\s*\(\s*(?:pageUrl|hostname|rawHtml|html|extractedProduct|captureResult|error)\s*\)/i;
+  if (diagnostic.test(source)) {
+    fail(`page-derived capture diagnostic found in ${path}`);
+  }
+}
+
 const forbiddenFoundationExports = new Set([
   "createChromeStorageAdapter",
   "createCompositionRoot",
@@ -407,6 +417,13 @@ export async function validateArtifactDirectory(directory) {
     join(directory, "service-worker.js"),
     "utf8",
   );
+  const captureContentScriptPath = join(directory, "content-script.js");
+  if (files.includes(captureContentScriptPath)) {
+    validateCaptureDiagnosticSource(
+      await readFile(captureContentScriptPath, "utf8"),
+      captureContentScriptPath,
+    );
+  }
   if (
     /node_modules[\\/].*react(?:-dom)?[\\/]|\b(?:document|window|HTMLElement)\b|\.createElement\s*\(/.test(
       workerBundle,

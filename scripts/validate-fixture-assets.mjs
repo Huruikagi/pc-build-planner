@@ -16,6 +16,8 @@ const rawHtml = /<(?:!doctype\s+html|!--|\/?[a-z][^>]*>)/i;
 const dataUrl = /\bdata:[^\s"']+/i;
 const webUrl = /https?:\/\/[^\s"'`)]+/gi;
 const syntheticValue = /(?:架空|synthetic|^SYN(?:-|$))/i;
+const registrableDomainLiteral =
+  /["']?registrableDomain["']?\s*:\s*["']([^"']+)["']/g;
 
 /** @typedef {{ readonly path: string, readonly content: string }} FixtureFile */
 
@@ -69,6 +71,16 @@ export async function findFixtureAssetViolations(
     if (imageExtensions.has(extname(path).toLowerCase()))
       rules.push("image-file");
     if (dataUrl.test(inspected)) rules.push("data-url");
+    for (const match of content.matchAll(registrableDomainLiteral)) {
+      const domain = match[1] ?? "";
+      if (
+        domain !== "example.invalid" &&
+        !domain.endsWith(".example.invalid")
+      ) {
+        rules.push("non-synthetic-domain");
+        break;
+      }
+    }
     for (const match of inspected.matchAll(webUrl)) {
       const hostname = new URL(match[0]).hostname;
       if (
@@ -123,6 +135,36 @@ export function findFixtureValueViolations(root) {
     }
     for (const [key, child] of Object.entries(value))
       walk(child, `${path}.${key}`);
+  };
+  walk(root, "$");
+  return violations;
+}
+
+/** Domain-map fixtures must never embed a real registrable domain. */
+/** @param {unknown} root */
+export function findSyntheticDomainViolations(root) {
+  /** @type {Array<{ path: string, rule: string }>} */
+  const violations = [];
+  /** @param {unknown} value @param {string} path */
+  const walk = (value, path) => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        walk(item, `${path}[${index}]`);
+      });
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = `${path}.${key}`;
+      if (
+        key === "registrableDomain" &&
+        (typeof child !== "string" ||
+          (child !== "example.invalid" && !child.endsWith(".example.invalid")))
+      ) {
+        violations.push({ path: childPath, rule: "non-synthetic-domain" });
+      }
+      walk(child, childPath);
+    }
   };
   walk(root, "$");
   return violations;

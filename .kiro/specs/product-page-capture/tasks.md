@@ -106,7 +106,7 @@
 
 - [ ] 7. 統合・安全性・cross-spec非回帰を検証する
 
-- [ ] 7.1 domain mapとhandoffを結ぶ受け入れflowを検証する
+- [x] 7.1 domain mapとhandoffを結ぶ受け入れflowを検証する
   - manufacturer欠損の架空メーカーdomainを抽出し、`domain-map` provenanceを保ったproject未解決pre-editがcandidate-managementへ一度だけ届くことを検証する。
   - ページ明示manufacturer、未知domain、空名manual handoff、project不存在、handoff retryを同じproduction-like compositionで検証する。
   - captureで保存mutationが発生せず、candidate editorへ到達後のtab失効がdraftを破棄しないことを完了条件とする。
@@ -114,7 +114,7 @@
   - _Requirements: 2.7, 2.8, 2.9, 2.10, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 7.1, 7.2, 7.3, 7.4_
   - _Boundary: ProductCaptureCandidateIntegration_
 
-- [ ] 7.2 (P) synthetic fixture・ログ・permission gateを強化する
+- [x] 7.2 (P) synthetic fixture・ログ・permission gateを強化する
   - domain map fixtureを架空domainだけで構成し、実サイトHTML、画像、取得商品データ、非synthetic URLを拒否する。
   - error pathで商品値、完全URL、hostname、生HTML、例外objectがログへ出ず、安定コードだけが観測されることを検証する。
   - permission集合、CSP、remote code、unsafe HTMLのartifact gateが既存基準のまま通ることを完了条件とする。
