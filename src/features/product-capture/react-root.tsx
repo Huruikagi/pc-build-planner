@@ -2,12 +2,10 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { LanguageProvider } from "../../ui-language/public.js";
 import type { CaptureState } from "./state.js";
-import { type CaptureProjectOption, CaptureView } from "./view.js";
+import { CaptureView } from "./view.js";
 
 export interface CaptureReactRootDependencies {
   readonly state: CaptureState;
-  readonly projects: readonly CaptureProjectOption[];
-  readonly onOpenDetailEdit?: (manualName?: string) => void;
 }
 
 export interface CaptureReactRoot {
@@ -25,13 +23,7 @@ export const mountCaptureReactRoot = (
     createElement(
       LanguageProvider,
       null,
-      createElement(CaptureView, {
-        state: dependencies.state,
-        projects: dependencies.projects,
-        ...(dependencies.onOpenDetailEdit === undefined
-          ? {}
-          : { onOpenDetailEdit: dependencies.onOpenDetailEdit }),
-      }),
+      createElement(CaptureView, { state: dependencies.state }),
     ),
   );
   return {

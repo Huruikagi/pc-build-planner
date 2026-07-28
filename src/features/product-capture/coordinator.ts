@@ -1,3 +1,4 @@
+import type { TargetTabId } from "../../application-shell/public.js";
 import {
   createRequestId,
   createUtcTimestamp,
@@ -19,16 +20,20 @@ import type { CaptureNormalizer } from "./normalizer.js";
 import type { CandidateRanker } from "./ranker.js";
 
 export interface CaptureCoordinator {
-  captureCurrentTab(): Promise<Result<CaptureResult, CaptureError>>;
+  captureTab(tabId: TargetTabId): Promise<Result<CaptureResult, CaptureError>>;
 }
 
 export interface ActiveTabInfo {
-  readonly tabId: number;
+  readonly tabId: TargetTabId;
   readonly url: string;
 }
 
 /** Distinguishes a lost `activeTab` grant from any other injection failure. */
 export type CaptureInjectionFailure = "permission" | "unknown";
+
+export type CaptureTabLookupFailure =
+  | { readonly kind: "tab-unavailable" }
+  | { readonly kind: "url-unavailable" };
 
 /**
  * The Chrome-facing capability the coordinator needs. Kept as a small,
@@ -37,7 +42,9 @@ export type CaptureInjectionFailure = "permission" | "unknown";
  * composition time.
  */
 export interface CaptureRuntimePort {
-  getActiveTab(): Promise<ActiveTabInfo | undefined>;
+  getTab(
+    tabId: TargetTabId,
+  ): Promise<Result<ActiveTabInfo, CaptureTabLookupFailure>>;
   inject(
     target: ActiveTabInfo,
     requestId: RequestId,
@@ -112,11 +119,25 @@ export const createCaptureCoordinator = (
     dependencies.isRestrictedUrl ?? defaultIsRestrictedUrl;
 
   return {
-    async captureCurrentTab() {
+    async captureTab(tabId) {
       const requestId = nextRequestId();
 
-      const tab = await dependencies.runtime.getActiveTab();
-      if (tab === undefined) return err({ kind: "permission-lost" });
+      let tabResult: Result<ActiveTabInfo, CaptureTabLookupFailure>;
+      try {
+        tabResult = await dependencies.runtime.getTab(tabId);
+      } catch {
+        return err({ kind: "tab-changed" });
+      }
+      if (!tabResult.ok) {
+        return err({
+          kind:
+            tabResult.error.kind === "url-unavailable"
+              ? "permission-lost"
+              : "tab-changed",
+        });
+      }
+      const tab = tabResult.value;
+      if (tab.tabId !== tabId) return err({ kind: "tab-changed" });
       if (isRestrictedUrl(tab.url)) return err({ kind: "restricted-page" });
 
       let injected: Result<RawCapturePayload, CaptureInjectionFailure>;

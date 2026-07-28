@@ -1,10 +1,11 @@
 import type {
   ActivationId,
+  FeatureActivationIntent,
   TargetTabId,
+  TransientSurfaceError,
   TransientSurfaceLifecyclePort,
 } from "../../application-shell/public.js";
 import type {
-  CandidatePartId,
   MoneyValue,
   ProjectId,
   RequestId,
@@ -162,22 +163,36 @@ export interface ConfirmedCaptureSession extends CaptureSession {
   readonly projectId: ProjectId;
 }
 
-/** The side-panel-only lifecycle; nothing here is persisted until `saved`. */
-export type CaptureSessionState =
-  | { readonly status: "idle" }
-  | { readonly status: "extracting"; readonly requestId: string }
-  | { readonly status: "review"; readonly session: CaptureSession }
-  | { readonly status: "submitting"; readonly session: ConfirmedCaptureSession }
+export type CaptureFailure =
   | {
-      readonly status: "saved";
-      readonly candidateId: CandidatePartId;
-      readonly projectId: ProjectId;
+      readonly kind: "execution";
+      readonly error: CaptureError;
+      readonly recoverable: boolean;
+    }
+  | {
+      readonly kind: "handoff";
+      readonly error: TransientSurfaceError;
+      readonly retainedIntent: FeatureActivationIntent;
+    };
+
+/** Activation-scoped transient execution state. */
+export type CaptureSessionState =
+  | {
+      readonly status: "idle";
+      readonly activationId: ActivationId;
+      readonly tabId: TargetTabId;
+    }
+  | {
+      readonly status: "extracting";
+      readonly activationId: ActivationId;
+      readonly tabId: TargetTabId;
+      readonly requestId: string;
     }
   | {
       readonly status: "failed";
-      readonly recoverable: boolean;
-      readonly draft?: CaptureSession;
-      readonly error: CaptureError;
+      readonly activationId: ActivationId;
+      readonly tabId: TargetTabId;
+      readonly failure: CaptureFailure;
     };
 
 /** Distinguishable capture and save failures; each keeps prior state recoverable. */

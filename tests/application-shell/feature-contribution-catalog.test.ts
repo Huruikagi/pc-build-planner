@@ -182,8 +182,8 @@ test("side panel compositionはtabs.createを候補再訪portへ注入する", a
     context as never,
     {
       tabs: {
-        async query() {
-          return [];
+        async get(id) {
+          return { id };
         },
         async create({ url }) {
           return { url };

@@ -57,8 +57,8 @@ export interface SidePanelCandidateFactories {
  * supplies real `chromeApis`.
  */
 const inertCaptureRuntimePort: CaptureRuntimePort = {
-  async getActiveTab() {
-    return undefined;
+  async getTab() {
+    return { ok: false, error: { kind: "tab-unavailable" } };
   },
   async inject() {
     return { ok: false, error: "unknown" };
@@ -94,15 +94,14 @@ export const createSidePanelFeatureContributions = (
       chromeApis === undefined
         ? inertCaptureRuntimePort
         : createChromeCaptureRuntimePort(chromeApis),
-    capture: candidateManagement.legacyCapture,
-    openCandidateEditor: candidateManagement.legacyOpenCandidateEditor,
-    async listProjects() {
-      const projects =
-        await candidateManagement.registration.publicApi.query.listProjects();
-      return projects.ok
-        ? projects.value.map(({ id, name }) => ({ id, name }))
-        : [];
+    transientSurface: context.transientSurface ?? {
+      isCurrent: () => false,
+      async conclude() {
+        return { ok: false, error: { kind: "not-started" } };
+      },
     },
+    createCandidateEditorIntent:
+      candidateManagement.registration.publicApi.createCandidateEditorIntent,
   });
   const compatibility = createCompatibilityContribution(context, {
     currentBuildQuery: currentBuild.registration.publicApi.query,

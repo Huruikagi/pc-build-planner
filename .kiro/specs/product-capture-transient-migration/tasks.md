@@ -62,7 +62,7 @@
   - _Boundary: CandidateManagementRegistration, SidePanelSessionLifecycle_
 
 - [ ] 3. product-captureを固定tabの一過性featureへ移行する
-- [ ] 3.1 (P) transient contributionとactivationを登録する
+- [x] 3.1 (P) transient contributionとactivationを登録する
   - product-captureをcanonical persistent／transient registration unionの一過性memberとして登録し、`presentation: "transient"`とactivationを申告して`navigation` metadataと`nav.productCapture`を持たせず、上流portから起動世代と固定TargetTabIdを受け取る。
   - activationごとに新しい実行contextを構築し、未起動時や常設navigationから直接mountされないようにする。
   - exact-shape型検査と正常activation、不正activation、再activationのregistration testを通し、mount/unmount、世代照合、handoff lifecycleが維持されることを確認する。
@@ -70,7 +70,7 @@
   - _Requirements: 2.1, 2.2, 2.7, 3.1, 3.2, 3.3, 5.1_
   - _Boundary: ProductCaptureRegistration, TransientFeatureContribution_
 
-- [ ] 3.2 (P) 固定tab runtimeとfail-closed coordinatorを実装する
+- [x] 3.2 (P) 固定tab runtimeとfail-closed coordinatorを実装する
   - active tab再解決を廃止し、全実行をactivationで固定されたTargetTabIdへの`getTab`とscript injectionへ統一する。
   - 現行世代の権限付与中だけtab情報を読み、URL欠落・取得失敗・出所不一致を実行不能として閉じ、`pageUrl`比較を迂回しない。
   - 制限URL、権限喪失、tab更新・閉鎖、URL欠落、stale世代のunit testを通し、診断ログへページ由来URL・HTML・抽出値を出さない。
@@ -78,7 +78,7 @@
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 3.4, 3.5, 5.2, 5.4_
   - _Boundary: CaptureRuntimePort, ProductCaptureCoordinator, SecurityLogging_
 
-- [ ] 3.3 capture stateを抽出と再試行へ縮小する
+- [x] 3.3 capture stateを抽出と再試行へ縮小する
   - `review`、`submitting`、`saved`と保存責務を削除し、idle／extracting／failedと現行世代だけを表すstateへ置き換える。
   - 失敗時は検証済みretained intentを同一世代に保持し、新activation・成功・一過性面終了で破棄する。
   - 抽出成功、失敗、同一世代再試行、stale callback、新activationのstate testを通す。
@@ -86,7 +86,7 @@
   - _Requirements: 1.1, 1.6, 2.1, 2.2, 2.5, 2.7, 3.1, 3.2, 5.1, 5.2_
   - _Boundary: ProductCaptureState, CaptureGenerationGuard_
 
-- [ ] 3.4 capture viewから編集・保存UIを除去する
+- [x] 3.4 capture viewから編集・保存UIを除去する
   - 抽出開始中と失敗・再試行だけを描画し、project selector、候補編集、保存完了、常設navigation相当のUIを削除する。
   - 制限ページ、権限喪失、対象tab失効を安全な説明と回復操作へ写像し、実行不能時の操作を隠す。
   - idle、extracting、各失敗、retryのDOM testで旧statusや保存操作が存在しないことを確認する。

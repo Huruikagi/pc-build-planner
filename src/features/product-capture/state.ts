@@ -1,208 +1,188 @@
-import {
-  type CandidatePartId,
-  createRequestId,
-  type ProjectId,
-  type Result,
-} from "../../domain/public.js";
+import type {
+  ActivationId,
+  FeatureActivationIntent,
+  TargetTabId,
+  TransientSurfaceError,
+} from "../../application-shell/public.js";
+import type { CandidatePartId, ProjectId } from "../../domain/public.js";
+import { createRequestId, type Result } from "../../domain/public.js";
 import type {
   CaptureError,
-  CaptureField,
   CaptureResult,
-  CaptureSession,
   CaptureSessionState,
-  ConfirmedCaptureSession,
 } from "./contracts.js";
 import type { CaptureCoordinator } from "./coordinator.js";
 
+export interface CaptureStateDependencies {
+  readonly coordinator: CaptureCoordinator;
+  readonly isCurrent: (activationId: ActivationId) => boolean;
+  readonly onCaptured?: (
+    activationId: ActivationId,
+    result: CaptureResult,
+  ) => Promise<Result<void, TransientSurfaceError>>;
+  readonly retryHandoff?: (
+    activationId: ActivationId,
+    intent: FeatureActivationIntent,
+  ) => Promise<Result<void, TransientSurfaceError>>;
+  readonly createRequestId?: () => string;
+}
+
+/** Kept for the legacy mapper module until task 5.2 removes that module. */
 export interface CaptureSubmitOutcome {
   readonly candidateId: CandidatePartId;
   readonly projectId: ProjectId;
 }
 
-export interface CaptureStateDependencies {
-  readonly coordinator: CaptureCoordinator;
-  /** Real port-calling logic (draft mapping + `CaptureCandidatePort`) is wired by later tasks. */
-  readonly submitDraft: (
-    session: ConfirmedCaptureSession,
-  ) => Promise<Result<CaptureSubmitOutcome, CaptureError>>;
-  readonly createRequestId?: () => string;
-}
-
-const resolvedName = (session: CaptureSession): string => {
-  const corrected = session.userCorrections.name;
-  if (corrected !== undefined) return corrected.trim();
-  const confirmed = session.fields.find((field) => field.field === "name")
-    ?.value.confirmed;
-  return typeof confirmed === "string" ? confirmed.trim() : "";
-};
+const isRecoverableExecutionError = (error: CaptureError): boolean =>
+  error.kind !== "permission-lost" &&
+  error.kind !== "restricted-page" &&
+  error.kind !== "tab-changed";
 
 export class CaptureState {
   #listeners = new Set<() => void>();
-  #value: CaptureSessionState = { status: "idle" };
+  #value: CaptureSessionState | null = null;
+  #requestGeneration = 0;
 
   public constructor(private readonly dependencies: CaptureStateDependencies) {}
 
-  public get value(): CaptureSessionState {
+  public get value(): CaptureSessionState | null {
     return this.#value;
   }
 
-  /** Lets the React adapter observe feature-owned state without owning it. */
-  public subscribe(listener: () => void): () => void {
-    this.#listeners.add(listener);
-    let unsubscribed = false;
-    return () => {
-      if (unsubscribed) return;
-      unsubscribed = true;
-      this.#listeners.delete(listener);
-    };
+  public activate(activationId: ActivationId, tabId: TargetTabId): void {
+    this.#requestGeneration += 1;
+    this.#set({ status: "idle", activationId, tabId });
   }
 
-  /** Always targets the currently displayed page; there is no cached prior tab. */
+  public deactivate(): void {
+    this.#requestGeneration += 1;
+    this.#value = null;
+    this.#notify();
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
   public async startCapture(): Promise<void> {
-    if (
-      this.#value.status === "extracting" ||
-      this.#value.status === "submitting"
-    ) {
+    const current = this.#value;
+    if (current === null || current.status === "extracting") return;
+    if (!this.dependencies.isCurrent(current.activationId)) return;
+
+    if (current.status === "failed" && current.failure.kind === "handoff") {
+      await this.#retryRetainedHandoff(current);
       return;
     }
+
+    const generation = ++this.#requestGeneration;
     const requestId = (this.dependencies.createRequestId ?? createRequestId)();
-    this.#set({ status: "extracting", requestId });
+    this.#set({
+      status: "extracting",
+      activationId: current.activationId,
+      tabId: current.tabId,
+      requestId,
+    });
 
     let result: Result<CaptureResult, CaptureError>;
     try {
-      result = await this.dependencies.coordinator.captureCurrentTab();
+      result = await this.dependencies.coordinator.captureTab(current.tabId);
     } catch {
-      this.#set({
-        status: "failed",
-        recoverable: true,
-        error: { kind: "injection-failed" },
-      });
-      return;
+      result = { ok: false, error: { kind: "injection-failed" } };
     }
-    if (!result.ok) {
-      this.#set({ status: "failed", recoverable: true, error: result.error });
-      return;
-    }
-
-    const session: CaptureSession = {
-      requestId: result.value.requestId,
-      tabId: result.value.tabId,
-      pageUrl: result.value.pageUrl,
-      capturedAt: result.value.capturedAt,
-      fields: result.value.draft.fields.map((field) => ({
-        field: field.field,
-        value: { original: field.rawValue, confirmed: field.normalizedValue },
-        source: field.source,
-        sourceLabel: field.sourceLabel,
-      })),
-      rejectedFields: result.value.rejectedFields,
-      missingCoreFields: result.value.draft.missingCoreFields,
-      userCorrections: {},
-    };
-    this.#set({ status: "review", session });
-  }
-
-  /** A failure with a retained draft is still editable, exactly like `review`. */
-  #activeSession(): CaptureSession | undefined {
-    if (this.#value.status === "review") return this.#value.session;
-    if (this.#value.status === "failed" && this.#value.draft !== undefined) {
-      return this.#value.draft;
-    }
-    return undefined;
-  }
-
-  public updateField(field: CaptureField, value: string): void {
-    const session = this.#activeSession();
-    if (session === undefined) return;
-    this.#set({
-      status: "review",
-      session: {
-        ...session,
-        userCorrections: { ...session.userCorrections, [field]: value },
-      },
-    });
-  }
-
-  public selectProject(projectId: ProjectId): void {
-    const session = this.#activeSession();
-    if (session === undefined) return;
-    this.#set({ status: "review", session: { ...session, projectId } });
-  }
-
-  /**
-   * Surfaces a detail-edit navigation failure (e.g. shell activation rejected
-   * the prefill) as a recoverable `failed` state, keeping the session so the
-   * caller (`CandidateEditorNavigation.open`) doesn't lose the review draft.
-   * A no-op without an active session, since there is nothing to attach the
-   * error to.
-   */
-  public reportDetailEditFailure(error: CaptureError): void {
-    const session = this.#activeSession();
-    if (session === undefined) return;
-    this.#set({ status: "failed", recoverable: true, draft: session, error });
-  }
-
-  /** Flips to `submitting` before awaiting the port call, so a re-entrant call is a no-op. */
-  public async submit(): Promise<void> {
-    const session = this.#activeSession();
-    if (session === undefined) return;
-
-    if (resolvedName(session).length === 0) {
-      this.#set({
-        status: "failed",
-        recoverable: true,
-        draft: session,
-        error: { kind: "validation", fields: { name: "required" } },
-      });
-      return;
-    }
-    if (session.projectId === undefined) {
-      this.#set({
-        status: "failed",
-        recoverable: true,
-        draft: session,
-        error: { kind: "project-required" },
-      });
-      return;
-    }
-
-    const confirmed: ConfirmedCaptureSession = {
-      ...session,
-      projectId: session.projectId,
-    };
-    this.#set({ status: "submitting", session: confirmed });
-
-    let result: Result<CaptureSubmitOutcome, CaptureError>;
-    try {
-      result = await this.dependencies.submitDraft(confirmed);
-    } catch {
-      this.#set({
-        status: "failed",
-        recoverable: true,
-        draft: session,
-        error: { kind: "storage" },
-      });
-      return;
-    }
+    if (!this.#accepts(generation, current.activationId)) return;
     if (!result.ok) {
       this.#set({
         status: "failed",
-        recoverable: true,
-        draft: session,
-        error: result.error,
+        activationId: current.activationId,
+        tabId: current.tabId,
+        failure: {
+          kind: "execution",
+          error: result.error,
+          recoverable: isRecoverableExecutionError(result.error),
+        },
       });
       return;
     }
+
+    const handoff = this.dependencies.onCaptured;
+    if (handoff === undefined) {
+      this.#set({
+        status: "idle",
+        activationId: current.activationId,
+        tabId: current.tabId,
+      });
+      return;
+    }
+    const concluded = await handoff(current.activationId, result.value);
+    if (!this.#accepts(generation, current.activationId)) return;
+    if (!concluded.ok) {
+      this.#set({
+        status: "failed",
+        activationId: current.activationId,
+        tabId: current.tabId,
+        failure: {
+          kind: "execution",
+          error: { kind: "injection-failed" },
+          recoverable: true,
+        },
+      });
+    }
+  }
+
+  public retainHandoffFailure(
+    error: TransientSurfaceError,
+    intent: FeatureActivationIntent,
+  ): void {
+    const current = this.#value;
+    if (current === null || !this.dependencies.isCurrent(current.activationId))
+      return;
     this.#set({
-      status: "saved",
-      candidateId: result.value.candidateId,
-      projectId: result.value.projectId,
+      status: "failed",
+      activationId: current.activationId,
+      tabId: current.tabId,
+      failure: { kind: "handoff", error, retainedIntent: intent },
     });
+  }
+
+  async #retryRetainedHandoff(
+    current: Extract<CaptureSessionState, { status: "failed" }>,
+  ): Promise<void> {
+    if (
+      current.failure.kind !== "handoff" ||
+      this.dependencies.retryHandoff === undefined
+    )
+      return;
+    const generation = ++this.#requestGeneration;
+    const result = await this.dependencies.retryHandoff(
+      current.activationId,
+      current.failure.retainedIntent,
+    );
+    if (!this.#accepts(generation, current.activationId)) return;
+    if (result.ok) {
+      this.deactivate();
+      return;
+    }
+    this.#set({
+      ...current,
+      failure: { ...current.failure, error: result.error },
+    });
+  }
+
+  #accepts(generation: number, activationId: ActivationId): boolean {
+    return (
+      generation === this.#requestGeneration &&
+      this.dependencies.isCurrent(activationId)
+    );
+  }
+
+  #notify(): void {
+    for (const listener of this.#listeners) listener();
   }
 
   #set(next: CaptureSessionState): void {
     this.#value = next;
-    for (const listener of this.#listeners) listener();
+    this.#notify();
   }
 }
 

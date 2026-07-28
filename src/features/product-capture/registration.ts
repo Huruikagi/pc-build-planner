@@ -1,11 +1,14 @@
 import type {
+  ActivationId,
   Availability,
+  FeatureActivationError,
+  FeatureActivationIntent,
   FeatureMountContext,
   FeatureMountHandle,
-  OperationPolicy,
-  PersistentApplicationFeatureRegistration,
+  TargetTabId,
+  TransientApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
-import { ok } from "../../domain/public.js";
+import { err, ok, type Result } from "../../domain/public.js";
 import {
   createProductCapturePublicApi,
   type ProductCapturePublicApi,
@@ -13,116 +16,82 @@ import {
 } from "./public.js";
 import { mountCaptureReactRoot } from "./react-root.js";
 import type { CaptureState } from "./state.js";
-import type { CaptureProjectOption } from "./view.js";
 
 export { productCaptureFeatureId };
 
-export interface CaptureMountDependencies {
-  readonly container: HTMLElement;
-  readonly operationPolicy: OperationPolicy;
-  readonly reportError: (message: string) => void;
-  readonly restoredState?: unknown;
+export interface CaptureTransientActivation {
+  readonly activationId: ActivationId;
+  readonly tabId: TargetTabId;
 }
 
-export type CaptureMount = (
-  dependencies: CaptureMountDependencies,
-) => Promise<FeatureMountHandle>;
-
 export interface CaptureFeatureRegistrationDependencies {
-  readonly mount?: CaptureMount;
+  readonly state: CaptureState;
   readonly getAvailability?: () => Availability;
   readonly subscribeAvailability?: (
     listener: (availability: Availability) => void,
   ) => () => void;
-  /** Supplied by the feature-local React/state composition when capture is enabled. */
-  readonly state?: CaptureState;
-  /** Resolved fresh on every mount, so a project created after startup is visible on the next visit. */
-  readonly listProjects?: () => Promise<readonly CaptureProjectOption[]>;
-  readonly onOpenDetailEdit?: (manualName?: string) => void;
 }
 
-const mountCaptureView =
-  (
-    state: CaptureState,
-    listProjects: () => Promise<readonly CaptureProjectOption[]>,
-    onOpenDetailEdit: ((manualName?: string) => void) | undefined,
-  ): CaptureMount =>
-  async ({ container }) => {
-    const projects = await listProjects();
-    const root = mountCaptureReactRoot(container, {
-      state,
-      projects,
-      ...(onOpenDetailEdit === undefined ? {} : { onOpenDetailEdit }),
+const validateActivation = (
+  intent: FeatureActivationIntent,
+): Result<CaptureTransientActivation, FeatureActivationError> => {
+  const payload = intent.payload;
+  if (
+    intent.target !== "capture" ||
+    typeof payload !== "object" ||
+    payload === null ||
+    !("activationId" in payload) ||
+    !("tabId" in payload) ||
+    typeof payload.activationId !== "string" ||
+    payload.activationId.length === 0 ||
+    typeof payload.tabId !== "number" ||
+    !Number.isSafeInteger(payload.tabId) ||
+    payload.tabId <= 0
+  )
+    return err({
+      kind: "invalid_activation",
+      detail: "invalid product capture activation",
     });
-    // Lets the initial render commit before the shell inspects the container.
+  return ok({
+    activationId: payload.activationId as ActivationId,
+    tabId: payload.tabId as TargetTabId,
+  });
+};
+
+export const createProductCaptureFeatureRegistration = (
+  dependencies: CaptureFeatureRegistrationDependencies,
+): TransientApplicationFeatureRegistration<
+  ProductCapturePublicApi,
+  CaptureTransientActivation
+> => ({
+  id: productCaptureFeatureId,
+  presentation: "transient",
+  publicApi: createProductCapturePublicApi(),
+  getAvailability:
+    dependencies.getAvailability ?? (() => ({ status: "available" })),
+  subscribeAvailability: dependencies.subscribeAvailability ?? (() => () => {}),
+  activation: {
+    validate: validateActivation,
+    async activate(input) {
+      dependencies.state.activate(input.activationId, input.tabId);
+      return ok(undefined);
+    },
+  },
+  async mount(context: FeatureMountContext): Promise<FeatureMountHandle> {
+    if (dependencies.state.value === null)
+      throw new Error("Product capture has not been activated.");
+    const root = mountCaptureReactRoot(context.container, {
+      state: dependencies.state,
+    });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     let unmounted = false;
-
     return {
       async unmount() {
         if (unmounted) return;
         unmounted = true;
         root.unmount();
-      },
-      /**
-       * `CaptureState` outlives a single mount (see `createProductCaptureContribution`),
-       * so switching away needs nothing snapshotted to restore a screen later.
-       * The shell's activation flow still requires a source feature to expose
-       * `captureState` before it will switch away from it at all (see
-       * `side-panel-host.ts`'s `capturePreviousState`), so this is a no-op that
-       * only satisfies that precondition.
-       */
-      async captureState() {
-        return ok(undefined);
+        dependencies.state.deactivate();
       },
     };
-  };
-
-/**
- * A registration without a mountable state must not report success; the shell
- * then surfaces a mount failure instead of an apparently working feature.
- */
-const mountUnavailable: CaptureMount = async () => {
-  throw new Error(
-    "Product capture registration has no capture state to mount.",
-  );
-};
-
-/** Connects only feature-owned composition dependencies to the application shell. */
-export const createProductCaptureFeatureRegistration = (
-  dependencies: CaptureFeatureRegistrationDependencies,
-): PersistentApplicationFeatureRegistration<ProductCapturePublicApi> => {
-  const mount =
-    dependencies.mount ??
-    (dependencies.state === undefined
-      ? mountUnavailable
-      : mountCaptureView(
-          dependencies.state,
-          dependencies.listProjects ?? (async () => []),
-          dependencies.onOpenDetailEdit,
-        ));
-  const getAvailability =
-    dependencies.getAvailability ?? (() => ({ status: "available" as const }));
-  const subscribeAvailability =
-    dependencies.subscribeAvailability ?? (() => () => {});
-  const publicApi = createProductCapturePublicApi();
-
-  return {
-    id: productCaptureFeatureId,
-    presentation: "persistent",
-    navigation: { labelKey: "nav.productCapture", order: 40, icon: "download" },
-    publicApi,
-    getAvailability,
-    subscribeAvailability,
-    mount(context: FeatureMountContext) {
-      return mount({
-        container: context.container,
-        operationPolicy: context.operationPolicy,
-        reportError: context.reportError,
-        ...(context.restoredState === undefined
-          ? {}
-          : { restoredState: context.restoredState }),
-      });
-    },
-  };
-};
+  },
+});

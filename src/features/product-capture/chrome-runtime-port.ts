@@ -1,6 +1,6 @@
+import type { TargetTabId } from "../../application-shell/public.js";
 import { err, ok } from "../../domain/public.js";
 import type {
-  ActiveTabInfo,
   CaptureInjectionFailure,
   CaptureRuntimePort,
 } from "./coordinator.js";
@@ -8,10 +8,7 @@ import type {
 const DEFAULT_CONTENT_SCRIPT_FILE = "content-script.js";
 
 export interface ChromeTabsApi {
-  query(queryInfo: {
-    readonly active: true;
-    readonly currentWindow: true;
-  }): Promise<ReadonlyArray<{ readonly id?: number; readonly url?: string }>>;
+  get(tabId: number): Promise<{ readonly id?: number; readonly url?: string }>;
   create?(details: { readonly url: string }): Promise<unknown>;
 }
 
@@ -86,24 +83,17 @@ export const createChromeCaptureRuntimePort = (
     dependencies.contentScriptFile ?? DEFAULT_CONTENT_SCRIPT_FILE;
 
   return {
-    async getActiveTab(): Promise<ActiveTabInfo | undefined> {
-      let tabs: ReadonlyArray<{ readonly id?: number; readonly url?: string }>;
+    async getTab(tabId: TargetTabId) {
+      let tab: { readonly id?: number; readonly url?: string };
       try {
-        tabs = await dependencies.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
+        tab = await dependencies.tabs.get(tabId);
       } catch {
-        return undefined;
+        return err({ kind: "tab-unavailable" } as const);
       }
-      const tab = tabs[0];
-      if (
-        tab === undefined ||
-        typeof tab.id !== "number" ||
-        typeof tab.url !== "string"
-      )
-        return undefined;
-      return { tabId: tab.id, url: tab.url };
+      if (tab.id !== tabId) return err({ kind: "tab-unavailable" } as const);
+      if (typeof tab.url !== "string" || tab.url.length === 0)
+        return err({ kind: "url-unavailable" } as const);
+      return ok({ tabId, url: tab.url });
     },
 
     async inject(target, requestId) {
