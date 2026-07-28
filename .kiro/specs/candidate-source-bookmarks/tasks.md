@@ -9,7 +9,7 @@
   - 公開seamが未実装またはshape不一致なら後続classifier/compositionへ進まず、このconsumer contract testが明確に失敗することを完了条件とする。
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 1.2 schema 2候補ソースのversioned domain契約を追加する
+- [x] 1.2 schema 2候補ソースのversioned domain契約を追加する
   - 候補ソース識別子、販売・メーカー紹介の種別、URL・サイト名・取得日時・任意価格を表現する。
   - 稼働中のschema 1型を変更せず、`CandidatePartV2` と `LocalDataRootV2` を明示的なversioned契約として追加する。
   - schema 2候補へソースcollectionと条件付きプライマリ参照を追加し、商品共通値から価格と単数取得元を除く。

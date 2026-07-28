@@ -1,14 +1,17 @@
 import type { RequestId, Revision, UtcTimestamp, Uuid } from "./identifiers.js";
 import type {
   CandidateProductValues,
+  MoneyValue,
   NormalizedAttributes,
   PartCategory,
+  SourcedValue,
   SourceInfo,
   SourceSnapshot,
 } from "./normalized-attributes.js";
 
 declare const projectIdBrand: unique symbol;
 declare const candidatePartIdBrand: unique symbol;
+declare const candidateSourceIdBrand: unique symbol;
 declare const currentBuildIdBrand: unique symbol;
 declare const maintenanceOwnerIdBrand: unique symbol;
 declare const positiveIntegerBrand: unique symbol;
@@ -17,6 +20,9 @@ declare const maintenanceGenerationBrand: unique symbol;
 export type ProjectId = Uuid & { readonly [projectIdBrand]: "ProjectId" };
 export type CandidatePartId = Uuid & {
   readonly [candidatePartIdBrand]: "CandidatePartId";
+};
+export type CandidateSourceId = Uuid & {
+  readonly [candidateSourceIdBrand]: "CandidateSourceId";
 };
 export type CurrentBuildId = Uuid & {
   readonly [currentBuildIdBrand]: "CurrentBuildId";
@@ -49,6 +55,34 @@ export interface CandidatePart {
   readonly createdAt: UtcTimestamp;
   readonly updatedAt: UtcTimestamp;
 }
+
+export type CandidateSourceKind = "retail" | "manufacturer";
+
+export interface CandidateSource {
+  readonly id: CandidateSourceId;
+  readonly pageUrl?: string;
+  readonly siteName?: string;
+  readonly capturedAt?: UtcTimestamp;
+  readonly price?: SourcedValue<MoneyValue>;
+  readonly kind?: CandidateSourceKind;
+}
+
+export type CandidateProductValuesV2 = Omit<CandidateProductValues, "price">;
+
+export type CandidateSourceState =
+  | {
+      readonly sources: readonly [];
+      readonly primarySourceId?: never;
+    }
+  | {
+      readonly sources: readonly [CandidateSource, ...CandidateSource[]];
+      readonly primarySourceId: CandidateSourceId;
+    };
+
+/** Schema 2 candidate contract staged independently from the live schema 1 model. */
+export type CandidatePartV2 = Omit<CandidatePart, "product" | "sourceInfo"> & {
+  readonly product: CandidateProductValuesV2;
+} & CandidateSourceState;
 
 export interface BuildItem {
   readonly candidatePartId: CandidatePartId;
@@ -95,3 +129,12 @@ export interface LocalDataRoot {
   readonly requestDedupe: readonly RequestDedupeRecord[];
   readonly maintenance: MaintenanceState;
 }
+
+/** Versioned root used by schema 2 validators and adapters before production cutover. */
+export type LocalDataRootV2 = Omit<
+  LocalDataRoot,
+  "schemaVersion" | "candidateParts"
+> & {
+  readonly schemaVersion: 2;
+  readonly candidateParts: readonly CandidatePartV2[];
+};
