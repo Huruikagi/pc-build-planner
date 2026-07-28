@@ -107,21 +107,21 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 7.3, 7.4, 8.6, 8.7_
 
 - [ ] 4. 候補管理stateとReact UIへソース操作を追加する
-- [ ] 4.1 editor stateへsource操作と再訪結果を統合する
+- [x] 4.1 editor stateへsource操作と再訪結果を統合する
   - source追加・編集・削除・primary選択をdraftへ反映し、primary削除時はreplacement選択を要求する。
   - 一覧primaryと詳細の任意sourceをpage portへ渡し、open失敗を保存状態と分離して表示stateへ保持する。
   - mutation失敗時はeditor入力と既存一覧を保持し、成功時だけ再読込して確定値を表示する。
   - state testでsource操作、保存中gate、open成功・失敗、入力保持が観測できることを完了条件とする。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.1, 5.2, 5.4, 7.4_
 
-- [ ] 4.2 複数ソースeditorのsnapshot codecをversion 2へ更新する
+- [x] 4.2 複数ソースeditorのsnapshot codecをversion 2へ更新する
   - source配列、primary参照、価格、種別を含むdraftだけを未信頼snapshotから復元する。
   - 危険URL、不正source ID、primary不整合、未知versionを永続化へ触れず拒否する。
   - 有効な編集中sourceがfeature切替後に同じdraftへ復元されるcodec testを通す。
   - snapshot失敗で保存済み候補と現在一覧が変わらないことを完了条件とする。
   - _Requirements: 3.2, 3.6, 7.1, 7.2, 7.5_
 
-- [ ] 4.3 (P) ソース操作・種別・再訪の文言を日本語と英語へ追加する
+- [x] 4.3 (P) ソース操作・種別・再訪の文言を日本語と英語へ追加する
   - source項目、販売・メーカー紹介、primary、追加・削除、開く操作、各失敗のmessage keyを定義する。
   - 両言語catalogのkey集合とplaceholderを一致させ、外部値を安全なtextとして挿入できる形にする。
   - message schemaと言語不変性のtestが新しい全keyで成功することを完了条件とする。

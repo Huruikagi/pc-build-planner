@@ -1,6 +1,9 @@
 import type { OperationPolicy } from "../../application-shell/public.js";
 import type {
   CandidatePartId,
+  CandidateSource,
+  CandidateSourceId,
+  CandidateSourceState,
   PartCategory,
   ProjectId,
 } from "../../domain/public.js";
@@ -13,6 +16,14 @@ import type {
   MutationContext,
   ProjectSummary,
 } from "./contracts.js";
+import {
+  type CandidateSourceRuleError,
+  candidateSourcePolicy,
+} from "./source-collection.js";
+import type {
+  SourcePageOpenError,
+  SourcePagePort,
+} from "./source-page-port.js";
 
 export type ManagementDisplayError = {
   readonly code: ManagementError["kind"] | "snapshot-restore-failed";
@@ -66,6 +77,8 @@ export interface ManagementStateValue {
   readonly deletion: DeletionConfirmation | null;
   readonly displayError: ManagementDisplayError | null;
   readonly fieldErrors: ManagementFieldErrors;
+  readonly sourceOperationError: CandidateSourceRuleError | null;
+  readonly sourceOpenError: SourcePageOpenError | null;
   readonly isLoading: boolean;
   readonly isSaving: boolean;
   readonly mutationsDisabled: boolean;
@@ -80,6 +93,7 @@ export interface ManagementStateDependencies {
     | Promise<MutationContext>;
   /** Shell-owned gate; mutations stay unavailable while the shell forbids them. */
   readonly operationPolicy?: OperationPolicy;
+  readonly sourcePage?: SourcePagePort;
 }
 
 const isTerminalReadError = (error: ManagementError): boolean =>
@@ -108,6 +122,8 @@ export class ManagementState {
     deletion: null,
     displayError: null,
     fieldErrors: emptyFieldErrors,
+    sourceOperationError: null,
+    sourceOpenError: null,
     isLoading: false,
     isSaving: false,
     mutationsDisabled: false,
@@ -190,6 +206,8 @@ export class ManagementState {
       deletion: null,
       displayError: null,
       fieldErrors: emptyFieldErrors,
+      sourceOperationError: null,
+      sourceOpenError: null,
     });
   }
 
@@ -368,6 +386,89 @@ export class ManagementState {
     const editor = this.#value.editor;
     if (editor === null || this.#mutationsDisabled()) return;
     this.#set({ editor: { ...editor, projectId: draft.projectId, draft } });
+  }
+
+  #editorSourceState(): CandidateSourceState | null {
+    const editor = this.#value.editor;
+    if (editor === null) return null;
+    const sources = editor.draft.sources ?? [];
+    return sources.length === 0
+      ? { sources: [] }
+      : {
+          sources: sources as [CandidateSource, ...CandidateSource[]],
+          primarySourceId: editor.draft.primarySourceId as CandidateSourceId,
+        };
+  }
+
+  #applyEditorSourceState(state: CandidateSourceState): void {
+    const editor = this.#value.editor;
+    if (editor === null) return;
+    const { primarySourceId: _oldPrimarySourceId, ...draftWithoutPrimary } =
+      editor.draft;
+    const draft = {
+      ...draftWithoutPrimary,
+      sources: state.sources,
+      ...(state.sources.length === 0
+        ? {}
+        : { primarySourceId: state.primarySourceId }),
+    } as CandidateDraft;
+    this.#set({
+      editor: { ...editor, draft },
+      sourceOperationError: null,
+    });
+  }
+
+  #updateEditorSources(
+    operation: (
+      state: CandidateSourceState,
+    ) => ReturnType<typeof candidateSourcePolicy.add>,
+  ): void {
+    if (this.#value.isSaving || this.#mutationsDisabled()) return;
+    const state = this.#editorSourceState();
+    if (state === null) return;
+    const result = operation(state);
+    if (!result.ok) {
+      this.#set({ sourceOperationError: result.error });
+      return;
+    }
+    this.#applyEditorSourceState(result.value);
+  }
+
+  public addEditorSource(source: CandidateSource): void {
+    this.#updateEditorSources((state) =>
+      candidateSourcePolicy.add(state, source),
+    );
+  }
+
+  public updateEditorSource(source: CandidateSource): void {
+    this.#updateEditorSources((state) =>
+      candidateSourcePolicy.update(state, source),
+    );
+  }
+
+  public removeEditorSource(
+    sourceId: CandidateSourceId,
+    replacementPrimarySourceId?: CandidateSourceId,
+  ): void {
+    this.#updateEditorSources((state) =>
+      candidateSourcePolicy.remove(state, sourceId, replacementPrimarySourceId),
+    );
+  }
+
+  public setEditorPrimarySource(sourceId: CandidateSourceId): void {
+    this.#updateEditorSources((state) =>
+      candidateSourcePolicy.setPrimary(state, sourceId),
+    );
+  }
+
+  public async openSource(url: string): Promise<void> {
+    this.#set({ sourceOpenError: null });
+    const result = await (this.dependencies.sourcePage?.open(url) ??
+      Promise.resolve({
+        ok: false as const,
+        error: { kind: "runtime-unavailable" as const },
+      }));
+    this.#set({ sourceOpenError: result.ok ? null : result.error });
   }
 
   public cancelEditor(): void {

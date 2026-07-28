@@ -80,6 +80,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     category: "uncategorized" as const,
     product: { name: { original: "未保存の架空候補" } },
     normalizedAttributes: { category: "uncategorized" as const },
+    sources: [],
   } satisfies CandidateDraft;
   const query = {
     async listProjects() {

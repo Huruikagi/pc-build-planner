@@ -14,7 +14,7 @@ import type {
 } from "./state.js";
 
 export interface ManagementStateSnapshot {
-  readonly version: 1;
+  readonly version: 2;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   readonly editor: CandidateEditor | null;
@@ -109,38 +109,54 @@ const isSourcedValue = (
 
 const isProduct = (value: unknown): boolean => {
   if (!isRecord(value)) return false;
-  const fields = ["name", "manufacturer", "modelNumber", "price", "notes"];
+  const fields = ["name", "manufacturer", "modelNumber", "notes"];
   if (!Object.keys(value).every((key) => fields.includes(key))) return false;
   return (
     (!("name" in value) || isSourcedValue(value.name)) &&
     (!("manufacturer" in value) || isSourcedValue(value.manufacturer)) &&
     (!("modelNumber" in value) || isSourcedValue(value.modelNumber)) &&
-    (!("price" in value) || isSourcedValue(value.price, "money")) &&
     (!("notes" in value) || isSourcedValue(value.notes))
   );
 };
 
-const isSourceInfo = (value: unknown): boolean => {
-  if (!isRecord(value)) return false;
-  if (
-    !Object.keys(value).every((key) =>
-      ["pageUrl", "capturedAt", "siteName"].includes(key),
-    )
-  )
-    return false;
-  if ("pageUrl" in value) {
-    if (!isSafeString(value.pageUrl)) return false;
-    try {
-      const url = new URL(value.pageUrl);
-      if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-    } catch {
-      return false;
-    }
-  }
-  return (
-    (!("capturedAt" in value) || isUtcTimestamp(value.capturedAt)) &&
-    (!("siteName" in value) || isSafeString(value.siteName))
+const isUuid = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
   );
+
+const isHttpUrl = (value: unknown): value is string => {
+  if (!isSafeString(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const isCandidateSource = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.keys(value).every((key) =>
+    ["id", "pageUrl", "siteName", "capturedAt", "price", "kind"].includes(key),
+  ) &&
+  isUuid(value.id) &&
+  (!("pageUrl" in value) || isHttpUrl(value.pageUrl)) &&
+  (!("siteName" in value) || isSafeString(value.siteName)) &&
+  (!("capturedAt" in value) || isUtcTimestamp(value.capturedAt)) &&
+  (!("price" in value) || isSourcedValue(value.price, "money")) &&
+  (!("kind" in value) ||
+    value.kind === "retail" ||
+    value.kind === "manufacturer");
+
+const isSourceState = (value: Record<string, unknown>): boolean => {
+  if (!Array.isArray(value.sources) || !value.sources.every(isCandidateSource))
+    return false;
+  const ids = value.sources.map((source) => (source as { id: string }).id);
+  if (new Set(ids).size !== ids.length) return false;
+  return value.sources.length === 0
+    ? !("primarySourceId" in value) || value.primarySourceId === undefined
+    : isUuid(value.primarySourceId) && ids.includes(value.primarySourceId);
 };
 
 const isSourceSnapshot = (value: unknown): boolean =>
@@ -193,7 +209,8 @@ const isDraft = (value: unknown): value is CandidateDraft => {
         "category",
         "product",
         "normalizedAttributes",
-        "sourceInfo",
+        "sources",
+        "primarySourceId",
         "sourceSnapshot",
       ].includes(key),
     ) &&
@@ -204,7 +221,7 @@ const isDraft = (value: unknown): value is CandidateDraft => {
       (typeof name.confirmed === "string" &&
         name.confirmed.trim().length > 0)) &&
     isAttributes(value.normalizedAttributes, value.category) &&
-    (!("sourceInfo" in value) || isSourceInfo(value.sourceInfo)) &&
+    isSourceState(value) &&
     (!("sourceSnapshot" in value) || isSourceSnapshot(value.sourceSnapshot))
   );
 };
@@ -295,7 +312,7 @@ export const createManagementStateSnapshotCodec = (
       displayError,
     } = current.value;
     return {
-      version: 1,
+      version: 2,
       selectedProjectId,
       selectedCategory,
       editor,
@@ -307,7 +324,7 @@ export const createManagementStateSnapshotCodec = (
   restore(input) {
     if (!isRecord(input))
       return { ok: false, error: { kind: "invalid-shape" } };
-    if (input.version !== 1) {
+    if (input.version !== 2) {
       return { ok: false, error: { kind: "unsupported-version" } };
     }
     const editor = input.editor;
@@ -335,7 +352,7 @@ export const createManagementStateSnapshotCodec = (
     }
 
     const snapshot: ManagementStateSnapshot = {
-      version: 1,
+      version: 2,
       selectedProjectId: input.selectedProjectId as ProjectId | null,
       selectedCategory: input.selectedCategory as PartCategory | null,
       editor: input.editor as CandidateEditor | null,

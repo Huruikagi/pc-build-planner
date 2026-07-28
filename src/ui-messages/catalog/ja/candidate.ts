@@ -48,6 +48,21 @@ export const candidate = {
   sourceUrlLabel: "取得元URL",
   capturedAtLabel: "取得日時",
   sourceSnapshotLabel: "取得元表記",
+  sources: {
+    label: "ソース",
+    kind: { retail: "販売ページ", manufacturer: "メーカー商品紹介" },
+    primary: "プライマリ",
+    add: "ソースを追加",
+    remove: "ソースを削除",
+    open: "ソースを開く",
+    errors: {
+      replacementRequired:
+        "プライマリを削除するには代わりのソースを選択してください",
+      invalidUrl: "http または https のURLを入力してください",
+      openFailed: "ソースを開けませんでした",
+      runtimeUnavailable: "この環境ではソースを開けません",
+    },
+  },
   attributeLabels: {
     socket: "ソケット",
     supportedSockets: "対応ソケット",

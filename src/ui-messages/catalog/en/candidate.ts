@@ -39,6 +39,21 @@ export const candidate = {
   sourceUrlLabel: "Source URL",
   capturedAtLabel: "Captured at",
   sourceSnapshotLabel: "Source snapshot",
+  sources: {
+    label: "Sources",
+    kind: { retail: "Retail page", manufacturer: "Manufacturer product page" },
+    primary: "Primary",
+    add: "Add source",
+    remove: "Remove source",
+    open: "Open source",
+    errors: {
+      replacementRequired:
+        "Choose a replacement source before removing the primary source",
+      invalidUrl: "Enter an http or https URL",
+      openFailed: "Couldn't open the source",
+      runtimeUnavailable: "Sources can't be opened in this environment",
+    },
+  },
   attributeLabels: {
     socket: "Socket",
     supportedSockets: "Supported sockets",

@@ -75,6 +75,26 @@ test("ja/enの全キーでプレースホルダ名の集合が一致する(4.2)"
   }
 });
 
+test("candidate source操作・種別・再訪・失敗の全message keyを両言語で提供する", () => {
+  const keys = [
+    "candidate.sources.label",
+    "candidate.sources.kind.retail",
+    "candidate.sources.kind.manufacturer",
+    "candidate.sources.primary",
+    "candidate.sources.add",
+    "candidate.sources.remove",
+    "candidate.sources.open",
+    "candidate.sources.errors.replacementRequired",
+    "candidate.sources.errors.invalidUrl",
+    "candidate.sources.errors.openFailed",
+    "candidate.sources.errors.runtimeUnavailable",
+  ];
+  for (const key of keys) {
+    assert.equal(typeof ja[key], "string", key);
+    assert.equal(typeof en[key], "string", key);
+  }
+});
+
 test("ja/enの複数数量キーはselector名・順序が一致する", () => {
   for (const key of Object.keys(ja)) {
     const jaSelectors = selectorsOf(ja[key] as MessageDefinition);

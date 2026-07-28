@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type {
   CandidatePartId,
+  CandidateSourceId,
   ProjectId,
   RequestId,
   Revision,
@@ -23,12 +24,23 @@ const candidateId =
 const otherProjectId =
   "10000000-0000-4000-8000-000000000002" as Uuid as ProjectId;
 const requestId = "20000000-0000-4000-8000-000000000001" as Uuid as RequestId;
+const sourceId =
+  "40000000-0000-4000-8000-000000000001" as Uuid as CandidateSourceId;
 
 const draft = {
   projectId,
   category: "uncategorized",
   product: { name: { original: "未保存の架空候補" } },
   normalizedAttributes: { category: "uncategorized" },
+  sources: [
+    {
+      id: sourceId,
+      pageUrl: "https://shop.invalid/item",
+      price: { original: "$123", confirmed: { amount: 123, currency: "USD" } },
+      kind: "retail",
+    },
+  ],
+  primarySourceId: sourceId,
 } satisfies CandidateDraft;
 
 const context: MutationContext = {
@@ -97,7 +109,7 @@ test("未保存の編集・選択・削除確認・表示エラーだけをversi
   const restored = codec.restore(snapshot);
 
   assert.deepEqual(snapshot, {
-    version: 1,
+    version: 2,
     selectedProjectId: projectId,
     selectedCategory: null,
     editor: { mode: "edit", projectId, candidateId, draft },
@@ -114,13 +126,13 @@ test("未知version、存在しない参照、無効draftを識別可能なresto
   const codec = createManagementStateSnapshotCodec(state);
   const before = state.value;
 
-  assert.deepEqual(codec.restore({ version: 2 }), {
+  assert.deepEqual(codec.restore({ version: 1 }), {
     ok: false,
     error: { kind: "unsupported-version" },
   });
   assert.deepEqual(
     codec.restore({
-      version: 1,
+      version: 2,
       selectedProjectId: otherProjectId,
       selectedCategory: null,
       editor: null,
@@ -131,7 +143,7 @@ test("未知version、存在しない参照、無効draftを識別可能なresto
   );
   assert.deepEqual(
     codec.restore({
-      version: 1,
+      version: 2,
       selectedProjectId: projectId,
       selectedCategory: null,
       editor: { mode: "create", projectId, draft: { product: {} } },
@@ -157,6 +169,12 @@ test("構造だけが正しい不正draftは属性、source、余剰fieldをfail
       },
     },
     { ...draft, sourceInfo: { pageUrl: "javascript:alert(1)" } },
+    {
+      ...draft,
+      sources: [{ ...draft.sources[0], pageUrl: "javascript:alert(1)" }],
+    },
+    { ...draft, sources: [{ ...draft.sources[0], id: "not-a-source-id" }] },
+    { ...draft, primarySourceId: "40000000-0000-4000-8000-000000000099" },
     { ...draft, sourceSnapshot: { title: { raw: "不正" } } },
     { ...draft, unexpected: true },
   ]) {
