@@ -8,10 +8,9 @@ import type {
 } from "../../application-shell/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
-  type CandidateEditorPrefill,
+  type CandidateActivationPrefill,
   candidateManagementFeatureId,
   createCandidateActivation,
-  type LegacyCandidateEditorPrefill,
 } from "./activation.js";
 import type {
   CandidateManagementQuery,
@@ -104,7 +103,7 @@ export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
 ): PersistentApplicationFeatureRegistration<
   CandidateManagementPublicApi,
-  CandidateEditorPrefill | LegacyCandidateEditorPrefill
+  CandidateActivationPrefill
 > => {
   const mount =
     dependencies.mount ??

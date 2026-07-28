@@ -12,6 +12,7 @@ import type {
   CandidateManagementService,
   CandidateQuery,
   CaptureCandidatePort,
+  ProjectSummary,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
@@ -28,24 +29,32 @@ const draft = {
   normalizedAttributes: { category: "uncategorized" as const },
 };
 
-const createState = () =>
+const unresolvedDraft = {
+  category: "uncategorized" as const,
+  product: { name: { original: null, confirmed: "" } },
+  normalizedAttributes: { category: "uncategorized" as const },
+};
+
+const projects = [
+  {
+    id: projectId,
+    name: "架空プロジェクト",
+    updatedAt: "2026-07-22T00:00:00.000Z" as never,
+  },
+  {
+    id: prefillProjectId,
+    name: "編集先プロジェクト",
+    updatedAt: "2026-07-22T00:00:00.000Z" as never,
+  },
+] as const;
+
+const createState = (availableProjects: readonly ProjectSummary[] = projects) =>
   createManagementState({
     query: {
       async listProjects() {
         return {
           ok: true as const,
-          value: [
-            {
-              id: projectId,
-              name: "架空プロジェクト",
-              updatedAt: "2026-07-22T00:00:00.000Z" as never,
-            },
-            {
-              id: prefillProjectId,
-              name: "編集先プロジェクト",
-              updatedAt: "2026-07-22T00:00:00.000Z" as never,
-            },
-          ],
+          value: availableProjects,
         };
       },
       async listCandidates() {
@@ -147,6 +156,97 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
     draft: prefill,
   });
   assert.equal((await prepared.value.activate()).ok, false);
+});
+
+test("未解決 prefill は unknown 境界で再検証し、選択中 project を解決して空名 editor を開く", async () => {
+  const state = createState();
+  await state.load();
+  await state.selectProject(prefillProjectId);
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const router = createActivationRouter({ registry });
+
+  const prepared = router.prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: unresolvedDraft },
+  });
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: true,
+    value: undefined,
+  });
+  assert.deepEqual(state.value.editor, {
+    mode: "create",
+    projectId: prefillProjectId,
+    draft: { ...unresolvedDraft, projectId: prefillProjectId },
+  });
+});
+
+test("未解決 prefill の明示 projectId は選択中 project より優先して解決する", async () => {
+  const state = createState();
+  await state.load();
+  await state.selectProject(prefillProjectId);
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const prepared = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { projectId, draft: unresolvedDraft },
+  });
+
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: true,
+    value: undefined,
+  });
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.equal(state.value.editor?.projectId, projectId);
+  assert.equal(state.value.editor?.draft.projectId, projectId);
+});
+
+test("不正な未解決 prefill は invalid_activation へ写像し state を変更しない", async () => {
+  const state = createState();
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const result = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: { ...unresolvedDraft, unexpected: "untrusted" } },
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      kind: "invalid_activation",
+      detail: "candidate editor prefill is invalid",
+    },
+  });
+  assert.equal(state.value.editor, null);
+});
+
+test("project が0件なら未解決 prefill は typed failure を返し保存を開始しない", async () => {
+  const state = createState([]);
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+  const prepared = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: unresolvedDraft },
+  });
+
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: false,
+    error: { kind: "activation_failed", detail: "project does not exist" },
+  });
+  assert.equal(state.value.editor, null);
+  assert.equal(state.value.isSaving, false);
 });
 
 test("mutation が禁止された状態の activation は編集画面を開かず失敗を返す", async () => {

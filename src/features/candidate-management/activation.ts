@@ -19,6 +19,7 @@ import type {
   CandidateSourceDraft,
   UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
+import { validateCandidateEditorPrefill } from "./pre-edit-validation.js";
 import type { ManagementState } from "./state.js";
 
 export const candidateManagementFeatureId = "candidate-management" as FeatureId;
@@ -131,9 +132,15 @@ const isSourceDraft = (value: unknown): value is CandidateSourceDraft => {
   }).ok;
 };
 
-type CandidateActivationPrefill =
+export type CandidateActivationPrefill =
   | CandidateEditorPrefill
-  | LegacyCandidateEditorPrefill;
+  | LegacyCandidateEditorPrefill
+  | UnresolvedCandidateEditorPrefill;
+
+const isUnresolvedCandidateEditorPrefill = (
+  prefill: CandidateActivationPrefill,
+): prefill is UnresolvedCandidateEditorPrefill =>
+  !("projectId" in prefill.draft);
 
 const isCandidateEditorPrefill = (
   payload: unknown,
@@ -152,27 +159,42 @@ export const createCandidateActivation = (
   validate(intent: FeatureActivationIntent) {
     if (
       intent.featureId !== candidateManagementFeatureId ||
-      intent.target !== openCandidateEditorTarget ||
-      !isCandidateEditorPrefill(intent.payload)
+      intent.target !== openCandidateEditorTarget
     ) {
       return err<FeatureActivationError>({
         kind: "invalid_activation",
         detail: "candidate editor prefill is invalid",
       });
     }
-    return ok(intent.payload);
+    const unresolved = validateCandidateEditorPrefill(intent.payload);
+    if (unresolved.ok) return unresolved;
+    if (isCandidateEditorPrefill(intent.payload)) return ok(intent.payload);
+    return err<FeatureActivationError>({
+      kind: "invalid_activation",
+      detail: "candidate editor prefill is invalid",
+    });
   },
 
   async activate(prefill) {
+    const requestedProjectId = prefill.projectId;
+    const projectId =
+      requestedProjectId ??
+      state.value.selectedProjectId ??
+      state.value.projects[0]?.id;
     if (
-      !state.value.projects.some((project) => project.id === prefill.projectId)
+      projectId === undefined ||
+      !state.value.projects.some((project) => project.id === projectId)
     ) {
       return err<FeatureActivationError>({
         kind: "activation_failed",
         detail: "project does not exist",
       });
     }
-    await state.selectProject(prefill.projectId);
+    await state.selectProject(projectId);
+    const resolvedDraft: CandidateDraft | CandidateSourceDraft =
+      isUnresolvedCandidateEditorPrefill(prefill)
+        ? ({ ...prefill.draft, projectId } satisfies CandidateDraft)
+        : prefill.draft;
     /**
      * Apply the suggestion only when the draft carries no confirmed category,
      * so an existing formal category always wins over a hint. The seeded draft
@@ -180,9 +202,9 @@ export const createCandidateActivation = (
      */
     const initialDraft =
       prefill.categoryHint !== undefined &&
-      prefill.draft.category === "uncategorized"
-        ? withCategory(prefill.draft, prefill.categoryHint)
-        : prefill.draft;
+      resolvedDraft.category === "uncategorized"
+        ? withCategory(resolvedDraft, prefill.categoryHint)
+        : resolvedDraft;
     state.beginCreate(initialDraft);
     /**
      * The editor stays closed when the shell forbids mutations, so reporting

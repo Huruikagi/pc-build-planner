@@ -25,7 +25,7 @@
   - _Boundary: CandidateManagementPublicAPI, CandidateEditorIntentFactory_
 
 - [ ] 2. candidate-managementへpre-edit状態を統合する
-- [ ] 2.1 activation境界でdraftを再検証し既存projectを解決する
+- [x] 2.1 activation境界でdraftを再検証し既存projectを解決する
   - candidate editor activation adapterで`unknown` payloadを再検証し、不正入力を既存の`invalid_activation`へ写像する。
   - projectが存在する場合は既定の解決規則でProjectIdを確定し、既存editor stateへdraftを配置する。
   - 有効・不正activationと既存project有無の各経路がtyped resultとなり、保存処理を先行させないintegration testを通す。
