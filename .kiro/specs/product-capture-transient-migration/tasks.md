@@ -95,7 +95,7 @@
   - _Boundary: ProductCaptureView, ProductCaptureMessages_
 
 - [ ] 4. 抽出結果をcandidate editorへ引き渡す
-- [ ] 4.1 抽出payloadをproject未解決draftへ写像する
+- [x] 4.1 抽出payloadをproject未解決draftへ写像する
   - extractorのunknown出力を既存schemaで検証し、projectを選ばずpre-edit draftへ正規化するmapperを追加する。
   - 商品名の空値はpre-editで保持し、URLやHTMLなど不要なページ由来値をintentへ含めない。
   - 正常、空名、構造不正、余分な値のmapper unit testを通す。
@@ -103,7 +103,7 @@
   - _Requirements: 1.2, 1.5, 4.1, 4.3, 4.5_
   - _Boundary: CaptureDraftMapper, CandidateDraftContracts_
 
-- [ ] 4.2 現行世代の抽出成功だけをtyped concludeする
+- [x] 4.2 現行世代の抽出成功だけをtyped concludeする
   - mapperと純粋intent factoryを用い、現行世代の成功結果だけを一回の`conclude`として上流portへ渡す。
   - conclude成功後はcapture stateを終了し、失敗時はretained intentを保持して同一世代の再試行だけを許可する。
   - 成功、activation失敗、retry、二重完了、stale完了のintegration testを通す。
@@ -111,7 +111,7 @@
   - _Requirements: 1.3, 1.6, 2.5, 5.2, 5.3_
   - _Boundary: ProductCaptureCoordinator, TransientSurfaceLifecyclePort_
 
-- [ ] 4.3 manual入力とproject不存在のhandoffを閉じる
+- [x] 4.3 manual入力とproject不存在のhandoffを閉じる
   - manual入力を抽出結果と同じproject未解決draft契約へ載せ、候補なしの場合だけ安全にcaptureへ留める。
   - project不存在でもcandidate-management activationを成功させ、capture終了後はpending pre-edit側から回復する。
   - manual、候補なし、project不存在、明示取消のintegration testで結果の寿命と終了責務を確認する。

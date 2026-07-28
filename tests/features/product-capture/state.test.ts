@@ -148,3 +148,182 @@ test("新activationと終了はretained intentを破棄する", () => {
   state.deactivate();
   assert.equal(state.value, null);
 });
+
+test("現行世代の抽出成功を一度だけtyped concludeし成功後に終了する", async () => {
+  const intent: FeatureActivationIntent = {
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: { draft: "typed" },
+  };
+  const concluded: Array<[ActivationId, FeatureActivationIntent]> = [];
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => ok(result) },
+    isCurrent: (id) => id === A,
+    createHandoffIntent: () => ok(intent),
+    async conclude(id, value) {
+      concluded.push([id, value]);
+      return ok(undefined);
+    },
+  });
+  state.activate(A, TAB);
+  await Promise.all([state.startCapture(), state.startCapture()]);
+  assert.deepEqual(concluded, [[A, intent]]);
+  assert.equal(state.value, null);
+});
+
+test("conclude失敗はintentを保持し同一世代のretryだけを許可する", async () => {
+  const intent: FeatureActivationIntent = {
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: {},
+  };
+  let attempts = 0;
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => ok(result) },
+    isCurrent: (id) => id === A,
+    createHandoffIntent: () => ok(intent),
+    async conclude() {
+      attempts += 1;
+      return attempts === 1
+        ? err({ kind: "transition-failed" })
+        : ok(undefined);
+    },
+  });
+  state.activate(A, TAB);
+  await state.startCapture();
+  assert.deepEqual(
+    state.value?.status === "failed" ? state.value.failure : null,
+    {
+      kind: "handoff",
+      error: { kind: "transition-failed" },
+      retainedIntent: intent,
+    },
+  );
+  await state.startCapture();
+  assert.equal(attempts, 2);
+  assert.equal(state.value, null);
+});
+
+test("抽出後にstaleとなった世代はintent生成もconcludeもしない", async () => {
+  let resolve!: (value: ReturnType<typeof ok<typeof result>>) => void;
+  const pending = new Promise<ReturnType<typeof ok<typeof result>>>((done) => {
+    resolve = done;
+  });
+  let current = A;
+  let intents = 0;
+  let concludes = 0;
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => pending },
+    isCurrent: (id) => id === current,
+    createHandoffIntent: () => {
+      intents += 1;
+      return ok({} as FeatureActivationIntent);
+    },
+    async conclude() {
+      concludes += 1;
+      return ok(undefined);
+    },
+  });
+  state.activate(A, TAB);
+  const run = state.startCapture();
+  current = B;
+  state.activate(B, 8 as TargetTabId);
+  resolve(ok(result));
+  await run;
+  assert.equal(intents, 0);
+  assert.equal(concludes, 0);
+});
+
+test("retained intentの同時retryはconcludeを一度だけ呼ぶ", async () => {
+  let release!: (value: ReturnType<typeof ok<void>>) => void;
+  const pending = new Promise<ReturnType<typeof ok<void>>>((done) => {
+    release = done;
+  });
+  let calls = 0;
+  const intent = {
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: {},
+  };
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => ok(result) },
+    isCurrent: () => true,
+    async conclude() {
+      calls += 1;
+      return pending;
+    },
+  });
+  state.activate(A, TAB);
+  state.retainHandoffFailure({ kind: "transition-failed" }, intent);
+  const first = state.startCapture();
+  const second = state.startCapture();
+  assert.equal(calls, 1);
+  release(ok(undefined));
+  await Promise.all([first, second]);
+  assert.equal(calls, 1);
+});
+
+test("concludeの後着成功と失敗は新activationを変更しない", async () => {
+  for (const response of [
+    ok(undefined),
+    err({ kind: "transition-failed" } as const),
+  ]) {
+    let release!: (value: typeof response) => void;
+    const pending = new Promise<typeof response>((done) => {
+      release = done;
+    });
+    const state = createCaptureState({
+      coordinator: { captureTab: async () => ok(result) },
+      isCurrent: () => true,
+      createHandoffIntent: () =>
+        ok({
+          featureId: "candidate-management" as FeatureId,
+          target: "open-candidate-editor",
+          payload: {},
+        }),
+      conclude: async () => pending,
+    });
+    state.activate(A, TAB);
+    const run = state.startCapture();
+    await Promise.resolve();
+    state.activate(B, 8 as TargetTabId);
+    release(response);
+    await run;
+    assert.deepEqual(state.value, {
+      status: "idle",
+      activationId: B,
+      tabId: 8,
+    });
+  }
+});
+
+test("候補なしの場合だけ空名manual draftをtyped concludeする", async () => {
+  const intent = {
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: {
+      draft: {
+        category: "uncategorized",
+        product: { name: { original: null, confirmed: "" } },
+        normalizedAttributes: { category: "uncategorized" },
+      },
+    },
+  };
+  const concluded: FeatureActivationIntent[] = [];
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => err({ kind: "no-candidate" }) },
+    isCurrent: () => true,
+    createManualIntent: () => intent,
+    async conclude(_id, value) {
+      concluded.push(value);
+      return ok(undefined);
+    },
+  });
+  state.activate(A, TAB);
+  await state.startManualEntry();
+  assert.deepEqual(concluded, []);
+  await state.startCapture();
+  await state.startManualEntry();
+  assert.deepEqual(concluded, [intent]);
+  assert.equal(state.value, null);
+});

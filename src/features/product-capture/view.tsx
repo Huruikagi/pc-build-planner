@@ -75,6 +75,15 @@ export function CaptureView({ state }: CaptureViewProps) {
           {messages("capture.retryAction")}
         </button>
       ) : null}
+      {executionError?.kind === "no-candidate" ? (
+        <button
+          data-capture-manual
+          onClick={() => void state.startManualEntry()}
+          type="button"
+        >
+          {messages("capture.detailEditAction")}
+        </button>
+      ) : null}
     </section>
   );
 }

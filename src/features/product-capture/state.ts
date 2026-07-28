@@ -24,6 +24,14 @@ export interface CaptureStateDependencies {
     activationId: ActivationId,
     intent: FeatureActivationIntent,
   ) => Promise<Result<void, TransientSurfaceError>>;
+  readonly createHandoffIntent?: (
+    result: CaptureResult,
+  ) => Result<FeatureActivationIntent, CaptureError>;
+  readonly createManualIntent?: () => FeatureActivationIntent;
+  readonly conclude?: (
+    activationId: ActivationId,
+    intent: FeatureActivationIntent,
+  ) => Promise<Result<void, TransientSurfaceError>>;
   readonly createRequestId?: () => string;
 }
 
@@ -36,12 +44,14 @@ export interface CaptureSubmitOutcome {
 const isRecoverableExecutionError = (error: CaptureError): boolean =>
   error.kind !== "permission-lost" &&
   error.kind !== "restricted-page" &&
-  error.kind !== "tab-changed";
+  error.kind !== "tab-changed" &&
+  error.kind !== "no-candidate";
 
 export class CaptureState {
   #listeners = new Set<() => void>();
   #value: CaptureSessionState | null = null;
   #requestGeneration = 0;
+  #handoffInFlightGeneration: number | null = null;
 
   public constructor(private readonly dependencies: CaptureStateDependencies) {}
 
@@ -51,11 +61,13 @@ export class CaptureState {
 
   public activate(activationId: ActivationId, tabId: TargetTabId): void {
     this.#requestGeneration += 1;
+    this.#handoffInFlightGeneration = null;
     this.#set({ status: "idle", activationId, tabId });
   }
 
   public deactivate(): void {
     this.#requestGeneration += 1;
+    this.#handoffInFlightGeneration = null;
     this.#value = null;
     this.#notify();
   }
@@ -68,6 +80,7 @@ export class CaptureState {
   public async startCapture(): Promise<void> {
     const current = this.#value;
     if (current === null || current.status === "extracting") return;
+    if (this.#handoffInFlightGeneration !== null) return;
     if (!this.dependencies.isCurrent(current.activationId)) return;
 
     if (current.status === "failed" && current.failure.kind === "handoff") {
@@ -106,6 +119,41 @@ export class CaptureState {
     }
 
     const handoff = this.dependencies.onCaptured;
+    const createIntent = this.dependencies.createHandoffIntent;
+    const conclude = this.dependencies.conclude;
+    if (createIntent !== undefined && conclude !== undefined) {
+      const prepared = createIntent(result.value);
+      if (!prepared.ok) {
+        this.#set({
+          status: "failed",
+          activationId: current.activationId,
+          tabId: current.tabId,
+          failure: {
+            kind: "execution",
+            error: prepared.error,
+            recoverable: isRecoverableExecutionError(prepared.error),
+          },
+        });
+        return;
+      }
+      const concluded = await conclude(current.activationId, prepared.value);
+      if (!this.#accepts(generation, current.activationId)) return;
+      if (concluded.ok) {
+        this.deactivate();
+        return;
+      }
+      this.#set({
+        status: "failed",
+        activationId: current.activationId,
+        tabId: current.tabId,
+        failure: {
+          kind: "handoff",
+          error: concluded.error,
+          retainedIntent: prepared.value,
+        },
+      });
+      return;
+    }
     if (handoff === undefined) {
       this.#set({
         status: "idle",
@@ -130,6 +178,46 @@ export class CaptureState {
     }
   }
 
+  public async startManualEntry(): Promise<void> {
+    const current = this.#value;
+    if (
+      current === null ||
+      current.status !== "failed" ||
+      current.failure.kind !== "execution" ||
+      current.failure.error.kind !== "no-candidate" ||
+      this.dependencies.createManualIntent === undefined ||
+      this.dependencies.conclude === undefined ||
+      this.#handoffInFlightGeneration !== null ||
+      !this.dependencies.isCurrent(current.activationId)
+    )
+      return;
+    const intent = this.dependencies.createManualIntent();
+    const generation = ++this.#requestGeneration;
+    this.#handoffInFlightGeneration = generation;
+    const concluded = await this.dependencies.conclude(
+      current.activationId,
+      intent,
+    );
+    if (this.#handoffInFlightGeneration === generation) {
+      this.#handoffInFlightGeneration = null;
+    }
+    if (!this.#accepts(generation, current.activationId)) return;
+    if (concluded.ok) {
+      this.deactivate();
+      return;
+    }
+    this.#set({
+      status: "failed",
+      activationId: current.activationId,
+      tabId: current.tabId,
+      failure: {
+        kind: "handoff",
+        error: concluded.error,
+        retainedIntent: intent,
+      },
+    });
+  }
+
   public retainHandoffFailure(
     error: TransientSurfaceError,
     intent: FeatureActivationIntent,
@@ -148,16 +236,18 @@ export class CaptureState {
   async #retryRetainedHandoff(
     current: Extract<CaptureSessionState, { status: "failed" }>,
   ): Promise<void> {
-    if (
-      current.failure.kind !== "handoff" ||
-      this.dependencies.retryHandoff === undefined
-    )
-      return;
+    if (current.failure.kind !== "handoff") return;
+    const retry = this.dependencies.retryHandoff ?? this.dependencies.conclude;
+    if (retry === undefined) return;
     const generation = ++this.#requestGeneration;
-    const result = await this.dependencies.retryHandoff(
+    this.#handoffInFlightGeneration = generation;
+    const result = await retry(
       current.activationId,
       current.failure.retainedIntent,
     );
+    if (this.#handoffInFlightGeneration === generation) {
+      this.#handoffInFlightGeneration = null;
+    }
     if (!this.#accepts(generation, current.activationId)) return;
     if (result.ok) {
       this.deactivate();

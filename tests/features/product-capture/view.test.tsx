@@ -19,7 +19,8 @@ const setup = (
     | { readonly kind: "permission-lost" }
     | { readonly kind: "restricted-page" }
     | { readonly kind: "tab-changed" }
-    | { readonly kind: "injection-failed" } = { kind: "injection-failed" },
+    | { readonly kind: "injection-failed" }
+    | { readonly kind: "no-candidate" } = { kind: "injection-failed" },
 ) => {
   const state = createCaptureState({
     coordinator: { captureTab: async () => err(error) },
@@ -42,6 +43,20 @@ test("idleは開始操作だけを表示し旧編集・保存UIを表示しな�
     null,
   );
   assert.equal(view.container.querySelector("[data-region='review']"), null);
+});
+
+test("候補なしだけ手入力開始操作を表示する", async () => {
+  const state = setup({ kind: "no-candidate" });
+  const view = render(
+    <LanguageProvider>
+      <CaptureView state={state} />
+    </LanguageProvider>,
+  );
+  const start = view.container.querySelector("[data-capture-start]");
+  assert.ok(start);
+  await userEvent.setup().click(start);
+  assert.ok(view.container.querySelector("[data-capture-manual]"));
+  assert.equal(view.container.querySelector("[data-capture-retry]"), null);
 });
 
 test("実行中は操作を隠し、失敗後は安全な案内とretryを表示する", async () => {

@@ -3,11 +3,13 @@ import type {
   FeatureContribution,
   TransientSurfaceLifecyclePort,
 } from "../../application-shell/public.js";
+import { ok } from "../../domain/public.js";
 import type { CandidateManagementPublicApi } from "../candidate-management/public.js";
 import {
   type CaptureRuntimePort,
   createCaptureCoordinator,
 } from "./coordinator.js";
+import { createCaptureDraftMapper } from "./draft-mapper.js";
 import { createCaptureNormalizer } from "./normalizer.js";
 import type { ProductCapturePublicApi } from "./public.js";
 import { createCandidateRanker } from "./ranker.js";
@@ -46,6 +48,18 @@ export const createProductCaptureContribution = (
     coordinator,
     isCurrent: (activationId) =>
       dependencies.transientSurface.isCurrent(activationId),
+    createHandoffIntent(result) {
+      const mapped = createCaptureDraftMapper().toUnresolvedDraft(result);
+      return mapped.ok
+        ? ok(dependencies.createCandidateEditorIntent({ draft: mapped.value }))
+        : mapped;
+    },
+    createManualIntent: () =>
+      dependencies.createCandidateEditorIntent({
+        draft: createCaptureDraftMapper().toManualDraft(),
+      }),
+    conclude: (activationId, intent) =>
+      dependencies.transientSurface.conclude(activationId, intent),
   });
   return {
     key: productCaptureContributionKey,
