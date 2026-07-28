@@ -32,7 +32,7 @@
   - _Requirements: 1.2, 1.4, 4.2, 4.3, 4.5_
   - _Boundary: CandidateManagementActivation, CandidateManagementState_
 
-- [ ] 2.2 project不存在時にpending pre-editを保持する
+- [x] 2.2 project不存在時にpending pre-editを保持する
   - projectが一件もないactivationを成功として受理し、解決前draftを既存management stateへの追加フィールドに保持する。
   - 新しいpre-edit activation、明示取消、project作成成功だけを同一panel session内の破棄条件にする。
   - capture surface終了後もpending draftが残り、再抽出なしでproject作成へ進めるstate testを通す。

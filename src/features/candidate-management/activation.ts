@@ -182,6 +182,14 @@ export const createCandidateActivation = (
       state.value.selectedProjectId ??
       state.value.projects[0]?.id;
     if (
+      projectId === undefined &&
+      isUnresolvedCandidateEditorPrefill(prefill) &&
+      state.value.projects.length === 0
+    ) {
+      state.holdPendingPreEdit(prefill);
+      if (state.value.pendingPreEdit !== null) return ok(undefined);
+    }
+    if (
       projectId === undefined ||
       !state.value.projects.some((project) => project.id === projectId)
     ) {
@@ -217,6 +225,7 @@ export const createCandidateActivation = (
         detail: "candidate editor could not be opened",
       });
     }
+    state.clearPendingPreEditForActivation();
     return ok(undefined);
   },
 });

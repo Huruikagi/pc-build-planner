@@ -228,7 +228,7 @@ test("不正な未解決 prefill は invalid_activation へ写像し state を�
   assert.equal(state.value.editor, null);
 });
 
-test("project が0件なら未解決 prefill は typed failure を返し保存を開始しない", async () => {
+test("project が0件でも未解決 prefill を pending に受理して capture 終了後まで保持する", async () => {
   const state = createState([]);
   await state.load();
   const registry = createFeatureRegistry();
@@ -242,11 +242,57 @@ test("project が0件なら未解決 prefill は typed failure を返し保存�
   assert.equal(prepared.ok, true);
   if (!prepared.ok) return;
   assert.deepEqual(await prepared.value.activate(), {
-    ok: false,
-    error: { kind: "activation_failed", detail: "project does not exist" },
+    ok: true,
+    value: undefined,
   });
   assert.equal(state.value.editor, null);
+  assert.deepEqual(state.value.pendingPreEdit, { draft: unresolvedDraft });
   assert.equal(state.value.isSaving, false);
+
+  state.resetTransientState();
+  assert.deepEqual(state.value.pendingPreEdit, { draft: unresolvedDraft });
+
+  const replacement = {
+    ...unresolvedDraft,
+    product: { name: { original: "架空の後続抽出候補" } },
+  };
+  const next = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: replacement },
+  });
+  assert.equal(next.ok, true);
+  if (!next.ok) return;
+  assert.equal((await next.value.activate()).ok, true);
+  assert.deepEqual(state.value.pendingPreEdit, { draft: replacement });
+});
+
+test("新しい pre-edit activation は保持中 pending を editor 受理後に破棄する", async () => {
+  const replacement = {
+    ...unresolvedDraft,
+    product: { name: { original: "架空の交換候補" } },
+  };
+  const availableState = createState();
+  await availableState.load();
+  availableState.holdPendingPreEdit({ draft: unresolvedDraft });
+  const availableRegistry = createFeatureRegistry();
+  assert.equal(
+    availableRegistry.register(createRegistration(availableState)).ok,
+    true,
+  );
+  const next = createActivationRouter({ registry: availableRegistry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: replacement },
+  });
+  assert.equal(next.ok, true);
+  if (!next.ok) return;
+  assert.equal((await next.value.activate()).ok, true);
+  assert.equal(availableState.value.pendingPreEdit, null);
+  assert.equal(
+    availableState.value.editor?.draft.product.name.original,
+    "架空の交換候補",
+  );
 });
 
 test("mutation が禁止された状態の activation は編集画面を開かず失敗を返す", async () => {

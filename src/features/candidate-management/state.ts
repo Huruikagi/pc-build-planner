@@ -15,6 +15,7 @@ import type {
   ManagementError,
   MutationContext,
   ProjectSummary,
+  UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
 import {
   type CandidateSourceRuleError,
@@ -68,7 +69,13 @@ export type DeletionConfirmation =
   | { readonly kind: "project"; readonly projectId: ProjectId }
   | { readonly kind: "candidate"; readonly candidateId: CandidatePartId };
 
-export interface ManagementStateValue {
+export type PendingPreEdit = UnresolvedCandidateEditorPrefill;
+
+export interface CandidatePreEditState {
+  readonly pendingPreEdit: PendingPreEdit | null;
+}
+
+export interface ManagementStateValue extends CandidatePreEditState {
   readonly projects: readonly ProjectSummary[];
   readonly candidates: readonly CandidateSummary[];
   readonly selectedProjectId: ProjectId | null;
@@ -119,6 +126,7 @@ export class ManagementState {
     selectedProjectId: null,
     selectedCategory: null,
     editor: null,
+    pendingPreEdit: null,
     deletion: null,
     displayError: null,
     fieldErrors: emptyFieldErrors,
@@ -196,9 +204,10 @@ export class ManagementState {
 
   /**
    * Drops unsaved screen state so a fresh mount starts from the persisted data
-   * only. The state instance outlives a single mount, and the shell restores a
-   * previous screen exclusively through a validated snapshot, so carrying an
-   * editor or a deletion confirmation across mounts would bypass that path.
+   * plus any accepted project-unresolved handoff. The state instance outlives
+   * a capture surface, so pending pre-edit remains available within the panel
+   * session; editor and deletion state still restore only through a validated
+   * snapshot.
    */
   public resetTransientState(): void {
     this.#set({
@@ -320,8 +329,23 @@ export class ManagementState {
       await this.dependencies.createMutationContext(),
     );
     if (!result.ok) return this.#mutationFailure(result.error);
-    this.#set({ isSaving: false });
+    this.#set({ isSaving: false, pendingPreEdit: null });
     await this.load();
+  }
+
+  /** Accepts a validated project-unresolved draft into panel-session state. */
+  public holdPendingPreEdit(prefill: PendingPreEdit): void {
+    this.#set({ pendingPreEdit: prefill });
+  }
+
+  /** The user explicitly abandons the held pre-edit without persistence. */
+  public cancelPendingPreEdit(): void {
+    this.#set({ pendingPreEdit: null });
+  }
+
+  /** Called only after a newer pre-edit has been accepted into the editor. */
+  public clearPendingPreEditForActivation(): void {
+    this.#set({ pendingPreEdit: null });
   }
 
   public async renameProject(id: ProjectId, name: string): Promise<void> {

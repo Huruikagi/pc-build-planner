@@ -29,6 +29,14 @@ const draft = {
   normalizedAttributes: { category: "uncategorized" },
 } satisfies CandidateDraft;
 
+const pendingPreEdit = {
+  draft: {
+    category: "uncategorized" as const,
+    product: { name: { original: "架空の抽出候補" } },
+    normalizedAttributes: { category: "uncategorized" as const },
+  },
+};
+
 const context: MutationContext = {
   requestId,
   expectedRevision: 0 as Revision,
@@ -116,6 +124,53 @@ test("読込時に先頭projectと候補一覧を復元し、カテゴリ選択�
   await state.selectCategory("uncategorized");
   assert.equal(state.value.selectedCategory, "uncategorized");
   assert.equal(state.value.candidates.length, 1);
+});
+
+test("pending pre-edit は reset と load では失われず明示取消だけで破棄できる", async () => {
+  const state = createManagementState({
+    query: createQuery(),
+    service: createService(),
+    createMutationContext: () => context,
+  });
+
+  state.holdPendingPreEdit(pendingPreEdit);
+  state.resetTransientState();
+  await state.load();
+  assert.deepEqual(state.value.pendingPreEdit, pendingPreEdit);
+
+  state.cancelPendingPreEdit();
+  assert.equal(state.value.pendingPreEdit, null);
+});
+
+test("project 作成は失敗時に pending pre-edit を保持し成功時だけ破棄する", async () => {
+  let shouldFail = true;
+  const state = createManagementState({
+    query: createQuery(),
+    service: createService({
+      async createProject() {
+        if (shouldFail)
+          return { ok: false as const, error: { kind: "storage" as const } };
+        return {
+          ok: true as const,
+          value: {
+            id: projectId,
+            name: "架空プロジェクト",
+            createdAt: "2026-07-22T00:00:00.000Z" as never,
+            updatedAt: "2026-07-22T00:00:00.000Z" as never,
+          },
+        };
+      },
+    }),
+    createMutationContext: () => context,
+  });
+  state.holdPendingPreEdit(pendingPreEdit);
+
+  await state.createProject("架空プロジェクト");
+  assert.deepEqual(state.value.pendingPreEdit, pendingPreEdit);
+
+  shouldFail = false;
+  await state.createProject("架空プロジェクト");
+  assert.equal(state.value.pendingPreEdit, null);
 });
 
 test("候補保存の失敗では入力と一覧を保持し、同一操作の二重送信を抑止する", async () => {
