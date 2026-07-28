@@ -16,8 +16,7 @@
   - _Requirements: 4.1, 4.3, 4.4, 4.5, 5.4_
   - _Boundary: CandidateDraftContracts, CandidatePreEditValidation_
 
-- [ ] 1.3 副作用のないcandidate editor intent factoryを公開する
-  - _Blocked: canonical `sources: { catalog, mutations }` のownerである `candidate-source-bookmarks` 3.4が未完了で、`CandidateSourceCatalogPort`／`CandidateSourceMutationPort`がまだ公開実装されていないため、下流spec内で仮portを捏造せず上流完了を待つ_
+- [x] 1.3 副作用のないcandidate editor intent factoryを公開する
   - project未解決draftからtyped activation intentを生成する純粋factoryをcandidate-managementのpublic APIへ追加する。
   - factoryはnavigation、state mutation、project照会、保存を開始せず、payload生成だけを担当する。
   - canonical公開APIの`query`と`sources: { catalog, mutations }`を維持し、captureは同名の縮小interfaceを再定義せず`createCandidateEditorIntent` facetだけを型参照する。

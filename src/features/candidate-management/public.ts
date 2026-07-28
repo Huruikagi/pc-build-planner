@@ -6,13 +6,14 @@ import type {
 import { err } from "../../domain/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
-  type CandidateEditorPrefill,
   createCandidateEditorIntent,
+  type CandidateEditorPrefill as ResolvedCandidateEditorPrefill,
 } from "./activation.js";
 import type {
   CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
+  UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
 
 export type {
@@ -43,10 +44,10 @@ export interface CandidateManagementPublicApi {
     readonly mutations: CandidateSourceMutationPort;
   };
   createCandidateEditorIntent(
-    prefill: CandidateEditorPrefill,
+    prefill: UnresolvedCandidateEditorPrefill,
   ): FeatureActivationIntent;
   openCandidateEditor(
-    prefill: CandidateEditorPrefill,
+    prefill: ResolvedCandidateEditorPrefill,
   ): Promise<
     import("../../domain/public.js").Result<void, FeatureActivationError>
   >;
@@ -81,7 +82,7 @@ export const createCandidateManagementPublicApi = (
       mutations: dependencies.sources.mutations,
     }),
     createCandidateEditorIntent,
-    openCandidateEditor(prefill: CandidateEditorPrefill) {
+    openCandidateEditor(prefill: ResolvedCandidateEditorPrefill) {
       if (dependencies.navigator === undefined) {
         return Promise.resolve(
           err<FeatureActivationError>({
@@ -91,10 +92,11 @@ export const createCandidateManagementPublicApi = (
         );
       }
       return dependencies.navigator.activate(
-        this.createCandidateEditorIntent(prefill),
+        createCandidateEditorIntent(prefill),
       );
     },
   });
 };
 
-export type { CandidateEditorPrefill } from "./activation.js";
+export type { CandidateEditorPrefill as ResolvedCandidateEditorPrefill } from "./activation.js";
+export type { UnresolvedCandidateEditorPrefill as CandidateEditorPrefill } from "./contracts.js";

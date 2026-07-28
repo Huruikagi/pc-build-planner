@@ -3,6 +3,7 @@ import test from "node:test";
 import type { CaptureCandidatePort } from "../../../src/features/candidate-management/contracts.js";
 import type {
   CandidateDraft,
+  CandidateEditorPrefill,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSummary,
@@ -45,19 +46,24 @@ test("公開入口はtyped editor intentを生成する", () => {
     sources,
   });
   const prefill = {
-    projectId: "10000000-0000-4000-8000-000000000001",
     draft: {
-      projectId: "10000000-0000-4000-8000-000000000001",
       category: "uncategorized",
-      product: { name: { original: "架空候補" } },
+      product: { name: { original: null, confirmed: "" } },
       normalizedAttributes: { category: "uncategorized" },
     },
-  } as never;
-  assert.deepEqual(api.createCandidateEditorIntent(prefill), {
+  } satisfies CandidateEditorPrefill;
+  const first = api.createCandidateEditorIntent(prefill);
+  const second = api.createCandidateEditorIntent(prefill);
+  assert.deepEqual(first, {
     featureId: "candidate-management",
     target: "open-candidate-editor",
     payload: prefill,
   });
+  assert.deepEqual(second, first);
+  assert.equal(first.payload, prefill);
+  assert.equal(api.query, query);
+  assert.equal(api.sources.catalog, sources.catalog);
+  assert.equal(api.sources.mutations, sources.mutations);
 });
 
 test("公開入口は照会とsources契約がなければ組み立てを拒否する", () => {

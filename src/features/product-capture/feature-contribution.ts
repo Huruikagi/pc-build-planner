@@ -5,7 +5,7 @@ import type {
 } from "../../application-shell/public.js";
 import type { Result } from "../../domain/public.js";
 import type { CaptureCandidatePort } from "../candidate-management/contracts.js";
-import type { CandidateEditorPrefill } from "../candidate-management/public.js";
+import type { ResolvedCandidateEditorPrefill } from "../candidate-management/public.js";
 import {
   type CaptureRuntimePort,
   createCaptureCoordinator,
@@ -45,7 +45,7 @@ export interface ProductCaptureContributionDependencies {
   readonly runtime: CaptureRuntimePort;
   readonly capture: CaptureCandidatePort;
   readonly openCandidateEditor: (
-    prefill: CandidateEditorPrefill,
+    prefill: ResolvedCandidateEditorPrefill,
   ) => Promise<Result<void, FeatureActivationError>>;
   /** Resolved fresh on every mount; see `registration.ts`'s `listProjects`. */
   readonly listProjects: () => Promise<readonly CaptureProjectOption[]>;

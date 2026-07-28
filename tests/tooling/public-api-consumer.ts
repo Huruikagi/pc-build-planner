@@ -12,6 +12,7 @@ import type { LocalDataRoot, Result } from "../../src/domain/public.js";
 import type {
   CandidateDraft,
   CandidateEditorPrefill,
+  CandidateManagementPublicApi,
   CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
@@ -172,11 +173,21 @@ export const inspectCanonicalUpdate = (input: UpdateCandidateInput) => {
 export const inspectCanonicalEditorIntent = (
   prefill: CandidateEditorPrefill,
 ) => {
-  // @ts-expect-error typed intent draft has no singleton source metadata
-  void prefill.draft.sourceInfo;
-  // @ts-expect-error typed intent draft has no shared product price
-  void prefill.draft.product.price;
+  // @ts-expect-error pre-edit intent leaves project resolution to candidate management
+  void prefill.draft.projectId;
 };
+
+/** Product capture consumes only the canonical public intent-factory facet. */
+export const createUnresolvedCandidateEditorIntent = (
+  factory: CandidateManagementPublicApi["createCandidateEditorIntent"],
+) =>
+  factory({
+    draft: {
+      category: "uncategorized",
+      product: { name: { original: null, confirmed: "" } },
+      normalizedAttributes: { category: "uncategorized" },
+    },
+  });
 
 const publicFeatureBase = {
   publicApi: {},

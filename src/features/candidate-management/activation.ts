@@ -14,7 +14,11 @@ import {
   validateCandidatePartV2Value,
 } from "../../domain/public.js";
 import { withCategory } from "./category-draft.js";
-import type { CandidateDraft, CandidateSourceDraft } from "./contracts.js";
+import type {
+  CandidateDraft,
+  CandidateSourceDraft,
+  UnresolvedCandidateEditorPrefill,
+} from "./contracts.js";
 import type { ManagementState } from "./state.js";
 
 export const candidateManagementFeatureId = "candidate-management" as FeatureId;
@@ -39,7 +43,7 @@ export interface LegacyCandidateEditorPrefill {
 
 /** Typed navigation factory owned with the candidate editor activation contract. */
 export const createCandidateEditorIntent = (
-  prefill: CandidateEditorPrefill,
+  prefill: CandidateEditorPrefill | UnresolvedCandidateEditorPrefill,
 ): FeatureActivationIntent => ({
   featureId: candidateManagementFeatureId,
   target: openCandidateEditorTarget,
