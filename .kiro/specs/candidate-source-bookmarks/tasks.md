@@ -36,7 +36,7 @@
   - _Depends: 1.2, 1.3_
 
 - [ ] 2. 独立したソース能力と隣接形式を実装する
-- [ ] 2.1 (P) ソースcollection更新と代表値導出policyを実装する
+- [x] 2.1 (P) ソースcollection更新と代表値導出policyを実装する
   - 初回追加でprimaryを設定し、追加・更新・primary切替を副作用なしで返す。
   - 非primary削除、primary削除時のreplacement必須、最後のsource削除を区別する。
   - 代表URL・代表価格をprimaryだけから導出し、価格欠損時に他sourceへfallbackしない。
@@ -45,7 +45,7 @@
   - _Boundary: CandidateSourcePolicy_
   - _Depends: 1.2, 1.3_
 
-- [ ] 2.2 (P) 上流メーカー判定をソース種別へ変換するclassifierを実装する
+- [x] 2.2 (P) 上流メーカー判定をソース種別へ変換するclassifierを実装する
   - product-capture公開入口のメーカー登録ドメイン照合だけを依存として受ける。
   - 一致をメーカー商品紹介、非一致または安全に判定不能なURLを販売ページへ写像する。
   - 利用者が明示した種別を自動判定で上書きしない契約を検証する。
@@ -54,7 +54,7 @@
   - _Boundary: SourceKindClassifier_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.3 (P) HTTP/HTTPS取得元を新規タブで開くruntime portを実装する
+- [x] 2.3 (P) HTTP/HTTPS取得元を新規タブで開くruntime portを実装する
   - featureが利用する最小のopen契約と、Chrome Tabs APIを包むadapterを定義する。
   - adapter直前でURLを再検証し、許可schemeだけを一回の新規タブ作成へ渡す。
   - runtime不在・API失敗・無効URLを値や完全URLを含まない判別可能errorへ変換する。
@@ -63,7 +63,7 @@
   - _Boundary: SourcePagePort_
   - _Depends: 1.2_
 
-- [ ] 2.4 (P) backup交換形式2と旧形式移行を実装する
+- [x] 2.4 (P) backup交換形式2と旧形式移行を実装する
   - 現行交換候補へ全source、primary参照、取得元別価格、種別、サイト名、日時を含める。
   - format 1の単数取得元と商品価格をformat 2へ連続的かつ決定的に変換する。
   - export/import mapperでsource順序・ID・primary・snapshotを維持し、不正参照をpreflightで拒否する。
