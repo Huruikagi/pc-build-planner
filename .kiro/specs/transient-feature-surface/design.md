@@ -14,6 +14,7 @@
 - 戻り先と型付き引き渡しを単一主表示領域の契約として提供する
 - Chrome APIをruntime adapterへ閉じ、shellを決定的に検証する
 - feature固有gestureを既存のsequence・store・panel open経路へ同期登録できる最小portを提供する
+- 起動要求を対象の一過性registrationが受理した後にだけmountし、配送失敗時は常設面を維持する
 
 ### Non-Goals
 
@@ -27,7 +28,7 @@
 
 ### This Spec Owns
 
-- `ApplicationFeatureRegistration`を構成する常設／一過性registration判別共用体と`isPersistent`型述語
+- `ApplicationFeatureRegistration`を構成する常設／一過性registration判別共用体、`TransientActivationAdapter`、`isPersistent`型述語
 - `ActivationId`、`TargetTabId`、未信頼なChrome tab IDをbrandへ変換する`parseTargetTabId`、`TransientActivationRequest`
 - `TransientSurfaceController`の起動、撤収、引き渡し、世代照合
 - 下流featureへ世代照合と引き渡しだけを公開する`TransientSurfaceLifecyclePort`
@@ -39,6 +40,7 @@
 ### Out of Boundary
 
 - 一過性面の業務payloadの意味
+- 一過性registrationが受理した起動状態の業務上の解釈
 - 抽出結果の確認・補正・保存
 - capture/candidateの文言とE2Eロケータ
 - context menuなど各gesture sourceの登録内容とChrome API adapter
@@ -49,11 +51,11 @@
 - application shellの既存registration、host transition、typed activation契約
 - canonical `Result<T, E>`と既存message catalog公開契約
 - shell/runtime専用adapter内に限定した`chrome.action`、`chrome.sidePanel`、`chrome.tabs`、`chrome.storage.session`、`chrome.runtime` message
-- 下流specは`application-shell/public.ts`の`TransientSurfaceLifecyclePort`または`TransientGestureRegistrationPort`と関連型だけを参照する
+- 下流specは`application-shell/public.ts`の`TransientApplicationFeatureRegistration`、`TransientActivationAdapter`、`TransientSurfaceLifecyclePort`または`TransientGestureRegistrationPort`と関連型だけを参照する
 
 ### Revalidation Triggers
 
-- `ActivationId`、`TargetTabId`、`parseTargetTabId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`のshapeまたは意味の変更
+- `ActivationId`、`TargetTabId`、`parseTargetTabId`、`TransientActivationRequest`、`TransientActivationAdapter`、`TransientSurfaceLifecyclePort`のshapeまたは意味の変更
 - `TransientGestureSource`、`TransientGestureRegistrationPort`、`TransientGestureRegistrationError`のshape、同期emit、cleanup保証の変更
 - `seq`割り当て、墓標優先、watch-ready最終許可の順序保証の変更
 - session媒体、worker単一write owner、タブ寿命イベントの変更
@@ -65,7 +67,7 @@
 
 - `application-shell` 1.1 / 1.5 / 2.1を、常設featureだけをナビゲーション・初期選択・availability fallback・通常`select()`の対象にし、一過性featureを同じ単一主表示領域へ型付き登録できる契約へ改訂する
 - `application-shell` 4.3 / 4.4を、常設featureを維持したまま一過性起動障害を安全なテキストの`transientNotice`で提示できる共通状態表示へ改訂する
-- `application-shell` 7のtyped activationは`conclude`の引き渡し先として再利用し、既存rollback保証を変更しない
+- `application-shell` 7のtyped activationは`conclude`の引き渡し先として再利用し、transient起動配送には流用しない。`TransientActivationRequest`専用adapterを一過性registrationへ要求する
 
 ### Dependency Direction
 
@@ -85,7 +87,7 @@ feature gesture source
     → transient scheduler
 ```
 
-下流featureはshellの内部moduleやChrome APIへ到達しない。shellは下流featureのpayloadを`unknown`として扱い、対象featureのactivation validatorへ委ねる。
+下流featureはshellの内部moduleやChrome APIへ到達しない。shellは`FeatureActivationIntent`をcross-feature handoff専用、`TransientActivationRequest`を一過性起動専用として混同せず、後者の検証と受理を対象registrationの`TransientActivationAdapter`へ委ねる。
 
 下流featureへcontroller実装そのものは公開しない。`ApplicationComposition`がcontrollerから最小の`TransientSurfaceLifecyclePort`を作り、feature contribution factoryへ依存注入する。これによりmigration側はshell実装やglobal singletonを参照しない。
 
@@ -107,12 +109,14 @@ graph TB
     Monitoring --> Controller
     Controller --> Host["SidePanelHost"]
     Host --> Registry["FeatureRegistry"]
+    Host --> Activation["Transient activation adapter"]
 ```
 
 ### Responsibilities
 
 - **FeatureRegistry**: `presentation`を検証し、不正登録を隔離する
-- **SidePanelHost**: 同時に一つのfeatureだけをmountし、既存transition/rollbackを維持する
+- **SidePanelHost**: 起動要求全体を対象registrationへ配送し、受理成功後にだけ同時に一つのfeatureをmountする。配送失敗時は現在の常設mountを維持する
+- **TransientActivationAdapter**: 対象feature固有の起動入力へ検証し、mount前に実行状態を受理して、失敗時またはunmount時に解放できるleaseを返す
 - **TransientSurfaceController**: 起動世代、対象タブ、戻り先、常設選択target、終了epochを所有する
 - **ProductionMonitoringIntegration**: panel監視callbackをcontrollerへ引き渡し、取得したwatch cleanupを停止時に所有・解除する
 - **TransientActivationStore**: worker再生成を跨ぐ起動要求、単調増加順序、失効墓標を保持する
@@ -126,7 +130,7 @@ graph TB
 
 ```text
 src/application-shell/
-  contracts.ts                            # explicit presentationとnavigation有無を相関させる判別共用体
+  contracts.ts                            # presentation/navigation相関とtransient activation adapter契約
   feature-registry.ts                     # branch相関のruntime検証とsnapshot複製
   side-panel-host.ts
   application-composition.ts
@@ -137,6 +141,8 @@ src/application-shell/
   transient-surface-controller.ts       # new
   transient-surface-ports.ts            # new
   public.ts
+src/features/product-capture/
+  registration.ts                        # 実consumerのtransient activation受理とlease解放
 src/runtime/
   service-worker.ts
   transient-gesture-registration.ts     # new
@@ -152,7 +158,12 @@ src/runtime/
 scripts/
   validate-boundaries.mjs
 tests/application-shell/
+  core-contracts.consumer.ts             # transient activation adapterの公開型fixture
+  feature-registry.test.ts               # adapter欠損登録の隔離とsnapshot保持
+  side-panel-host.test.ts                 # validate/accept/unmount/mount順序とrollback
+  transient-surface-controller.test.ts    # request全体配送とactive publish順序
 tests/runtime/
+  product-capture-production-fixture.test.ts # 実registrationのmount前activation配送
 ```
 
 `StorageAccessGuard`には`src/runtime/transient-activation-store.ts`だけを限定追加する。featureから`chrome.storage`への直接到達は引き続き禁止する。
@@ -190,26 +201,56 @@ export interface PersistentApplicationFeatureRegistration<
 
 export interface TransientApplicationFeatureRegistration<
   TPublic extends object = object,
-  TActivation = never,
-> extends FeatureRegistrationBase<TPublic, TActivation> {
+  TTransientActivation = TransientActivationRequest,
+  THandoffActivation = never,
+> extends FeatureRegistrationBase<TPublic, THandoffActivation> {
   readonly presentation: "transient";
   readonly navigation?: never;
+  readonly transientActivation: TransientActivationAdapter<TTransientActivation>;
+}
+
+export interface TransientActivationLease {
+  /** 冪等。受理済み状態を解放し、二度目以降はno-opにする。 */
+  release(): Promise<void>;
+}
+
+export interface TransientActivationAdapter<TTransientActivation> {
+  validate(
+    request: TransientActivationRequest,
+  ): Result<TTransientActivation, FeatureActivationError>;
+  accept(
+    input: TTransientActivation,
+  ): Promise<Result<TransientActivationLease, FeatureActivationError>>;
 }
 
 export type ApplicationFeatureRegistration<
   TPublic extends object = object,
-  TActivation = never,
+  THandoffActivation = never,
+  TTransientActivation = TransientActivationRequest,
 > =
-  | PersistentApplicationFeatureRegistration<TPublic, TActivation>
-  | TransientApplicationFeatureRegistration<TPublic, TActivation>;
+  | PersistentApplicationFeatureRegistration<TPublic, THandoffActivation>
+  | TransientApplicationFeatureRegistration<TPublic, TTransientActivation, THandoffActivation>;
 
-export const isPersistent = <TPublic extends object, TActivation>(
-  registration: ApplicationFeatureRegistration<TPublic, TActivation>,
-): registration is PersistentApplicationFeatureRegistration<TPublic, TActivation> =>
+export const isPersistent = <
+  TPublic extends object,
+  THandoffActivation,
+  TTransientActivation,
+>(
+  registration: ApplicationFeatureRegistration<
+    TPublic,
+    THandoffActivation,
+    TTransientActivation
+  >,
+): registration is PersistentApplicationFeatureRegistration<
+  TPublic,
+  THandoffActivation
+> =>
   registration.presentation === "persistent";
 ```
 
-共通baseは既存のmount、availability、public API、任意のtyped activationを保持するため、transient lifecycle／activation配送をnavigation契約から分離できる。全producerは`presentation`を明示する。常設branchだけが`MessageKey`で型付けされたnavigation metadataを持ち、一過性branchではproperty自体を渡さない。runtime境界は未知／欠損presentation、常設navigation欠損、一過性navigation混入を拒否し、snapshot複製でもbranchを維持する。`isPersistent`をnavigation catalog構築、通常選択、初期選択、fallback、controller検証の単一型述語とする。
+共通baseの`activation`は既存の`FeatureActivationIntent`によるcross-feature handoff専用とする。一過性branchはこれとは別に`transientActivation`を必須とし、`TransientActivationRequest`をfeature固有入力へ検証してmount前に受理する。`accept`成功は解放leaseを返し、hostがmount失敗、stale transition、通常unmountの全経路で最大一回解放する。`accept`が失敗を返す場合、adapterはfeature状態を変更しない。
+
+全producerは`presentation`を明示する。常設branchだけが`MessageKey`で型付けされたnavigation metadataを持ち、一過性branchではproperty自体を渡さない。runtime境界は未知／欠損presentation、常設navigation欠損、一過性navigation混入、`transientActivation`欠損を拒否し、snapshot複製でもbranchを維持する。`isPersistent`をnavigation catalog構築、通常選択、初期選択、fallback、controller検証の単一型述語とする。
 
 ### Transient Controller
 
@@ -281,6 +322,12 @@ export interface TransientSurfaceController {
   stop(): Promise<void>;
 }
 
+export interface TransientSurfaceHost {
+  showTransient(
+    request: TransientActivationRequest,
+  ): Promise<Result<void, TransientSurfaceError>>;
+}
+
 /** 下流の一過性featureへ注入する最小公開port。 */
 export interface TransientSurfaceLifecyclePort {
   isCurrent(activationId: ActivationId): boolean;
@@ -291,7 +338,7 @@ export interface TransientSurfaceLifecyclePort {
 }
 ```
 
-controllerは自身のcommandをpromise chainで直列化する。各intentの受付時に単調なcommand epochを割り当て、await後のstate確定は最新epochだけに許可する。これにより先行`request` / `conclude`の遅延完了より後発navigationが勝ち、navigation後に受理した新世代`request`だけがnavigationを置換できる。`conclude`は受付時にactivation単位のsingle-owner claimを同期取得し、host副作用前にclaimと最新epochを照合する。同じactivationでhost handoffを開始できるownerは最大1件とし、最新intentのhandoff失敗時だけclaimを解放してrollback済みtransientを再試行可能に戻す。終了開始時に同期的に`closing`へ進め、`isCurrent()`をfalseにして同世代の`conclude`をno-opにする。全command入口で`activationId`を照合し、旧世代由来の終了、抽出完了、監視callbackをno-opにする。
+controllerは自身のcommandをpromise chainで直列化する。各intentの受付時に単調なcommand epochを割り当て、await後のstate確定は最新epochだけに許可する。`request`は`surfaceId`だけでなく`TransientActivationRequest`全体をhostへ渡し、host成功後にだけ`active`をpublishする。これにより先行`request` / `conclude`の遅延完了より後発navigationが勝ち、navigation後に受理した新世代`request`だけがnavigationを置換できる。`conclude`は受付時にactivation単位のsingle-owner claimを同期取得し、host副作用前にclaimと最新epochを照合する。同じactivationでhost handoffを開始できるownerは最大1件とし、最新intentのhandoff失敗時だけclaimを解放してrollback済みtransientを再試行可能に戻す。終了開始時に同期的に`closing`へ進め、`isCurrent()`をfalseにして同世代の`conclude`をno-opにする。全command入口で`activationId`を照合し、旧世代由来の終了、抽出完了、監視callbackをno-opにする。
 
 `TransientSurfaceController`は`TransientSurfaceLifecyclePort`を実装する。`application-shell/public.ts`が型だけを公開し、composition rootが具体instanceを次の形で注入する。
 
@@ -361,6 +408,32 @@ proxyとbind操作はapplication composition内部契約であり、`application
 - 戻り先が利用不可なら利用可能な常設featureと理由を提示する
 
 ## Activation Delivery
+
+### Mount-Before-Delivery Prevention
+
+```mermaid
+sequenceDiagram
+    participant Controller as TransientSurfaceController
+    participant Host as SidePanelHost
+    participant Registration as TransientRegistration
+    participant Current as CurrentPersistentFeature
+    participant Target as TransientFeature
+    Controller->>Host: showTransient request
+    Host->>Registration: validate request
+    Registration-->>Host: typed activation
+    Host->>Registration: accept activation
+    Registration-->>Host: activation lease
+    Host->>Current: unmount
+    Host->>Target: mount
+    Target-->>Host: mount handle
+    Host-->>Controller: success
+```
+
+`SidePanelHost.showTransient`を配送とmountの単一transaction ownerとする。hostはrequestの`surfaceId`とregistration IDの一致、transient区分、availabilityを確認し、対象registrationの`validate`と`accept`を完了するまでcurrent featureをunmountしない。検証または受理失敗ではleaseを取得せず、現在の常設mountと選択を変更しない。
+
+受理後のstale化、current unmount失敗、target mount失敗ではhostがleaseを解放する。mount成功後はhostがfeatureのmount handleとleaseを同じslot資源として所有し、通常unmount、終了、handoff、stopのいずれでもmount handleを解放してからleaseを一度だけ解放する。lease解放失敗はslot cleanup失敗として診断し、別featureとの同時表示を許可しない。controllerはhost成功前に`active` stateを公開しない。
+
+`FeatureActivationIntent`は`conclude`後のcross-feature handoffに限定し、transient起動requestからsynthetic intentを合成しない。これによりfeature固有のhandoff target/payloadと、shell所有のactivation ID・固定tabを同じvalidatorへ暗黙混在させない。
 
 ### Generic Gesture Ingress
 
@@ -533,6 +606,8 @@ export interface TabLifecyclePort {
 - **記録なし**: Chrome UIから直接開かれた場合は常設表示に留まり通知しない
 - **失効済み**: 一過性面を立てず再操作を案内する
 - **起動拒否**: 常設表示に留まり安定コードで診断する
+- **起動配送の検証・受理失敗**: current featureをunmountせず常設表示を維持し、transient stateをactiveへ進めない
+- **受理後のmount失敗**: activation leaseを解放し、一過性featureを選択済みにしない
 - **終了中**: `closing`へ進めて`isCurrent` / `conclude`を無効化し、対象tabへの実行操作を許可しない
 - **終了失敗**: 実行操作を隠した`dismiss-failed`として選択targetとreasonを保持する。hostのrecoverable error投影はfeature slotを非表示にしてretry操作を提示し、production compositionはその操作を同じcontroller commandへ戻す
 - **引き渡し失敗**: 一過性面を維持し、呼び出しfeatureへ判別可能な失敗を返す
@@ -549,6 +624,7 @@ export interface TabLifecyclePort {
 |---|---|---|
 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | Registry, composition, host | contract/integration |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | Gesture registration/ingress, Store, sequence/tombstone protocol, typed runtime port, failure signal, controller, service worker | contract/runtime integration |
+| 2.8, 2.9, 2.10 | Transient activation adapter, controller, host, production registration | public consumer/production integration |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8 | Controller, host, tab adapter | unit/integration |
 | 3.9, 3.10 | Controller, activation router | integration |
 | 4.1, 4.2, 4.3, 4.4 | ports, in-memory adapters, existing shell fixtures | unit/integration |
@@ -561,6 +637,7 @@ export interface TabLifecyclePort {
 
 - 判別共用体の常設navigation必須・一過性navigation禁止、`isPersistent`の型絞り込み、未知／欠損presentationとbranch矛盾の不正登録隔離
 - controllerの起動、世代更新、3種のdismiss、conclude、stale callback
+- transient registrationの起動adapter必須、request shape検証、accept失敗時の状態不変、lease解放一回性
 - tab lifecycle ruleのtabIdフィルタと最大1回通知
 - 単調増加`seq`、record不在時の墓標、`invalidated`終端と不正stage遷移拒否
 - 墓標がtabごとに最新1件・全体128件以内で、安全checkpoint前の支配墓標を剪定しないこと
@@ -571,6 +648,10 @@ export interface TabLifecyclePort {
 ### Integration
 
 - panel閉状態・開状態の起動配送
+- controllerがrequest全体をhostへ渡し、registration受理後にだけactive stateとmountを成立させること
+- product-captureの実registrationでactivation stateが初回mountより先に設定され、`feature-mount-failed`を発生させないこと
+- transient activationの検証・受理失敗時にcurrent persistent featureをunmountせず、一過性面を選択しないこと
+- 受理後のmount失敗、stale化、終了でactivation leaseを最大一回解放すること
 - `put()`保留中の失効が墓標に残り、watch-ready後の最終許可で拒否されること
 - runtime messageのsender/request/response検証と`authorized | invalidated | error`保持
 - watch-ready前後の遷移・閉鎖で一過性面が立たないこと
@@ -608,5 +689,7 @@ export interface TabLifecyclePort {
 6. `TransientSurfaceLifecyclePort`と`TransientGestureRegistrationPort`を`application-shell/public.ts`から提供する
 7. 組み込みaction sourceをgeneric registrarへ移し、feature-owned sourceを同じworker ingressへ登録できるcontract fixtureを追加する
 8. composition rootから下流feature factoryへ`TransientSurfaceLifecyclePort`を注入できるcontract fixtureを追加する
+9. transient registrationへ専用activation adapterを必須化し、controllerからhostへrequest全体を配送する
+10. product-capture registrationを専用adapterへ移行し、production fixtureで受理前mount禁止と配送失敗時の常設維持を固定する
 
-一過性surfaceへの最初の業務feature適用とicon起動E2Eは`product-capture-transient-migration`、feature-owned context menu sourceの実登録とE2Eは`source-price-refresh`で行う。shell tasksはテスト専用featureをproduction catalogへ追加しない。
+一過性surfaceへの最初の業務feature適用とicon起動E2Eは`product-capture-transient-migration`、feature-owned context menu sourceの実登録とE2Eは`source-price-refresh`で行う。shell tasksはテスト専用featureをproduction catalogへ追加しない。公開adapter shape変更後は本specの全gateに加え、`product-capture-transient-migration` 6.6／6.7を再実行する。

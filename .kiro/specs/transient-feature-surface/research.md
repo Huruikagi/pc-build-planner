@@ -24,6 +24,7 @@
 5. hostの既存activation rollbackは汎用`conclude`の実装基盤として利用できる。
 6. worker監視からpanel監視への移管には空白を作らないhandshakeが必要である。
 7. `source-price-refresh`はfeature-owned context menu clickを起点にするが、現行設計は`chrome.action`をservice workerへ直接配線しており、別gesture sourceが同じsequence/store/open経路へ参加する公開seamを持たない。
+8. production product-capture registrationは`mount()`開始時にactivation stateを要求する一方、controllerは`showTransient(surfaceId)`でmountした後にだけactive stateを公開し、registrationの既存`FeatureActivationAdapter`を起動要求へ接続していない。このため実registrationは未activationのままmountされる。
 
 ## Selected Boundary
 
@@ -33,6 +34,18 @@
 - downstream gesture source: source固有のChrome event登録とtab ID検証だけ。activation ID、sequence、store、panel openはshell/runtimeが所有する
 
 ## Design Decisions
+
+### transient起動配送をcross-feature handoffから分離する
+
+- **Context**: `TransientActivationRequest`はshellが所有するactivation ID・surface ID・固定tabを運ぶが、既存`FeatureActivationIntent`はfeature固有targetと未信頼payloadを持つcross-feature handoff契約である。両者の変換規則がなく、product-captureはactivation stateを必要とする`mount()`が先に呼ばれて失敗する。
+- **Alternatives Considered**:
+  1. controllerがproduct-capture向け`FeatureActivationIntent`を合成する — shellがfeature固有target/payloadを知り、下流境界を破る。
+  2. transient `mount()`へrequestを直接追加する — 共通mount contextへ一過性専用状態を漏らし、persistent registrationとの共通baseを崩す。
+  3. transient registrationへ専用activation adapterを必須化し、hostがvalidate/accept後にmountする — 採用。
+- **Selected Approach**: `TransientActivationAdapter<T>`はrequest全体を検証し、feature状態を受理すると冪等な`TransientActivationLease`を返す。`SidePanelHost.showTransient(request)`が配送とmountを一意に所有し、受理完了までcurrent featureをunmountしない。mount成功後はhostがmount handleとleaseを同じslot資源として解放する。
+- **Rationale**: shellは業務payloadを解釈せず、下流featureは初回mount前に型付き起動状態を確立できる。配送失敗時は既存常設面を維持でき、`FeatureActivationIntent`のrollback意味も変更しない。
+- **Risks and Mitigations**: accept後のmount/stale失敗でfeature状態が残るリスクはleaseの必須解放と一回性testで閉じる。公開registration shape変更のためproduct-capture consumer contractと下流E2Eを再検証する。
+- **Build vs Adopt**: 外部ライブラリやChrome APIは不要で、既存registration/host transactionへ最小契約を追加する。
 
 ### registrationはnavigation optional化ではなく判別共用体にする
 
