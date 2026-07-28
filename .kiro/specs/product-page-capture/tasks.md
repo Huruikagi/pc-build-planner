@@ -79,16 +79,16 @@
   - _Requirements: 1.4, 4.2, 4.5, 4.7, 5.5, 5.6, 6.2, 6.3, 6.4, 7.2_
   - _Boundary: ProductCaptureState, ProductCaptureView, ProductCaptureComposition, LegacyCaptureRemoval_
 
-- [ ] 6. 固定tabの価格抽出を公開consumerへ提供する
+- [x] 6. 固定tabの価格抽出を公開consumerへ提供する
 
-- [ ] 6.1 price observationとtyped failureの公開契約を固定する
+- [x] 6.1 price observationとtyped failureの公開契約を固定する
   - page-derived URL、canonical取得時点、任意の根拠付き価格を返すread-only portと6種の閉じたfailureを`public.ts`へ公開する。
   - `ProductCapturePublicApi.pagePriceExtraction`だけから組立済みportを受け取り、extractor、normalizer、ranker、runtime concreteを公開しない。
   - source-price-refresh相当consumerがdeep importなしでstrict型検査を通ることを完了条件とする。
   - _Requirements: 1.1, 1.3, 2.3, 3.2, 3.5, 6.5, 7.2, 7.4_
   - _Boundary: ProductCapturePublicAPI, PagePriceExtractionContract_
 
-- [ ] 6.2 固定tab runtimeを既存価格pipelineへ接続する
+- [x] 6.2 固定tab runtimeを既存価格pipelineへ接続する
   - 固定tabを解決・注入し、request、tab、page-derived URLを通常取り込みと同じdecoderで検証する。
   - 価格候補だけを既存normalizer/rankerへ通し、元表記とMoneyValueを返し、有効価格なしは成功・価格欠損とする。
   - 通常取り込みとprice portへ同じsynthetic候補集合を渡して同じ価格provenanceが選ばれ、domain map追加が価格へ影響しないことを完了条件とする。
@@ -96,7 +96,7 @@
   - _Requirements: 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, 6.2, 7.1, 7.2, 7.4_
   - _Boundary: PagePriceExtractionAdapter, CaptureRuntimePort, ExtractionPipeline_
 
-- [ ] 6.3 price portの公開境界と下流再検証を完成する
+- [x] 6.3 price portの公開境界と下流再検証を完成する
   - tab不存在、権限失効、制限ページ、tab変化、注入失敗、payload不正をpage URLや商品値を含まないtyped failureへ写像する。
   - 組立済みport instanceをtransient migration後のproduct-capture contributionからproduction consumerへ一度だけ注入する。
   - contract、public consumer、boundary validationが通り、`source-price-refresh`の確定shapeにdriftがないことを完了条件とする。

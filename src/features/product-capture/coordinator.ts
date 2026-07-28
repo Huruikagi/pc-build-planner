@@ -83,7 +83,7 @@ const isExtractionCandidate = (value: unknown): value is ExtractionCandidate =>
   typeof value.sourceLabel === "string" &&
   (value.source !== "domain-map" || value.field === "manufacturer");
 
-const decodeCapturePagePayload = (
+export const decodeCapturePagePayload = (
   value: RawCapturePayload,
 ): CapturePagePayload | undefined => {
   if (!isRecord(value)) return undefined;
@@ -101,7 +101,7 @@ const decodeCapturePagePayload = (
   return { requestId, tabId, pageUrl, candidates };
 };
 
-const defaultIsRestrictedUrl = (url: string): boolean => {
+export const isRestrictedCaptureUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
     return parsed.protocol !== "http:" && parsed.protocol !== "https:";
@@ -116,7 +116,7 @@ export const createCaptureCoordinator = (
   const nextRequestId = dependencies.createRequestId ?? createRequestId;
   const now = dependencies.now ?? createUtcTimestamp;
   const isRestrictedUrl =
-    dependencies.isRestrictedUrl ?? defaultIsRestrictedUrl;
+    dependencies.isRestrictedUrl ?? isRestrictedCaptureUrl;
 
   return {
     async captureTab(tabId) {

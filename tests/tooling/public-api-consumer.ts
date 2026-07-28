@@ -22,6 +22,7 @@ import type {
 import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
 import type {
   ManufacturerDomainLookup,
+  PagePriceExtractionError,
   ProductCapturePublicApi,
 } from "../../src/features/product-capture/public.js";
 import {
@@ -115,6 +116,21 @@ export const consumeManufacturerDomainLookup = (
   pageUrl: string,
 ): ReturnType<ManufacturerDomainLookup["findManufacturer"]> =>
   capture.manufacturerDomains.findManufacturer(pageUrl);
+
+/** Source-price-refresh consumes the assembled price port without a deep import. */
+export const consumePagePriceExtraction = async (
+  capture: ProductCapturePublicApi,
+  tabId: Parameters<
+    ProductCapturePublicApi["pagePriceExtraction"]["extractPrice"]
+  >[0],
+) => {
+  const result = await capture.pagePriceExtraction.extractPrice(tabId);
+  if (!result.ok) {
+    const failure: PagePriceExtractionError = result.error;
+    return failure.kind;
+  }
+  return result.value.price?.confirmed;
+};
 
 /** Downstream source consumers need neither the storage root nor product values. */
 export const consumeCandidateSources = async (

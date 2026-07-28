@@ -11,7 +11,11 @@ import {
 } from "./coordinator.js";
 import { createCaptureDraftMapper } from "./draft-mapper.js";
 import { createCaptureNormalizer } from "./normalizer.js";
-import type { ProductCapturePublicApi } from "./public.js";
+import { createPagePriceExtractionAdapter } from "./page-price-extraction.js";
+import {
+  createProductCapturePublicApi,
+  type ProductCapturePublicApi,
+} from "./public.js";
 import { createCandidateRanker } from "./ranker.js";
 import { createProductCaptureFeatureRegistration } from "./registration.js";
 import { createCaptureState } from "./state.js";
@@ -40,11 +44,19 @@ export const createProductCaptureContribution = (
   _context: FeatureCompositionContext,
   dependencies: ProductCaptureContributionDependencies,
 ): ProductCaptureContribution => {
+  const normalizer = createCaptureNormalizer();
+  const ranker = createCandidateRanker();
   const coordinator = createCaptureCoordinator({
     runtime: dependencies.runtime,
-    normalizer: createCaptureNormalizer(),
-    ranker: createCandidateRanker(),
+    normalizer,
+    ranker,
   });
+  const pagePriceExtraction = createPagePriceExtractionAdapter({
+    runtime: dependencies.runtime,
+    normalizer,
+    ranker,
+  });
+  const publicApi = createProductCapturePublicApi({ pagePriceExtraction });
   const state = createCaptureState({
     coordinator,
     isCurrent: (activationId) =>
@@ -64,6 +76,6 @@ export const createProductCaptureContribution = (
   });
   return {
     key: productCaptureContributionKey,
-    registration: createProductCaptureFeatureRegistration({ state }),
+    registration: createProductCaptureFeatureRegistration({ state, publicApi }),
   };
 };

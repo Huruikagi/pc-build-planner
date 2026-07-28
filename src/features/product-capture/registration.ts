@@ -27,6 +27,7 @@ export interface CaptureTransientActivation {
 
 export interface CaptureFeatureRegistrationDependencies {
   readonly state: CaptureState;
+  readonly publicApi?: ProductCapturePublicApi;
   readonly getAvailability?: () => Availability;
   readonly subscribeAvailability?: (
     listener: (availability: Availability) => void,
@@ -68,7 +69,7 @@ export const createProductCaptureFeatureRegistration = (
 > => ({
   id: productCaptureFeatureId,
   presentation: "transient",
-  publicApi: createProductCapturePublicApi(),
+  publicApi: dependencies.publicApi ?? createProductCapturePublicApi(),
   getAvailability:
     dependencies.getAvailability ?? (() => ({ status: "available" })),
   subscribeAvailability: dependencies.subscribeAvailability ?? (() => () => {}),
