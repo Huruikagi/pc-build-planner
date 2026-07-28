@@ -15,7 +15,7 @@ import type {
 } from "../../../src/domain/public.js";
 import type {
   CandidateDraft,
-  UpdateCandidateInput,
+  LegacyUpdateCandidateInput,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
 import type {
@@ -321,7 +321,7 @@ test("カテゴリ変更は省略された共通項目と取得元を保持し�
   });
   // The editor round-trips the stored draft, so only the category and its
   // attributes differ; omitted source metadata must survive the change.
-  const input: UpdateCandidateInput = {
+  const input: LegacyUpdateCandidateInput = {
     id: candidateId,
     draft: draft({
       projectId: otherProjectId,

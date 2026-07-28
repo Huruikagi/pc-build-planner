@@ -1,6 +1,6 @@
 import type { FeatureActivationError } from "../../application-shell/public.js";
 import { err, ok, type ProjectId, type Result } from "../../domain/public.js";
-import type { CandidateEditorPrefill } from "../candidate-management/public.js";
+import type { LegacyCandidateEditorPrefill as CandidateEditorPrefill } from "../candidate-management/activation.js";
 import { inferCategoryHint } from "./category-hint.js";
 import type { CaptureError, CaptureSession } from "./contracts.js";
 import { toCandidateDraft } from "./draft-mapper.js";

@@ -5,7 +5,7 @@ import {
   type Result,
   type SourcedValue,
 } from "../../domain/public.js";
-import type { CandidateDraft } from "../candidate-management/public.js";
+import type { CaptureCandidatePort } from "../candidate-management/contracts.js";
 import type {
   CaptureCoreField,
   CaptureError,
@@ -15,6 +15,7 @@ import type {
 import { createCaptureNormalizer } from "./normalizer.js";
 
 const normalizer = createCaptureNormalizer();
+type CandidateDraft = Parameters<CaptureCandidatePort["createCandidate"]>[0];
 
 const fieldEntry = (session: CaptureSession, field: CaptureCoreField) =>
   session.fields.find((candidate) => candidate.field === field);

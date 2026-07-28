@@ -7,6 +7,11 @@ import type { MutationContext } from "./contracts.js";
 import type { CandidateManagementPublicApi } from "./public.js";
 import { createCandidateFeatureRegistration } from "./registration.js";
 import { createCandidateManagementService } from "./service.js";
+import { createCandidateSourceCatalog } from "./source-catalog.js";
+import {
+  type CandidateSourceDataPort,
+  unavailableCandidateSourceDataPort,
+} from "./source-data-port.js";
 import { createManagementState } from "./state.js";
 
 export const candidateManagementContributionKey = "candidateManagement";
@@ -14,7 +19,17 @@ export const candidateManagementContributionKey = "candidateManagement";
 export type CandidateManagementContribution = FeatureContribution<
   typeof candidateManagementContributionKey,
   CandidateManagementPublicApi
->;
+> & {
+  readonly legacyCapture: import("./contracts.js").CaptureCandidatePort;
+  readonly legacyOpenCandidateEditor: (
+    prefill: import("./activation.js").LegacyCandidateEditorPrefill,
+  ) => Promise<
+    import("../../domain/public.js").Result<
+      void,
+      import("../../application-shell/public.js").FeatureActivationError
+    >
+  >;
+};
 
 /**
  * Assembles the feature from the shell-provided composition context only.
@@ -22,8 +37,13 @@ export type CandidateManagementContribution = FeatureContribution<
  */
 export const createCandidateManagementContribution = (
   context: FeatureCompositionContext,
+  sourceData: CandidateSourceDataPort = unavailableCandidateSourceDataPort,
 ): CandidateManagementContribution => {
-  const service = createCandidateManagementService({ data: context.data });
+  const service = createCandidateManagementService({
+    data: context.data,
+    sourceData,
+  });
+  const catalog = createCandidateSourceCatalog({ data: sourceData });
 
   /**
    * The expected revision is read per mutation, so a concurrent writer in
@@ -36,6 +56,13 @@ export const createCandidateManagementContribution = (
       expectedRevision: revision.ok ? revision.value : 0,
     };
   };
+  const createSourceMutationContext = async (): Promise<MutationContext> => {
+    const revision = await sourceData.query((root) => root.revision);
+    return {
+      requestId: createUuid() as RequestId,
+      expectedRevision: revision.ok ? revision.value : 0,
+    };
+  };
 
   const state = createManagementState({
     query: service,
@@ -43,18 +70,69 @@ export const createCandidateManagementContribution = (
     createMutationContext,
   });
 
+  const legacyCapture = {
+    async createCandidate(
+      input: Parameters<
+        import("./contracts.js").CaptureCandidatePort["createCandidate"]
+      >[0],
+    ) {
+      return service.createCandidate(input, await createMutationContext());
+    },
+  } satisfies import("./contracts.js").CaptureCandidatePort;
+
   const registration = createCandidateFeatureRegistration({
     data: context.data,
     query: service,
     /** Adjacent capture features do not own revisions, so the feature supplies one. */
-    capture: {
-      async createCandidate(input) {
-        return service.createCandidate(input, await createMutationContext());
+    capture: legacyCapture,
+    sources: {
+      catalog,
+      mutations: {
+        async addSource(input) {
+          const result = await service.addSource(
+            input,
+            await createSourceMutationContext(),
+          );
+          return result.ok ? { ok: true, value: undefined } : result;
+        },
+        async updateSource(input) {
+          const result = await service.updateSource(
+            input,
+            await createSourceMutationContext(),
+          );
+          return result.ok ? { ok: true, value: undefined } : result;
+        },
+        async removeSource(input) {
+          const result = await service.removeSource(
+            input,
+            await createSourceMutationContext(),
+          );
+          return result.ok ? { ok: true, value: undefined } : result;
+        },
+        async setPrimarySource(input) {
+          const result = await service.setPrimarySource(
+            input,
+            await createSourceMutationContext(),
+          );
+          return result.ok ? { ok: true, value: undefined } : result;
+        },
       },
     },
     navigator: context.navigator,
     state,
   });
+  const legacyOpenCandidateEditor: CandidateManagementContribution["legacyOpenCandidateEditor"] =
+    (prefill) =>
+      context.navigator.activate({
+        featureId: registration.id,
+        target: "open-candidate-editor",
+        payload: prefill,
+      });
 
-  return { key: candidateManagementContributionKey, registration };
+  return {
+    key: candidateManagementContributionKey,
+    registration,
+    legacyCapture,
+    legacyOpenCandidateEditor,
+  };
 };

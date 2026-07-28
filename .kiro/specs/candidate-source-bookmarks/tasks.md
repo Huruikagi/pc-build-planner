@@ -72,8 +72,8 @@
   - _Boundary: BackupExchangeV2_
   - _Depends: 1.2_
 
-- [ ] 3. 候補管理serviceと公開source契約を統合する
-- [ ] 3.1 候補draft・summary・公開source catalog／mutation契約を複数ソース化する
+- [x] 3. 候補管理serviceと公開source契約を統合する
+- [x] 3.1 候補draft・summary・公開source catalog／mutation契約を複数ソース化する
   - editor draftへsource collectionとprimary参照を追加し、一覧summaryへprimary sourceと導出価格を公開する。
   - source追加・更新・削除・primary変更をsource IDで指定する型付き公開portを定義する。
   - 全候補または指定候補のsource参照列挙と候補・source IDによる再取得を、識別子・任意URL・任意種別・primary状態だけのread-only DTOで定義する。
@@ -82,7 +82,7 @@
   - _Requirements: 1.1, 1.2, 1.5, 2.3, 3.1, 3.2, 3.3, 8.6, 8.7_
   - _Depends: 1.2_
 
-- [ ] 3.2 保存済みsourceのread-only catalogを実装する
+- [x] 3.2 保存済みsourceのread-only catalogを実装する
   - 全候補または指定候補を一回のread snapshotから走査し、sourceごとの候補ID、source ID、任意URL、任意種別、primary状態を投影する。
   - sourceなし候補は成功した空配列とし、未知candidateとcandidate内に存在しないsourceは識別可能なnot-foundとして返す。
   - URL正規化、種別eligibility、重複排除、0件・1件・複数件の一致判定を行わず、同一URLを持つ複数参照も保存順のまま返す。
@@ -90,7 +90,7 @@
   - _Requirements: 8.7_
   - _Depends: 3.1_
 
-- [ ] 3.3 candidate serviceへ原子的なsource mutationと代表queryを実装する
+- [x] 3.3 candidate serviceへ原子的なsource mutationと代表queryを実装する
   - 新規sourceに有効URLを要求し、種別未指定時だけclassifier結果を保存する。
   - source更新・削除・primary変更をpolicyへ委譲し、versioned schema 2 port上で候補全体を一回のmutationとして確定する。foundation production portへの結線は5.6が所有する。
   - queryはprimary sourceから一覧価格・URLを導出し、欠損時の非fallbackを維持する。
@@ -98,7 +98,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 7.3, 7.4_
   - _Depends: 2.1, 2.2, 3.1_
 
-- [ ] 3.4 candidate-management公開API用のsource facetを実装する
+- [x] 3.4 candidate-management公開API用のsource facetを実装する
   - feature contributionがread-only catalogとmutation portを `sources: { catalog, mutations }` facetとして構築し、`public.ts` から型と契約を限定exportする。
   - 公開source portの各操作に新しいrequest IDと読取時点revisionをfeature内で付与する。
   - 本taskはsource facetだけを所有し、project-candidate-managementが所有する `query` と `createCandidateEditorIntent(prefill): FeatureActivationIntent` を再実装・変更しない。canonical公開APIに旧capture write portを残さない。

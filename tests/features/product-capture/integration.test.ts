@@ -11,11 +11,11 @@ import type {
   UtcTimestamp,
 } from "../../../src/domain/public.js";
 import { err, ok } from "../../../src/domain/public.js";
-import type {
-  CandidateDraft,
-  CandidateEditorPrefill,
-  CaptureCandidatePort,
-} from "../../../src/features/candidate-management/public.js";
+import type { LegacyCandidateEditorPrefill as CandidateEditorPrefill } from "../../../src/features/candidate-management/activation.js";
+import type { CaptureCandidatePort } from "../../../src/features/candidate-management/contracts.js";
+
+type CandidateDraft = Parameters<CaptureCandidatePort["createCandidate"]>[0];
+
 import type {
   ActiveTabInfo,
   CaptureRuntimePort,

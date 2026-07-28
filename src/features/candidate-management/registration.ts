@@ -11,8 +11,15 @@ import {
   type CandidateEditorPrefill,
   candidateManagementFeatureId,
   createCandidateActivation,
+  type LegacyCandidateEditorPrefill,
 } from "./activation.js";
-import type { CandidateQuery, CaptureCandidatePort } from "./contracts.js";
+import type {
+  CandidateManagementQuery,
+  CandidateQuery,
+  CandidateSourceCatalogPort,
+  CandidateSourceMutationPort,
+  CaptureCandidatePort,
+} from "./contracts.js";
 import {
   type CandidateManagementPublicApi,
   createCandidateManagementPublicApi,
@@ -35,8 +42,13 @@ export type CandidateManagementMount = (
 
 export interface CandidateFeatureRegistrationDependencies {
   readonly data: FoundationScopedDataPort;
-  readonly query: CandidateQuery;
+  readonly query: CandidateManagementQuery;
+  readonly publicQuery?: CandidateQuery;
   readonly capture: CaptureCandidatePort;
+  readonly sources?: {
+    readonly catalog: CandidateSourceCatalogPort;
+    readonly mutations: CandidateSourceMutationPort;
+  };
   readonly mount?: CandidateManagementMount;
   readonly getAvailability?: () => Availability;
   readonly subscribeAvailability?: (
@@ -92,7 +104,7 @@ export const createCandidateFeatureRegistration = (
   dependencies: CandidateFeatureRegistrationDependencies,
 ): PersistentApplicationFeatureRegistration<
   CandidateManagementPublicApi,
-  CandidateEditorPrefill
+  CandidateEditorPrefill | LegacyCandidateEditorPrefill
 > => {
   const mount =
     dependencies.mount ??
@@ -105,8 +117,24 @@ export const createCandidateFeatureRegistration = (
     dependencies.subscribeAvailability ?? (() => () => {});
   const publicApi = createCandidateManagementPublicApi({
     data: dependencies.data,
-    query: dependencies.query,
-    capture: dependencies.capture,
+    query: dependencies.publicQuery ?? {
+      listProjects: () => dependencies.query.listProjects(),
+      listCandidates: (input) => dependencies.query.listCandidates(input),
+      listBuildEligible: (projectId) =>
+        dependencies.query.listBuildEligible(projectId),
+      async getCandidateDraft() {
+        return { ok: false, error: { kind: "unsupported-data" } };
+      },
+    },
+    sources:
+      dependencies.sources ??
+      ({
+        catalog: {},
+        mutations: {},
+      } as {
+        catalog: CandidateSourceCatalogPort;
+        mutations: CandidateSourceMutationPort;
+      }),
     ...(dependencies.navigator === undefined
       ? {}
       : { navigator: dependencies.navigator }),

@@ -9,6 +9,15 @@ import {
   type TransientSurfaceLifecyclePort,
 } from "../../src/application-shell/public.js";
 import type { LocalDataRoot, Result } from "../../src/domain/public.js";
+import type {
+  CandidateDraft,
+  CandidateEditorPrefill,
+  CandidateQuery,
+  CandidateSourceCatalogPort,
+  CandidateSourceMutationPort,
+  CandidateSourceReference,
+  UpdateCandidateInput,
+} from "../../src/features/candidate-management/public.js";
 import type { CurrentBuildPublicApi } from "../../src/features/current-build/public.js";
 import type {
   ManufacturerDomainLookup,
@@ -105,6 +114,69 @@ export const consumeManufacturerDomainLookup = (
   pageUrl: string,
 ): ReturnType<ManufacturerDomainLookup["findManufacturer"]> =>
   capture.manufacturerDomains.findManufacturer(pageUrl);
+
+/** Downstream source consumers need neither the storage root nor product values. */
+export const consumeCandidateSources = async (
+  catalog: CandidateSourceCatalogPort,
+  mutations: CandidateSourceMutationPort,
+  candidateId: Parameters<
+    CandidateSourceCatalogPort["getSourceReference"]
+  >[0]["candidateId"],
+): Promise<readonly CandidateSourceReference[]> => {
+  void mutations;
+  const result = await catalog.listSourceReferences({ candidateId });
+  return result.ok ? result.value : [];
+};
+
+export const mutateCandidateSourceWithoutAggregate = async (
+  mutations: CandidateSourceMutationPort,
+  input: Parameters<CandidateSourceMutationPort["setPrimarySource"]>[0],
+) => {
+  const result = await mutations.setPrimarySource(input);
+  if (result.ok) {
+    // @ts-expect-error mutation consumers cannot reach candidate product values
+    void result.value.product;
+  }
+  return result;
+};
+
+export const inspectCanonicalCandidateDraft = (draft: CandidateDraft) => {
+  void draft.sources;
+  void draft.primarySourceId;
+  // @ts-expect-error canonical draft has no legacy singleton source
+  void draft.sourceInfo;
+  // @ts-expect-error canonical product values have no shared price
+  void draft.product.price;
+};
+
+export const inspectCanonicalQueryDraft = async (
+  query: CandidateQuery,
+  id: Parameters<CandidateQuery["getCandidateDraft"]>[0],
+) => {
+  const result = await query.getCandidateDraft(id);
+  if (result.ok) {
+    // @ts-expect-error public query does not expose singleton source metadata
+    void result.value.sourceInfo;
+    // @ts-expect-error public query does not expose shared product price
+    void result.value.product.price;
+  }
+};
+
+export const inspectCanonicalUpdate = (input: UpdateCandidateInput) => {
+  // @ts-expect-error public update does not expose singleton source metadata
+  void input.draft.sourceInfo;
+  // @ts-expect-error public update does not expose shared product price
+  void input.draft.product.price;
+};
+
+export const inspectCanonicalEditorIntent = (
+  prefill: CandidateEditorPrefill,
+) => {
+  // @ts-expect-error typed intent draft has no singleton source metadata
+  void prefill.draft.sourceInfo;
+  // @ts-expect-error typed intent draft has no shared product price
+  void prefill.draft.product.price;
+};
 
 const publicFeatureBase = {
   publicApi: {},

@@ -9,16 +9,16 @@ import type {
   UtcTimestamp,
 } from "../../../src/domain/public.js";
 import { err, ok } from "../../../src/domain/public.js";
-import type {
-  CandidateDraft,
-  ManagementError,
-} from "../../../src/features/candidate-management/public.js";
+import type { CaptureCandidatePort } from "../../../src/features/candidate-management/contracts.js";
+import type { ManagementError } from "../../../src/features/candidate-management/public.js";
 import type {
   CaptureError,
   ConfirmedCaptureSession,
 } from "../../../src/features/product-capture/contracts.js";
 import type { CaptureDraftMapper } from "../../../src/features/product-capture/draft-mapper.js";
 import { createSubmitCaptureDraft } from "../../../src/features/product-capture/submit-draft.js";
+
+type CandidateDraft = Parameters<CaptureCandidatePort["createCandidate"]>[0];
 
 const REQUEST_ID = "80000000-0000-4000-8000-000000000001" as RequestId;
 const CAPTURED_AT = "2026-07-23T00:00:00Z" as UtcTimestamp;

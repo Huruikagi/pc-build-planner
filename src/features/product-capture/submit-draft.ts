@@ -2,7 +2,7 @@ import { err, ok, type Result } from "../../domain/public.js";
 import type {
   CaptureCandidatePort,
   ManagementError,
-} from "../candidate-management/public.js";
+} from "../candidate-management/contracts.js";
 import type { CaptureError, ConfirmedCaptureSession } from "./contracts.js";
 import type { CaptureDraftMapper } from "./draft-mapper.js";
 import type { CaptureSubmitOutcome } from "./state.js";

@@ -1,6 +1,7 @@
 import {
   type CandidatePart,
   type CandidatePartId,
+  type CandidatePartV2,
   createUtcTimestamp,
   createUuid,
   type Project,
@@ -10,6 +11,7 @@ import {
   type SourceSnapshot,
   type UtcTimestamp,
   validateCandidatePartContent,
+  validateCandidatePartV2Value,
 } from "../../domain/public.js";
 import type {
   FoundationScopedDataPort,
@@ -17,21 +19,30 @@ import type {
 } from "../../persistence/public.js";
 import type {
   CandidateDraft,
+  CandidateManagementQuery,
   CandidateManagementService,
-  CandidateQuery,
+  CandidateSourceService,
   CandidateSummary,
   CreateProjectInput,
+  LegacyUpdateCandidateInput,
   ManagementError,
   MutationContext,
   RenameProjectInput,
-  UpdateCandidateInput,
 } from "./contracts.js";
+import { candidateSourcePolicy } from "./source-collection.js";
+import type { CandidateSourceDataPort } from "./source-data-port.js";
+import {
+  resolveSourceKind,
+  type SourceKindClassifier,
+} from "./source-kind-classifier.js";
 
 export interface CandidateManagementServiceDependencies {
   readonly data: FoundationScopedDataPort;
   readonly now?: () => UtcTimestamp;
   readonly createProjectId?: () => ProjectId;
   readonly createCandidateId?: () => CandidatePartId;
+  readonly classifier?: SourceKindClassifier;
+  readonly sourceData?: CandidateSourceDataPort;
 }
 
 const normalizeName = (name: string): Result<string, ManagementError> => {
@@ -124,19 +135,32 @@ const commandFor = (
   operation,
 });
 
-const candidateSummary = (candidate: CandidatePart): CandidateSummary => {
-  const { name, price, manufacturer, modelNumber } = candidate.product;
+const candidateSummary = (
+  candidate: CandidatePart | CandidatePartV2,
+): CandidateSummary => {
+  const { name, manufacturer, modelNumber } = candidate.product;
+  const sourceState = "sources" in candidate ? candidate : undefined;
+  const primarySource = sourceState?.sources.find(
+    (source) => source.id === sourceState.primarySourceId,
+  );
+  const representativePrice =
+    sourceState === undefined && "price" in candidate.product
+      ? candidate.product.price
+      : primarySource?.price;
   return {
     id: candidate.id,
     projectId: candidate.projectId,
     category: candidate.category,
     ...(name === undefined ? {} : { name }),
-    ...(price === undefined ? {} : { price }),
+    ...(primarySource === undefined ? {} : { primarySource }),
+    ...(representativePrice === undefined
+      ? {}
+      : { price: representativePrice }),
     ...(manufacturer === undefined ? {} : { manufacturer }),
     ...(modelNumber === undefined ? {} : { modelNumber }),
     hasMissingDetails:
       name === undefined ||
-      price === undefined ||
+      representativePrice === undefined ||
       manufacturer === undefined ||
       modelNumber === undefined,
     updatedAt: candidate.updatedAt,
@@ -153,12 +177,76 @@ const sourceMetadata = (
 
 export const createCandidateManagementService = (
   dependencies: CandidateManagementServiceDependencies,
-): CandidateManagementService & CandidateQuery => {
+): CandidateManagementService &
+  CandidateManagementQuery &
+  CandidateSourceService => {
   const now = dependencies.now ?? createUtcTimestamp;
   const newProjectId =
     dependencies.createProjectId ?? (() => createUuid() as ProjectId);
   const newCandidateId =
     dependencies.createCandidateId ?? (() => createUuid() as CandidatePartId);
+  const classifier: SourceKindClassifier = dependencies.classifier ?? {
+    classify: () => "retail",
+  };
+  const sourceData = dependencies.sourceData;
+
+  const sourceValidation = (candidate: CandidatePartV2) => {
+    const checked = validateCandidatePartV2Value(candidate);
+    return checked.ok
+      ? ({ ok: true, value: candidate } as const)
+      : ({
+          ok: false,
+          error: validationFailure(checked.error.path, checked.error.code),
+        } as const);
+  };
+
+  const mutateSource = async (
+    candidateId: CandidatePartId,
+    context: MutationContext,
+    change: (
+      candidate: CandidatePartV2,
+    ) => Result<
+      Pick<CandidatePartV2, "sources" | "primarySourceId">,
+      ManagementError
+    >,
+  ): Promise<Result<CandidatePartV2, ManagementError>> => {
+    if (sourceData === undefined)
+      return { ok: false, error: { kind: "unsupported-data" } };
+    const existing = await sourceData.query((snapshot) =>
+      snapshot.candidateParts.find((candidate) => candidate.id === candidateId),
+    );
+    if (!existing.ok)
+      return { ok: false, error: managementError(existing.error.code) };
+    if (existing.value === undefined)
+      return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+    const candidate = existing.value;
+    const changed = change(candidate);
+    if (!changed.ok) return changed;
+    const {
+      sources: _sources,
+      primarySourceId: _primary,
+      ...candidateBase
+    } = candidate;
+    const updated = {
+      ...candidateBase,
+      ...changed.value,
+      updatedAt: now(),
+    } as CandidatePartV2;
+    const validated = sourceValidation(updated);
+    if (!validated.ok) return validated;
+    const mutation = await sourceData.mutateCandidate(updated, context);
+    return mutation.ok
+      ? { ok: true, value: updated }
+      : {
+          ok: false,
+          error: managementError(mutation.error.code, "candidate"),
+        };
+  };
+
+  const ruleFailure = (kind: string): ManagementError =>
+    kind === "source-not-found"
+      ? { kind: "not-found", entity: "source" }
+      : { kind: "validation", fields: { sources: kind } };
 
   const mutateProject = async (
     project: Project,
@@ -187,6 +275,73 @@ export const createCandidateManagementService = (
   };
 
   return {
+    async addSource(input, context) {
+      let parsed: URL;
+      try {
+        parsed = new URL(input.source.pageUrl);
+      } catch {
+        return {
+          ok: false,
+          error: {
+            kind: "validation",
+            fields: { "source.pageUrl": "invalid-url" },
+          },
+        };
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+        return {
+          ok: false,
+          error: {
+            kind: "validation",
+            fields: { "source.pageUrl": "invalid-url" },
+          },
+        };
+      return mutateSource(input.candidateId, context, (candidate) => {
+        const source = {
+          ...input.source,
+          kind: resolveSourceKind(
+            input.source.pageUrl,
+            input.source.kind,
+            classifier,
+          ),
+        };
+        const result = candidateSourcePolicy.add(candidate, source);
+        return result.ok
+          ? result
+          : { ok: false, error: ruleFailure(result.error.kind) };
+      });
+    },
+    async updateSource(input, context) {
+      return mutateSource(input.candidateId, context, (candidate) => {
+        const result = candidateSourcePolicy.update(candidate, input.source);
+        return result.ok
+          ? result
+          : { ok: false, error: ruleFailure(result.error.kind) };
+      });
+    },
+    async removeSource(input, context) {
+      return mutateSource(input.candidateId, context, (candidate) => {
+        const result = candidateSourcePolicy.remove(
+          candidate,
+          input.sourceId,
+          input.replacementPrimarySourceId,
+        );
+        return result.ok
+          ? result
+          : { ok: false, error: ruleFailure(result.error.kind) };
+      });
+    },
+    async setPrimarySource(input, context) {
+      return mutateSource(input.candidateId, context, (candidate) => {
+        const result = candidateSourcePolicy.setPrimary(
+          candidate,
+          input.sourceId,
+        );
+        return result.ok
+          ? result
+          : { ok: false, error: ruleFailure(result.error.kind) };
+      });
+    },
     async createProject(input: CreateProjectInput, context: MutationContext) {
       const name = normalizeName(input.name);
       if (!name.ok) return name;
@@ -246,7 +401,7 @@ export const createCandidateManagementService = (
       return mutateCandidate(candidate, "create", context);
     },
     async updateCandidate(
-      input: UpdateCandidateInput,
+      input: LegacyUpdateCandidateInput,
       context: MutationContext,
     ) {
       const validated = candidateValidation(input.draft);

@@ -1,45 +1,50 @@
 import type {
   FeatureActivationError,
+  FeatureActivationIntent,
   ShellNavigator,
 } from "../../application-shell/public.js";
 import { err } from "../../domain/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
   type CandidateEditorPrefill,
-  candidateManagementFeatureId,
-  openCandidateEditorTarget,
+  createCandidateEditorIntent,
 } from "./activation.js";
-import type { CandidateQuery, CaptureCandidatePort } from "./contracts.js";
+import type {
+  CandidateQuery,
+  CandidateSourceCatalogPort,
+  CandidateSourceMutationPort,
+} from "./contracts.js";
 
 export type {
-  CandidateDraft,
+  AddCandidateSourceInput,
   CandidateListQuery,
-  CandidateManagementService,
   CandidateQuery,
+  CandidateSourceCatalogPort,
+  CandidateSourceDraft as CandidateDraft,
+  CandidateSourceMutationPort,
+  CandidateSourceReference,
   CandidateSummary,
-  CaptureCandidatePort,
   CreateProjectInput,
   ManagementError,
   MutationContext,
   ProjectSummary,
+  RemoveCandidateSourceInput,
   RenameProjectInput,
-  UnresolvedCandidateDraft,
-  UnresolvedCandidateEditorPrefill,
+  SetPrimarySourceInput,
   UpdateCandidateInput,
+  UpdateCandidateSourceInput,
 } from "./contracts.js";
-export type {
-  CandidateEditorPrefillError,
-  PreEditDraftError,
-} from "./pre-edit-validation.js";
-export {
-  validateCandidateEditorPrefill,
-  validatePreEditDraft,
-} from "./pre-edit-validation.js";
 
 /** Feature-local public boundary for downstream candidate-management contracts. */
 export interface CandidateManagementPublicApi {
   readonly query: CandidateQuery;
-  readonly capture: CaptureCandidatePort;
+  readonly sources: {
+    readonly catalog: CandidateSourceCatalogPort;
+    readonly mutations: CandidateSourceMutationPort;
+  };
+  createCandidateEditorIntent(
+    prefill: CandidateEditorPrefill,
+  ): FeatureActivationIntent;
   openCandidateEditor(
     prefill: CandidateEditorPrefill,
   ): Promise<
@@ -50,21 +55,32 @@ export interface CandidateManagementPublicApi {
 export interface CandidateManagementPublicDependencies {
   readonly data: FoundationScopedDataPort;
   readonly query: CandidateQuery;
-  readonly capture: CaptureCandidatePort;
+  readonly sources: {
+    readonly catalog: CandidateSourceCatalogPort;
+    readonly mutations: CandidateSourceMutationPort;
+  };
   readonly navigator?: ShellNavigator;
 }
 
 export const createCandidateManagementPublicApi = (
   dependencies: CandidateManagementPublicDependencies,
 ): CandidateManagementPublicApi => {
-  if (dependencies.query === undefined || dependencies.capture === undefined) {
+  if (
+    dependencies.query === undefined ||
+    dependencies.sources?.catalog === undefined ||
+    dependencies.sources.mutations === undefined
+  ) {
     throw new TypeError(
-      "Candidate management public API requires query and capture dependencies.",
+      "Candidate management public API requires query and sources dependencies.",
     );
   }
   return Object.freeze({
     query: dependencies.query,
-    capture: dependencies.capture,
+    sources: Object.freeze({
+      catalog: dependencies.sources.catalog,
+      mutations: dependencies.sources.mutations,
+    }),
+    createCandidateEditorIntent,
     openCandidateEditor(prefill: CandidateEditorPrefill) {
       if (dependencies.navigator === undefined) {
         return Promise.resolve(
@@ -74,11 +90,9 @@ export const createCandidateManagementPublicApi = (
           }),
         );
       }
-      return dependencies.navigator.activate({
-        featureId: candidateManagementFeatureId,
-        target: openCandidateEditorTarget,
-        payload: prefill,
-      });
+      return dependencies.navigator.activate(
+        this.createCandidateEditorIntent(prefill),
+      );
     },
   });
 };

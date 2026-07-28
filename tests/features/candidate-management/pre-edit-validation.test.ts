@@ -9,7 +9,7 @@ import type {
 import {
   validateCandidateEditorPrefill,
   validatePreEditDraft,
-} from "../../../src/features/candidate-management/public.js";
+} from "../../../src/features/candidate-management/pre-edit-validation.js";
 import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
 

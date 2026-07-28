@@ -8,7 +8,7 @@ import type {
   UtcTimestamp,
 } from "../../../src/domain/public.js";
 import { err, ok } from "../../../src/domain/public.js";
-import type { CandidateEditorPrefill } from "../../../src/features/candidate-management/public.js";
+import type { LegacyCandidateEditorPrefill as CandidateEditorPrefill } from "../../../src/features/candidate-management/activation.js";
 import type { CaptureSession } from "../../../src/features/product-capture/contracts.js";
 import { createCandidateEditorNavigation } from "../../../src/features/product-capture/editor-navigation.js";
 

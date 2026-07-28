@@ -9,6 +9,8 @@ import type {
 import type {
   CandidateDraft,
   CandidateQuery,
+  CandidateSourceCatalogPort,
+  CandidateSourceMutationPort,
   CaptureCandidatePort,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateManagementPublicApi } from "../../../src/features/candidate-management/public.js";
@@ -57,10 +59,13 @@ test("公開入口は取り込み側の欠損候補作成と構成管理側の�
   const api = createCandidateManagementPublicApi({
     data: {} as FoundationDataPort,
     query,
-    capture,
+    sources: {
+      catalog: {} as CandidateSourceCatalogPort,
+      mutations: {} as CandidateSourceMutationPort,
+    },
   });
 
-  assert.deepEqual(await api.capture.createCandidate(draft), {
+  assert.deepEqual(await capture.createCandidate(draft), {
     ok: true,
     value: capturedCandidate,
   });

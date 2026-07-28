@@ -6,8 +6,8 @@ import type {
 } from "../../domain/public.js";
 import type {
   CandidateDraft,
+  CandidateManagementQuery,
   CandidateManagementService,
-  CandidateQuery,
   CandidateSummary,
   ManagementError,
   MutationContext,
@@ -72,7 +72,7 @@ export interface ManagementStateValue {
 }
 
 export interface ManagementStateDependencies {
-  readonly query: CandidateQuery;
+  readonly query: CandidateManagementQuery;
   readonly service: CandidateManagementService;
   /** May resolve asynchronously so the expected revision is read per mutation. */
   readonly createMutationContext: () =>

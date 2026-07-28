@@ -83,24 +83,34 @@ test("候補編集公開 API は型付き prefill を candidate-management activ
       return { ok: true, value: undefined };
     },
   };
-  const api = createCandidateFeatureRegistration({
+  const registration = createCandidateFeatureRegistration({
     data: {} as FoundationDataPort,
     query: {} as CandidateQuery,
     capture: {} as CaptureCandidatePort,
     navigator,
-  }).publicApi;
-
-  assert.deepEqual(await api.openCandidateEditor({ projectId, draft }), {
-    ok: true,
-    value: undefined,
+    state: createState(),
   });
+  const api = registration.publicApi;
+
+  const sourceDraft = { ...draft, sources: [] as const };
+  assert.deepEqual(
+    await api.openCandidateEditor({ projectId, draft: sourceDraft }),
+    {
+      ok: true,
+      value: undefined,
+    },
+  );
   assert.deepEqual(received, [
     {
       featureId,
       target: "open-candidate-editor",
-      payload: { projectId, draft },
+      payload: { projectId, draft: sourceDraft },
     },
   ]);
+  const validated = registration.activation?.validate(received[0] as never);
+  assert.equal(validated?.ok, true);
+  if (validated?.ok)
+    assert.deepEqual(validated.value.draft.sources, sourceDraft.sources);
 });
 
 test("activation は正常 prefill を一度だけ詳細編集へ適用し、不正な受信内容では既存画面を保持する", async () => {

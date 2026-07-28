@@ -1,8 +1,13 @@
 import type {
   CandidatePart,
   CandidatePartId,
+  CandidatePartV2,
   CandidateProductValues,
-  MoneyValue,
+  CandidateProductValuesV2,
+  CandidateSource,
+  CandidateSourceId,
+  CandidateSourceKind,
+  CandidateSourceState,
   NormalizedAttributes,
   PartCategory,
   Project,
@@ -20,7 +25,10 @@ interface CandidateDraftBase {
   readonly product: CandidateProductValues & {
     readonly name: SourcedValue<string>;
   };
-  /** Capture may not know source metadata; omission remains distinct from an empty value. */
+  /** Transitional editor shape; schema-2 saves use the collection fields. */
+  readonly sources?: readonly CandidateSource[];
+  readonly primarySourceId?: CandidateSourceId;
+  /** Removed when the production schema-2 cutover updates legacy editor consumers. */
   readonly sourceInfo?: SourceInfo;
   readonly sourceSnapshot?: SourceSnapshot;
 }
@@ -28,6 +36,21 @@ interface CandidateDraftBase {
 /** Keeps the selected category and its normalized attributes coherent before persistence. */
 export type CandidateDraft = {
   readonly [Attributes in NormalizedAttributes as Attributes["category"]]: CandidateDraftBase & {
+    readonly category: Attributes["category"];
+    readonly normalizedAttributes: Attributes;
+  };
+}[PartCategory];
+
+type CandidateSourceDraftBase = {
+  readonly projectId: ProjectId;
+  readonly product: CandidateProductValuesV2 & {
+    readonly name: SourcedValue<string>;
+  };
+} & CandidateSourceState;
+
+/** Canonical schema-2 editor contract exposed to adjacent features. */
+export type CandidateSourceDraft = {
+  readonly [Attributes in NormalizedAttributes as Attributes["category"]]: CandidateSourceDraftBase & {
     readonly category: Attributes["category"];
     readonly normalizedAttributes: Attributes;
   };
@@ -61,6 +84,11 @@ export interface RenameProjectInput {
 
 export interface UpdateCandidateInput {
   readonly id: CandidatePartId;
+  readonly draft: CandidateSourceDraft;
+}
+
+export interface LegacyUpdateCandidateInput {
+  readonly id: CandidatePartId;
   readonly draft: CandidateDraft;
 }
 
@@ -86,7 +114,8 @@ export interface CandidateSummary {
   readonly category: PartCategory;
   /** Omitted when the stored candidate predates the required-name feature rule. */
   readonly name?: SourcedValue<string>;
-  readonly price?: SourcedValue<MoneyValue>;
+  readonly primarySource?: CandidateSource;
+  readonly price?: CandidateSource["price"];
   readonly manufacturer?: SourcedValue<string>;
   readonly modelNumber?: SourcedValue<string>;
   /** True when one or more comparison fields remain intentionally unknown. */
@@ -100,7 +129,10 @@ export type ManagementError =
       readonly kind: "validation";
       readonly fields: Readonly<Record<string, string>>;
     }
-  | { readonly kind: "not-found"; readonly entity: "project" | "candidate" }
+  | {
+      readonly kind: "not-found";
+      readonly entity: "project" | "candidate" | "source";
+    }
   | { readonly kind: "conflict" }
   | { readonly kind: "maintenance" }
   | { readonly kind: "storage" }
@@ -125,7 +157,7 @@ export interface CandidateManagementService {
     context: MutationContext,
   ): Promise<Result<CandidatePart, ManagementError>>;
   updateCandidate(
-    input: UpdateCandidateInput,
+    input: LegacyUpdateCandidateInput,
     context: MutationContext,
   ): Promise<Result<CandidatePart, ManagementError>>;
   deleteCandidate(
@@ -134,7 +166,7 @@ export interface CandidateManagementService {
   ): Promise<Result<void, ManagementError>>;
 }
 
-export interface CandidateQuery {
+interface CandidateQueryBase {
   listProjects(): Promise<Result<readonly ProjectSummary[], ManagementError>>;
   listCandidates(
     input: CandidateListQuery,
@@ -142,6 +174,15 @@ export interface CandidateQuery {
   listBuildEligible(
     projectId: ProjectId,
   ): Promise<Result<readonly CandidatePart[], ManagementError>>;
+}
+
+export interface CandidateQuery extends CandidateQueryBase {
+  getCandidateDraft(
+    id: CandidatePartId,
+  ): Promise<Result<CandidateSourceDraft, ManagementError>>;
+}
+
+export interface CandidateManagementQuery extends CandidateQueryBase {
   /**
    * Restores a complete edit draft for a stored candidate.
    * `CandidateSummary` intentionally omits attributes and source metadata, so
@@ -150,6 +191,80 @@ export interface CandidateQuery {
   getCandidateDraft(
     id: CandidatePartId,
   ): Promise<Result<CandidateDraft, ManagementError>>;
+}
+
+export interface CandidateSourceReference {
+  readonly candidateId: CandidatePartId;
+  readonly sourceId: CandidateSourceId;
+  readonly pageUrl?: string;
+  readonly kind?: CandidateSourceKind;
+  readonly isPrimary: boolean;
+}
+
+export interface CandidateSourceCatalogPort {
+  listSourceReferences(input: {
+    readonly candidateId?: CandidatePartId;
+  }): Promise<Result<readonly CandidateSourceReference[], ManagementError>>;
+  getSourceReference(input: {
+    readonly candidateId: CandidatePartId;
+    readonly sourceId: CandidateSourceId;
+  }): Promise<Result<CandidateSourceReference, ManagementError>>;
+}
+
+export interface AddCandidateSourceInput {
+  readonly candidateId: CandidatePartId;
+  readonly source: CandidateSource & { readonly pageUrl: string };
+}
+
+export interface UpdateCandidateSourceInput {
+  readonly candidateId: CandidatePartId;
+  readonly source: CandidateSource;
+}
+
+export interface RemoveCandidateSourceInput {
+  readonly candidateId: CandidatePartId;
+  readonly sourceId: CandidateSourceId;
+  readonly replacementPrimarySourceId?: CandidateSourceId;
+}
+
+export interface SetPrimarySourceInput {
+  readonly candidateId: CandidatePartId;
+  readonly sourceId: CandidateSourceId;
+}
+
+export interface CandidateSourceMutationPort {
+  addSource(
+    input: AddCandidateSourceInput,
+  ): Promise<Result<void, ManagementError>>;
+  updateSource(
+    input: UpdateCandidateSourceInput,
+  ): Promise<Result<void, ManagementError>>;
+  removeSource(
+    input: RemoveCandidateSourceInput,
+  ): Promise<Result<void, ManagementError>>;
+  setPrimarySource(
+    input: SetPrimarySourceInput,
+  ): Promise<Result<void, ManagementError>>;
+}
+
+/** Feature-internal mutation contract; public facade supplies the context. */
+export interface CandidateSourceService {
+  addSource(
+    input: AddCandidateSourceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  updateSource(
+    input: UpdateCandidateSourceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  removeSource(
+    input: RemoveCandidateSourceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  setPrimarySource(
+    input: SetPrimarySourceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePartV2, ManagementError>>;
 }
 
 /** Public capture boundary for adjacent product-capture features. */

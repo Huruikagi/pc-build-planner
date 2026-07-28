@@ -15,12 +15,12 @@ import type {
 } from "../../../src/domain/public.js";
 import type {
   CandidateDraft,
+  CandidateManagementQuery,
   CandidateManagementService,
-  CandidateQuery,
   CandidateSummary,
+  LegacyUpdateCandidateInput,
   ManagementError,
   MutationContext,
-  UpdateCandidateInput,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { ManagementView } from "../../../src/features/candidate-management/view.js";
@@ -64,12 +64,12 @@ const summary: CandidateSummary = {
 interface Harness {
   readonly container: HTMLElement;
   readonly created: CandidateDraft[];
-  readonly updated: UpdateCandidateInput[];
+  readonly updated: LegacyUpdateCandidateInput[];
   readonly draftReads: CandidatePartId[];
   cleanup(): Promise<void>;
 }
 
-const query = (draftReads: CandidatePartId[]): CandidateQuery => ({
+const query = (draftReads: CandidatePartId[]): CandidateManagementQuery => ({
   async listProjects() {
     return {
       ok: true as const,
@@ -95,7 +95,7 @@ const renderView = async (options?: {
   readonly operationPolicy?: OperationPolicy;
 }): Promise<Harness> => {
   const created: CandidateDraft[] = [];
-  const updated: UpdateCandidateInput[] = [];
+  const updated: LegacyUpdateCandidateInput[] = [];
   const draftReads: CandidatePartId[] = [];
   const failure = options?.saveFailure;
   const service = {
@@ -105,7 +105,7 @@ const renderView = async (options?: {
         ? { ok: true as const, value: {} as CandidatePart }
         : { ok: false as const, error: failure };
     },
-    async updateCandidate(input: UpdateCandidateInput) {
+    async updateCandidate(input: LegacyUpdateCandidateInput) {
       updated.push(input);
       return failure === undefined
         ? { ok: true as const, value: {} as CandidatePart }

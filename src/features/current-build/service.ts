@@ -7,14 +7,12 @@ import {
   createUtcTimestamp,
   createUuid,
   type PositiveInteger,
+  type ProjectId,
   type Result,
   type UtcTimestamp,
 } from "../../domain/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
-import type {
-  CandidateQuery,
-  ManagementError,
-} from "../candidate-management/public.js";
+import type { ManagementError } from "../candidate-management/public.js";
 import { type CategoryPolicy, isValidQuantity } from "./category-policy.js";
 import type {
   BuildCommand,
@@ -27,7 +25,11 @@ import type {
 export interface BuildServiceDependencies {
   readonly data: FoundationScopedDataPort;
   readonly policy: CategoryPolicy;
-  readonly candidates: CandidateQuery;
+  readonly candidates: {
+    listBuildEligible(
+      projectId: ProjectId,
+    ): Promise<Result<readonly CandidatePart[], ManagementError>>;
+  };
   readonly query: CurrentBuildQuery;
   readonly now?: () => UtcTimestamp;
   readonly createBuildId?: () => CurrentBuildId;
@@ -44,7 +46,10 @@ export const managementErrorToBuildError = (
     case "validation":
       return { kind: "validation", fields: error.fields };
     case "not-found":
-      return { kind: "not-found", entity: error.entity };
+      return {
+        kind: "not-found",
+        entity: error.entity === "source" ? "candidate" : error.entity,
+      };
     case "conflict":
       return { kind: "conflict" };
     case "maintenance":

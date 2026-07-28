@@ -74,9 +74,8 @@ export const createSidePanelFeatureContributions = (
       chromeApis === undefined
         ? inertCaptureRuntimePort
         : createChromeCaptureRuntimePort(chromeApis),
-    capture: candidateManagement.registration.publicApi.capture,
-    openCandidateEditor:
-      candidateManagement.registration.publicApi.openCandidateEditor,
+    capture: candidateManagement.legacyCapture,
+    openCandidateEditor: candidateManagement.legacyOpenCandidateEditor,
     async listProjects() {
       const projects =
         await candidateManagement.registration.publicApi.query.listProjects();

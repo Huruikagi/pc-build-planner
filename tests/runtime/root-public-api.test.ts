@@ -65,7 +65,14 @@ test("実featureの公開契約がroot入口から到達できる", () => {
   const candidateManagement = composed.value.candidateManagement;
   assert.equal(typeof candidateManagement.query.listProjects, "function");
   assert.equal(typeof candidateManagement.query.getCandidateDraft, "function");
-  assert.equal(typeof candidateManagement.capture.createCandidate, "function");
+  assert.equal(
+    typeof candidateManagement.sources.catalog.listSourceReferences,
+    "function",
+  );
+  assert.equal(
+    typeof candidateManagement.sources.mutations.addSource,
+    "function",
+  );
   assert.equal(typeof candidateManagement.openCandidateEditor, "function");
   const currentBuild = composed.value.currentBuild;
   assert.equal(typeof currentBuild.query.getByProject, "function");

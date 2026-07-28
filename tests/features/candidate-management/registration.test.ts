@@ -54,8 +54,12 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
     },
   });
 
-  assert.equal(registration.publicApi.query, query);
-  assert.equal(registration.publicApi.capture, capture);
+  assert.equal(typeof registration.publicApi.query.listProjects, "function");
+  assert.equal(
+    typeof registration.publicApi.query.getCandidateDraft,
+    "function",
+  );
+  assert.equal("capture" in registration.publicApi, false);
   const violations = await collectFeatureContractViolations(registration, {
     emitAvailability: () => {
       for (const listener of availabilityListeners)

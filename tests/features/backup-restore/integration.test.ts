@@ -119,12 +119,6 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
     data,
     policy,
     candidates: {
-      async listProjects() {
-        throw new Error("not used by this acceptance test");
-      },
-      async listCandidates() {
-        throw new Error("not used by this acceptance test");
-      },
       async listBuildEligible() {
         return {
           ok: true,
@@ -134,9 +128,6 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
             projectId,
           })),
         };
-      },
-      async getCandidateDraft() {
-        throw new Error("not used by this acceptance test");
       },
     },
     query: buildQuery,
