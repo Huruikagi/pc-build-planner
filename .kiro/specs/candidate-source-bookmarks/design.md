@@ -639,10 +639,10 @@ erDiagram
 
 ## 移行戦略
 
-1. domain型、schema 2 validator、保存schema 1→2 step、production registry登録、通常fixtureと既存consumerの最小shape更新を、一つの原子的cutoverとして導入する。中間状態を個別コミットせず、型検査・foundation回帰・移行非破壊性を同じレビューgateで確認する。
-2. schema 1 fixtureはmigration専用に分離して残し、通常fixtureと現行rootの読書きはschema 2だけを使用する。
-3. candidate-management、product-capture、backup mapperへsource操作と初期source生成のfeature behaviorを追加する。cutover時の機械的shape整合を越える振る舞いは各所有タスクまで導入しない。
-4. candidate-managementのread-only source catalogとmutationを `public.ts` のsource facetへ合成し、下流public consumer contractを固定する。
-5. backup format 1→2 migrationを有効化し、復元preflightからfoundation最終検証まで通す。
+1. 稼働中のschema 1契約を維持したまま、`CandidatePartV2`、`LocalDataRootV2`、schema 2専用validator、純粋1→2 migration stepをversioned契約として追加する。production registryと現行schema定数はまだ切り替えない。
+2. candidate-management、product-capture、backup mapperをversioned schema 2 portへ順次対応させる。途中のfeature taskはfoundation具体portへ依存せず、schema 1 productionの全回帰を維持する。
+3. candidate-managementのread-only source catalogとmutationを `public.ts` のsource facetへ合成し、下流public consumer contractを固定する。
+4. backup format 1→2 migrationとschema 2復元候補のpreflightを実装するが、foundation replacementへのproduction結線はcutoverまで行わない。
+5. 全consumerがschema 2契約へ対応した後、専用cutover taskでmigration registry、現行schema定数、initial root、replacement、write authority、通常fixtureを一度にschema 2へ切り替える。schema 1型とfixtureはmigration境界だけに残す。
 
 ロールバック用の逆migrationは提供しない。変換失敗時は旧rootを上書きせず、実装の修正後に同じschema 1入力から再試行する。現行rootの書込みが始まった後はversion 2をcanonicalとする。

@@ -9,24 +9,31 @@
   - 公開seamが未実装またはshape不一致なら後続classifier/compositionへ進まず、このconsumer contract testが明確に失敗することを完了条件とする。
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 1.2 schema 2の候補ソース契約・検証・移行を原子的にcutoverする
-  - _Blocked: canonical schema 2 cutoverにはcandidate editorの価格・取得元draft、product-capture handoff、backup mapperの意味変更が不可分だが、これらは現行Boundary外の後続feature task所有であり、最小shape更新だけでは型安全かつ回帰なしにcutoverできない_
+- [ ] 1.2 schema 2候補ソースのversioned domain契約を追加する
   - 候補ソース識別子、販売・メーカー紹介の種別、URL・サイト名・取得日時・任意価格を表現する。
-  - 候補へソースcollectionと条件付きプライマリ参照を追加し、商品共通値から価格と単数取得元を除く。
+  - 稼働中のschema 1型を変更せず、`CandidatePartV2` と `LocalDataRootV2` を明示的なversioned契約として追加する。
+  - schema 2候補へソースcollectionと条件付きプライマリ参照を追加し、商品共通値から価格と単数取得元を除く。
   - sourceなし候補と、sourceが存在するときの唯一のprimary参照を型契約で明示する。
+  - schema 1型との混同を型検査で拒否し、現行productionと全回帰testが変更なしで成功することを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.5_
+  - _Boundary: CandidateSourceModel_
+
+- [ ] 1.3 schema 2候補とprimaryの独立validatorを実装する
   - sourceの固定field集合、識別子、HTTP/HTTPS URL、UTC日時、価格、種別を未信頼入力として検証する。
   - source ID重複、source有無とprimary有無の不一致、存在しないprimary参照をpath付きで拒否する。
   - 生HTML、data URL、画像・binary相当payloadの既存fail-closed規約をsourceの全外部文字列へ適用する。
+  - 現行 `schemaValidator` を切り替えず、schema 2専用validatorを単独で検証する。
+  - _Requirements: 1.2, 1.3, 1.4, 7.1, 7.2, 7.5_
+  - _Boundary: CandidateSourceValidator_
+  - _Depends: 1.2_
+
+- [ ] 1.4 schema 1から2への純粋migration stepを実装する
   - 旧単数取得元と商品価格を一件のprimary sourceへ移し、片方だけ・両方なしも値損失なく変換する。
   - 旧候補IDを生成source IDとして再利用し、同じ入力から同じschema 2結果を生成する。
-  - 現行schema定数をmigration registry、replacement、初期rootで一元参照し、限定したfoundation公開入口からbackup mapperへ供給してproduction runtimeへ1→2 stepを登録する。
-  - domain型の切替で影響する既存consumerは、source操作など後続機能を先取りせず、schema 2の読書きに必要な最小shapeだけを同じcutoverで更新する。
-  - 通常利用fixtureをsource collection形式へ更新し、schema 1 fixtureはmigration専用に分離する。
-  - repository read、root transaction、replacement、write authorityが同じ現行schemaとvalidatorを使うことを検証する。
-  - 破損旧root、未知の将来版、移行後primary不整合が既存データを上書きしないことを検証する。
-  - domain contract、validator、migration、foundation回帰、型検査を途中で分割せず一回のレビューとコミットで成功させることを完了条件とする。
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.4, 7.5_
-  - _Boundary: CandidateSourceModel, CandidateSourceValidator, CandidateSourceMigration, schema 2 foundation cutover_
+  - production registryへはまだ登録せず、schema 2専用validatorまでの純粋変換と入力非変更をtestする。
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
+  - _Boundary: CandidateSourceMigration_
+  - _Depends: 1.2, 1.3_
 
 - [ ] 2. 独立したソース能力と隣接形式を実装する
 - [ ] 2.1 (P) ソースcollection更新と代表値導出policyを実装する
@@ -36,7 +43,7 @@
   - 全policy分岐のunit testで入力を変更せず期待projectionを返すことを完了条件とする。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.3, 3.4, 3.5_
   - _Boundary: CandidateSourcePolicy_
-  - _Depends: 1.2_
+  - _Depends: 1.2, 1.3_
 
 - [ ] 2.2 (P) 上流メーカー判定をソース種別へ変換するclassifierを実装する
   - product-capture公開入口のメーカー登録ドメイン照合だけを依存として受ける。
@@ -73,6 +80,7 @@
   - `ManagementError` のnot-found対象でcandidateとsourceを区別し、downstream consumerへmutation revision、保存root、商品値を公開しない。
   - 公開consumerの型検査で単数取得元と商品共通priceへ戻る経路や、foundation rootへ到達する必要がないことを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.5, 2.3, 3.1, 3.2, 3.3, 8.6, 8.7_
+  - _Depends: 1.2_
 
 - [ ] 3.2 保存済みsourceのread-only catalogを実装する
   - 全候補または指定候補を一回のread snapshotから走査し、sourceごとの候補ID、source ID、任意URL、任意種別、primary状態を投影する。
@@ -80,13 +88,15 @@
   - URL正規化、種別eligibility、重複排除、0件・1件・複数件の一致判定を行わず、同一URLを持つ複数参照も保存順のまま返す。
   - 全catalog・候補限定catalog・ID再取得・not-found・下流の曖昧一致判定に必要な重複保持をcontract testで観測できることを完了条件とする。
   - _Requirements: 8.7_
+  - _Depends: 3.1_
 
 - [ ] 3.3 candidate serviceへ原子的なsource mutationと代表queryを実装する
   - 新規sourceに有効URLを要求し、種別未指定時だけclassifier結果を保存する。
-  - source更新・削除・primary変更をpolicyへ委譲し、候補全体を一回のroot mutationで確定する。
+  - source更新・削除・primary変更をpolicyへ委譲し、versioned schema 2 port上で候補全体を一回のmutationとして確定する。foundation production portへの結線は5.6が所有する。
   - queryはprimary sourceから一覧価格・URLを導出し、欠損時の非fallbackを維持する。
   - validation・conflict・maintenance・quota・storage失敗で旧候補が残り、成功時だけ対象sourceが変わるintegration testが成功することを完了条件とする。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 7.3, 7.4_
+  - _Depends: 2.1, 2.2, 3.1_
 
 - [ ] 3.4 candidate-management公開API用のsource facetを実装する
   - feature contributionがread-only catalogとmutation portを `sources: { catalog, mutations }` facetとして構築し、`public.ts` から型と契約を限定exportする。
@@ -154,13 +164,13 @@
   - _Depends: 1.1, 3.1, 3.4, 5.1_
 
 - [ ] 5.3 (P) backup復元とfoundation置換の複数source統合を検証する
-  - format 2 backupをpreflight、容量評価、atomic replacementまで通して全source関係を復元する。
+  - format 2 backupをversioned schema 2 validatorによるpreflightまで通し、全source関係を復元候補へ写像する。foundation atomic replacementへの結線は5.6が所有する。
   - format 1 backupも移行後に同じprimary source規則へ到達することを検証する。
   - 不正sourceまたはprimary参照を持つbackupが既存rootを置き換えないことを検証する。
   - exportした架空データを復元して再exportしたときsource意味が一致するintegration testが成功することを完了条件とする。
   - _Requirements: 6.1, 6.2, 6.5, 8.2, 8.3, 8.4_
   - _Boundary: BackupExchangeV2, CandidateSourceMigration_
-  - _Depends: 1.2, 2.4_
+  - _Depends: 1.3, 1.4, 2.4_
 
 - [ ] 5.4 互換性判定と未変更consumerのschema 2回帰を整備する
   - source・取得元別価格だけを変えた候補が同じ正規化属性から同じ互換性結果を返すことを検証する。
@@ -168,12 +178,23 @@
   - 隣接featureが商品共通priceや単数取得元へ依存していないことを型検査とcontract testで確認する。
   - compatibilityと未変更consumerの回帰testがschema 2 fixtureで成功することを完了条件とする。
   - _Requirements: 6.4, 8.5, 8.6_
+  - _Depends: 5.6_
 
 - [ ] 5.5 downstream向けsource catalog consumer契約を検証する
   - 価格更新consumer fixtureが公開catalogから全候補または候補限定のsource参照を取得できることを検証する。
   - 同一URLの複数参照をcatalogが保持し、URL同一性・0件・1件・複数件の一致と曖昧さをconsumer側で判定できることを確認する。
   - source再取得のnot-foundをconsumerがstale targetへ変換でき、foundation rootやcandidate内部moduleをimportしない公開consumer型検査が成功することを完了条件とする。
   - _Requirements: 8.7_
+
+- [ ] 5.6 schema 2をproduction foundationへcutoverする
+  - 1→2 migrationをproduction registryへ登録し、現行schema定数、initial root、replacement、write authorityをschema 2へ一元切替する。
+  - versioned schema 2 portをfoundation portへ結線し、schema 1の候補型・商品共通price・単数sourceInfo・一時adapterを削除する。
+  - 通常fixtureと未変更consumerをschema 2へ更新し、schema 1 fixtureはmigration専用に分離する。
+  - repository read、root transaction、backup replacement、candidate serviceが同じ現行validatorを使い、移行失敗時に旧rootを書き換えないことを検証する。
+  - typecheck、foundation回帰、migration、candidate、capture、backupの各suiteが同じcommitで成功することを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: SchemaV2ProductionCutover_
+  - _Depends: 1.4, 2.4, 3.2, 3.3, 3.4, 4.2, 4.4, 5.2, 5.3_
 
 - [ ] 6. 実ブラウザ経路とセキュリティgateを検証する
 - [ ] 6.1 複数source管理と新規タブ再訪のE2Eを追加する
