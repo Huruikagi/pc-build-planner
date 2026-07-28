@@ -73,7 +73,11 @@ test("実featureの公開契約がroot入口から到達できる", () => {
     typeof candidateManagement.sources.mutations.addSource,
     "function",
   );
-  assert.equal(typeof candidateManagement.openCandidateEditor, "function");
+  assert.equal(
+    typeof candidateManagement.createCandidateEditorIntent,
+    "function",
+  );
+  assert.equal("openCandidateEditor" in candidateManagement, false);
   const currentBuild = composed.value.currentBuild;
   assert.equal(typeof currentBuild.query.getByProject, "function");
   const compatibility = composed.value.compatibility;

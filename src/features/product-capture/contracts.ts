@@ -7,9 +7,7 @@ import type {
 } from "../../application-shell/public.js";
 import type {
   MoneyValue,
-  ProjectId,
   RequestId,
-  SourcedValue,
   UtcTimestamp,
 } from "../../domain/public.js";
 
@@ -83,19 +81,6 @@ export interface CapturePagePayload {
   readonly candidates: readonly ExtractionCandidate[];
 }
 
-/**
- * A capture item after acceptance. `value.original` keeps the raw page wording;
- * `value.confirmed` starts as the normalizer's suggestion and is never itself
- * mutated — a user edit is tracked separately in `CaptureSession.userCorrections`
- * so the two stay distinguishable per Requirement 3.5.
- */
-export interface CaptureSessionField {
-  readonly field: CaptureField;
-  readonly value: SourcedValue<CaptureNormalizedValue>;
-  readonly source: ExtractionSource;
-  readonly sourceLabel: string;
-}
-
 export type CaptureFieldRejectionReason =
   | "empty"
   | "too-long"
@@ -142,27 +127,6 @@ export interface CaptureResult {
   readonly rejectedFields: readonly CaptureFieldRejection[];
 }
 
-/**
- * The temporary, side-panel-only review model for one capture attempt.
- * Nothing here is persisted until a `CandidateDraft` is derived from it.
- */
-export interface CaptureSession {
-  readonly requestId: RequestId;
-  readonly tabId: number;
-  readonly pageUrl: string;
-  readonly capturedAt: UtcTimestamp;
-  readonly fields: readonly CaptureSessionField[];
-  readonly rejectedFields: readonly CaptureFieldRejection[];
-  readonly missingCoreFields: readonly CaptureCoreField[];
-  readonly userCorrections: Readonly<Partial<Record<CaptureField, string>>>;
-  readonly projectId?: ProjectId;
-}
-
-/** A session with the project selected; required before a `CandidateDraft` can be built. */
-export interface ConfirmedCaptureSession extends CaptureSession {
-  readonly projectId: ProjectId;
-}
-
 export type CaptureFailure =
   | {
       readonly kind: "execution";
@@ -195,21 +159,11 @@ export type CaptureSessionState =
       readonly failure: CaptureFailure;
     };
 
-/** Distinguishable capture and save failures; each keeps prior state recoverable. */
+/** Distinguishable capture execution failures. */
 export type CaptureError =
   | { readonly kind: "permission-lost" }
   | { readonly kind: "restricted-page" }
   | { readonly kind: "tab-changed" }
   | { readonly kind: "injection-failed" }
   | { readonly kind: "invalid-payload" }
-  | { readonly kind: "no-candidate" }
-  | {
-      readonly kind: "validation";
-      readonly fields: Readonly<Record<string, string>>;
-    }
-  | { readonly kind: "project-required" }
-  | { readonly kind: "navigation" }
-  | { readonly kind: "maintenance" }
-  | { readonly kind: "storage" }
-  | { readonly kind: "quota" }
-  | { readonly kind: "unsupported-data" };
+  | { readonly kind: "no-candidate" };

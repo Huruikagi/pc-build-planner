@@ -83,13 +83,6 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const registration = createCandidateFeatureRegistration({
     data,
     query: service,
-    capture: {
-      createCandidate: (draft) =>
-        service.createCandidate(draft, {
-          requestId: nextRequest(),
-          expectedRevision: 0 as Revision,
-        }),
-    },
     state,
   });
   const container = document.createElement("div");
@@ -176,13 +169,6 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const reopenedHandle = await createCandidateFeatureRegistration({
     data,
     query: service,
-    capture: {
-      createCandidate: (draft) =>
-        service.createCandidate(draft, {
-          requestId: nextRequest(),
-          expectedRevision: revision as Revision,
-        }),
-    },
     state: reopenedState,
   }).mount({
     container: reopenedContainer,

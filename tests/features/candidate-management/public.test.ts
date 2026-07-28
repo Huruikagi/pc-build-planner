@@ -7,31 +7,16 @@ import type {
   Uuid,
 } from "../../../src/domain/public.js";
 import type {
-  CandidateDraft,
   CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
-  CaptureCandidatePort,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateManagementPublicApi } from "../../../src/features/candidate-management/public.js";
-import type { FoundationDataPort } from "../../../src/persistence/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000071" as Uuid as ProjectId;
-const draft = {
-  projectId,
-  category: "uncategorized",
-  product: { name: { original: "架空の取り込み候補" } },
-  normalizedAttributes: { category: "uncategorized" },
-} satisfies CandidateDraft;
 
-test("公開入口は取り込み側の欠損候補作成と構成管理側の分類済み候補照会をそのまま提供する", async () => {
-  const captured: CandidateDraft[] = [];
-  const eligible = [
-    { id: "30000000-0000-4000-8000-000000000071" },
-  ] as CandidatePart[];
-  const capturedCandidate = eligible[0];
-  if (capturedCandidate === undefined)
-    throw new Error("架空の分類済み候補がありません");
+test("公開入口はquery・純粋intent factory・sourcesのcanonical exact shapeだけを提供する", async () => {
+  const eligible: readonly CandidatePart[] = [];
   const query = {
     async listProjects() {
       return { ok: true as const, value: [] };
@@ -50,14 +35,7 @@ test("公開入口は取り込み側の欠損候補作成と構成管理側の�
       };
     },
   } satisfies CandidateQuery;
-  const capture = {
-    async createCandidate(input: CandidateDraft) {
-      captured.push(input);
-      return { ok: true as const, value: capturedCandidate };
-    },
-  } satisfies CaptureCandidatePort;
   const api = createCandidateManagementPublicApi({
-    data: {} as FoundationDataPort,
     query,
     sources: {
       catalog: {} as CandidateSourceCatalogPort,
@@ -65,11 +43,14 @@ test("公開入口は取り込み側の欠損候補作成と構成管理側の�
     },
   });
 
-  assert.deepEqual(await capture.createCandidate(draft), {
-    ok: true,
-    value: capturedCandidate,
-  });
-  assert.deepEqual(captured, [draft]);
+  assert.deepEqual(Object.keys(api).sort(), [
+    "createCandidateEditorIntent",
+    "query",
+    "sources",
+  ]);
+  assert.equal("capture" in api, false);
+  assert.equal("openCandidateEditor" in api, false);
+
   assert.deepEqual(await api.query.listBuildEligible(projectId), {
     ok: true,
     value: eligible,

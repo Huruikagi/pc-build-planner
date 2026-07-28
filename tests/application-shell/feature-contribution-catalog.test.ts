@@ -103,7 +103,8 @@ test("side panel contributionは合成contextから実featureを組み立てる"
       "backupRestore",
     ],
   );
-  const [candidateManagement, currentBuild, , compatibility] = contributions;
+  const [candidateManagement, currentBuild, productCapture, compatibility] =
+    contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
   assert.ok(isPersistent(candidateManagement.registration));
   assert.equal(
@@ -128,6 +129,10 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     typeof currentBuild.registration.publicApi.query.getByProject,
     "function",
   );
+  assert.equal(productCapture.registration.id, "product-capture");
+  assert.equal(productCapture.registration.presentation, "transient");
+  assert.equal("navigation" in productCapture.registration, false);
+  assert.deepEqual(Object.keys(productCapture).sort(), ["key", "registration"]);
   assert.equal(compatibility.registration.id, "compatibility");
   assert.ok(isPersistent(compatibility.registration));
   assert.equal(

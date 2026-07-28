@@ -37,7 +37,7 @@ export type CaptureTabLookupFailure =
 
 /**
  * The Chrome-facing capability the coordinator needs. Kept as a small,
- * injectable port so `captureCurrentTab` stays deterministic and testable;
+ * injectable port so fixed-tab capture stays deterministic and testable;
  * the real `chrome.tabs`/`chrome.scripting`-backed implementation is wired at
  * composition time.
  */

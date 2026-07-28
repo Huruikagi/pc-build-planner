@@ -15,13 +15,6 @@ const errorMessageKeys = {
   "injection-failed": "capture.errors.injection-failed",
   "invalid-payload": "capture.errors.invalid-payload",
   "no-candidate": "capture.errors.no-candidate",
-  validation: "persistenceError.validation",
-  "project-required": "capture.errors.project-required",
-  navigation: "capture.errors.navigation",
-  maintenance: "persistenceError.maintenance",
-  storage: "capture.errors.storage",
-  quota: "persistenceError.quota",
-  "unsupported-data": "capture.errors.unsupportedData",
 } as const satisfies Record<CaptureError["kind"], MessageKey>;
 
 export function CaptureView({ state }: CaptureViewProps) {

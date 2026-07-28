@@ -16,6 +16,8 @@ const state = () =>
   createCaptureState({
     coordinator: { captureTab: async () => ok({} as never) },
     isCurrent: () => true,
+    createHandoffIntent: () => ok({} as never),
+    conclude: async () => ok(undefined),
   });
 const intent = (payload: unknown): FeatureActivationIntent => ({
   featureId: productCaptureFeatureId,

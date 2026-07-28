@@ -2,16 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createFeatureRegistry } from "../../../src/application-shell/feature-registry.js";
-import type {
-  FeatureId,
-  ShellNavigator,
-} from "../../../src/application-shell/public.js";
+import type { FeatureId } from "../../../src/application-shell/public.js";
 import { createActivationRouter } from "../../../src/application-shell/public.js";
 import type { ProjectId, Uuid } from "../../../src/domain/public.js";
 import type {
   CandidateManagementService,
   CandidateQuery,
-  CaptureCandidatePort,
   ProjectSummary,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
@@ -80,47 +76,8 @@ const createRegistration = (state: ReturnType<typeof createState>) =>
   createCandidateFeatureRegistration({
     data: {} as FoundationDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
     state,
   });
-
-test("候補編集公開 API は型付き prefill を candidate-management activation intent として navigator へ渡す", async () => {
-  const received: unknown[] = [];
-  const navigator: ShellNavigator = {
-    async activate(intent) {
-      received.push(intent);
-      return { ok: true, value: undefined };
-    },
-  };
-  const registration = createCandidateFeatureRegistration({
-    data: {} as FoundationDataPort,
-    query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
-    navigator,
-    state: createState(),
-  });
-  const api = registration.publicApi;
-
-  const sourceDraft = { ...draft, sources: [] as const };
-  assert.deepEqual(
-    await api.openCandidateEditor({ projectId, draft: sourceDraft }),
-    {
-      ok: true,
-      value: undefined,
-    },
-  );
-  assert.deepEqual(received, [
-    {
-      featureId,
-      target: "open-candidate-editor",
-      payload: { projectId, draft: sourceDraft },
-    },
-  ]);
-  const validated = registration.activation?.validate(received[0] as never);
-  assert.equal(validated?.ok, true);
-  if (validated?.ok)
-    assert.deepEqual(validated.value.draft.sources, sourceDraft.sources);
-});
 
 test("activation は正常 prefill を一度だけ詳細編集へ適用し、不正な受信内容では既存画面を保持する", async () => {
   const state = createState();

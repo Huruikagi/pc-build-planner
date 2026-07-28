@@ -31,17 +31,7 @@ export const candidateManagementContributionKey = "candidateManagement";
 export type CandidateManagementContribution = FeatureContribution<
   typeof candidateManagementContributionKey,
   CandidateManagementPublicApi
-> & {
-  readonly legacyCapture: import("./contracts.js").CaptureCandidatePort;
-  readonly legacyOpenCandidateEditor: (
-    prefill: import("./activation.js").LegacyCandidateEditorPrefill,
-  ) => Promise<
-    import("../../domain/public.js").Result<
-      void,
-      import("../../application-shell/public.js").FeatureActivationError
-    >
-  >;
-};
+>;
 
 export interface CandidateManagementContributionDependencies {
   readonly sourceData?: CandidateSourceDataPort;
@@ -100,21 +90,9 @@ export const createCandidateManagementContribution = (
       : { sourcePage: dependencies.sourcePage }),
   });
 
-  const legacyCapture = {
-    async createCandidate(
-      input: Parameters<
-        import("./contracts.js").CaptureCandidatePort["createCandidate"]
-      >[0],
-    ) {
-      return service.createCandidate(input, await createMutationContext());
-    },
-  } satisfies import("./contracts.js").CaptureCandidatePort;
-
   const registration = createCandidateFeatureRegistration({
     data: context.data,
     query: service,
-    /** Adjacent capture features do not own revisions, so the feature supplies one. */
-    capture: legacyCapture,
     sources: {
       catalog,
       mutations: {
@@ -148,21 +126,11 @@ export const createCandidateManagementContribution = (
         },
       },
     },
-    navigator: context.navigator,
     state,
   });
-  const legacyOpenCandidateEditor: CandidateManagementContribution["legacyOpenCandidateEditor"] =
-    (prefill) =>
-      context.navigator.activate({
-        featureId: registration.id,
-        target: "open-candidate-editor",
-        payload: prefill,
-      });
 
   return {
     key: candidateManagementContributionKey,
     registration,
-    legacyCapture,
-    legacyOpenCandidateEditor,
   };
 };

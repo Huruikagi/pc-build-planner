@@ -4,7 +4,6 @@ import type {
   FeatureMountHandle,
   OperationPolicy,
   PersistentApplicationFeatureRegistration,
-  ShellNavigator,
 } from "../../application-shell/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import {
@@ -17,7 +16,6 @@ import type {
   CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
-  CaptureCandidatePort,
 } from "./contracts.js";
 import {
   type CandidateManagementPublicApi,
@@ -43,7 +41,6 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly data: FoundationScopedDataPort;
   readonly query: CandidateManagementQuery;
   readonly publicQuery?: CandidateQuery;
-  readonly capture: CaptureCandidatePort;
   readonly sources?: {
     readonly catalog: CandidateSourceCatalogPort;
     readonly mutations: CandidateSourceMutationPort;
@@ -53,7 +50,6 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly subscribeAvailability?: (
     listener: (availability: Availability) => void,
   ) => () => void;
-  readonly navigator?: ShellNavigator;
   /** Supplied by the feature-local React/state composition when activation is enabled. */
   readonly state?: ManagementState;
 }
@@ -115,7 +111,6 @@ export const createCandidateFeatureRegistration = (
   const subscribeAvailability =
     dependencies.subscribeAvailability ?? (() => () => {});
   const publicApi = createCandidateManagementPublicApi({
-    data: dependencies.data,
     query: dependencies.publicQuery ?? {
       listProjects: () => dependencies.query.listProjects(),
       listCandidates: (input) => dependencies.query.listCandidates(input),
@@ -134,9 +129,6 @@ export const createCandidateFeatureRegistration = (
         catalog: CandidateSourceCatalogPort;
         mutations: CandidateSourceMutationPort;
       }),
-    ...(dependencies.navigator === undefined
-      ? {}
-      : { navigator: dependencies.navigator }),
   });
 
   return {

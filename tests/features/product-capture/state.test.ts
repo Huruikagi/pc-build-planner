@@ -25,9 +25,19 @@ const result = {
   draft: { fields: [], missingCoreFields: [] },
   rejectedFields: [],
 };
+const handoff = {
+  createHandoffIntent: () =>
+    ok({
+      featureId: "candidate-management" as FeatureId,
+      target: "open-candidate-editor",
+      payload: {},
+    }),
+  conclude: async () => ok(undefined),
+};
 
 test("activationごとに固定tabを持つidleへ初期化する", () => {
   const state = createCaptureState({
+    ...handoff,
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
   });
@@ -45,6 +55,7 @@ test("現行世代だけが固定tabの抽出を開始する", async () => {
   const calls: TargetTabId[] = [];
   let current = A;
   const state = createCaptureState({
+    ...handoff,
     coordinator: {
       async captureTab(tabId) {
         calls.push(tabId);
@@ -62,6 +73,7 @@ test("現行世代だけが固定tabの抽出を開始する", async () => {
 test("失敗は同一世代で再試行できる", async () => {
   let calls = 0;
   const state = createCaptureState({
+    ...handoff,
     coordinator: {
       async captureTab() {
         calls += 1;
@@ -74,7 +86,7 @@ test("失敗は同一世代で再試行できる", async () => {
   await state.startCapture();
   assert.equal(state.value?.status, "failed");
   await state.startCapture();
-  assert.equal(state.value?.status, "idle");
+  assert.equal(state.value, null);
   assert.equal(calls, 2);
 });
 
@@ -85,6 +97,7 @@ test("stale callbackとunmount後のcallbackを破棄する", async () => {
   });
   let current = A;
   const state = createCaptureState({
+    ...handoff,
     coordinator: { captureTab: async () => pending },
     isCurrent: (id) => id === current,
   });
@@ -109,7 +122,8 @@ test("handoff失敗intentを同一世代だけ保持し成功時に破棄する"
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: (id) => id === A,
-    async retryHandoff(_activationId, retained) {
+    createHandoffIntent: () => ok(intent),
+    async conclude(_activationId, retained) {
       retries.push(retained);
       return ok(undefined);
     },
@@ -134,6 +148,7 @@ test("新activationと終了はretained intentを破棄する", () => {
     payload: {},
   };
   const state = createCaptureState({
+    ...handoff,
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
   });
@@ -248,6 +263,7 @@ test("retained intentの同時retryはconcludeを一度だけ呼ぶ", async () =
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
+    createHandoffIntent: handoff.createHandoffIntent,
     async conclude() {
       calls += 1;
       return pending;
@@ -313,6 +329,7 @@ test("候補なしの場合だけ空名manual draftをtyped concludeする", asy
   const state = createCaptureState({
     coordinator: { captureTab: async () => err({ kind: "no-candidate" }) },
     isCurrent: () => true,
+    createHandoffIntent: handoff.createHandoffIntent,
     createManualIntent: () => intent,
     async conclude(_id, value) {
       concluded.push(value);

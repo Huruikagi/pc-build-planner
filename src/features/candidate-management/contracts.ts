@@ -267,10 +267,3 @@ export interface CandidateSourceService {
     context: MutationContext,
   ): Promise<Result<CandidatePartV2, ManagementError>>;
 }
-
-/** Public capture boundary for adjacent product-capture features. */
-export interface CaptureCandidatePort {
-  createCandidate(
-    input: CandidateDraft,
-  ): Promise<Result<CandidatePart, ManagementError>>;
-}

@@ -15,7 +15,6 @@ import type {
   CandidateDraft,
   CandidateManagementService,
   CandidateQuery,
-  CaptureCandidatePort,
   UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
@@ -26,7 +25,6 @@ import { collectFeatureContractViolations } from "../../contracts/application-sh
 test("候補管理registrationはshell契約へmount依存とoperation policyを注入する", async () => {
   const data = {} as FoundationScopedDataPort;
   const query = {} as CandidateQuery;
-  const capture = {} as CaptureCandidatePort;
   const observed: {
     data?: FoundationScopedDataPort;
     readAllowed?: boolean;
@@ -36,7 +34,6 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
   const registration = createCandidateFeatureRegistration({
     data,
     query,
-    capture,
     subscribeAvailability(listener) {
       availabilityListeners.add(listener);
       return () => availabilityListeners.delete(listener);
@@ -120,7 +117,6 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const sourceRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
     state,
   });
   const sourceContainer = document.createElement("div");
@@ -147,7 +143,6 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const targetRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
     state: restoredState,
   });
   const targetContainer = document.createElement("div");
@@ -176,7 +171,6 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const rejectedHandle = await createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
     state: rejectedState,
   }).mount({
     container: document.createElement("div"),
@@ -233,7 +227,6 @@ test("snapshotなしの再mountは前回の未保存draftと削除確認を持�
   const registration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
     state,
   });
   const policy = { isAllowed: () => true, subscribe: () => () => {} };
@@ -315,7 +308,6 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
   const registration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query,
-    capture: {} as CaptureCandidatePort,
     state: sessionState,
   });
 
@@ -364,7 +356,6 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
   const recreated = await createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query,
-    capture: {} as CaptureCandidatePort,
     state: recreatedState,
   }).mount({
     container: document.createElement("div"),
@@ -382,7 +373,6 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   const registration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
     query: {} as CandidateQuery,
-    capture: {} as CaptureCandidatePort,
   });
   const container = document.createElement("div");
 

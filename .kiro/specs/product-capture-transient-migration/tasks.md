@@ -120,7 +120,7 @@
   - _Boundary: ProductCaptureCoordinator, CandidateManagementActivation_
 
 - [ ] 5. production compositionと公開境界を移行する
-- [ ] 5.1 capture contributionを3依存だけで構成する
+- [x] 5.1 capture contributionを3依存だけで構成する
   - production compositionをruntime、TransientSurfaceLifecyclePort、candidate editor intent factoryの3依存へ切り替える。
   - capture／candidate-managementの登録順をlate-bound shell契約へ合わせ、起動前・cleanup後はfail closedにする。
   - production factoryが正確に3依存だけを受け、テスト専用featureなしで型検査を通るcomposition testが成功することを完了条件とする。
@@ -128,7 +128,7 @@
   - _Requirements: 1.2, 1.3, 1.7, 3.3, 5.4_
   - _Boundary: ApplicationComposition, ProductCaptureDependencies_
 
-- [ ] 5.2 product-captureの旧実行・保存経路を削除する
+- [x] 5.2 product-captureの旧実行・保存経路を削除する
   - `submit-draft`、worker registration、active-tab再解決、direct editor navigation、保存statusと旧UI依存をproduct-captureから除去する。
   - 旧callbackやdead stateを参照するconsumerを新しいlifecycle／intent経路へ移し、未使用moduleを削除する。
   - product-capture境界で旧API名・保存処理・navigation callbackが残らない型検査と検索gateを通す。
@@ -136,7 +136,7 @@
   - _Requirements: 1.1, 1.7, 3.2, 3.3, 3.4, 5.1, 5.4_
   - _Boundary: ProductCaptureFeature, ProductCaptureLegacyRemoval_
 
-- [ ] 5.3 candidate-managementのcanonical公開APIを保全する
+- [x] 5.3 candidate-managementのcanonical公開APIを保全する
   - capture専用の`CaptureCandidatePort`、`listProjects`、direct open callbackを公開面から外し、保存serviceをcandidate-management内部へ戻す。
   - 公開面をcanonical `query`、純粋`createCandidateEditorIntent`、`sources: { catalog, mutations }`のexact shapeへ統一し、captureにはintent factory facetだけを配線する。
   - 全consumerのtypecheckと公開API contract testで全facetのparity、削除済みsymbol不在、同名縮小interface不在、deep import不在を確認する。

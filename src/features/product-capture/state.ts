@@ -4,7 +4,6 @@ import type {
   TargetTabId,
   TransientSurfaceError,
 } from "../../application-shell/public.js";
-import type { CandidatePartId, ProjectId } from "../../domain/public.js";
 import { createRequestId, type Result } from "../../domain/public.js";
 import type {
   CaptureError,
@@ -16,29 +15,15 @@ import type { CaptureCoordinator } from "./coordinator.js";
 export interface CaptureStateDependencies {
   readonly coordinator: CaptureCoordinator;
   readonly isCurrent: (activationId: ActivationId) => boolean;
-  readonly onCaptured?: (
-    activationId: ActivationId,
-    result: CaptureResult,
-  ) => Promise<Result<void, TransientSurfaceError>>;
-  readonly retryHandoff?: (
-    activationId: ActivationId,
-    intent: FeatureActivationIntent,
-  ) => Promise<Result<void, TransientSurfaceError>>;
-  readonly createHandoffIntent?: (
+  readonly createHandoffIntent: (
     result: CaptureResult,
   ) => Result<FeatureActivationIntent, CaptureError>;
   readonly createManualIntent?: () => FeatureActivationIntent;
-  readonly conclude?: (
+  readonly conclude: (
     activationId: ActivationId,
     intent: FeatureActivationIntent,
   ) => Promise<Result<void, TransientSurfaceError>>;
   readonly createRequestId?: () => string;
-}
-
-/** Kept for the legacy mapper module until task 5.2 removes that module. */
-export interface CaptureSubmitOutcome {
-  readonly candidateId: CandidatePartId;
-  readonly projectId: ProjectId;
 }
 
 const isRecoverableExecutionError = (error: CaptureError): boolean =>
@@ -118,64 +103,38 @@ export class CaptureState {
       return;
     }
 
-    const handoff = this.dependencies.onCaptured;
     const createIntent = this.dependencies.createHandoffIntent;
     const conclude = this.dependencies.conclude;
-    if (createIntent !== undefined && conclude !== undefined) {
-      const prepared = createIntent(result.value);
-      if (!prepared.ok) {
-        this.#set({
-          status: "failed",
-          activationId: current.activationId,
-          tabId: current.tabId,
-          failure: {
-            kind: "execution",
-            error: prepared.error,
-            recoverable: isRecoverableExecutionError(prepared.error),
-          },
-        });
-        return;
-      }
-      const concluded = await conclude(current.activationId, prepared.value);
-      if (!this.#accepts(generation, current.activationId)) return;
-      if (concluded.ok) {
-        this.deactivate();
-        return;
-      }
-      this.#set({
-        status: "failed",
-        activationId: current.activationId,
-        tabId: current.tabId,
-        failure: {
-          kind: "handoff",
-          error: concluded.error,
-          retainedIntent: prepared.value,
-        },
-      });
-      return;
-    }
-    if (handoff === undefined) {
-      this.#set({
-        status: "idle",
-        activationId: current.activationId,
-        tabId: current.tabId,
-      });
-      return;
-    }
-    const concluded = await handoff(current.activationId, result.value);
-    if (!this.#accepts(generation, current.activationId)) return;
-    if (!concluded.ok) {
+    const prepared = createIntent(result.value);
+    if (!prepared.ok) {
       this.#set({
         status: "failed",
         activationId: current.activationId,
         tabId: current.tabId,
         failure: {
           kind: "execution",
-          error: { kind: "injection-failed" },
-          recoverable: true,
+          error: prepared.error,
+          recoverable: isRecoverableExecutionError(prepared.error),
         },
       });
+      return;
     }
+    const concluded = await conclude(current.activationId, prepared.value);
+    if (!this.#accepts(generation, current.activationId)) return;
+    if (concluded.ok) {
+      this.deactivate();
+      return;
+    }
+    this.#set({
+      status: "failed",
+      activationId: current.activationId,
+      tabId: current.tabId,
+      failure: {
+        kind: "handoff",
+        error: concluded.error,
+        retainedIntent: prepared.value,
+      },
+    });
   }
 
   public async startManualEntry(): Promise<void> {
@@ -186,7 +145,6 @@ export class CaptureState {
       current.failure.kind !== "execution" ||
       current.failure.error.kind !== "no-candidate" ||
       this.dependencies.createManualIntent === undefined ||
-      this.dependencies.conclude === undefined ||
       this.#handoffInFlightGeneration !== null ||
       !this.dependencies.isCurrent(current.activationId)
     )
@@ -237,11 +195,9 @@ export class CaptureState {
     current: Extract<CaptureSessionState, { status: "failed" }>,
   ): Promise<void> {
     if (current.failure.kind !== "handoff") return;
-    const retry = this.dependencies.retryHandoff ?? this.dependencies.conclude;
-    if (retry === undefined) return;
     const generation = ++this.#requestGeneration;
     this.#handoffInFlightGeneration = generation;
-    const result = await retry(
+    const result = await this.dependencies.conclude(
       current.activationId,
       current.failure.retainedIntent,
     );
