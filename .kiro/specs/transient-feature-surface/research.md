@@ -65,7 +65,7 @@
 ### production E2Eは最初の実featureへ委譲する
 
 - shell specはproduction bundleへテスト専用featureを混入させず、in-memory fixtureのcontract/runtime integrationを所有する。
-- Chrome 116以降の主要動線は`product-capture-transient-migration`の実product-capture登録と5.5 E2Eで、shell 4.5も合わせて検証する。
+- Chrome 116以降の主要動線は`product-capture-transient-migration`の実product-capture登録を使い、durable activation受信以降を5.5 Playwright E2E、browser toolbar iconの実user gestureと`activeTab`付与を同じproduction buildの必須manual smokeで検証する。manual smoke未実施または失敗時は`MANUAL_VERIFY_REQUIRED`としてshell 4.5を閉じない。
 
 ### composition循環とwatch-ready transportはshell内部portで閉じる
 

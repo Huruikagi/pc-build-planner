@@ -552,7 +552,7 @@ export interface TabLifecyclePort {
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8 | Controller, host, tab adapter | unit/integration |
 | 3.9, 3.10 | Controller, activation router | integration |
 | 4.1, 4.2, 4.3, 4.4 | ports, in-memory adapters, existing shell fixtures | unit/integration |
-| 4.5 | downstream production feature registration | `product-capture-transient-migration` Playwright E2E |
+| 4.5 | downstream production feature registration | `product-capture-transient-migration`のdurable activation以降のPlaywright E2E + toolbar icon/`activeTab` manual smoke |
 | 4.6 | synthetic fixtures | fixture validation |
 
 ## Testing Strategy
@@ -587,7 +587,8 @@ export interface TabLifecyclePort {
 
 - 本specはproduction bundleへテスト専用の一過性featureを登録しない
 - shell単体ではin-memory registration fixtureによるcontract/runtime integrationまでを所有する
-- Chrome 116以降のproduction buildにおけるアイコン起動、対象タブ失効、常設復帰は、最初の実featureを登録する下流`product-capture-transient-migration`の5.5 E2Eで本specの4.5も合わせて検証する
+- Chrome 116以降のproduction buildにおけるdurable activation受信以降、対象タブ失効、常設復帰は、最初の実featureを登録する下流`product-capture-transient-migration`の5.5 Playwright E2Eで自動検証する
+- browser toolbar iconの実user gestureと`activeTab`付与は同じproduction buildの必須manual smokeで検証し、未実施または失敗時は`MANUAL_VERIFY_REQUIRED`として本spec 4.5を閉じない
 
 ## Security Considerations
 

@@ -210,25 +210,27 @@
   - _Requirements: 1.7, 3.3, 4.2, 4.5, 5.4, 5.6_
   - _Boundary: ExtractorRegression, CandidateSaveRegression, NavigationRegression_
 
-- [ ] 6.6 production icon起動からcandidate editorまでのE2Eを通す
-  - 未パッケージMV3拡張でaction iconから固定tab captureを起動し、抽出結果をcandidate editorへ引き渡す。
+- [ ] 6.6 durable activation受信からcandidate editorまでのproduction E2Eを通す
+  - action後と同形のdurable activationをproduction session transportへ投入し、実product-capture登録で固定tab captureを起動して抽出結果をcandidate editorへ引き渡す。
   - project存在時と不存在時の双方で、後者は作成後に再抽出せずeditorへ到達することを確認する。
-  - synthetic production featureなしで主要動線とproduction artifactが成立するE2Eを通す。
-  - _Blocked: Playwrightのextension page／service worker操作ではChrome toolbar actionの明示user gestureとactiveTab付与を生成できず、storage seed・恒久host permission・test-only production hookはいずれもicon起動を証明しないか要件3.5／task boundaryへ違反する。実toolbar clickを駆動できるE2E harnessまたは承認済みのmanual verification gateが必要。_
-  - _Depends: 6.5_
+  - fixture投入をicon起動または`activeTab`付与の証明とは扱わず、synthetic production featureなしでproduction transport以降の主要動線とartifactを検証する。
+  - _Blocked: 上流`transient-feature-surface`のcontroller requestがproduct-capture activation adapterへactivationId／固定tabを配送せず、未activation stateを先にmountしてproductionで`feature-mount-failed`になる。下流hookで迂回せず、上流contractを修復して再検証する必要がある。_
+  - _Depends: 6.5, transient-feature-surface 6.5_
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.6, 5.5, 5.6_
   - _Boundary: ExtensionE2E, ProductionBuild_
 
 - [ ] 6.7 失効復帰と常設navigation終了のE2Eを通す
   - capture中の対象tab更新・閉鎖で一過性面が終了し、安全な理由を示して常設面へ復帰することを確認する。
   - capture中に常設navigationを選択すると一過性面が終了し、選択した常設featureだけが表示されることを確認する。
-  - 上流要件4.5を委譲されたproduction E2Eとして終了まで閉じる。
+  - durable activation以降のproduction E2Eとしてdismissal／常設復帰を自動検証し、上流要件4.5の最終closureは6.8のmanual smoke gateへ委譲する。
   - _Depends: 6.6_
   - _Requirements: 1.4, 2.5, 3.3, 5.5_
   - _Boundary: ExtensionE2E, TransientSurfaceLifecycle_
 
 - [ ] 6.8 全検証gateを実行し移行完了を確認する
   - lint、typecheck、unit、integration、E2E、boundary、artifact、permissionの全gateをproduction構成で実行する。
+  - 同じcommitのproduction buildをChrome 116以降へ未パッケージロードし、実toolbar icon click、`activeTab`付与、固定tab抽出、candidate editor到達をmanual smokeで確認する。
+  - manual smoke未実施または失敗時は`MANUAL_VERIFY_REQUIRED`とし、fixture投入だけでfeature GOを主張しない。
   - requirements 1.1〜5.6のtraceabilityと削除対象・受容リスクを再確認し、未検証項目を残さない。
   - 全gateのfresh evidenceを記録し、上流・下流specとsteeringの整合を最終確認する。
   - _Depends: 6.7_

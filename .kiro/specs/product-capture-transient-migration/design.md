@@ -66,7 +66,7 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 
 captureはcontroller concrete classを取得しない。`createProductCaptureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。candidate-managementからはnavigationを直接実行するcallbackではなく、typed intentを組み立てる純粋なfactoryだけを利用する。
 
-本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5 E2Eで一過性面のアイコン起動、候補編集面への引き渡し、対象タブ失効または常設ナビ選択による終了・常設復帰までを検証する。
+本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5自動E2Eでaction後のdurable activation受信、候補編集面への引き渡し、対象タブ失効または常設ナビ選択による終了・常設復帰までを検証する。Playwrightがブラウザーchromeのtoolbar user gestureを生成できない境界は、同じproduction buildをChrome 116以降へ未パッケージロードして実icon clickと`activeTab`付与を確認する必須manual smokeで閉じる。
 
 ### Existing Feature Contracts
 
@@ -381,7 +381,7 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 | 3.1, 3.2, 3.3, 3.4, 3.5 | registration, state, coordinator | regression/E2E |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | candidate contracts, pre-edit validation, project-required state | type/contract/integration |
 | 5.1, 5.2, 5.3, 5.4 | feature test suites | unit/integration |
-| 5.5 / upstream 4.5 | production product-capture registration | Playwright E2E |
+| 5.5 / upstream 4.5 | production product-capture registration | durable activation以降のPlaywright E2E + toolbar icon manual smoke |
 | 5.6 | synthetic fixtures | fixture validation |
 
 ## Testing Strategy
@@ -411,13 +411,14 @@ captureはcandidate-managementのcomponentや内部stateをdeep importしない�
 
 ### E2E
 
-- アイコン起動後にcapture面が立ち、利用者操作までは解析しない
+- action後と同形のdurable activationをproduction session transportへ投入するとcapture面が立ち、利用者操作までは解析しない
 - 実行成功後に候補編集面へ遷移する
+- project存在時と不存在時を網羅し、project作成後は再抽出せず候補編集面へ進む
 - 対象タブ遷移で一過性面が終了して常設面へ戻り、古い結果を表示・保存しない
 - 常設ナビ選択で一過性面が終了する
 - product-captureが常設ナビへ存在しない
 
-このsuiteは実featureを含むproduction buildだけをロードし、上流shell spec 4.5と本spec 5.5を同じ主要動線で閉じる。
+このsuiteは実featureを含むproduction buildだけをロードする。durable activationのfixture投入はtoolbar icon起動または`activeTab`付与の代替証明として扱わず、production transport以降の決定的な自動検証にだけ使用する。実toolbar icon起動、固定tabへの`activeTab`付与、capture面表示、抽出成功、candidate editor到達は、同じcommitのproduction buildをChrome 116以降へ未パッケージロードするmanual smokeで確認する。manual smoke未実施または失敗時の最終判定は`MANUAL_VERIFY_REQUIRED`とし、feature GOを主張しない。
 
 ## Security Considerations
 

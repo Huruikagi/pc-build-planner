@@ -180,7 +180,7 @@
   - _Requirements: 3.7, 4.4, 4.5, 4.6_
   - _Boundary: PublicAPI, StorageAccessGuard, ArtifactValidation_
 
-- [x] 6. 決定的検証と下流handoff seamを完成させる
+- [ ] 6. 決定的検証と下流handoff seamを完成させる
 - [x] 6.1 shell controllerと常設feature非回帰を検証する
   - explicit persistent producerへの移行、常設navigation欠損／一過性navigation混入の型・runtime拒否、不正隔離、navigation除外、初期選択、fallback、単一mountをpublic consumer／contract／integration testで覆う。
   - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
@@ -213,6 +213,15 @@
   - _Depends: 6.3_
   - _Requirements: 4.4, 4.5, 4.6_
   - _Boundary: ValidationGates_
+
+- [ ] 6.5 production consumerへ起動payloadをmount前に配送する契約を修復する
+  - `TransientActivationRequest`のactivationId／surfaceId／固定tabを、対象の一過性registrationが検証・受理してから`showTransient`／mountする順序を公開契約、controller、hostで一意にする。
+  - product-captureの実registrationをconsumer contract fixtureとして使い、未activation stateのmountが`feature-mount-failed`にならず、配送失敗時は一過性面を表示しないproduction integration testを追加する。
+  - 修復後に本spec 6.4の全gateと下流`product-capture-transient-migration` 6.6／6.7を再実行する。
+  - _Blocked: 現行designはgeneric `FeatureActivationIntent`と`TransientActivationRequest`の接続shapeを定義していないため、上流requirements／design amendmentとhuman approvalが必要。_
+  - _Depends: 6.4_
+  - _Requirements: 2.1, 3.9, 3.10, 4.1, 4.5_
+  - _Boundary: TransientActivationContract, TransientSurfaceController, SidePanelHost, ProductionIntegration_
 
 ## Implementation Notes
 
