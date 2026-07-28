@@ -104,6 +104,25 @@ const isForbiddenApplicationShellFeatureImport = (specifier) => {
   );
 };
 
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenCrossFeatureImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  const owner = normalizedSource.match(/(?:^|\/)features\/([^/]+)\//)?.[1];
+  if (owner === undefined) return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  const target = normalizedSpecifier.match(
+    /(?:^|\/)features\/([^/]+)\/(.+)$|(?:^|\/)\.\.\/([^/]+)\/(.+)$/,
+  );
+  const targetFeature = target?.[1] ?? target?.[3];
+  const targetPath = target?.[2] ?? target?.[4];
+  return (
+    targetFeature !== undefined &&
+    ["candidate-management", "product-capture"].includes(targetFeature) &&
+    targetFeature !== owner &&
+    !/^public(?:\.js|\.ts)?$/.test(targetPath ?? "")
+  );
+};
+
 /** @param {string} value */
 const canonicalApiPath = (value) =>
   value.startsWith("globalThis.") ? value.slice("globalThis.".length) : value;
@@ -146,6 +165,16 @@ export const findBoundaryViolations = (sources) =>
           )
       )
         rules.add("application-shell-feature-public-import-only");
+      if (
+        token.kind === SyntaxKind.StringLiteral &&
+        isForbiddenCrossFeatureImport(normalizedPath, token.value) &&
+        tokens
+          .slice(Math.max(0, index - 4), index)
+          .some(({ kind }) =>
+            [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(kind),
+          )
+      )
+        rules.add("cross-feature-public-import-only");
       const pathValue = memberPath(tokens, index, aliases);
       if (
         pathValue !== undefined &&
@@ -213,6 +242,25 @@ export const findBoundaryViolations = (sources) =>
       /\b(?:interface|type|class)\s+MaintenanceSnapshotSource\b/.test(source)
     )
       rules.add("application-shell-no-maintenance-contract-redefinition");
+    if (normalizedPath.includes("/features/product-capture/")) {
+      if (
+        /\b(?:interface|type|class)\s+CandidateManagementPublicApi\b/.test(
+          source,
+        )
+      )
+        rules.add("product-capture-no-public-api-redefinition");
+      if (/\bCaptureCandidatePort\b/.test(source))
+        rules.add("product-capture-no-legacy-candidate-port");
+      if (/\bopenCandidateEditor\b/.test(source))
+        rules.add("product-capture-no-legacy-editor-navigation");
+      if (
+        /presentation\s*:\s*["']transient["']/.test(source) &&
+        /\bnavigation\s*:/.test(source)
+      )
+        rules.add("product-capture-transient-no-navigation");
+      if (/nav\.productCapture/.test(source))
+        rules.add("product-capture-no-navigation-message");
+    }
     if (isApplicationShell && /\bFoundationRuntimePlatform\b/.test(source))
       rules.add("application-shell-no-foundation-platform-injection");
     if (

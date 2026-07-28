@@ -55,6 +55,8 @@ test("禁止権限と全サイト権限を拒否する", () => {
     { ...validManifest, permissions: ["storage", "tabs"] },
     { ...validManifest, permissions: ["storage", "storage"] },
     { ...validManifest, permissions: ["activeTab", "scripting"] },
+    { ...validManifest, permissions: ["storage", "scripting", "sidePanel"] },
+    { ...validManifest, permissions: ["storage", "activeTab", "sidePanel"] },
     { ...validManifest, host_permissions: ["<all_urls>"] },
     { ...validManifest, optional_host_permissions: ["https://*/*"] },
   ]) {
@@ -152,6 +154,22 @@ test("remote code、動的評価、inline JavaScriptを生成物から拒否す�
         fileName: "missing-target.html",
         source: '<script type="module" src="./missing-side-panel.js"></script>',
         expected: /referenced script is missing/,
+      },
+      {
+        fileName: "synthetic-transient-feature.js",
+        source: "export const syntheticTransientFeature = {};",
+        expected: /synthetic transient feature/,
+      },
+      {
+        fileName: "product-capture-worker.js",
+        source: "export const legacyCaptureWorker = {};",
+        expected: /legacy product-capture worker entry/,
+      },
+      {
+        fileName: "leaky-capture-log.js",
+        source:
+          "console.error('capture failed', pageUrl, rawHtml, extractedProduct);",
+        expected: /page-derived capture diagnostic/,
       },
       {
         fileName: "duplicate-attribute.html",

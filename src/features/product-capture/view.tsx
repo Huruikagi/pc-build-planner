@@ -74,7 +74,7 @@ export function CaptureView({ state }: CaptureViewProps) {
           onClick={() => void state.startManualEntry()}
           type="button"
         >
-          {messages("capture.detailEditAction")}
+          {messages("capture.manualEntryAction")}
         </button>
       ) : null}
     </section>

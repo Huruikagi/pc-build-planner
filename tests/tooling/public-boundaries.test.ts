@@ -158,6 +158,50 @@ test("deep import、直接Storage、固定lock迂回を拒否する", () => {
   );
 });
 
+test("capture・candidate-management間は公開entry pointだけを許可する", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "src/features/product-capture/deep.ts",
+      source:
+        'import type { Draft } from "../candidate-management/contracts.js";',
+    },
+    {
+      path: "src/features/candidate-management/deep.ts",
+      source: 'import { capture } from "../product-capture/coordinator.js";',
+    },
+    {
+      path: "src/features/product-capture/legacy.ts",
+      source:
+        "interface CandidateManagementPublicApi { createCandidateEditorIntent(): unknown }\n" +
+        "const port: CaptureCandidatePort = openCandidateEditor;",
+    },
+    {
+      path: "src/features/product-capture/registration.ts",
+      source:
+        'const registration = { presentation: "transient", navigation: { labelKey: "nav.productCapture" } };',
+    },
+    {
+      path: "src/features/product-capture/reordered-registration.ts",
+      source:
+        'const registration = { navigation: { labelKey: "capture" }, presentation: "transient" };',
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ rule }) => rule),
+    [
+      "cross-feature-public-import-only",
+      "cross-feature-public-import-only",
+      "product-capture-no-public-api-redefinition",
+      "product-capture-no-legacy-candidate-port",
+      "product-capture-no-legacy-editor-navigation",
+      "product-capture-transient-no-navigation",
+      "product-capture-no-navigation-message",
+      "product-capture-transient-no-navigation",
+    ],
+  );
+});
+
 test("application shell固有のsecurity・ownership境界違反をowner付きで拒否する", () => {
   const violations = findBoundaryViolations([
     {

@@ -144,7 +144,7 @@
   - _Requirements: 1.2, 1.7, 4.1, 5.4_
   - _Boundary: CandidateManagementPublicAPI, CandidateManagementInternalServices_
 
-- [ ] 5.4 (P) message catalogとE2E locatorを移行する
+- [x] 5.4 (P) message catalogとE2E locatorを移行する
   - captureの抽出・失敗・再試行、candidate-managementのproject-required・取消・作成失敗に安定した日英message keyを割り当てる。
   - transient product-captureはnavigation keyを申告せず、consumer移行後に`nav.productCapture`がcatalog、fixture、locatorへ残らない状態にする。
   - icon起動、editor到達、project-required、常設復帰、navigation終了をrole／label／test idで観測できるlocatorへ揃える。
@@ -153,7 +153,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 2.3, 2.4, 2.6, 3.3, 5.4, 5.5_
   - _Boundary: MessageCatalog, E2ELocators_
 
-- [ ] 5.5 公開境界とdeep-import gateを更新する
+- [x] 5.5 公開境界とdeep-import gateを更新する
   - shell、capture、candidate-management間の許可依存をboundary validatorへ反映し、公開entry point以外の横断importを拒否する。
   - 削除したcapture専用portと旧navigation callbackをfixture・test doubleを含む全consumerから除去する。
   - transient registrationの`navigation`／`nav.productCapture`と、不完全な`CandidateManagementPublicApi`再定義を拒否する検索gateを加え、`validate-boundaries`、exact public API contract、snapshotが新しい依存方向だけで通る状態にする。
@@ -161,7 +161,7 @@
   - _Requirements: 1.7, 3.5, 5.4, 5.6_
   - _Boundary: BoundaryValidation, PublicAPIArtifacts_
 
-- [ ] 5.6 permission・fixture・production artifact gateを更新する
+- [x] 5.6 permission・fixture・production artifact gateを更新する
   - 固定tabの`activeTab`付与、`tabs.get` URL欠落、script injectionをproduction同等fixtureで再現し、追加権限を要求しない。
   - production bundleにsynthetic transient featureや旧worker entryが混入せず、ページ由来URL・HTML・抽出値が診断ログへ出ない検査を追加する。
   - `validate-artifacts`、permission検査、production-only fixture gateを新しい起動経路で通す。

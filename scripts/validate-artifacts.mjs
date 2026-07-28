@@ -72,15 +72,18 @@ export function validateManifest(manifest) {
   if (manifest.minimum_chrome_version !== "116") {
     fail("minimum_chrome_version must be 116");
   }
+  const permissions = manifest.permissions;
   if (
-    !Array.isArray(manifest.permissions) ||
-    manifest.permissions.length === 0 ||
-    new Set(manifest.permissions).size !== manifest.permissions.length ||
-    !manifest.permissions.every(
+    !Array.isArray(permissions) ||
+    permissions.length !== allowedPermissions.size ||
+    new Set(permissions).size !== permissions.length ||
+    !permissions.every(
       (permission) =>
         typeof permission === "string" && allowedPermissions.has(permission),
     ) ||
-    !manifest.permissions.includes("storage")
+    ![...allowedPermissions].every((permission) =>
+      permissions.includes(permission),
+    )
   ) {
     fail(
       "only the minimal storage, activeTab, scripting, sidePanel permissions are allowed",
@@ -163,6 +166,18 @@ function validateJavaScript(source, path) {
     [
       /\b(?:onStateChange|observeShellState|subscribeShellState)\s*:\s*\(?.*?=>\s*\{\s*\}/,
       "noop shell state observer",
+    ],
+    [
+      /\bsyntheticTransientFeature\b|synthetic-transient-feature/i,
+      "synthetic transient feature",
+    ],
+    [
+      /\blegacyCaptureWorker\b|product-capture-worker/i,
+      "legacy product-capture worker entry",
+    ],
+    [
+      /console\s*\.\s*(?:log|info|warn|error|debug)\s*\([^)]*\b(?:pageUrl|rawHtml|html|extractedProduct|captureResult)\b/i,
+      "page-derived capture diagnostic",
     ],
   ];
   for (const [pattern, label] of checks) {

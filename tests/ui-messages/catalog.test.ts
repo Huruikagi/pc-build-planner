@@ -78,3 +78,24 @@ test("persistenceError名前空間は統合対象コードだけを、移行前�
     );
   }
 });
+
+test("transient product-capture は navigation と legacy 保存 message を公開しない", () => {
+  assert.equal("productCapture" in MESSAGES.nav, false);
+
+  const capture = MESSAGES.capture as Readonly<Record<string, unknown>>;
+  for (const legacyKey of [
+    "saveDestinationLabel",
+    "selectPrompt",
+    "noProjectsNotice",
+    "reviewTitle",
+    "submittingTitle",
+    "submittingStatus",
+    "savedTitle",
+    "savedWithoutProject",
+    "savedWithProject",
+    "captureAnotherAction",
+  ]) {
+    assert.equal(legacyKey in capture, false, legacyKey);
+  }
+  assert.equal(typeof capture.manualEntryAction, "string");
+});

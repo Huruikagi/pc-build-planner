@@ -63,6 +63,26 @@ export const action = (scope: Locator | Page, name: string): Locator =>
 export const navItem = (page: Page, featureId: string): Locator =>
   page.locator(`.shell-navigation [data-feature-id="${featureId}"]`);
 
+/** Observes the surface produced by the extension action activation. */
+export const extensionAction = (page: Page): Locator =>
+  transientFeature(page, "product-capture");
+
+/** Locates a mounted transient feature and never relies on navigation metadata. */
+export const transientFeature = (page: Page, featureId: string): Locator =>
+  featureRoot(page, featureId);
+
+/** Locates a mounted persistent feature after handoff or fallback. */
+export const persistentFeature = (page: Page, featureId: string): Locator =>
+  featureRoot(page, featureId);
+
+/** Locates the canonical candidate editor reached after capture handoff. */
+export const candidateEditor = (page: Page): Locator =>
+  region(persistentFeature(page, "candidate-management"), "candidate-form");
+
+/** Locates the project-required recovery surface for an unresolved draft. */
+export const projectRequired = (page: Page): Locator =>
+  region(persistentFeature(page, "candidate-management"), "project-required");
+
 /** Locates one of the stable named fields used by E2E setup flows. */
 export const formField = (
   scope: Locator | Page,

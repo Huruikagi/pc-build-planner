@@ -81,3 +81,16 @@ test("E2E specは生のlocator呼び出しを持たず共有ヘルパへ識別�
       .join("\n")}`,
   );
 });
+
+test("一過性capture主要動線は意味別locator helperで観測できる", async () => {
+  const source = await readFile("e2e/locators.ts", "utf8");
+  for (const helper of [
+    "extensionAction",
+    "candidateEditor",
+    "projectRequired",
+    "persistentFeature",
+    "transientFeature",
+  ]) {
+    assert.match(source, new RegExp(`export const ${helper}\\b`), helper);
+  }
+});
