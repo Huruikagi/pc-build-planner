@@ -9,15 +9,23 @@ import type {
   ShellNavigator,
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
-import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
+import type {
+  TransientActivationRequest,
+  TransientSurfaceLifecyclePort,
+} from "./transient-surface-ports.js";
 
 export interface FeatureContribution<
   TKey extends string = string,
   TPublic extends object = object,
   TActivation = unknown,
+  TTransientActivation = TransientActivationRequest,
 > {
   readonly key: TKey;
-  readonly registration: ApplicationFeatureRegistration<TPublic, TActivation>;
+  readonly registration: ApplicationFeatureRegistration<
+    TPublic,
+    TActivation,
+    TTransientActivation
+  >;
   readonly workerRegistration?: ApplicationWorkerRegistration;
 }
 

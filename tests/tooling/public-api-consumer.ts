@@ -207,6 +207,13 @@ export const publicTransient: TransientApplicationFeatureRegistration = {
   ...publicFeatureBase,
   id: "public-transient" as FeatureId,
   presentation: "transient",
+  transientActivation: {
+    validate: (request) => ({ ok: true, value: request }),
+    accept: async () => ({
+      ok: true,
+      value: { release: async () => undefined },
+    }),
+  },
 };
 
 export const consumeTransientShellPorts = (
@@ -234,4 +241,5 @@ export const invalidTransient: TransientApplicationFeatureRegistration = {
   presentation: "transient",
   // @ts-expect-error transient registrations cannot expose navigation
   navigation: { labelKey: "Invalid" as MessageKey, order: 0 },
+  transientActivation: publicTransient.transientActivation,
 };

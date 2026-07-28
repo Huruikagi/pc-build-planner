@@ -4,6 +4,7 @@ import type {
   MaintenanceSnapshotSource,
 } from "../persistence/public.js";
 import type { MessageDescriptor, MessageKey } from "../ui-messages/public.js";
+import type { TransientActivationRequest } from "./transient-surface-ports.js";
 
 export type FeatureId = string & { readonly __brand: "FeatureId" };
 
@@ -86,24 +87,52 @@ export interface PersistentApplicationFeatureRegistration<
 
 export interface TransientApplicationFeatureRegistration<
   TPublic extends object = object,
-  TActivation = never,
-> extends FeatureRegistrationBase<TPublic, TActivation> {
+  TTransientActivation = TransientActivationRequest,
+  THandoffActivation = never,
+> extends FeatureRegistrationBase<TPublic, THandoffActivation> {
   readonly presentation: "transient";
   readonly navigation?: never;
+  readonly transientActivation: TransientActivationAdapter<TTransientActivation>;
+}
+
+export interface TransientActivationLease {
+  release(): Promise<void>;
+}
+
+export interface TransientActivationAdapter<TTransientActivation> {
+  validate(
+    request: TransientActivationRequest,
+  ): Result<TTransientActivation, FeatureActivationError>;
+  accept(
+    input: TTransientActivation,
+  ): Promise<Result<TransientActivationLease, FeatureActivationError>>;
 }
 
 export type ApplicationFeatureRegistration<
   TPublic extends object = object,
-  TActivation = never,
+  THandoffActivation = never,
+  TTransientActivation = TransientActivationRequest,
 > =
-  | PersistentApplicationFeatureRegistration<TPublic, TActivation>
-  | TransientApplicationFeatureRegistration<TPublic, TActivation>;
+  | PersistentApplicationFeatureRegistration<TPublic, THandoffActivation>
+  | TransientApplicationFeatureRegistration<
+      TPublic,
+      TTransientActivation,
+      THandoffActivation
+    >;
 
-export const isPersistent = <TPublic extends object, TActivation>(
-  registration: ApplicationFeatureRegistration<TPublic, TActivation>,
+export const isPersistent = <
+  TPublic extends object,
+  THandoffActivation,
+  TTransientActivation,
+>(
+  registration: ApplicationFeatureRegistration<
+    TPublic,
+    THandoffActivation,
+    TTransientActivation
+  >,
 ): registration is PersistentApplicationFeatureRegistration<
   TPublic,
-  TActivation
+  THandoffActivation
 > => registration.presentation === "persistent";
 
 export interface PreparedFeatureActivation {
@@ -216,7 +245,9 @@ export interface SidePanelHost {
     intent: FeatureActivationIntent,
   ): Promise<Result<void, FeatureActivationError>>;
   getSelected(): FeatureId | null;
-  showTransient(id: FeatureId): Promise<Result<void, SelectionError>>;
+  showTransient(
+    request: TransientActivationRequest,
+  ): Promise<Result<void, SelectionError>>;
   restorePersistent(
     preferred: FeatureId | null,
     reason: "navigated" | "tab-closed" | "persistent-selected",

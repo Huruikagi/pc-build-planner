@@ -440,6 +440,13 @@ test("一過性contributionをnavigation順へ混入させずbranch-safeに整�
     registration: {
       id: id("transient"),
       presentation: "transient",
+      transientActivation: {
+        validate: (request) => ({ ok: true, value: request }),
+        accept: async () => ({
+          ok: true,
+          value: { release: async () => undefined },
+        }),
+      },
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => undefined,

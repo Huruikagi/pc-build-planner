@@ -540,8 +540,8 @@ export function createProductionApplicationComposition<
               feature.getAvailability().status === "available"
             );
           },
-          async showTransient(surfaceId) {
-            const result = await integration?.showTransient?.(surfaceId);
+          async showTransient(request) {
+            const result = await integration?.showTransient?.(request);
             return result?.ok
               ? ok(undefined)
               : err({ kind: "transition-failed" });

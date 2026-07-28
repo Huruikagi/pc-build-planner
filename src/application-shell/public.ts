@@ -27,6 +27,8 @@ export type {
   RegistrationError,
   ShellNavigationMetadata,
   ShellNavigator,
+  TransientActivationAdapter,
+  TransientActivationLease,
   TransientApplicationFeatureRegistration,
   WorkerRegistrationContext,
 } from "./contracts.js";
@@ -47,6 +49,7 @@ export type {
   ActivationId,
   TargetTabId,
   TargetTabIdValidationError,
+  TransientActivationRequest,
   TransientGestureRegistrationError,
   TransientGestureRegistrationPort,
   TransientGestureSource,

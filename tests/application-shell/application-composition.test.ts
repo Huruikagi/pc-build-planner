@@ -23,6 +23,17 @@ import type {
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+
+const noopTransientActivation = () => ({
+  validate: (
+    request: import("../../src/application-shell/transient-surface-ports.js").TransientActivationRequest,
+  ) => ({ ok: true as const, value: request }),
+  accept: async () => ({
+    ok: true as const,
+    value: { release: async () => undefined },
+  }),
+});
+
 import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const id = (value: string) => value as FeatureId;
@@ -167,6 +178,7 @@ test("常設と一過性の混在時もpresentation navigationと初期表示を
   const transient: ApplicationFeatureRegistration = {
     id: id("transient"),
     presentation: "transient",
+    transientActivation: noopTransientActivation(),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,
@@ -269,6 +281,7 @@ test("production nav commandは終了失敗をUI retryし選択targetと遅延ev
   const transient: ApplicationFeatureRegistration = {
     id: id("capture"),
     presentation: "transient",
+    transientActivation: noopTransientActivation(),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,

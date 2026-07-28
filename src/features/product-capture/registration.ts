@@ -6,6 +6,7 @@ import type {
   FeatureMountContext,
   FeatureMountHandle,
   TargetTabId,
+  TransientActivationRequest,
   TransientApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import { err, ok, type Result } from "../../domain/public.js";
@@ -62,6 +63,7 @@ export const createProductCaptureFeatureRegistration = (
   dependencies: CaptureFeatureRegistrationDependencies,
 ): TransientApplicationFeatureRegistration<
   ProductCapturePublicApi,
+  TransientActivationRequest,
   CaptureTransientActivation
 > => ({
   id: productCaptureFeatureId,
@@ -77,6 +79,33 @@ export const createProductCaptureFeatureRegistration = (
       return ok(undefined);
     },
   },
+  transientActivation: {
+    validate(request: TransientActivationRequest) {
+      if (
+        request.surfaceId !== productCaptureFeatureId ||
+        request.activationId.length === 0 ||
+        !Number.isSafeInteger(request.tabId) ||
+        request.tabId <= 0
+      )
+        return err({
+          kind: "invalid_activation",
+          detail: "invalid product capture surface",
+        });
+      return ok(request);
+    },
+    async accept(input: TransientActivationRequest) {
+      dependencies.state.activate(input.activationId, input.tabId);
+      let released = false;
+      return ok({
+        async release() {
+          if (released) return;
+          released = true;
+          if (dependencies.state.value?.activationId === input.activationId)
+            dependencies.state.deactivate();
+        },
+      });
+    },
+  },
   async mount(context: FeatureMountContext): Promise<FeatureMountHandle> {
     if (dependencies.state.value === null)
       throw new Error("Product capture has not been activated.");
@@ -90,7 +119,6 @@ export const createProductCaptureFeatureRegistration = (
         if (unmounted) return;
         unmounted = true;
         root.unmount();
-        dependencies.state.deactivate();
       },
     };
   },

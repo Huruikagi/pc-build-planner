@@ -47,6 +47,13 @@ export const mockTransientFeature: TransientApplicationFeatureRegistration<MockP
   {
     id: "mock-transient" as FeatureId,
     presentation: "transient",
+    transientActivation: {
+      validate: (request) => ({ ok: true, value: request }),
+      accept: async () => ({
+        ok: true,
+        value: { release: async () => undefined },
+      }),
+    },
     publicApi: { inspect: () => "transient" },
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,
@@ -61,6 +68,7 @@ export const readPersistentNavigation = (
 const invalidTransient: TransientApplicationFeatureRegistration = {
   id: "invalid-transient" as FeatureId,
   presentation: "transient",
+  transientActivation: mockTransientFeature.transientActivation,
   // @ts-expect-error transient registrations cannot expose navigation
   navigation: { labelKey: "Invalid" as MessageKey, order: 0 },
   publicApi: {},

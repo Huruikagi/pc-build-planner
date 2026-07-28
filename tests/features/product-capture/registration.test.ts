@@ -78,3 +78,41 @@ test("不正activationをfail closedで拒否し、未起動mountも拒否する
     }),
   );
 });
+
+test("mount前にtransient requestを受理しlease解放を冪等にする", async () => {
+  const capture = state();
+  const registration = createProductCaptureFeatureRegistration({
+    state: capture,
+  });
+  const request = {
+    activationId: "lease-a" as ActivationId,
+    surfaceId: productCaptureFeatureId,
+    tabId: 9 as TargetTabId,
+  };
+  const validated = registration.transientActivation.validate(request);
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  const accepted = await registration.transientActivation.accept(
+    validated.value,
+  );
+  assert.equal(accepted.ok, true);
+  if (!accepted.ok) return;
+  assert.equal(capture.value?.activationId, request.activationId);
+  const handle = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+  });
+  await handle.unmount();
+  assert.equal(capture.value?.activationId, request.activationId);
+  await accepted.value.release();
+  await accepted.value.release();
+  assert.equal(capture.value, null);
+  assert.equal(
+    registration.transientActivation.validate({
+      ...request,
+      surfaceId: "other" as never,
+    }).ok,
+    false,
+  );
+});

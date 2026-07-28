@@ -161,6 +161,14 @@ function validateRegistrationShape(value: unknown): RegistrationError | null {
     if (typeof value.mount !== "function")
       return invalidRegistration("registration.mount: function is required");
     if (
+      !isRecord(value.transientActivation) ||
+      typeof value.transientActivation.validate !== "function" ||
+      typeof value.transientActivation.accept !== "function"
+    )
+      return invalidRegistration(
+        "registration.transientActivation: validate and accept functions are required",
+      );
+    if (
       value.activation !== undefined &&
       (!isRecord(value.activation) ||
         typeof value.activation.validate !== "function" ||
@@ -271,7 +279,11 @@ function createSnapshotRegistration(
           presentation: "persistent" as const,
           navigation: Object.freeze({ ...source.navigation }),
         }
-      : { ...common, presentation: "transient" as const },
+      : {
+          ...common,
+          presentation: "transient" as const,
+          transientActivation: source.transientActivation,
+        },
   );
 }
 

@@ -26,7 +26,8 @@ export type { CaptureRuntimePort } from "./coordinator.js";
 export const productCaptureContributionKey = "productCapture";
 export type ProductCaptureContribution = FeatureContribution<
   typeof productCaptureContributionKey,
-  ProductCapturePublicApi
+  ProductCapturePublicApi,
+  unknown
 >;
 
 export interface ProductCaptureContributionDependencies {

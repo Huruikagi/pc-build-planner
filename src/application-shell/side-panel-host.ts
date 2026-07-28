@@ -12,6 +12,7 @@ import type {
   SelectionError,
   ShellViewState,
   SidePanelHost,
+  TransientActivationLease,
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
 
@@ -30,6 +31,7 @@ export function createSidePanelHost(
   let stopped = false;
   let selected: FeatureId | null = null;
   let mounted: FeatureMountHandle | undefined;
+  let transientLease: TransientActivationLease | undefined;
   let unsubscribeRegistry: (() => void) | undefined;
   let lifecycleEpoch = 0;
   let transition: Promise<unknown> = Promise.resolve();
@@ -74,14 +76,30 @@ export function createSidePanelHost(
     if (handle === undefined) return ok(undefined);
     try {
       await handle.unmount();
-      mounted = undefined;
-      selected = null;
-      return ok(undefined);
     } catch {
       const id = previous ?? ("unknown" as FeatureId);
       reportDiagnostic("feature-unmount-failed", id);
       const descriptor = message("shell.featureUnmountFailed", {
         featureId: id,
+      });
+      publish({ kind: "error", message: descriptor, recoverable: true });
+      return err({ kind: "mount_failed", message: descriptor });
+    }
+    mounted = undefined;
+    selected = null;
+    const lease = transientLease;
+    transientLease = undefined;
+    if (lease === undefined) return ok(undefined);
+    try {
+      await lease.release();
+      return ok(undefined);
+    } catch {
+      reportDiagnostic(
+        "transient-activation-release-failed",
+        previous ?? undefined,
+      );
+      const descriptor = message("shell.featureUnmountFailed", {
+        featureId: previous ?? ("unknown" as FeatureId),
       });
       publish({ kind: "error", message: descriptor, recoverable: true });
       return err({ kind: "mount_failed", message: descriptor });
@@ -181,8 +199,9 @@ export function createSidePanelHost(
   };
 
   const performShowTransient = async (
-    id: FeatureId,
+    request: import("./transient-surface-ports.js").TransientActivationRequest,
   ): Promise<Result<void, SelectionError>> => {
+    const id = request.surfaceId;
     const feature = find(id);
     if (
       feature === undefined ||
@@ -194,10 +213,48 @@ export function createSidePanelHost(
         message: message("shell.featureNotRegistered", { featureId: id }),
       });
     }
-    if (selected === id && mounted !== undefined) return ok(undefined);
+    const validated = feature.transientActivation.validate(request);
+    if (!validated.ok)
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    let accepted: Result<TransientActivationLease, FeatureActivationError>;
+    try {
+      accepted = await feature.transientActivation.accept(validated.value);
+    } catch {
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    }
+    if (!accepted.ok)
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    const previous = selected === null ? undefined : find(selected);
     const unmounted = await unmountCurrent();
-    if (!unmounted.ok) return unmounted;
+    if (!unmounted.ok) {
+      try {
+        await accepted.value.release();
+      } catch {
+        reportDiagnostic("transient-activation-release-failed", id);
+      }
+      return unmounted;
+    }
+    transientLease = accepted.value;
     const result = await mountFeature(feature);
+    if (!result.ok) {
+      const lease = transientLease;
+      transientLease = undefined;
+      try {
+        await lease.release();
+      } catch {
+        reportDiagnostic("transient-activation-release-failed", id);
+      }
+      if (previous !== undefined) await restorePrevious(previous, undefined);
+    }
     return result.ok
       ? ok(undefined)
       : err({
@@ -207,11 +264,11 @@ export function createSidePanelHost(
   };
 
   const enqueueShowTransient = (
-    id: FeatureId,
+    request: import("./transient-surface-ports.js").TransientActivationRequest,
   ): Promise<Result<void, SelectionError>> => {
     const next = transition.then(
-      () => performShowTransient(id),
-      () => performShowTransient(id),
+      () => performShowTransient(request),
+      () => performShowTransient(request),
     );
     transition = next;
     return next;

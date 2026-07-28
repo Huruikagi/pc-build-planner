@@ -214,7 +214,7 @@
   - _Requirements: 4.4, 4.5, 4.6_
   - _Boundary: ValidationGates_
 
-- [ ] 6.5 一過性registrationのmount前起動受理契約を公開する
+- [x] 6.5 一過性registrationのmount前起動受理契約を公開する
   - 一過性registrationに起動要求の検証・受理と冪等な解放leaseを必須化し、cross-feature引き渡し契約とは分離して公開する。
   - registryは専用adapter欠損を不正登録として隔離し、snapshotでも一過性branchのadapterを保持する。
   - public consumerとregistry contract testで、正しいregistrationがstrict型検査を通り、adapter欠損・branch矛盾が他featureへ影響せず拒否される。
@@ -222,7 +222,7 @@
   - _Requirements: 1.1, 1.6, 2.8, 2.9, 2.10, 4.1, 4.4_
   - _Boundary: TransientActivationContract, FeatureRegistry_
 
-- [ ] 6.6 起動受理とmountをshell transactionへ統合する
+- [x] 6.6 起動受理とmountをshell transactionへ統合する
   - controllerは起動要求全体をhostへ渡し、hostは対象・区分・availability・要求を検証して受理に成功するまで現在のfeatureをunmountしない。
   - 受理後のstale化、current unmount失敗、target mount失敗、通常終了でleaseを最大一回解放し、host成功後だけcontrollerがactive世代を公開する。
   - controller／host integration testで配送順、失敗時の常設維持、単一mount、lease解放一回性が決定的に通る。
@@ -230,7 +230,7 @@
   - _Requirements: 1.4, 2.1, 2.4, 2.6, 2.8, 2.9, 2.10, 3.6, 3.10, 4.1, 4.4_
   - _Boundary: TransientSurfaceController, SidePanelHost_
 
-- [ ] 6.7 product-capture registrationをmount前起動配送へ適合させる
+- [x] 6.7 product-capture registrationをmount前起動配送へ適合させる
   - 実registration adapterが起動世代と固定tabを検証・受理してleaseを返し、初回mount時点で既存の実行状態を利用できるようにする。
   - 業務状態・UI・抽出処理は変更せず、React mount handleと起動状態の解放責務だけをhost所有leaseへ適合させる。
   - production consumer fixtureで未activation mountによる`feature-mount-failed`が起きず、検証・受理失敗時は一過性面を表示せず常設featureを維持する。

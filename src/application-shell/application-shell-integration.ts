@@ -35,7 +35,9 @@ export interface ApplicationShellIntegration
     intent: FeatureActivationIntent,
   ): Promise<Result<void, FeatureActivationError>>;
   getSelected?(): FeatureId | null;
-  showTransient?(id: FeatureId): ReturnType<SidePanelHost["showTransient"]>;
+  showTransient?(
+    request: import("./transient-surface-ports.js").TransientActivationRequest,
+  ): ReturnType<SidePanelHost["showTransient"]>;
   restorePersistent?(
     preferred: FeatureId | null,
     reason: "navigated" | "tab-closed" | "persistent-selected",

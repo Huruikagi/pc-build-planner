@@ -102,7 +102,13 @@ export function createTransientHandoffContractFixture() {
             order: activationTarget ? 1 : 0,
           },
         }
-      : { presentation }),
+      : {
+          presentation,
+          transientActivation: {
+            validate: (request) => ok(request),
+            accept: async () => ok({ release: async () => undefined }),
+          },
+        }),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => {},

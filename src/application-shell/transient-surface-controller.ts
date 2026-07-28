@@ -13,7 +13,7 @@ export interface TransientSurfaceHost {
   getSelected(): FeatureId | null;
   isTransientAvailable(surfaceId: FeatureId): boolean;
   showTransient(
-    surfaceId: FeatureId,
+    request: TransientActivationRequest,
   ): Promise<Result<void, TransientSurfaceError>>;
   restorePersistent(
     preferred: FeatureId | null,
@@ -165,7 +165,7 @@ export function createTransientSurfaceController(options: {
         }
         let shown: Result<void, TransientSurfaceError>;
         try {
-          shown = await options.host.showTransient(value.surfaceId);
+          shown = await options.host.showTransient(value);
         } catch {
           releasePending();
           return err({ kind: "transition-failed" });

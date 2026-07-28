@@ -344,7 +344,7 @@ test("application shell公開入口はtransient concrete実装を公開しない
   assert.match(publicApi, /TransientApplicationFeatureRegistration/);
   assert.doesNotMatch(
     publicApi,
-    /createTransientSurfaceController|TransientSurfaceController|createLateBoundLifecycle|createTransientGestureRegistrar|TransientWatchReadyRequest|TransientActivationStore|TransientActivationRequest|TransientDismissReason|TransientSurfaceState/,
+    /createTransientSurfaceController|TransientSurfaceController|createLateBoundLifecycle|createTransientGestureRegistrar|TransientWatchReadyRequest|TransientActivationStore|TransientDismissReason|TransientSurfaceState/,
   );
 });
 

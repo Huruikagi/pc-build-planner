@@ -72,11 +72,48 @@ test("presentationとnavigationの矛盾を隔離し正常registrationを維持�
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,
     mount: async () => ({ unmount: async () => undefined }),
+    transientActivation: {
+      validate: (request) => ({ ok: true, value: request }),
+      accept: async () => ({
+        ok: true,
+        value: { release: async () => undefined },
+      }),
+    },
   };
   assert.equal(registry.register(transient).ok, true);
   const snapshot = registry.snapshot();
   assert.equal(snapshot[1]?.presentation, "transient");
   assert.equal("navigation" in (snapshot[1] ?? {}), false);
+  assert.equal(
+    snapshot[1]?.presentation === "transient" &&
+      typeof snapshot[1].transientActivation.accept,
+    "function",
+  );
+});
+
+test("transient activation adapter欠損を隔離する", () => {
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(feature("healthy", 1).registration).ok, true);
+  const invalid = {
+    id: "invalid-transient" as FeatureId,
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" as const }),
+    subscribeAvailability: () => () => undefined,
+    mount: async () => ({ unmount: async () => undefined }),
+  };
+  assert.deepEqual(registry.register(invalid as never), {
+    ok: false,
+    error: {
+      kind: "invalid_registration",
+      detail:
+        "registration.transientActivation: validate and accept functions are required",
+    },
+  });
+  assert.deepEqual(
+    registry.snapshot().map(({ id }) => id),
+    ["healthy"],
+  );
 });
 
 test("登録をorder、同順位ではid順の決定的snapshotにする", () => {

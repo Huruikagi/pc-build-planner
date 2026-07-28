@@ -15,6 +15,19 @@ import { err, ok } from "../../src/domain/public.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
 
 const featureId = (value: string) => value as FeatureId;
+const noopTransientActivation = () => ({
+  validate: (
+    request: import("../../src/application-shell/transient-surface-ports.js").TransientActivationRequest,
+  ) => ok(request),
+  accept: async () => ok({ release: async () => undefined }),
+});
+const transientRequest = (surfaceId: FeatureId) => ({
+  activationId:
+    "fixture-activation" as import("../../src/application-shell/transient-surface-ports.js").ActivationId,
+  surfaceId,
+  tabId:
+    1 as import("../../src/application-shell/transient-surface-ports.js").TargetTabId,
+});
 
 function feature(
   id: string,
@@ -81,6 +94,228 @@ function setup(
   return { container, diagnostics, host, states };
 }
 
+test("transient起動をmount前に受理し通常終了でleaseを一度だけ解放する", async () => {
+  const events: string[] = [];
+  const persistent = feature("planner", 0, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate(request) {
+        events.push(`validate:${request.activationId}`);
+        return ok(request);
+      },
+      async accept(request) {
+        events.push(`accept:${request.tabId}`);
+        let released = false;
+        return ok({
+          async release() {
+            if (released) return;
+            released = true;
+            events.push("release");
+          },
+        });
+      },
+    },
+    async mount() {
+      events.push("mount:capture");
+      return {
+        async unmount() {
+          events.push("unmount:capture");
+        },
+      };
+    },
+  };
+  const { host } = setup([persistent, transient]);
+  await host.start();
+  assert.equal(
+    (await host.showTransient(transientRequest(transient.id))).ok,
+    true,
+  );
+  await host.restorePersistent(persistent.id, "navigated");
+  await host.stop();
+  assert.deepEqual(events, [
+    "mount:planner",
+    "validate:fixture-activation",
+    "accept:1",
+    "unmount:planner",
+    "mount:capture",
+    "unmount:capture",
+    "release",
+    "mount:planner",
+    "unmount:planner",
+  ]);
+});
+
+test("transient受理失敗では常設mountを維持する", async () => {
+  const events: string[] = [];
+  const persistent = feature("planner", 0, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("rejected"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () =>
+        err({ kind: "activation_failed", detail: "rejected" }),
+    },
+    async mount() {
+      events.push("mount:rejected");
+      return { async unmount() {} };
+    },
+  };
+  const { host } = setup([persistent, transient]);
+  await host.start();
+  assert.equal(
+    (await host.showTransient(transientRequest(transient.id))).ok,
+    false,
+  );
+  assert.equal(host.getSelected(), persistent.id);
+  assert.deepEqual(events, ["mount:planner"]);
+  await host.stop();
+});
+
+test("transient mount失敗はleaseを一度解放して常設面を復元する", async () => {
+  const events: string[] = [];
+  let releases = 0;
+  const persistent = feature("planner", 0, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("broken"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () =>
+        ok({
+          release: async () => {
+            releases += 1;
+          },
+        }),
+    },
+    async mount() {
+      throw new Error("mount failed");
+    },
+  };
+  const { host } = setup([persistent, transient]);
+  await host.start();
+  assert.equal(
+    (await host.showTransient(transientRequest(transient.id))).ok,
+    false,
+  );
+  assert.equal(releases, 1);
+  assert.equal(host.getSelected(), persistent.id);
+  assert.deepEqual(events, [
+    "mount:planner",
+    "unmount:planner",
+    "mount:planner",
+  ]);
+  await host.stop();
+});
+
+test("lease release拒否を一度だけ診断しunmount済みslotを保持しない", async () => {
+  const events: string[] = [];
+  let releases = 0;
+  const persistent = feature("planner", 0, events);
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("release-fails"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () =>
+        ok({
+          release: async () => {
+            releases += 1;
+            throw new Error("release failed");
+          },
+        }),
+    },
+    async mount() {
+      return {
+        async unmount() {
+          events.push("unmount:transient");
+        },
+      };
+    },
+  };
+  const { diagnostics, host } = setup([persistent, transient]);
+  await host.start();
+  assert.equal(
+    (await host.showTransient(transientRequest(transient.id))).ok,
+    true,
+  );
+  assert.equal(
+    (await host.restorePersistent(persistent.id, "navigated")).ok,
+    false,
+  );
+  assert.equal(host.getSelected(), null);
+  await host.stop();
+  assert.equal(releases, 1);
+  assert.equal(
+    diagnostics.some((value) =>
+      value.includes("transient-activation-release-failed"),
+    ),
+    true,
+  );
+});
+
+test("accept後にcurrent unmountが失敗しても新leaseを一度だけ解放する", async () => {
+  const events: string[] = [];
+  let releases = 0;
+  const persistent: ApplicationFeatureRegistration = {
+    ...feature("sticky", 0, events),
+    async mount() {
+      events.push("mount:sticky");
+      return {
+        async unmount() {
+          events.push("unmount:sticky");
+          throw new Error("sticky");
+        },
+      };
+    },
+  };
+  const transient: ApplicationFeatureRegistration = {
+    id: featureId("capture-after-sticky"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () =>
+        ok({
+          release: async () => {
+            releases += 1;
+          },
+        }),
+    },
+    async mount() {
+      events.push("mount:transient");
+      return { async unmount() {} };
+    },
+  };
+  const { host } = setup([persistent, transient]);
+  await host.start();
+  assert.equal(
+    (await host.showTransient(transientRequest(transient.id))).ok,
+    false,
+  );
+  assert.equal(releases, 1);
+  assert.equal(host.getSelected(), persistent.id);
+  assert.deepEqual(events, ["mount:sticky", "unmount:sticky"]);
+  await assert.rejects(host.stop(), AggregateError);
+  assert.equal(releases, 1);
+});
+
 test("開始時に決定順の利用可能featureだけを選び、切替はunmount後にmountする", async () => {
   const events: string[] = [];
   const unavailable = feature("hidden", 0, events, {
@@ -112,6 +347,7 @@ test("一過性面から利用不可の戻り先を避けて常設fallbackと理
   const transient: ApplicationFeatureRegistration = {
     id: featureId("capture"),
     presentation: "transient",
+    transientActivation: noopTransientActivation(),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,
@@ -126,7 +362,7 @@ test("一過性面から利用不可の戻り先を避けて常設fallbackと理
   };
   const { host, states } = setup([unavailable, fallback, transient]);
   await host.start();
-  await host.showTransient(transient.id);
+  await host.showTransient(transientRequest(transient.id));
   assert.equal(
     (await host.restorePersistent(unavailable.id, "navigated")).ok,
     true,
@@ -154,6 +390,7 @@ test("一過性featureを初期表示と通常選択の候補から除外する"
   const transient: ApplicationFeatureRegistration = {
     id: featureId("transient"),
     presentation: "transient",
+    transientActivation: noopTransientActivation(),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,
@@ -189,6 +426,7 @@ test("利用不可featureの理由を返し、選択中が不可なら安全な�
   const transient: ApplicationFeatureRegistration = {
     id: featureId("transient-fallback"),
     presentation: "transient",
+    transientActivation: noopTransientActivation(),
     publicApi: {},
     getAvailability: () => ({ status: "available" }),
     subscribeAvailability: () => () => undefined,

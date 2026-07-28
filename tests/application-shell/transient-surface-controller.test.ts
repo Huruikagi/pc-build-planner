@@ -30,9 +30,9 @@ function harness() {
   const host: TransientSurfaceHost = {
     getSelected: () => selected,
     isTransientAvailable: (id) => id === featureId("capture"),
-    async showTransient(id) {
-      events.push(`show:${id}`);
-      selected = id;
+    async showTransient(request) {
+      events.push(`show:${request.surfaceId}`);
+      selected = request.surfaceId;
       return ok(undefined);
     },
     async restorePersistent(preferred) {
@@ -704,7 +704,13 @@ test("実hostとのhandoffは成功・rollback・staleの全経路で単一mount
               order: id === "planner" ? 0 : 1,
             },
           }
-        : { presentation }),
+        : {
+            presentation,
+            transientActivation: {
+              validate: (request) => ok(request),
+              accept: async () => ok({ release: async () => undefined }),
+            },
+          }),
       publicApi: {},
       getAvailability: () => ({ status: "available" }),
       subscribeAvailability: () => () => undefined,
