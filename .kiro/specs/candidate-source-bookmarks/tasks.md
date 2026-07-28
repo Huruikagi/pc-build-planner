@@ -129,14 +129,14 @@
   - _Boundary: CandidateSourceView_
   - _Depends: 3.1_
 
-- [ ] 4.4 候補一覧・editorへソース一覧、primary、種別、再訪UIを実装する
+- [x] 4.4 候補一覧・editorへソース一覧、primary、種別、再訪UIを実装する
   - 一覧にprimary価格状態と代表sourceを開くbuttonを表示し、価格欠損を不明として示す。
   - editorに全sourceのURL・サイト名・日時・価格・種別、primary選択、追加・削除操作を表示する。
   - 通常の外部link遷移を使わずstate経由でpage portを呼び、side panel内のeditor状態を維持する。
   - 販売・メーカー紹介が区別でき、primary変更とsource編集が利用者操作として到達可能なDOMになることを完了条件とする。
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 4.4, 4.5, 5.1, 5.2, 5.3_
 
-- [ ] 4.5 source UIの利用者操作と安全な描画をDOM testで検証する
+- [x] 4.5 source UIの利用者操作と安全な描画をDOM testで検証する
   - source追加、種別上書き、primary切替、非primary削除、primary replacement、最後の削除をuser-eventで操作する。
   - field errorが入力へ関連付けられ、不正価格・URLでもraw入力と保存前一覧が残ることを検証する。
   - 悪意あるサイト名・URL文字列がHTML要素やscriptとして解釈されないことを検証する。

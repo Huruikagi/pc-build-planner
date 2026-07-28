@@ -3,6 +3,9 @@ import { useReducer, useState, useSyncExternalStore } from "react";
 
 import {
   type CandidatePartId,
+  type CandidateSource,
+  type CandidateSourceId,
+  createUuid,
   MOTHERBOARD_FORM_FACTORS,
   PART_CATEGORIES,
   type PartCategory,
@@ -73,11 +76,13 @@ function CandidateListItem({
   disabled,
   onDelete,
   onEdit,
+  onOpenSource,
 }: {
   readonly candidate: CandidateSummary;
   readonly disabled: boolean;
   readonly onDelete: (candidate: CandidateSummary) => void;
   readonly onEdit: (candidate: CandidateSummary) => void;
+  readonly onOpenSource: (url: string) => void;
 }) {
   const messages = useMessages();
   const name = displayValue(candidate.name, messages);
@@ -105,7 +110,29 @@ function CandidateListItem({
               : messages("candidate.priceEntered")}
           </dd>
         </div>
+        <div>
+          <dt>{messages("candidate.sources.primary")}</dt>
+          <dd>
+            {candidate.primarySource === undefined
+              ? messages("common.notEntered")
+              : messages(
+                  candidate.primarySource.kind === "manufacturer"
+                    ? "candidate.sources.kind.manufacturer"
+                    : "candidate.sources.kind.retail",
+                )}
+          </dd>
+        </div>
       </dl>
+      {candidate.primarySource?.pageUrl === undefined ? null : (
+        <button
+          data-open-primary-source-id={candidate.primarySource.id}
+          disabled={disabled}
+          onClick={() => onOpenSource(candidate.primarySource?.pageUrl ?? "")}
+          type="button"
+        >
+          {messages("candidate.sources.open")}
+        </button>
+      )}
       {candidate.hasMissingDetails ? (
         <p>{messages("candidate.missingDetailsNotice")}</p>
       ) : null}
@@ -429,6 +456,18 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   /** Raw text keeps unparsable input visible without storing it in the draft. */
   const [priceText, setPriceText] = useState<string | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [sourcePriceText, setSourcePriceText] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const [sourcePriceErrors, setSourcePriceErrors] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const [sourceUrlErrors, setSourceUrlErrors] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const [replacementIds, setReplacementIds] = useState<
+    Readonly<Record<string, string>>
+  >({});
   const editor = state.value.editor;
   const fieldErrors = state.value.fieldErrors;
   const errorFor = (key: string) =>
@@ -437,6 +476,10 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const { draft } = editor;
   const update = (next: CandidateDraft) => {
     state.updateEditorDraft(next);
+    rerender();
+  };
+  const updateSource = (source: CandidateSource) => {
+    state.updateEditorSource(source);
     rerender();
   };
   const setProductText = (
@@ -503,7 +546,12 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           setNameError(messages("candidate.nameRequiredError"));
           return;
         }
-        if (priceError !== null) return;
+        if (
+          priceError !== null ||
+          Object.keys(sourcePriceErrors).length > 0 ||
+          Object.keys(sourceUrlErrors).length > 0
+        )
+          return;
         await state.saveEditor();
         rerender();
       }}
@@ -677,6 +725,243 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           </div>
         );
       })}
+      <fieldset data-region="candidate-sources">
+        <legend>{messages("candidate.sources.label")}</legend>
+        {(draft.sources ?? []).map((source, index) => {
+          const priceText =
+            sourcePriceText[source.id] ?? source.price?.confirmed?.amount ?? "";
+          const priceError = sourcePriceErrors[source.id];
+          const isPrimary = source.id === draft.primarySourceId;
+          return (
+            <section data-source-id={source.id} key={source.id}>
+              <label>
+                {messages("candidate.sourceUrlLabel")}
+                <input
+                  aria-describedby={
+                    sourceUrlErrors[source.id] === undefined
+                      ? undefined
+                      : `source-url-${source.id}-error`
+                  }
+                  aria-invalid={
+                    sourceUrlErrors[source.id] === undefined ? undefined : true
+                  }
+                  name={`source-${index}-url`}
+                  onChange={(event) => {
+                    const pageUrl = event.target.value;
+                    let valid = false;
+                    try {
+                      const parsed = new URL(pageUrl);
+                      valid =
+                        parsed.protocol === "http:" ||
+                        parsed.protocol === "https:";
+                    } catch {
+                      valid = false;
+                    }
+                    setSourceUrlErrors((current) => {
+                      if (!valid)
+                        return {
+                          ...current,
+                          [source.id]: messages(
+                            "candidate.sources.errors.invalidUrl",
+                          ),
+                        };
+                      const { [source.id]: _error, ...rest } = current;
+                      return rest;
+                    });
+                    updateSource({ ...source, pageUrl });
+                  }}
+                  value={source.pageUrl ?? ""}
+                />
+              </label>
+              <FieldError
+                id={`source-url-${source.id}-error`}
+                message={sourceUrlErrors[source.id] ?? null}
+              />
+              <label>
+                {messages("candidate.sources.label")}
+                <input
+                  name={`source-${index}-site-name`}
+                  onChange={(event) =>
+                    updateSource({ ...source, siteName: event.target.value })
+                  }
+                  value={source.siteName ?? ""}
+                />
+              </label>
+              <label>
+                {messages("candidate.capturedAtLabel")}
+                <input
+                  name={`source-${index}-captured-at`}
+                  onChange={(event) =>
+                    updateSource({
+                      ...source,
+                      capturedAt: event.target.value as UtcTimestamp,
+                    })
+                  }
+                  value={source.capturedAt ?? ""}
+                />
+              </label>
+              <label>
+                {messages("candidate.priceFieldLabel")}
+                <input
+                  aria-describedby={
+                    priceError === undefined
+                      ? undefined
+                      : `source-price-${source.id}-error`
+                  }
+                  aria-invalid={priceError === undefined ? undefined : true}
+                  inputMode="decimal"
+                  name={`source-${index}-price`}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setSourcePriceText((current) => ({
+                      ...current,
+                      [source.id]: raw,
+                    }));
+                    if (raw.trim() === "") {
+                      const { price: _price, ...withoutPrice } = source;
+                      setSourcePriceErrors((current) => {
+                        const { [source.id]: _error, ...rest } = current;
+                        return rest;
+                      });
+                      updateSource(withoutPrice);
+                      return;
+                    }
+                    const amount = Number(raw);
+                    if (!Number.isFinite(amount)) {
+                      setSourcePriceErrors((current) => ({
+                        ...current,
+                        [source.id]: messages("candidate.priceNotNumberError"),
+                      }));
+                      return;
+                    }
+                    setSourcePriceErrors((current) => {
+                      const { [source.id]: _error, ...rest } = current;
+                      return rest;
+                    });
+                    updateSource({
+                      ...source,
+                      price: {
+                        original: source.price?.original ?? null,
+                        confirmed: {
+                          amount,
+                          currency: source.price?.confirmed?.currency ?? "",
+                        },
+                      },
+                    });
+                  }}
+                  value={priceText}
+                />
+              </label>
+              <FieldError
+                id={`source-price-${source.id}-error`}
+                message={priceError ?? null}
+              />
+              <label>
+                {messages("candidate.sources.kind.retail")}
+                <select
+                  name={`source-${index}-kind`}
+                  onChange={(event) =>
+                    updateSource({
+                      ...source,
+                      kind: event.target.value as NonNullable<
+                        CandidateSource["kind"]
+                      >,
+                    })
+                  }
+                  value={source.kind ?? "retail"}
+                >
+                  <option value="retail">
+                    {messages("candidate.sources.kind.retail")}
+                  </option>
+                  <option value="manufacturer">
+                    {messages("candidate.sources.kind.manufacturer")}
+                  </option>
+                </select>
+              </label>
+              <label>
+                <input
+                  checked={isPrimary}
+                  name="candidate-primary-source"
+                  onChange={() => {
+                    state.setEditorPrimarySource(source.id);
+                    rerender();
+                  }}
+                  type="radio"
+                />
+                {messages("candidate.sources.primary")}
+              </label>
+              {isPrimary && (draft.sources?.length ?? 0) > 1 ? (
+                <select
+                  aria-label={messages("candidate.sources.primary")}
+                  onChange={(event) =>
+                    setReplacementIds((current) => ({
+                      ...current,
+                      [source.id]: event.target.value,
+                    }))
+                  }
+                  value={replacementIds[source.id] ?? ""}
+                >
+                  <option value="">{messages("common.notEntered")}</option>
+                  {(draft.sources ?? [])
+                    .filter((item) => item.id !== source.id)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.siteName ?? item.pageUrl ?? item.id}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
+              {source.pageUrl === undefined ? null : (
+                <button
+                  onClick={() => void state.openSource(source.pageUrl ?? "")}
+                  type="button"
+                >
+                  {messages("candidate.sources.open")}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  state.removeEditorSource(
+                    source.id,
+                    replacementIds[source.id] as CandidateSourceId | undefined,
+                  );
+                  rerender();
+                }}
+                type="button"
+              >
+                {messages("candidate.sources.remove")}
+              </button>
+            </section>
+          );
+        })}
+        <button
+          onClick={() => {
+            state.addEditorSource({
+              id: createUuid() as CandidateSourceId,
+              pageUrl: "",
+              kind: "retail",
+            });
+            rerender();
+          }}
+          type="button"
+        >
+          {messages("candidate.sources.add")}
+        </button>
+        {state.value.sourceOperationError?.kind === "replacement-required" ? (
+          <p role="alert">
+            {messages("candidate.sources.errors.replacementRequired")}
+          </p>
+        ) : null}
+        {state.value.sourceOpenError === null ? null : (
+          <p role="alert">
+            {messages(
+              state.value.sourceOpenError.kind === "runtime-unavailable"
+                ? "candidate.sources.errors.runtimeUnavailable"
+                : "candidate.sources.errors.openFailed",
+            )}
+          </p>
+        )}
+      </fieldset>
       <label>
         {messages("candidate.sourceUrlLabel")}
         <input
@@ -1000,6 +1285,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               rerender();
             }}
             onEdit={() => void startEdit(candidate.id)}
+            onOpenSource={(url) => void state.openSource(url)}
           />
         ))}
       </ul>
