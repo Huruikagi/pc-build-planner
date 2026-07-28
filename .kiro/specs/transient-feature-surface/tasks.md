@@ -238,7 +238,7 @@
   - _Requirements: 2.1, 2.3, 2.4, 2.8, 2.9, 2.10, 3.6, 3.10, 4.1, 4.5, 4.6_
   - _Boundary: ProductCaptureRegistration, ProductionIntegration_
 
-- [ ] 6.8 修復後の本spec validation gateを再実行する
+- [x] 6.8 修復後の本spec validation gateを再実行する
   - typecheck、public consumer、lint、unit／integration、boundary、fixture、artifact、final buildを実行する。
   - 全gateが成功し、production catalog／artifactへsynthetic featureが混入しないことを機械検査で確認する。
   - _Depends: 6.7_
@@ -248,6 +248,7 @@
 - [ ] 6.9 下流production起動経路を再検証する
   - `product-capture-transient-migration` 6.6／6.7の検証を再実行し、production buildで起動状態受理後に初回mountされることを確認する。
   - 起動から終了まで`feature-mount-failed`や旧世代状態残留がなく、下流のproduction gateが成功することを完了条件とする。
+  - _Blocked: 下流`product-capture-transient-migration` 6.6／6.7のdurable activation・失効復帰production E2Eが未実装で、既存product-capture／英語UI E2Eも移行前の常設navigation経路を待ってtimeoutする。下流specでE2Eを移行してproduction gateを成功させた後に再検証する必要がある。_
   - _Depends: 6.8_
   - _Requirements: 2.1, 2.8, 2.9, 2.10, 4.5_
   - _Boundary: CrossSpecProductionValidation_
