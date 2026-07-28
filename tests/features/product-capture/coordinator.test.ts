@@ -116,3 +116,49 @@ test("制限URLと出所不一致を拒否する", async () => {
   }).captureTab(TAB);
   assert.deepEqual(mismatch, { ok: false, error: { kind: "tab-changed" } });
 });
+
+test("注入時の権限失効と実行失敗を識別し、別tabへfallbackしない", async () => {
+  for (const [failure, expected] of [
+    ["permission", "permission-lost"],
+    ["unknown", "injection-failed"],
+  ] as const) {
+    const lookedUp: TargetTabId[] = [];
+    const injected: TargetTabId[] = [];
+    const result = await make({
+      async getTab(tabId) {
+        lookedUp.push(tabId);
+        return ok(target);
+      },
+      async inject(tab) {
+        injected.push(tab.tabId);
+        return err(failure);
+      },
+    }).captureTab(TAB);
+
+    assert.deepEqual(result, { ok: false, error: { kind: expected } });
+    assert.deepEqual(lookedUp, [TAB]);
+    assert.deepEqual(injected, [TAB]);
+  }
+});
+
+test("request・tab・payload形状の不一致をhandoff前にfail closedにする", async () => {
+  const payloads = [
+    { requestId: "different", tabId: TAB, pageUrl: URL, candidates: [] },
+    { requestId: REQUEST, tabId: 8, pageUrl: URL, candidates: [] },
+    { requestId: REQUEST, tabId: TAB, pageUrl: URL, candidates: "invalid" },
+  ] as const;
+
+  for (const payload of payloads) {
+    const result = await make({
+      async getTab() {
+        return ok(target);
+      },
+      async inject() {
+        return ok(payload);
+      },
+    }).captureTab(TAB);
+    assert.equal(result.ok, false);
+    if (!result.ok)
+      assert.ok(["tab-changed", "invalid-payload"].includes(result.error.kind));
+  }
+});

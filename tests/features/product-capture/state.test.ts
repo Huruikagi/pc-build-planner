@@ -344,3 +344,77 @@ test("候補なしの場合だけ空名manual draftをtyped concludeする", asy
   assert.deepEqual(concluded, [intent]);
   assert.equal(state.value, null);
 });
+
+test("manual conclude失敗はintentを保持し、retryでは再抽出しない", async () => {
+  const intent: FeatureActivationIntent = {
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: { draft: "manual" },
+  };
+  let captures = 0;
+  let concludes = 0;
+  const state = createCaptureState({
+    coordinator: {
+      async captureTab() {
+        captures += 1;
+        return err({ kind: "no-candidate" });
+      },
+    },
+    isCurrent: () => true,
+    createHandoffIntent: handoff.createHandoffIntent,
+    createManualIntent: () => intent,
+    async conclude() {
+      concludes += 1;
+      return concludes === 1
+        ? err({ kind: "transition-failed" })
+        : ok(undefined);
+    },
+  });
+
+  state.activate(A, TAB);
+  await state.startCapture();
+  await state.startManualEntry();
+  assert.deepEqual(
+    state.value?.status === "failed" ? state.value.failure : null,
+    {
+      kind: "handoff",
+      error: { kind: "transition-failed" },
+      retainedIntent: intent,
+    },
+  );
+  await state.startCapture();
+  assert.equal(captures, 1);
+  assert.equal(concludes, 2);
+  assert.equal(state.value, null);
+});
+
+test("manual handoffの後着結果は新activationを変更しない", async () => {
+  let release!: (value: ReturnType<typeof ok<void>>) => void;
+  const pending = new Promise<ReturnType<typeof ok<void>>>((resolve) => {
+    release = resolve;
+  });
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => err({ kind: "no-candidate" }) },
+    isCurrent: () => true,
+    createHandoffIntent: handoff.createHandoffIntent,
+    createManualIntent: () => ({
+      featureId: "candidate-management" as FeatureId,
+      target: "open-candidate-editor",
+      payload: {},
+    }),
+    conclude: async () => pending,
+  });
+
+  state.activate(A, TAB);
+  await state.startCapture();
+  const manual = state.startManualEntry();
+  await Promise.resolve();
+  state.activate(B, 8 as TargetTabId);
+  release(ok(undefined));
+  await manual;
+  assert.deepEqual(state.value, {
+    status: "idle",
+    activationId: B,
+    tabId: 8,
+  });
+});

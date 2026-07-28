@@ -57,6 +57,32 @@ test("tab失効とURL欠落を識別する", async () => {
     ok: false,
     error: { kind: "url-unavailable" },
   });
+
+  const wrongTab = createChromeCaptureRuntimePort({
+    tabs: {
+      async get() {
+        return { id: 8, url: "https://example.invalid/p" };
+      },
+    },
+    scripting,
+  });
+  assert.deepEqual(await wrongTab.getTab(TAB), {
+    ok: false,
+    error: { kind: "tab-unavailable" },
+  });
+
+  const emptyUrl = createChromeCaptureRuntimePort({
+    tabs: {
+      async get(id) {
+        return { id, url: "" };
+      },
+    },
+    scripting,
+  });
+  assert.deepEqual(await emptyUrl.getTab(TAB), {
+    ok: false,
+    error: { kind: "url-unavailable" },
+  });
 });
 
 test("injectは固定tabへだけscriptを注入する", async () => {
@@ -89,4 +115,47 @@ test("injectは固定tabへだけscriptを注入する", async () => {
   );
   assert.equal(result.ok, true);
   assert.deepEqual(targets, [TAB, TAB]);
+});
+
+test("activeTab権限失効と予期しない注入失敗を機密値なしで分類する", async () => {
+  const sensitiveUrl = "https://private.example.invalid/account?token=secret";
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const logs: unknown[][] = [];
+  console.error = (...values) => logs.push(values);
+  console.warn = (...values) => logs.push(values);
+  try {
+    for (const [failure, expected] of [
+      [
+        new Error(`Cannot access contents of url ${sensitiveUrl}`),
+        "permission",
+      ],
+      [new Error(`renderer failed for ${sensitiveUrl}`), "unknown"],
+    ] as const) {
+      const targets: number[] = [];
+      const port = createChromeCaptureRuntimePort({
+        tabs: {
+          async get(id) {
+            return { id, url: sensitiveUrl };
+          },
+        },
+        scripting: {
+          async executeScript(details) {
+            targets.push(details.target.tabId);
+            throw failure;
+          },
+        },
+      });
+
+      assert.deepEqual(
+        await port.inject({ tabId: TAB, url: sensitiveUrl }, REQUEST),
+        { ok: false, error: expected },
+      );
+      assert.deepEqual(targets, [TAB]);
+    }
+    assert.deepEqual(logs, []);
+  } finally {
+    console.error = originalError;
+    console.warn = originalWarn;
+  }
 });

@@ -170,7 +170,7 @@
   - _Boundary: ExtensionPermissions, ProductionFixtures, ArtifactValidation, SecurityLogging_
 
 - [ ] 6. 移行後の動線と非回帰を検証する
-- [ ] 6.1 candidate pre-editとproject回復のunit・integration testを完成する
+- [x] 6.1 candidate pre-editとproject回復のunit・integration testを完成する
   - unknown activation、pre-edit検証、既存project解決、project不存在pending、作成成功・失敗・取消を網羅する。
   - capture終了ではdraftが残りpanel document破棄後は復元されない寿命を実際のregistration構成で確認する。
   - candidate-management test suiteが保存時validatorとの段階差を含めて決定的に通る。
@@ -178,7 +178,7 @@
   - _Requirements: 1.2, 1.4, 1.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.4_
   - _Boundary: CandidateManagementTests_
 
-- [ ] 6.2 固定tab runtimeのfail-closed testを完成する
+- [x] 6.2 固定tab runtimeのfail-closed testを完成する
   - activation固定tab、制限URL、URL欠落、権限喪失、tab更新・閉鎖、出所不一致をruntime adapterとcoordinatorで検証する。
   - 失敗時に別tabを再解決せずscriptを注入せず、機密的なページ由来値をログへ残さないことをassertする。
   - runtime／coordinator test suiteがChrome mockの権限差を含めて通る。
@@ -186,7 +186,7 @@
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 3.4, 3.5, 5.2, 5.4_
   - _Boundary: CaptureRuntimeTests, CaptureSecurityTests_
 
-- [ ] 6.3 capture stateとhandoff世代のtestを完成する
+- [x] 6.3 capture stateとhandoff世代のtestを完成する
   - idle／extracting／failed、retained intent、retry、manual、候補なし、conclude成功・失敗を網羅する。
   - stale callback、二重完了、新activationが現行世代やcandidate stateを変更しないことを確認する。
   - product-capture unit／integration suiteから旧review／submitting／saved期待値が消えた状態で通す。

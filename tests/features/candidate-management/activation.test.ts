@@ -185,6 +185,32 @@ test("不正な未解決 prefill は invalid_activation へ写像し state を�
   assert.equal(state.value.editor, null);
 });
 
+test("unknown activation の非object入力を副作用前に拒否する", async () => {
+  for (const payload of [undefined, null, [], "prefill", 42]) {
+    const state = createState();
+    await state.load();
+    const registry = createFeatureRegistry();
+    assert.equal(registry.register(createRegistration(state)).ok, true);
+
+    const result = createActivationRouter({ registry }).prepare({
+      featureId,
+      target: "open-candidate-editor",
+      payload,
+    });
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: {
+        kind: "invalid_activation",
+        detail: "candidate editor prefill is invalid",
+      },
+    });
+    assert.equal(state.value.editor, null);
+    assert.equal(state.value.pendingPreEdit, null);
+    assert.equal(state.value.isSaving, false);
+  }
+});
+
 test("project が0件でも未解決 prefill を pending に受理して capture 終了後まで保持する", async () => {
   const state = createState([]);
   await state.load();
