@@ -194,7 +194,7 @@
   - _Requirements: 1.1, 1.3, 1.5, 1.6, 2.1, 2.2, 2.5, 2.7, 3.1, 3.2, 5.1, 5.2, 5.3, 5.4_
   - _Boundary: ProductCaptureStateTests, CaptureHandoffTests_
 
-- [ ] 6.4 production compositionと公開契約のtestを完成する
+- [x] 6.4 production compositionと公開契約のtestを完成する
   - capture factoryの依存が正確に3つで、transient registrationにnavigation metadataがなく、shell lifecycleとcandidate intentの公開entry pointだけを使うことを検証する。
   - start前、正常起動、cleanup後のlifecycleと全consumer typecheckをproduction compositionで確認する。
   - candidate-management公開APIの`query`、intent factory、`sources: { catalog, mutations }` exact parityを確認し、boundary／public API regression suiteが削除symbolと`nav.productCapture`なしで通る。

@@ -133,6 +133,19 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   assert.equal(productCapture.registration.presentation, "transient");
   assert.equal("navigation" in productCapture.registration, false);
   assert.deepEqual(Object.keys(productCapture).sort(), ["key", "registration"]);
+  assert.deepEqual(
+    Object.keys(candidateManagement.registration.publicApi).sort(),
+    ["createCandidateEditorIntent", "query", "sources"],
+  );
+  assert.deepEqual(
+    Object.keys(candidateManagement.registration.publicApi.sources).sort(),
+    ["catalog", "mutations"],
+  );
+  assert.equal("capture" in candidateManagement.registration.publicApi, false);
+  assert.equal(
+    "openCandidateEditor" in candidateManagement.registration.publicApi,
+    false,
+  );
   assert.equal(compatibility.registration.id, "compatibility");
   assert.ok(isPersistent(compatibility.registration));
   assert.equal(
@@ -145,6 +158,157 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     typeof compatibility.registration.publicApi.query.evaluate,
     "function",
   );
+});
+
+test("production capture compositionは公開lifecycleとintent factoryだけで起動・cleanupする", async () => {
+  const lifecycleEvents: unknown[] = [];
+  const context = {
+    data: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    fullDataPort: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+      async assessReplacement() {
+        return { ok: true, value: {} } as never;
+      },
+      async replaceRoot() {
+        return { ok: true, value: {} } as never;
+      },
+      async runMaintenance() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    navigator: {
+      async activate() {
+        return { ok: true, value: undefined };
+      },
+    },
+    transientSurface: {
+      isCurrent() {
+        lifecycleEvents.push("isCurrent");
+        return true;
+      },
+      async conclude(activationId: unknown, intent: unknown) {
+        lifecycleEvents.push({ activationId, intent });
+        return { ok: true as const, value: undefined };
+      },
+    },
+  };
+  const contributions = createSidePanelFeatureContributions(context as never, {
+    tabs: {
+      async get(tabId) {
+        return {
+          id: tabId,
+          url: "https://catalog.example.invalid/production-part",
+        };
+      },
+      async create() {
+        return {};
+      },
+    },
+    scripting: {
+      async executeScript(injection) {
+        return injection.files === undefined
+          ? [
+              {
+                result: {
+                  pageUrl: "https://catalog.example.invalid/production-part",
+                  candidates: [
+                    {
+                      field: "name",
+                      rawValue: "架空 production CPU",
+                      source: "heading",
+                      sourceLabel: "h1",
+                    },
+                  ],
+                },
+              },
+            ]
+          : [{}];
+      },
+    },
+  });
+  const candidateManagement = contributions[0];
+  const productCapture = contributions[2];
+  const activation = productCapture.registration.activation;
+  assert.ok(activation);
+  await assert.rejects(
+    productCapture.registration.mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    }),
+  );
+  assert.deepEqual(lifecycleEvents, []);
+  const validated = activation.validate({
+    featureId: productCapture.registration.id,
+    target: "capture",
+    payload: { activationId: "production-activation", tabId: 41 },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  await activation.activate(validated.value);
+  assert.deepEqual(lifecycleEvents, []);
+
+  const container = document.createElement("div");
+  const handle = await productCapture.registration.mount({
+    container,
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+  });
+  assert.equal(
+    typeof candidateManagement.registration.publicApi
+      .createCandidateEditorIntent,
+    "function",
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const start = container.querySelector<HTMLButtonElement>(
+    "[data-capture-start]",
+  );
+  assert.ok(start);
+  start.click();
+  for (
+    let attempt = 0;
+    attempt < 20 && lifecycleEvents.length < 3;
+    attempt += 1
+  )
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(lifecycleEvents[0], "isCurrent");
+  assert.equal(lifecycleEvents[1], "isCurrent");
+  assert.deepEqual(lifecycleEvents[2], {
+    activationId: "production-activation",
+    intent: {
+      featureId: "candidate-management",
+      target: "open-candidate-editor",
+      payload: {
+        draft: {
+          category: "uncategorized",
+          normalizedAttributes: { category: "uncategorized" },
+          product: {
+            name: {
+              confirmed: "架空 production CPU",
+              original: "架空 production CPU",
+            },
+          },
+        },
+      },
+    },
+  });
+  const completedEventCount = lifecycleEvents.length;
+  await handle.unmount();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(lifecycleEvents.length, completedEventCount);
+  assert.equal(container.childElementCount, 0);
 });
 
 test("side panel compositionはtabs.createを候補再訪portへ注入する", async () => {
