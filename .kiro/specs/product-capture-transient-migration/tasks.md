@@ -214,6 +214,7 @@
   - 未パッケージMV3拡張でaction iconから固定tab captureを起動し、抽出結果をcandidate editorへ引き渡す。
   - project存在時と不存在時の双方で、後者は作成後に再抽出せずeditorへ到達することを確認する。
   - synthetic production featureなしで主要動線とproduction artifactが成立するE2Eを通す。
+  - _Blocked: Playwrightのextension page／service worker操作ではChrome toolbar actionの明示user gestureとactiveTab付与を生成できず、storage seed・恒久host permission・test-only production hookはいずれもicon起動を証明しないか要件3.5／task boundaryへ違反する。実toolbar clickを駆動できるE2E harnessまたは承認済みのmanual verification gateが必要。_
   - _Depends: 6.5_
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.6, 5.5, 5.6_
   - _Boundary: ExtensionE2E, ProductionBuild_
