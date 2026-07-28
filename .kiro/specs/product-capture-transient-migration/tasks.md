@@ -46,7 +46,7 @@
   - _Requirements: 1.4, 1.7, 4.2, 4.6, 5.4_
   - _Boundary: ProjectCreationService, CandidateManagementState_
 
-- [ ] 2.4 project-required UIと回復操作を実装する
+- [x] 2.4 project-required UIと回復操作を実装する
   - pending pre-edit時にproject作成が必要な理由、作成操作、取消操作を表示し、抽出済み内容を確認可能にする。
   - 作成失敗を同じ画面へ安全な文言で表示し、再試行または取消ができ、成功後はeditorへ切り替える。
   - prompt、error、cancel、成功後editorのDOM testを日英message catalog込みで通す。

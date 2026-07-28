@@ -9,6 +9,10 @@ export const candidate = {
   newProjectNameLabel: "New project name",
   projectNameLabel: "Project name",
   createProjectAction: "Create project",
+  projectRequiredTitle: "Create a project to continue",
+  projectRequiredReason:
+    "A project is needed before this extracted candidate can be edited and saved.",
+  projectRequiredExtractedSummary: "Extracted candidate",
   saveProjectNameAction: "Save project name",
   projectNameRequiredError: "Enter a project name",
   createCandidateAction: "Create candidate",

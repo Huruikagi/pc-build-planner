@@ -13,6 +13,10 @@ export const candidate = {
   newProjectNameLabel: "新しいプロジェクト名",
   projectNameLabel: "プロジェクト名",
   createProjectAction: "プロジェクトを作成",
+  projectRequiredTitle: "続行するにはプロジェクトを作成してください",
+  projectRequiredReason:
+    "抽出した候補を編集して保存するには、所属するプロジェクトが必要です。",
+  projectRequiredExtractedSummary: "抽出済みの候補",
   saveProjectNameAction: "プロジェクト名を保存",
   projectNameRequiredError: "プロジェクト名を入力してください",
   createCandidateAction: "候補を作成",

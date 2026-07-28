@@ -1127,6 +1127,85 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         };
   })();
 
+  if (value.pendingPreEdit !== null) {
+    const draft = value.pendingPreEdit.draft;
+    return (
+      <section
+        aria-label={messages("candidate.title")}
+        className="candidate-management"
+      >
+        <section
+          aria-label={messages("candidate.projectRequiredTitle")}
+          data-region="project-required"
+        >
+          <h2>{messages("candidate.projectRequiredTitle")}</h2>
+          <p>{messages("candidate.projectRequiredReason")}</p>
+          <h3>{messages("candidate.projectRequiredExtractedSummary")}</h3>
+          <dl>
+            <dt>{messages("candidate.nameFieldLabel")}</dt>
+            <dd>{displayValue(draft.product.name, messages)}</dd>
+            <dt>{messages("candidate.categoryFieldLabel")}</dt>
+            <dd>{messages(categoryMessageKeys[draft.category])}</dd>
+            <dt>{messages("candidate.manufacturerFieldLabel")}</dt>
+            <dd>{displayValue(draft.product.manufacturer, messages)}</dd>
+            <dt>{messages("candidate.modelNumberFieldLabel")}</dt>
+            <dd>{displayValue(draft.product.modelNumber, messages)}</dd>
+          </dl>
+          <form onSubmit={(event) => void saveProject(event)}>
+            <label>
+              {messages("candidate.newProjectNameLabel")}
+              <input
+                aria-describedby={
+                  projectNameError === null
+                    ? undefined
+                    : "pending-project-name-error"
+                }
+                aria-invalid={projectNameError === null ? undefined : true}
+                disabled={value.isSaving || value.mutationsDisabled}
+                name="project-name"
+                onChange={(event) => {
+                  setProjectName(event.target.value);
+                  setProjectNameError(null);
+                }}
+                value={projectName}
+              />
+            </label>
+            {projectNameError === null ? null : (
+              <p id="pending-project-name-error" role="alert">
+                {projectNameError}
+              </p>
+            )}
+            {value.displayError === null ? null : (
+              <p role="alert">
+                {errorMessage(value.displayError.code, messages)}
+              </p>
+            )}
+            <button
+              data-create-pending-project
+              disabled={value.isSaving || value.mutationsDisabled}
+              type="submit"
+            >
+              {messages("candidate.createProjectAction")}
+            </button>
+            <button
+              data-cancel-pending-pre-edit
+              disabled={value.isSaving}
+              onClick={() => {
+                state.cancelPendingPreEdit();
+                setProjectName("");
+                setProjectNameError(null);
+                rerender();
+              }}
+              type="button"
+            >
+              {messages("common.cancel")}
+            </button>
+          </form>
+        </section>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label={messages("candidate.title")}
