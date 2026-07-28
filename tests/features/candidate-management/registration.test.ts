@@ -16,6 +16,7 @@ import type {
   CandidateManagementService,
   CandidateQuery,
   CaptureCandidatePort,
+  UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
@@ -263,6 +264,118 @@ test("snapshotなしの再mountは前回の未保存draftと削除確認を持�
   assert.equal(state.value.displayError, null);
   assert.deepEqual(state.value.projects.length, 1);
   await second.unmount();
+});
+
+test("capture handoffのpending pre-editは同一panel sessionで保持し、新しいdocument sessionへ復元しない", async () => {
+  const query = {
+    async listProjects() {
+      return { ok: true as const, value: [] };
+    },
+    async listCandidates() {
+      return { ok: true as const, value: [] };
+    },
+    async listBuildEligible() {
+      return { ok: true as const, value: [] };
+    },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
+  } satisfies CandidateQuery;
+  const createState = () =>
+    createManagementState({
+      query,
+      service: {} as CandidateManagementService,
+      createMutationContext: () => ({
+        requestId: "20000000-0000-4000-8000-000000000001" as never,
+        expectedRevision: 0 as Revision,
+      }),
+    });
+  const pending = {
+    draft: {
+      category: "uncategorized",
+      product: { name: { original: "架空の抽出候補" } },
+      normalizedAttributes: { category: "uncategorized" },
+    },
+  } satisfies UnresolvedCandidateEditorPrefill;
+  let subscriptions = 0;
+  let releases = 0;
+  const policy = {
+    isAllowed: () => true,
+    subscribe() {
+      subscriptions += 1;
+      return () => {
+        releases += 1;
+      };
+    },
+  };
+  const sessionState = createState();
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query,
+    capture: {} as CaptureCandidatePort,
+    state: sessionState,
+  });
+
+  const firstContainer = document.createElement("div");
+  const first = await registration.mount({
+    container: firstContainer,
+    operationPolicy: policy,
+    reportError: () => {},
+  });
+  const validated = registration.activation?.validate({
+    featureId: registration.id,
+    target: "open-candidate-editor",
+    payload: pending,
+  });
+  assert.equal(validated?.ok, true);
+  if (validated === undefined || !validated.ok)
+    throw new Error("candidate activation must validate");
+  // Successful activation is the handoff boundary after which capture may end.
+  const activated = await registration.activation?.activate(validated.value);
+  assert.deepEqual(activated, { ok: true, value: undefined });
+  assert.deepEqual(sessionState.value.pendingPreEdit, pending);
+  const captured = await first.captureState?.();
+  await first.unmount();
+  assert.equal(releases, 1);
+  assert.equal(firstContainer.textContent, "");
+  // A post-unmount state notification must not recreate or update the React UI.
+  sessionState.rejectSnapshotRestore();
+  assert.equal(firstContainer.textContent, "");
+  assert.deepEqual(sessionState.value.pendingPreEdit, pending);
+
+  const second = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: policy,
+    reportError: () => {},
+    restoredState: captured?.ok ? captured.value : undefined,
+  });
+  assert.deepEqual(sessionState.value.pendingPreEdit, pending);
+  assert.equal(sessionState.value.displayError, null);
+  await second.unmount();
+  assert.equal(subscriptions, 2);
+  assert.equal(releases, 2);
+
+  // A recreated composition models a new side-panel document. The opaque
+  // feature snapshot deliberately excludes panel-session-only pre-edit data.
+  const recreatedState = createState();
+  const recreated = await createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query,
+    capture: {} as CaptureCandidatePort,
+    state: recreatedState,
+  }).mount({
+    container: document.createElement("div"),
+    operationPolicy: policy,
+    reportError: () => {},
+    restoredState: captured?.ok ? captured.value : undefined,
+  });
+  assert.equal(recreatedState.value.pendingPreEdit, null);
+  await recreated.unmount();
+  assert.equal(subscriptions, 3);
+  assert.equal(releases, 3);
 });
 
 test("mountできるstateを持たないregistrationはmountを成功と偽らない", async () => {

@@ -53,7 +53,7 @@
   - _Requirements: 1.4, 4.2, 4.6, 5.4_
   - _Boundary: CandidateManagementView, MessageCatalog_
 
-- [ ] 2.5 pending pre-editのpanel session寿命をcompositionへ接続する
+- [x] 2.5 pending pre-editのpanel session寿命をcompositionへ接続する
   - candidate-management registrationとmount lifecycleへpending stateを接続し、capture unmountでは破棄しない。
   - panel document破棄後は復元しないsession限定の寿命とし、cleanup時に購読・一時状態を確実に解放する。
   - capture終了、feature切替、panel document破棄のintegration testで保持・破棄条件を観測できるようにする。
