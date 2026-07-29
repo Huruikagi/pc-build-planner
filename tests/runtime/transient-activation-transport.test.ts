@@ -58,6 +58,30 @@ test("worker transport preserves authorized decisions for trusted extension pane
   assert.deepEqual(response, { version: 1, ok: true, decision });
 });
 
+test("worker transportは通常tabで開いたexact side-panel documentも認証する", async () => {
+  const { runtime, getListener } = fixture();
+  let calls = 0;
+  registerTransientWatchReadyListener(runtime, {
+    authorizeAfterWatchReady: async () => {
+      calls += 1;
+      return ok(decision);
+    },
+  });
+  const response = await new Promise<unknown>((resolve) => {
+    getListener()?.(
+      { version: 1, kind: "transient-watch-ready", activationId: id },
+      {
+        id: runtime.id,
+        tab: { id: 7 },
+        url: runtime.getURL("side-panel.html"),
+      },
+      resolve,
+    );
+  });
+  assert.deepEqual(response, { version: 1, ok: true, decision });
+  assert.equal(calls, 1);
+});
+
 test("activated stageはpanelからtrusted worker schedulerへ委譲する", async () => {
   const { runtime, getListener } = fixture();
   const advanced: string[] = [];
@@ -113,6 +137,18 @@ test("worker transport rejects untrusted senders and malformed requests", async 
     await invoke(
       { version: 1, kind: "transient-watch-ready", activationId: id },
       { id: runtime.id, url: runtime.getURL("options.html") },
+    ),
+    { version: 1, ok: false, code: "invalid-message" },
+  );
+  assert.deepEqual(
+    await invoke(
+      { version: 1, kind: "transient-watch-ready", activationId: id },
+      {
+        id: runtime.id,
+        get url() {
+          throw new Error("untrusted getter");
+        },
+      },
     ),
     { version: 1, ok: false, code: "invalid-message" },
   );

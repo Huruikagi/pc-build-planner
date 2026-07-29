@@ -1,9 +1,8 @@
 import type { ActivationId } from "../application-shell/transient-surface-ports.js";
 import { err, ok, type Result } from "../domain/public.js";
-import {
-  classifyCaller,
-  type FoundationMessageRuntime,
-  type RuntimeMessageListener,
+import type {
+  FoundationMessageRuntime,
+  RuntimeMessageListener,
 } from "./foundation-message-target.js";
 import type {
   ActivationAuthorization,
@@ -57,6 +56,21 @@ export interface WatchReadyScheduler {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isTrustedSidePanelSender = (
+  runtime: FoundationMessageRuntime,
+  sender: unknown,
+): boolean => {
+  try {
+    return (
+      isRecord(sender) &&
+      sender.id === runtime.id &&
+      sender.url === runtime.getURL("side-panel.html")
+    );
+  } catch {
+    return false;
+  }
+};
 
 const parseRequest = (
   value: unknown,
@@ -135,10 +149,7 @@ export const registerTransientWatchReadyListener = (
             readonly stage: "activated";
           })
         : undefined;
-    const trustedPanel =
-      classifyCaller(runtime, sender).kind === "trusted-extension" &&
-      isRecord(sender) &&
-      sender.url === runtime.getURL("side-panel.html");
+    const trustedPanel = isTrustedSidePanelSender(runtime, sender);
     if (
       (request === undefined && stageRequest === undefined) ||
       !trustedPanel

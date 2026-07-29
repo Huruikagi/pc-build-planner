@@ -214,7 +214,7 @@
   - action後と同形のdurable activationをproduction session transportへ投入し、実product-capture登録で固定tab captureを起動して抽出結果をcandidate editorへ引き渡す。
   - project存在時と不存在時の双方で、後者は作成後に再抽出せずeditorへ到達することを確認する。
   - fixture投入をicon起動または`activeTab`付与の証明とは扱わず、synthetic production featureなしでproduction transport以降の主要動線とartifactを検証する。
-  - _Blocked: 上流`transient-feature-surface`のcontroller requestがproduct-capture activation adapterへactivationId／固定tabを配送せず、未activation stateを先にmountしてproductionで`feature-mount-failed`になる。下流hookで迂回せず、上流contractを修復して再検証する必要がある。_
+  - _Blocked: exact `side-panel.html`を通常tabで開くproduction harnessのwatch-ready認証は上流で修復済み。一方、durable activationのfixture投入はtoolbar user gestureではないため`activeTab`を付与せず、実`chrome.scripting.executeScript`が権限喪失として拒否されcandidate editorまで自動到達できない。6.8へ委譲済みのmanual icon smokeと6.6の自動成功経路を両立するproduction-safe test seam、またはタスク境界の承認済み見直しが必要。_
   - _Depends: 6.5, transient-feature-surface 6.5_
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.6, 5.5, 5.6_
   - _Boundary: ExtensionE2E, ProductionBuild_
