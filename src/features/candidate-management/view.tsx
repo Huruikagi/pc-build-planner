@@ -799,8 +799,13 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
                       >,
                     })
                   }
-                  value={source.kind ?? "retail"}
+                  value={source.kind ?? ""}
                 >
+                  {source.kind === undefined ? (
+                    <option disabled value="">
+                      {messages("candidate.sources.kind.retail")}
+                    </option>
+                  ) : null}
                   <option value="retail">
                     {messages("candidate.sources.kind.retail")}
                   </option>
@@ -872,7 +877,6 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
             state.addEditorSource({
               id: createUuid() as CandidateSourceId,
               pageUrl: "",
-              kind: "retail",
             });
             rerender();
           }}

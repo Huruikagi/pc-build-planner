@@ -8,6 +8,7 @@ import type {
   Revision,
   UtcTimestamp,
 } from "../../../src/domain/public.js";
+import type { CandidateDraft } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
 import type { CandidateSourceDataPort } from "../../../src/features/candidate-management/source-data-port.js";
 import type {
@@ -324,4 +325,67 @@ test("schema 2 validation失敗はmutationせず旧候補を維持する", async
   assert.equal(result.ok ? "ok" : result.error.kind, "validation");
   assert.equal(h.commands.length, 0);
   assert.deepEqual(h.root().candidateParts[0], before);
+});
+
+test("手動editorで追加したsourceは保存時に自動分類し明示上書きを優先する", async () => {
+  const h = harness();
+  const candidate = h.root().candidateParts[0];
+  assert.ok(candidate);
+  assert.ok(candidate.product.name);
+  const manufacturerId =
+    "30000000-0000-4000-8000-000000000091" as CandidateSourceId;
+  const retailId = "30000000-0000-4000-8000-000000000092" as CandidateSourceId;
+  const overrideId =
+    "30000000-0000-4000-8000-000000000093" as CandidateSourceId;
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+    classifier: {
+      classify: (pageUrl) =>
+        pageUrl.includes("manufacturer") ? "manufacturer" : "retail",
+    },
+  });
+  const result = await service.updateCandidate(
+    {
+      id: candidate.id,
+      draft: {
+        projectId: candidate.projectId,
+        category: candidate.category,
+        product: { ...candidate.product, name: candidate.product.name },
+        normalizedAttributes: candidate.normalizedAttributes,
+        sources: [
+          ...candidate.sources,
+          {
+            id: manufacturerId,
+            pageUrl: "https://manufacturer.example.invalid/item",
+          },
+          {
+            id: retailId,
+            pageUrl: "https://shop.example.invalid/item",
+          },
+          {
+            id: overrideId,
+            pageUrl: "https://manufacturer.example.invalid/overridden",
+            kind: "retail",
+          },
+        ],
+        primarySourceId: candidate.primarySourceId,
+      } as CandidateDraft,
+    },
+    context,
+  );
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(
+    result.value.sources.find(({ id }) => id === manufacturerId)?.kind,
+    "manufacturer",
+  );
+  assert.equal(
+    result.value.sources.find(({ id }) => id === retailId)?.kind,
+    "retail",
+  );
+  assert.equal(
+    result.value.sources.find(({ id }) => id === overrideId)?.kind,
+    "retail",
+  );
 });

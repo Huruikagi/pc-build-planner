@@ -182,6 +182,13 @@ export const createCandidateManagementService = (
   const classifier: SourceKindClassifier = dependencies.classifier ?? {
     classify: () => "retail",
   };
+  const classifySource = (source: CandidatePart["sources"][number]) =>
+    source.pageUrl === undefined
+      ? source
+      : {
+          ...source,
+          kind: resolveSourceKind(source.pageUrl, source.kind, classifier),
+        };
   const sourceData = dependencies.sourceData;
 
   const sourceValidation = (candidate: CandidatePart) => {
@@ -228,7 +235,11 @@ export const createCandidateManagementService = (
     } as CandidatePart;
     const validated = sourceValidation(updated);
     if (!validated.ok) return validated;
-    const mutation = await sourceData.mutateCandidate(updated, context);
+    const mutation = await sourceData.mutateCandidate(
+      updated,
+      context,
+      "update",
+    );
     return mutation.ok
       ? { ok: true, value: updated }
       : {
@@ -401,13 +412,6 @@ export const createCandidateManagementService = (
       const validated = candidateValidation(input);
       if (!validated.ok) return validated;
       const createdAt = now();
-      const classifySource = (source: CandidatePart["sources"][number]) =>
-        source.pageUrl === undefined
-          ? source
-          : {
-              ...source,
-              kind: resolveSourceKind(source.pageUrl, source.kind, classifier),
-            };
       const [firstSource, ...remainingSources] = input.sources ?? [];
       const primarySourceId = input.primarySourceId;
       const sourceState: CandidateSourceState =
@@ -436,7 +440,11 @@ export const createCandidateManagementService = (
       };
       const candidate: CandidatePart = { ...candidateBase, ...sourceState };
       if (sourceData !== undefined) {
-        const mutation = await sourceData.mutateCandidate(candidate, context);
+        const mutation = await sourceData.mutateCandidate(
+          candidate,
+          context,
+          "create",
+        );
         return mutation.ok
           ? { ok: true, value: candidate }
           : {
@@ -471,13 +479,20 @@ export const createCandidateManagementService = (
         sourceSnapshot: _sourceSnapshot,
         ...draftBase
       } = input.draft;
+      const existingSourceIds = new Set(
+        existing.value.sources.map((source) => source.id),
+      );
       const sourceState: CandidateSourceState =
         input.draft.sources === undefined
           ? sourceStateOf(existing.value)
           : input.draft.sources.length === 0
             ? { sources: [] }
             : {
-                sources: input.draft.sources as readonly [
+                sources: input.draft.sources.map((source) =>
+                  existingSourceIds.has(source.id)
+                    ? source
+                    : classifySource(source),
+                ) as unknown as readonly [
                   CandidatePart["sources"][number],
                   ...CandidatePart["sources"][number][],
                 ],

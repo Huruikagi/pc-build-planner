@@ -16,6 +16,7 @@ import type { SourceKindClassifier } from "./source-kind-classifier.js";
 import type { SourcePagePort } from "./source-page-port.js";
 import { createManagementState } from "./state.js";
 
+export { createCandidateSourceDataPort } from "./source-data-port.js";
 export {
   createSourceKindClassifier,
   type SourceKindClassifier,

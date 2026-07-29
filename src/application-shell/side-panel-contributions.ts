@@ -5,6 +5,7 @@ import {
 import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
+  createCandidateSourceDataPort,
   createChromeSourcePagePort,
   createSourceKindClassifier,
   type SourcePagePort,
@@ -77,6 +78,7 @@ export const createSidePanelFeatureContributions = (
 ): SidePanelFeatureContributions => {
   const productCapturePublic = createProductCapturePublicApi();
   const candidateManagement = createCandidateManagementContribution(context, {
+    sourceData: createCandidateSourceDataPort(context.data),
     classifier: createSourceKindClassifier(
       productCapturePublic.manufacturerDomains,
     ),

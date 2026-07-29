@@ -167,6 +167,11 @@ test("source操作、種別上書き、primary切替、削除へDOMから到達�
   assert.equal(state.value.editor?.draft.sources?.length, 0);
   await user.click(screen.getByRole("button", { name: /ソースを追加/ }));
   assert.equal(state.value.editor?.draft.sources?.length, 1);
+  assert.equal(
+    state.value.editor?.draft.sources?.[0]?.kind,
+    undefined,
+    "新規手動sourceは利用者が種別を選ぶまで自動判定可能な状態を保つ",
+  );
 });
 
 test("不正価格・URLと保存前一覧を保持し、一覧とeditorを日英で安全に描画する", async () => {

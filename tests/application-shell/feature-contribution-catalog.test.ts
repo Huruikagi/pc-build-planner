@@ -14,11 +14,18 @@ import {
   getWorkerContributions,
 } from "../../src/application-shell/feature-contribution-catalog.js";
 import { createSidePanelFeatureContributions } from "../../src/application-shell/side-panel-contributions.js";
+import type {
+  CandidateSourceId,
+  LocalDataRoot,
+  Revision,
+} from "../../src/domain/public.js";
+import type { RootMutationCommand } from "../../src/persistence/public.js";
 import {
   defaultMessageResolver,
   type MessageKey,
   message,
 } from "../../src/ui-messages/public.js";
+import { sourceRoot } from "../fixtures/candidate-source-root.js";
 
 type NavigationMessageKey = Extract<MessageKey, `nav.${string}`>;
 
@@ -383,6 +390,64 @@ test("side panel compositionはtabs.createを候補再訪portへ注入する", a
       url: "https://shop.example.invalid/item",
     },
   );
+});
+
+test("production side panel compositionはcanonical dataをsource catalogとmutationへ接続する", async () => {
+  const root: LocalDataRoot = { ...sourceRoot(), revision: 7 as Revision };
+  const commands: RootMutationCommand[] = [];
+  const data = {
+    async query<T>(project: (snapshot: LocalDataRoot) => T) {
+      return { ok: true as const, value: project(root) };
+    },
+    async mutate(command: RootMutationCommand) {
+      commands.push(command);
+      return { ok: true as const, value: {} as never };
+    },
+  };
+  const contributions = createSidePanelFeatureContributions({
+    data,
+    fullDataPort: {
+      ...data,
+      async assessReplacement() {
+        return { ok: true as const, value: {} as never };
+      },
+      async replaceRoot() {
+        return { ok: true as const, value: {} as never };
+      },
+      async runMaintenance() {
+        return { ok: true as const, value: {} as never };
+      },
+    },
+    navigator: {
+      async activate() {
+        return { ok: true as const, value: undefined };
+      },
+    },
+  });
+  const api = contributions[0].registration.publicApi.sources;
+  const listed = await api.catalog.listSourceReferences({});
+  assert.equal(listed.ok && listed.value.length, 2);
+
+  const candidate = root.candidateParts[0];
+  const source = candidate?.sources[0];
+  assert.ok(candidate && source);
+  const updated = await api.mutations.updateSource({
+    candidateId: candidate.id,
+    source: { ...source, siteName: "更新後の架空販売店" },
+  });
+  assert.equal(updated.ok, true);
+  assert.equal(commands.length, 1);
+  const command = commands[0];
+  assert.ok(command);
+  assert.equal(command.operation.kind, "update");
+  assert.equal(command.operation.entity, "candidatePart");
+  assert.equal(command.expectedRevision, 7);
+  assert.equal(
+    (command.operation.value as LocalDataRoot["candidateParts"][number])
+      .sources[0]?.siteName,
+    "更新後の架空販売店",
+  );
+  assert.equal(candidate.primarySourceId as CandidateSourceId, source.id);
 });
 
 test("複数contributionを決定順でside panel・public API入力へ型付き提供する", () => {
