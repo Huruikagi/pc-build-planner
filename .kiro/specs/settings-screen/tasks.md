@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. 設定画面の公開契約と実装前提を整える
-- [ ] 1.1 上流の常設／一過性feature契約を実装前提として検証する
+- [x] 1. 設定画面の公開契約と実装前提を整える
+- [x] 1.1 上流の常設／一過性feature契約を実装前提として検証する
   - 上流`transient-feature-surface`のcanonical判別共用体で常設branchが`presentation: "persistent"`とnavigationを必須とし、一過性branchが`presentation: "transient"`でnavigationを禁止すること、および`product-capture-transient-migration`の一過性登録・常設navigation除外が実装済みであることを公開contractから確認する
   - 常設featureだけがnavigation、通常選択、初期選択、fallbackの対象になる既存contract検証をsettingsの前提gateとして実行する
   - 上流contractが欠ける場合は互換shimを本specへ追加せず、settings実装へ進む前に明示的に失敗させる
@@ -9,7 +9,7 @@
   - _Requirements: 5.5, 6.6_
   - _Boundary: UpstreamContractGate_
 
-- [ ] 1.2 (P) 設定用semantic message consumer・navigation・識別子契約を整える
+- [x] 1.2 (P) 設定用semantic message consumer・navigation・識別子契約を整える
   - 画面見出し、表示言語区画、backup区画、navigation label、起動例外時の二言語案内について、意味要件、consumer位置、observable guidanceを設定画面側の契約として固定する
   - viewとshell surfaceは`ui-message-catalog`の公開key／resolver契約だけを利用し、exact key名、ja/en値、namespace shape、placeholder、parity、fallback、廃止keyを定義・編集しない
   - settings用の同梱navigation iconと、画面・言語・backup区画を表示文言に依存せず特定する識別子を定める
@@ -18,7 +18,7 @@
   - _Requirements: 1.1, 1.5, 3.4, 3.5, 5.3, 5.4, 6.1_
   - _Boundary: SettingsMessageConsumerAndLocatorContract_
 
-- [ ] 1.3 (P) canonical backup section mount契約を受け入れる
+- [x] 1.3 (P) canonical backup section mount契約を受け入れる
   - `backup-restore` task 6.1が実装・公開する`BackupRestoreSectionMount`をpublic entryだけから受け取り、settingsの安定hostと既存mount contextを渡すconsumer境界を固定する
   - settingsはsection factory、backup service、restore service、state、file gateway、専用data capability、mount内部cleanupを実装・所有しない
   - 公開mount失敗時のsettings root rollback、返却handleの先行cleanup、二重settings unmountをsettings側のstub／integration contractで検証する
