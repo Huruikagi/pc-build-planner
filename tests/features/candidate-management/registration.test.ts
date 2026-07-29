@@ -388,3 +388,76 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   assert.equal(container.textContent, "");
   assert.equal(registration.activation, undefined);
 });
+
+test("mount中のactivation拒否だけをfeature診断へ安定コードで通知する", async () => {
+  const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
+  const query = {
+    async listProjects() {
+      return {
+        ok: true as const,
+        value: [
+          {
+            id: projectId,
+            name: "架空プロジェクト",
+            updatedAt: "2026-07-22T00:00:00.000Z" as never,
+          },
+        ],
+      };
+    },
+    async listCandidates() {
+      return { ok: true as const, value: [] };
+    },
+    async listBuildEligible() {
+      return { ok: true as const, value: [] };
+    },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
+  } satisfies CandidateQuery;
+  const state = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => {
+      throw new Error("not used");
+    },
+  });
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query,
+    state,
+  });
+  const diagnostics: string[] = [];
+  const handle = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: {
+      isAllowed: (operation) => operation !== "mutation",
+      subscribe: () => () => {},
+    },
+    reportError: (message) => diagnostics.push(message),
+  });
+  const validated = registration.activation?.validate({
+    featureId: registration.id,
+    target: "open-candidate-editor",
+    payload: {
+      draft: {
+        category: "uncategorized",
+        product: { name: { original: "架空の取り込み候補" } },
+        normalizedAttributes: { category: "uncategorized" },
+      },
+    },
+  });
+  assert.equal(validated?.ok, true);
+  if (validated === undefined || !validated.ok) return;
+
+  assert.equal(
+    (await registration.activation?.activate(validated.value))?.ok,
+    false,
+  );
+  assert.deepEqual(diagnostics, ["activation-editor-mutation-disabled"]);
+  await handle.unmount();
+  await registration.activation?.activate(validated.value);
+  assert.deepEqual(diagnostics, ["activation-editor-mutation-disabled"]);
+});

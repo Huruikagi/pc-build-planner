@@ -101,6 +101,13 @@ export const createCandidateFeatureRegistration = (
   CandidateManagementPublicApi,
   CandidateActivationPrefill
 > => {
+  let reportActivationDiagnostic: ((message: string) => void) | undefined;
+  const activation =
+    dependencies.state === undefined
+      ? undefined
+      : createCandidateActivation(dependencies.state, (code) => {
+          reportActivationDiagnostic?.(`activation-${code}`);
+        });
   const mount =
     dependencies.mount ??
     (dependencies.state === undefined
@@ -142,8 +149,8 @@ export const createCandidateFeatureRegistration = (
     publicApi,
     getAvailability,
     subscribeAvailability,
-    mount(context: FeatureMountContext) {
-      return mount({
+    async mount(context: FeatureMountContext) {
+      const handle = await mount({
         container: context.container,
         data: dependencies.data,
         operationPolicy: context.operationPolicy,
@@ -152,9 +159,19 @@ export const createCandidateFeatureRegistration = (
           ? {}
           : { restoredState: context.restoredState }),
       });
+      reportActivationDiagnostic = context.reportError;
+      let unmounted = false;
+      return {
+        ...handle,
+        async unmount() {
+          if (unmounted) return;
+          unmounted = true;
+          if (reportActivationDiagnostic === context.reportError)
+            reportActivationDiagnostic = undefined;
+          await handle.unmount();
+        },
+      };
     },
-    ...(dependencies.state === undefined
-      ? {}
-      : { activation: createCandidateActivation(dependencies.state) }),
+    ...(activation === undefined ? {} : { activation }),
   };
 };

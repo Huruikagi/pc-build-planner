@@ -774,7 +774,7 @@ test("stopのunmountが常に失敗してもownershipを保持して再stopで�
   );
 });
 
-test("別featureへのactivationはmount後に一度配送し、適用失敗では直前featureを回復する", async () => {
+test("別featureへのactivationはmount後に一度配送し、適用失敗では安定診断を残して直前featureを回復する", async () => {
   const events: string[] = [];
   const previous = feature("previous", 0, events);
   const target: ApplicationFeatureRegistration<object, unknown> = {
@@ -793,7 +793,7 @@ test("別featureへのactivationはmount後に一度配送し、適用失敗で�
       },
     },
   };
-  const { container, host } = setup([previous, target]);
+  const { container, diagnostics, host } = setup([previous, target]);
   await host.start();
 
   const result = await host.activate({
@@ -818,6 +818,9 @@ test("別featureへのactivationはmount後に一度配送し、適用失敗で�
     container.querySelector("[data-feature]")?.getAttribute("data-feature"),
     "previous",
   );
+  assert.deepEqual(diagnostics, [
+    "side-panel-host: activation-apply-failed-activation_failed featureId=target",
+  ]);
   await host.stop();
 });
 

@@ -5,6 +5,7 @@ import { createFeatureRegistry } from "../../../src/application-shell/feature-re
 import type { FeatureId } from "../../../src/application-shell/public.js";
 import { createActivationRouter } from "../../../src/application-shell/public.js";
 import type { ProjectId, Uuid } from "../../../src/domain/public.js";
+import { createCandidateActivation } from "../../../src/features/candidate-management/activation.js";
 import type {
   CandidateManagementService,
   CandidateQuery,
@@ -307,6 +308,31 @@ test("mutation が禁止された状態の activation は編集画面を開か�
     },
   });
   assert.equal(state.value.editor, null);
+  state.releaseOperationPolicy();
+});
+
+test("activation拒否は商品payloadを含めず安定診断コードだけを通知する", async () => {
+  const state = createState();
+  await state.load();
+  state.attachOperationPolicy({
+    isAllowed: (operation) => operation !== "mutation",
+    subscribe: () => () => {},
+  });
+  const diagnostics: string[] = [];
+  const activation = createCandidateActivation(state, (code) =>
+    diagnostics.push(code),
+  );
+  const validated = activation.validate({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { draft: unresolvedDraft },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  assert.equal((await activation.activate(validated.value)).ok, false);
+  assert.deepEqual(diagnostics, ["editor-mutation-disabled"]);
+  assert.equal(JSON.stringify(diagnostics).includes("架空"), false);
   state.releaseOperationPolicy();
 });
 

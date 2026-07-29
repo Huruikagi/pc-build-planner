@@ -433,10 +433,23 @@ export function createSidePanelHost(
     const prepared = createActivationRouter({
       registry: options.registry,
     }).prepare(intent);
-    if (!prepared.ok) return err(prepared.error);
+    if (!prepared.ok) {
+      reportDiagnostic(
+        `activation-prepare-failed-${prepared.error.kind}`,
+        intent.featureId,
+      );
+      return err(prepared.error);
+    }
 
-    if (selected === prepared.value.feature.id && mounted !== undefined)
-      return prepared.value.activate();
+    if (selected === prepared.value.feature.id && mounted !== undefined) {
+      const applied = await prepared.value.activate();
+      if (!applied.ok)
+        reportDiagnostic(
+          `activation-apply-failed-${applied.error.kind}`,
+          intent.featureId,
+        );
+      return applied;
+    }
 
     const previous = selected === null ? undefined : find(selected);
     const snapshot =
@@ -457,6 +470,10 @@ export function createSidePanelHost(
     }
     const applied = await prepared.value.activate();
     if (applied.ok) return applied;
+    reportDiagnostic(
+      `activation-apply-failed-${applied.error.kind}`,
+      intent.featureId,
+    );
 
     const released = await unmountCurrent();
     if (!released.ok) {

@@ -101,6 +101,13 @@ export type CandidateActivationPrefill =
   | LegacyCandidateEditorPrefill
   | UnresolvedCandidateEditorPrefill;
 
+export type CandidateActivationDiagnosticCode =
+  | "prefill-invalid"
+  | "project-unavailable"
+  | "pending-pre-edit-unavailable"
+  | "editor-mutation-disabled"
+  | "editor-state-unavailable";
+
 const isUnresolvedCandidateEditorPrefill = (
   prefill: CandidateActivationPrefill,
 ): boolean => !("projectId" in prefill.draft);
@@ -118,12 +125,16 @@ const isCandidateEditorPrefill = (
 /** Revalidates shell-delivered unknown payloads before changing feature UI state. */
 export const createCandidateActivation = (
   state: ManagementState,
+  reportDiagnostic: (
+    code: CandidateActivationDiagnosticCode,
+  ) => void = () => {},
 ): FeatureActivationAdapter<CandidateActivationPrefill> => ({
   validate(intent: FeatureActivationIntent) {
     if (
       intent.featureId !== candidateManagementFeatureId ||
       intent.target !== openCandidateEditorTarget
     ) {
+      reportDiagnostic("prefill-invalid");
       return err<FeatureActivationError>({
         kind: "invalid_activation",
         detail: "candidate editor prefill is invalid",
@@ -132,6 +143,7 @@ export const createCandidateActivation = (
     const unresolved = validateCandidateEditorPrefill(intent.payload);
     if (unresolved.ok) return unresolved;
     if (isCandidateEditorPrefill(intent.payload)) return ok(intent.payload);
+    reportDiagnostic("prefill-invalid");
     return err<FeatureActivationError>({
       kind: "invalid_activation",
       detail: "candidate editor prefill is invalid",
@@ -151,11 +163,13 @@ export const createCandidateActivation = (
     ) {
       state.holdPendingPreEdit(prefill);
       if (state.value.pendingPreEdit !== null) return ok(undefined);
+      reportDiagnostic("pending-pre-edit-unavailable");
     }
     if (
       projectId === undefined ||
       !state.value.projects.some((project) => project.id === projectId)
     ) {
+      reportDiagnostic("project-unavailable");
       return err<FeatureActivationError>({
         kind: "activation_failed",
         detail: "project does not exist",
@@ -184,6 +198,11 @@ export const createCandidateActivation = (
      * see is open.
      */
     if (state.value.editor === null) {
+      reportDiagnostic(
+        state.value.mutationsDisabled
+          ? "editor-mutation-disabled"
+          : "editor-state-unavailable",
+      );
       return err<FeatureActivationError>({
         kind: "activation_failed",
         detail: "candidate editor could not be opened",
