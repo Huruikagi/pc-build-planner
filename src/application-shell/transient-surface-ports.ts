@@ -49,7 +49,8 @@ export type TransientTransitionFailureReason =
   | "target-activation-failed"
   | "operation-blocked"
   | "target-data-unavailable"
-  | "target-state-unavailable";
+  | "target-state-unavailable"
+  | "rollback-failed";
 
 /** Converts a typed shell activation failure into a safe, user-identifiable handoff reason. */
 export const transientHandoffFailure = (

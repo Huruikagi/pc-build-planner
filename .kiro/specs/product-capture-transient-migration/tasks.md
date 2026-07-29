@@ -226,7 +226,7 @@
   - _Requirements: 1.4, 2.5, 3.3, 5.5_
   - _Boundary: ExtensionE2E, TransientSurfaceLifecycle_
 
-- [ ] 6.8 全検証gateを実行し移行完了を確認する
+- [x] 6.8 全検証gateを実行し移行完了を確認する
   - lint、typecheck、unit、integration、E2E、boundary、artifact、permissionの全gateをproduction構成で実行する。
   - 同じcommitのproduction buildをChrome 116以降へ未パッケージロードし、実toolbar icon click、`activeTab`付与、固定tabへの実script注入・抽出、candidate editor到達をmanual smokeで確認する。
   - manual smoke未実施または失敗時は`MANUAL_VERIFY_REQUIRED`とし、fixture投入だけでfeature GOを主張しない。
@@ -239,3 +239,5 @@
 ## Implementation Notes
 
 - production workerのfeature catalogはDOM/React境界を保つため空なので、toolbar gestureはcanonical `productCaptureFeatureId`をcomposition rootから明示注入する。
+- cross-feature handoff前にshellがrollback snapshotを要求するため、product-captureのmount handleはページ内容を含めず`activationId`・固定`tabId`・内部世代だけをcapture/restoreする。shellはsource leaseをtarget mount前に解放し、handoff失敗時は保存した内部世代で進行中結果を受理できるsourceを復元する。復元不能時はcontrollerもinactiveへ倒し、非表示のcaptureをactiveとして残さない。
+- 2026-07-30、同一production buildをChromeへ再読み込みし、AMD Ryzen 7 9700Xの商品ページで実toolbar iconから「取り込みを開始」を実行してcandidate詳細編集画面への到達をmanual smoke確認した。

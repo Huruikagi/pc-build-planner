@@ -34,6 +34,50 @@ export interface CaptureFeatureRegistrationDependencies {
   ) => () => void;
 }
 
+interface CaptureRollbackSnapshot {
+  readonly version: 1;
+  readonly activationId: ActivationId;
+  readonly tabId: TargetTabId;
+  readonly requestGeneration: number;
+  readonly handoffInFlightGeneration: number | null;
+}
+
+const decodeRollbackSnapshot = (
+  value: unknown,
+): CaptureRollbackSnapshot | undefined => {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return undefined;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (
+    !Object.keys(candidate).every((key) =>
+      [
+        "version",
+        "activationId",
+        "tabId",
+        "requestGeneration",
+        "handoffInFlightGeneration",
+      ].includes(key),
+    ) ||
+    candidate.version !== 1 ||
+    typeof candidate.activationId !== "string" ||
+    candidate.activationId.length === 0 ||
+    typeof candidate.tabId !== "number" ||
+    !Number.isSafeInteger(candidate.tabId) ||
+    candidate.tabId <= 0 ||
+    typeof candidate.requestGeneration !== "number" ||
+    !Number.isSafeInteger(candidate.requestGeneration) ||
+    candidate.requestGeneration < 0 ||
+    (candidate.handoffInFlightGeneration !== null &&
+      (typeof candidate.handoffInFlightGeneration !== "number" ||
+        !Number.isSafeInteger(candidate.handoffInFlightGeneration) ||
+        candidate.handoffInFlightGeneration < 0))
+  )
+    return undefined;
+  return candidate as unknown as CaptureRollbackSnapshot;
+};
+
 const validateActivation = (
   intent: FeatureActivationIntent,
 ): Result<CaptureTransientActivation, FeatureActivationError> => {
@@ -108,18 +152,48 @@ export const createProductCaptureFeatureRegistration = (
     },
   },
   async mount(context: FeatureMountContext): Promise<FeatureMountHandle> {
+    const restored =
+      context.restoredState === undefined
+        ? undefined
+        : decodeRollbackSnapshot(context.restoredState);
+    if (context.restoredState !== undefined && restored === undefined)
+      throw new Error("Product capture rollback snapshot is invalid.");
+    if (restored !== undefined)
+      dependencies.state.restoreRollbackState(restored);
     if (dependencies.state.value === null)
       throw new Error("Product capture has not been activated.");
+    const mountedActivationId = dependencies.state.value.activationId;
     const root = mountCaptureReactRoot(context.container, {
       state: dependencies.state,
     });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     let unmounted = false;
     return {
+      async captureState() {
+        const rollback = dependencies.state.captureRollbackState();
+        if (
+          rollback === undefined ||
+          rollback.activationId !== mountedActivationId
+        )
+          return err<FeatureActivationError>({
+            kind: "activation_failed",
+            detail: "product capture activation is unavailable",
+            reason: "target-state-unavailable",
+          });
+        return ok<CaptureRollbackSnapshot>({
+          version: 1,
+          ...rollback,
+        });
+      },
       async unmount() {
         if (unmounted) return;
         unmounted = true;
         root.unmount();
+        if (
+          restored !== undefined &&
+          dependencies.state.value?.activationId === mountedActivationId
+        )
+          dependencies.state.deactivate();
       },
     };
   },

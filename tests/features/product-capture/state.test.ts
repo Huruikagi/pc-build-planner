@@ -141,6 +141,46 @@ test("handoff失敗intentを同一世代だけ保持し成功時に破棄する"
   assert.equal(state.value, null);
 });
 
+test("shell rollback後も復元したgenerationが進行中handoff失敗を受理する", async () => {
+  let resolveConclude!: (
+    value: ReturnType<typeof err<{ readonly kind: "transition-failed" }>>,
+  ) => void;
+  let markConcludeStarted!: () => void;
+  const concludeStarted = new Promise<void>((resolve) => {
+    markConcludeStarted = resolve;
+  });
+  const pending = new Promise<
+    ReturnType<typeof err<{ readonly kind: "transition-failed" }>>
+  >((resolve) => {
+    resolveConclude = resolve;
+  });
+  const state = createCaptureState({
+    coordinator: { captureTab: async () => ok(result) },
+    isCurrent: () => true,
+    createHandoffIntent: handoff.createHandoffIntent,
+    conclude: async () => {
+      markConcludeStarted();
+      return pending;
+    },
+  });
+  state.activate(A, TAB);
+  const capture = state.startCapture();
+  await concludeStarted;
+  const rollback = state.captureRollbackState();
+  assert.ok(rollback);
+
+  state.deactivate();
+  state.restoreRollbackState(rollback);
+  resolveConclude(err({ kind: "transition-failed" }));
+  await capture;
+
+  assert.equal(state.value?.status, "failed");
+  assert.deepEqual(
+    state.value?.status === "failed" ? state.value.failure.error : null,
+    { kind: "transition-failed" },
+  );
+});
+
 test("新activationと終了はretained intentを破棄する", () => {
   const intent: FeatureActivationIntent = {
     featureId: "candidate-management" as FeatureId,

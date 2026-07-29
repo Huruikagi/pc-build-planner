@@ -11,6 +11,10 @@ import type {
 } from "../../src/application-shell/contracts.js";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import { createSidePanelHost } from "../../src/application-shell/side-panel-host.js";
+import type {
+  ActivationId,
+  TargetTabId,
+} from "../../src/application-shell/transient-surface-ports.js";
 import { err, ok } from "../../src/domain/public.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
 
@@ -219,7 +223,7 @@ test("transient mount失敗はleaseを一度解放して常設面を復元する
   await host.stop();
 });
 
-test("lease release拒否を一度だけ診断しunmount済みslotを保持しない", async () => {
+test("lease release拒否後はstopで所有権を再解放する", async () => {
   const events: string[] = [];
   let releases = 0;
   const persistent = feature("planner", 0, events);
@@ -235,7 +239,7 @@ test("lease release拒否を一度だけ診断しunmount済みslotを保持し�
         ok({
           release: async () => {
             releases += 1;
-            throw new Error("release failed");
+            if (releases === 1) throw new Error("release failed");
           },
         }),
     },
@@ -259,7 +263,7 @@ test("lease release拒否を一度だけ診断しunmount済みslotを保持し�
   );
   assert.equal(host.getSelected(), null);
   await host.stop();
-  assert.equal(releases, 1);
+  assert.equal(releases, 2);
   assert.equal(
     diagnostics.some((value) =>
       value.includes("transient-activation-release-failed"),
@@ -824,6 +828,140 @@ test("別featureへのactivationはmount後に一度配送し、適用失敗で�
   await host.stop();
 });
 
+test("handoff中のtransient lease解放失敗はsourceを復元しretry成功までtargetを起動しない", async () => {
+  const events: string[] = [];
+  let releaseAttempts = 0;
+  let targetActivations = 0;
+  const planner = feature("planner", 0, events);
+  const capture: ApplicationFeatureRegistration = {
+    id: featureId("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => {},
+    transientActivation: {
+      validate: (request) => ok(request),
+      async accept() {
+        return ok({
+          async release() {
+            releaseAttempts += 1;
+            if (releaseAttempts === 1) throw new Error("release failed");
+          },
+        });
+      },
+    },
+    async mount() {
+      events.push("mount:capture");
+      return {
+        async captureState() {
+          return ok({ activationId: "capture" });
+        },
+        async unmount() {
+          events.push("unmount:capture");
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    activation: {
+      validate: () => ok({}),
+      async activate() {
+        targetActivations += 1;
+        return ok(undefined);
+      },
+    },
+  };
+  const { host } = setup([planner, capture, target]);
+  await host.start();
+  assert.equal(
+    (
+      await host.showTransient({
+        activationId: "capture" as ActivationId,
+        surfaceId: capture.id,
+        tabId: 1 as TargetTabId,
+      })
+    ).ok,
+    true,
+  );
+  const intent = {
+    featureId: target.id,
+    target: "edit",
+    payload: {},
+  };
+
+  assert.equal((await host.activate(intent)).ok, false);
+  assert.equal(host.getSelected(), capture.id);
+  assert.equal(targetActivations, 0);
+  assert.equal(releaseAttempts, 1);
+
+  assert.equal((await host.activate(intent)).ok, true);
+  assert.equal(host.getSelected(), target.id);
+  assert.equal(targetActivations, 1);
+  assert.equal(releaseAttempts, 2);
+  await host.stop();
+});
+
+test("handoff失敗後にsource rollback mountも失敗した場合は専用理由を返す", async () => {
+  const events: string[] = [];
+  let captureMounts = 0;
+  const planner = feature("planner", 0, events);
+  const capture: ApplicationFeatureRegistration = {
+    id: featureId("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => {},
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () => ok({ release: async () => {} }),
+    },
+    async mount() {
+      captureMounts += 1;
+      if (captureMounts > 1) throw new Error("rollback mount failed");
+      return {
+        async captureState() {
+          return ok({ activationId: "capture" });
+        },
+        async unmount() {},
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    activation: {
+      validate: () => ok({}),
+      activate: async () =>
+        err({ kind: "activation_failed", detail: "target rejected" }),
+    },
+  };
+  const { host } = setup([planner, capture, target]);
+  await host.start();
+  await host.showTransient({
+    activationId: "capture" as ActivationId,
+    surfaceId: capture.id,
+    tabId: 1 as TargetTabId,
+  });
+
+  assert.deepEqual(
+    await host.activate({
+      featureId: target.id,
+      target: "edit",
+      payload: {},
+    }),
+    {
+      ok: false,
+      error: {
+        kind: "activation_failed",
+        detail: "source feature rollback failed",
+        reason: "rollback-failed",
+      },
+    },
+  );
+  assert.equal(host.getSelected(), null);
+  await host.stop();
+});
+
 test("同一featureへのactivationは再mountせず、各intentを一度だけ配送する", async () => {
   const events: string[] = [];
   const target: ApplicationFeatureRegistration<object, unknown> = {
@@ -934,7 +1072,7 @@ test("snapshotを拒否するsourceからのactivationは表示を変更しな�
   await host.stop();
 });
 
-test("activation失敗後にtarget cleanupが失敗するとtarget ownershipを保持しsourceを復元しない", async () => {
+test("activation失敗後にtarget cleanupが失敗するとrollback-failedを返してtarget ownershipを保持する", async () => {
   const events: string[] = [];
   const source = feature("source", 0, events);
   const target: ApplicationFeatureRegistration<object, unknown> = {
@@ -968,7 +1106,11 @@ test("activation失敗後にtarget cleanupが失敗するとtarget ownershipを�
 
   assert.deepEqual(result, {
     ok: false,
-    error: { kind: "mount_failed", featureId: target.id },
+    error: {
+      kind: "activation_failed",
+      detail: "source feature rollback failed",
+      reason: "rollback-failed",
+    },
   });
   assert.deepEqual(events, [
     "mount:source",
@@ -1056,6 +1198,76 @@ test("activation中にtargetが利用不可になるとstale targetをcleanupし
     "mount:source:restored:draft",
   ]);
   await host.stop();
+});
+
+test("activation中のstale target cleanup失敗はrollback-failedとしてtarget ownershipを保持する", async () => {
+  const events: string[] = [];
+  const targetMount = deferred<FeatureMountHandle>();
+  const targetStarted = deferred<void>();
+  let availability: Availability = { status: "available" };
+  const listeners = new Set<(value: Availability) => void>();
+  const source: ApplicationFeatureRegistration = {
+    ...feature("source", 0, events),
+    async mount() {
+      events.push("mount:source");
+      return {
+        async captureState() {
+          return ok({ value: "draft" });
+        },
+        async unmount() {
+          events.push("unmount:source");
+        },
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    ...feature("target", 1, events),
+    getAvailability: () => availability,
+    subscribeAvailability(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async mount() {
+      events.push("mount:target");
+      targetStarted.resolve();
+      return targetMount.promise;
+    },
+    activation: { validate: () => ok({}), activate: async () => ok(undefined) },
+  };
+  const { host } = setup([source, target]);
+  await host.start();
+  const activating = host.activate({
+    featureId: target.id,
+    target: "x",
+    payload: {},
+  });
+  await targetStarted.promise;
+  availability = { status: "unavailable", reason: "closed" };
+  for (const listener of listeners) listener(availability);
+  targetMount.resolve({
+    async unmount() {
+      events.push("unmount:target:failed");
+      throw new Error("cleanup failed");
+    },
+  });
+
+  assert.deepEqual(await activating, {
+    ok: false,
+    error: {
+      kind: "activation_failed",
+      detail: "source feature rollback failed",
+      reason: "rollback-failed",
+    },
+  });
+  assert.equal(host.getSelected(), target.id);
+  assert.deepEqual(events, [
+    "mount:source",
+    "unmount:source",
+    "mount:target",
+    "unmount:target:failed",
+    "unmount:target:failed",
+  ]);
+  await assert.rejects(host.stop(), AggregateError);
 });
 
 function isValuePayload(value: unknown): value is { readonly value: string } {

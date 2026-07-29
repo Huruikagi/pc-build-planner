@@ -16,7 +16,8 @@ import type {
   ActivationId,
   TargetTabId,
 } from "../../src/application-shell/transient-surface-ports.js";
-import { ok } from "../../src/domain/public.js";
+import { transientHandoffFailure } from "../../src/application-shell/transient-surface-ports.js";
+import { err, ok } from "../../src/domain/public.js";
 
 const featureId = (value: string) => value as FeatureId;
 const activationId = (value: string) => value as ActivationId;
@@ -506,6 +507,157 @@ test("typed handoff失敗はhostが返した安全な理由を消さずcallerへ
   );
 });
 
+test("rollback失敗は表示できないcapture世代をactiveへ戻さない", async () => {
+  const h = harness();
+  h.host.activate = async () => ({
+    ok: false,
+    error: { kind: "transition-failed", reason: "rollback-failed" },
+  });
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("rollback-failed"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+
+  const result = await controller.conclude(activationId("rollback-failed"), {
+    featureId: featureId("candidates"),
+    target: "edit",
+    payload: {},
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+  assert.equal(controller.isCurrent(activationId("rollback-failed")), false);
+});
+
+test("実hostのstale target cleanup失敗でもcontrollerをinactiveへ同期する", async () => {
+  let targetAvailable = true;
+  let publishTargetAvailability:
+    | ((value: { status: "unavailable"; reason: string }) => void)
+    | undefined;
+  let leaseReleases = 0;
+  const planner: ApplicationFeatureRegistration = {
+    id: featureId("planner"),
+    presentation: "persistent",
+    navigation: { labelKey: "planner" as never, order: 0 },
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      return { async unmount() {} };
+    },
+  };
+  const capture: ApplicationFeatureRegistration = {
+    id: featureId("capture"),
+    presentation: "transient",
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    transientActivation: {
+      validate: (request) => ok(request),
+      accept: async () =>
+        ok({
+          async release() {
+            leaseReleases += 1;
+          },
+        }),
+    },
+    async mount() {
+      return {
+        async captureState() {
+          return ok({ activationId: "current" });
+        },
+        async unmount() {},
+      };
+    },
+  };
+  const target: ApplicationFeatureRegistration<object, unknown> = {
+    id: featureId("target"),
+    presentation: "persistent",
+    navigation: { labelKey: "target" as never, order: 1 },
+    publicApi: {},
+    getAvailability: () =>
+      targetAvailable
+        ? { status: "available" }
+        : { status: "unavailable", reason: "closed" },
+    subscribeAvailability(listener) {
+      publishTargetAvailability = listener;
+      return () => {
+        publishTargetAvailability = undefined;
+      };
+    },
+    async mount() {
+      targetAvailable = false;
+      publishTargetAvailability?.({ status: "unavailable", reason: "closed" });
+      return {
+        async unmount() {
+          throw new Error("cleanup failed");
+        },
+      };
+    },
+    activation: { validate: () => ok({}), activate: async () => ok(undefined) },
+  };
+  const registry = createFeatureRegistry();
+  for (const value of [planner, capture, target])
+    assert.equal(registry.register(value).ok, true);
+  const host = createSidePanelHost({
+    registry,
+    container: document.createElement("div"),
+    operationPolicy: {
+      isAllowed: () => true,
+      subscribe: () => () => undefined,
+    },
+    onStateChange() {},
+    reportError() {},
+  });
+  await host.start();
+  const controller = createTransientSurfaceController({
+    host: {
+      getSelected: host.getSelected,
+      isTransientAvailable: (id) => id === capture.id,
+      async showTransient(request) {
+        const result = await host.showTransient(request);
+        return result.ok ? ok(undefined) : err({ kind: "transition-failed" });
+      },
+      async restorePersistent(preferred, reason) {
+        const result = await host.restorePersistent(preferred, reason);
+        return result.ok ? ok(undefined) : err({ kind: "transition-failed" });
+      },
+      async activate(intent) {
+        const result = await host.activate(intent);
+        return result.ok
+          ? ok(undefined)
+          : err(transientHandoffFailure(result.error));
+      },
+    },
+  });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("current"),
+    surfaceId: capture.id,
+    tabId: tabId(1),
+  });
+
+  const result = await controller.conclude(activationId("current"), {
+    featureId: target.id,
+    target: "edit",
+    payload: {},
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "transition-failed", reason: "rollback-failed" },
+  });
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
+  assert.equal(controller.isCurrent(activationId("current")), false);
+  assert.equal(host.getSelected(), target.id);
+  assert.equal(leaseReleases, 1);
+  await controller.stop();
+  await assert.rejects(host.stop(), AggregateError);
+});
+
 test("stale conclude失敗は後発navと新世代claimを復活させない", async () => {
   const h = harness();
   let release!: () => void;
@@ -717,6 +869,7 @@ test("実hostとのhandoffは成功・rollback・staleの全経路で単一mount
     let mounted = 0;
     let maximumMounted = 0;
     let activations = 0;
+    let leaseReleases = 0;
     const registration = (
       id: string,
       presentation: "persistent" | "transient",
@@ -735,7 +888,12 @@ test("実hostとのhandoffは成功・rollback・staleの全経路で単一mount
             presentation,
             transientActivation: {
               validate: (request) => ok(request),
-              accept: async () => ok({ release: async () => undefined }),
+              accept: async () =>
+                ok({
+                  async release() {
+                    leaseReleases += 1;
+                  },
+                }),
             },
           }),
       publicApi: {},
@@ -840,6 +998,11 @@ test("実hostとのhandoffは成功・rollback・staleの全経路で単一mount
       payload: {},
     });
     assert.equal(result.ok, !activationFails);
+    assert.equal(
+      leaseReleases,
+      2,
+      "handoff must release the source transient lease before target mount",
+    );
     assert.equal(activations, 1);
     assert.equal(host.getSelected(), activationFails ? capture.id : target.id);
     assert.equal(maximumMounted, 1);

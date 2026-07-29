@@ -47,7 +47,8 @@ export interface FeatureActivationIntent {
 export type FeatureActivationFailureReason =
   | "operation-blocked"
   | "target-data-unavailable"
-  | "target-state-unavailable";
+  | "target-state-unavailable"
+  | "rollback-failed";
 
 export type FeatureActivationError =
   | { readonly kind: "feature_not_found"; readonly featureId: FeatureId }

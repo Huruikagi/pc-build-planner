@@ -267,6 +267,16 @@ export function createTransientSurfaceController(options: {
         const activated = await options.host.activate(handoff);
         if (!activated.ok) {
           if (
+            activated.error.kind === "transition-failed" &&
+            activated.error.reason === "rollback-failed"
+          ) {
+            if (epoch === commandEpoch) {
+              acceptedActivation = undefined;
+              publish({ kind: "inactive" });
+            }
+            return err(activated.error);
+          }
+          if (
             epoch === commandEpoch &&
             state.kind === "active" &&
             state.activationId === activationId

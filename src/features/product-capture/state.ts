@@ -26,6 +26,13 @@ export interface CaptureStateDependencies {
   readonly createRequestId?: () => string;
 }
 
+export interface CaptureRollbackState {
+  readonly activationId: ActivationId;
+  readonly tabId: TargetTabId;
+  readonly requestGeneration: number;
+  readonly handoffInFlightGeneration: number | null;
+}
+
 const isRecoverableExecutionError = (error: CaptureError): boolean =>
   error.kind !== "permission-lost" &&
   error.kind !== "restricted-page" &&
@@ -55,6 +62,30 @@ export class CaptureState {
     this.#handoffInFlightGeneration = null;
     this.#value = null;
     this.#notify();
+  }
+
+  /** Captures only execution identity needed to continue an in-flight handoff rollback. */
+  public captureRollbackState(): CaptureRollbackState | undefined {
+    const current = this.#value;
+    if (current === null) return undefined;
+    return {
+      activationId: current.activationId,
+      tabId: current.tabId,
+      requestGeneration: this.#requestGeneration,
+      handoffInFlightGeneration: this.#handoffInFlightGeneration,
+    };
+  }
+
+  /** Restores the exact generation so the awaiting handoff result is still accepted. */
+  public restoreRollbackState(snapshot: CaptureRollbackState): void {
+    this.#requestGeneration = snapshot.requestGeneration;
+    this.#handoffInFlightGeneration = snapshot.handoffInFlightGeneration;
+    this.#set({
+      status: "extracting",
+      activationId: snapshot.activationId,
+      tabId: snapshot.tabId,
+      requestId: "rollback",
+    });
   }
 
   public subscribe(listener: () => void): () => void {

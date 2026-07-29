@@ -73,20 +73,21 @@ export function createSidePanelHost(
   async function unmountCurrent(): Promise<Result<void, SelectionError>> {
     const handle = mounted;
     const previous = selected;
-    if (handle === undefined) return ok(undefined);
-    try {
-      await handle.unmount();
-    } catch {
-      const id = previous ?? ("unknown" as FeatureId);
-      reportDiagnostic("feature-unmount-failed", id);
-      const descriptor = message("shell.featureUnmountFailed", {
-        featureId: id,
-      });
-      publish({ kind: "error", message: descriptor, recoverable: true });
-      return err({ kind: "mount_failed", message: descriptor });
+    if (handle !== undefined) {
+      try {
+        await handle.unmount();
+      } catch {
+        const id = previous ?? ("unknown" as FeatureId);
+        reportDiagnostic("feature-unmount-failed", id);
+        const descriptor = message("shell.featureUnmountFailed", {
+          featureId: id,
+        });
+        publish({ kind: "error", message: descriptor, recoverable: true });
+        return err({ kind: "mount_failed", message: descriptor });
+      }
+      mounted = undefined;
+      selected = null;
     }
-    mounted = undefined;
-    selected = null;
     const lease = transientLease;
     transientLease = undefined;
     if (lease === undefined) return ok(undefined);
@@ -94,6 +95,7 @@ export function createSidePanelHost(
       await lease.release();
       return ok(undefined);
     } catch {
+      transientLease = lease;
       reportDiagnostic(
         "transient-activation-release-failed",
         previous ?? undefined,
@@ -390,10 +392,11 @@ export function createSidePanelHost(
   const restorePrevious = async (
     previous: ApplicationFeatureRegistration | undefined,
     snapshot: unknown,
-  ): Promise<void> => {
-    if (previous === undefined) return;
+  ): Promise<boolean> => {
+    if (previous === undefined) return false;
     const restored = await mountFeature(previous, snapshot, true);
     if (!restored.ok) reportDiagnostic("feature-restore-failed", previous.id);
+    return restored.ok;
   };
 
   const capturePreviousState = async (
@@ -458,14 +461,37 @@ export function createSidePanelHost(
         : await capturePreviousState(previous, mounted);
     if (!snapshot.ok) return snapshot;
     const unmounted = await unmountCurrent();
-    if (!unmounted.ok)
+    if (!unmounted.ok) {
+      if (mounted === undefined) {
+        const restored = await restorePrevious(previous, snapshot.value);
+        if (!restored)
+          return err({
+            kind: "activation_failed",
+            detail: "source feature rollback failed",
+            reason: "rollback-failed",
+          });
+      }
       return err({ kind: "mount_failed", featureId: intent.featureId });
+    }
 
     const mountedTarget = await mountFeature(prepared.value.feature);
     if (!mountedTarget.ok) {
       // A failed stale cleanup retains the target handle; never remount source.
-      if (mounted === undefined)
-        await restorePrevious(previous, snapshot.value);
+      if (mounted !== undefined)
+        return err({
+          kind: "activation_failed",
+          detail: "source feature rollback failed",
+          reason: "rollback-failed",
+        });
+      if (mounted === undefined) {
+        const restored = await restorePrevious(previous, snapshot.value);
+        if (!restored)
+          return err({
+            kind: "activation_failed",
+            detail: "source feature rollback failed",
+            reason: "rollback-failed",
+          });
+      }
       return mountedTarget;
     }
     const applied = await prepared.value.activate();
@@ -478,9 +504,19 @@ export function createSidePanelHost(
     const released = await unmountCurrent();
     if (!released.ok) {
       reportDiagnostic("activation-unmount-failed", intent.featureId);
-      return err({ kind: "mount_failed", featureId: intent.featureId });
+      return err({
+        kind: "activation_failed",
+        detail: "source feature rollback failed",
+        reason: "rollback-failed",
+      });
     }
-    await restorePrevious(previous, snapshot.value);
+    const restored = await restorePrevious(previous, snapshot.value);
+    if (!restored)
+      return err({
+        kind: "activation_failed",
+        detail: "source feature rollback failed",
+        reason: "rollback-failed",
+      });
     return applied;
   };
 
@@ -560,7 +596,12 @@ export function createSidePanelHost(
     showTransient: enqueueShowTransient,
     restorePersistent,
     async stop() {
-      if (stopped && unsubscribeRegistry === undefined && mounted === undefined)
+      if (
+        stopped &&
+        unsubscribeRegistry === undefined &&
+        mounted === undefined &&
+        transientLease === undefined
+      )
         return;
       stopped = true;
       lifecycleEpoch += 1;
@@ -587,6 +628,19 @@ export function createSidePanelHost(
         } catch (error: unknown) {
           failures.push(error);
           reportDiagnostic("host-stop-unmount-failed");
+        }
+      }
+      if (mounted === undefined) {
+        const lease = transientLease;
+        transientLease = undefined;
+        if (lease !== undefined) {
+          try {
+            await lease.release();
+          } catch (error: unknown) {
+            transientLease = lease;
+            failures.push(error);
+            reportDiagnostic("host-stop-transient-release-failed");
+          }
         }
       }
       if (failures.length > 0) {

@@ -103,6 +103,16 @@ test("mount前にtransient requestを受理しlease解放を冪等にする", as
     operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
     reportError: () => {},
   });
+  assert.deepEqual(await handle.captureState?.(), {
+    ok: true,
+    value: {
+      version: 1,
+      activationId: request.activationId,
+      tabId: request.tabId,
+      requestGeneration: 1,
+      handoffInFlightGeneration: null,
+    },
+  });
   await handle.unmount();
   assert.equal(capture.value?.activationId, request.activationId);
   await accepted.value.release();
@@ -115,4 +125,58 @@ test("mount前にtransient requestを受理しlease解放を冪等にする", as
     }).ok,
     false,
   );
+});
+
+test("handoff rollback snapshotはページ内容を持たず同じactivationを復元する", async () => {
+  const capture = state();
+  const registration = createProductCaptureFeatureRegistration({
+    state: capture,
+  });
+  const snapshot = {
+    version: 1,
+    activationId: "rollback-a" as ActivationId,
+    tabId: 11 as TargetTabId,
+    requestGeneration: 4,
+    handoffInFlightGeneration: 4,
+  };
+
+  const handle = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+    restoredState: snapshot,
+  });
+  assert.deepEqual(capture.value, {
+    status: "extracting",
+    activationId: snapshot.activationId,
+    tabId: snapshot.tabId,
+    requestId: "rollback",
+  });
+  assert.equal(JSON.stringify(snapshot).includes("page"), false);
+
+  await handle.unmount();
+  assert.equal(capture.value, null);
+});
+
+test("不正なrollback snapshotはReact mount前に拒否する", async () => {
+  const capture = state();
+  const registration = createProductCaptureFeatureRegistration({
+    state: capture,
+  });
+
+  await assert.rejects(
+    registration.mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+      restoredState: {
+        version: 1,
+        activationId: "rollback-a",
+        tabId: 0,
+        pageUrl: "https://secret.example.invalid/item",
+      },
+    }),
+    /snapshot is invalid/,
+  );
+  assert.equal(capture.value, null);
 });
