@@ -39,7 +39,7 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 
 ### Allowed Dependencies
 
-- application-shellの`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`、activation識別子・固定tab型
+- application-shellの`TransientApplicationFeatureRegistration`、`TransientActivationRequest`、`TransientActivationAdapter`、`TransientActivationLease`、`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`、activation識別子・固定tab型、およびhandoff rollbackに用いる`FeatureMountContext.restoredState`／`FeatureMountHandle.captureState`
 - product-capture既存の抽出runtime、normalizer、ranker
 - candidate-managementのcanonical `CandidateManagementPublicApi`（`query`、intent factory、`sources` facet）とcanonical candidate contract。product-captureが利用するのはintent factory facetだけとする
 - local data foundationのcanonical `Result<T, E>`とdomain型
@@ -59,12 +59,22 @@ product-captureを、常設ナビゲーション上で確認・保存まで担�
 - `ActivationId`
 - `TargetTabId`
 - `FeaturePresentation`
+- `TransientActivationRequest`
+- `TransientActivationAdapter`
+- `TransientActivationLease`
+- `TransientApplicationFeatureRegistration`
 - `TransientSurfaceLifecyclePort`
 - `FeatureActivationIntent`
+- `FeatureMountContext`
+- `FeatureMountHandle`
 
 上流contractの値集合や意味を本specで再定義しない。
 
 captureはcontroller concrete classを取得しない。`createProductCaptureContribution`が`TransientSurfaceLifecyclePort`を引数で受け、state/coordinatorへ必要な`isCurrent`と`conclude`だけを渡す。candidate-managementからはnavigationを直接実行するcallbackではなく、typed intentを組み立てる純粋なfactoryだけを利用する。
+
+上流hostは一過性featureをmountする前に、registrationの`transientActivation.validate(request)`と`accept(input)`を順に呼ぶ。product-captureは`accept`で起動世代と固定tabをstateへ配置し、冪等な`TransientActivationLease`を返す。leaseの所有・通常終了・mount失敗・stale化・handoff時の解放順序は上流hostが担い、captureは配送や解放規則を再実装しない。
+
+原子的handoffでは、上流hostがsource mountの`captureState`でrollback snapshotを取得してからsource leaseを解放し、target mountを試みる。target受理またはmountが失敗した場合、`FeatureMountContext.restoredState`でsourceを復元する。product-captureのsnapshotはページ内容や抽出payloadを含めず、`activationId`、固定`tabId`、内部request generation、handoff中generationだけを保持する。
 
 本specは上流4.5のproduction検証先でもある。テスト専用featureをcatalogへ追加せず、実product-capture登録を使う5.5自動E2Eでaction後と同形のdurable activation受信、capture面の提示、対象タブ失効または常設ナビ選択による終了・常設復帰までを検証する。固定tab抽出から候補編集面への引き渡し、project存在時と不存在時の回復はChrome-shaped integration testで検証する。Playwrightがブラウザーchromeのtoolbar user gestureを生成できずfixture投入も`activeTab`を付与しない境界は、同じproduction buildをChrome 116以降へ未パッケージロードして実icon click、`activeTab`付与、script注入、candidate editor到達を確認する必須manual smokeで閉じる。
 
@@ -93,18 +103,25 @@ sequenceDiagram
     participant Extractor
     participant Candidates
 
-    Shell->>Capture: activationId + fixed tabId
+    Shell->>Capture: validate activationId + fixed tabId
+    Shell->>Capture: accept activation + acquire lease
+    Shell->>Capture: mount accepted state
     Capture->>Capture: idleを提示
     Capture->>Extractor: 利用者操作で抽出
     Extractor-->>Capture: session/result
     Capture->>Shell: isCurrent(activationId)
     Capture->>Candidates: unresolved pre-edit intent
     Capture->>Shell: conclude(intent)
+    Shell->>Capture: capture rollback snapshot
+    Shell->>Capture: release source lease
     Shell->>Candidates: typed activation + accept pre-edit
     alt project exists
         Candidates->>Candidates: resolve project + open editor
     else no project
         Candidates->>Candidates: retain draft + prompt project creation
+    end
+    alt target activation/mount fails
+        Shell->>Capture: restore snapshot + remount
     end
     Shell-->>Capture: handoff result
 ```
@@ -113,15 +130,15 @@ sequenceDiagram
 
 ```text
 src/features/product-capture/
-  registration.ts
-  transient-activation.ts               # new
+  registration.ts                       # transient activation validation/acceptance、lease、rollback snapshot
+  contracts.ts
   state.ts
   view.tsx
+  react-root.tsx
   coordinator.ts
   chrome-runtime-port.ts
   draft-mapper.ts
-  feature-contribution.ts
-  editor-handoff.ts                     # new; replaces editor-navigation.ts
+  feature-contribution.ts               # editor intent assembly and handoff wiring
   editor-navigation.ts                  # remove
   public.ts
   submit-draft.ts                        # remove
@@ -152,7 +169,7 @@ e2e/
 
 ### Registration
 
-product-capture registrationはapplication-shellが公開するcanonical `ApplicationFeatureRegistration` discriminated unionの一過性memberをそのまま満たす。`presentation: "transient"`とactivation adapterを指定し、`navigation` metadataは申告しない。したがって`nav.productCapture`も要求・参照しない。activation adapterは次のpayloadを検証する。
+product-capture registrationはapplication-shellが公開するcanonical `ApplicationFeatureRegistration` discriminated unionの一過性memberをそのまま満たす。`presentation: "transient"`と、mount前受理用の`transientActivation` adapter、およびcross-feature handoff用の`activation` adapterを指定し、`navigation` metadataは申告しない。したがって`nav.productCapture`も要求・参照しない。各adapterは上流requestまたはhandoff intentから次のpayloadを検証する。
 
 ```typescript
 export interface CaptureTransientActivation {
@@ -170,6 +187,7 @@ import type { ProductCapturePublicApi } from "./public.js";
 
 type ProductCaptureTransientRegistration = TransientApplicationFeatureRegistration<
   ProductCapturePublicApi,
+  TransientActivationRequest,
   CaptureTransientActivation
 >;
 
@@ -186,6 +204,10 @@ export function createProductCaptureContribution(
 ```
 
 canonical unionのbranch型`TransientApplicationFeatureRegistration`も同じ公開entry pointからtype-only importし、product-captureのregistration objectを直接適合させる。このbranchの`presentation: "transient"`と`navigation?: never`を変更せず、runtime objectではproperty自体を渡さない。composition rootだけが具体controllerとcapture contributionを知り、capture内部は公開portだけへ依存する。
+
+`transientActivation.validate`は`surfaceId`、`activationId`、`tabId`を検証し、`accept`はmount前にstateを`idle`へ起動して冪等なrelease leaseを返す。releaseは同じactivationが現行の場合だけstateを破棄する。mountは受理済みstateを要求し、未受理mountをfail closedにする。
+
+handoff開始前にmount handleの`captureState`は、ページ由来値を含まないrollback snapshotを返す。上流hostがtarget遷移に失敗して`restoredState`を渡した場合、registrationはsnapshotを境界検証し、同じgenerationを復元して進行中handoffの後着結果を受理可能にする。不正snapshotはmountを拒否し、復元されたmountのunmount時だけ復元stateを解放する。
 
 `CandidateManagementPublicApi`はcandidate-managementの`public.ts`からtype-only importし、product-capture側で同名interfaceを再定義しない。canonical公開面は`query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog, mutations }`の全facetを保持する。captureはindexed access typeでintent factory facetだけを依存注入し、他facetが存在しない、または削除対象であるとは扱わない。
 
