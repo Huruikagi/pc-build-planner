@@ -181,7 +181,7 @@
   - _Requirements: 6.4, 8.5, 8.6_
   - _Depends: 5.6_
 
-- [ ] 5.5 downstream向けsource catalog consumer契約を検証する
+- [x] 5.5 downstream向けsource catalog consumer契約を検証する
   - 価格更新consumer fixtureが公開catalogから全候補または候補限定のsource参照を取得できることを検証する。
   - 同一URLの複数参照をcatalogが保持し、URL同一性・0件・1件・複数件の一致と曖昧さをconsumer側で判定できることを確認する。
   - source再取得のnot-foundをconsumerがstale targetへ変換でき、foundation rootやcandidate内部moduleをimportしない公開consumer型検査が成功することを完了条件とする。
