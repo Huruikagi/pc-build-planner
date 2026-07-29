@@ -38,3 +38,114 @@ export type AssertCatalogParity<TTarget extends LocalizedCatalog> = [
 ] extends [never]
   ? true
   : CatalogParityViolations<TTarget>;
+
+export const V03_SETTINGS_KEYS = [
+  "nav.settings",
+  "settings.title",
+  "settings.language.title",
+  "settings.language.description",
+  "settings.backupRestore.title",
+  "settings.backupRestore.description",
+] as const;
+
+export const V03_SHELL_KEYS = [
+  "shell.transientActivationFailed",
+  "shell.transientActivationExpired",
+  "shell.settingsRecoveryLoading",
+  "shell.settingsRecoveryStartupFailed",
+] as const;
+
+export const V03_CAPTURE_KEYS = [
+  "capture.errors.permission-lost",
+  "capture.newGenerationHint",
+  "capture.handoffRetainedNotice",
+  "capture.retryHandoffAction",
+] as const;
+
+export const V03_BILINGUAL_HINT_KEYS = [
+  "shell.settingsRecoveryLoading",
+  "shell.settingsRecoveryStartupFailed",
+] as const;
+
+export type CatalogParityIssue = Readonly<{
+  code:
+    | "missing-key"
+    | "excess-key"
+    | "required-key-missing"
+    | "placeholder-mismatch"
+    | "bilingual-hint-missing";
+  key: string;
+}>;
+
+export interface CatalogParityOptions {
+  readonly requiredKeys?: readonly string[];
+  readonly bilingualHintKeys?: readonly string[];
+}
+
+const definitionTexts = (definition: MessageDefinition): readonly string[] =>
+  typeof definition === "string"
+    ? [definition]
+    : Object.values(definition.forms);
+
+const placeholderNames = (definition: MessageDefinition): readonly string[] => {
+  const names = new Set<string>();
+  for (const text of definitionTexts(definition)) {
+    for (const match of text.matchAll(/\{([A-Za-z][A-Za-z0-9]*)\}/g)) {
+      names.add(match[1] as string);
+    }
+  }
+  return [...names].sort();
+};
+
+/** Runtime parity gate used by fixtures and CI before legacy navigation removal. */
+export const validateCatalogParity = (
+  source: Readonly<Record<string, MessageDefinition>>,
+  target: Readonly<Record<string, MessageDefinition>>,
+  options: CatalogParityOptions = {},
+): readonly CatalogParityIssue[] => {
+  const issues: CatalogParityIssue[] = [];
+  const sourceKeys = new Set(Object.keys(source));
+  const targetKeys = new Set(Object.keys(target));
+
+  for (const key of sourceKeys) {
+    if (!targetKeys.has(key)) issues.push({ code: "missing-key", key });
+  }
+  for (const key of targetKeys) {
+    if (!sourceKeys.has(key)) issues.push({ code: "excess-key", key });
+  }
+  for (const key of sourceKeys) {
+    const sourceDefinition = source[key];
+    const targetDefinition = target[key];
+    if (sourceDefinition === undefined || targetDefinition === undefined) {
+      continue;
+    }
+    if (
+      placeholderNames(sourceDefinition).join("\0") !==
+      placeholderNames(targetDefinition).join("\0")
+    ) {
+      issues.push({ code: "placeholder-mismatch", key });
+    }
+  }
+
+  for (const key of options.requiredKeys ?? []) {
+    if (!sourceKeys.has(key) || !targetKeys.has(key)) {
+      issues.push({ code: "required-key-missing", key });
+    }
+  }
+  for (const key of options.bilingualHintKeys ?? []) {
+    for (const catalog of [source, target]) {
+      const definition = catalog[key];
+      if (
+        definition === undefined ||
+        definitionTexts(definition).some(
+          (text) => !text.includes("設定") || !text.includes("Settings"),
+        )
+      ) {
+        issues.push({ code: "bilingual-hint-missing", key });
+        break;
+      }
+    }
+  }
+
+  return issues;
+};

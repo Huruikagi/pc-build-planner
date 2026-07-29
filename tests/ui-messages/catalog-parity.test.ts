@@ -7,6 +7,13 @@ import type {
   AssertCatalogParity,
   FlattenLocalizedCatalog,
 } from "../../src/ui-messages/catalog-parity.js";
+import {
+  V03_BILINGUAL_HINT_KEYS,
+  V03_CAPTURE_KEYS,
+  V03_SETTINGS_KEYS,
+  V03_SHELL_KEYS,
+  validateCatalogParity,
+} from "../../src/ui-messages/catalog-parity.js";
 import type { MessageDefinition } from "../../src/ui-messages/contracts.js";
 import { formatMessage } from "../../src/ui-messages/format.js";
 import { flattenNamespace } from "../../src/ui-messages/resolver.js";
@@ -58,6 +65,19 @@ const ja = flattenNamespace(MESSAGES) as Readonly<
 const en = flattenNamespace(EN_MESSAGES) as Readonly<
   Record<string, MessageDefinition>
 >;
+
+const parityIssues = (
+  source: Readonly<Record<string, MessageDefinition>>,
+  target: Readonly<Record<string, MessageDefinition>>,
+) =>
+  validateCatalogParity(source, target, {
+    requiredKeys: [
+      ...V03_SETTINGS_KEYS,
+      ...V03_SHELL_KEYS,
+      ...V03_CAPTURE_KEYS,
+    ],
+    bilingualHintKeys: V03_BILINGUAL_HINT_KEYS,
+  });
 
 test("ja/enはキー集合が一致する", () => {
   assert.deepEqual(Object.keys(en).sort(), Object.keys(ja).sort());
@@ -115,4 +135,99 @@ test("英語の単複フォームはcountの0/1/2に対して期待どおりの�
   assert.equal(formatMessage(items, { count: 0 }), "0 items");
   assert.equal(formatMessage(items, { count: 1 }), "1 item");
   assert.equal(formatMessage(items, { count: 2 }), "2 items");
+});
+
+test("v0.3移行前gateはexact keyと旧navigation keyの加算状態を許容する", () => {
+  assert.deepEqual(Object.keys(MESSAGES), [
+    "common",
+    "category",
+    "persistenceError",
+    "nav",
+    "shell",
+    "settings",
+    "candidate",
+    "build",
+    "compatibility",
+    "capture",
+    "backup",
+  ]);
+  assert.deepEqual(Object.keys(EN_MESSAGES), Object.keys(MESSAGES));
+  assert.deepEqual(V03_SETTINGS_KEYS, [
+    "nav.settings",
+    "settings.title",
+    "settings.language.title",
+    "settings.language.description",
+    "settings.backupRestore.title",
+    "settings.backupRestore.description",
+  ]);
+  assert.deepEqual(V03_SHELL_KEYS, [
+    "shell.transientActivationFailed",
+    "shell.transientActivationExpired",
+    "shell.settingsRecoveryLoading",
+    "shell.settingsRecoveryStartupFailed",
+  ]);
+  assert.deepEqual(V03_CAPTURE_KEYS, [
+    "capture.errors.permission-lost",
+    "capture.newGenerationHint",
+    "capture.handoffRetainedNotice",
+    "capture.retryHandoffAction",
+  ]);
+  assert.deepEqual(parityIssues(ja, en), []);
+  assert.equal(typeof ja["nav.backupRestore"], "string");
+  assert.equal(typeof en["nav.backupRestore"], "string");
+});
+
+test("v0.3移行前gateはキー欠落と余剰を拒否する", () => {
+  const missing = { ...en };
+  delete missing["settings.title"];
+  assert.ok(
+    parityIssues(ja, missing).some(
+      (issue) => issue.code === "missing-key" && issue.key === "settings.title",
+    ),
+  );
+
+  const excess = { ...en, "settings.unapproved": "Unapproved" };
+  assert.ok(
+    parityIssues(ja, excess).some(
+      (issue) =>
+        issue.code === "excess-key" && issue.key === "settings.unapproved",
+    ),
+  );
+});
+
+test("v0.3移行前gateは全formのplaceholder不一致を拒否する", () => {
+  const source = {
+    ...ja,
+    "capture.fixture": {
+      forms: { one: "{item}件", other: "{count}件の{item}" },
+    },
+  };
+  const target = {
+    ...en,
+    "capture.fixture": {
+      forms: { one: "{count} item", other: "{count} items" },
+    },
+  };
+  assert.ok(
+    parityIssues(source, target).some(
+      (issue) =>
+        issue.code === "placeholder-mismatch" &&
+        issue.key === "capture.fixture",
+    ),
+  );
+});
+
+test("v0.3移行前gateは固定二言語hintの片言語欠落を拒否する", () => {
+  const broken = {
+    ...en,
+    "shell.settingsRecoveryLoading":
+      "Loading. Change the display language in Settings.",
+  };
+  assert.ok(
+    parityIssues(ja, broken).some(
+      (issue) =>
+        issue.code === "bilingual-hint-missing" &&
+        issue.key === "shell.settingsRecoveryLoading",
+    ),
+  );
 });

@@ -281,7 +281,7 @@
 
 - [ ] 7. parity、legacy key削除、横断受入を完成する
 
-- [ ] 7.1 追加キーの移行前parityとexact-key contractを固定する
+- [x] 7.1 追加キーの移行前parityとexact-key contractを固定する
   - 11名前空間のja/en双方向キー網羅、全message formのplaceholder集合、4つのshell key、4つのcapture key、settings key集合を検査する
   - この移行前gateでは旧navigation keyの存在を許容し、dead-key不在の検査はconsumer切替後の7.2だけで有効化する
   - 意図的なキー欠落・余剰、placeholder不一致、二言語hintの片言語欠落が検査を失敗させるfixtureを追加する
