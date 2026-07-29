@@ -52,6 +52,11 @@ export function CaptureView({ state }: CaptureViewProps) {
   }
   const executionError =
     value.failure.kind === "execution" ? value.failure.error : null;
+  const handoffReason =
+    value.failure.kind === "handoff" &&
+    value.failure.error.kind === "transition-failed"
+      ? value.failure.error.reason
+      : undefined;
   return (
     <section aria-label={messages("capture.failedTitle")}>
       <p role="alert">
@@ -59,6 +64,13 @@ export function CaptureView({ state }: CaptureViewProps) {
           ? messages("capture.errors.navigation")
           : messages(errorMessageKeys[executionError.kind])}
       </p>
+      {handoffReason === undefined ? null : (
+        <p data-capture-handoff-reason>
+          {messages("capture.errors.handoffDiagnostic", {
+            reason: handoffReason,
+          })}
+        </p>
+      )}
       {value.failure.kind === "handoff" || value.failure.recoverable ? (
         <button
           data-capture-retry

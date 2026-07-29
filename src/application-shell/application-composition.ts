@@ -46,6 +46,7 @@ import {
   type TransientSurfaceController,
 } from "./transient-surface-controller.js";
 import { projectTransientNotice } from "./transient-surface-notice.js";
+import { transientHandoffFailure } from "./transient-surface-ports.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export interface ProductionFoundationHandle {
@@ -559,7 +560,7 @@ export function createProductionApplicationComposition<
             const result = await integration?.activate?.(intent);
             return result?.ok
               ? ok(undefined)
-              : err({ kind: "transition-failed" });
+              : err(transientHandoffFailure(result?.error));
           },
         },
       });

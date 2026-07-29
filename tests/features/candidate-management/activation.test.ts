@@ -305,6 +305,7 @@ test("mutation が禁止された状態の activation は編集画面を開か�
     error: {
       kind: "activation_failed",
       detail: "candidate editor could not be opened",
+      reason: "operation-blocked",
     },
   });
   assert.equal(state.value.editor, null);
@@ -429,7 +430,11 @@ test("存在しない project を指定した activation は draft を変更し�
   if (!result.ok) return;
   assert.deepEqual(await result.value.activate(), {
     ok: false,
-    error: { kind: "activation_failed", detail: "project does not exist" },
+    error: {
+      kind: "activation_failed",
+      detail: "project does not exist",
+      reason: "target-data-unavailable",
+    },
   });
   assert.equal(state.value.editor, null);
 });

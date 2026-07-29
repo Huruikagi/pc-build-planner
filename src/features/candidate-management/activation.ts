@@ -173,6 +173,7 @@ export const createCandidateActivation = (
       return err<FeatureActivationError>({
         kind: "activation_failed",
         detail: "project does not exist",
+        reason: "target-data-unavailable",
       });
     }
     await state.selectProject(projectId);
@@ -206,6 +207,9 @@ export const createCandidateActivation = (
       return err<FeatureActivationError>({
         kind: "activation_failed",
         detail: "candidate editor could not be opened",
+        reason: state.value.mutationsDisabled
+          ? "operation-blocked"
+          : "target-state-unavailable",
       });
     }
     state.clearPendingPreEditForActivation();

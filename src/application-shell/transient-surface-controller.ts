@@ -272,7 +272,7 @@ export function createTransientSurfaceController(options: {
             state.activationId === activationId
           )
             disabledActivationId = undefined;
-          return err({ kind: "transition-failed" });
+          return err(activated.error);
         }
         if (epoch === commandEpoch) {
           acceptedActivation = undefined;

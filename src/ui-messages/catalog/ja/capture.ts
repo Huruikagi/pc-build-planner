@@ -55,5 +55,6 @@ export const capture = {
       "ページから取得した内容を解釈できませんでした。もう一度実行してください。",
     "no-candidate": "このページからは商品情報を自動取得できませんでした。",
     navigation: "詳細編集画面を開けませんでした。",
+    handoffDiagnostic: "失敗理由: {reason}",
   },
 } as const;

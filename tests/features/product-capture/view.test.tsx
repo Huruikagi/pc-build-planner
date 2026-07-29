@@ -4,6 +4,7 @@ import { cleanup, render } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import type {
   ActivationId,
+  FeatureActivationIntent,
   TargetTabId,
 } from "../../../src/application-shell/public.js";
 import { err } from "../../../src/domain/public.js";
@@ -74,6 +75,28 @@ test("実行中は操作を隠し、失敗後は安全な案内とretryを表示
   assert.ok(view.container.querySelector("[role='alert']"));
   assert.ok(view.container.querySelector("[data-capture-retry]"));
   assert.equal(view.container.querySelector("[data-capture-start]"), null);
+});
+
+test("handoff失敗はDevToolsなしでも安全な固定理由を識別できる", () => {
+  const state = setup();
+  state.retainHandoffFailure(
+    { kind: "transition-failed", reason: "operation-blocked" },
+    {
+      featureId: "candidate-management" as never,
+      target: "open-candidate-editor",
+      payload: {},
+    } satisfies FeatureActivationIntent,
+  );
+  const view = render(
+    <LanguageProvider>
+      <CaptureView state={state} />
+    </LanguageProvider>,
+  );
+
+  assert.equal(
+    view.container.querySelector("[data-capture-handoff-reason]")?.textContent,
+    "失敗理由: operation-blocked",
+  );
 });
 
 test("制限page・権限喪失・対象tab失効では実行操作を隠す", async () => {

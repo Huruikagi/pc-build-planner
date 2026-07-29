@@ -44,12 +44,21 @@ export interface FeatureActivationIntent {
   readonly payload: unknown;
 }
 
+export type FeatureActivationFailureReason =
+  | "operation-blocked"
+  | "target-data-unavailable"
+  | "target-state-unavailable";
+
 export type FeatureActivationError =
   | { readonly kind: "feature_not_found"; readonly featureId: FeatureId }
   | { readonly kind: "feature_unavailable"; readonly featureId: FeatureId }
   | { readonly kind: "invalid_activation"; readonly detail: string }
   | { readonly kind: "mount_failed"; readonly featureId: FeatureId }
-  | { readonly kind: "activation_failed"; readonly detail: string };
+  | {
+      readonly kind: "activation_failed";
+      readonly detail: string;
+      readonly reason?: FeatureActivationFailureReason;
+    };
 
 export interface FeatureActivationAdapter<TActivation> {
   validate(

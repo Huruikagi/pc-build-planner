@@ -49,5 +49,6 @@ export const capture = {
     "no-candidate":
       "Couldn't automatically detect product information on this page.",
     navigation: "Couldn't open the detailed editing screen.",
+    handoffDiagnostic: "Failure reason: {reason}",
   },
 } as const;

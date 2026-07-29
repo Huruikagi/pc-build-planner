@@ -1,5 +1,9 @@
 import { err, ok, type Result } from "../domain/public.js";
-import type { FeatureActivationIntent, FeatureId } from "./contracts.js";
+import type {
+  FeatureActivationError,
+  FeatureActivationIntent,
+  FeatureId,
+} from "./contracts.js";
 
 export type TargetTabId = number & { readonly __brand: "TargetTabId" };
 export type ActivationId = string & { readonly __brand: "ActivationId" };
@@ -31,7 +35,44 @@ export type TransientSurfaceError =
   | { readonly kind: "not-started" }
   | { readonly kind: "invalid-request" }
   | { readonly kind: "surface-unavailable"; readonly surfaceId: FeatureId }
-  | { readonly kind: "transition-failed" };
+  | {
+      readonly kind: "transition-failed";
+      readonly reason?: TransientTransitionFailureReason;
+    };
+
+export type TransientTransitionFailureReason =
+  | "host-unavailable"
+  | "target-not-found"
+  | "target-unavailable"
+  | "invalid-handoff"
+  | "target-mount-failed"
+  | "target-activation-failed"
+  | "operation-blocked"
+  | "target-data-unavailable"
+  | "target-state-unavailable";
+
+/** Converts a typed shell activation failure into a safe, user-identifiable handoff reason. */
+export const transientHandoffFailure = (
+  error: FeatureActivationError | undefined,
+): Extract<TransientSurfaceError, { readonly kind: "transition-failed" }> => {
+  if (error === undefined)
+    return { kind: "transition-failed", reason: "host-unavailable" };
+  switch (error.kind) {
+    case "feature_not_found":
+      return { kind: "transition-failed", reason: "target-not-found" };
+    case "feature_unavailable":
+      return { kind: "transition-failed", reason: "target-unavailable" };
+    case "invalid_activation":
+      return { kind: "transition-failed", reason: "invalid-handoff" };
+    case "mount_failed":
+      return { kind: "transition-failed", reason: "target-mount-failed" };
+    case "activation_failed":
+      return {
+        kind: "transition-failed",
+        reason: error.reason ?? "target-activation-failed",
+      };
+  }
+};
 
 export type TransientSurfaceState =
   | { readonly kind: "inactive" }

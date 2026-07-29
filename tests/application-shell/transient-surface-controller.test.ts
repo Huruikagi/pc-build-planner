@@ -479,6 +479,33 @@ test("typed handoff成功時は引き渡し先を保持し失敗時は一過性�
   assert.deepEqual(failed.getSnapshot(), { kind: "inactive" });
 });
 
+test("typed handoff失敗はhostが返した安全な理由を消さずcallerへ返す", async () => {
+  const h = harness();
+  h.host.activate = async () => ({
+    ok: false,
+    error: { kind: "transition-failed", reason: "operation-blocked" },
+  });
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  await controller.request({
+    activationId: activationId("reason"),
+    surfaceId: featureId("capture"),
+    tabId: tabId(1),
+  });
+
+  assert.deepEqual(
+    await controller.conclude(activationId("reason"), {
+      featureId: featureId("candidates"),
+      target: "edit",
+      payload: {},
+    }),
+    {
+      ok: false,
+      error: { kind: "transition-failed", reason: "operation-blocked" },
+    },
+  );
+});
+
 test("stale conclude失敗は後発navと新世代claimを復活させない", async () => {
   const h = harness();
   let release!: () => void;

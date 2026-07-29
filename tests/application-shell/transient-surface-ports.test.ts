@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseTargetTabId } from "../../src/application-shell/public.js";
+import { transientHandoffFailure } from "../../src/application-shell/transient-surface-ports.js";
 
 test("parseTargetTabId accepts only positive safe integers", () => {
   const accepted = parseTargetTabId(1);
@@ -22,4 +23,35 @@ test("parseTargetTabId accepts only positive safe integers", () => {
       error: { kind: "invalid-target-tab" },
     });
   }
+});
+
+test("shell activation失敗をpayload非依存のhandoff理由へ写像する", () => {
+  assert.deepEqual(transientHandoffFailure(undefined), {
+    kind: "transition-failed",
+    reason: "host-unavailable",
+  });
+  assert.deepEqual(
+    transientHandoffFailure({
+      kind: "invalid_activation",
+      detail: "unsafe payload detail",
+    }),
+    { kind: "transition-failed", reason: "invalid-handoff" },
+  );
+  assert.deepEqual(
+    transientHandoffFailure({
+      kind: "activation_failed",
+      detail: "unsafe feature detail",
+      reason: "operation-blocked",
+    }),
+    { kind: "transition-failed", reason: "operation-blocked" },
+  );
+  assert.equal(
+    JSON.stringify(
+      transientHandoffFailure({
+        kind: "activation_failed",
+        detail: "secret extracted value",
+      }),
+    ).includes("secret"),
+    false,
+  );
 });
