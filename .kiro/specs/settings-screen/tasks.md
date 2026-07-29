@@ -27,7 +27,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1_
   - _Boundary: SettingsFeatureRegistration, SettingsReactRootAdapter_
 
-- [ ] 2. 設定画面とshell状態表示を実装する
+- [x] 2. 設定画面とshell状態表示を実装する
 - [x] 2.1 (P) 言語区画とbackup hostを持つ設定画面を実装する
   - 設定画面、表示言語区画、バックアップ・復元区画を見出し階層と安定識別子で描画し、公開言語controlを表示言語区画だけに配置する
   - 初回layoutを同期確定して安定したbackup hostを返し、言語変更でもhost identity、入力途中の内容、スクロール位置、backup状態を保持できるroot lifecycleを実装する
@@ -37,7 +37,7 @@
   - _Requirements: 1.2, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.2, 4.5, 4.6, 5.3, 5.4_
   - _Boundary: SettingsReactRootAdapter, SettingsView_
 
-- [ ] 2.2 (P) shellヘッダを撤去し状態別の言語設定案内へ移行する
+- [x] 2.2 (P) shellヘッダを撤去し状態別の言語設定案内へ移行する
   - shell共通headerから言語controlと空のlayout行を除去し、通常・maintenance・feature failureではpersistent navigation領域を維持する
   - loadingとglobal startup errorでは操作不能なselectを出さず、表示言語の場所が「設定 / Settings」であることと既存回復操作を判別できる案内を表示する
   - 注入したpersistent settings fixtureを用い、到達可能状態でnavigationが残り、到達不能状態では二言語案内だけが出ることをshell単体で確認する

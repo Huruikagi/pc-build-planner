@@ -23,15 +23,21 @@ afterEach(() => {
 
 const plannerId = "planner" as FeatureId;
 const libraryId = "library" as FeatureId;
+const settingsId = "settings" as FeatureId;
 const navigation = [
   { id: plannerId, labelKey: "構成プラン" as MessageKey },
   { id: libraryId, labelKey: "候補パーツ" as MessageKey },
+] as const;
+const navigationWithSettings = [
+  ...navigation,
+  { id: settingsId, labelKey: "nav.settings" as MessageKey, icon: "settings" },
 ] as const;
 
 async function renderShell(
   state: ShellViewState,
   children?: ReactNode,
   onRetry?: () => void,
+  navigationItems: readonly (typeof navigationWithSettings)[number][] = navigation,
 ) {
   const container = document.createElement("div");
   document.body.append(container);
@@ -41,7 +47,7 @@ async function renderShell(
       <LanguageProvider>
         <ShellView
           state={state}
-          navigation={navigation}
+          navigation={navigationItems}
           onNavigate={() => {}}
           onRetry={onRetry}
         >
@@ -141,14 +147,6 @@ test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで
     assert.ok(
       rendered.container.querySelector("[data-region='transient-notice']"),
     );
-    const language = rendered.container.querySelector<HTMLSelectElement>(
-      "[data-region='language-select']",
-    );
-    assert.ok(language);
-    await act(() => {
-      language.value = "ja";
-      language.dispatchEvent(new window.Event("change", { bubbles: true }));
-    });
     assert.match(
       rendered.container.querySelector("[data-region='transient-notice']")
         ?.textContent ?? "",
@@ -156,15 +154,6 @@ test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで
     );
     assert.match(rendered.container.textContent ?? "", /常設操作/);
     assert.equal(rendered.container.querySelector("img"), null);
-    await act(() => {
-      language.value = "en";
-      language.dispatchEvent(new window.Event("change", { bubbles: true }));
-    });
-    assert.match(
-      rendered.container.querySelector("[data-region='transient-notice']")
-        ?.textContent ?? "",
-      /Use the extension icon again/,
-    );
     await rendered.cleanup();
   }
 });
@@ -295,7 +284,7 @@ test("feature切替時にもerror boundaryをresetする", async () => {
   container.remove();
 });
 
-test("読み込み中・通常・エラー・保守中の全状態で言語コントロールが描画される", async () => {
+test("全 shell 状態で header と言語 control を描画しない", async () => {
   const states: ShellViewState[] = [
     { kind: "loading" },
     { kind: "ready", selected: plannerId },
@@ -312,25 +301,64 @@ test("読み込み中・通常・エラー・保守中の全状態で言語コ�
   ];
   for (const state of states) {
     const rendered = await renderShell(state);
-    const select = rendered.container.querySelector(
-      "[data-region='shell-header'] [data-region='language-select']",
+    assert.equal(
+      rendered.container.querySelector("[data-region='shell-header']"),
+      null,
     );
-    assert.ok(select, `expected language control for state ${state.kind}`);
+    assert.equal(
+      rendered.container.querySelector("[data-region='language-select']"),
+      null,
+    );
     await rendered.cleanup();
   }
 });
 
-test("言語コントロールの操作で表示文言が切り替わる", async () => {
+test("loading は設定への二言語案内だけを表示し navigation を提示しない", async () => {
   const rendered = await renderShell({ kind: "loading" });
-  const select = rendered.container.querySelector<HTMLSelectElement>(
-    "[data-region='language-select']",
-  );
-  assert.ok(select);
-  const before = rendered.container.textContent;
-  await act(() => {
-    select.value = "en";
-    select.dispatchEvent(new window.Event("change", { bubbles: true }));
-  });
-  assert.notEqual(rendered.container.textContent, before);
+  assert.match(rendered.container.textContent ?? "", /設定 \/ Settings/);
+  assert.equal(rendered.container.querySelector("nav"), null);
   await rendered.cleanup();
+});
+
+test("ready、maintenance、feature failure は settings navigation を維持する", async () => {
+  for (const state of [
+    { kind: "ready" as const, selected: plannerId },
+    {
+      kind: "maintenance" as const,
+      selected: plannerId,
+      message: message("shell.maintenanceActive"),
+    },
+    {
+      kind: "error" as const,
+      message: message("shell.featureMountFailed", { featureId: "planner" }),
+      recoverable: true,
+    },
+  ]) {
+    const rendered = await renderShell(
+      state,
+      undefined,
+      undefined,
+      navigationWithSettings,
+    );
+    assert.ok(
+      rendered.container.querySelector("nav [data-feature-id='settings']"),
+    );
+    await rendered.cleanup();
+  }
+
+  function BrokenFeature(): ReactNode {
+    throw new Error("feature failed");
+  }
+  const failed = await renderShell(
+    { kind: "ready", selected: plannerId },
+    <BrokenFeature />,
+    undefined,
+    navigationWithSettings,
+  );
+  assert.ok(failed.container.querySelector("nav [data-feature-id='settings']"));
+  assert.match(
+    failed.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("shell.featureFailureHeading")),
+  );
+  await failed.cleanup();
 });

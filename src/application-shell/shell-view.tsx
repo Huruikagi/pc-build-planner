@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { LanguageSelectControl } from "../ui-language/public.js";
 import type { MessageKey } from "../ui-messages/public.js";
 import { message, useMessages } from "../ui-messages/public.js";
 import type { FeatureId, ShellViewState } from "./contracts.js";
@@ -104,6 +103,14 @@ function selectedFeature(state: ShellViewState): FeatureId | null {
   }
 }
 
+function canNavigate(state: ShellViewState): boolean {
+  return (
+    state.kind === "ready" ||
+    state.kind === "maintenance" ||
+    (state.kind === "error" && state.message.key !== "shell.startupFailed")
+  );
+}
+
 export function ShellView({
   state,
   navigation,
@@ -115,16 +122,13 @@ export function ShellView({
   const selected = selectedFeature(state);
   return (
     <div className="application-shell">
-      <header data-region="shell-header">
-        <LanguageSelectControl />
-      </header>
-      {state.kind === "loading" ? null : (
+      {canNavigate(state) ? (
         <ShellNavigation
           items={navigation}
           onNavigate={onNavigate}
           selected={selected}
         />
-      )}
+      ) : null}
       <main className="shell-main">
         {(state.kind === "ready" || state.kind === "maintenance") &&
         state.transientNotice ? (
@@ -138,7 +142,7 @@ export function ShellView({
         ) : null}
         {state.kind === "loading" ? (
           <p aria-live="polite" className="shell-status">
-            {messages("shell.loading")}
+            {messages("shell.settingsRecoveryLoading")}
           </p>
         ) : null}
         {state.kind === "error" ? (
@@ -148,6 +152,9 @@ export function ShellView({
           >
             <h2>{messages("shell.errorHeading")}</h2>
             <p>{messages.resolveDescriptor(state.message)}</p>
+            {state.message.key === "shell.startupFailed" ? (
+              <p>{messages("shell.settingsRecoveryStartupFailed")}</p>
+            ) : null}
             {state.recoverable ? <RetryButton onRetry={onRetry} /> : null}
           </section>
         ) : null}
