@@ -204,7 +204,7 @@
   - _Requirements: 5.4, 5.5, 7.5, 8.7_
 
 - [ ] 7. 境界別の完全検証で実装完了を確認する
-- [ ] 7.1 静的検査とsource契約suiteを実行する
+- [x] 7.1 静的検査とsource契約suiteを実行する
   - typecheck、公開consumer型検査、lint、domain・policy・catalog・serviceのunit／contract／integration testを実行する。
   - candidate source DTO、catalog／mutation facet、not-found、URL照合の下流所有を含む公開契約suiteがすべて成功することを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.5, 8.6, 8.7_
