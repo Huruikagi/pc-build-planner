@@ -180,7 +180,7 @@
   - _Requirements: 3.7, 4.4, 4.5, 4.6_
   - _Boundary: PublicAPI, StorageAccessGuard, ArtifactValidation_
 
-- [ ] 6. 決定的検証と下流handoff seamを完成させる
+- [x] 6. 決定的検証と下流handoff seamを完成させる
 - [x] 6.1 shell controllerと常設feature非回帰を検証する
   - explicit persistent producerへの移行、常設navigation欠損／一過性navigation混入の型・runtime拒否、不正隔離、navigation除外、初期選択、fallback、単一mountをpublic consumer／contract／integration testで覆う。
   - controllerの新世代、3終了理由、dismiss失敗、conclude成功・rollback、stale callbackをin-memory fixtureで覆う。
@@ -245,16 +245,16 @@
   - _Requirements: 2.8, 2.9, 2.10, 4.4, 4.5, 4.6_
   - _Boundary: ValidationGates_
 
-- [ ] 6.9 下流production起動経路を再検証する
+- [x] 6.9 下流production起動経路を再検証する
   - `product-capture-transient-migration` 6.6／6.7の検証を再実行し、production buildで起動状態受理後に初回mountされることを確認する。
   - 起動から終了まで`feature-mount-failed`や旧世代状態残留がなく、下流のproduction gateが成功することを完了条件とする。
-  - _Blocked: 下流`product-capture-transient-migration` 6.6／6.7のdurable activation・失効復帰production E2Eが未実装で、既存product-capture／英語UI E2Eも移行前の常設navigation経路を待ってtimeoutする。下流specでE2Eを移行してproduction gateを成功させた後に再検証する必要がある。_
   - _Depends: 6.8_
   - _Requirements: 2.1, 2.8, 2.9, 2.10, 4.5_
   - _Boundary: CrossSpecProductionValidation_
 
 ## Implementation Notes
 
+- task 6.9再検証で、下流`product-capture-transient-migration` 6.6／6.7完了後のproduction E2E 4件（durable activation、固定tab更新・閉鎖、常設navigation終了）と`pnpm validate`（unit／integration 1095件、E2E 12件）が成功し、独立レビューで承認された。
 - final validation再監査で、requestのavailability／表示失敗時にpending activationを解放し、dismiss失敗のrecoverable error中はfeature slotを隠して実DOMのretry操作だけを提示する回帰を追加した。
 - validation remediation retry 2で、start前requestがaccepted activationを残すghost claimを除去した。stale conclude失敗後のnavigation／新世代、stop／restart時のclaim reset、重複dismissのsingle restoreを決定的controller testで固定した。
 - validation remediation retryで`conclude`受付時のactivation単位single-owner claimを追加し、同世代の重複handoffを抑止した。最新handoffの失敗時だけclaimを解放し、rollbackされたtransientから再試行できる。
