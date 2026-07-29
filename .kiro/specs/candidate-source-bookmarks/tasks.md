@@ -134,7 +134,7 @@
   - 一覧とeditorのcritical pathが日本語・英語の両catalogで成功することを完了条件とする。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.4, 4.5, 5.1, 5.2, 5.4, 7.5_
 
-- [ ] 5. compositionと隣接featureを新しいsource契約へ接続する
+- [x] 5. compositionと隣接featureを新しいsource契約へ接続する
 - [x] 5.1 application shellからclassifierとChrome tab portを注入する
   - side panel compositionがproduct-capture公開照合をcandidate classifierへ渡し、内部mapを直接importしないようにする。
   - 既存Chrome tabs handleの最小shapeを新規タブ作成へ拡張し、candidate page portへ注入する。
@@ -180,7 +180,7 @@
   - _Boundary: CanonicalSchemaIntegration_
   - _Depends: 2.4, 3.2, 3.3, 3.4, 4.2, 4.4, 5.2, 5.3, 5.4_
 
-- [ ] 5.6 互換性判定と未変更consumerのcanonical schema 1回帰を整備する
+- [x] 5.6 互換性判定と未変更consumerのcanonical schema 1回帰を整備する
   - source・取得元別価格だけを変えた候補が同じ正規化属性から同じ互換性結果を返すことを検証する。
   - 隣接featureが商品共通priceや単数取得元へ依存していないことを型検査とcontract testで確認する。
   - compatibilityと未変更consumerの回帰testがcanonical schema 1 fixtureで成功することを完了条件とする。

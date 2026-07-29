@@ -3,6 +3,7 @@ import test from "node:test";
 import type {
   CandidatePart,
   CandidatePartId,
+  CandidateSourceId,
   CurrentBuild,
   NormalizedAttributes,
   PositiveInteger,
@@ -37,6 +38,10 @@ const coolerId = partId("30000000-0000-4000-8000-000000000004");
 const caseId = partId("30000000-0000-4000-8000-000000000005");
 const psuId = partId("30000000-0000-4000-8000-000000000006");
 const unlistedId = partId("30000000-0000-4000-8000-000000000007");
+const primarySourceId =
+  "50000000-0000-4000-8000-000000000001" as Uuid as CandidateSourceId;
+const secondarySourceId =
+  "50000000-0000-4000-8000-000000000002" as Uuid as CandidateSourceId;
 
 const candidate = (
   id: CandidatePartId,
@@ -372,6 +377,83 @@ test("同じ入力から同じreportを再現し上流データを変更しな�
   assert.deepEqual(first, second);
   assert.deepEqual(parts, partsSnapshot);
   assert.deepEqual(build, buildSnapshot);
+});
+
+test("sourceと取得元別価格だけの変更は同じ互換性reportを返す", async () => {
+  const build = fullBuild();
+  let parts: readonly CandidatePart[] = partsWith("AM5", "AM5").map((part) =>
+    part.id === cpuId
+      ? {
+          ...part,
+          sources: [
+            {
+              id: primarySourceId,
+              pageUrl: "https://shop-a.example.invalid/cpu",
+              price: {
+                original: "10,000円",
+                confirmed: { amount: 10000, currency: "JPY" },
+              },
+              kind: "retail" as const,
+            },
+          ],
+          primarySourceId,
+        }
+      : part,
+  );
+  const normalizedBefore = parts.map(({ normalizedAttributes }) =>
+    structuredClone(normalizedAttributes),
+  );
+  const sourcesBefore = structuredClone(
+    parts.find(({ id }) => id === cpuId)?.sources,
+  );
+  const buildBefore = structuredClone(build);
+  const service = createCompatibilityService({
+    currentBuildQuery: dynamicBuildQuery(() => ({
+      ok: true,
+      value: snapshotWith(build),
+    })),
+    candidateQuery: dynamicCandidateQuery(() => ({ ok: true, value: parts })),
+  });
+
+  const before = await service.evaluate(projectId);
+  parts = parts.map((part) =>
+    part.id === cpuId
+      ? {
+          ...part,
+          sources: [
+            {
+              id: primarySourceId,
+              pageUrl: "https://shop-b.example.invalid/cpu",
+              price: {
+                original: "15,000円",
+                confirmed: { amount: 15000, currency: "JPY" },
+              },
+              kind: "retail" as const,
+            },
+            {
+              id: secondarySourceId,
+              pageUrl: "https://maker.example.invalid/cpu",
+              kind: "manufacturer" as const,
+            },
+          ],
+          primarySourceId: secondarySourceId,
+        }
+      : part,
+  );
+  const after = await service.evaluate(projectId);
+
+  assert.deepEqual(
+    parts.map(({ normalizedAttributes }) => normalizedAttributes),
+    normalizedBefore,
+  );
+  assert.deepEqual(build, buildBefore);
+  assert.notDeepEqual(
+    parts.find(({ id }) => id === cpuId)?.sources,
+    sourcesBefore,
+  );
+  assert.ok(parts.every((part) => !("price" in part.product)));
+  assert.ok(parts.every((part) => !("sourceInfo" in part)));
+  assert.deepEqual(after, before);
 });
 
 test("評価要求ごとに上流を再読取し、構成または属性変更後の結果へ更新する", async () => {
