@@ -28,7 +28,7 @@
   - _Boundary: SettingsFeatureRegistration, SettingsReactRootAdapter_
 
 - [ ] 2. 設定画面とshell状態表示を実装する
-- [ ] 2.1 (P) 言語区画とbackup hostを持つ設定画面を実装する
+- [x] 2.1 (P) 言語区画とbackup hostを持つ設定画面を実装する
   - 設定画面、表示言語区画、バックアップ・復元区画を見出し階層と安定識別子で描画し、公開言語controlを表示言語区画だけに配置する
   - 初回layoutを同期確定して安定したbackup hostを返し、言語変更でもhost identity、入力途中の内容、スクロール位置、backup状態を保持できるroot lifecycleを実装する
   - 保存失敗時にもその回の表示言語を維持し、domain dataやbackup対象データへ書き込まない既存言語契約を利用する
