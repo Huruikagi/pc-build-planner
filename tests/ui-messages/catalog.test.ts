@@ -3,6 +3,7 @@ import test from "node:test";
 import type { PartCategory } from "../../src/domain/public.js";
 import { PART_CATEGORIES } from "../../src/domain/public.js";
 import { MESSAGES } from "../../src/ui-messages/catalog/index.js";
+import { resolverFor } from "../../src/ui-messages/public.js";
 
 // Compile-time guarantee (5.4): an incomplete category table fails typecheck
 // (missing "gpu"), demonstrating that a category addition/removal is caught
@@ -98,4 +99,60 @@ test("transient product-capture は navigation と legacy 保存 message を公�
     assert.equal(legacyKey in capture, false, legacyKey);
   }
   assert.equal(typeof capture.manualEntryAction, "string");
+});
+
+test("v0.3.0 settings・shell回復・capture回復messageをja/enで解決できる", () => {
+  const ja = resolverFor("ja");
+  const en = resolverFor("en");
+
+  const expected = {
+    "nav.settings": ["設定", "Settings"],
+    "settings.title": ["設定", "Settings"],
+    "settings.language.title": ["表示言語", "Display language"],
+    "settings.language.description": [
+      "画面に表示する言語を選択します。",
+      "Choose the language used by the interface.",
+    ],
+    "settings.backupRestore.title": ["バックアップ・復元", "Backup & Restore"],
+    "settings.backupRestore.description": [
+      "ローカルデータをファイルへ退避し、必要なときに復元します。",
+      "Back up local data to a file and restore it when needed.",
+    ],
+    "shell.transientActivationFailed": [
+      "一過性の表示を開始できませんでした。拡張アイコンをもう一度操作して、新しい権限で起動してください。",
+      "The temporary view couldn't start. Click the extension icon again to start it with newly granted access.",
+    ],
+    "shell.transientActivationExpired": [
+      "この表示の起動情報は失効しました。古い画面から再実行せず、拡張アイコンをもう一度操作して新しい表示を起動してください。",
+      "This view's activation has expired. Don't retry from the stale view; click the extension icon again to start a new one.",
+    ],
+    "shell.settingsRecoveryLoading": [
+      "読み込み中です。表示言語は設定 / Settings から変更できます。読み込み完了までお待ちください。",
+      "Loading. You can change the display language in 設定 / Settings. Wait for loading to finish.",
+    ],
+    "shell.settingsRecoveryStartupFailed": [
+      "起動に失敗しました。表示言語は設定 / Settings から変更できます。再試行してください。",
+      "Startup failed. You can change the display language in 設定 / Settings. Try again.",
+    ],
+    "capture.errors.permission-lost": [
+      "ページへのアクセス権限が失効しました。ページを表示し直してから拡張アイコンをもう一度操作し、権限を付与し直してください。",
+      "Permission to access the page has expired. Reload the page, then click the extension icon again to grant access again.",
+    ],
+    "capture.newGenerationHint": [
+      "拡張アイコンを新しく操作すると、古い失敗状態や保持中の結果は新しい取り込みで置き換わります。",
+      "A new extension icon gesture replaces any stale failure or retained result with a new capture.",
+    ],
+    "capture.handoffRetainedNotice": [
+      "取り込み結果は現在の起動世代に保持されています。",
+      "The capture result is retained for the current activation generation.",
+    ],
+    "capture.retryHandoffAction": ["引き渡しを再試行", "Retry handoff"],
+  } as const;
+
+  const resolve = (resolver: typeof ja, key: string): string =>
+    (resolver as unknown as (messageKey: string) => string)(key);
+  for (const [key, [jaText, enText]] of Object.entries(expected)) {
+    assert.equal(resolve(ja, key), jaText, key);
+    assert.equal(resolve(en, key), enText, key);
+  }
 });

@@ -33,12 +33,17 @@ export const capture = {
   extractingStatus: "Capturing the page…",
   failedTitle: "Capture Failed",
   retryAction: "Retry",
+  newGenerationHint:
+    "A new extension icon gesture replaces any stale failure or retained result with a new capture.",
+  handoffRetainedNotice:
+    "The capture result is retained for the current activation generation.",
+  retryHandoffAction: "Retry handoff",
   manualEntryTitle: "Manual Entry",
   manualEntryInstruction:
     "Enter a product name to continue to detailed editing.",
   errors: {
     "permission-lost":
-      "Permission to access the page has expired. Reload the page and try again.",
+      "Permission to access the page has expired. Reload the page, then click the extension icon again to grant access again.",
     "restricted-page":
       "This page can't be read by the extension, so it can't be captured.",
     "tab-changed":

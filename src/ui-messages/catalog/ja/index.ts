@@ -13,15 +13,17 @@ import { common } from "./common.js";
 import { compatibility } from "./compatibility.js";
 import { nav } from "./nav.js";
 import { persistenceError } from "./persistence-error.js";
+import { settings } from "./settings.js";
 import { shell } from "./shell.js";
 
-/** 日本語カタログの10個の名前空間を束ねる集約点。以降のタスクは各名前空間ファイルだけを編集する。 */
+/** 日本語カタログの11個の名前空間を束ねる集約点。 */
 export const MESSAGES = {
   common,
   category,
   persistenceError,
   nav,
   shell,
+  settings,
   candidate,
   build,
   compatibility,

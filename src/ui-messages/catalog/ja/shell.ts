@@ -19,6 +19,14 @@ export const shell = {
   maintenanceStartupFailed: "メンテナンス状態を取得できませんでした",
   transientActivationUnavailable:
     "一過性の表示を開始できませんでした。拡張アイコンを再操作してください。{detail}",
+  transientActivationFailed:
+    "一過性の表示を開始できませんでした。拡張アイコンをもう一度操作して、新しい権限で起動してください。",
+  transientActivationExpired:
+    "この表示の起動情報は失効しました。古い画面から再実行せず、拡張アイコンをもう一度操作して新しい表示を起動してください。",
+  settingsRecoveryLoading:
+    "読み込み中です。表示言語は設定 / Settings から変更できます。読み込み完了までお待ちください。",
+  settingsRecoveryStartupFailed:
+    "起動に失敗しました。表示言語は設定 / Settings から変更できます。再試行してください。",
   hostStopped: "side panel host は停止しています",
   runtimeHostUnavailable: "Application shell host is unavailable.",
   runtimeStartupFailed: "Application shell failed to start.",

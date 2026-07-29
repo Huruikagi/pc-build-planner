@@ -40,11 +40,15 @@ export const capture = {
   extractingStatus: "ページを取り込んでいます…",
   failedTitle: "取り込み失敗",
   retryAction: "再実行",
+  newGenerationHint:
+    "拡張アイコンを新しく操作すると、古い失敗状態や保持中の結果は新しい取り込みで置き換わります。",
+  handoffRetainedNotice: "取り込み結果は現在の起動世代に保持されています。",
+  retryHandoffAction: "引き渡しを再試行",
   manualEntryTitle: "手入力での登録案内",
   manualEntryInstruction: "商品名を入力すると詳細編集へ進めます。",
   errors: {
     "permission-lost":
-      "ページへのアクセス権限が失効しました。ページを表示し直してから再実行してください。",
+      "ページへのアクセス権限が失効しました。ページを表示し直してから拡張アイコンをもう一度操作し、権限を付与し直してください。",
     "restricted-page":
       "このページは拡張から読み取れないため取り込みの対象外です。",
     "tab-changed":

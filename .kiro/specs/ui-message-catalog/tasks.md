@@ -253,7 +253,7 @@
 
 - [ ] 6. v0.3.0のcatalog dataを追加する
 
-- [ ] 6.1 canonical settings名前空間と設定navigationを加算的に追加する
+- [x] 6.1 canonical settings名前空間と設定navigationを加算的に追加する
   - 日本語・英語へ11番目の`settings`名前空間を追加し、画面見出し、表示言語区画、バックアップ・復元区画の見出しと説明をcanonical key contractどおりに定義する
   - `nav.settings`を両言語へ追加し、consumer移行が完了する7.2までは旧navigation keyを削除しない
   - 既存のresolver、記述子、Provider、言語stateの公開signatureを変更せず、11名前空間を集約する
@@ -261,7 +261,7 @@
   - _Requirements: 1.1, 1.5, 7.5, 10.1, 10.2, 11.5_
   - _Boundary: V03CatalogMigration_
 
-- [ ] 6.2 shellの一過性・settings回復messageを追加する
+- [x] 6.2 shellの一過性・settings回復messageを追加する
   - `shell.transientActivationFailed`と`shell.transientActivationExpired`へ、新しい付与gestureと新世代起動を案内するja/en値を追加する
   - `shell.settingsRecoveryLoading`と`shell.settingsRecoveryStartupFailed`へ、どちらの表示言語でも「設定 / Settings」と回復操作を判別できる固定二言語値を追加する
   - noticeの発火、clear、state遷移、retry callbackをcatalogへ持ち込まず、固定文言だけを所有する
@@ -270,7 +270,7 @@
   - _Requirements: 1.1, 1.5, 10.1, 10.2, 11.1, 11.2, 11.6_
   - _Boundary: V03CatalogMigration_
 
-- [ ] 6.3 product-captureの権限・新世代・handoff回復messageを追加する
+- [x] 6.3 product-captureの権限・新世代・handoff回復messageを追加する
   - `capture.errors.permission-lost`を、ページ再表示後に拡張アイコンを再操作して権限を付与し直すja/en案内へ改訂する
   - `capture.newGenerationHint`、`capture.handoffRetainedNotice`、`capture.retryHandoffAction`をexact key contractどおりに追加する
   - capture state、抽出、handoff、activation寿命を変更せず、外部由来値を固定文言へ取り込まない
