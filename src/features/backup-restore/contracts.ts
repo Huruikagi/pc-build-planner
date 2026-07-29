@@ -1,13 +1,14 @@
 import type {
   CandidatePartId,
   CandidateProductValues,
+  CandidateSource,
+  CandidateSourceId,
   CurrentBuildId,
   FoundationError,
   NormalizedAttributes,
   PartCategory,
   PositiveInteger,
   ProjectId,
-  SourceInfo,
   SourceSnapshot,
   UtcTimestamp,
 } from "../../domain/public.js";
@@ -45,7 +46,8 @@ export interface BackupCandidatePart {
   readonly projectId: ProjectId;
   readonly category: PartCategory;
   readonly product: CandidateProductValues;
-  readonly sourceInfo?: SourceInfo;
+  readonly sources: readonly CandidateSource[];
+  readonly primarySourceId?: CandidateSourceId;
   readonly sourceSnapshot?: SourceSnapshot;
   readonly normalizedAttributes: NormalizedAttributes;
   readonly createdAt: UtcTimestamp;

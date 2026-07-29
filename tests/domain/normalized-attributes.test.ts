@@ -9,20 +9,6 @@ const productValues = {
   name: { original: "架空 CPU", confirmed: "架空 CPU Confirmed" },
   manufacturer: { original: null },
   modelNumber: { original: "SYN-100" },
-  price: {
-    original: "12,345円",
-    confirmed: { amount: 12345, currency: "JPY" },
-  },
-};
-
-/** @type {import("../../src/domain/normalized-attributes.ts").SourceInfo} */
-const sourceInfo = {
-  pageUrl: "https://example.invalid/products/synthetic-100",
-  siteName: "架空ショップ",
-  capturedAt:
-    /** @type {import("../../src/domain/identifiers.ts").UtcTimestamp} */ (
-      "2026-07-18T12:34:56.789Z"
-    ),
 };
 
 /** @type {readonly import("../../src/domain/normalized-attributes.ts").NormalizedAttributes[]} */
@@ -75,7 +61,6 @@ test("全12カテゴリと欠損可能な商品情報をJSON往復できる", ()
   );
 
   const value = {
-    sourceInfo,
     productValues,
     normalizedAttributes: allAttributes,
   };

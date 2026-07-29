@@ -5,7 +5,6 @@ import type {
   NormalizedAttributes,
   PartCategory,
   SourcedValue,
-  SourceInfo,
   SourceSnapshot,
 } from "./normalized-attributes.js";
 
@@ -44,12 +43,11 @@ export interface Project {
   readonly updatedAt: UtcTimestamp;
 }
 
-export interface CandidatePart {
+interface CandidatePartBase {
   readonly id: CandidatePartId;
   readonly projectId: ProjectId;
   readonly category: PartCategory;
   readonly product: CandidateProductValues;
-  readonly sourceInfo?: SourceInfo;
   readonly sourceSnapshot?: SourceSnapshot;
   readonly normalizedAttributes: NormalizedAttributes;
   readonly createdAt: UtcTimestamp;
@@ -67,8 +65,6 @@ export interface CandidateSource {
   readonly kind?: CandidateSourceKind;
 }
 
-export type CandidateProductValuesV2 = Omit<CandidateProductValues, "price">;
-
 export type CandidateSourceState =
   | {
       readonly sources: readonly [];
@@ -79,10 +75,7 @@ export type CandidateSourceState =
       readonly primarySourceId: CandidateSourceId;
     };
 
-/** Schema 2 candidate contract staged independently from the live schema 1 model. */
-export type CandidatePartV2 = Omit<CandidatePart, "product" | "sourceInfo"> & {
-  readonly product: CandidateProductValuesV2;
-} & CandidateSourceState;
+export type CandidatePart = CandidatePartBase & CandidateSourceState;
 
 export interface BuildItem {
   readonly candidatePartId: CandidatePartId;
@@ -129,12 +122,3 @@ export interface LocalDataRoot {
   readonly requestDedupe: readonly RequestDedupeRecord[];
   readonly maintenance: MaintenanceState;
 }
-
-/** Versioned root used by schema 2 validators and adapters before production cutover. */
-export type LocalDataRootV2 = Omit<
-  LocalDataRoot,
-  "schemaVersion" | "candidateParts"
-> & {
-  readonly schemaVersion: 2;
-  readonly candidateParts: readonly CandidatePartV2[];
-};

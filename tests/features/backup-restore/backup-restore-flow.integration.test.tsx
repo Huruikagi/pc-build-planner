@@ -105,6 +105,7 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
       product: {
         name: { original: "架空メモリ統合候補", confirmed: "SYN-MEMORY" },
       },
+      sources: [],
       normalizedAttributes: {
         category: "memory",
         memoryStandard: { original: "架空規格", confirmed: "SYN-DDR" },

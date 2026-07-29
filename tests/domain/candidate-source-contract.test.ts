@@ -3,12 +3,11 @@ import test from "node:test";
 
 import type { UtcTimestamp } from "../../src/domain/identifiers.js";
 import type {
+  CandidatePart,
   CandidatePartId,
-  CandidatePartV2,
   CandidateSource,
   CandidateSourceId,
   LocalDataRoot,
-  LocalDataRootV2,
   ProjectId,
 } from "../../src/domain/model.js";
 
@@ -42,66 +41,62 @@ const baseCandidate = {
 const manualCandidate = {
   ...baseCandidate,
   sources: [],
-} satisfies CandidatePartV2;
+} satisfies CandidatePart;
 
 const sourcedCandidate = {
   ...baseCandidate,
   sources: [source],
   primarySourceId: sourceId,
-} satisfies CandidatePartV2;
+} satisfies CandidatePart;
 
-const schemaTwoRoot = {
-  schemaVersion: 2,
+const canonicalRoot = {
+  schemaVersion: 1,
   revision: 0,
   projects: [],
   candidateParts: [manualCandidate, sourcedCandidate],
   currentBuilds: [],
   requestDedupe: [],
   maintenance: { generation: 0, active: false },
-} as unknown as LocalDataRootV2;
+} as unknown as LocalDataRoot;
 
-test("versioned schema 2契約はsourceなしと取得元別価格を型安全に表現する", () => {
-  assert.equal(schemaTwoRoot.schemaVersion, 2);
+test("canonical schema 1契約はsourceなしと取得元別価格を型安全に表現する", () => {
+  assert.equal(canonicalRoot.schemaVersion, 1);
   assert.deepEqual(manualCandidate.sources, []);
-  assert.equal(sourcedCandidate.sources[0].price.confirmed?.amount, 12345);
+  assert.equal(sourcedCandidate.sources[0]?.price?.confirmed?.amount, 12345);
   assert.equal("price" in sourcedCandidate.product, false);
   assert.equal("sourceInfo" in sourcedCandidate, false);
 });
 
-// @ts-expect-error schema 1 rootとschema 2 rootは混同できない。
-const schemaOneRoot: LocalDataRoot = schemaTwoRoot;
-void schemaOneRoot;
-
-// @ts-expect-error sourceが存在する候補にはprimarySourceIdが必須。
-const missingPrimary: CandidatePartV2 = {
-  ...baseCandidate,
-  sources: [source],
-};
-void missingPrimary;
-
-// @ts-expect-error sourceなし候補にprimarySourceIdは指定できない。
-const unexpectedPrimary: CandidatePartV2 = {
-  ...baseCandidate,
-  sources: [],
-  primarySourceId: sourceId,
-};
-void unexpectedPrimary;
-
-const legacyPrice: CandidatePartV2 = {
+const legacyPrice: CandidatePart = {
   ...baseCandidate,
   product: {
     ...baseCandidate.product,
-    // @ts-expect-error schema 2の商品共通値へpriceは保存できない。
+    // @ts-expect-error canonical商品の共通値へpriceは保存できない。
     price: { original: "100 JPY" },
   },
   sources: [],
 };
 void legacyPrice;
 
-const legacySourceInfo: CandidatePartV2 = {
+const legacySourceInfo: CandidatePart = {
   ...baseCandidate,
   sources: [],
-  // @ts-expect-error schema 2候補へ単数sourceInfoは保存できない。
+  // @ts-expect-error canonical候補へ単数sourceInfoは保存できない。
   sourceInfo: {},
 };
 void legacySourceInfo;
+
+// @ts-expect-error sourceが非空ならprimarySourceIdが必須。
+const missingPrimarySource: CandidatePart = {
+  ...baseCandidate,
+  sources: [source],
+};
+void missingPrimarySource;
+
+// @ts-expect-error sourceが空ならprimarySourceIdを持てない。
+const unexpectedPrimarySource: CandidatePart = {
+  ...baseCandidate,
+  sources: [],
+  primarySourceId: sourceId,
+};
+void unexpectedPrimarySource;

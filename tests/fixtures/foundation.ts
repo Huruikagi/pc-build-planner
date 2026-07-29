@@ -6,6 +6,7 @@ import type {
 import type {
   CandidatePart,
   CandidatePartId,
+  CandidateSourceId,
   CurrentBuildId,
   LocalDataRoot,
   MaintenanceGeneration,
@@ -39,6 +40,8 @@ const CAPTURED_AT = "2026-07-19T00:00:00.000Z" as UtcTimestamp;
 
 const candidateId = (index: number) =>
   `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}` as Uuid as CandidatePartId;
+const candidateSourceId = (index: number) =>
+  `40000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}` as Uuid as CandidateSourceId;
 
 const attributesFor = (category: PartCategory): NormalizedAttributes => {
   switch (category) {
@@ -103,17 +106,22 @@ export const buildFoundationRoot = (): LocalDataRoot => {
           original: `架空型番-${index + 1}`,
           confirmed: `SYN-${index + 1}`,
         },
-        price: {
-          original: "架空価格",
-          confirmed: { amount: 1000 + index, currency: "SYN" },
-        },
         notes: { original: null, confirmed: "架空注記" },
       },
-      sourceInfo: {
-        pageUrl: `https://catalog.example.invalid/synthetic-part-${index + 1}`,
-        siteName: "架空部品カタログ",
-        capturedAt: CAPTURED_AT,
-      },
+      sources: [
+        {
+          id: candidateSourceId(index),
+          pageUrl: `https://catalog.example.invalid/synthetic-part-${index + 1}`,
+          siteName: "架空部品カタログ",
+          capturedAt: CAPTURED_AT,
+          price: {
+            original: "架空価格",
+            confirmed: { amount: 1000 + index, currency: "SYN" },
+          },
+          kind: "retail",
+        },
+      ],
+      primarySourceId: candidateSourceId(index),
       normalizedAttributes: attributesFor(category),
       createdAt: CAPTURED_AT,
       updatedAt: CAPTURED_AT,
@@ -157,24 +165,27 @@ export const buildMissingProductFieldsRoot = (): LocalDataRoot => {
   };
 };
 
-/** schema 1の取得元ありfixtureを保ちつつ、optional取得元の互換形状を提供する。 */
+/** canonical sourceとsourceSnapshotの欠損可能な形状を提供する。 */
 export const buildSourceMetadataCompatibilityRoot = (): LocalDataRoot => {
   const root = structuredClone(buildFoundationRoot());
   return {
     ...root,
     candidateParts: root.candidateParts.map((candidate, index) => {
       if (index === 0) {
-        const {
-          sourceInfo: _sourceInfo,
-          sourceSnapshot: _sourceSnapshot,
-          ...withoutSource
-        } = candidate;
-        return withoutSource;
+        const { primarySourceId: _primarySourceId, ...withoutPrimary } =
+          candidate;
+        return { ...withoutPrimary, sources: [] };
       }
       if (index === 1)
         return {
           ...candidate,
-          sourceInfo: { siteName: "架空部分取得元" },
+          sources: [
+            {
+              id: candidateSourceId(index),
+              siteName: "架空部分取得元",
+            },
+          ],
+          primarySourceId: candidateSourceId(index),
         };
       if (index === 2)
         return {

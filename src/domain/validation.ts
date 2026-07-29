@@ -1,9 +1,4 @@
-import type {
-  CandidatePart,
-  CandidatePartV2,
-  LocalDataRoot,
-  LocalDataRootV2,
-} from "./model.js";
+import type { CandidatePart, LocalDataRoot } from "./model.js";
 import type { JsonValue } from "./normalized-attributes.js";
 import type { Result } from "./result.js";
 
@@ -62,6 +57,10 @@ export interface ValidationError {
   readonly code: ValidationErrorCode;
   readonly path: string;
 }
+
+/** Canonical validation path for a candidate source URL field. */
+export const candidateSourcePageUrlPath = (index: number): string =>
+  `sources[${index}].pageUrl`;
 
 export type ReplaceableRoot = LocalDataRoot;
 
@@ -207,27 +206,6 @@ const product = (value: unknown, path: string): ValidationError | undefined => {
     value,
     path,
     [],
-    ["name", "manufacturer", "modelNumber", "price", "notes"],
-  );
-  if (!result.ok) return result.error;
-  for (const key of ["name", "manufacturer", "modelNumber", "notes"] as const)
-    if (key in result.value) {
-      const issue = sourced(result.value[key], `${path}.${key}`);
-      if (issue) return issue;
-    }
-  return "price" in result.value
-    ? sourced(result.value.price, `${path}.price`, "money")
-    : undefined;
-};
-
-const productV2 = (
-  value: unknown,
-  path: string,
-): ValidationError | undefined => {
-  const result = object(
-    value,
-    path,
-    [],
     ["name", "manufacturer", "modelNumber", "notes"],
   );
   if (!result.ok) return result.error;
@@ -236,27 +214,6 @@ const productV2 = (
       const issue = sourced(result.value[key], `${path}.${key}`);
       if (issue) return issue;
     }
-  return undefined;
-};
-
-const sourceInfo = (
-  value: unknown,
-  path: string,
-): ValidationError | undefined => {
-  const result = object(value, path, [], ["pageUrl", "capturedAt", "siteName"]);
-  if (!result.ok) return result.error;
-  for (const issue of [
-    "pageUrl" in result.value
-      ? url(result.value.pageUrl, `${path}.pageUrl`)
-      : undefined,
-    "capturedAt" in result.value
-      ? utc(result.value.capturedAt, `${path}.capturedAt`)
-      : undefined,
-    "siteName" in result.value
-      ? string(result.value.siteName, `${path}.siteName`)
-      : undefined,
-  ])
-    if (issue) return issue;
   return undefined;
 };
 
@@ -330,6 +287,63 @@ export type CandidatePartContent = Omit<
   "id" | "createdAt" | "updatedAt"
 >;
 
+const candidateSources = (
+  candidate: RecordValue,
+  path: string,
+): ValidationError | undefined => {
+  if (!Array.isArray(candidate.sources))
+    return { code: "invalid-array", path: `${path}.sources` };
+  const sourceIds = new Set<string>();
+  for (const [index, value] of candidate.sources.entries()) {
+    const sourcePath = `${path}.sources[${index}]`;
+    const source = object(
+      value,
+      sourcePath,
+      ["id"],
+      ["pageUrl", "siteName", "capturedAt", "price", "kind"],
+    );
+    if (!source.ok) return source.error;
+    const issue = uuid(source.value.id, `${sourcePath}.id`);
+    if (issue) return issue;
+    if (sourceIds.has(source.value.id as string))
+      return { code: "duplicate-id", path: `${sourcePath}.id` };
+    sourceIds.add(source.value.id as string);
+    for (const sourceIssue of [
+      "pageUrl" in source.value
+        ? url(source.value.pageUrl, `${sourcePath}.pageUrl`)
+        : undefined,
+      "siteName" in source.value
+        ? string(source.value.siteName, `${sourcePath}.siteName`)
+        : undefined,
+      "capturedAt" in source.value
+        ? utc(source.value.capturedAt, `${sourcePath}.capturedAt`)
+        : undefined,
+      "price" in source.value
+        ? sourced(source.value.price, `${sourcePath}.price`, "money")
+        : undefined,
+    ])
+      if (sourceIssue) return sourceIssue;
+    if (
+      "kind" in source.value &&
+      source.value.kind !== "retail" &&
+      source.value.kind !== "manufacturer"
+    )
+      return { code: "invalid-string", path: `${sourcePath}.kind` };
+  }
+  if (candidate.sources.length === 0) {
+    if ("primarySourceId" in candidate)
+      return { code: "unexpected-field", path: `${path}.primarySourceId` };
+    return undefined;
+  }
+  if (!("primarySourceId" in candidate))
+    return { code: "missing-field", path: `${path}.primarySourceId` };
+  const issue = uuid(candidate.primarySourceId, `${path}.primarySourceId`);
+  if (issue) return issue;
+  if (!sourceIds.has(candidate.primarySourceId as string))
+    return { code: "missing-reference", path: `${path}.primarySourceId` };
+  return undefined;
+};
+
 /**
  * 識別子と日時を伴わない候補パーツ内容のcanonical shape validator。
  * 保存前のdraftは、rootや無関係なaggregateを組み立てずにこの入口だけで検証する。
@@ -343,8 +357,8 @@ export const validateCandidatePartContent = (
   const content = object(
     input,
     path,
-    ["projectId", "category", "product", "normalizedAttributes"],
-    ["sourceInfo", "sourceSnapshot"],
+    ["projectId", "category", "product", "sources", "normalizedAttributes"],
+    ["primarySourceId", "sourceSnapshot"],
   );
   if (!content.ok) return content;
   const projectIdIssue = uuid(content.value.projectId, `${path}.projectId`);
@@ -353,10 +367,6 @@ export const validateCandidatePartContent = (
     return fail("category-mismatch", `${path}.category`);
   let issue = product(content.value.product, `${path}.product`);
   if (issue) return err(issue);
-  if ("sourceInfo" in content.value) {
-    issue = sourceInfo(content.value.sourceInfo, `${path}.sourceInfo`);
-    if (issue) return err(issue);
-  }
   if ("sourceSnapshot" in content.value) {
     issue = sourceSnapshot(
       content.value.sourceSnapshot,
@@ -369,6 +379,8 @@ export const validateCandidatePartContent = (
     content.value.category as string,
     `${path}.normalizedAttributes`,
   );
+  if (issue) return err(issue);
+  issue = candidateSources(content.value, path);
   if (issue) return err(issue);
   return ok(input as CandidatePartContent);
 };
@@ -391,11 +403,12 @@ export const validateCandidatePartValue = (
       "projectId",
       "category",
       "product",
+      "sources",
       "normalizedAttributes",
       "createdAt",
       "updatedAt",
     ],
-    ["sourceInfo", "sourceSnapshot"],
+    ["primarySourceId", "sourceSnapshot"],
   );
   if (!candidate.ok) return candidate;
   for (const issue of [
@@ -413,116 +426,9 @@ export const validateCandidatePartValue = (
   return ok(input as CandidatePart);
 };
 
-export const validateCandidatePartV2Value = (
-  input: unknown,
-  path = "$",
-): Result<CandidatePartV2, ValidationError> => {
-  const prohibited = inspectPayload(input, path);
-  if (prohibited) return err(prohibited);
-  const candidate = object(
-    input,
-    path,
-    [
-      "id",
-      "projectId",
-      "category",
-      "product",
-      "sources",
-      "normalizedAttributes",
-      "createdAt",
-      "updatedAt",
-    ],
-    ["primarySourceId", "sourceSnapshot"],
-  );
-  if (!candidate.ok) return candidate;
-  for (const issue of [
-    uuid(candidate.value.id, `${path}.id`),
-    uuid(candidate.value.projectId, `${path}.projectId`),
-    utc(candidate.value.createdAt, `${path}.createdAt`),
-    utc(candidate.value.updatedAt, `${path}.updatedAt`),
-  ])
-    if (issue) return err(issue);
-  if (!PART_CATEGORIES.includes(candidate.value.category as never))
-    return fail("category-mismatch", `${path}.category`);
-  let issue = productV2(candidate.value.product, `${path}.product`);
-  if (issue) return err(issue);
-  if ("sourceSnapshot" in candidate.value) {
-    issue = sourceSnapshot(
-      candidate.value.sourceSnapshot,
-      `${path}.sourceSnapshot`,
-    );
-    if (issue) return err(issue);
-  }
-  issue = attributes(
-    candidate.value.normalizedAttributes,
-    candidate.value.category as string,
-    `${path}.normalizedAttributes`,
-  );
-  if (issue) return err(issue);
-  if (!Array.isArray(candidate.value.sources))
-    return fail("invalid-array", `${path}.sources`);
-  const sourceIds = new Set<string>();
-  for (const [index, value] of candidate.value.sources.entries()) {
-    const sourcePath = `${path}.sources[${index}]`;
-    const source = object(
-      value,
-      sourcePath,
-      ["id"],
-      ["pageUrl", "siteName", "capturedAt", "price", "kind"],
-    );
-    if (!source.ok) return source;
-    issue = uuid(source.value.id, `${sourcePath}.id`);
-    if (issue) return err(issue);
-    if (sourceIds.has(source.value.id as string))
-      return fail("duplicate-id", `${sourcePath}.id`);
-    sourceIds.add(source.value.id as string);
-    for (const sourceIssue of [
-      "pageUrl" in source.value
-        ? url(source.value.pageUrl, `${sourcePath}.pageUrl`)
-        : undefined,
-      "siteName" in source.value
-        ? string(source.value.siteName, `${sourcePath}.siteName`)
-        : undefined,
-      "capturedAt" in source.value
-        ? utc(source.value.capturedAt, `${sourcePath}.capturedAt`)
-        : undefined,
-      "price" in source.value
-        ? sourced(source.value.price, `${sourcePath}.price`, "money")
-        : undefined,
-    ])
-      if (sourceIssue) return err(sourceIssue);
-    if (
-      "kind" in source.value &&
-      source.value.kind !== "retail" &&
-      source.value.kind !== "manufacturer"
-    )
-      return fail("invalid-string", `${sourcePath}.kind`);
-  }
-  if (candidate.value.sources.length === 0) {
-    if ("primarySourceId" in candidate.value)
-      return fail("unexpected-field", `${path}.primarySourceId`);
-  } else {
-    if (!("primarySourceId" in candidate.value))
-      return fail("missing-field", `${path}.primarySourceId`);
-    issue = uuid(candidate.value.primarySourceId, `${path}.primarySourceId`);
-    if (issue) return err(issue);
-    if (!sourceIds.has(candidate.value.primarySourceId as string))
-      return fail("missing-reference", `${path}.primarySourceId`);
-  }
-  return ok(input as CandidatePartV2);
-};
-
-const validateRootAt = <T extends LocalDataRoot | LocalDataRootV2>(
+const validateRootAt = <T extends LocalDataRoot>(
   input: unknown,
   base = "$",
-  schemaVersion: 1 | 2 = 1,
-  candidateValidator: (
-    input: unknown,
-    path: string,
-  ) => Result<
-    CandidatePart | CandidatePartV2,
-    ValidationError
-  > = validateCandidatePartValue,
 ): Result<T, ValidationError> => {
   const prohibited = inspectPayload(input, base);
   if (prohibited) return err(prohibited);
@@ -536,7 +442,7 @@ const validateRootAt = <T extends LocalDataRoot | LocalDataRootV2>(
     "maintenance",
   ]);
   if (!root.ok) return root;
-  if (root.value.schemaVersion !== schemaVersion)
+  if (root.value.schemaVersion !== 1)
     return fail("unsupported-schema", `${base}.schemaVersion`);
   if (!isRevision(root.value.revision))
     return fail("invalid-integer", `${base}.revision`);
@@ -576,7 +482,7 @@ const validateRootAt = <T extends LocalDataRoot | LocalDataRootV2>(
   const candidateIds = new Map<string, string>();
   for (const [i, item] of candidates.entries()) {
     const path = `${base}.candidateParts[${i}]`;
-    const candidate = candidateValidator(item, path);
+    const candidate = validateCandidatePartValue(item, path);
     if (!candidate.ok) return candidate;
     if (!projectIds.has(candidate.value.projectId as string))
       return fail("missing-reference", `${path}.projectId`);
@@ -726,21 +632,6 @@ export const schemaValidator: SchemaValidator = {
     if (!proposed.ok) return proposed;
     return ok(input as DataCommand);
   },
-};
-
-export interface SchemaV2Validator {
-  validateRoot(input: unknown): Result<LocalDataRootV2, ValidationError>;
-}
-
-/** Production schema 1の切替前にschema 2を単独検証するversioned validator。 */
-export const schemaV2Validator: SchemaV2Validator = {
-  validateRoot: (input) =>
-    validateRootAt<LocalDataRootV2>(
-      input,
-      "$",
-      2,
-      validateCandidatePartV2Value,
-    ),
 };
 
 export const isJsonValue = (value: unknown): value is JsonValue => {

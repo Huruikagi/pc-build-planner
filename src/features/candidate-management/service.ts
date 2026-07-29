@@ -1,18 +1,16 @@
 import {
   type CandidatePart,
   type CandidatePartId,
-  type CandidatePartV2,
+  type CandidateSourceId,
   type CandidateSourceState,
   createUtcTimestamp,
   createUuid,
   type Project,
   type ProjectId,
   type Result,
-  type SourceInfo,
-  type SourceSnapshot,
   type UtcTimestamp,
   validateCandidatePartContent,
-  validateCandidatePartV2Value,
+  validateCandidatePartValue,
 } from "../../domain/public.js";
 import type {
   FoundationScopedDataPort,
@@ -25,10 +23,10 @@ import type {
   CandidateSourceService,
   CandidateSummary,
   CreateProjectInput,
-  LegacyUpdateCandidateInput,
   ManagementError,
   MutationContext,
   RenameProjectInput,
+  UpdateCandidateInput,
 } from "./contracts.js";
 import { candidateSourcePolicy } from "./source-collection.js";
 import type { CandidateSourceDataPort } from "./source-data-port.js";
@@ -108,7 +106,10 @@ const candidateValidation = (
       ok: false,
       error: { kind: "validation", fields: { "product.name": "required" } },
     };
-  const content = validateCandidatePartContent(draft);
+  const content = validateCandidatePartContent({
+    ...draft,
+    sources: draft.sources ?? [],
+  });
   if (!content.ok)
     return {
       ok: false,
@@ -123,7 +124,13 @@ const draftFromCandidate = (candidate: CandidatePart): CandidateDraft =>
     category: candidate.category,
     product: candidate.product,
     normalizedAttributes: candidate.normalizedAttributes,
-    ...sourceMetadata(candidate.sourceInfo, candidate.sourceSnapshot),
+    sources: candidate.sources,
+    ...(candidate.primarySourceId === undefined
+      ? {}
+      : { primarySourceId: candidate.primarySourceId }),
+    ...(candidate.sourceSnapshot === undefined
+      ? {}
+      : { sourceSnapshot: candidate.sourceSnapshot }),
   }) as CandidateDraft;
 
 const commandFor = (
@@ -136,18 +143,12 @@ const commandFor = (
   operation,
 });
 
-const candidateSummary = (
-  candidate: CandidatePart | CandidatePartV2,
-): CandidateSummary => {
+const candidateSummary = (candidate: CandidatePart): CandidateSummary => {
   const { name, manufacturer, modelNumber } = candidate.product;
-  const sourceState = "sources" in candidate ? candidate : undefined;
-  const primarySource = sourceState?.sources.find(
-    (source) => source.id === sourceState.primarySourceId,
+  const primarySource = candidate.sources.find(
+    (source) => source.id === candidate.primarySourceId,
   );
-  const representativePrice =
-    sourceState === undefined && "price" in candidate.product
-      ? candidate.product.price
-      : primarySource?.price;
+  const representativePrice = primarySource?.price;
   return {
     id: candidate.id,
     projectId: candidate.projectId,
@@ -168,14 +169,6 @@ const candidateSummary = (
   };
 };
 
-const sourceMetadata = (
-  sourceInfo: SourceInfo | undefined,
-  sourceSnapshot: SourceSnapshot | undefined,
-): Pick<CandidatePart, "sourceInfo" | "sourceSnapshot"> => ({
-  ...(sourceInfo === undefined ? {} : { sourceInfo }),
-  ...(sourceSnapshot === undefined ? {} : { sourceSnapshot }),
-});
-
 export const createCandidateManagementService = (
   dependencies: CandidateManagementServiceDependencies,
 ): CandidateManagementService &
@@ -191,8 +184,8 @@ export const createCandidateManagementService = (
   };
   const sourceData = dependencies.sourceData;
 
-  const sourceValidation = (candidate: CandidatePartV2) => {
-    const checked = validateCandidatePartV2Value(candidate);
+  const sourceValidation = (candidate: CandidatePart) => {
+    const checked = validateCandidatePartValue(candidate);
     return checked.ok
       ? ({ ok: true, value: candidate } as const)
       : ({
@@ -205,12 +198,12 @@ export const createCandidateManagementService = (
     candidateId: CandidatePartId,
     context: MutationContext,
     change: (
-      candidate: CandidatePartV2,
+      candidate: CandidatePart,
     ) => Result<
-      Pick<CandidatePartV2, "sources" | "primarySourceId">,
+      Pick<CandidatePart, "sources" | "primarySourceId">,
       ManagementError
     >,
-  ): Promise<Result<CandidatePartV2, ManagementError>> => {
+  ): Promise<Result<CandidatePart, ManagementError>> => {
     if (sourceData === undefined)
       return { ok: false, error: { kind: "unsupported-data" } };
     const existing = await sourceData.query((snapshot) =>
@@ -232,7 +225,7 @@ export const createCandidateManagementService = (
       ...candidateBase,
       ...changed.value,
       updatedAt: now(),
-    } as CandidatePartV2;
+    } as CandidatePart;
     const validated = sourceValidation(updated);
     if (!validated.ok) return validated;
     const mutation = await sourceData.mutateCandidate(updated, context);
@@ -248,6 +241,19 @@ export const createCandidateManagementService = (
     kind === "source-not-found"
       ? { kind: "not-found", entity: "source" }
       : { kind: "validation", fields: { sources: kind } };
+
+  const sourceStateOf = (candidate: CandidatePart): CandidateSourceState =>
+    candidate.sources.length === 0
+      ? { sources: [] }
+      : {
+          sources: candidate.sources as [
+            CandidatePart["sources"][number],
+            ...CandidatePart["sources"][number][],
+          ],
+          primarySourceId: candidate.primarySourceId as NonNullable<
+            CandidatePart["primarySourceId"]
+          >,
+        };
 
   const mutateProject = async (
     project: Project,
@@ -306,7 +312,10 @@ export const createCandidateManagementService = (
             classifier,
           ),
         };
-        const result = candidateSourcePolicy.add(candidate, source);
+        const result = candidateSourcePolicy.add(
+          sourceStateOf(candidate),
+          source,
+        );
         return result.ok
           ? result
           : { ok: false, error: ruleFailure(result.error.kind) };
@@ -314,7 +323,10 @@ export const createCandidateManagementService = (
     },
     async updateSource(input, context) {
       return mutateSource(input.candidateId, context, (candidate) => {
-        const result = candidateSourcePolicy.update(candidate, input.source);
+        const result = candidateSourcePolicy.update(
+          sourceStateOf(candidate),
+          input.source,
+        );
         return result.ok
           ? result
           : { ok: false, error: ruleFailure(result.error.kind) };
@@ -323,7 +335,7 @@ export const createCandidateManagementService = (
     async removeSource(input, context) {
       return mutateSource(input.candidateId, context, (candidate) => {
         const result = candidateSourcePolicy.remove(
-          candidate,
+          sourceStateOf(candidate),
           input.sourceId,
           input.replacementPrimarySourceId,
         );
@@ -335,7 +347,7 @@ export const createCandidateManagementService = (
     async setPrimarySource(input, context) {
       return mutateSource(input.candidateId, context, (candidate) => {
         const result = candidateSourcePolicy.setPrimary(
-          candidate,
+          sourceStateOf(candidate),
           input.sourceId,
         );
         return result.ok
@@ -386,78 +398,44 @@ export const createCandidateManagementService = (
     },
 
     async createCandidate(input: CandidateDraft, context: MutationContext) {
-      if ("sources" in input) {
-        if (!hasProductName(input))
-          return {
-            ok: false,
-            error: {
-              kind: "validation",
-              fields: { "product.name": "required" },
-            },
-          };
-        if (sourceData === undefined)
-          return { ok: false, error: { kind: "unsupported-data" } };
-        const createdAt = now();
-        const checkedDraft = validateCandidatePartV2Value({
-          ...input,
-          id: newCandidateId(),
-          createdAt,
-          updatedAt: createdAt,
-        });
-        if (!checkedDraft.ok)
-          return {
-            ok: false,
-            error: validationFailure(
-              checkedDraft.error.path,
-              checkedDraft.error.code,
-            ),
-          };
-        const sourceDraft = checkedDraft.value;
-        const classifySource = (source: CandidatePartV2["sources"][number]) =>
-          source.pageUrl === undefined
-            ? source
-            : {
-                ...source,
-                kind: resolveSourceKind(
-                  source.pageUrl,
-                  source.kind,
-                  classifier,
-                ),
-              };
-        const [firstSource, ...remainingSources] = sourceDraft.sources;
-        const primarySourceId = sourceDraft.primarySourceId;
-        let sourceState: CandidateSourceState;
-        if (firstSource === undefined) {
-          sourceState = { sources: [] };
-        } else {
-          if (primarySourceId === undefined)
-            return {
-              ok: false,
-              error: validationFailure("$.primarySourceId", "missing-field"),
+      const validated = candidateValidation(input);
+      if (!validated.ok) return validated;
+      const createdAt = now();
+      const classifySource = (source: CandidatePart["sources"][number]) =>
+        source.pageUrl === undefined
+          ? source
+          : {
+              ...source,
+              kind: resolveSourceKind(source.pageUrl, source.kind, classifier),
             };
-          sourceState = {
-            sources: [
-              classifySource(firstSource),
-              ...remainingSources.map(classifySource),
-            ],
-            primarySourceId,
-          };
-        }
-        const candidateBase = {
-          id: sourceDraft.id,
-          projectId: sourceDraft.projectId,
-          category: sourceDraft.category,
-          product: sourceDraft.product,
-          normalizedAttributes: sourceDraft.normalizedAttributes,
-          ...(sourceDraft.sourceSnapshot === undefined
-            ? {}
-            : { sourceSnapshot: sourceDraft.sourceSnapshot }),
-          createdAt,
-          updatedAt: createdAt,
-        };
-        const candidate: CandidatePartV2 = { ...candidateBase, ...sourceState };
-        const validated = sourceValidation(candidate);
-        if (!validated.ok) return validated;
+      const [firstSource, ...remainingSources] = input.sources ?? [];
+      const primarySourceId = input.primarySourceId;
+      const sourceState: CandidateSourceState =
+        firstSource === undefined
+          ? { sources: [] }
+          : primarySourceId === undefined
+            ? { sources: [] }
+            : {
+                sources: [
+                  classifySource(firstSource),
+                  ...remainingSources.map(classifySource),
+                ],
+                primarySourceId,
+              };
+      const candidateBase = {
+        id: newCandidateId(),
+        projectId: input.projectId,
+        category: input.category,
+        product: input.product,
+        ...(input.sourceSnapshot === undefined
+          ? {}
+          : { sourceSnapshot: input.sourceSnapshot }),
+        normalizedAttributes: input.normalizedAttributes,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      const candidate: CandidatePart = { ...candidateBase, ...sourceState };
+      if (sourceData !== undefined) {
         const mutation = await sourceData.mutateCandidate(candidate, context);
         return mutation.ok
           ? { ok: true, value: candidate }
@@ -466,23 +444,10 @@ export const createCandidateManagementService = (
               error: managementError(mutation.error.code, "candidate"),
             };
       }
-      const validated = candidateValidation(input);
-      if (!validated.ok) return validated;
-      const createdAt = now();
-      const candidate: CandidatePart = {
-        id: newCandidateId(),
-        projectId: input.projectId,
-        category: input.category,
-        product: input.product,
-        ...sourceMetadata(input.sourceInfo, input.sourceSnapshot),
-        normalizedAttributes: input.normalizedAttributes,
-        createdAt,
-        updatedAt: createdAt,
-      };
       return mutateCandidate(candidate, "create", context);
     },
     async updateCandidate(
-      input: LegacyUpdateCandidateInput,
+      input: UpdateCandidateInput,
       context: MutationContext,
     ) {
       const validated = candidateValidation(input.draft);
@@ -500,16 +465,35 @@ export const createCandidateManagementService = (
        * intended state, so omitted metadata falls back to the stored value.
        * An update never reparents a candidate.
        */
+      const {
+        primarySourceId: _primarySourceId,
+        sources: _sources,
+        sourceSnapshot: _sourceSnapshot,
+        ...draftBase
+      } = input.draft;
+      const sourceState: CandidateSourceState =
+        input.draft.sources === undefined
+          ? sourceStateOf(existing.value)
+          : input.draft.sources.length === 0
+            ? { sources: [] }
+            : {
+                sources: input.draft.sources as readonly [
+                  CandidatePart["sources"][number],
+                  ...CandidatePart["sources"][number][],
+                ],
+                primarySourceId: input.draft
+                  .primarySourceId as CandidateSourceId,
+              };
       const updated: CandidatePart = {
         id: existing.value.id,
+        ...draftBase,
         projectId: existing.value.projectId,
-        category: input.draft.category,
-        product: input.draft.product,
-        ...sourceMetadata(
-          input.draft.sourceInfo ?? existing.value.sourceInfo,
-          input.draft.sourceSnapshot ?? existing.value.sourceSnapshot,
-        ),
-        normalizedAttributes: input.draft.normalizedAttributes,
+        ...sourceState,
+        ...(input.draft.sourceSnapshot === undefined
+          ? existing.value.sourceSnapshot === undefined
+            ? {}
+            : { sourceSnapshot: existing.value.sourceSnapshot }
+          : { sourceSnapshot: input.draft.sourceSnapshot }),
         createdAt: existing.value.createdAt,
         updatedAt: now(),
       };

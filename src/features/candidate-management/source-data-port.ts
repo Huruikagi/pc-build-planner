@@ -1,6 +1,6 @@
 import type {
-  CandidatePartV2,
-  LocalDataRootV2,
+  CandidatePart,
+  LocalDataRoot,
   Result,
 } from "../../domain/public.js";
 import type { MutationContext } from "./contracts.js";
@@ -9,13 +9,13 @@ export interface CandidateSourceDataError {
   readonly code: string;
 }
 
-/** Versioned seam kept separate from the schema-1 production foundation until cutover. */
+/** Canonical candidate source seam over the production foundation. */
 export interface CandidateSourceDataPort {
   query<T>(
-    project: (snapshot: LocalDataRootV2) => T,
+    project: (snapshot: LocalDataRoot) => T,
   ): Promise<Result<T, CandidateSourceDataError>>;
   mutateCandidate(
-    candidate: CandidatePartV2,
+    candidate: CandidatePart,
     context: MutationContext,
   ): Promise<Result<void, CandidateSourceDataError>>;
 }

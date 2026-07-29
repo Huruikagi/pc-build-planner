@@ -3,7 +3,7 @@ import test from "node:test";
 import type {
   CandidatePartId,
   CandidateSourceId,
-  LocalDataRootV2,
+  LocalDataRoot,
   RequestId,
   Revision,
   UtcTimestamp,
@@ -14,7 +14,7 @@ import type {
   FoundationScopedDataPort,
   RootMutationCommand,
 } from "../../../src/persistence/public.js";
-import { sourceRootV2 } from "../../fixtures/candidate-source-root-v2.js";
+import { sourceRoot } from "../../fixtures/candidate-source-root.js";
 
 const candidateId = "20000000-0000-4000-8000-000000000001" as CandidatePartId;
 const context = {
@@ -23,7 +23,7 @@ const context = {
 };
 
 const harness = (failure?: string) => {
-  let root = sourceRootV2();
+  let root = sourceRoot();
   const commands: RootMutationCommand[] = [];
   const data = {
     async query(project: (root: never) => unknown) {
@@ -39,7 +39,7 @@ const harness = (failure?: string) => {
           revision: 2 as Revision,
           candidateParts: root.candidateParts.map((candidate) =>
             candidate.id === operation.value.id
-              ? (operation.value as unknown as LocalDataRootV2["candidateParts"][number])
+              ? (operation.value as unknown as LocalDataRoot["candidateParts"][number])
               : candidate,
           ),
         };

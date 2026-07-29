@@ -47,6 +47,7 @@ const memoryCandidate: CandidatePart = {
   projectId,
   category: "memory",
   product: { name: { original: "架空メモリ", confirmed: "架空メモリ" } },
+  sources: [],
   normalizedAttributes: memoryAttributes,
   createdAt: timestamp,
   updatedAt: timestamp,

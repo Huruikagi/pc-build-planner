@@ -59,16 +59,18 @@ const candidate = (
   id: CandidatePartId,
   name: string,
   overrides: Partial<CandidatePart> = {},
-): CandidatePart => ({
-  id,
-  projectId,
-  category: "cpu",
-  product: { name: { original: name, confirmed: name } },
-  normalizedAttributes: cpuAttributes,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  ...overrides,
-});
+): CandidatePart =>
+  ({
+    id,
+    projectId,
+    category: "cpu",
+    product: { name: { original: name, confirmed: name } },
+    sources: [],
+    normalizedAttributes: cpuAttributes,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  }) as CandidatePart;
 
 const project = (id: ProjectId, name: string): ProjectSummary => ({
   id,

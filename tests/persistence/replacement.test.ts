@@ -121,6 +121,28 @@ test("移行・全体検証・容量評価は候補も永続状態も変更し�
   );
   assert.equal(invalid.ok, false);
   assert.equal(invalid.error.code, "validation");
+  const legacyCandidate = {
+    id: "11111111-1111-4111-8111-111111111111",
+    projectId: "22222222-2222-4222-8222-222222222222",
+    category: "cpu",
+    product: { name: { original: "架空CPU" } },
+    sourceInfo: {},
+    normalizedAttributes: { category: "cpu" },
+    createdAt: "2026-07-29T00:00:00.000Z",
+    updatedAt: "2026-07-29T00:00:00.000Z",
+  };
+  const legacy = await coordinator().assessReplacement(
+    { ...candidate, candidateParts: [legacyCandidate] },
+    cursor,
+  );
+  assert.equal(legacy.ok, false);
+  assert.equal(legacy.error.code, "validation");
+  const unknown = await coordinator().assessReplacement(
+    { ...candidate, schemaVersion: 2 },
+    cursor,
+  );
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.error.code, "unsupported-version");
   const overQuota = await coordinator().assessReplacement(candidate, {
     ...cursor,
     quotaBytes: 1,

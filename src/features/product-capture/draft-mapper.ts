@@ -192,6 +192,7 @@ const unresolvedDraftFromFields = (
           }
         : {}),
     },
+    sources: [],
     normalizedAttributes: { category: "uncategorized" },
   };
 };

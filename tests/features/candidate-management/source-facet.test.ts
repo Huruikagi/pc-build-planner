@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {
   CandidateSourceId,
-  LocalDataRootV2,
+  LocalDataRoot,
   Revision,
 } from "../../../src/domain/public.js";
 import { createCandidateManagementContribution } from "../../../src/features/candidate-management/feature-contribution.js";
@@ -12,10 +12,10 @@ import type {
   FoundationScopedDataPort,
   RootMutationCommand,
 } from "../../../src/persistence/public.js";
-import { sourceRootV2 } from "../../fixtures/candidate-source-root-v2.js";
+import { sourceRoot } from "../../fixtures/candidate-source-root.js";
 
 test("contributionのsources facetはcatalogと全mutationをfeature内portへ配送する", async () => {
-  const root: LocalDataRootV2 = { ...sourceRootV2(), revision: 7 as Revision };
+  const root: LocalDataRoot = { ...sourceRoot(), revision: 7 as Revision };
   const commands: RootMutationCommand[] = [];
   let sourceQueries = 0;
   const data = {

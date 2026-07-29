@@ -5,6 +5,7 @@ import {
   type CandidatePartId,
   type CandidateSource,
   type CandidateSourceId,
+  candidateSourcePageUrlPath,
   createUuid,
   MOTHERBOARD_FORM_FACTORS,
   PART_CATEGORIES,
@@ -16,6 +17,7 @@ import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
 import { withCategory } from "./category-draft.js";
 import type { CandidateDraft, CandidateSummary } from "./contracts.js";
+import { safeSourcePageUrl } from "./source-page-port.js";
 import type { ManagementDisplayError, ManagementState } from "./state.js";
 
 const categoryMessageKeys = {
@@ -157,22 +159,6 @@ function CandidateListItem({
     </li>
   );
 }
-
-/**
- * Clears a confirmed price without inventing one. Any extracted original is
- * kept, because a missing confirmed value is a normal state, not a zero.
- */
-const withoutConfirmedPrice = (draft: CandidateDraft): CandidateDraft => {
-  const { price, ...withoutPrice } = draft.product;
-  const original = price?.original ?? null;
-  return {
-    ...draft,
-    product:
-      original === null
-        ? withoutPrice
-        : { ...withoutPrice, price: { original } },
-  } as CandidateDraft;
-};
 
 type AttributeLabelKey =
   | "candidate.attributeLabels.socket"
@@ -454,8 +440,6 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [nameError, setNameError] = useState<string | null>(null);
   /** Raw text keeps unparsable input visible without storing it in the draft. */
-  const [priceText, setPriceText] = useState<string | null>(null);
-  const [priceError, setPriceError] = useState<string | null>(null);
   const [sourcePriceText, setSourcePriceText] = useState<
     Readonly<Record<string, string>>
   >({});
@@ -547,7 +531,6 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           return;
         }
         if (
-          priceError !== null ||
           Object.keys(sourcePriceErrors).length > 0 ||
           Object.keys(sourceUrlErrors).length > 0
         )
@@ -608,52 +591,6 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           value={editableValue(draft.product.modelNumber)}
         />
       </label>
-      <label>
-        {messages("candidate.priceFieldLabel")}
-        <input
-          aria-describedby={
-            priceError === null ? undefined : "candidate-price-error"
-          }
-          aria-invalid={priceError === null ? undefined : true}
-          inputMode="decimal"
-          name="candidate-price-amount"
-          onChange={(event) => {
-            const raw = event.target.value;
-            setPriceText(raw);
-            if (raw.trim().length === 0) {
-              setPriceError(null);
-              update(withoutConfirmedPrice(draft));
-              return;
-            }
-            const amount = Number(raw);
-            if (!Number.isFinite(amount)) {
-              // Unparsable text is reported, never rounded into a stored price.
-              setPriceError(messages("candidate.priceNotNumberError"));
-              update(withoutConfirmedPrice(draft));
-              return;
-            }
-            setPriceError(null);
-            const previous = draft.product.price;
-            update({
-              ...draft,
-              product: {
-                ...draft.product,
-                price: {
-                  original: previous?.original ?? null,
-                  confirmed: {
-                    amount,
-                    // An empty currency means "unknown", never a guessed locale.
-                    currency: previous?.confirmed?.currency ?? "",
-                  },
-                },
-              },
-            } as CandidateDraft);
-          }}
-          placeholder={messages("common.notEntered")}
-          value={priceText ?? draft.product.price?.confirmed?.amount ?? ""}
-        />
-      </label>
-      <FieldError id="candidate-price-error" message={priceError} />
       <label>
         {messages("candidate.categoryFieldLabel")}
         <select
@@ -731,6 +668,10 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           const priceText =
             sourcePriceText[source.id] ?? source.price?.confirmed?.amount ?? "";
           const priceError = sourcePriceErrors[source.id];
+          const sourceUrlError =
+            sourceUrlErrors[source.id] ??
+            errorFor(candidateSourcePageUrlPath(index)) ??
+            undefined;
           const isPrimary = source.id === draft.primarySourceId;
           return (
             <section data-source-id={source.id} key={source.id}>
@@ -738,25 +679,15 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
                 {messages("candidate.sourceUrlLabel")}
                 <input
                   aria-describedby={
-                    sourceUrlErrors[source.id] === undefined
+                    sourceUrlError === undefined
                       ? undefined
                       : `source-url-${source.id}-error`
                   }
-                  aria-invalid={
-                    sourceUrlErrors[source.id] === undefined ? undefined : true
-                  }
+                  aria-invalid={sourceUrlError === undefined ? undefined : true}
                   name={`source-${index}-url`}
                   onChange={(event) => {
                     const pageUrl = event.target.value;
-                    let valid = false;
-                    try {
-                      const parsed = new URL(pageUrl);
-                      valid =
-                        parsed.protocol === "http:" ||
-                        parsed.protocol === "https:";
-                    } catch {
-                      valid = false;
-                    }
+                    const valid = safeSourcePageUrl(pageUrl) !== undefined;
                     setSourceUrlErrors((current) => {
                       if (!valid)
                         return {
@@ -775,7 +706,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
               </label>
               <FieldError
                 id={`source-url-${source.id}-error`}
-                message={sourceUrlErrors[source.id] ?? null}
+                message={sourceUrlError ?? null}
               />
               <label>
                 {messages("candidate.sources.label")}
@@ -962,59 +893,6 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           </p>
         )}
       </fieldset>
-      <label>
-        {messages("candidate.sourceUrlLabel")}
-        <input
-          aria-describedby={
-            errorFor("sourceInfo.pageUrl") === null
-              ? undefined
-              : "candidate-source-url-error"
-          }
-          aria-invalid={
-            errorFor("sourceInfo.pageUrl") === null ? undefined : true
-          }
-          name="candidate-source-url"
-          onChange={(event) =>
-            update({
-              ...draft,
-              sourceInfo: { ...draft.sourceInfo, pageUrl: event.target.value },
-            })
-          }
-          value={draft.sourceInfo?.pageUrl ?? ""}
-        />
-      </label>
-      <FieldError
-        id="candidate-source-url-error"
-        message={errorFor("sourceInfo.pageUrl")}
-      />
-      <label>
-        {messages("candidate.capturedAtLabel")}
-        <input
-          aria-describedby={
-            errorFor("sourceInfo.capturedAt") === null
-              ? undefined
-              : "candidate-captured-at-error"
-          }
-          aria-invalid={
-            errorFor("sourceInfo.capturedAt") === null ? undefined : true
-          }
-          name="candidate-captured-at"
-          onChange={(event) =>
-            update({
-              ...draft,
-              sourceInfo: {
-                ...draft.sourceInfo,
-                capturedAt: event.target.value as UtcTimestamp,
-              },
-            })
-          }
-          value={draft.sourceInfo?.capturedAt ?? ""}
-        />
-      </label>
-      <FieldError
-        id="candidate-captured-at-error"
-        message={errorFor("sourceInfo.capturedAt")}
-      />
       <label>
         {messages("candidate.sourceSnapshotLabel")}
         <textarea

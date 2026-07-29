@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { schemaV2Validator } from "../../src/domain/validation.js";
+import { schemaValidator } from "../../src/domain/validation.js";
 
 const root = () => ({
-  schemaVersion: 2,
+  schemaVersion: 1,
   revision: 0,
   projects: [
     {
@@ -57,8 +57,8 @@ const source = (input: ReturnType<typeof root>) => {
   return value;
 };
 
-test("schema 2 validatorは独立したsourceとprimaryを受理する", () => {
-  assert.equal(schemaV2Validator.validateRoot(root()).ok, true);
+test("canonical schema 1 validatorは独立したsourceとprimaryを受理する", () => {
+  assert.equal(schemaValidator.validateRoot(root()).ok, true);
 });
 
 test("sourceの固定fieldと未信頼値をpath付きで拒否する", () => {
@@ -71,7 +71,7 @@ test("sourceの固定fieldと未信頼値をpath付きで拒否する", () => {
   for (const [field, value, code] of cases) {
     const input = root();
     Object.assign(source(input), { [field]: value });
-    assert.deepEqual(schemaV2Validator.validateRoot(input), {
+    assert.deepEqual(schemaValidator.validateRoot(input), {
       ok: false,
       error: {
         code,
@@ -82,7 +82,7 @@ test("sourceの固定fieldと未信頼値をpath付きで拒否する", () => {
 
   const input = root();
   Object.assign(source(input), { extra: "no" });
-  assert.deepEqual(schemaV2Validator.validateRoot(input), {
+  assert.deepEqual(schemaValidator.validateRoot(input), {
     ok: false,
     error: {
       code: "unexpected-field",
@@ -94,7 +94,7 @@ test("sourceの固定fieldと未信頼値をpath付きで拒否する", () => {
 test("source ID重複とprimary不整合を拒否する", () => {
   const duplicate = root();
   candidate(duplicate).sources.push({ ...source(duplicate) });
-  assert.deepEqual(schemaV2Validator.validateRoot(duplicate), {
+  assert.deepEqual(schemaValidator.validateRoot(duplicate), {
     ok: false,
     error: {
       code: "duplicate-id",
@@ -104,7 +104,7 @@ test("source ID重複とprimary不整合を拒否する", () => {
 
   const missing = root();
   candidate(missing).primarySourceId = "44444444-4444-4444-8444-444444444444";
-  assert.deepEqual(schemaV2Validator.validateRoot(missing), {
+  assert.deepEqual(schemaValidator.validateRoot(missing), {
     ok: false,
     error: {
       code: "missing-reference",
@@ -114,7 +114,7 @@ test("source ID重複とprimary不整合を拒否する", () => {
 
   const noPrimary = root();
   delete (candidate(noPrimary) as { primarySourceId?: string }).primarySourceId;
-  assert.deepEqual(schemaV2Validator.validateRoot(noPrimary), {
+  assert.deepEqual(schemaValidator.validateRoot(noPrimary), {
     ok: false,
     error: {
       code: "missing-field",
@@ -124,7 +124,7 @@ test("source ID重複とprimary不整合を拒否する", () => {
 
   const empty = root();
   candidate(empty).sources = [];
-  assert.deepEqual(schemaV2Validator.validateRoot(empty), {
+  assert.deepEqual(schemaValidator.validateRoot(empty), {
     ok: false,
     error: {
       code: "unexpected-field",
@@ -133,7 +133,7 @@ test("source ID重複とprimary不整合を拒否する", () => {
   });
 });
 
-test("schema 2 validatorは商品共通priceと単数sourceInfoを拒否する", () => {
+test("canonical validatorは商品共通priceと単数sourceInfoを拒否する", () => {
   for (const [field, value] of [
     ["sourceInfo", {}],
     ["product", { price: { original: "100 JPY" } }],
@@ -141,10 +141,10 @@ test("schema 2 validatorは商品共通priceと単数sourceInfoを拒否する",
     const input = root();
     if (field === "product") Object.assign(candidate(input).product, value);
     else Object.assign(candidate(input), { [field]: value });
-    assert.equal(schemaV2Validator.validateRoot(input).ok, false);
+    assert.equal(schemaValidator.validateRoot(input).ok, false);
   }
   assert.equal(
-    schemaV2Validator.validateRoot({ ...root(), schemaVersion: 1 }).ok,
+    schemaValidator.validateRoot({ ...root(), schemaVersion: 2 }).ok,
     false,
   );
 });

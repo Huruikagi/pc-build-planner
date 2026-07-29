@@ -61,6 +61,45 @@ test("保存rootを検証し、Repository再生成後も同じsnapshotを読む"
   assert.deepEqual(recreated.value, first.value);
 });
 
+test("canonical複数sourceを読み、旧開発shapeはsourceを書き換えず拒否する", async () => {
+  const canonical = currentRoot(3);
+  canonical.projects.push({
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "架空構成",
+    createdAt: "2026-07-29T00:00:00.000Z",
+    updatedAt: "2026-07-29T00:00:00.000Z",
+  });
+  canonical.candidateParts.push({
+    id: "22222222-2222-4222-8222-222222222222",
+    projectId: canonical.projects[0].id,
+    category: "cpu",
+    product: { name: { original: "架空CPU" } },
+    sources: [],
+    normalizedAttributes: { category: "cpu" },
+    createdAt: "2026-07-29T00:00:00.000Z",
+    updatedAt: "2026-07-29T00:00:00.000Z",
+  });
+  const validState = createInMemoryStorageState();
+  validState.entries.set("localDataRoot", canonical);
+  assert.equal((await repositoryFor(validState).readRoot()).ok, true);
+
+  for (const legacyCandidate of [
+    { ...canonical.candidateParts[0], sourceInfo: {} },
+    {
+      ...canonical.candidateParts[0],
+      product: { name: { original: "架空CPU" }, price: { original: "100" } },
+    },
+  ]) {
+    const legacy = { ...canonical, candidateParts: [legacyCandidate] };
+    const state = createInMemoryStorageState();
+    state.entries.set("localDataRoot", structuredClone(legacy));
+    const result = await repositoryFor(state).readRoot();
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "corrupt-data");
+    assert.deepEqual(state.entries.get("localDataRoot"), legacy);
+  }
+});
+
 test("queryへはmigrationと全体validation済みsnapshotだけを渡す", async () => {
   const state = createInMemoryStorageState();
   state.entries.set("localDataRoot", { schemaVersion: 0, legacyRevision: 4 });

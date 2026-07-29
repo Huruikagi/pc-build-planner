@@ -14,6 +14,7 @@ const ids = {
   otherCandidate: "20000000-0000-4000-8000-000000000003",
   build: "30000000-0000-4000-8000-000000000001",
   otherBuild: "30000000-0000-4000-8000-000000000002",
+  source: "40000000-0000-4000-8000-000000000001",
 };
 const timestamp = "2026-07-18T00:00:00Z";
 const candidate = (id, category) => ({
@@ -21,10 +22,14 @@ const candidate = (id, category) => ({
   projectId: ids.project,
   category,
   product: {},
-  sourceInfo: {
-    pageUrl: "https://example.invalid/item",
-    capturedAt: timestamp,
-  },
+  sources: [
+    {
+      id: ids.source,
+      pageUrl: "https://example.invalid/item",
+      capturedAt: timestamp,
+    },
+  ],
+  primarySourceId: ids.source,
   normalizedAttributes: { category },
   createdAt: timestamp,
   updatedAt: timestamp,

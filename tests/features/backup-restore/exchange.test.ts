@@ -42,6 +42,75 @@ test("空データのenvelopeも検証を通る", () => {
   assert.equal(result.ok, true);
 });
 
+test("formatVersion 1の複数ソース候補は全ソースとprimaryを保持して検証される", () => {
+  const envelope = structuredClone(buildCurrentBackupEnvelope()) as unknown as {
+    data: { parts: Array<Record<string, unknown>> };
+  };
+  const part = envelope.data.parts[0];
+  assert.ok(part);
+  part.sources = [
+    {
+      id: "40000000-0000-4000-8000-000000000004",
+      pageUrl: "https://shop.invalid/fictional-cpu",
+      siteName: "架空販売店",
+      capturedAt: "2026-07-19T00:00:00.000Z",
+      price: {
+        original: "12,345円",
+        confirmed: { amount: 12345, currency: "JPY" },
+      },
+      kind: "retail",
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000005",
+      pageUrl: "https://manufacturer.invalid/fictional-cpu",
+      siteName: "架空メーカー",
+      capturedAt: "2026-07-18T00:00:00.000Z",
+      kind: "manufacturer",
+    },
+  ];
+  part.primarySourceId = "40000000-0000-4000-8000-000000000004";
+
+  const result = exchangeValidator.validate(envelope);
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.value.data.parts[0]?.sources, part.sources);
+    assert.equal(
+      result.value.data.parts[0]?.primarySourceId,
+      part.primarySourceId,
+    );
+  }
+});
+
+test("旧開発版formatVersion 1の単数sourceInfoと商品priceは未対応形式として拒否される", () => {
+  const envelope = structuredClone(buildCurrentBackupEnvelope()) as unknown as {
+    data: { parts: Array<Record<string, unknown>> };
+  };
+  const part = envelope.data.parts[0];
+  assert.ok(part);
+  delete part.sources;
+  delete part.primarySourceId;
+  part.sourceInfo = {
+    pageUrl: "https://legacy.invalid/fictional-cpu",
+    capturedAt: "2026-07-19T00:00:00.000Z",
+  };
+  part.product = {
+    ...(part.product as Record<string, unknown>),
+    price: {
+      original: "12,345円",
+      confirmed: { amount: 12345, currency: "JPY" },
+    },
+  };
+
+  const result = exchangeMigration.toCurrent(envelope);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "unsupported-version");
+    assert.equal(result.error.path, "$.formatVersion");
+  }
+});
+
 test("JSON非互換の値はnot-jsonとして拒否される", () => {
   const result = exchangeValidator.validate({
     product: "pc-build-planner",

@@ -58,6 +58,7 @@ const cpuCandidate = (id: CandidatePartId, name: string) => ({
   projectId,
   category: "cpu" as const,
   product: { name: { original: name } },
+  sources: [] as const,
   normalizedAttributes: {
     category: "cpu" as const,
     socket: { original: "架空ソケット" },
@@ -71,6 +72,7 @@ const memoryCandidate = (id: CandidatePartId, name: string) => ({
   projectId,
   category: "memory" as const,
   product: { name: { original: name } },
+  sources: [] as const,
   normalizedAttributes: {
     category: "memory" as const,
     memoryStandard: { original: "架空規格" },
@@ -84,6 +86,7 @@ const uncategorizedCandidate = (id: CandidatePartId, name: string) => ({
   projectId,
   category: "uncategorized" as const,
   product: { name: { original: name } },
+  sources: [] as const,
   normalizedAttributes: { category: "uncategorized" as const },
   createdAt: now,
   updatedAt: now,

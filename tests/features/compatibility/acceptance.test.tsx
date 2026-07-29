@@ -53,7 +53,14 @@ const sensitiveCpu: CandidatePart = {
   product: {
     name: { original: SECRET_NAME, confirmed: SECRET_NAME },
   },
-  sourceInfo: { pageUrl: SECRET_URL, siteName: "架空サイト" },
+  sources: [
+    {
+      id: "50000000-0000-4000-8000-000000000001" as never,
+      pageUrl: SECRET_URL,
+      siteName: "架空サイト",
+    },
+  ],
+  primarySourceId: "50000000-0000-4000-8000-000000000001" as never,
   normalizedAttributes: {
     category: "cpu",
     socket: { original: SECRET_ATTRIBUTE, confirmed: SECRET_ATTRIBUTE },
@@ -69,6 +76,7 @@ const motherboard: CandidatePart = {
   product: {
     name: { original: "架空マザーボード", confirmed: "架空マザーボード" },
   },
+  sources: [],
   normalizedAttributes: {
     category: "motherboard",
     socket: { original: "元表記", confirmed: SECRET_ATTRIBUTE },

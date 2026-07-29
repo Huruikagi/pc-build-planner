@@ -1,4 +1,4 @@
-import type { CandidatePartV2 } from "../../domain/public.js";
+import type { CandidatePart } from "../../domain/public.js";
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceReference,
@@ -25,8 +25,8 @@ const readError = (code: string): ManagementError => {
 };
 
 const reference = (
-  candidate: CandidatePartV2,
-  source: CandidatePartV2["sources"][number],
+  candidate: CandidatePart,
+  source: CandidatePart["sources"][number],
 ): CandidateSourceReference => ({
   candidateId: candidate.id,
   sourceId: source.id,
@@ -35,7 +35,7 @@ const reference = (
   isPrimary: candidate.primarySourceId === source.id,
 });
 
-/** Read-only schema-2 projection; production root cutover is composed separately. */
+/** Read-only projection over the canonical production root. */
 export const createCandidateSourceCatalog = (
   dependencies: CandidateSourceCatalogDependencies,
 ): CandidateSourceCatalogPort => ({

@@ -307,9 +307,34 @@ test("lock・storage失敗では成功せず旧rootを保持する", async () =>
 });
 
 test("破損または未対応snapshotをoperationへ渡さず旧rootを保持する", async () => {
-  for (const root of [
-    { schemaVersion: 99 },
-    { schemaVersion: 1, revision: -1 },
+  const canonical = createInitialRoot();
+  const legacyShape = {
+    ...canonical,
+    projects: [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "架空構成",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    candidateParts: [
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        projectId: "11111111-1111-4111-8111-111111111111",
+        category: "cpu",
+        product: { name: { original: "架空CPU" } },
+        sourceInfo: {},
+        normalizedAttributes: { category: "cpu" },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  };
+  for (const [root, expectedCode] of [
+    [{ schemaVersion: 99 }, "unsupported-version"],
+    [{ schemaVersion: 1, revision: -1 }, "corrupt-data"],
+    [legacyShape, "corrupt-data"],
   ]) {
     const harness = createHarness({ root });
     let called = false;
@@ -319,10 +344,7 @@ test("破損または未対応snapshotをoperationへ渡さず旧rootを保持�
       }),
     );
     assert.equal(result.ok, false);
-    assert.equal(
-      result.error.code,
-      root.schemaVersion === 99 ? "unsupported-version" : "corrupt-data",
-    );
+    assert.equal(result.error.code, expectedCode);
     assert.equal(called, false);
     assert.equal(harness.getWrites(), 0);
   }

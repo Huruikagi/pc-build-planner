@@ -52,6 +52,7 @@ const candidate = (id: CandidatePartId, name: string) => ({
   projectId,
   category: "cpu" as const,
   product: { name: { original: name } },
+  sources: [] as const,
   normalizedAttributes: {
     category: "cpu" as const,
     socket: { original: "架空ソケットSK1" },

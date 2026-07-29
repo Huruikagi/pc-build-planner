@@ -51,6 +51,7 @@ const candidate = (
   product: {
     name: { original: `架空パーツ${id}`, confirmed: `架空パーツ${id}` },
   },
+  sources: [],
   normalizedAttributes,
   createdAt: timestamp,
   updatedAt: timestamp,

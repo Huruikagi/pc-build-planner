@@ -204,10 +204,14 @@ test("candidatePart wire valueはcategoryと全nested objectをexact検証する
     projectId: "10000000-0000-4000-8000-000000000001",
     category: "cpu",
     product: {},
-    sourceInfo: {
-      pageUrl: "https://catalog.example.invalid/part-1",
-      capturedAt: "2026-07-19T00:00:00Z",
-    },
+    sources: [
+      {
+        id: "30000000-0000-4000-8000-000000000001",
+        pageUrl: "https://catalog.example.invalid/part-1",
+        capturedAt: "2026-07-19T00:00:00Z",
+      },
+    ],
+    primarySourceId: "30000000-0000-4000-8000-000000000001",
     normalizedAttributes: { category: "cpu" },
     createdAt: "2026-07-19T00:00:00Z",
     updatedAt: "2026-07-19T00:00:00Z",
@@ -225,8 +229,15 @@ test("candidatePart wire valueはcategoryと全nested objectをexact検証する
   for (const invalidCandidate of [
     { ...candidate, category: "bogus" },
     { ...candidate, product: { extra: 1 } },
-    { ...candidate, sourceInfo: { ...candidate.sourceInfo, extra: true } },
-    { ...candidate, sourceInfo: { pageUrl: "not a URL" } },
+    { ...candidate, sourceInfo: {} },
+    {
+      ...candidate,
+      sources: [{ ...candidate.sources[0], extra: true }],
+    },
+    {
+      ...candidate,
+      sources: [{ ...candidate.sources[0], pageUrl: "not a URL" }],
+    },
     { ...candidate, normalizedAttributes: { category: "cpu", extra: true } },
     { ...candidate, normalizedAttributes: { category: "gpu" } },
     {

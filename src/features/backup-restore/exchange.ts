@@ -1,9 +1,11 @@
 import type {
   CandidatePart,
+  CandidateSource,
+  CandidateSourceId,
+  CandidateSourceState,
   CurrentBuild,
   LocalDataRoot,
   MaintenanceGeneration,
-  PartCategory,
   Project,
   Result,
   Revision,
@@ -15,7 +17,7 @@ import {
   isUtcTimestamp,
   isUuid,
   ok,
-  PART_CATEGORIES,
+  validateCandidatePartValue,
 } from "../../domain/public.js";
 import type {
   BackupCandidatePart,
@@ -115,46 +117,13 @@ const validatePart = (
   value: unknown,
   path: string,
 ): Result<BackupCandidatePart, ExchangeValidationError> => {
-  const part = object(
-    value,
-    path,
-    [
-      "id",
-      "projectId",
-      "category",
-      "product",
-      "normalizedAttributes",
-      "createdAt",
-      "updatedAt",
-    ],
-    ["sourceInfo", "sourceSnapshot"],
-  );
-  if (!part.ok) return part;
-  if (!isUuid(part.value.id)) return structureFail(`${path}.id`);
-  if (!isUuid(part.value.projectId)) return structureFail(`${path}.projectId`);
-  if (!PART_CATEGORIES.includes(part.value.category as PartCategory))
-    return structureFail(`${path}.category`);
-  if (!isPlainRecord(part.value.product))
-    return structureFail(`${path}.product`);
-  if (!isPlainRecord(part.value.normalizedAttributes))
-    return structureFail(`${path}.normalizedAttributes`);
-  if (
-    (part.value.normalizedAttributes as Record<string, unknown>).category !==
-    part.value.category
-  )
-    return structureFail(`${path}.normalizedAttributes.category`);
-  if (!isUtcTimestamp(part.value.createdAt))
-    return structureFail(`${path}.createdAt`);
-  if (!isUtcTimestamp(part.value.updatedAt))
-    return structureFail(`${path}.updatedAt`);
-  if ("sourceInfo" in part.value && !isPlainRecord(part.value.sourceInfo))
-    return structureFail(`${path}.sourceInfo`);
-  if (
-    "sourceSnapshot" in part.value &&
-    !isPlainRecord(part.value.sourceSnapshot)
-  )
-    return structureFail(`${path}.sourceSnapshot`);
-  return ok(value as BackupCandidatePart);
+  const validated = validateCandidatePartValue(value, path);
+  if (!validated.ok)
+    return validated.error.code === "duplicate-id" ||
+      validated.error.code === "missing-reference"
+      ? referenceFail(validated.error.path)
+      : structureFail(validated.error.path);
+  return ok(validated.value as BackupCandidatePart);
 };
 
 const validateBuildItem = (
@@ -315,6 +284,18 @@ const readFormatVersion = (input: unknown): number | undefined => {
   return typeof value === "number" ? value : undefined;
 };
 
+const hasLegacyCandidateShape = (input: unknown): boolean => {
+  if (!isPlainRecord(input) || !isPlainRecord(input.data)) return false;
+  if (!Array.isArray(input.data.parts)) return false;
+  return input.data.parts.some(
+    (part) =>
+      isPlainRecord(part) &&
+      (!("sources" in part) ||
+        "sourceInfo" in part ||
+        (isPlainRecord(part.product) && "price" in part.product)),
+  );
+};
+
 /** 各移行段階を再検証し、未知・将来・経路欠落版は内容を変換せずunsupported-versionとして拒否する。 */
 export const migrateBackupEnvelopeToCurrent = (
   input: unknown,
@@ -323,6 +304,11 @@ export const migrateBackupEnvelopeToCurrent = (
   ExchangeVersionError | ExchangeValidationError
 > => {
   const sourceVersion = readFormatVersion(input);
+  if (
+    sourceVersion === CURRENT_BACKUP_FORMAT_VERSION &&
+    hasLegacyCandidateShape(input)
+  )
+    return err({ code: "unsupported-version", path: "$.formatVersion" });
   if (
     sourceVersion === undefined ||
     sourceVersion === CURRENT_BACKUP_FORMAT_VERSION
@@ -373,7 +359,10 @@ const partToBackup = (part: CandidatePart): BackupCandidatePart => ({
   projectId: part.projectId,
   category: part.category,
   product: part.product,
-  ...(part.sourceInfo === undefined ? {} : { sourceInfo: part.sourceInfo }),
+  sources: part.sources,
+  ...(part.primarySourceId === undefined
+    ? {}
+    : { primarySourceId: part.primarySourceId }),
   ...(part.sourceSnapshot === undefined
     ? {}
     : { sourceSnapshot: part.sourceSnapshot }),
@@ -414,19 +403,31 @@ const projectFromBackup = (project: BackupProject): Project => ({
   updatedAt: project.updatedAt,
 });
 
-const partFromBackup = (part: BackupCandidatePart): CandidatePart => ({
-  id: part.id,
-  projectId: part.projectId,
-  category: part.category,
-  product: part.product,
-  ...(part.sourceInfo === undefined ? {} : { sourceInfo: part.sourceInfo }),
-  ...(part.sourceSnapshot === undefined
-    ? {}
-    : { sourceSnapshot: part.sourceSnapshot }),
-  normalizedAttributes: part.normalizedAttributes,
-  createdAt: part.createdAt,
-  updatedAt: part.updatedAt,
-});
+const partFromBackup = (part: BackupCandidatePart): CandidatePart => {
+  const sourceState: CandidateSourceState =
+    part.sources.length === 0
+      ? { sources: [] }
+      : {
+          sources: part.sources as readonly [
+            CandidateSource,
+            ...CandidateSource[],
+          ],
+          primarySourceId: part.primarySourceId as CandidateSourceId,
+        };
+  return {
+    id: part.id,
+    projectId: part.projectId,
+    category: part.category,
+    product: part.product,
+    ...sourceState,
+    ...(part.sourceSnapshot === undefined
+      ? {}
+      : { sourceSnapshot: part.sourceSnapshot }),
+    normalizedAttributes: part.normalizedAttributes,
+    createdAt: part.createdAt,
+    updatedAt: part.updatedAt,
+  };
+};
 
 const buildFromBackup = (build: BackupCurrentBuild): CurrentBuild => ({
   id: build.id,

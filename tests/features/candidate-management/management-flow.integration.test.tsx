@@ -106,10 +106,14 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
       name: { original: "架空の未分類候補", confirmed: "SYN-CANDIDATE" },
       manufacturer: { original: "架空メーカー", confirmed: "SYNTHETIC" },
     },
-    sourceInfo: {
-      pageUrl: "https://catalog.example.invalid/management-flow",
-      capturedAt: timestamp,
-    },
+    sources: [
+      {
+        id: "40000000-0000-4000-8000-000000000001" as never,
+        pageUrl: "https://catalog.example.invalid/management-flow",
+        capturedAt: timestamp,
+      },
+    ],
+    primarySourceId: "40000000-0000-4000-8000-000000000001" as never,
     sourceSnapshot: {
       name: "取得時の架空候補名",
       manufacturer: "取得時の架空メーカー",
@@ -141,10 +145,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   assert.equal(buildEligible.ok, true);
   if (!buildEligible.ok) throw new Error("分類済み候補を照会できません");
   assert.deepEqual(buildEligible.value[0]?.product, uncategorized.product);
-  assert.deepEqual(
-    buildEligible.value[0]?.sourceInfo,
-    uncategorized.sourceInfo,
-  );
+  assert.deepEqual(buildEligible.value[0]?.sources, uncategorized.sources);
   assert.deepEqual(
     buildEligible.value[0]?.sourceSnapshot,
     uncategorized.sourceSnapshot,

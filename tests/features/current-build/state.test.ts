@@ -56,16 +56,18 @@ const memoryAttributes = {
 const candidate = (
   id: CandidatePartId,
   overrides: Partial<CandidatePart> = {},
-): CandidatePart => ({
-  id,
-  projectId,
-  category: "cpu",
-  product: { name: { original: "架空CPU", confirmed: "架空CPU" } },
-  normalizedAttributes: cpuAttributes,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  ...overrides,
-});
+): CandidatePart =>
+  ({
+    id,
+    projectId,
+    category: "cpu",
+    product: { name: { original: "架空CPU", confirmed: "架空CPU" } },
+    sources: [],
+    normalizedAttributes: cpuAttributes,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  }) as CandidatePart;
 
 const project = (id: ProjectId, name: string): ProjectSummary => ({
   id,

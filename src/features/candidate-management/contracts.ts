@@ -1,13 +1,10 @@
 import type {
   CandidatePart,
   CandidatePartId,
-  CandidatePartV2,
   CandidateProductValues,
-  CandidateProductValuesV2,
   CandidateSource,
   CandidateSourceId,
   CandidateSourceKind,
-  CandidateSourceState,
   NormalizedAttributes,
   PartCategory,
   Project,
@@ -15,7 +12,6 @@ import type {
   RequestId,
   Result,
   SourcedValue,
-  SourceInfo,
   SourceSnapshot,
 } from "../../domain/public.js";
 
@@ -25,11 +21,9 @@ interface CandidateDraftBase {
   readonly product: CandidateProductValues & {
     readonly name: SourcedValue<string>;
   };
-  /** Transitional editor shape; schema-2 saves use the collection fields. */
+  /** Omission in an unsaved manual draft is normalized to an empty collection. */
   readonly sources?: readonly CandidateSource[];
   readonly primarySourceId?: CandidateSourceId;
-  /** Removed when the production schema-2 cutover updates legacy editor consumers. */
-  readonly sourceInfo?: SourceInfo;
   readonly sourceSnapshot?: SourceSnapshot;
 }
 
@@ -41,21 +35,8 @@ export type CandidateDraft = {
   };
 }[PartCategory];
 
-type CandidateSourceDraftBase = {
-  readonly projectId: ProjectId;
-  readonly product: CandidateProductValuesV2 & {
-    readonly name: SourcedValue<string>;
-  };
-  readonly sourceSnapshot?: SourceSnapshot;
-} & CandidateSourceState;
-
-/** Canonical schema-2 editor contract exposed to adjacent features. */
-export type CandidateSourceDraft = {
-  readonly [Attributes in NormalizedAttributes as Attributes["category"]]: CandidateSourceDraftBase & {
-    readonly category: Attributes["category"];
-    readonly normalizedAttributes: Attributes;
-  };
-}[PartCategory];
+/** Temporary internal name retained while call sites converge on CandidateDraft. */
+export type CandidateSourceDraft = CandidateDraft;
 
 /** Editing-start draft whose project is intentionally unresolved. */
 export type UnresolvedCandidateDraft = {
@@ -85,13 +66,10 @@ export interface RenameProjectInput {
 
 export interface UpdateCandidateInput {
   readonly id: CandidatePartId;
-  readonly draft: CandidateSourceDraft;
-}
-
-export interface LegacyUpdateCandidateInput {
-  readonly id: CandidatePartId;
   readonly draft: CandidateDraft;
 }
+
+export type LegacyUpdateCandidateInput = UpdateCandidateInput;
 
 export interface MutationContext {
   readonly requestId: RequestId;
@@ -158,7 +136,7 @@ export interface CandidateManagementService {
     context: MutationContext,
   ): Promise<Result<CandidatePart, ManagementError>>;
   updateCandidate(
-    input: LegacyUpdateCandidateInput,
+    input: UpdateCandidateInput,
     context: MutationContext,
   ): Promise<Result<CandidatePart, ManagementError>>;
   deleteCandidate(
@@ -253,17 +231,17 @@ export interface CandidateSourceService {
   addSource(
     input: AddCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  ): Promise<Result<CandidatePart, ManagementError>>;
   updateSource(
     input: UpdateCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  ): Promise<Result<CandidatePart, ManagementError>>;
   removeSource(
     input: RemoveCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  ): Promise<Result<CandidatePart, ManagementError>>;
   setPrimarySource(
     input: SetPrimarySourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePartV2, ManagementError>>;
+  ): Promise<Result<CandidatePart, ManagementError>>;
 }

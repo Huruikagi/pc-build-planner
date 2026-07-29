@@ -22,7 +22,7 @@ import {
 } from "../../../src/features/product-capture/feature-contribution.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
-import { sourceRootV2 } from "../../fixtures/candidate-source-root-v2.js";
+import { sourceRoot } from "../../fixtures/candidate-source-root.js";
 import { createProductionCaptureChromeFixture } from "../../fixtures/product-capture-production.js";
 
 const activationId = "synthetic-activation" as ActivationId;
@@ -118,7 +118,7 @@ const createFlow = (
 };
 
 const createSourceSaveHarness = () => {
-  let root = sourceRootV2();
+  let root = sourceRoot();
   let mutations = 0;
   const data = {
     async query(project: (root: never) => unknown) {

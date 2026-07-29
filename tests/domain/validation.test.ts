@@ -25,10 +25,14 @@ const root = () => ({
       projectId: "11111111-1111-4111-8111-111111111111",
       category: "cpu",
       product: { name: { original: "架空CPU", confirmed: "Synthetic CPU" } },
-      sourceInfo: {
-        pageUrl: "https://example.invalid/products/1",
-        capturedAt: "2026-07-18T01:30:00.000Z",
-      },
+      sources: [
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          pageUrl: "https://example.invalid/products/1",
+          capturedAt: "2026-07-18T01:30:00.000Z",
+        },
+      ],
+      primarySourceId: "66666666-6666-4666-8666-666666666666",
       normalizedAttributes: {
         category: "cpu",
         socket: { original: "EX-1", confirmed: "EX-1" },
@@ -91,20 +95,28 @@ test("有効なroot、command、replacementを入力を変更せず受理する"
 
 test("取得元の完全欠損・部分欠損・snapshotのnullを入力どおり受理する", () => {
   const withoutSource = root();
-  delete withoutSource.candidateParts[0].sourceInfo;
+  withoutSource.candidateParts[0].sources = [];
+  delete withoutSource.candidateParts[0].primarySourceId;
   const partialSources = [
     { pageUrl: "https://example.invalid/products/url-only" },
     { capturedAt: "2026-07-22T03:04:05.000Z" },
     {},
   ];
 
-  for (const sourceInfo of partialSources) {
+  for (const partialSource of partialSources) {
     const input = structuredClone(withoutSource);
-    input.candidateParts[0].sourceInfo = sourceInfo;
+    input.candidateParts[0].sources = [
+      { id: "66666666-6666-4666-8666-666666666666", ...partialSource },
+    ];
+    input.candidateParts[0].primarySourceId =
+      "66666666-6666-4666-8666-666666666666";
     const result = schemaValidator.validateRoot(input);
     assert.equal(result.ok, true);
     assert.strictEqual(result.value, input);
-    assert.deepEqual(result.value.candidateParts[0].sourceInfo, sourceInfo);
+    assert.deepEqual(result.value.candidateParts[0].sources[0], {
+      id: "66666666-6666-4666-8666-666666666666",
+      ...partialSource,
+    });
   }
 
   withoutSource.candidateParts[0].sourceSnapshot = {
@@ -114,7 +126,7 @@ test("取得元の完全欠損・部分欠損・snapshotのnullを入力どお�
   const result = schemaValidator.validateRoot(withoutSource);
   assert.equal(result.ok, true);
   assert.strictEqual(result.value, withoutSource);
-  assert.equal("sourceInfo" in result.value.candidateParts[0], false);
+  assert.deepEqual(result.value.candidateParts[0].sources, []);
   assert.deepEqual(result.value.candidateParts[0].sourceSnapshot, {
     name: "架空 CPU",
     manufacturer: null,
@@ -136,20 +148,20 @@ test("取得元の完全欠損・部分欠損・snapshotのnullを入力どお�
 });
 
 test("存在する取得元値だけへURL・UTC規約を適用する", () => {
-  for (const [sourceInfo, code, path] of [
+  for (const [sourceValue, code, path] of [
     [
       { pageUrl: "not a URL" },
       "invalid-url",
-      "$.candidateParts[0].sourceInfo.pageUrl",
+      "$.candidateParts[0].sources[0].pageUrl",
     ],
     [
       { capturedAt: "2026-07-22T12:04:05+09:00" },
       "invalid-utc-timestamp",
-      "$.candidateParts[0].sourceInfo.capturedAt",
+      "$.candidateParts[0].sources[0].capturedAt",
     ],
   ]) {
     const input = root();
-    input.candidateParts[0].sourceInfo = sourceInfo;
+    Object.assign(input.candidateParts[0].sources[0], sourceValue);
     assertError(schemaValidator.validateRoot(input), code, path);
   }
 });
@@ -259,9 +271,9 @@ test("UUID、UTC、URL、category整合をpathとcode付きで拒否する", () 
     ],
     [
       (value) => {
-        value.candidateParts[0].sourceInfo.pageUrl = "not a URL";
+        value.candidateParts[0].sources[0].pageUrl = "not a URL";
       },
-      "$.candidateParts[0].sourceInfo.pageUrl",
+      "$.candidateParts[0].sources[0].pageUrl",
       "invalid-url",
     ],
     [

@@ -1,6 +1,5 @@
 /** 復元commitのfence受け渡しにだけ必要な最小型。owner/lease操作capabilityそのものは公開しない。 */
 
-export { migrateCandidateSourcesV1ToV2 } from "./candidate-source-migration.js";
 export type { MaintenanceFence } from "./maintenance.js";
 export type {
   MaintenanceSnapshot,

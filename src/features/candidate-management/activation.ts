@@ -10,8 +10,7 @@ import {
   PART_CATEGORIES,
   type PartCategory,
   type ProjectId,
-  validateCandidatePartContent,
-  validateCandidatePartV2Value,
+  validateCandidatePartValue,
 } from "../../domain/public.js";
 import { withCategory } from "./category-draft.js";
 import type {
@@ -63,43 +62,7 @@ const hasAllowedKeys = (
   keys: readonly string[],
 ) => Object.keys(value).every((key) => keys.includes(key));
 
-const isDraft = (value: unknown): value is CandidateDraft => {
-  if (
-    !isRecord(value) ||
-    !hasAllowedKeys(value, [
-      "projectId",
-      "category",
-      "product",
-      "normalizedAttributes",
-      "sourceInfo",
-      "sourceSnapshot",
-    ]) ||
-    typeof value.projectId !== "string" ||
-    typeof value.category !== "string" ||
-    !isRecord(value.product) ||
-    !isRecord(value.product.name)
-  ) {
-    return false;
-  }
-  const name = value.product.name;
-  if (
-    !hasAllowedKeys(name, ["original", "confirmed"]) ||
-    !(
-      (typeof name.original === "string" && name.original.trim().length > 0) ||
-      (typeof name.confirmed === "string" && name.confirmed.trim().length > 0)
-    )
-  ) {
-    return false;
-  }
-  /**
-   * Validates the draft itself. Fabricating a LocalDataRoot here would couple
-   * candidate management to CurrentBuild, maintenance and request dedupe,
-   * none of which this feature owns.
-   */
-  return validateCandidatePartContent(value).ok;
-};
-
-const isSourceDraft = (value: unknown): value is CandidateSourceDraft => {
+const isDraft = (value: unknown): value is CandidateSourceDraft => {
   if (
     !isRecord(value) ||
     !hasAllowedKeys(value, [
@@ -124,8 +87,9 @@ const isSourceDraft = (value: unknown): value is CandidateSourceDraft => {
     )
   )
     return false;
-  return validateCandidatePartV2Value({
+  return validateCandidatePartValue({
     ...value,
+    sources: value.sources ?? [],
     id: "00000000-0000-4000-8000-000000000001",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -139,8 +103,7 @@ export type CandidateActivationPrefill =
 
 const isUnresolvedCandidateEditorPrefill = (
   prefill: CandidateActivationPrefill,
-): prefill is UnresolvedCandidateEditorPrefill =>
-  !("projectId" in prefill.draft);
+): boolean => !("projectId" in prefill.draft);
 
 const isCandidateEditorPrefill = (
   payload: unknown,
@@ -148,7 +111,7 @@ const isCandidateEditorPrefill = (
   isRecord(payload) &&
   hasAllowedKeys(payload, ["projectId", "draft", "categoryHint"]) &&
   typeof payload.projectId === "string" &&
-  (isDraft(payload.draft) || isSourceDraft(payload.draft)) &&
+  isDraft(payload.draft) &&
   payload.draft.projectId === payload.projectId &&
   (payload.categoryHint === undefined || isPartCategory(payload.categoryHint));
 
@@ -199,10 +162,11 @@ export const createCandidateActivation = (
       });
     }
     await state.selectProject(projectId);
-    const resolvedDraft: CandidateDraft | CandidateSourceDraft =
-      isUnresolvedCandidateEditorPrefill(prefill)
-        ? ({ ...prefill.draft, projectId } satisfies CandidateDraft)
-        : prefill.draft;
+    const resolvedDraft: CandidateDraft = isUnresolvedCandidateEditorPrefill(
+      prefill,
+    )
+      ? ({ ...prefill.draft, projectId } as CandidateDraft)
+      : (prefill.draft as CandidateDraft);
     /**
      * Apply the suggestion only when the draft carries no confirmed category,
      * so an existing formal category always wins over a hint. The seeded draft

@@ -4,6 +4,7 @@ import test from "node:test";
 import type {
   CandidatePart,
   CandidatePartId,
+  CandidateSourceId,
   LocalDataRoot,
   NormalizedAttributes,
   Project,
@@ -28,6 +29,8 @@ const requestId = "20000000-0000-4000-8000-000000000001" as Uuid as RequestId;
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
 const candidateId =
   "30000000-0000-4000-8000-000000000001" as Uuid as CandidatePartId;
+const sourceId =
+  "40000000-0000-4000-8000-000000000001" as Uuid as CandidateSourceId;
 const otherCandidateId =
   "30000000-0000-4000-8000-000000000002" as Uuid as CandidatePartId;
 const otherProjectId =
@@ -50,6 +53,15 @@ const draft = (overrides: Partial<CandidateDraft> = {}): CandidateDraft =>
     projectId,
     category: "cpu",
     product: { name: { original: "架空CPU", confirmed: "架空CPU" } },
+    sources: [
+      {
+        id: sourceId,
+        pageUrl: "https://catalog.example.invalid/cpu",
+        siteName: "架空カタログ",
+        capturedAt: timestamp,
+      },
+    ],
+    primarySourceId: sourceId,
     normalizedAttributes: cpuAttributes,
     ...overrides,
   }) as CandidateDraft;
@@ -57,28 +69,33 @@ const draft = (overrides: Partial<CandidateDraft> = {}): CandidateDraft =>
 const candidate = (
   id: CandidatePartId = candidateId,
   overrides: Partial<CandidatePart> = {},
-): CandidatePart => ({
-  id,
-  projectId,
-  category: "cpu",
-  product: {
-    name: { original: "抽出名", confirmed: "確認済みCPU" },
-    manufacturer: { original: "抽出製造元", confirmed: "確認済み製造元" },
-  },
-  sourceInfo: {
-    pageUrl: "https://catalog.example.invalid/cpu",
-    siteName: "架空カタログ",
-    capturedAt: timestamp,
-  },
-  sourceSnapshot: {
-    name: "抽出名",
-    manufacturer: "抽出製造元",
-  },
-  normalizedAttributes: cpuAttributes,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  ...overrides,
-});
+): CandidatePart =>
+  ({
+    id,
+    projectId,
+    category: "cpu",
+    product: {
+      name: { original: "抽出名", confirmed: "確認済みCPU" },
+      manufacturer: { original: "抽出製造元", confirmed: "確認済み製造元" },
+    },
+    sources: [
+      {
+        id: sourceId,
+        pageUrl: "https://catalog.example.invalid/cpu",
+        siteName: "架空カタログ",
+        capturedAt: timestamp,
+      },
+    ],
+    primarySourceId: sourceId,
+    sourceSnapshot: {
+      name: "抽出名",
+      manufacturer: "抽出製造元",
+    },
+    normalizedAttributes: cpuAttributes,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  }) as unknown as CandidatePart;
 
 const project = (name = "既存プロジェクト"): Project => ({
   id: projectId,
@@ -116,6 +133,14 @@ const createData = (
           ...currentRoot,
           candidateParts: currentRoot.candidateParts.filter(
             (candidate) => candidate.id !== operation.id,
+          ),
+        };
+      }
+      if (operation.entity === "candidatePart" && operation.kind === "update") {
+        currentRoot = {
+          ...currentRoot,
+          candidateParts: currentRoot.candidateParts.map((candidate) =>
+            candidate.id === operation.value.id ? operation.value : candidate,
           ),
         };
       }
@@ -344,7 +369,7 @@ test("カテゴリ変更は省略された共通項目と取得元を保持し�
     assert.equal(result.value.projectId, projectId);
     assert.equal(result.value.category, "memory");
     assert.deepEqual(result.value.product, candidate().product);
-    assert.deepEqual(result.value.sourceInfo, candidate().sourceInfo);
+    assert.deepEqual(result.value.sources, candidate().sources);
     assert.deepEqual(result.value.sourceSnapshot, candidate().sourceSnapshot);
     assert.deepEqual(result.value.normalizedAttributes, memoryAttributes);
   }
@@ -425,7 +450,7 @@ test("同一カテゴリ編集は明示値を反映し、省略された取得�
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.deepEqual(result.value.product, editedProduct);
-    assert.deepEqual(result.value.sourceInfo, existing.sourceInfo);
+    assert.deepEqual(result.value.sources, existing.sources);
     assert.deepEqual(result.value.sourceSnapshot, existing.sourceSnapshot);
   }
 });
@@ -444,14 +469,15 @@ test("同一カテゴリ編集は明示された取得元情報を入力どお�
     data,
     now: () => timestamp,
   });
-  const editedSourceInfo = { siteName: "編集後の架空カタログ" };
+  const editedSources = [{ id: sourceId, siteName: "編集後の架空カタログ" }];
   const editedSourceSnapshot = { name: "編集後の元表記", price: null };
 
   const result = await service.updateCandidate(
     {
       id: candidateId,
       draft: draft({
-        sourceInfo: editedSourceInfo,
+        sources: editedSources,
+        primarySourceId: sourceId,
         sourceSnapshot: editedSourceSnapshot,
       }),
     },
@@ -460,9 +486,43 @@ test("同一カテゴリ編集は明示された取得元情報を入力どお�
 
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.deepEqual(result.value.sourceInfo, editedSourceInfo);
+    assert.deepEqual(result.value.sources, editedSources);
     assert.deepEqual(result.value.sourceSnapshot, editedSourceSnapshot);
   }
+});
+
+test("最後の取得元を明示削除すると空配列かつprimaryなしで保存・再読込できる", async () => {
+  const { data, currentRoot } = createData({
+    schemaVersion: 1,
+    revision: 0 as Revision,
+    projects: [project()],
+    candidateParts: [candidate()],
+    currentBuilds: [],
+    requestDedupe: [],
+    maintenance: { generation: 0 as never, active: false },
+  });
+  const service = createCandidateManagementService({
+    data,
+    now: () => timestamp,
+  });
+  const { primarySourceId: _removedPrimary, ...draftWithoutPrimary } = draft({
+    sources: [],
+  });
+
+  const result = await service.updateCandidate(
+    {
+      id: candidateId,
+      draft: draftWithoutPrimary,
+    },
+    { requestId, expectedRevision: 0 as Revision },
+  );
+
+  assert.equal(result.ok, true);
+  const reloaded = currentRoot().candidateParts.find(
+    ({ id }) => id === candidateId,
+  );
+  assert.deepEqual(reloaded?.sources, []);
+  assert.equal("primarySourceId" in (reloaded ?? {}), false);
 });
 
 test("候補削除は単一mutationへ委譲し、他候補を対象にしない", async () => {
@@ -538,6 +598,7 @@ test("候補照会はproject・category境界を守り、欠損を捏造しな�
         category: "cpu",
         name: { original: "抽出名", confirmed: "確認済みCPU" },
         manufacturer: { original: "抽出製造元", confirmed: "確認済み製造元" },
+        primarySource: candidate().sources[0],
         hasMissingDetails: true,
         updatedAt: timestamp,
       },
@@ -546,6 +607,7 @@ test("候補照会はproject・category境界を守り、欠損を捏造しな�
         projectId,
         category: "uncategorized",
         name: { original: "未分類の架空部品" },
+        primarySource: candidate().sources[0],
         hasMissingDetails: true,
         updatedAt: timestamp,
       },
@@ -561,6 +623,7 @@ test("候補照会はproject・category境界を守り、欠損を捏造しな�
           projectId,
           category: "uncategorized",
           name: { original: "未分類の架空部品" },
+          primarySource: candidate().sources[0],
           hasMissingDetails: true,
           updatedAt: timestamp,
         },

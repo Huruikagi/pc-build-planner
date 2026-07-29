@@ -47,7 +47,13 @@ const storedDraft: CandidateDraft = {
     category: "cpu",
     socket: { original: "架空ソケットSK1" },
   },
-  sourceInfo: { pageUrl: "https://example.invalid/synthetic-cpu" },
+  sources: [
+    {
+      id: "40000000-0000-4000-8000-000000000001" as never,
+      pageUrl: "https://example.invalid/synthetic-cpu",
+    },
+  ],
+  primarySourceId: "40000000-0000-4000-8000-000000000001" as never,
   sourceSnapshot: { price: "架空の元表記" },
 };
 
@@ -211,7 +217,7 @@ test("候補の編集導線は詳細取得契約から属性と元表記を含�
   assert.equal(input(harness, "candidate-name").value, "架空CPU 確認済み");
   assert.equal(input(harness, "attribute-socket").value, "架空ソケットSK1");
   assert.equal(
-    input(harness, "candidate-source-url").value,
+    input(harness, "source-0-url").value,
     "https://example.invalid/synthetic-cpu",
   );
   const snapshot = harness.container.querySelector(
@@ -273,7 +279,7 @@ test("カテゴリ変更後は新カテゴリの属性を編集でき共通項�
   // Requirement 4.3: shared fields and source metadata survive the change.
   assert.equal(input(harness, "candidate-name").value, "架空CPU 確認済み");
   assert.equal(
-    input(harness, "candidate-source-url").value,
+    input(harness, "source-0-url").value,
     "https://example.invalid/synthetic-cpu",
   );
 
@@ -294,7 +300,7 @@ test("項目検証の失敗は該当欄へ対応付けられ入力内容と一�
   const harness = await renderView({
     saveFailure: {
       kind: "validation",
-      fields: { "sourceInfo.pageUrl": "invalid-url" },
+      fields: { "sources[0].pageUrl": "invalid-url" },
     },
   });
 
@@ -303,12 +309,12 @@ test("項目検証の失敗は該当欄へ対応付けられ入力内容と一�
       `[data-edit-candidate-id='${candidateId}']`,
     ),
   );
-  setInputValue(input(harness, "candidate-source-url"), "ftp://例");
+  setInputValue(input(harness, "source-0-url"), "ftp://例");
   await act(async () => undefined);
   await submitEditor(harness);
 
   // Requirement 4.5: the offending field is identified, not just the operation.
-  const url = input(harness, "candidate-source-url");
+  const url = input(harness, "source-0-url");
   assert.equal(url.getAttribute("aria-invalid"), "true");
   const describedBy = url.getAttribute("aria-describedby");
   assert.ok(describedBy);
@@ -480,56 +486,6 @@ test("欠損した任意項目は空欄で開き、一覧の未入力表示を�
     harness.created[0]?.product.manufacturer?.confirmed,
     "架空メーカー",
   );
-
-  await harness.cleanup();
-});
-
-test("価格を空にすると保存対象から外れ、数値でない入力は0へ丸めない", async () => {
-  const harness = await renderView();
-
-  await click(harness.container.querySelector("[data-create-candidate]"));
-  setInputValue(input(harness, "candidate-name"), "架空候補");
-  setInputValue(input(harness, "candidate-price-amount"), "1234");
-  await act(async () => undefined);
-  setInputValue(input(harness, "candidate-price-amount"), "");
-  await act(async () => undefined);
-  await submitEditor(harness);
-
-  // Requirement 2.2: a cleared price stays missing instead of becoming zero.
-  assert.equal(harness.created.length, 1);
-  assert.equal(harness.created[0]?.product.price, undefined);
-
-  await click(harness.container.querySelector("[data-create-candidate]"));
-  setInputValue(input(harness, "candidate-name"), "架空候補2");
-  setInputValue(input(harness, "candidate-price-amount"), "いくらか");
-  await act(async () => undefined);
-
-  const priceInput = input(harness, "candidate-price-amount");
-  assert.equal(priceInput.value, "いくらか");
-  assert.equal(priceInput.getAttribute("aria-invalid"), "true");
-  await submitEditor(harness);
-
-  // The unparsable price blocks the save rather than storing a guessed amount.
-  assert.equal(harness.created.length, 1);
-
-  await harness.cleanup();
-});
-
-test("通貨が判明していない候補の手入力価格は通貨を推測しない", async () => {
-  const harness = await renderView();
-
-  await click(harness.container.querySelector("[data-create-candidate]"));
-  setInputValue(input(harness, "candidate-name"), "架空候補");
-  setInputValue(input(harness, "candidate-price-amount"), "1234");
-  await act(async () => undefined);
-  await submitEditor(harness);
-
-  // No extracted currency exists, so none is invented from the UI locale.
-  assert.equal(harness.created.length, 1);
-  assert.deepEqual(harness.created[0]?.product.price?.confirmed, {
-    amount: 1234,
-    currency: "",
-  });
 
   await harness.cleanup();
 });

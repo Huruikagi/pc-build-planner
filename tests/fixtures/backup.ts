@@ -1,5 +1,6 @@
 import type {
   CandidatePartId,
+  CandidateSourceId,
   CurrentBuildId,
   PositiveInteger,
   ProjectId,
@@ -18,6 +19,10 @@ const PART_ID =
   "40000000-0000-4000-8000-000000000002" as Uuid as CandidatePartId;
 const BUILD_ID =
   "40000000-0000-4000-8000-000000000003" as Uuid as CurrentBuildId;
+const PRIMARY_SOURCE_ID =
+  "40000000-0000-4000-8000-000000000004" as Uuid as CandidateSourceId;
+const SECONDARY_SOURCE_ID =
+  "40000000-0000-4000-8000-000000000005" as Uuid as CandidateSourceId;
 const CREATED_AT = "2026-07-19T00:00:00.000Z" as UtcTimestamp;
 
 const project: BackupProject = {
@@ -34,6 +39,27 @@ const part: BackupCandidatePart = {
   product: {
     name: { original: "架空CPU 原表記", confirmed: "架空CPU 確認値" },
   },
+  sources: [
+    {
+      id: PRIMARY_SOURCE_ID,
+      pageUrl: "https://shop.example.invalid/fictional-cpu",
+      siteName: "架空販売店",
+      capturedAt: CREATED_AT,
+      price: {
+        original: "12,345円",
+        confirmed: { amount: 12345, currency: "JPY" },
+      },
+      kind: "retail",
+    },
+    {
+      id: SECONDARY_SOURCE_ID,
+      pageUrl: "https://manufacturer.example.invalid/fictional-cpu",
+      siteName: "架空メーカー",
+      capturedAt: CREATED_AT,
+      kind: "manufacturer",
+    },
+  ],
+  primarySourceId: PRIMARY_SOURCE_ID,
   normalizedAttributes: { category: "cpu" },
   createdAt: CREATED_AT,
   updatedAt: CREATED_AT,
@@ -145,6 +171,30 @@ export const buildCorruptBackupEnvelopes =
       }),
       expectedCode: "invalid-reference",
       expectedPath: "$.data.parts[0].projectId",
+    },
+    {
+      name: "unsafe candidate source URL",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const parts = data.parts as Array<Record<string, unknown>>;
+        const sources = parts[0]?.sources as
+          | Array<Record<string, unknown>>
+          | undefined;
+        if (sources?.[0]) sources[0].pageUrl = "javascript:alert(1)";
+      }),
+      expectedCode: "invalid-structure",
+      expectedPath: "$.data.parts[0].sources[0].pageUrl",
+    },
+    {
+      name: "missing primary source reference",
+      envelope: corrupted((envelope) => {
+        const data = envelope.data as Record<string, unknown>;
+        const parts = data.parts as Array<Record<string, unknown>>;
+        if (parts[0])
+          parts[0].primarySourceId = "90000000-0000-4000-8000-000000000001";
+      }),
+      expectedCode: "invalid-reference",
+      expectedPath: "$.data.parts[0].primarySourceId",
     },
     {
       name: "cross-project current build reference",

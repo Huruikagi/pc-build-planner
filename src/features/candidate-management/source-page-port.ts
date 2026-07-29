@@ -12,7 +12,7 @@ export interface TabsCreatePort {
   create(details: { readonly url: string }): Promise<unknown>;
 }
 
-const safeUrl = (value: string): string | undefined => {
+export const safeSourcePageUrl = (value: string): string | undefined => {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:"
@@ -27,7 +27,7 @@ export const createChromeSourcePagePort = (
   tabs?: TabsCreatePort,
 ): SourcePagePort => ({
   async open(url) {
-    const validated = safeUrl(url);
+    const validated = safeSourcePageUrl(url);
     if (validated === undefined) return err({ kind: "invalid-url" });
     if (tabs === undefined) return err({ kind: "runtime-unavailable" });
     try {

@@ -42,6 +42,7 @@ const project = (id, name) => ({ id, name, createdAt: now, updatedAt: now });
 const ids = {
   project: "00000000-0000-4000-8000-000000000001",
   candidate: "00000000-0000-4000-8000-000000000002",
+  source: "00000000-0000-4000-8000-000000000006",
   build: "00000000-0000-4000-8000-000000000003",
 };
 const candidate = {
@@ -49,7 +50,14 @@ const candidate = {
   projectId: ids.project,
   category: "cpu",
   product: { name: { original: "架空CPU" } },
-  sourceInfo: { pageUrl: "https://example.invalid/item", capturedAt: now },
+  sources: [
+    {
+      id: ids.source,
+      pageUrl: "https://example.invalid/item",
+      capturedAt: now,
+    },
+  ],
+  primarySourceId: ids.source,
   normalizedAttributes: { category: "cpu", socket: { original: "架空Socket" } },
   createdAt: now,
   updatedAt: now,

@@ -39,13 +39,22 @@ const syntheticRoot = {
       ),
       category: "cpu",
       product: { name: { original: "架空CPU", confirmed: "Example CPU" } },
-      sourceInfo: {
-        pageUrl: "https://example.invalid/products/cpu-1",
-        capturedAt:
-          /** @type {import("../../src/domain/identifiers.ts").UtcTimestamp} */ (
-            "2026-07-18T01:30:00.000Z"
+      sources: [
+        {
+          id: /** @type {import("../../src/domain/model.ts").CandidateSourceId} */ (
+            "66666666-6666-4666-8666-666666666666"
           ),
-      },
+          pageUrl: "https://example.invalid/products/cpu-1",
+          capturedAt:
+            /** @type {import("../../src/domain/identifiers.ts").UtcTimestamp} */ (
+              "2026-07-18T01:30:00.000Z"
+            ),
+        },
+      ],
+      primarySourceId:
+        /** @type {import("../../src/domain/model.ts").CandidateSourceId} */ (
+          "66666666-6666-4666-8666-666666666666"
+        ),
       normalizedAttributes: {
         category: "cpu",
         socket: { original: "EX-1", confirmed: "EX-1" },

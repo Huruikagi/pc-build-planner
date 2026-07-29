@@ -1,7 +1,7 @@
 import type {
   CandidatePartId,
   CandidateSourceId,
-  LocalDataRootV2,
+  LocalDataRoot,
   ProjectId,
   Revision,
   UtcTimestamp,
@@ -10,8 +10,8 @@ import type {
 const timestamp = "2026-07-28T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000001" as ProjectId;
 
-export const sourceRootV2 = (): LocalDataRootV2 => ({
-  schemaVersion: 2,
+export const sourceRoot = (): LocalDataRoot => ({
+  schemaVersion: 1,
   revision: 1 as Revision,
   projects: [
     {

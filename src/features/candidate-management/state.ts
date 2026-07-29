@@ -49,6 +49,7 @@ export const emptyDraft = (projectId: ProjectId): CandidateDraft => ({
   projectId,
   category: "uncategorized",
   product: { name: { original: null, confirmed: "" } },
+  sources: [],
   normalizedAttributes: { category: "uncategorized" },
 });
 
@@ -335,10 +336,10 @@ export class ManagementState {
     }
     if (!result.ok) return this.#mutationFailure(result.error);
     if (pendingAtStart !== null) {
-      const resolvedDraft: CandidateDraft = {
+      const resolvedDraft = {
         ...pendingAtStart.draft,
         projectId: result.value.id,
-      };
+      } as CandidateDraft;
       this.#set({
         projects: [
           ...this.#value.projects,

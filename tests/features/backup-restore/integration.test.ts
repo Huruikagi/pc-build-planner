@@ -97,9 +97,10 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
       category: fixtureCandidate.category,
       product: fixtureCandidate.product,
       normalizedAttributes: fixtureCandidate.normalizedAttributes,
-      ...(fixtureCandidate.sourceInfo === undefined
+      sources: fixtureCandidate.sources,
+      ...(fixtureCandidate.primarySourceId === undefined
         ? {}
-        : { sourceInfo: fixtureCandidate.sourceInfo }),
+        : { primarySourceId: fixtureCandidate.primarySourceId }),
       ...(fixtureCandidate.sourceSnapshot === undefined
         ? {}
         : { sourceSnapshot: fixtureCandidate.sourceSnapshot }),
@@ -280,7 +281,7 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
   assert.equal(rebackup.ok, true);
 });
 
-test("不正JSON・将来版・孤立参照の各経路でpreflightが復元前データを変更しない", async () => {
+test("不正JSON・旧開発形式・将来版・孤立参照の各経路でpreflightが復元前データを変更しない", async () => {
   const storageState = createInMemoryStorageState({ quotaBytes: 10_000_000 });
   const data = createFoundationPortOn(storageState);
   const candidateService = createCandidateManagementService({
@@ -309,6 +310,37 @@ test("不正JSON・将来版・孤立参照の各経路でpreflightが復元前�
       }),
     },
     {
+      name: "legacy format 1 candidate shape",
+      text: JSON.stringify({
+        product: "pc-build-planner",
+        formatVersion: 1,
+        createdAt: timestamp,
+        data: {
+          projects: [],
+          parts: [
+            {
+              id: "30000000-0000-4000-8000-000000000001",
+              projectId: "90000000-0000-4000-8000-000000000001",
+              category: "cpu",
+              product: {
+                price: {
+                  original: "12,345円",
+                  confirmed: { amount: 12345, currency: "JPY" },
+                },
+              },
+              sourceInfo: {
+                pageUrl: "https://legacy.invalid/fictional-cpu",
+              },
+              normalizedAttributes: { category: "cpu" },
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+          ],
+          currentBuilds: [],
+        },
+      }),
+    },
+    {
       name: "orphan reference",
       text: JSON.stringify({
         product: "pc-build-planner",
@@ -322,6 +354,7 @@ test("不正JSON・将来版・孤立参照の各経路でpreflightが復元前�
               projectId: "90000000-0000-4000-8000-000000000001",
               category: "cpu",
               product: {},
+              sources: [],
               normalizedAttributes: { category: "cpu" },
               createdAt: timestamp,
               updatedAt: timestamp,
@@ -377,6 +410,7 @@ test("容量境界を超える復元はwriteなしで拒否され既存データ
         confirmed: "架空".repeat(200),
       },
     },
+    sources: [],
     normalizedAttributes: { category: "cpu" },
     createdAt: timestamp,
     updatedAt: timestamp,

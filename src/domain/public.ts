@@ -10,15 +10,14 @@ export { err, ok } from "./result.js";
 export type {
   CandidatePartContent,
   ReplaceableRoot,
-  SchemaV2Validator,
   SchemaValidator,
   ValidationError,
   ValidationErrorCode,
 } from "./validation.js";
 export {
+  candidateSourcePageUrlPath,
   isJsonValue,
-  schemaV2Validator,
   schemaValidator,
   validateCandidatePartContent,
-  validateCandidatePartV2Value,
+  validateCandidatePartValue,
 } from "./validation.js";

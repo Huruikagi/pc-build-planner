@@ -3,18 +3,18 @@ import test from "node:test";
 import type {
   CandidatePartId,
   CandidateSourceId,
-  LocalDataRootV2,
+  LocalDataRoot,
 } from "../../../src/domain/public.js";
 import { createCandidateSourceCatalog } from "../../../src/features/candidate-management/source-catalog.js";
 import type { CandidateSourceDataPort } from "../../../src/features/candidate-management/source-data-port.js";
-import { sourceRootV2 } from "../../fixtures/candidate-source-root-v2.js";
+import { sourceRoot } from "../../fixtures/candidate-source-root.js";
 
 const candidateId = "20000000-0000-4000-8000-000000000001" as CandidatePartId;
 const secondCandidateId =
   "20000000-0000-4000-8000-000000000002" as CandidatePartId;
 const sourceId = "30000000-0000-4000-8000-000000000001" as CandidateSourceId;
 
-const data = (root: LocalDataRootV2): CandidateSourceDataPort =>
+const data = (root: LocalDataRoot): CandidateSourceDataPort =>
   ({
     async query(project) {
       return { ok: true, value: project(root) };
@@ -22,7 +22,7 @@ const data = (root: LocalDataRootV2): CandidateSourceDataPort =>
   }) as CandidateSourceDataPort;
 
 test("catalogは保存順と同一URLの重複を維持してsource参照を投影する", async () => {
-  const catalog = createCandidateSourceCatalog({ data: data(sourceRootV2()) });
+  const catalog = createCandidateSourceCatalog({ data: data(sourceRoot()) });
   const all = await catalog.listSourceReferences({});
   assert.equal(all.ok, true);
   if (!all.ok) return;
@@ -51,7 +51,7 @@ test("catalogは保存順と同一URLの重複を維持してsource参照を投�
 });
 
 test("catalogはcandidate/source not-foundとsourceなし空配列を区別する", async () => {
-  const root = sourceRootV2();
+  const root = sourceRoot();
   const catalog = createCandidateSourceCatalog({ data: data(root) });
   const emptyId = root.candidateParts[2]?.id as CandidatePartId;
   assert.deepEqual(
@@ -77,7 +77,7 @@ test("catalogはcandidate/source not-foundとsourceなし空配列を区別す�
 });
 
 test("catalogは指定候補だけを列挙しcandidate/source IDで最小DTOを再取得する", async () => {
-  const catalog = createCandidateSourceCatalog({ data: data(sourceRootV2()) });
+  const catalog = createCandidateSourceCatalog({ data: data(sourceRoot()) });
   const limited = await catalog.listSourceReferences({ candidateId });
   assert.deepEqual(limited, {
     ok: true,

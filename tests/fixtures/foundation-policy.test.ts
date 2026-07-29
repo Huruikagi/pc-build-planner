@@ -57,13 +57,19 @@ test("欠損商品値と元表記・確認値を別々に表現するbuilderが�
   assert.equal(schemaValidator.validateRoot(missing).ok, true);
 });
 
-test("新旧取得元fixtureがJSON往復とroot検証後も欠損・nullを補完しない", () => {
-  const legacy = jsonRoundTrip(buildFoundationRoot());
-  assert.equal(schemaValidator.validateRoot(legacy).ok, true);
-  assert.deepEqual(legacy.candidateParts[0].sourceInfo, {
+test("canonical取得元fixtureがJSON往復とroot検証後も欠損・nullを補完しない", () => {
+  const canonical = jsonRoundTrip(buildFoundationRoot());
+  assert.equal(schemaValidator.validateRoot(canonical).ok, true);
+  assert.deepEqual(canonical.candidateParts[0].sources[0], {
+    id: "40000000-0000-4000-8000-000000000001",
     pageUrl: "https://catalog.example.invalid/synthetic-part-1",
     siteName: "架空部品カタログ",
     capturedAt: "2026-07-19T00:00:00.000Z",
+    price: {
+      original: "架空価格",
+      confirmed: { amount: 1000, currency: "SYN" },
+    },
+    kind: "retail",
   });
 
   const compatible = jsonRoundTrip(buildSourceMetadataCompatibilityRoot());
@@ -72,11 +78,12 @@ test("新旧取得元fixtureがJSON往復とroot検証後も欠損・nullを補�
   const [withoutSource, partialSource, withSnapshot] =
     validated.value.candidateParts;
 
-  assert.equal("sourceInfo" in withoutSource, false);
+  assert.deepEqual(withoutSource.sources, []);
+  assert.equal("primarySourceId" in withoutSource, false);
   assert.equal("sourceSnapshot" in withoutSource, false);
-  assert.deepEqual(partialSource.sourceInfo, { siteName: "架空部分取得元" });
-  assert.equal("pageUrl" in partialSource.sourceInfo, false);
-  assert.equal("capturedAt" in partialSource.sourceInfo, false);
+  assert.equal(partialSource.sources[0].siteName, "架空部分取得元");
+  assert.equal("pageUrl" in partialSource.sources[0], false);
+  assert.equal("capturedAt" in partialSource.sources[0], false);
   assert.deepEqual(withSnapshot.sourceSnapshot, {
     name: "架空マザーボード 元表記",
     manufacturer: null,

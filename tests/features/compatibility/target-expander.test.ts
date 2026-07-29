@@ -41,16 +41,18 @@ const candidate = (
     readonly category: CandidatePart["category"];
     readonly normalizedAttributes: NormalizedAttributes;
   },
-): CandidatePart => ({
-  id,
-  projectId,
-  product: {
-    name: { original: `架空パーツ${id}`, confirmed: `架空パーツ${id}` },
-  },
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  ...overrides,
-});
+): CandidatePart =>
+  ({
+    id,
+    projectId,
+    product: {
+      name: { original: `架空パーツ${id}`, confirmed: `架空パーツ${id}` },
+    },
+    sources: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  }) as CandidatePart;
 
 const cpuCandidate = (id: CandidatePartId, socket?: string): CandidatePart =>
   candidate(id, {

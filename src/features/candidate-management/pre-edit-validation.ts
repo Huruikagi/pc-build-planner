@@ -1,12 +1,11 @@
 import {
   err,
-  isUtcTimestamp,
   isUuid,
   ok,
   PART_CATEGORIES,
   type PartCategory,
   type Result,
-  validateCandidatePartV2Value,
+  validateCandidatePartValue,
 } from "../../domain/public.js";
 import type {
   UnresolvedCandidateDraft,
@@ -51,23 +50,10 @@ const isSourcedValue = (
 const isString = (value: unknown): boolean => typeof value === "string";
 const isStringArray = (value: unknown): boolean =>
   Array.isArray(value) && value.every(isString);
-const isMoney = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["amount", "currency"]) &&
-  typeof value.amount === "number" &&
-  Number.isFinite(value.amount) &&
-  typeof value.currency === "string";
-
 const isProduct = (value: unknown): boolean => {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, [
-      "name",
-      "manufacturer",
-      "modelNumber",
-      "price",
-      "notes",
-    ]) ||
+    !hasOnlyKeys(value, ["name", "manufacturer", "modelNumber", "notes"]) ||
     !isSourcedValue(value.name, isString)
   )
     return false;
@@ -76,7 +62,6 @@ const isProduct = (value: unknown): boolean => {
       isSourcedValue(value.manufacturer, isString)) &&
     (value.modelNumber === undefined ||
       isSourcedValue(value.modelNumber, isString)) &&
-    (value.price === undefined || isSourcedValue(value.price, isMoney)) &&
     (value.notes === undefined || isSourcedValue(value.notes, isString))
   );
 };
@@ -132,23 +117,6 @@ const isAttributes = (
   return "valid";
 };
 
-const isHttpUrl = (value: unknown): boolean => {
-  if (typeof value !== "string") return false;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
-
-const isSourceInfo = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["pageUrl", "siteName", "capturedAt"]) &&
-  (value.pageUrl === undefined || isHttpUrl(value.pageUrl)) &&
-  (value.siteName === undefined || typeof value.siteName === "string") &&
-  (value.capturedAt === undefined || isUtcTimestamp(value.capturedAt));
-
 const isSourceSnapshot = (value: unknown): boolean =>
   isRecord(value) &&
   Object.values(value).every(
@@ -166,7 +134,6 @@ export const validatePreEditDraft = (
       "normalizedAttributes",
       "sources",
       "primarySourceId",
-      "sourceInfo",
       "sourceSnapshot",
     ]) ||
     !("category" in draft) ||
@@ -178,27 +145,23 @@ export const validatePreEditDraft = (
   const attributes = isAttributes(draft.normalizedAttributes, draft.category);
   if (attributes === "mismatch") return err({ kind: "category-mismatch" });
   if (attributes === "invalid") return err({ kind: "invalid-draft-shape" });
-  if ("sources" in draft) {
-    if ("sourceInfo" in draft) return err({ kind: "invalid-draft-shape" });
-    const validated = validateCandidatePartV2Value({
-      ...draft,
-      id: "00000000-0000-4000-8000-000000000001",
-      projectId: "00000000-0000-4000-8000-000000000002",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    return validated.ok
-      ? ok(draft as UnresolvedCandidateDraft)
-      : err({ kind: "invalid-draft-shape" });
-  }
   if (
     !isProduct(draft.product) ||
-    (draft.sourceInfo !== undefined && !isSourceInfo(draft.sourceInfo)) ||
     (draft.sourceSnapshot !== undefined &&
       !isSourceSnapshot(draft.sourceSnapshot))
   )
     return err({ kind: "invalid-draft-shape" });
-  return ok(draft as UnresolvedCandidateDraft);
+  const validated = validateCandidatePartValue({
+    ...draft,
+    sources: draft.sources ?? [],
+    id: "00000000-0000-4000-8000-000000000001",
+    projectId: "00000000-0000-4000-8000-000000000002",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  return validated.ok
+    ? ok(draft as UnresolvedCandidateDraft)
+    : err({ kind: "invalid-draft-shape" });
 };
 
 export const validateCandidateEditorPrefill = (

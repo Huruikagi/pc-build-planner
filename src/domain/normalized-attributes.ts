@@ -1,5 +1,3 @@
-import type { UtcTimestamp } from "./identifiers.js";
-
 export const PART_CATEGORIES = [
   "cpu",
   "cpu-cooler",
@@ -42,12 +40,6 @@ export interface SourcedValue<T extends JsonValue> {
 /** field名ごとの元表記を、明示的な欠損を含めて保持する。 */
 export type SourceSnapshot = Readonly<Record<string, string | null>>;
 
-export interface SourceInfo {
-  readonly pageUrl?: string;
-  readonly siteName?: string;
-  readonly capturedAt?: UtcTimestamp;
-}
-
 export interface MoneyValue extends Readonly<Record<string, JsonValue>> {
   readonly amount: number;
   readonly currency: string;
@@ -58,7 +50,6 @@ export interface CandidateProductValues {
   readonly name?: SourcedValue<string>;
   readonly manufacturer?: SourcedValue<string>;
   readonly modelNumber?: SourcedValue<string>;
-  readonly price?: SourcedValue<MoneyValue>;
   readonly notes?: SourcedValue<string>;
 }
 

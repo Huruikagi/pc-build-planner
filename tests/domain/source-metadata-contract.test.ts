@@ -2,28 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createUtcTimestamp } from "../../src/domain/identifiers.js";
-import type { CandidatePart } from "../../src/domain/model.js";
 import type {
-  SourceInfo,
-  SourceSnapshot,
-} from "../../src/domain/normalized-attributes.js";
+  CandidatePart,
+  CandidateSource,
+  CandidateSourceId,
+} from "../../src/domain/model.js";
+import type { SourceSnapshot } from "../../src/domain/normalized-attributes.js";
 
 type CandidateSourceMetadata = Pick<
   CandidatePart,
-  "sourceInfo" | "sourceSnapshot"
+  "sources" | "primarySourceId" | "sourceSnapshot"
 >;
 
-const manualCandidate = {} satisfies CandidateSourceMetadata;
-
+const sourceId = "33333333-3333-4333-8333-333333333333" as CandidateSourceId;
+const manualCandidate = { sources: [] } satisfies CandidateSourceMetadata;
 const urlOnlySource = {
-  sourceInfo: { pageUrl: "https://example.invalid/products/synthetic" },
-} satisfies CandidateSourceMetadata;
-
+  id: sourceId,
+  pageUrl: "https://example.invalid/products/synthetic",
+} satisfies CandidateSource;
 const capturedAtOnlySource = {
-  sourceInfo: {
-    capturedAt: createUtcTimestamp(new Date("2026-07-22T00:00:00.000Z")),
-  },
-} satisfies CandidateSourceMetadata;
+  id: sourceId,
+  capturedAt: createUtcTimestamp(new Date("2026-07-22T00:00:00.000Z")),
+} satisfies CandidateSource;
 
 const sourceSnapshot = {
   name: "架空 CPU",
@@ -31,6 +31,7 @@ const sourceSnapshot = {
 } satisfies SourceSnapshot;
 
 const candidateWithSnapshot = {
+  sources: [],
   sourceSnapshot,
 } satisfies CandidateSourceMetadata;
 
@@ -41,15 +42,12 @@ function assertSnapshotIsReadonly(snapshot: SourceSnapshot): void {
 
 void assertSnapshotIsReadonly;
 
-test("取得元の完全欠損とURL・取得日時の部分欠損を区別できる", () => {
-  assert.equal("sourceInfo" in manualCandidate, false);
-  assert.equal(
-    urlOnlySource.sourceInfo.pageUrl.includes("example.invalid"),
-    true,
-  );
-  assert.equal("capturedAt" in urlOnlySource.sourceInfo, false);
-  assert.equal(capturedAtOnlySource.sourceInfo.capturedAt.endsWith("Z"), true);
-  assert.equal("pageUrl" in capturedAtOnlySource.sourceInfo, false);
+test("sourceなしとURL・取得日時の部分欠損を区別できる", () => {
+  assert.deepEqual(manualCandidate.sources, []);
+  assert.equal(urlOnlySource.pageUrl.includes("example.invalid"), true);
+  assert.equal("capturedAt" in urlOnlySource, false);
+  assert.equal(capturedAtOnlySource.capturedAt.endsWith("Z"), true);
+  assert.equal("pageUrl" in capturedAtOnlySource, false);
 });
 
 test("snapshotのkey不在と明示的なnullを区別できる", () => {
@@ -57,10 +55,3 @@ test("snapshotのkey不在と明示的なnullを区別できる", () => {
   assert.equal(candidateWithSnapshot.sourceSnapshot.manufacturer, null);
   assert.equal("modelNumber" in candidateWithSnapshot.sourceSnapshot, false);
 });
-
-const completeSourceInfo = {
-  pageUrl: "https://example.invalid/products/legacy-schema-one",
-  capturedAt: createUtcTimestamp(new Date("2026-07-22T00:00:00.000Z")),
-} satisfies SourceInfo;
-
-assert.equal(completeSourceInfo.pageUrl.includes("legacy-schema-one"), true);
