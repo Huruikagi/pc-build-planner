@@ -107,7 +107,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
       "currentBuild",
       "productCapture",
       "compatibility",
-      "backupRestore",
+      "settings",
     ],
   );
   const [candidateManagement, currentBuild, productCapture, compatibility] =
@@ -165,6 +165,15 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     typeof compatibility.registration.publicApi.query.evaluate,
     "function",
   );
+  const settings = contributions[4];
+  assert.equal(settings.registration.id, "settings");
+  assert.ok(isPersistent(settings.registration));
+  assert.deepEqual(settings.registration.navigation, {
+    labelKey: "nav.settings",
+    order: 60,
+    icon: "settings",
+  });
+  assert.deepEqual(settings.registration.publicApi, {});
 });
 
 test("production capture compositionは公開lifecycleとintent factoryだけで起動・cleanupする", async () => {

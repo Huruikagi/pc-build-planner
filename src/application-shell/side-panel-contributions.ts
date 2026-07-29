@@ -1,7 +1,4 @@
-import {
-  type BackupRestoreContribution,
-  createBackupRestoreContribution,
-} from "../features/backup-restore/feature-contribution.js";
+import { createBackupRestoreSectionMount } from "../features/backup-restore/public.js";
 import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
@@ -28,6 +25,10 @@ import {
   type ProductCaptureContribution,
 } from "../features/product-capture/feature-contribution.js";
 import { createProductCapturePublicApi } from "../features/product-capture/public.js";
+import {
+  createSettingsContribution,
+  type SettingsContribution,
+} from "../features/settings/feature-contribution.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 
 /**
@@ -39,7 +40,7 @@ export type SidePanelFeatureContributions = readonly [
   CurrentBuildContribution,
   ProductCaptureContribution,
   CompatibilityContribution,
-  BackupRestoreContribution,
+  SettingsContribution,
 ];
 
 /** Real `chrome.tabs`/`chrome.scripting` handles, supplied by the runtime entrypoint. */
@@ -114,12 +115,16 @@ export const createSidePanelFeatureContributions = (
       return projects.ok ? (projects.value[0]?.id ?? null) : null;
     },
   });
-  const backupRestore = createBackupRestoreContribution(context);
+  const settings = createSettingsContribution({
+    backupRestore: createBackupRestoreSectionMount({
+      data: context.fullDataPort,
+    }),
+  });
   return [
     candidateManagement,
     currentBuild,
     productCapture,
     compatibility,
-    backupRestore,
+    settings,
   ];
 };

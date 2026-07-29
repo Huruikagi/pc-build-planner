@@ -52,7 +52,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
     "candidateManagement",
     "currentBuild",
     "compatibility",
-    "backupRestore",
+    "settings",
     "productCapture",
   ]);
 });

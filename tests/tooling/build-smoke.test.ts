@@ -102,7 +102,7 @@ test("buildがroot公開bundleと共有service workerを生成する", async () 
     "candidateManagement",
     "currentBuild",
     "compatibility",
-    "backupRestore",
+    "settings",
     "productCapture",
   ]);
   assert.equal(Object.getPrototypeOf(composed.value), null);

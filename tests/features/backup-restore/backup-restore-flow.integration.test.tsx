@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
+import { userEvent } from "@testing-library/user-event";
 import { act } from "react";
 import { createSidePanelFeatureContributions } from "../../../src/application-shell/side-panel-contributions.js";
 import type {
@@ -27,7 +27,11 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
-import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
+import { resetUiLanguageForTest } from "../../../src/ui-language/store.js";
+import {
+  defaultMessageResolver,
+  resolverFor,
+} from "../../../src/ui-messages/public.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
@@ -84,7 +88,7 @@ const fakeFileList = (file: File): FileList => {
   return list as unknown as FileList;
 };
 
-test("実foundationを共有するside panel構成でexport・変更・復元後に他featureの照会が復元後データを返す", async () => {
+test("実foundationを共有する settings 構成で言語変更を挟んでも backup state と復元後データを保持する", async () => {
   const data = createFoundationPort();
 
   const seedService = createCandidateManagementService({
@@ -124,7 +128,7 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
       },
     },
   });
-  const [candidateManagement, , , , backupRestore] = contributions;
+  const [candidateManagement, , , , settings] = contributions;
 
   const originalCreateObjectURL = URL.createObjectURL.bind(URL);
   const originalRevokeObjectURL = URL.revokeObjectURL.bind(URL);
@@ -139,11 +143,11 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
 
   const container = document.createElement("div");
   let handle:
-    | Awaited<ReturnType<typeof backupRestore.registration.mount>>
+    | Awaited<ReturnType<typeof settings.registration.mount>>
     | undefined;
   try {
     await act(async () => {
-      handle = await backupRestore.registration.mount({
+      handle = await settings.registration.mount({
         container,
         operationPolicy: policy,
         reportError: () => {},
@@ -198,13 +202,36 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
     const confirmButton = container.querySelector(
       'button[data-action="confirm"]',
     ) as HTMLButtonElement;
+    const languageSelect = container.querySelector<HTMLSelectElement>(
+      '[data-region="language-select"]',
+    );
+    assert.ok(languageSelect);
+    const settingsRoot = container.querySelector('[data-region="settings"]');
+    const backupHost = container.querySelector(
+      '[data-region="backup-restore-host"]',
+    );
+    assert.ok(settingsRoot);
+    assert.ok(backupHost);
+    await userEvent.setup().selectOptions(languageSelect, "en");
+    assert.equal(
+      container.querySelector('[data-region="settings"]'),
+      settingsRoot,
+    );
+    assert.equal(
+      container.querySelector('[data-region="backup-restore-host"]'),
+      backupHost,
+    );
+    assert.equal(
+      container.querySelector('button[data-action="confirm"]'),
+      confirmButton,
+    );
     await act(async () => {
       confirmButton.click();
       await waitUntil(
         () =>
           container.querySelector('[role="alert"]') === null &&
           (container.textContent ?? "").includes(
-            defaultMessageResolver("backup.restoreCompleted", {
+            resolverFor("en")("backup.restoreCompleted", {
               projectCount: 1,
               partCount: 1,
               currentBuildCount: 0,
@@ -233,5 +260,6 @@ test("実foundationを共有するside panel構成でexport・変更・復元後
     HTMLAnchorElement.prototype.click = originalClick;
     const mounted = handle;
     if (mounted !== undefined) await act(async () => mounted.unmount());
+    resetUiLanguageForTest();
   }
 });

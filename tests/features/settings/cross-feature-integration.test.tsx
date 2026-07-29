@@ -1,0 +1,236 @@
+import assert from "node:assert/strict";
+import { afterEach, test } from "node:test";
+
+import { userEvent } from "@testing-library/user-event";
+import { act } from "react";
+
+import { createApplicationShellIntegration } from "../../../src/application-shell/application-shell-integration.js";
+import { createFeatureRegistry } from "../../../src/application-shell/feature-registry.js";
+import type {
+  FeatureId,
+  TransientApplicationFeatureRegistration,
+} from "../../../src/application-shell/public.js";
+import { createSettingsFeatureRegistration } from "../../../src/features/settings/public.js";
+import type {
+  MaintenanceSnapshot,
+  MaintenanceSnapshotSource,
+} from "../../../src/persistence/public.js";
+import {
+  initializeUiLanguage,
+  resetUiLanguageForTest,
+} from "../../../src/ui-language/store.js";
+
+const id = (value: string) => value as FeatureId;
+const snapshot = (active: boolean, revision: number): MaintenanceSnapshot => ({
+  generation: 1 as MaintenanceSnapshot["generation"],
+  revision: revision as MaintenanceSnapshot["revision"],
+  active,
+});
+
+function maintenanceFixture() {
+  const listeners = new Set<(value: MaintenanceSnapshot) => void>();
+  const source: MaintenanceSnapshotSource = {
+    async getSnapshot() {
+      return { ok: true, value: snapshot(false, 1) };
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  return {
+    source,
+    emit(value: MaintenanceSnapshot) {
+      for (const listener of listeners) listener(value);
+    },
+  };
+}
+
+afterEach(() => resetUiLanguageForTest());
+
+test("maintenance・backup failure・transient 遷移でも policy/state と逆順 cleanup を保つ", async () => {
+  const events: string[] = [];
+  const registry = createFeatureRegistry();
+  let mountedPolicy: (() => void) | undefined;
+  const settings = createSettingsFeatureRegistration({
+    backupRestore: {
+      async mount(context) {
+        const input = document.createElement("input");
+        input.value = "failed-backup.json";
+        input.dataset.state = "backup-failure";
+        context.container.append(input);
+        mountedPolicy = () => {};
+        const unsubscribe = context.operationPolicy.subscribe(mountedPolicy);
+        events.push("backup:mount");
+        return {
+          async unmount() {
+            events.push(
+              context.container.closest("[data-region='settings']")
+                ? "backup:unmount-before-root"
+                : "backup:unmount-after-root",
+            );
+            unsubscribe();
+            events.push("backup:unsubscribe");
+          },
+        };
+      },
+    },
+  });
+  const transient: TransientApplicationFeatureRegistration = {
+    id: id("capture"),
+    presentation: "transient",
+    transientActivation: {
+      validate: (request) => ({ ok: true, value: request }),
+      accept: async () => ({ ok: true, value: { release: async () => {} } }),
+    },
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => {},
+    async mount(context) {
+      events.push("transient:mount");
+      context.container.textContent = "transient";
+      return { unmount: async () => void events.push("transient:unmount") };
+    },
+  };
+  assert.equal(registry.register(settings).ok, true);
+  assert.equal(registry.register(transient).ok, true);
+  const maintenance = maintenanceFixture();
+  const container = document.createElement("div");
+  const integration = createApplicationShellIntegration({
+    registry,
+    container,
+    maintenanceSource: maintenance.source,
+    onStateChange() {},
+    reportError() {},
+  });
+
+  assert.equal((await integration.start()).ok, true);
+  const backupState = container.querySelector<HTMLInputElement>(
+    '[data-state="backup-failure"]',
+  );
+  const language = container.querySelector<HTMLSelectElement>(
+    '[data-region="language-select"]',
+  );
+  assert.ok(backupState);
+  assert.ok(language);
+  maintenance.emit(snapshot(true, 2));
+  assert.equal(integration.operationPolicy.isAllowed("mutation"), false);
+  await userEvent.setup().selectOptions(language, "en");
+  assert.equal(
+    container.querySelector('[data-state="backup-failure"]'),
+    backupState,
+  );
+  assert.equal(backupState.value, "failed-backup.json");
+  assert.ok(mountedPolicy);
+
+  assert.equal(
+    (
+      await integration.showTransient?.({
+        activationId: "settings-transition" as never,
+        surfaceId: transient.id,
+        tabId: 1 as never,
+      })
+    )?.ok,
+    true,
+  );
+  assert.deepEqual(events.slice(0, 4), [
+    "backup:mount",
+    "backup:unmount-before-root",
+    "backup:unsubscribe",
+    "transient:mount",
+  ]);
+  assert.equal(
+    (await integration.restorePersistent?.(settings.id, "navigated"))?.ok,
+    true,
+  );
+  assert.equal(
+    container.querySelectorAll("[data-region='settings']").length,
+    1,
+  );
+  await integration.stop();
+});
+
+test("言語保存失敗は表示と backup 操作を継続し domain data を変更しない", async () => {
+  const domain = Object.freeze({ revision: 7, projects: 2 });
+  let writes = 0;
+  await initializeUiLanguage({
+    browserUiLanguage: () => "ja",
+    preferences: {
+      async read() {
+        return { ok: true, value: "ja" };
+      },
+      async write() {
+        writes += 1;
+        return { ok: false, error: { code: "storage-write-failed" } };
+      },
+    },
+  });
+  let backupActions = 0;
+  const registration = createSettingsFeatureRegistration({
+    backupRestore: {
+      async mount(context) {
+        const button = document.createElement("button");
+        button.dataset.action = "fixture-backup";
+        button.onclick = () => {
+          backupActions += 1;
+        };
+        context.container.append(button);
+        return { unmount: async () => {} };
+      },
+    },
+  });
+  const container = document.createElement("div");
+  const handle = await registration.mount({
+    container,
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError() {},
+  });
+  const language = container.querySelector<HTMLSelectElement>(
+    '[data-region="language-select"]',
+  );
+  const backup = container.querySelector<HTMLButtonElement>(
+    '[data-action="fixture-backup"]',
+  );
+  assert.ok(language);
+  assert.ok(backup);
+  await userEvent.setup().selectOptions(language, "en");
+  await act(async () => backup.click());
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes, 1);
+  assert.equal(backupActions, 1);
+  assert.deepEqual(domain, { revision: 7, projects: 2 });
+  assert.match(container.textContent ?? "", /Settings/);
+  await handle.unmount();
+});
+
+test("backup cross-feature mount failure は settings 部分表示を残さない", async () => {
+  const registry = createFeatureRegistry();
+  const states: { readonly kind: string }[] = [];
+  assert.equal(
+    registry.register(
+      createSettingsFeatureRegistration({
+        backupRestore: {
+          async mount() {
+            throw new Error("backup fixture failure");
+          },
+        },
+      }),
+    ).ok,
+    true,
+  );
+  const container = document.createElement("div");
+  const integration = createApplicationShellIntegration({
+    registry,
+    container,
+    maintenanceSource: maintenanceFixture().source,
+    onStateChange(state) {
+      states.push(state);
+    },
+    reportError() {},
+  });
+  const result = await integration.start();
+  assert.equal(result.ok, true);
+  assert.equal(states.at(-1)?.kind, "error");
+  assert.equal(container.querySelector("[data-region='settings']"), null);
+  await integration.stop();
+});

@@ -46,8 +46,8 @@
   - _Requirements: 1.3, 3.1, 3.3, 3.4, 3.5, 3.6, 6.5_
   - _Boundary: ShellLanguageRecoverySurface_
 
-- [ ] 3. 設定featureをproduction compositionへ統合する
-- [ ] 3.1 設定registrationと協調mount transactionを実装する
+- [x] 3. 設定featureをproduction compositionへ統合する
+- [x] 3.1 設定registrationと協調mount transactionを実装する
   - settings id、`presentation: "persistent"`、`navigation: { labelKey: "nav.settings", order: 60, icon: "settings" }`、空public API、availability透過を持つ常設registrationを作り、設定rootの後にbackup sectionをmountする
   - backup mount失敗時は取得済み設定rootを解放してshellの既存rollbackへ失敗を返し、正常unmountではbackup、設定rootの順に一度だけcleanupする
   - settingsはfull data capabilityやbackup stateを公開せず、section mount handleだけをlifecycle資源として保持する
@@ -56,7 +56,7 @@
   - _Requirements: 1.1, 1.2, 2.4, 5.1, 5.5_
   - _Boundary: SettingsFeatureRegistration_
 
-- [ ] 3.2 side panel catalogをsettings中心のcompositionへ原子的に切り替える
+- [x] 3.2 side panel catalogをsettings中心のcompositionへ原子的に切り替える
   - canonical backup sectionをsettings contributionへ注入し、上流移行後のtransient product-captureを登録に残したままpersistent navigationへsettingsを一度だけ追加する
   - application-shellが所有するproduction tuple、root API composition、navigation fixture／expectationから独立backup参照を外し、settings参照へ切り替える。backup-owned registration／contributionファイルと公開surfaceの削除は`backup-restore` task 6.2へ委ねる
   - exact navigation keyとdead catalog consumerの削除は`ui-message-catalog`のmigration checkpointへ委ね、settings側は公開keyを申告するconsumerだけを切り替える
@@ -66,7 +66,7 @@
   - _Requirements: 1.1, 1.4, 3.1, 3.2, 4.1, 4.3, 5.1, 5.2, 5.5_
   - _Boundary: SettingsFeatureContribution, ApplicationComposition_
 
-- [ ] 3.3 言語変更とbackup lifecycleのcross-feature統合を完成する
+- [x] 3.3 言語変更とbackup lifecycleのcross-feature統合を完成する
   - maintenance、backup確認中、backup失敗、復元成功の各状態で言語変更を行い、operation policy、ticket、preview、結果、現在言語を保持する
   - 言語保存失敗でも表示とbackup操作を継続し、domain dataを変更しないことを既存言語契約との統合で確認する
   - persistent navigation選択とtransient surface起動・終了でsettingsとbackup rootが正しい順序で解放され、settingsがpersistentな戻り先として扱われることを確認する
