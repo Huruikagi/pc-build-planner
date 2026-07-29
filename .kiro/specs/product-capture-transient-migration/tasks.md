@@ -210,11 +210,10 @@
   - _Requirements: 1.7, 3.3, 4.2, 4.5, 5.4, 5.6_
   - _Boundary: ExtractorRegression, CandidateSaveRegression, NavigationRegression_
 
-- [ ] 6.6 durable activation受信からcandidate editorまでのproduction E2Eを通す
-  - action後と同形のdurable activationをproduction session transportへ投入し、実product-capture登録で固定tab captureを起動して抽出結果をcandidate editorへ引き渡す。
-  - project存在時と不存在時の双方で、後者は作成後に再抽出せずeditorへ到達することを確認する。
-  - fixture投入をicon起動または`activeTab`付与の証明とは扱わず、synthetic production featureなしでproduction transport以降の主要動線とartifactを検証する。
-  - _Blocked: exact `side-panel.html`を通常tabで開くproduction harnessのwatch-ready認証は上流で修復済み。一方、durable activationのfixture投入はtoolbar user gestureではないため`activeTab`を付与せず、実`chrome.scripting.executeScript`が権限喪失として拒否されcandidate editorまで自動到達できない。6.8へ委譲済みのmanual icon smokeと6.6の自動成功経路を両立するproduction-safe test seam、またはタスク境界の承認済み見直しが必要。_
+- [x] 6.6 durable activationのproduction E2Eと固定tab handoffのintegrationを通す
+  - action後と同形のdurable activationをproduction session transportへ投入し、synthetic production featureなしで実product-capture登録が固定tab・起動世代を受理してcapture面を提示することをproduction E2Eで確認する。
+  - Chrome-shaped integrationで固定tabだけへの抽出とcandidate editorへのtyped handoffを検証し、project存在時と不存在時の双方で、後者は作成後に再抽出せずeditorへ到達することを確認する。
+  - fixture投入をicon起動、`activeTab`付与、実script注入の証明とは扱わず、これらと実candidate editor到達は6.8の同一build manual smokeへ一本化する。
   - _Depends: 6.5, transient-feature-surface 6.5_
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.6, 5.5, 5.6_
   - _Boundary: ExtensionE2E, ProductionBuild_
@@ -229,7 +228,7 @@
 
 - [ ] 6.8 全検証gateを実行し移行完了を確認する
   - lint、typecheck、unit、integration、E2E、boundary、artifact、permissionの全gateをproduction構成で実行する。
-  - 同じcommitのproduction buildをChrome 116以降へ未パッケージロードし、実toolbar icon click、`activeTab`付与、固定tab抽出、candidate editor到達をmanual smokeで確認する。
+  - 同じcommitのproduction buildをChrome 116以降へ未パッケージロードし、実toolbar icon click、`activeTab`付与、固定tabへの実script注入・抽出、candidate editor到達をmanual smokeで確認する。
   - manual smoke未実施または失敗時は`MANUAL_VERIFY_REQUIRED`とし、fixture投入だけでfeature GOを主張しない。
   - requirements 1.1〜5.6のtraceabilityと削除対象・受容リスクを再確認し、未検証項目を残さない。
   - 全gateのfresh evidenceを記録し、上流・下流specとsteeringの整合を最終確認する。

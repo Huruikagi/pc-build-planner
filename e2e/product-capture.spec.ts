@@ -1,24 +1,18 @@
-import type { ConsoleMessage, Page } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
 import {
   applicationShell,
-  captureRetryButton,
   captureStartButton,
-  documentBody,
-  expectedText,
-  featureRoot,
-  formField,
+  expectedTextFor,
+  extensionAction,
   navItem,
-  region,
   selectLanguage,
-  submitButton,
 } from "./locators.js";
 
-async function extensionId(context: {
-  serviceWorkers(): readonly { url(): string }[];
-  waitForEvent(event: "serviceworker"): Promise<{ url(): string }>;
-}): Promise<string> {
+const STORAGE_KEY = "transientActivationEnvelope";
+
+async function extensionId(context: BrowserContext): Promise<string> {
   const existing = context.serviceWorkers()[0];
   const worker = existing ?? (await context.waitForEvent("serviceworker"));
   const id = new URL(worker.url()).host;
@@ -26,96 +20,104 @@ async function extensionId(context: {
   return id;
 }
 
-interface Diagnostics {
-  readonly consoleErrors: string[];
-  readonly pageErrors: string[];
-}
-
-function watchDiagnostics(page: Page): Diagnostics {
-  const consoleErrors: string[] = [];
-  const pageErrors: string[] = [];
-  page.on("console", (message: ConsoleMessage) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+async function targetTabId(context: BrowserContext): Promise<number> {
+  const target = await context.newPage();
+  await target.goto(
+    `data:text/html,${encodeURIComponent("<!doctype html><title>SYN capture target</title>")}`,
+  );
+  const worker = context.serviceWorkers()[0];
+  if (worker === undefined) throw new Error("service worker is not available");
+  const tabId = await worker.evaluate(async () => {
+    const tabs = await chrome.tabs.query({ active: true });
+    const id = tabs[0]?.id;
+    if (id === undefined) throw new Error("target tab id is unavailable");
+    return id;
   });
-  page.on("pageerror", (error: Error) => pageErrors.push(error.message));
-  return { consoleErrors, pageErrors };
+  return tabId;
 }
 
-const FICTIONAL_PRODUCT_HTML = `<!doctype html><html><body>
-  <script type="application/ld+json">${JSON.stringify({
-    "@type": "Product",
-    name: "E2E 架空CPU X200",
-    brand: { name: "架空メーカー" },
-    offers: { price: "39800", priceCurrency: "JPY" },
-  })}</script>
-</body></html>`;
+async function putDurableActivation(
+  context: BrowserContext,
+  tabId: number,
+  activationId: string,
+): Promise<void> {
+  const worker = context.serviceWorkers()[0];
+  if (worker === undefined) throw new Error("service worker is not available");
+  await worker.evaluate(
+    async ({ key, targetTabId, id }) => {
+      const current = (await chrome.storage.session.get(key))[key] as
+        | {
+            readonly lastSequence?: number;
+            readonly tombstones?: readonly { readonly seq?: number }[];
+          }
+        | undefined;
+      const seq =
+        Math.max(
+          current?.lastSequence ?? 0,
+          ...(current?.tombstones ?? []).map((item) => item.seq ?? 0),
+        ) + 1;
+      await chrome.storage.session.set({
+        [key]: {
+          version: 1,
+          lastSequence: seq,
+          record: {
+            activationId: id,
+            surfaceId: "product-capture",
+            tabId: targetTabId,
+            seq,
+            stage: "pending",
+          },
+          tombstones: current?.tombstones ?? [],
+        },
+      });
+    },
+    { key: STORAGE_KEY, targetTabId: tabId, id: activationId },
+  );
+}
 
-/**
- * `chrome.scripting.executeScript` requires a genuine `activeTab` grant from
- * a real toolbar-icon click, which Playwright/CDP cannot simulate for a
- * loaded extension (there is no automatable browser-chrome toolbar). Opening
- * the side panel directly and clicking the in-panel start button therefore
- * always lands on the real, recoverable "permission-lost" path here — this
- * still proves `chrome.tabs.query`, the coordinator, `CaptureState`, and the
- * view render correctly against real Chrome APIs end-to-end. The success
- * path (`chrome.scripting.executeScript` actually extracting a real page)
- * needs a manual click on the built extension's real toolbar icon to verify.
- */
-test("side panelはactiveTab未許諾でも実chrome.tabs.queryを通じて回復可能な権限失効を表示する", async ({
+test("durable activationはproduction transportから実product-capture面を提示する", async ({
   context,
 }) => {
   const id = await extensionId(context);
+  const tabId = await targetTabId(context);
+  const activationId = "e2e-durable-product-capture";
+  await putDurableActivation(context, tabId, activationId);
 
-  const productPage = await context.newPage();
-  const diagnostics = watchDiagnostics(productPage);
-  await productPage.goto(
-    `data:text/html,${encodeURIComponent(FICTIONAL_PRODUCT_HTML)}`,
-  );
-  await productPage.bringToFront();
-
-  const sidePanel = await context.newPage();
-  await sidePanel.goto(`chrome-extension://${id}/side-panel.html`);
-  await expect(applicationShell(sidePanel)).toHaveAttribute(
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${id}/side-panel.html`);
+  await expect(applicationShell(panel)).toHaveAttribute(
     "data-runtime-state",
     "started",
   );
-  // This spec's assertions expect Japanese text; pin it explicitly rather
-  // than depending on the test machine's ambient browser locale (8.1, 8.2).
-  await selectLanguage(sidePanel, "ja");
+  await selectLanguage(panel, "en");
 
-  // A project must exist before capture can save anywhere.
-  await navItem(sidePanel, "candidate-management").click();
-  const candidateManagementRoot = featureRoot(
-    sidePanel,
-    "candidate-management",
+  const capture = extensionAction(panel);
+  await expect(capture).toBeVisible();
+  await expect(captureStartButton(capture)).toBeVisible();
+  await expect(capture).toContainText(
+    expectedTextFor("en")("capture.idleInstruction"),
   );
-  await formField(sidePanel, "project-name").fill("E2E 取り込み先プロジェクト");
-  await submitButton(region(candidateManagementRoot, "project-form")).click();
-  await expect(
-    sidePanel.getByRole("button", {
-      name: "E2E 取り込み先プロジェクト",
-      exact: true,
-    }),
-  ).toBeVisible();
-
-  await navItem(sidePanel, "product-capture").click();
-  const captureRoot = featureRoot(sidePanel, "product-capture");
-  await expect(
-    region(captureRoot, "review").or(captureStartButton(captureRoot)),
-  ).toBeVisible();
-
-  await captureStartButton(captureRoot).click();
-
-  // No real activeTab grant exists in this harness, so the coordinator's
-  // real chrome.tabs.query call correctly reports the page as unreadable.
-  await expect(documentBody(sidePanel)).toContainText(
-    expectedText("capture.errors.permission-lost"),
-    { timeout: 10_000 },
-  );
-  await expect(captureRetryButton(captureRoot)).toBeVisible();
-
-  expect(
-    diagnostics.pageErrors,
-    "product page must raise no runtime errors",
-  ).toEqual([]);
+  await expect(navItem(panel, "product-capture")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const worker = context.serviceWorkers()[0];
+      if (worker === undefined) return undefined;
+      return worker.evaluate(
+        async ({ key, expectedId }) => {
+          const envelope = (await chrome.storage.session.get(key))[key] as
+            | {
+                readonly record?: {
+                  readonly activationId?: string;
+                  readonly stage?: string;
+                };
+              }
+            | undefined;
+          return envelope?.record?.activationId === expectedId
+            ? envelope.record.stage
+            : undefined;
+        },
+        { key: STORAGE_KEY, expectedId: activationId },
+      );
+    })
+    .toBe("activated");
 });

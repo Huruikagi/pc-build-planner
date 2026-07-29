@@ -35,12 +35,11 @@ const FEATURE_CHECKS = [
     key: "candidate.createProjectAction",
   },
   { featureId: "currentBuild", key: "category.storage" },
-  { featureId: "product-capture", key: "capture.idleInstruction" },
   { featureId: "compatibility", key: "compatibility.idle" },
   { featureId: "backupRestore", key: "backup.noticeUninstall" },
 ] as const;
 
-test("英語へ切り替えると5つの機能画面すべてで英語カタログの解決値が表示される", async ({
+test("英語へ切り替えると4つの常設機能画面すべてで英語カタログの解決値が表示される", async ({
   context,
 }) => {
   const id = await extensionId(context);

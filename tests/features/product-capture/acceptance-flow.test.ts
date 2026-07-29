@@ -8,8 +8,12 @@ import type {
 } from "../../../src/application-shell/public.js";
 import { ok, type RequestId } from "../../../src/domain/public.js";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
-import { createProductCaptureContribution } from "../../../src/features/product-capture/feature-contribution.js";
+import {
+  createChromeCaptureRuntimePort,
+  createProductCaptureContribution,
+} from "../../../src/features/product-capture/feature-contribution.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
+import { createProductionCaptureChromeFixture } from "../../fixtures/product-capture-production.js";
 
 const activationId = "synthetic-activation" as ActivationId;
 const tabId = 71 as TargetTabId;
@@ -40,6 +44,7 @@ const candidatesFrom = (body: string, url = pageUrl) => {
 const createFlow = (
   candidates: ReturnType<typeof candidatesFrom>,
   targetUrl = pageUrl,
+  runtime?: Parameters<typeof createProductCaptureContribution>[1]["runtime"],
 ) => {
   const received: FeatureActivationIntent[] = [];
   let concludeAttempts = 0;
@@ -55,7 +60,7 @@ const createFlow = (
       },
     } as never,
     {
-      runtime: {
+      runtime: runtime ?? {
         async getTab(requestedTabId) {
           return ok({ tabId: requestedTabId, url: targetUrl });
         },
@@ -146,6 +151,31 @@ test("domain-map provenanceを保つproject未解決pre-editを一度だけhando
   assert.equal(flow.saveMutations(), 0);
   flow.expireTab();
   assert.equal(flow.received.length, 1, "handoff済みdraftはtab失効後も残る");
+});
+
+test("Chrome-shaped固定tab runtimeは実capture compositionからtyped handoffする", async () => {
+  const candidates = candidatesFrom("<h1>SYN 固定tab CPU</h1>");
+  const chromeFixture = createProductionCaptureChromeFixture({
+    grantedTabId: tabId,
+    pageUrl,
+    candidates,
+  });
+  const flow = createFlow(
+    candidates,
+    pageUrl,
+    createChromeCaptureRuntimePort(chromeFixture.chrome),
+  );
+
+  await runCapture(flow);
+
+  assert.deepEqual(chromeFixture.observedTabsGet, [tabId]);
+  assert.deepEqual(chromeFixture.observedInjectionTabs, [tabId, tabId]);
+  assert.equal(flow.received.length, 1);
+  assert.equal(flow.received[0]?.target, "open-candidate-editor");
+  const payload = flow.received[0]?.payload as {
+    readonly draft: { readonly projectId?: string };
+  };
+  assert.equal(payload.draft.projectId, undefined);
 });
 
 test("ページ明示manufacturerと未知domainも同じcompositionからhandoffする", async () => {

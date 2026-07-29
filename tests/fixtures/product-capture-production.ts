@@ -4,6 +4,7 @@ import type { ChromeCaptureRuntimeDependencies } from "../../src/features/produc
 interface ProductionCaptureFixtureOptions {
   readonly grantedTabId: TargetTabId | null;
   readonly pageUrl: string;
+  readonly candidates?: readonly unknown[];
 }
 
 /** Chrome-shaped fixture for the production activeTab + scripting contract. */
@@ -33,7 +34,14 @@ export const createProductionCaptureChromeFixture = (
         async executeScript(injection) {
           observedInjectionTabs.push(injection.target.tabId);
           return injection.files === undefined
-            ? [{ result: { pageUrl: options.pageUrl, candidates: [] } }]
+            ? [
+                {
+                  result: {
+                    pageUrl: options.pageUrl,
+                    candidates: options.candidates ?? [],
+                  },
+                },
+              ]
             : [{}];
         },
       },
