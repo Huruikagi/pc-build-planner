@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 公開契約と候補引き渡しの基礎を整える
+- [x] 1. 公開契約と候補引き渡しの基礎を整える
 - [x] 1.1 上流の一過性surfaceライフサイクル契約をconsumerへ導入する
   - `application-shell/public.ts`の最小ライフサイクルport、固定対象tab、起動世代、終了理由をcapture側のcanonical依存として接続する。
   - controller実体やChrome型をfeature境界へ漏らさず、上流未実装時には型検査で失敗する明示的なconsumer契約にする。
@@ -24,7 +24,7 @@
   - _Requirements: 1.2, 1.7, 4.1, 5.4_
   - _Boundary: CandidateManagementPublicAPI, CandidateEditorIntentFactory_
 
-- [ ] 2. candidate-managementへpre-edit状態を統合する
+- [x] 2. candidate-managementへpre-edit状態を統合する
 - [x] 2.1 activation境界でdraftを再検証し既存projectを解決する
   - candidate editor activation adapterで`unknown` payloadを再検証し、不正入力を既存の`invalid_activation`へ写像する。
   - projectが存在する場合は既定の解決規則でProjectIdを確定し、既存editor stateへdraftを配置する。
@@ -61,7 +61,7 @@
   - _Requirements: 1.4, 4.6, 5.4_
   - _Boundary: CandidateManagementRegistration, SidePanelSessionLifecycle_
 
-- [ ] 3. product-captureを固定tabの一過性featureへ移行する
+- [x] 3. product-captureを固定tabの一過性featureへ移行する
 - [x] 3.1 (P) transient contributionとactivationを登録する
   - product-captureをcanonical persistent／transient registration unionの一過性memberとして登録し、`presentation: "transient"`とactivationを申告して`navigation` metadataと`nav.productCapture`を持たせず、上流portから起動世代と固定TargetTabIdを受け取る。
   - activationごとに新しい実行contextを構築し、未起動時や常設navigationから直接mountされないようにする。
@@ -94,7 +94,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 2.3, 2.4, 2.6, 3.2, 5.1_
   - _Boundary: ProductCaptureView, ProductCaptureMessages_
 
-- [ ] 4. 抽出結果をcandidate editorへ引き渡す
+- [x] 4. 抽出結果をcandidate editorへ引き渡す
 - [x] 4.1 抽出payloadをproject未解決draftへ写像する
   - extractorのunknown出力を既存schemaで検証し、projectを選ばずpre-edit draftへ正規化するmapperを追加する。
   - 商品名の空値はpre-editで保持し、URLやHTMLなど不要なページ由来値をintentへ含めない。
@@ -119,7 +119,7 @@
   - _Requirements: 1.5, 4.3, 4.4, 4.6, 5.3_
   - _Boundary: ProductCaptureCoordinator, CandidateManagementActivation_
 
-- [ ] 5. production compositionと公開境界を移行する
+- [x] 5. production compositionと公開境界を移行する
 - [x] 5.1 capture contributionを3依存だけで構成する
   - production compositionをruntime、TransientSurfaceLifecyclePort、candidate editor intent factoryの3依存へ切り替える。
   - capture／candidate-managementの登録順をlate-bound shell契約へ合わせ、起動前・cleanup後はfail closedにする。
@@ -169,7 +169,7 @@
   - _Requirements: 2.4, 3.4, 3.5, 4.5, 5.4, 5.6_
   - _Boundary: ExtensionPermissions, ProductionFixtures, ArtifactValidation, SecurityLogging_
 
-- [ ] 6. 移行後の動線と非回帰を検証する
+- [x] 6. 移行後の動線と非回帰を検証する
 - [x] 6.1 candidate pre-editとproject回復のunit・integration testを完成する
   - unknown activation、pre-edit検証、既存project解決、project不存在pending、作成成功・失敗・取消を網羅する。
   - capture終了ではdraftが残りpanel document破棄後は復元されない寿命を実際のregistration構成で確認する。
