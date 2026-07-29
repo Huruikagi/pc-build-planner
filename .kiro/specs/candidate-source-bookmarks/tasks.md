@@ -97,7 +97,7 @@
   - 公開API contract fixtureで `query`、typed intent factory、`sources` facetが共存し、catalogがread portへ、全source変更がserviceへ一度だけ配送されることを完了条件とする。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 7.3, 7.4, 8.6, 8.7_
 
-- [ ] 4. 候補管理stateとReact UIへソース操作を追加する
+- [x] 4. 候補管理stateとReact UIへソース操作を追加する
 - [x] 4.1 editor stateへsource操作と再訪結果を統合する
   - source追加・編集・削除・primary選択をdraftへ反映し、primary削除時はreplacement選択を要求する。
   - 一覧primaryと詳細の任意sourceをpage portへ渡し、open失敗を保存状態と分離して表示stateへ保持する。
@@ -187,7 +187,7 @@
   - _Requirements: 6.4, 8.5, 8.6_
   - _Depends: 5.5_
 
-- [ ] 6. 実ブラウザ経路とセキュリティgateを検証する
+- [x] 6. 実ブラウザ経路とセキュリティgateを検証する
 - [x] 6.1 複数source管理と新規タブ再訪のE2Eを追加する
   - 架空候補へ複数sourceを追加し、種別上書きとprimary変更を保存・再読込後に確認する。
   - 一覧の代表sourceと詳細の任意sourceを開き、それぞれ新しいtabが作られることを確認する。
@@ -203,7 +203,7 @@
   - artifacts、boundaries、fixturesの各gateが新しいsource実装とproduction bundleに対して成功することを完了条件とする。
   - _Requirements: 5.4, 5.5, 7.5, 8.7_
 
-- [ ] 7. 境界別の完全検証で実装完了を確認する
+- [x] 7. 境界別の完全検証で実装完了を確認する
 - [x] 7.1 静的検査とsource契約suiteを実行する
   - typecheck、公開consumer型検査、lint、domain・policy・catalog・serviceのunit／contract／integration testを実行する。
   - candidate source DTO、catalog／mutation facet、not-found、URL照合の下流所有を含む公開契約suiteがすべて成功することを完了条件とする。
@@ -214,7 +214,7 @@
   - foundation、backup／restore、capacityの関連suiteが値損失・重複source・部分更新・暗黙変換なしで成功することを完了条件とする。
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4_
 
-- [ ] 7.3 production build・browser・security gateを実行する
+- [x] 7.3 production build・browser・security gateを実行する
   - production build、artifacts、boundaries、fixtures、新規タブ再訪Playwrightを実行する。
   - `pnpm validate` が成功し、追加権限、実データfixture、feature内部deep import、未関係の公開契約差分がないことを完了条件とする。
   - _Requirements: 3.6, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 7.5, 8.6, 8.7_
