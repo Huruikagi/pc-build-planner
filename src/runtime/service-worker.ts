@@ -15,6 +15,7 @@ import {
   type TransientGestureRegistrationPort,
   type TransientGestureSource,
 } from "../application-shell/transient-surface-ports.js";
+import { productCaptureFeatureId } from "../features/product-capture/public.js";
 import {
   type ActivationFailureSignal,
   createChromeActivationFailureSignal,
@@ -224,6 +225,7 @@ export const createProductionTransientRuntimeBootstrap = (
   runtime: ChromeProductionTransientRuntime,
   chromeApis: ChromeProductionTransientApis,
   catalog: readonly FeatureContribution[] = featureContributionCatalog,
+  transientSurfaceId?: FeatureId,
 ): {
   readonly scheduler: TransientActivationScheduler;
   readonly gestureRegistration: TransientGestureRegistrationPort;
@@ -239,6 +241,7 @@ export const createProductionTransientRuntimeBootstrap = (
   const transient = catalog.find(
     ({ registration }) => registration.presentation === "transient",
   );
+  const surfaceId = transientSurfaceId ?? transient?.registration.id;
   const runtimeBootstrap = createTransientWorkerRuntimeBootstrap({
     scheduler,
     action: chromeApis.action,
@@ -248,9 +251,7 @@ export const createProductionTransientRuntimeBootstrap = (
       action: chromeApis.action,
       runtime,
     }),
-    ...(transient === undefined
-      ? {}
-      : { surfaceId: transient.registration.id }),
+    ...(surfaceId === undefined ? {} : { surfaceId }),
     createActivationId: () => crypto.randomUUID() as ActivationId,
     reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
   });
@@ -258,7 +259,7 @@ export const createProductionTransientRuntimeBootstrap = (
   return {
     scheduler,
     gestureRegistration: runtimeBootstrap.gestureRegistration,
-    hasTransientGesture: transient !== undefined,
+    hasTransientGesture: surfaceId !== undefined,
     async cleanup() {
       if (!active) return;
       active = false;
@@ -338,12 +339,17 @@ if (
     typeof runtime.getManifest === "function"
   ) {
     productionTransientGestureRegistered =
-      createProductionTransientRuntimeBootstrap(runtime, {
-        storage: { session: transientWorkerSession },
-        action: chrome.action,
-        tabs: chrome.tabs,
-        sidePanel: chrome.sidePanel,
-      }).hasTransientGesture;
+      createProductionTransientRuntimeBootstrap(
+        runtime,
+        {
+          storage: { session: transientWorkerSession },
+          action: chrome.action,
+          tabs: chrome.tabs,
+          sidePanel: chrome.sidePanel,
+        },
+        featureContributionCatalog,
+        productCaptureFeatureId,
+      ).hasTransientGesture;
   }
   void createProductionServiceWorkerBootstrap(runtime).start();
 }

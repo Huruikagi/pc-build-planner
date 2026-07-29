@@ -235,3 +235,7 @@
   - _Depends: 6.7_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
   - _Boundary: QualityGates, SpecTraceability_
+
+## Implementation Notes
+
+- production workerのfeature catalogはDOM/React境界を保つため空なので、toolbar gestureはcanonical `productCaptureFeatureId`をcomposition rootから明示注入する。

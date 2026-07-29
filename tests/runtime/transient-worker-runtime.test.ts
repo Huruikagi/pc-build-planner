@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FeatureId } from "../../src/application-shell/contracts.js";
-import type { FeatureContribution } from "../../src/application-shell/feature-contribution-catalog.js";
 import type {
   ActivationId,
   TargetTabId,
@@ -267,7 +266,7 @@ test("gesture直後のnavigationは保留putを追い越さず同世代をinvali
   assert.equal(record.ok && record.value?.stage, "invalidated");
 });
 
-test("production compositionはgesture・tabs・watch-readyへ単一schedulerを注入する", async () => {
+test("production compositionはworker-safeなcanonical surface IDでgestureを登録する", async () => {
   const action = event<[{ id?: number }]>();
   const onUpdated = event<[number, { status?: string }]>();
   const onRemoved = event<[number]>();
@@ -300,21 +299,15 @@ test("production compositionはgesture・tabs・watch-readyへ単一schedulerを
       tabs: { onUpdated, onRemoved },
       sidePanel: { open: async () => {} },
     },
-    [
-      {
-        key: "transient-fixture",
-        registration: {
-          id: "transient-fixture" as FeatureId,
-          presentation: "transient",
-        },
-      } as unknown as FeatureContribution,
-    ],
+    [],
+    "product-capture" as FeatureId,
   );
   assert.equal(composition.hasTransientGesture, true);
   action.emit({ id: 21 });
   await settle();
   const stored = await composition.scheduler.store.read();
   assert.equal(stored.ok && stored.value?.tabId, 21);
+  assert.equal(stored.ok && stored.value?.surfaceId, "product-capture");
   const activationId = stored.ok && stored.value?.activationId;
   assert.equal(typeof activationId, "string");
   const response = await new Promise<unknown>((resolve) => {
