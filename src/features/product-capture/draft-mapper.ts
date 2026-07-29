@@ -1,4 +1,6 @@
 import {
+  type CandidateSourceId,
+  createUuid,
   err,
   isUtcTimestamp,
   isUuid,
@@ -20,12 +22,24 @@ type UnresolvedCandidateDraft =
   Parameters<CandidateEditorIntentFactory>[0]["draft"];
 type UnresolvedCandidateEditorPrefill =
   Parameters<CandidateEditorIntentFactory>[0];
-export const createCaptureDraftMapper = (): UnresolvedCaptureDraftMapper => ({
+export interface CaptureDraftMapperDependencies {
+  readonly createSourceId?: () => CandidateSourceId;
+}
+
+export const createCaptureDraftMapper = (
+  dependencies: CaptureDraftMapperDependencies = {},
+): UnresolvedCaptureDraftMapper => ({
   toUnresolvedDraft(value) {
     const result = decodeCaptureResult(value);
     return result === undefined
       ? err({ kind: "invalid-payload" })
-      : ok(unresolvedDraftFromResult(result));
+      : ok(
+          unresolvedDraftFromResult(
+            result,
+            dependencies.createSourceId ??
+              (() => createUuid() as CandidateSourceId),
+          ),
+        );
   },
   toEditorPrefill(value) {
     const result = decodeCaptureResult(value);
@@ -39,12 +53,16 @@ export const createCaptureDraftMapper = (): UnresolvedCaptureDraftMapper => ({
         : undefined,
     );
     return ok({
-      draft: unresolvedDraftFromResult(result),
+      draft: unresolvedDraftFromResult(
+        result,
+        dependencies.createSourceId ??
+          (() => createUuid() as CandidateSourceId),
+      ),
       ...(categoryHint === undefined ? {} : { categoryHint }),
     });
   },
   toManualDraft() {
-    return unresolvedDraftFromFields([]);
+    return { ...unresolvedDraftFromFields([]), sources: [] };
   },
 });
 
@@ -142,12 +160,11 @@ const decodeCaptureResult = (value: unknown): CaptureResult | undefined => {
 const unresolvedDraftFromFields = (
   fields: readonly NormalizedField[],
 ): UnresolvedCandidateDraft => {
-  const find = (field: "name" | "manufacturer" | "modelNumber" | "price") =>
+  const find = (field: "name" | "manufacturer" | "modelNumber") =>
     fields.find((candidate) => candidate.field === field);
   const name = find("name");
   const manufacturer = find("manufacturer");
   const modelNumber = find("modelNumber");
-  const price = find("price");
   return {
     category: "uncategorized",
     product: {
@@ -174,14 +191,6 @@ const unresolvedDraftFromFields = (
             },
           }
         : {}),
-      ...(price !== undefined && typeof price.normalizedValue === "object"
-        ? {
-            price: {
-              original: price.rawValue,
-              confirmed: price.normalizedValue,
-            },
-          }
-        : {}),
     },
     normalizedAttributes: { category: "uncategorized" },
   };
@@ -189,20 +198,37 @@ const unresolvedDraftFromFields = (
 
 const unresolvedDraftFromResult = (
   result: CaptureResult,
-): UnresolvedCandidateDraft => ({
-  ...unresolvedDraftFromFields(result.draft.fields),
-  sourceInfo: {
-    pageUrl: result.pageUrl,
-    capturedAt: result.capturedAt,
-  },
-  sourceSnapshot: Object.fromEntries(
-    result.draft.fields.flatMap((field) => [
-      [field.field, field.rawValue],
-      [`${field.field}:source`, field.source],
-      [`${field.field}:sourceLabel`, field.sourceLabel],
-    ]),
-  ),
-});
+  createSourceId: () => CandidateSourceId,
+): UnresolvedCandidateDraft => {
+  const price = result.draft.fields.find((field) => field.field === "price");
+  const sourceId = createSourceId();
+  return {
+    ...unresolvedDraftFromFields(result.draft.fields),
+    sources: [
+      {
+        id: sourceId,
+        pageUrl: result.pageUrl,
+        capturedAt: result.capturedAt,
+        ...(price !== undefined && typeof price.normalizedValue === "object"
+          ? {
+              price: {
+                original: price.rawValue,
+                confirmed: price.normalizedValue,
+              },
+            }
+          : {}),
+      },
+    ],
+    primarySourceId: sourceId,
+    sourceSnapshot: Object.fromEntries(
+      result.draft.fields.flatMap((field) => [
+        [field.field, field.rawValue],
+        [`${field.field}:source`, field.source],
+        [`${field.field}:sourceLabel`, field.sourceLabel],
+      ]),
+    ),
+  };
+};
 
 export interface UnresolvedCaptureDraftMapper {
   toUnresolvedDraft(

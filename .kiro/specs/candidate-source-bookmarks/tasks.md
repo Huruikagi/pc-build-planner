@@ -152,8 +152,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 5.3, 5.5_
   - _Depends: 1.1, 2.2, 2.3_
 
-- [ ] 5.2 (P) 商品取り込みから候補保存までの初期source統合を検証する
-  - _Blocked: product-capture-transient-migration の一過性登録・ActivationId伝播・現行世代gateが未実装で、公開intentを transient conclude へ配送する必須契約を CaptureSourceMapper 境界内では実装できない_
+- [x] 5.2 (P) 商品取り込みから候補保存までの初期source統合を検証する
   - 更新済み候補draft契約に合わせ、取り込みページURL、取得日時、取得価格を一件のsourceへ写像し、そのIDをprimaryにした `CandidateEditorPrefill` を構築する。
   - 商品共通値へ価格を残さず、元表記snapshotと他の確認済み商品値を維持し、種別未指定は候補serviceのclassifierへ委ねる。
   - product-captureがprefillを公開 `createCandidateEditorIntent` へ渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送することを検証する。candidate query、source mutation、candidate serviceを直接呼ばない。

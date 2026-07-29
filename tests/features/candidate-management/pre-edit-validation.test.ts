@@ -30,6 +30,46 @@ test("pre-editはproject未解決かつ空名の構造的に正しいdraftを受
   });
 });
 
+test("schema 2 pre-editは初期sourceとprimaryを受理しlegacy価格・単数sourceを拒否する", () => {
+  const sourceDraft = {
+    ...unresolvedDraft,
+    product: { name: { original: "架空CPU", confirmed: "SYN CPU" } },
+    sources: [
+      {
+        id: "80000000-0000-4000-8000-000000000001",
+        pageUrl: "https://shop.example.invalid/product",
+        capturedAt: "2026-07-28T00:00:00.000Z",
+        price: {
+          original: "JPY 32,100",
+          confirmed: { amount: 32100, currency: "JPY" },
+        },
+      },
+    ],
+    primarySourceId: "80000000-0000-4000-8000-000000000001",
+  } as const;
+  assert.deepEqual(validatePreEditDraft(sourceDraft), {
+    ok: true,
+    value: sourceDraft,
+  });
+  assert.equal(
+    validatePreEditDraft({
+      ...sourceDraft,
+      product: {
+        ...sourceDraft.product,
+        price: sourceDraft.sources[0].price,
+      },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validatePreEditDraft({
+      ...sourceDraft,
+      sourceInfo: { pageUrl: sourceDraft.sources[0].pageUrl },
+    }).ok,
+    false,
+  );
+});
+
 test("pre-editは欠落、不正型、未知category、category不一致を閉じたerrorへ写像する", () => {
   assert.deepEqual(validatePreEditDraft({}), {
     ok: false,

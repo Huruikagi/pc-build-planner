@@ -6,6 +6,7 @@ import {
   PART_CATEGORIES,
   type PartCategory,
   type Result,
+  validateCandidatePartV2Value,
 } from "../../domain/public.js";
 import type {
   UnresolvedCandidateDraft,
@@ -163,6 +164,8 @@ export const validatePreEditDraft = (
       "category",
       "product",
       "normalizedAttributes",
+      "sources",
+      "primarySourceId",
       "sourceInfo",
       "sourceSnapshot",
     ]) ||
@@ -174,8 +177,21 @@ export const validatePreEditDraft = (
   if (!isPartCategory(draft.category)) return err({ kind: "invalid-category" });
   const attributes = isAttributes(draft.normalizedAttributes, draft.category);
   if (attributes === "mismatch") return err({ kind: "category-mismatch" });
+  if (attributes === "invalid") return err({ kind: "invalid-draft-shape" });
+  if ("sources" in draft) {
+    if ("sourceInfo" in draft) return err({ kind: "invalid-draft-shape" });
+    const validated = validateCandidatePartV2Value({
+      ...draft,
+      id: "00000000-0000-4000-8000-000000000001",
+      projectId: "00000000-0000-4000-8000-000000000002",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    return validated.ok
+      ? ok(draft as UnresolvedCandidateDraft)
+      : err({ kind: "invalid-draft-shape" });
+  }
   if (
-    attributes === "invalid" ||
     !isProduct(draft.product) ||
     (draft.sourceInfo !== undefined && !isSourceInfo(draft.sourceInfo)) ||
     (draft.sourceSnapshot !== undefined &&

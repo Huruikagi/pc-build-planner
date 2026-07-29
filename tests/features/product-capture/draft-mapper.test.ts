@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TargetTabId } from "../../../src/application-shell/public.js";
-import type { RequestId, UtcTimestamp } from "../../../src/domain/public.js";
+import type {
+  CandidateSourceId,
+  RequestId,
+  UtcTimestamp,
+} from "../../../src/domain/public.js";
 import { createCaptureDraftMapper } from "../../../src/features/product-capture/draft-mapper.js";
 
 const captureResult = (fields: readonly unknown[] = []) => ({
@@ -12,9 +16,12 @@ const captureResult = (fields: readonly unknown[] = []) => ({
   draft: { fields, missingCoreFields: [] },
   rejectedFields: [],
 });
+const sourceId = "80000000-0000-4000-8000-000000000002" as CandidateSourceId;
 
 test("抽出結果をproject未解決draftへ必要最小限で写像する", () => {
-  const mapped = createCaptureDraftMapper().toUnresolvedDraft(
+  const mapped = createCaptureDraftMapper({
+    createSourceId: () => sourceId,
+  }).toUnresolvedDraft(
     captureResult([
       {
         field: "name",
@@ -30,6 +37,13 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         source: "meta",
         sourceLabel: "og:brand",
       },
+      {
+        field: "price",
+        normalizedValue: { amount: 32100, currency: "JPY" },
+        rawValue: "JPY 32,100",
+        source: "meta",
+        sourceLabel: "product:price",
+      },
     ]),
   );
   assert.equal(mapped.ok, true);
@@ -44,10 +58,18 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
       },
     },
     normalizedAttributes: { category: "uncategorized" },
-    sourceInfo: {
-      pageUrl: "https://shop.example.invalid/product",
-      capturedAt: "2026-07-28T00:00:00.000Z",
-    },
+    sources: [
+      {
+        id: sourceId,
+        pageUrl: "https://shop.example.invalid/product",
+        capturedAt: "2026-07-28T00:00:00.000Z",
+        price: {
+          original: "JPY 32,100",
+          confirmed: { amount: 32100, currency: "JPY" },
+        },
+      },
+    ],
+    primarySourceId: sourceId,
     sourceSnapshot: {
       name: "  架空CPU  ",
       "name:source": "heading",
@@ -55,13 +77,15 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
       manufacturer: "架空メーカー",
       "manufacturer:source": "meta",
       "manufacturer:sourceLabel": "og:brand",
+      price: "JPY 32,100",
+      "price:source": "meta",
+      "price:sourceLabel": "product:price",
     },
   });
   assert.equal("projectId" in mapped.value, false);
-  assert.deepEqual(mapped.value.sourceInfo, {
-    pageUrl: "https://shop.example.invalid/product",
-    capturedAt: "2026-07-28T00:00:00.000Z",
-  });
+  assert.equal("sourceInfo" in mapped.value, false);
+  assert.equal("price" in mapped.value.product, false);
+  assert.equal("kind" in (mapped.value.sources?.[0] ?? {}), false);
   assert.deepEqual(mapped.value.sourceSnapshot, {
     name: "  架空CPU  ",
     "name:source": "heading",
@@ -69,6 +93,9 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
     manufacturer: "架空メーカー",
     "manufacturer:source": "meta",
     "manufacturer:sourceLabel": "og:brand",
+    price: "JPY 32,100",
+    "price:source": "meta",
+    "price:sourceLabel": "product:price",
   });
 });
 
@@ -126,6 +153,7 @@ test("候補ゼロの手入力開始では空の商品名を保持する", () =>
     category: "uncategorized",
     product: { name: { original: null, confirmed: "" } },
     normalizedAttributes: { category: "uncategorized" },
+    sources: [],
   });
   const extracted = createCaptureDraftMapper().toUnresolvedDraft(
     captureResult(),

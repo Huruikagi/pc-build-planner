@@ -6,13 +6,23 @@ import type {
   FeatureActivationIntent,
   TargetTabId,
 } from "../../../src/application-shell/public.js";
-import { ok, type RequestId } from "../../../src/domain/public.js";
+import {
+  type CandidatePartId,
+  ok,
+  type RequestId,
+  type Revision,
+} from "../../../src/domain/public.js";
+import { createSourceKindClassifier } from "../../../src/features/candidate-management/feature-contribution.js";
+import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
+import type { CandidateSourceDataPort } from "../../../src/features/candidate-management/source-data-port.js";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import {
   createChromeCaptureRuntimePort,
   createProductCaptureContribution,
 } from "../../../src/features/product-capture/feature-contribution.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
+import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
+import { sourceRootV2 } from "../../fixtures/candidate-source-root-v2.js";
 import { createProductionCaptureChromeFixture } from "../../fixtures/product-capture-production.js";
 
 const activationId = "synthetic-activation" as ActivationId;
@@ -45,6 +55,7 @@ const createFlow = (
   candidates: ReturnType<typeof candidatesFrom>,
   targetUrl = pageUrl,
   runtime?: Parameters<typeof createProductCaptureContribution>[1]["runtime"],
+  acceptIntent?: (intent: FeatureActivationIntent) => Promise<void>,
 ) => {
   const received: FeatureActivationIntent[] = [];
   let concludeAttempts = 0;
@@ -84,6 +95,7 @@ const createFlow = (
             return { ok: false, error: { kind: "transition-failed" as const } };
           }
           received.push(intent);
+          await acceptIntent?.(intent);
           return ok(undefined);
         },
       },
@@ -103,6 +115,36 @@ const createFlow = (
       current = false;
     },
   };
+};
+
+const createSourceSaveHarness = () => {
+  let root = sourceRootV2();
+  let mutations = 0;
+  const data = {
+    async query(project: (root: never) => unknown) {
+      return ok(project(root as never));
+    },
+    async mutate() {
+      throw new Error(
+        "schema-2 source handoff must not use legacy persistence",
+      );
+    },
+  } as FoundationScopedDataPort;
+  const sourceData: CandidateSourceDataPort = {
+    async query(project) {
+      return ok(project(root));
+    },
+    async mutateCandidate(candidate) {
+      mutations += 1;
+      root = {
+        ...root,
+        revision: (root.revision + 1) as Revision,
+        candidateParts: [...root.candidateParts, candidate],
+      };
+      return ok(undefined);
+    },
+  };
+  return { data, sourceData, root: () => root, mutations: () => mutations };
 };
 
 const runCapture = async (flow: ReturnType<typeof createFlow>) => {
@@ -152,6 +194,119 @@ test("domain-map provenanceを保つproject未解決pre-editを一度だけhando
   flow.expireTab();
   assert.equal(flow.received.length, 1, "handoff済みdraftはtab失効後も残る");
 });
+
+test("取得価格を初期primary sourceだけに載せてtyped concludeする", async () => {
+  const flow = createFlow(
+    candidatesFrom(`
+      <meta property="product:price:amount" content="32100">
+      <meta property="product:price:currency" content="JPY">
+      <h1>SYN 架空CPU</h1>
+    `),
+  );
+  await runCapture(flow);
+  assert.equal(flow.received.length, 1);
+  const payload = flow.received[0]?.payload as {
+    readonly draft: {
+      readonly product: Record<string, unknown>;
+      readonly sourceInfo?: unknown;
+      readonly sources: readonly {
+        readonly id: string;
+        readonly pageUrl?: string;
+        readonly capturedAt?: string;
+        readonly price?: {
+          readonly confirmed?: {
+            readonly amount: number;
+            readonly currency: string;
+          };
+        };
+        readonly kind?: string;
+      }[];
+      readonly primarySourceId: string;
+    };
+  };
+  const source = payload.draft.sources[0];
+  assert.ok(source);
+  assert.equal(payload.draft.primarySourceId, source.id);
+  assert.equal(source.pageUrl, pageUrl);
+  assert.equal(typeof source.capturedAt, "string");
+  assert.deepEqual(source.price?.confirmed, { amount: 32100, currency: "JPY" });
+  assert.equal(source.kind, undefined);
+  assert.equal("price" in payload.draft.product, false);
+  assert.equal("sourceInfo" in payload.draft, false);
+  assert.equal(flow.saveMutations(), 0);
+});
+
+for (const scenario of [
+  { label: "domain-map一致", url: pageUrl, expectedKind: "manufacturer" },
+  {
+    label: "domain-map非一致",
+    url: "https://unknown-shop.example.invalid/item",
+    expectedKind: "retail",
+  },
+] as const) {
+  test(`${scenario.label}のcapture intentを保存し一覧の代表sourceへ反映する`, async () => {
+    const storage = createSourceSaveHarness();
+    const project = storage.root().projects[0];
+    assert.ok(project);
+    const createdId = `20000000-0000-4000-8000-0000000000${
+      scenario.expectedKind === "manufacturer" ? "21" : "22"
+    }` as CandidatePartId;
+    const service = createCandidateManagementService({
+      data: storage.data,
+      sourceData: storage.sourceData,
+      classifier: createSourceKindClassifier(syntheticMap()),
+      createCandidateId: () => createdId,
+    });
+    const captured = candidatesFrom(
+      `<meta property="product:price:amount" content="32100">
+       <meta property="product:price:currency" content="JPY">
+       <h1>SYN source handoff CPU</h1>`,
+      scenario.url,
+    );
+    const flow = createFlow(
+      captured,
+      scenario.url,
+      undefined,
+      async (intent) => {
+        assert.equal(intent.target, "open-candidate-editor");
+        const prefill = intent.payload as {
+          readonly draft: Record<string, unknown>;
+        };
+        const saved = await service.createCandidate(
+          { ...prefill.draft, projectId: project.id } as Parameters<
+            typeof service.createCandidate
+          >[0],
+          {
+            requestId: "40000000-0000-4000-8000-000000000021" as RequestId,
+            expectedRevision: 1,
+          },
+        );
+        assert.equal(saved.ok, true);
+      },
+    );
+
+    await runCapture(flow);
+
+    assert.equal(storage.mutations(), 1);
+    const listed = await service.listCandidates({ projectId: project.id });
+    assert.equal(listed.ok, true);
+    if (!listed.ok) return;
+    const summary = listed.value.find(
+      (candidate) => candidate.id === createdId,
+    );
+    assert.equal(summary?.primarySource?.pageUrl, scenario.url);
+    assert.equal(summary?.primarySource?.kind, scenario.expectedKind);
+    assert.deepEqual(summary?.price?.confirmed, {
+      amount: 32100,
+      currency: "JPY",
+    });
+    const stored = storage
+      .root()
+      .candidateParts.find((candidate) => candidate.id === createdId);
+    assert.equal("price" in (stored?.product ?? {}), false);
+    assert.equal("sourceInfo" in (stored ?? {}), false);
+  });
+}
 
 test("Chrome-shaped固定tab runtimeは実capture compositionからtyped handoffする", async () => {
   const candidates = candidatesFrom("<h1>SYN 固定tab CPU</h1>");

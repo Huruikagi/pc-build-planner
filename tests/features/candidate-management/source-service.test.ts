@@ -54,18 +54,107 @@ const harness = (failure?: string) => {
     async mutateCandidate(candidate) {
       commands.push({ operation: { value: candidate } } as never);
       if (failure) return { ok: false, error: { code: failure } };
+      const exists = root.candidateParts.some(
+        (current) => current.id === candidate.id,
+      );
       root = {
         ...root,
         revision: 2 as Revision,
-        candidateParts: root.candidateParts.map((current) =>
-          current.id === candidate.id ? candidate : current,
-        ),
+        candidateParts: exists
+          ? root.candidateParts.map((current) =>
+              current.id === candidate.id ? candidate : current,
+            )
+          : [...root.candidateParts, candidate],
       };
       return { ok: true, value: undefined };
     },
   };
   return { data, sourceData, commands, root: () => root };
 };
+
+test("初期source付き候補作成はkindを補完しprimary代表値を公開する", async () => {
+  const h = harness();
+  const createdId = "20000000-0000-4000-8000-000000000010" as CandidatePartId;
+  const initialSourceId =
+    "30000000-0000-4000-8000-000000000010" as CandidateSourceId;
+  const project = h.root().projects[0];
+  assert.ok(project);
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+    classifier: { classify: () => "manufacturer" },
+    createCandidateId: () => createdId,
+    now: () => "2026-07-28T01:00:00.000Z" as UtcTimestamp,
+  });
+  const created = await service.createCandidate(
+    {
+      projectId: project.id,
+      category: "uncategorized",
+      product: {
+        name: { original: "架空CPU", confirmed: "SYN CPU" },
+      },
+      normalizedAttributes: { category: "uncategorized" },
+      sources: [
+        {
+          id: initialSourceId,
+          pageUrl: "https://maker.invalid/synthetic-cpu",
+          capturedAt: "2026-07-28T00:00:00.000Z" as UtcTimestamp,
+          price: {
+            original: "JPY 32100",
+            confirmed: { amount: 32100, currency: "JPY" },
+          },
+        },
+      ],
+      primarySourceId: initialSourceId,
+    },
+    context,
+  );
+  assert.equal(created.ok, true);
+  assert.equal(h.commands.length, 1);
+  const stored = h
+    .root()
+    .candidateParts.find((candidate) => candidate.id === createdId);
+  assert.equal(stored?.sources[0]?.kind, "manufacturer");
+  assert.equal("price" in (stored?.product ?? {}), false);
+  const listed = await service.listCandidates({ projectId: project.id });
+  assert.equal(listed.ok, true);
+  if (!listed.ok) return;
+  const summary = listed.value.find((candidate) => candidate.id === createdId);
+  assert.equal(summary?.primarySource?.pageUrl, stored?.sources[0]?.pageUrl);
+  assert.deepEqual(summary?.price, stored?.sources[0]?.price);
+});
+
+test("初期source付き候補の保存失敗は部分的な候補を残さない", async () => {
+  const h = harness("storage-unavailable");
+  const before = structuredClone(h.root().candidateParts);
+  const project = h.root().projects[0];
+  assert.ok(project);
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+    createCandidateId: () =>
+      "20000000-0000-4000-8000-000000000010" as CandidatePartId,
+  });
+  const result = await service.createCandidate(
+    {
+      projectId: project.id,
+      category: "uncategorized",
+      product: { name: { original: "架空CPU", confirmed: "SYN CPU" } },
+      normalizedAttributes: { category: "uncategorized" },
+      sources: [
+        {
+          id: "30000000-0000-4000-8000-000000000010" as CandidateSourceId,
+          pageUrl: "https://shop.invalid/synthetic-cpu",
+        },
+      ],
+      primarySourceId:
+        "30000000-0000-4000-8000-000000000010" as CandidateSourceId,
+    },
+    context,
+  );
+  assert.deepEqual(result, { ok: false, error: { kind: "storage" } });
+  assert.deepEqual(h.root().candidateParts, before);
+});
 
 test("source追加はkindを補完し候補全体を一回だけ更新する", async () => {
   const h = harness();

@@ -55,7 +55,9 @@ export const createCandidateManagementContribution = (
     dependencies.sourceData ?? unavailableCandidateSourceDataPort;
   const service = createCandidateManagementService({
     data: context.data,
-    sourceData,
+    ...(dependencies.sourceData === undefined
+      ? {}
+      : { sourceData: dependencies.sourceData }),
     ...(dependencies.classifier === undefined
       ? {}
       : { classifier: dependencies.classifier }),
