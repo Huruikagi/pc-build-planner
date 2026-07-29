@@ -844,6 +844,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
               ) : null}
               {source.pageUrl === undefined ? null : (
                 <button
+                  data-action="open-candidate-source"
                   onClick={() => void state.openSource(source.pageUrl ?? "")}
                   type="button"
                 >
@@ -866,6 +867,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
           );
         })}
         <button
+          data-action="add-candidate-source"
           onClick={() => {
             state.addEditorSource({
               id: createUuid() as CandidateSourceId,

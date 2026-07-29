@@ -13,6 +13,8 @@ type FormFieldName =
   | "candidate-name"
   | "project-name";
 
+type CandidateSourceFieldName = "captured-at" | "kind" | "site-name" | "url";
+
 /**
  * Task 1.3 measurement: a temporary spec re-exporting a value from
  * `src/domain/public.js` (a NodeNext `.js`-specifier import into `src/`) was
@@ -111,6 +113,38 @@ export const editCandidateButton = (candidateRow: Locator): Locator =>
 /** Locates the delete affordance for a candidate row. */
 export const deleteCandidateButton = (candidateRow: Locator): Locator =>
   candidateRow.locator("[data-delete-candidate-id]");
+
+/** Locates the source fieldset in the candidate editor. */
+export const candidateSources = (editor: Locator): Locator =>
+  region(editor, "candidate-sources");
+
+/** Locates all source rows in their persisted editor order. */
+export const candidateSourceRows = (sources: Locator): Locator =>
+  sources.locator("[data-source-id]");
+
+/** Locates one indexed source field while keeping DOM naming knowledge centralized. */
+export const candidateSourceField = (
+  sourceRow: Locator,
+  index: number,
+  name: CandidateSourceFieldName,
+): Locator => sourceRow.locator(`[name="source-${index}-${name}"]`);
+
+/** Locates the source-add affordance without depending on translated text. */
+export const addCandidateSourceButton = (sources: Locator): Locator =>
+  action(sources, "add-candidate-source");
+
+/** Locates a detail-row source revisit affordance. */
+export const openCandidateSourceButton = (sourceRow: Locator): Locator =>
+  action(sourceRow, "open-candidate-source");
+
+/** Locates a candidate-list primary-source revisit affordance. */
+export const openPrimaryCandidateSourceButton = (
+  candidateRow: Locator,
+): Locator => candidateRow.locator("[data-open-primary-source-id]");
+
+/** Locates the primary selector within one source row. */
+export const primaryCandidateSourceInput = (sourceRow: Locator): Locator =>
+  sourceRow.locator('input[name="candidate-primary-source"]');
 
 /** Locates the deletion confirmation affordance in the deletion dialog. */
 export const confirmDeletionButton = (page: Page): Locator =>
