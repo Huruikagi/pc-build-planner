@@ -209,7 +209,7 @@
   - candidate source DTO、catalog／mutation facet、not-found、URL照合の下流所有を含む公開契約suiteがすべて成功することを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.5, 8.6, 8.7_
 
-- [ ] 7.2 canonical保存・交換形式suiteを実行する
+- [x] 7.2 canonical保存・交換形式suiteを実行する
   - schema 1の複数ソースroot read／write／replacement、format 1 backup round trip、旧開発shape・未知version・不正入力の非置換を実行する。
   - foundation、backup／restore、capacityの関連suiteが値損失・重複source・部分更新・暗黙変換なしで成功することを完了条件とする。
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4_
