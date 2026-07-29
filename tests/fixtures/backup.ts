@@ -46,8 +46,8 @@ const part: BackupCandidatePart = {
       siteName: "架空販売店",
       capturedAt: CREATED_AT,
       price: {
-        original: "12,345円",
-        confirmed: { amount: 12345, currency: "JPY" },
+        original: "架空価格 12,345 SYN",
+        confirmed: { amount: 12345, currency: "SYN" },
       },
       kind: "retail",
     },

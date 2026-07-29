@@ -202,6 +202,294 @@ test("capture・candidate-management間は公開entry pointだけを許可する
   );
 });
 
+test("source catalog公開consumerは公開facetだけを利用する", () => {
+  const forbiddenSources = [
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import type { LocalDataRoot } from "../../src/domain/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import type { FoundationDataPort } from "../../src/persistence/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import type { CandidateDraft } from "../../src/features/candidate-management/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import { query } from "../../src/features/candidate-management/source-catalog.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import "../../src/features/candidate-management/source-catalog.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'const internal = import("../../src/features/candidate-management/source-catalog.js");',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'export { createCandidateSourceCatalog } from "../../src/features/candidate-management/source-catalog.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'export * from "../../src/features/candidate-management/source-catalog.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import * as candidate from "../../src/features/candidate-management/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'type Internal = import("../../src/features/candidate-management/source-catalog.js").CandidateSourceCatalogDependencies;',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'const modulePath = "../../src/features/candidate-management/public.js"; const candidate = await import(modulePath);',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        "const candidate = await import(`../../src/features/candidate-management/${" +
+        "entry}.js`);",
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'const candidate = await import("../../src/features/candidate-management/" + entry + ".js");',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'const candidate = await import("../../src/features/candidate-management/public.js"); void candidate.CandidateDraft;',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-consumer.ts",
+      source:
+        'import type { CandidateDraft as Draft } from "../../src/features/candidate-management/public.js";',
+    },
+  ];
+  const violations = findBoundaryViolations(forbiddenSources);
+
+  assert.equal(violations.length, forbiddenSources.length);
+  assert.ok(
+    violations.every(
+      ({ rule }) => rule === "source-catalog-consumer-public-contract-only",
+    ),
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "tests/tooling/source-price-refresh-consumer.ts",
+        source:
+          'import type { Result } from "../../src/domain/public.js";\n' +
+          'import type { CandidateSourceCatalogPort as Catalog, CandidateSourceReference, ManagementError } from "../../src/features/candidate-management/public.js";\n' +
+          'import type { PagePriceExtractionError } from "../../src/features/product-capture/public.js";',
+      },
+    ]),
+    [],
+  );
+});
+
+test("candidate source catalogへURL正規化・一致判定を持ち込まない", () => {
+  const forbiddenSources = [
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        "const normalized = new URL(reference.pageUrl).hostname.toLowerCase();",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        "const matches = references.filter((item) => item.pageUrl === pageUrl);",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        "const match = references.find((item) => pageUrl === item['pageUrl']);",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const key = canonicalize(reference.pageUrl);",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: 'const key = normalizeUrl(reference["pageUrl"]);',
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const unique = new Set(references.map((item) => item.pageUrl));",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        "const url = source.pageUrl; const references = dedupeByPageUrl(allReferences, url);",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        'const url = source.pageUrl; const matches = references.filter((item) => item.pageUrl === url); const selection = matches.length > 1 ? { kind: "ambiguous", matches } : matches[0];',
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const key = source.pageUrl?.toLowerCase();",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const url = source.pageUrl; const same = url === requestedUrl;",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const url = source.pageUrl; const key = url.trim();",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source: "const url = source.pageUrl; const key = canonicalize(url);",
+    },
+    {
+      path: "src/features/candidate-management/source-catalog.ts",
+      source:
+        "const { pageUrl: url } = source; const found = references.find((item) => item.pageUrl === url);",
+    },
+  ];
+  const violations = findBoundaryViolations(forbiddenSources);
+
+  assert.equal(violations.length, forbiddenSources.length);
+  assert.ok(
+    violations.every(
+      ({ rule }) => rule === "candidate-source-catalog-no-url-matching",
+    ),
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/candidate-management/source-catalog.ts",
+        source:
+          "const projected = source.pageUrl === undefined ? {} : { pageUrl: source.pageUrl }; const ids = new Set(references.map((item) => item.sourceId)); normalizeProjectName(name);",
+      },
+    ]),
+    [],
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/candidate-management/source-catalog.ts",
+        source:
+          "const matches = candidates.filter((item) => item.id === candidateId); const unique = new Set(matches.map((item) => item.sourceId));",
+      },
+      {
+        path: "src/features/candidate-management/source-catalog.ts",
+        source:
+          "const projected = source.pageUrl == null ? {} : { pageUrl: source.pageUrl };",
+      },
+    ]),
+    [],
+  );
+});
+
+test("candidate source catalogのcomputed・Reflect pageUrl利用も所有違反として拒否する", () => {
+  const forbiddenSources = [
+    "const key = 'page' + 'Url'; const normalized = source[key].trim();",
+    "const key = `pageUrl`; const same = Reflect.get(source, key) === requestedUrl;",
+    "const prefix = 'page'; const key = prefix + 'Url'; const unique = new Set([source[key]]);",
+    "const property = 'page' + 'Url'; const url = Reflect.get(source, property); canonicalize(url);",
+  ].map((source) => ({
+    path: "src/features/candidate-management/source-catalog.ts",
+    source,
+  }));
+
+  assert.deepEqual(
+    findBoundaryViolations(forbiddenSources).map(({ rule }) => rule),
+    forbiddenSources.map(() => "candidate-source-catalog-no-url-matching"),
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/candidate-management/source-catalog.ts",
+        source:
+          "const key = 'page' + 'Url'; const url = source[key]; const projected = url == null ? {} : { pageUrl: url };",
+      },
+    ]),
+    [],
+  );
+});
+
+test("candidate source catalogはconst alias・computed binding・Reflect alias経由のpageUrl所有違反を拒否する", () => {
+  const forbiddenSources = [
+    "const key = 'pageUrl'; const first = source[key]; const second = first; canonicalize(second);",
+    "const key = 'pageUrl'; const { [key]: first } = source; const second = first; second.trim();",
+    "const reflection = Reflect; const get = reflection.get; const key = 'page' + 'Url'; const first = get(source, key); normalizeUrl(first);",
+    "const reflection = Reflect; const get = reflection['get']; const read = get; canonicalize(read(source, 'pageUrl'));",
+    "const copied = { ...source }; const key = 'pageUrl'; const first = copied[key]; const compare = (value) => value === requestedUrl; compare(first);",
+    "const key = runtimeKey; const value = source[key]; const projected = { pageUrl: value };",
+    "const get = Reflect.get; const value = get(source, runtimeKey); const projected = { pageUrl: value };",
+  ].map((source) => ({
+    path: "src/features/candidate-management/source-catalog.ts",
+    source,
+  }));
+
+  assert.deepEqual(
+    findBoundaryViolations(forbiddenSources).map(({ rule }) => rule),
+    forbiddenSources.map(() => "candidate-source-catalog-no-url-matching"),
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/candidate-management/source-catalog.ts",
+        source:
+          "const key = 'pageUrl'; const value = source[key]; const projected = value == null ? {} : { pageUrl: value }; const ids = references.map(({ candidateId, sourceId }) => ({ candidateId, sourceId }));",
+      },
+    ]),
+    [],
+  );
+});
+
+test("TypeScript AST gateは構文エラーをconsumer実行前にfail closedで拒否する", () => {
+  assert.throws(
+    () =>
+      findBoundaryViolations([
+        {
+          path: "src/features/candidate-management/source-catalog.ts",
+          source: "const broken = ;",
+        },
+      ]),
+    /TypeScript syntactic diagnostics/,
+  );
+});
+
+test("TypeScript AST gateは全TS・JS入力をrule判定前に構文preflightする", () => {
+  const paths = [
+    "src/features/source-price-refresh/public.ts",
+    "src/application-shell/application-composition.ts",
+    "tests/tooling/public-api-consumer.ts",
+    "src/features/candidate-management/source-catalog.ts",
+    "tests/tooling/source-price-refresh-consumer.ts",
+  ];
+  for (const path of paths)
+    assert.throws(
+      () => findBoundaryViolations([{ path, source: "const broken = ;" }]),
+      /TypeScript syntactic diagnostics/,
+      path,
+    );
+});
+
 test("application shell固有のsecurity・ownership境界違反をowner付きで拒否する", () => {
   const violations = findBoundaryViolations([
     {

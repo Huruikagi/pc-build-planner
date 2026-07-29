@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { runFinalGate } from "../../scripts/validate-final-gate.mjs";
-import { findFixtureAssetViolations } from "../../scripts/validate-fixture-assets.mjs";
+import {
+  findFixtureAssetViolations,
+  findFixtureRegistryViolations,
+} from "../../scripts/validate-fixture-assets.mjs";
 
 const validManifest = {
   manifest_version: 3,
@@ -34,7 +38,7 @@ async function workspace() {
 
 const builder =
   (
-    manifest: typeof validManifest = validManifest,
+    manifest: typeof validManifest & Record<string, unknown> = validManifest,
     extra: Record<string, string> = {},
   ) =>
   async (output = "") => {
@@ -100,6 +104,199 @@ test("artifact fixture検査は除外対象の実行bundleを解析前に省く"
   );
 
   assert.deepEqual(violations, [{ path: image, rule: "image-file" }]);
+});
+
+test("validate:fixtures CLIはregistryの非架空source値を拒否する", async () => {
+  const paths = await workspace();
+  const registry = join(paths.fixtures, "source-registry.ts");
+  await writeFile(
+    registry,
+    "export const syntheticSourceFixtures = [" +
+      '{ name: "site", module: "source-registry.ts", value: { candidateParts: [{ sources: [{ pageUrl: "https://shop.example.invalid/item", siteName: "Real Store" }] }] } },' +
+      '{ name: "url", module: "source-registry.ts", value: { candidateParts: [{ sources: [{ pageUrl: "https://real.example.com/item", siteName: "架空販売店" }] }] } },' +
+      '{ name: "price", module: "source-registry.ts", value: { candidateParts: [{ sources: [{ pageUrl: "https://shop.example.invalid/item", siteName: "架空販売店", price: { original: "data:image/png;base64,AAAA", confirmed: { amount: 1, currency: "SYN" } } }] }] } }' +
+      ',{ name: "real-price", module: "source-registry.ts", value: { candidateParts: [{ sources: [{ pageUrl: "https://shop.example.invalid/item", siteName: "架空販売店", price: { original: "$499.99 USD", confirmed: { amount: 49999, currency: "USD" } } }] }] } }' +
+      "];",
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      registry,
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /non-synthetic-source-site-name/,
+  );
+  assert.match(`${result.stdout}${result.stderr}`, /non-synthetic-source-url/);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /unsafe-synthetic-source-price/,
+  );
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /non-synthetic-source-price/,
+  );
+});
+
+test("validate:fixtures CLIは未登録source fixture moduleを拒否する", async () => {
+  const paths = await workspace();
+  const unregistered = join(paths.fixtures, "unregistered-source.ts");
+  const registry = join(paths.fixtures, "source-registry.ts");
+  await writeFile(
+    unregistered,
+    'export const fixture = { candidateParts: [{ sources: [{ pageUrl: "https://shop.example.invalid/item", siteName: "架空販売店" }] }] };',
+  );
+  await writeFile(registry, "export const syntheticSourceFixtures = [];");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      registry,
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /unregistered-source-fixture-module/,
+  );
+});
+
+test("fixture registry完全性はspread・多段alias・computed sourcesを検出し無関係configを除外する", async () => {
+  const paths = await workspace();
+  const registry = join(paths.fixtures, "source-registry.ts");
+  await writeFile(registry, "export const syntheticSourceFixtures = [];");
+  await writeFile(
+    join(paths.fixtures, "shorthand.ts"),
+    "const sources = [{ id: 'source-1', pageUrl: 'https://shop.example.invalid/item', siteName: '架空販売店' }]; export const fixture = { candidateParts: [{ id: 'candidate-1', projectId: 'project-1', sources }] };",
+  );
+  await writeFile(
+    join(paths.fixtures, "computed.ts"),
+    "export const fixture = { candidateParts: [{ id: 'candidate-2', projectId: 'project-1', ['sour' + 'ces']: [{ id: 'source-2', pageUrl: 'https://shop.example.invalid/item', siteName: '架空販売店' }] }] };",
+  );
+  await writeFile(
+    join(paths.fixtures, "spread-alias.ts"),
+    "const sourceBase = { id: 'source-3', kind: 'retail' }; const sourceDetails = { pageUrl: 'https://shop.example.invalid/item', capturedAt: '2026-01-01T00:00:00.000Z' }; const source = { ...sourceBase, ...sourceDetails }; const first = [source]; const second = first; const sources = [...second]; const candidateBase = { id: 'candidate-3', projectId: 'project-1' }; const candidate = { ...candidateBase, sources }; const aliasOne = candidate; const aliasTwo = aliasOne; export const fixture = { candidateParts: [aliasTwo] };",
+  );
+  await writeFile(
+    join(paths.fixtures, "unrelated-config.ts"),
+    "const defaults = { id: 'source-config', kind: 'retail' }; const entry = { ...defaults }; const first = [entry]; const sources = [...first]; export const config = { name: '架空設定', sources };",
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      registry,
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  const output = `${result.stdout}${result.stderr}`;
+
+  assert.notEqual(result.status, 0);
+  assert.match(output, /shorthand\.ts: unregistered-source-fixture-module/);
+  assert.match(output, /computed\.ts: unregistered-source-fixture-module/);
+  assert.match(output, /spread-alias\.ts: unregistered-source-fixture-module/);
+  assert.doesNotMatch(output, /unrelated-config\.ts/);
+});
+
+test("fixture registryは空名と重複名をfail closedで拒否する", async () => {
+  const paths = await workspace();
+  const registry = join(paths.fixtures, "source-registry.ts");
+  await writeFile(
+    registry,
+    "export const syntheticSourceFixtures = [" +
+      "{ name: '', module: 'foundation.ts', value: {} }," +
+      "{ name: 'duplicate', module: 'foundation.ts', value: {} }," +
+      "{ name: 'duplicate', module: 'foundation.ts', value: {} }" +
+      "];",
+  );
+
+  const violations = await findFixtureRegistryViolations(registry);
+  assert.ok(
+    violations.some(({ rule }) => rule === "invalid-source-fixture-registry"),
+  );
+  assert.ok(
+    violations.some(({ rule }) => rule === "duplicate-source-fixture-name"),
+  );
+});
+
+test("boundary・fixture AST gateは構文エラーで非zero終了する", async () => {
+  const paths = await workspace();
+  const malformedCatalogDirectory = join(
+    paths.fixtures,
+    "src",
+    "features",
+    "candidate-management",
+  );
+  const malformedCatalog = join(malformedCatalogDirectory, "source-catalog.ts");
+  await mkdir(malformedCatalogDirectory, { recursive: true });
+  await writeFile(malformedCatalog, "const broken = ;");
+  const boundary = spawnSync(
+    process.execPath,
+    ["scripts/validate-boundaries.mjs", malformedCatalog],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  const registry = join(paths.fixtures, "source-registry.ts");
+  await writeFile(registry, "export const syntheticSourceFixtures = [];");
+  await writeFile(join(paths.fixtures, "broken.ts"), "const broken = ;");
+  const fixtures = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      registry,
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.notEqual(boundary.status, 0);
+  assert.match(`${boundary.stdout}${boundary.stderr}`, /syntactic diagnostics/);
+  assert.notEqual(fixtures.status, 0);
+  assert.match(`${fixtures.stdout}${fixtures.stderr}`, /syntactic diagnostics/);
+});
+
+test("boundary CLIは通常feature・shell・公開consumerの構文エラーも拒否する", async () => {
+  const paths = await workspace();
+  const root = dirname(paths.source);
+  const malformed = [
+    join(root, "src", "features", "ordinary", "public.ts"),
+    join(root, "src", "application-shell", "composition.ts"),
+    join(root, "tests", "tooling", "public-api-consumer.ts"),
+  ];
+  for (const path of malformed) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, "const broken = ;");
+  }
+
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/validate-boundaries.mjs", ...malformed],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /syntactic diagnostics/);
 });
 
 test("foundation公開bundleを生成しないbuildをfail closedに拒否する", async () => {
@@ -168,6 +365,15 @@ test("source境界・fixture違反とmissing rootをfail closedに伝播する",
 test("manifest・code・公開境界・fixtureのartifact違反をすべて伝播する", async () => {
   const cases = [
     builder({ ...validManifest, permissions: ["storage", "tabs"] }),
+    builder({
+      ...validManifest,
+      host_permissions: ["https://example.invalid/*"],
+    }),
+    builder({ ...validManifest, optional_permissions: ["tabs"] }),
+    builder({
+      ...validManifest,
+      optional_host_permissions: ["https://example.invalid/*"],
+    }),
     builder({
       ...validManifest,
       content_security_policy: { extension_pages: "script-src *" },

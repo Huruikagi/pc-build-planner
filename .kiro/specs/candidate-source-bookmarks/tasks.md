@@ -195,7 +195,7 @@
   - production buildしたunpacked拡張でcritical pathがChrome 116以降相当のPlaywright実行に成功することを完了条件とする。
   - _Requirements: 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 4.4, 4.5, 5.1, 5.2, 5.3_
 
-- [ ] 6.2 権限・公開境界・架空fixtureの検証gateを拡張する
+- [x] 6.2 権限・公開境界・架空fixtureの検証gateを拡張する
   - manifestの権限集合に `tabs`、host、optional permissionが追加されていないことを検証する。
   - feature間利用が公開入口とcomposition注入だけで、内部mapやstorage adapterへのdeep importを持たないことを検証する。
   - source catalogの公開consumerがfoundation root、編集draft、内部query実装をimportせず、URL正規化・一致判定をcatalogへ持ち込まないことを検証する。
@@ -218,3 +218,7 @@
   - production build、artifacts、boundaries、fixtures、新規タブ再訪Playwrightを実行する。
   - `pnpm validate` が成功し、追加権限、実データfixture、feature内部deep import、未関係の公開契約差分がないことを完了条件とする。
   - _Requirements: 3.6, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 7.5, 8.6, 8.7_
+
+## Implementation Notes
+
+- 境界・fixture gateは文字列や1段aliasの列挙ではなく、全入力のAST構文preflight、循環安全なconst固定点解析、fixture registryの双方向完全性でfail closedにする。

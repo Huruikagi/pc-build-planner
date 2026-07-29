@@ -55,8 +55,8 @@ test("formatVersion 1の複数ソース候補は全ソースとprimaryを保持�
       siteName: "架空販売店",
       capturedAt: "2026-07-19T00:00:00.000Z",
       price: {
-        original: "12,345円",
-        confirmed: { amount: 12345, currency: "JPY" },
+        original: "架空価格 12,345 SYN",
+        confirmed: { amount: 12345, currency: "SYN" },
       },
       kind: "retail",
     },
@@ -97,8 +97,8 @@ test("旧開発版formatVersion 1の単数sourceInfoと商品priceは未対応�
   part.product = {
     ...(part.product as Record<string, unknown>),
     price: {
-      original: "12,345円",
-      confirmed: { amount: 12345, currency: "JPY" },
+      original: "架空価格 12,345 SYN",
+      confirmed: { amount: 12345, currency: "SYN" },
     },
   };
 

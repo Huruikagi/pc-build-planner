@@ -10,12 +10,14 @@ import { schemaValidator } from "../../src/domain/validation.ts";
 
 // @ts-expect-error Node 26のtype strippingでTypeScript fixtureを直接利用する。
 const fixtureModule = await import("./foundation.ts");
+const candidateSourceFixtureModule = await import("./candidate-source-root.ts");
 const {
   buildCorruptFoundationRoots,
   buildFoundationRoot,
   buildMissingProductFieldsRoot,
   buildSourceMetadataCompatibilityRoot,
 } = fixtureModule;
+const { sourceRoot } = candidateSourceFixtureModule;
 
 const jsonRoundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const candidateCategory = (candidate: { category: string }) =>
@@ -112,6 +114,37 @@ test("foundation fixture sourceに実サイトassetや商品値を含まない",
     findFixtureValueViolations(buildSourceMetadataCompatibilityRoot()),
     [],
   );
+});
+
+test("candidate source fixtureは架空URL・価格・siteNameだけを保持する", () => {
+  const sources = sourceRoot().candidateParts.flatMap(
+    (candidate: { sources: readonly unknown[] }) => candidate.sources,
+  );
+  assert.ok(sources.length > 0);
+  const pricedSources = sources.filter(
+    (source: { price?: unknown }) => source.price !== undefined,
+  );
+  assert.ok(pricedSources.length > 0);
+  for (const source of sources) {
+    assert.match(source.pageUrl, /^https:\/\/[^/]+\.example\.invalid\//);
+    assert.match(source.siteName, /架空|synthetic/i);
+  }
+  for (const source of pricedSources) {
+    assert.equal(typeof source.price?.confirmed?.amount, "number");
+    assert.match(source.price?.confirmed?.currency ?? "", /^[A-Z]{3}$/);
+  }
+  assert.deepEqual(findFixtureValueViolations(sourceRoot()), []);
+});
+
+test("source fixture policyは非架空siteNameをfail closedで拒否する", () => {
+  const root = jsonRoundTrip(sourceRoot());
+  root.candidateParts[0].sources[0].siteName = "Real Store";
+  assert.deepEqual(findFixtureValueViolations(root), [
+    {
+      path: "$.candidateParts[0].sources[0].siteName",
+      rule: "non-synthetic-source-site-name",
+    },
+  ]);
 });
 
 test("合成markerを持たない任意の実商品名と型番をfail closedで拒否する", () => {

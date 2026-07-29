@@ -32,6 +32,8 @@ export const sourceRoot = (): LocalDataRoot => ({
         {
           id: "30000000-0000-4000-8000-000000000001" as CandidateSourceId,
           pageUrl: "https://catalog.example.invalid/synthetic-part-1",
+          siteName: "架空販売店",
+          capturedAt: timestamp,
           kind: "retail",
         },
       ],
@@ -50,6 +52,12 @@ export const sourceRoot = (): LocalDataRoot => ({
         {
           id: "30000000-0000-4000-8000-000000000002" as CandidateSourceId,
           pageUrl: "https://catalog.example.invalid/synthetic-part-1",
+          siteName: "架空メーカー",
+          capturedAt: timestamp,
+          price: {
+            original: "架空価格 23,456 SYN",
+            confirmed: { amount: 23_456, currency: "SYN" },
+          },
           kind: "manufacturer",
         },
       ],
