@@ -22,7 +22,7 @@
 - `src/domain/validation.ts`: `sourceInfo` のバリデーションが単数前提。
 - `src/features/candidate-management/state-snapshot.ts`: `pageUrl` の保持と `http`/`https` 検証（:134 付近）を実装済み。
 - `src/features/candidate-management/view.tsx`: 取得元ページを開く UI が無い。
-- 移行機構は local-data-foundation が所有しており、`schemaVersion` を上げる仕組み自体は存在する。
+- 移行機構は local-data-foundation が所有しているが、本プロジェクトは初回リリース前であり、開発中の保存データと旧backupは互換対象にしない。
 
 ## Desired Outcome
 
@@ -30,7 +30,7 @@
 - どれか一つをプライマリ（代表）として指定でき、一覧に出る価格・URL はプライマリから導出される。二重管理しない。
 - 各ソースに種別（**販売ページ** / **メーカー商品紹介ページ**）が付き、価格を持たないメーカーページを自然に扱える。既定は自動判定し、利用者が上書きできる。
 - 候補一覧・詳細から任意のソースページを開き直せる。作業中のタブを潰さず、サイドパネルは開いたまま維持される。
-- 既存データは非破壊で移行される。既存の `sourceInfo` + `product.price` が「プライマリ1件」へ変換される。
+- 初回リリースの保存形式を複数ソース構造へ直接統一し、旧`sourceInfo`と商品共通`price`をcanonical契約へ残さない。
 
 ## Approach
 
@@ -49,7 +49,7 @@
   - `sourceInfo` の 1:N 化（各エントリが URL / 価格 / 取得日時 / サイト名 / 種別を持つ）
   - 価格の per-source かつ optional 化、商品側代表価格の廃止とプライマリからの導出
   - プライマリソースの指定・変更
-  - `schemaVersion` の引き上げと既存データの非破壊移行（既存 `sourceInfo` + `product.price` → プライマリ1件）
+  - 初回リリースの`schemaVersion`と保存形式を複数ソース構造へ統一
   - 実行時検証（`validation.ts`）の複数ソース対応
   - 既存パーツへのソース手動追加・削除
   - ソースページを開く導線（`chrome.tabs.create` 経由、新規タブ既定）
@@ -65,7 +65,7 @@
 ## Boundary Candidates
 
 - **ドメインモデル**（local data foundation 所有）: ソースコレクションの型、プライマリの表現（フラグか ID 参照か）、種別フィールド、検証規則。
-- **移行**（local data foundation 所有）: `schemaVersion` 引き上げと変換ロジック。既存の単一ソースが必ずプライマリになること。
+- **初期schema確定**（local data foundation 所有）: 現行`schemaVersion`、初期root、validator、Repository、replacementを同じ複数ソース契約へ統一すること。
 - **導出ロジック**: 一覧表示の代表価格 / 代表 URL をプライマリから導く純粋関数。プライマリ不在・価格なしプライマリのフォールバック規則。
 - **タブ遷移 adapter**（feature 所有 runtime adapter）: `chrome.tabs.create` を呼ぶ境界。URL 検証をこの手前で行う。
 - **種別推定**: ドメイン→メーカー名マップの参照点。`product-page-capture` の `public.ts` を通す形にし、deep import しない。
@@ -80,13 +80,13 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `local-data-foundation`（ドメインモデル・検証・移行・Repository）、`project-candidate-management`（候補 CRUD・詳細編集契約）、`product-page-capture`（保存時に渡す取得元情報、および #8 のドメインマップ）
+- **Upstream**: `local-data-foundation`（ドメインモデル・検証・Repository・将来の移行基盤）、`project-candidate-management`（候補 CRUD・詳細編集契約）、`product-page-capture`（保存時に渡す取得元情報、および #8 のドメインマップ）
 - **Downstream**: `source-price-refresh`（更新先ソースの特定に本 spec のコレクションを使う）、`duplicate-product-merge`（統合先として本 spec のソース追加契約を使う）、`backup-restore`（新しい `schemaVersion` の入出力）
 
 ## Existing Spec Touchpoints
 
 - **Extends**:
-  - `local-data-foundation` -- ドメインモデル・検証・`schemaVersion` 移行
+  - `local-data-foundation` -- ドメインモデル・検証・初回リリースの`schemaVersion`確定
   - `project-candidate-management` -- 要件2（候補の作成と所属）、要件4（候補情報の編集）、要件6（隣接機能向け契約）。価格が per-source になることで候補作成契約の形が変わる
   - `product-page-capture` -- 要件5.3（確認値・元表記・取得元・取得日時を候補作成契約へ渡す）。渡す取得元がソース1件として扱われる
   - `backup-restore` -- 新 `schemaVersion` の互換
@@ -96,7 +96,7 @@
 
 ## Constraints
 
-- 既存データを失わない非破壊移行。移行失敗時に既存データを上書きしない（local-data-foundation の原子的 mutation / atomic replacement 規約に従う）。
+- 開発中の旧保存データと旧backupは互換対象にしない。初回リリース形式の不正なroot・backupは、local-data-foundationの原子的mutation / atomic replacement規約に従って既存値を置換せず拒否する。
 - 永続化 mutation は単一 write authority へ集約する（steering `structure.md`）。成功後イベントによる別 write で参照整合性を修復しない。
 - サイドパネルを外部 URL へ遷移させない。`<a href>` を素で辿らせず必ず `chrome.tabs.*` 経由にする。
 - タブ操作に追加権限を要求しない（`chrome.tabs.create` / URL 指定のみの `chrome.tabs.update` は権限不要。`"tabs"` 権限は追加しない）。

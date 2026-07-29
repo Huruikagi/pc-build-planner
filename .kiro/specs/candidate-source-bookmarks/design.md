@@ -4,13 +4,13 @@
 
 本機能は、一つの候補パーツを複数の販売ページ・メーカー商品紹介ページへ結び付け、代表ソースを基準に比較と再訪を行えるようにする。保存モデルを単数 `sourceInfo` と商品共通 `price` から、候補内の `sources` collectionと `primarySourceId` へ変更し、一覧の価格・URLは保存値を複製せず純粋に導出する。
 
-対象は既存のlocal data foundation、candidate-management、product-capture、backup-restoreをまたぐextensionである。schemaVersion 1から2への非破壊移行、候補editorの複数ソース操作、追加権限不要の新規タブ再訪に加え、下流が保存rootへ到達せずsource参照を列挙・再取得できる読み取り専用catalogを既存の単一write authorityと公開境界へ統合する。
+対象は既存のlocal data foundation、candidate-management、product-capture、backup-restoreをまたぐextensionである。初回リリースのschemaVersion 1を複数ソース形式として直接確定し、候補editorの複数ソース操作、追加権限不要の新規タブ再訪に加え、下流が保存rootへ到達せずsource参照を列挙・再取得できる読み取り専用catalogを既存の単一write authorityと公開境界へ統合する。
 
 ### 目標
 
 - 候補ごとに0件以上の取得元と、存在時に唯一のプライマリ参照を保持する。
 - 価格を取得元別に移し、代表価格と代表URLをプライマリから一意に導出する。
-- 旧保存データと旧backupを値損失なく新形式へ移行する。
+- 初回リリースの保存rootとbackupを複数ソース形式へ直接統一し、開発中の旧形式を製品契約へ含めない。
 - 販売・メーカー紹介の種別を自動判定し、利用者の上書きを優先する。
 - HTTP/HTTPSの取得元を新規タブで開き、side panelと作業中タブを維持する。
 - 全候補または指定候補のsource参照を最小投影で公開し、ID指定で現行参照を再取得できるようにする。
@@ -29,11 +29,11 @@
 
 - 候補に埋め込まれるソースentity、ソース種別、プライマリ参照、取得元別価格のcanonical domain contract。
 - 代表ソース・代表価格・代表URLの導出規則と候補ソースmutation規則。
-- 保存schema 1→2 migration、現行root検証、移行失敗時の非破壊性。
+- 初回リリースschema 1のcanonical root、現行root検証、未対応形式の拒否。
 - candidate-management内のソース一覧、追加・編集・削除・プライマリ変更・再訪UI/state/service。
 - candidate-managementの `public.ts` から公開する読み取り専用 `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`sources: { catalog, mutations }` facet、source参照DTO、列挙・ID再取得・not-found規則。
 - `chrome.tabs.create`を隔離する再訪portとHTTP/HTTPS検証。
-- backup交換形式2と交換形式1→2 migration。
+- 初回リリースのcanonical backup交換形式と現行形式の往復検証。
 - product-captureが新候補へ初期ソースを渡すためのdraft contract更新。
 
 ### 境界外
@@ -60,7 +60,7 @@
 
 - `CandidateSource`、`primarySourceId`、価格またはsource IDの形状・所有場所が変わる場合。
 - product-capture #8の公開classifier契約または登録ドメインの解決規則が変わる場合。
-- backup format version、保存schema version、migration registryの登録方式が変わる場合。
+- backup format version、保存schema version、将来のmigration registry登録方式が変わる場合。
 - Chrome Tabs APIの権限要件またはside panelからのAPI注入経路が変わる場合。
 - downstreamの `source-price-refresh` / `duplicate-product-merge` がsourceを候補外aggregateとして扱う提案をする場合。
 - `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`CandidateSourceReference`、列挙scope、not-found規則、またはcanonical `CandidateManagementPublicApi` の `query`・typed intent factory・`sources` facetが変わる場合。
@@ -94,21 +94,20 @@ graph TB
     CandidateService --> SourcePolicy[Candidate source policy]
     SourcePolicy --> SourceModel[Candidate source model]
     CandidateService --> DataPort[Foundation data port]
-    Migration[Schema migration] --> SourceModel
     DataPort --> Storage[Chrome local storage]
     CandidateView --> PagePort
     PagePort --> ChromeTabs[Chrome tabs API]
-    Backup[Backup exchange v2] --> SourceModel
+    Backup[Backup exchange] --> SourceModel
 ```
 
 **統合判断**:
 
 - 選択パターンは候補aggregate内entity collection + ports and adaptersである。
-- 依存方向は `domain types → validation/migration/policy → service → state → view` とし、platform adapterはport実装としてcompositionから注入する。
-- foundationからproduct-captureへは依存させない。旧migrationの種別は任意のまま保持し、feature側classifierが表示・新規作成時に解決する。
+- 依存方向は `domain types → validation/policy → service → state → view` とし、platform adapterはport実装としてcompositionから注入する。
+- foundationからproduct-captureへは依存させない。新規sourceの種別はfeature側classifierが作成時に解決する。
 - source catalogはcandidate-managementが保存snapshotから最小参照を投影する。URLの正規化・一致判定・重複排除を行わず、sourceの完全な候補集合を下流へ渡す。
 - candidate-managementのcanonical公開APIは `query`、`createCandidateEditorIntent(prefill): FeatureActivationIntent`、`sources: { catalog, mutations }` の三facetである。本specはcatalog/mutation facetだけを所有し、typed intent factoryとactivation適用はproject-candidate-management、一過性世代と`conclude`はproduct-capture側の契約を利用する。
-- 新規libraryは追加しない。標準URL、既存Result/UUID/migration、Chrome native APIを採用する。
+- 新規libraryは追加しない。標準URL、既存Result/UUID、将来用migration registry、Chrome native APIを採用する。
 
 ### 技術スタック
 
@@ -116,7 +115,7 @@ graph TB
 |---|---|---|---|
 | UI | React 19 / CSS | source一覧、編集、代表切替、再訪操作 | stateはReact外 |
 | 言語 | TypeScript 7 strict / ESM NodeNext | domain、port、error union | `any`禁止 |
-| データ | `chrome.storage.local` / schemaVersion 2 | 候補内source collectionの保存 | 既存10MB制約 |
+| データ | `chrome.storage.local` / schemaVersion 1 | 候補内source collectionの保存 | 初回リリースcanonical形式、既存10MB制約 |
 | runtime | Chrome 116 MV3 Tabs API | 新規タブ再訪 | 追加権限なし |
 | 検証 | node:test、testing-library、Playwright | unit、contract、DOM、E2E | 架空データのみ |
 
@@ -128,12 +127,11 @@ graph TB
 src/
 ├── domain/
 │   ├── normalized-attributes.ts       # source種別・取得元別価格の値型
-│   ├── model.ts                       # CandidateSource entityとCandidatePart集約
-│   └── validation.ts                  # source collectionとprimary参照のcanonical検証
+│   ├── model.ts                       # CandidateSource entityとcanonical CandidatePart集約
+│   └── validation.ts                  # canonical root、source collection、primary参照の検証
 ├── persistence/
-│   ├── schema.ts                      # schemaVersion 2と初期root
-│   ├── migration-v1-to-v2.ts          # 単数sourceと商品価格の純粋変換
-│   ├── runtime-contribution.ts        # production migration step登録
+│   ├── schema.ts                      # 初回リリースschemaVersion 1と初期root
+│   ├── runtime-contribution.ts        # canonical validatorと空の将来migration registryを結線
 │   ├── public.ts                      # 現行schema定数の限定公開
 │   └── replacement.ts                 # 共通現行schema定数の参照
 ├── features/
@@ -153,8 +151,8 @@ src/
 │   ├── product-capture/
 │   │   └── draft-mapper.ts            # 初期sourceとprimaryを持つCandidateEditorPrefillを生成
 │   └── backup-restore/
-│       ├── contracts.ts               # BackupCandidatePart v2契約
-│       └── exchange.ts                # format 1→2 migrationとv2 mapper
+│       ├── contracts.ts               # canonical backup候補契約
+│       └── exchange.ts                # 現行backup形式のvalidatorとmapper
 ├── application-shell/
 │   └── side-panel-contributions.ts    # Chrome tabsと上流classifierのadapter注入
 └── ui-messages/catalog/
@@ -163,13 +161,13 @@ src/
 
 tests/
 ├── domain/                            # model・source invariant・validation
-├── persistence/                       # 1→2 migration、read/replace非破壊性
+├── persistence/                       # canonical schema read/write、未対応形式拒否、replace非破壊性
 ├── features/candidate-management/     # policy、catalog、service、state、DOM、公開contract、Chrome adapter
 ├── features/product-capture/          # source draft mapping
-├── features/backup-restore/           # format migrationと往復
+├── features/backup-restore/           # 現行backup形式の往復
 ├── features/compatibility/            # source変更が判定へ影響しない回帰
 ├── application-shell/                 # classifier/tab adapter composition
-└── fixtures/foundation.ts             # schema 2の架空source fixture
+└── fixtures/foundation.ts             # canonical複数ソースの架空fixture
 
 e2e/
 └── candidate-management.spec.ts       # 複数source管理と新規タブ再訪のcritical path
@@ -178,15 +176,15 @@ e2e/
 ### 変更対象ファイル
 
 - `src/domain/normalized-attributes.ts` — `CandidateProductValues.price`を除き、`CandidateSourceKind`とsource用price値を定義する。
-- `src/domain/model.ts` — source ID、source entity、`sources`、`primarySourceId`、schemaVersion 2を定義する。
-- `src/domain/validation.ts` — source配列、重複ID、種別、価格、primary参照、schema 2を検証する。
-- `src/persistence/schema.ts`、`runtime-contribution.ts`、`public.ts`、`replacement.ts` — 現行版2とmigration登録を一元化し、backup mapperへ限定公開する。
+- `src/domain/model.ts` — source ID、source entity、`sources`、`primarySourceId`をcanonical候補契約として定義する。
+- `src/domain/validation.ts` — source配列、重複ID、種別、価格、primary参照、schema 1を検証する。
+- `src/persistence/schema.ts`、`runtime-contribution.ts`、`public.ts`、`replacement.ts` — 現行版1、初期root、validatorを一元化し、migration registryは将来拡張用に空で維持する。
 - `src/features/candidate-management/contracts.ts`、`source-catalog.ts`、`service.ts`、`state.ts`、`state-snapshot.ts`、`view.tsx`、`styles.css`、`public.ts`、`feature-contribution.ts` — 候補管理のsource catalog・mutation能力を公開し、sourceを保存・表示する。
 - `src/features/product-capture/draft-mapper.ts` — 価格と取得元を一件の初期sourceへ写像した `CandidateEditorPrefill` を生成する。
-- `src/features/backup-restore/contracts.ts`、`exchange.ts` — format 2と旧format移行を実装する。
+- `src/features/backup-restore/contracts.ts`、`exchange.ts` — 初回リリースの現行backup形式を複数ソース契約として実装する。
 - `src/application-shell/side-panel-contributions.ts` — source classifierとChrome tab portだけをcompositionする。
 - `src/ui-messages/catalog/{ja,en}/candidate.ts` — 既存message schemaを両言語で同時更新する。
-- 既存fixture・contract・integration testはschema 2形状へ更新し、上記の新規専用testを加える。
+- 既存fixture・contract・integration testはcanonical複数ソース形状へ更新し、上記の新規専用testを加える。
 
 ## システムフロー
 
@@ -232,18 +230,6 @@ sequenceDiagram
     State-->>View: panel維持またはエラー表示
 ```
 
-### schema移行
-
-```mermaid
-flowchart TD
-    Read[Schema 1 root読込] --> Clone[入力をclone]
-    Clone --> Transform[各候補のsourceInfoとpriceを変換]
-    Transform --> Version[Schema 2を設定]
-    Version --> Validate[Schema 2全体を検証]
-    Validate -->|成功| Return[移行済みsnapshotを返す]
-    Validate -->|失敗| Reject[失敗を返して旧保存値を維持]
-```
-
 ## 要件トレーサビリティ
 
 | 要件 | 要約 | コンポーネント | インターフェース | フロー |
@@ -253,9 +239,9 @@ flowchart TD
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 手動source管理 | CandidateSourcePolicy、CandidateManagementState、CandidateSourceView | `CandidateSourceMutationPort` | source変更 |
 | 4.1, 4.2, 4.3, 4.4, 4.5 | 種別判定と上書き | SourceKindClassifier、CandidateManagementService、CandidateSourceView | `SourceKindClassifier` | source変更 |
 | 5.1, 5.2, 5.3, 5.4, 5.5 | 安全な再訪 | SourcePagePort、CandidateManagementState、CandidateSourceView | `SourcePagePort.open` | 再訪 |
-| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 非破壊移行 | CandidateSourceMigration、CandidateSourceValidator | `MigrationStep<1, 2>` | schema移行 |
+| 6.1, 6.2, 6.3, 6.4, 6.5 | 初回リリース保存形式の一貫性 | CanonicalSourceSchema、CandidateSourceValidator | `SchemaValidator`、`MigrationRegistry` | root read/write |
 | 7.1, 7.2, 7.3, 7.4, 7.5 | 検証と原子性 | CandidateSourceValidator、CandidateManagementService、SourcePagePort | `validateCandidatePartContent`、foundation mutation | 全フロー |
-| 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 | 既存workflow・下流参照整合 | CaptureSourceMapper、BackupExchangeV2、CandidateSourceModel、CandidateSourceCatalog | `createCandidateEditorIntent`、`FeatureActivationIntent`、`ExchangeMapper`、`CandidateSourceCatalogPort` | 取り込みhandoff・backup・下流参照 |
+| 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 | 既存workflow・下流参照整合 | CaptureSourceMapper、BackupExchange、CandidateSourceModel、CandidateSourceCatalog | `createCandidateEditorIntent`、`FeatureActivationIntent`、`ExchangeMapper`、`CandidateSourceCatalogPort` | 取り込みhandoff・backup・下流参照 |
 
 ## コンポーネントとインターフェース
 
@@ -263,7 +249,7 @@ flowchart TD
 |---|---|---|---|---|---|
 | CandidateSourceModel | Domain | source entityとaggregate invariantを定義 | 1.1, 1.2, 1.3, 1.4, 1.5, 2.5 | UUID、UTC | State |
 | CandidateSourceValidator | Domain | 未信頼root/draftをfail closedで検証 | 1.2, 6.5, 7.1, 7.2, 7.5, 8.4 | CandidateSourceModel | Service |
-| CandidateSourceMigration | Persistence | schema 1を2へ純粋変換 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | migration registry、validator | Batch |
+| CanonicalSourceSchema | Persistence | 複数ソース形式を初回リリースschema 1として確定 | 6.1, 6.2, 6.3, 6.4, 6.5 | schema、migration registry、validator | State |
 | CandidateSourcePolicy | Feature domain | add/update/remove/primary/代表導出を一元化 | 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5 | CandidateSourceModel | Service |
 | CandidateSourceCatalog | Feature query | source参照をread-onlyで列挙・再取得 | 8.7 | FoundationScopedDataPort、CandidateSourceModel | Service |
 | CandidateManagementService | Feature service | source mutationを一回のroot更新へ確定 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.3, 7.4 | policy、classifier、data port | Service |
@@ -272,7 +258,7 @@ flowchart TD
 | SourcePagePort | Runtime adapter | 安全なURLだけを新規タブで開く | 5.1, 5.2, 5.3, 5.4, 5.5 | Chrome Tabs API | Service |
 | SourceKindClassifier | Integration adapter | 上流mapから初期種別を解決 | 4.1, 4.2, 4.3, 4.4 | product-capture public | Service |
 | CaptureSourceMapper | Integration | capture値を初期primary source付きprefillへ変換 | 8.1 | capture session、CandidateEditorPrefill | Service |
-| BackupExchangeV2 | Integration | source関係を交換形式で往復・移行 | 8.2, 8.3, 8.4 | source model、foundation replacement | Batch |
+| BackupExchange | Integration | source関係を現行交換形式で往復 | 8.2, 8.3, 8.4 | source model、foundation replacement | Batch |
 
 ### Domain / Persistence
 
@@ -333,24 +319,24 @@ interface CandidatePart {
 - sourceなし + primaryあり、sourceあり + primaryなしを拒否する。
 - 外部文字列に生HTML、data URL、画像・binary payloadを許可しない。
 
-#### CandidateSourceMigration
+#### CanonicalSourceSchema
 
 | 項目 | 詳細 |
 |---|---|
-| 意図 | schema 1候補を値損失なくschema 2へ変換する |
-| 要件 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 |
+| 意図 | 複数ソース候補を初回リリースのschema 1として一貫してread/writeする |
+| 要件 | 6.1, 6.2, 6.3, 6.4, 6.5 |
 
-**契約**: Batch [x]
+**契約**: State [x]
 
 ```typescript
-const migrateV1ToV2: MigrationStep<1, 2>;
+const CURRENT_SCHEMA_VERSION = 1 as const;
+const schemaValidator: SchemaValidator;
 ```
 
-- Trigger: registryがschemaVersion 1を現行版2へ読むとき。
-- Input: `unknown`。step内部で旧rootの必要shapeを検査する。
-- Output: `schemaVersion: 2`、候補ごとの `sources` と `primarySourceId`。
-- Idempotency: 旧候補のsource IDにcandidate IDを使い、同じ入力から同じ出力を生成する。
-- Recovery: 変換・最終検証の失敗を返し、storage writeを行わない。
+- `createInitialRoot`、Repository、transaction runner、replacementは同じcanonical validatorを使う。
+- production migration registryは現行版1と空step集合で構築し、将来のリリース後変更にmigration stepを追加できる形を維持する。
+- schemaVersion 1でも旧単数`sourceInfo`・商品共通`price`を持つ開発形式はcanonical検証で拒否し、暗黙変換しない。
+- 検証失敗時はstorage writeやreplacementを行わない。
 
 ### Candidate Management
 
@@ -516,7 +502,7 @@ interface SourceKindClassifier {
 
 summary-only component。capture sessionのpageUrl、capturedAt、取得priceを一件のsourceへ移し、そのIDをprimaryに設定した `CandidateEditorPrefill` を構築する。商品共通値にはpriceを含めず、kindは未指定のまま候補serviceのclassifierに委ね、元表記 `sourceSnapshot` は候補単位で保持する。product-captureはこのprefillを `CandidateManagementPublicApi.createCandidateEditorIntent` に渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送する。mapperはcandidate query、`sources.mutations`、candidate serviceを直接呼ばない。
 
-#### BackupExchangeV2
+#### BackupExchange
 
 | 項目 | 詳細 |
 |---|---|
@@ -525,9 +511,9 @@ summary-only component。capture sessionのpageUrl、capturedAt、取得priceを
 
 **契約**: Batch [x]
 
-- formatVersion 2のcandidateは `sources` と条件付き `primarySourceId` を持ち、商品priceと単数sourceInfoを持たない。
-- v1→v2 stepは保存schema migrationと同じ値移動規則・決定的source IDを使う。
-- v2 envelope検証後にだけ現行 `LocalDataRoot` 候補へ写像し、最終schema・容量・参照整合はfoundationへ委ねる。
+- 初回リリースのformatVersion 1 candidateは `sources` と条件付き `primarySourceId` を持ち、商品priceと単数sourceInfoを持たない。
+- 開発中の旧formatVersion 1 shapeと未知versionを未対応形式として拒否し、変換stepを持たない。
+- 現行envelope検証後にだけcanonical `LocalDataRoot`候補へ写像し、最終schema・容量・参照整合はfoundationへ委ねる。
 - export→importでsource順序、ID、primary、価格、kind、siteName、capturedAt、sourceSnapshotを保持する。
 
 ## データモデル
@@ -553,7 +539,7 @@ erDiagram
 
 ### 論理データモデル
 
-- `LocalDataRoot.schemaVersion`: literal `2`。
+- `LocalDataRoot.schemaVersion`: 初回リリースcanonicalのliteral `1`。
 - `CandidatePart.sources`: JSON配列。表示順は利用者が保存した順を維持する。
 - `CandidatePart.primarySourceId`: sourceがある場合だけ必須のUUID参照。
 - `CandidateSource.price`: `SourcedValue<MoneyValue>`。元表記と利用者確認値を分離する。
@@ -576,7 +562,7 @@ erDiagram
 - source editorのvalidation失敗はdraftと保存済み候補を維持し、source index/fieldに対応するエラーを表示する。
 - source mutationのrevision conflict、maintenance、quota、storage失敗は既存の回復actionを再利用する。
 - tab open失敗は保存mutationへ影響させず、panel内に再試行可能なエラーを表示する。
-- migration/restore失敗は旧storage rootを置換しない。
+- canonical root読込・restore検証失敗はstorage rootを置換しない。
 
 ### 主なカテゴリ
 
@@ -588,13 +574,13 @@ erDiagram
 | downstream match | URL一致0件・複数件、kind不適格 | catalogでは選択せず全参照を返し、consumerが `no-match` / `ambiguous-match` / eligibilityを判定 |
 | concurrency | revision conflict | 変更前データ保持、既存conflict案内 |
 | runtime | Tabs API unavailable/throw | `open-failed`案内、panel維持 |
-| migration | 旧shape破損、最終schema不適合 | migration失敗、旧保存値維持 |
+| schema | 旧開発shape、未知version、canonical schema不適合 | 未対応または検証失敗、保存値を書き換えない |
 | restore | format未知、source参照不整合 | preflight拒否、既存root維持 |
 
 ### 監視
 
 - 既存の安定error code報告だけを使い、URL・商品値・backup内容は出力しない。
-- schema migrationとtab adapterのtest failureをCI gateで検出する。新しいtelemetryや外部送信は導入しない。
+- canonical schemaとtab adapterのtest failureをCI gateで検出する。新しいtelemetryや外部送信は導入しない。
 
 ## テスト戦略
 
@@ -602,7 +588,7 @@ erDiagram
 
 - CandidateSourcePolicy: 初回primary、切替、非primary削除、primary replacement必須、最後のsource削除、primary価格なしの非fallbackを検証する（2.1–2.5、3.3–3.5）。
 - CandidateSourceValidator: source key/type/URL/UTC/money、重複ID、primary参照、禁止payloadのpathを検証する（7.1、7.2、7.5）。
-- CandidateSourceMigration: sourceInfo+price、片方だけ、両方なしを変換し、ID決定性と元属性保持を検証する（6.1–6.6）。
+- CanonicalSourceSchema: 初期root、通常read/write、旧開発shape・未知version拒否、検証失敗時の非書込みを検証する（6.1–6.5）。
 - SourceKindClassifier: 明示kind優先、map一致manufacturer、非一致retailを検証する（4.1–4.4）。
 - SourcePagePort: HTTP/HTTPSだけがtabs.createへ一回到達し、危険scheme・throwが型付き失敗になることを検証する（5.4、5.5）。
 
@@ -612,8 +598,8 @@ erDiagram
 - CandidateSourceCatalogで全候補・候補限定の列挙、sourceなし空配列、candidate/source not-found、primary投影を検証し、URL重複を除外・暗黙選択しないことを確認する（8.7）。
 - candidate-management public contractでsource catalogとmutationが同一source facetから利用でき、公開consumerがfoundation rootや内部moduleをimportせず型検査を通ることを確認する（8.7）。
 - product-capture draftが価格をprimary sourceへ渡し、商品共通priceを生成しないことを検証する（8.1）。
-- backup format 2のexport/import round tripとformat 1 migrationで全source値・primary・参照を維持する（8.2–8.4）。
-- production foundationが1→2 stepを登録し、read/transaction/replacementの各経路で同じ現行版を使うことを検証する（6.5、6.6）。
+- 現行backup format 1のexport/import round tripで全source値・primary・参照を維持し、旧開発shapeを拒否する（8.2–8.4）。
+- production foundationが空の将来migration registryとcanonical validatorを使い、read/transaction/replacementの各経路で同じ現行版を使うことを検証する（6.1–6.5）。
 - application shellがproduct-capture公開lookupとChrome tabs handleをcandidate contributionへ注入し、feature間deep importを作らないことを検証する（4.1、5.5）。
 - compatibility flowでsource/priceだけの変更がrule入力と結果を変えないことを検証する（8.5）。
 
@@ -627,7 +613,7 @@ erDiagram
 
 ### 性能・容量
 
-- 既存10MB capacity testをschema 2 fixtureへ更新し、source増加分を正確にbyte評価する。
+- 既存10MB capacity testをcanonical複数ソースfixtureへ更新し、source増加分を正確にbyte評価する。
 - 候補一覧queryは各候補のprimaryを一回の配列探索で導出する。別storage readやネットワーク取得を追加しない。
 
 ## セキュリティ考慮事項
@@ -637,12 +623,12 @@ erDiagram
 - `tabs`、host、optional permissionをmanifestへ追加しない。既存artifacts gateを回帰検証する。
 - URL・商品値・閲覧履歴をログへ出さず、架空 `.invalid` URLだけをfixtureへ使う。
 
-## 移行戦略
+## 初回schema確定戦略
 
-1. 稼働中のschema 1契約を維持したまま、`CandidatePartV2`、`LocalDataRootV2`、schema 2専用validator、純粋1→2 migration stepをversioned契約として追加する。production registryと現行schema定数はまだ切り替えない。
-2. candidate-management、product-capture、backup mapperをversioned schema 2 portへ順次対応させる。途中のfeature taskはfoundation具体portへ依存せず、schema 1 productionの全回帰を維持する。
-3. candidate-managementのread-only source catalogとmutationを `public.ts` のsource facetへ合成し、下流public consumer contractを固定する。
-4. backup format 1→2 migrationとschema 2復元候補のpreflightを実装するが、foundation replacementへのproduction結線はcutoverまで行わない。
-5. 全consumerがschema 2契約へ対応した後、専用cutover taskでmigration registry、現行schema定数、initial root、replacement、write authority、通常fixtureを一度にschema 2へ切り替える。schema 1型とfixtureはmigration境界だけに残す。
+1. 先行実装した`CandidatePartV2`、`LocalDataRootV2`、schema 2専用validatorから複数ソース契約をcanonical `CandidatePart`、`LocalDataRoot`、`schemaValidator`へ昇格する。
+2. `schemaVersion`は初回リリースのliteral `1`を維持し、旧単数`sourceInfo`・商品共通`price`の型、validator、fixture、変換stepを削除する。
+3. candidate-management、product-capture、backup mapper、全consumerをcanonical複数ソース契約へ一度に結線する。
+4. backupのformatVersionも初回リリースのliteral `1`を維持し、複数ソース形式を現行shapeとして直接検証・往復する。旧開発shapeの変換は提供しない。
+5. production migration registryは空step集合で維持し、初回リリース後にschemaVersionを変更するときだけ非破壊migrationを追加する。
 
-ロールバック用の逆migrationは提供しない。変換失敗時は旧rootを上書きせず、実装の修正後に同じschema 1入力から再試行する。現行rootの書込みが始まった後はversion 2をcanonicalとする。
+開発中データは破棄可能でありrollbackや旧形式変換を提供しない。canonical形式の検証・restore失敗時は既存rootを置換しない。

@@ -31,7 +31,7 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 - 取得は明示的なユーザー操作を契機とし、閲覧中のページのみを対象とする（steering `product.md` プロダクト原則）。この線は #14 で steering に明文化する。
 - `src/features/<feature>/public.ts` のみを feature 外の公開入口とする境界規約（steering `structure.md`）と `scripts/validate-boundaries.mjs` の検証を破らない。
 - 実サイト由来の HTML・画像・商品データをテスト資産に使わない（product-page-capture 要件7）。
-- `LocalDataRoot.schemaVersion` の引き上げを伴う変更は、既存データの非破壊移行と backup/restore の互換を保つ。
+- 初回リリース前の保存形式変更は、開発中データを互換対象とせず、リリース時点のcanonical schemaとbackup形式へ直接統一する。初回リリース後に`LocalDataRoot.schemaVersion`を引き上げる変更では、既存データの非破壊移行とbackup/restore互換を保つ。
 
 ## Boundary Strategy
 
@@ -45,7 +45,7 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
   - **`SourceInfo` / `price` の所有**: `candidate-source-bookmarks` が per-source 化の canonical owner。`source-price-refresh` と `duplicate-product-merge` はその契約の利用者であり、価格の置き場所を再定義しない。
   - **ドメイン→メーカー名マップの利用先**: #8 のマップは `product-page-capture` が所有し、#11 のソース種別自動判定はそれを**参照する**（マップを二重に持たない）。
   - **付与ジェスチャー経路**: `transient-feature-surface` が起動口（アイコン / コンテキストメニュー）の契約を所有し、`source-price-refresh` は「価格更新」メニュー項目をその契約に登録する形にする。service worker 側で経路を再実装しない。
-  - **`schemaVersion` 移行**: `candidate-source-bookmarks` のみが移行を書く。backup/restore のエクスポート形式との整合を同 spec 内で確認する。
+  - **初期`schemaVersion`確定**: `candidate-source-bookmarks` が複数ソース形式を初回リリースのcanonical schemaとして確定する。開発中の旧保存形式・旧backup形式は互換対象にせず、将来のmigration基盤だけをlocal-data-foundationに維持する。
 
 ## Existing Spec Updates
 

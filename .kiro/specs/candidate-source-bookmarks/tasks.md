@@ -27,14 +27,6 @@
   - _Boundary: CandidateSourceValidator_
   - _Depends: 1.2_
 
-- [x] 1.4 schema 1から2への純粋migration stepを実装する
-  - 旧単数取得元と商品価格を一件のprimary sourceへ移し、片方だけ・両方なしも値損失なく変換する。
-  - 旧候補IDを生成source IDとして再利用し、同じ入力から同じschema 2結果を生成する。
-  - production registryへはまだ登録せず、schema 2専用validatorまでの純粋変換と入力非変更をtestする。
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
-  - _Boundary: CandidateSourceMigration_
-  - _Depends: 1.2, 1.3_
-
 - [ ] 2. 独立したソース能力と隣接形式を実装する
 - [x] 2.1 (P) ソースcollection更新と代表値導出policyを実装する
   - 初回追加でprimaryを設定し、追加・更新・primary切替を副作用なしで返す。
@@ -63,13 +55,12 @@
   - _Boundary: SourcePagePort_
   - _Depends: 1.2_
 
-- [x] 2.4 (P) backup交換形式2と旧形式移行を実装する
+- [x] 2.4 (P) 複数ソースbackupの独立mapperとpreflightを実装する
   - 現行交換候補へ全source、primary参照、取得元別価格、種別、サイト名、日時を含める。
-  - format 1の単数取得元と商品価格をformat 2へ連続的かつ決定的に変換する。
   - export/import mapperでsource順序・ID・primary・snapshotを維持し、不正参照をpreflightで拒否する。
-  - format 1 migrationとformat 2 round tripのtestが、既存rootを置換する前の検証まで成功することを完了条件とする。
-  - _Requirements: 6.1, 6.2, 8.2, 8.3, 8.4_
-  - _Boundary: BackupExchangeV2_
+  - 複数ソース形式のround trip testが、既存rootを置換する前の検証まで成功することを完了条件とする。
+  - _Requirements: 6.2, 8.2, 8.3, 8.4_
+  - _Boundary: BackupExchange_
   - _Depends: 1.2_
 
 - [x] 3. 候補管理serviceと公開source契約を統合する
@@ -152,7 +143,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 5.3, 5.5_
   - _Depends: 1.1, 2.2, 2.3_
 
-- [x] 5.2 (P) 商品取り込みから候補保存までの初期source統合を検証する
+- [x] 5.2 商品取り込みから候補保存までの初期source統合を検証する
   - 更新済み候補draft契約に合わせ、取り込みページURL、取得日時、取得価格を一件のsourceへ写像し、そのIDをprimaryにした `CandidateEditorPrefill` を構築する。
   - 商品共通値へ価格を残さず、元表記snapshotと他の確認済み商品値を維持し、種別未指定は候補serviceのclassifierへ委ねる。
   - product-captureがprefillを公開 `createCandidateEditorIntent` へ渡し、返された `FeatureActivationIntent` を一過性surfaceの`conclude`へ配送することを検証する。candidate query、source mutation、candidate serviceを直接呼ばない。
@@ -164,37 +155,50 @@
   - _Depends: 1.1, 3.1, 3.4, 5.1_
 
 - [x] 5.3 (P) backup復元とfoundation置換の複数source統合を検証する
-  - format 2 backupをversioned schema 2 validatorによるpreflightまで通し、全source関係を復元候補へ写像する。foundation atomic replacementへの結線は5.6が所有する。
-  - format 1 backupも移行後に同じprimary source規則へ到達することを検証する。
+  - 複数ソースbackupをcanonical validatorによるpreflightまで通し、全source関係を復元候補へ写像する。foundation atomic replacementへの結線は5.5、現行backup mapperへの結線は5.6が所有する。
   - 不正sourceまたはprimary参照を持つbackupが既存rootを置き換えないことを検証する。
   - exportした架空データを復元して再exportしたときsource意味が一致するintegration testが成功することを完了条件とする。
-  - _Requirements: 6.1, 6.2, 6.5, 8.2, 8.3, 8.4_
-  - _Boundary: BackupExchangeV2, CandidateSourceMigration_
-  - _Depends: 1.3, 1.4, 2.4_
+  - _Requirements: 6.2, 6.4, 8.2, 8.3, 8.4_
+  - _Boundary: BackupExchange, CanonicalSourceSchema_
+  - _Depends: 1.3, 2.4_
 
-- [ ] 5.4 互換性判定と未変更consumerのschema 2回帰を整備する
-  - source・取得元別価格だけを変えた候補が同じ正規化属性から同じ互換性結果を返すことを検証する。
-  - 現在構成、worker registration、公開consumerなどの候補fixtureを新source契約へ更新する。
-  - 隣接featureが商品共通priceや単数取得元へ依存していないことを型検査とcontract testで確認する。
-  - compatibilityと未変更consumerの回帰testがschema 2 fixtureで成功することを完了条件とする。
-  - _Requirements: 6.4, 8.5, 8.6_
-  - _Depends: 5.6_
-
-- [x] 5.5 downstream向けsource catalog consumer契約を検証する
+- [x] 5.4 downstream向けsource catalog consumer契約を検証する
   - 価格更新consumer fixtureが公開catalogから全候補または候補限定のsource参照を取得できることを検証する。
   - 同一URLの複数参照をcatalogが保持し、URL同一性・0件・1件・複数件の一致と曖昧さをconsumer側で判定できることを確認する。
   - source再取得のnot-foundをconsumerがstale targetへ変換でき、foundation rootやcandidate内部moduleをimportしない公開consumer型検査が成功することを完了条件とする。
   - _Requirements: 8.7_
 
-- [ ] 5.6 schema 2をproduction foundationへcutoverする
-  - 1→2 migrationをproduction registryへ登録し、現行schema定数、initial root、replacement、write authorityをschema 2へ一元切替する。
-  - versioned schema 2 portをfoundation portへ結線し、schema 1の候補型・商品共通price・単数sourceInfo・一時adapterを削除する。
-  - 通常fixtureと未変更consumerをschema 2へ更新し、schema 1 fixtureはmigration専用に分離する。
-  - repository read、root transaction、backup replacement、candidate serviceが同じ現行validatorを使い、移行失敗時に旧rootを書き換えないことを検証する。
-  - typecheck、foundation回帰、migration、candidate、capture、backupの各suiteが同じcommitで成功することを完了条件とする。
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5_
-  - _Boundary: SchemaV2ProductionCutover_
-  - _Depends: 1.4, 2.4, 3.2, 3.3, 3.4, 4.2, 4.4, 5.2, 5.3_
+- [ ] 5.5 複数ソースdomainとfoundationをcanonical schema 1へcutoverする
+  - 先行実装したschema 2型・validatorをcanonical `CandidatePart`、`LocalDataRoot`、`schemaValidator`へ昇格し、`schemaVersion: 1`のinitial root、repository、replacement、write authorityへ一元結線する。
+  - 旧候補型の商品共通price・単数sourceInfo、1→2 migration実装・export・専用test、versioned V2別名を削除する。
+  - production migration registryを現行版1・空step集合で構築し、将来のリリース後migration seamを維持する。
+  - repository read、root transaction、replacementが同じcanonical validatorを使い、旧開発shape・未知version・検証失敗で保存rootを書き換えないtestが成功することを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2, 6.3, 6.4, 6.5, 7.2, 7.3, 7.4_
+  - _Boundary: CanonicalSourceSchema_
+  - _Depends: 3.2, 3.3, 3.4, 4.2, 4.4, 5.2_
+
+- [ ] 5.6 backupを初回リリースのcanonical format 1へcutoverする
+  - 複数ソースbackup shapeを`formatVersion: 1`の現行契約へ昇格し、旧単数source shape、format 1→2変換、format 2別名・mapper・専用testを削除する。
+  - 現行envelopeだけをcanonical rootへ写像し、旧開発shapeと未知versionを暗黙変換せず拒否する。
+  - export/import round tripとatomic replacementで全source・primary・価格・種別・snapshotを維持し、不正入力時に既存rootを置換しないtestが成功することを完了条件とする。
+  - _Requirements: 6.2, 6.3, 6.4, 8.2, 8.3, 8.4_
+  - _Boundary: BackupExchange_
+  - _Depends: 2.4, 5.3, 5.5_
+
+- [ ] 5.7 candidate consumerとfixtureをcanonical複数ソース契約へ統合する
+  - candidate-management、product-capture、現在構成、worker registration、公開consumerをcanonical型・portへ切り替え、versioned V2一時adapterを削除する。
+  - 通常fixtureをcanonical schema 1へ更新し、旧開発fixtureと旧migration参照を削除する。
+  - typecheck、公開consumer型検査、foundation、candidate、capture、backupの関連suiteが同じcommitで成功し、`CandidatePartV2`、`LocalDataRootV2`、`schemaV2Validator`参照が残らないことを完了条件とする。
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 7.2, 7.3, 7.4, 8.1, 8.5, 8.6_
+  - _Boundary: CanonicalSchemaIntegration_
+  - _Depends: 5.4, 5.5, 5.6_
+
+- [ ] 5.8 互換性判定と未変更consumerのcanonical schema 1回帰を整備する
+  - source・取得元別価格だけを変えた候補が同じ正規化属性から同じ互換性結果を返すことを検証する。
+  - 隣接featureが商品共通priceや単数取得元へ依存していないことを型検査とcontract testで確認する。
+  - compatibilityと未変更consumerの回帰testがcanonical schema 1 fixtureで成功することを完了条件とする。
+  - _Requirements: 6.4, 8.5, 8.6_
+  - _Depends: 5.7_
 
 - [ ] 6. 実ブラウザ経路とセキュリティgateを検証する
 - [ ] 6.1 複数source管理と新規タブ再訪のE2Eを追加する
@@ -218,10 +222,10 @@
   - candidate source DTO、catalog／mutation facet、not-found、URL照合の下流所有を含む公開契約suiteがすべて成功することを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.5, 8.6, 8.7_
 
-- [ ] 7.2 保存・交換形式の移行suiteを実行する
-  - schema 1保存移行、schema 2通常read／write／replacement、format 1 backup移行、format 2 round trip、不正入力の非置換を実行する。
-  - migration、backup／restore、capacityの関連suiteが値損失・重複source・部分更新なしで成功することを完了条件とする。
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4_
+- [ ] 7.2 canonical保存・交換形式suiteを実行する
+  - schema 1の複数ソースroot read／write／replacement、format 1 backup round trip、旧開発shape・未知version・不正入力の非置換を実行する。
+  - foundation、backup／restore、capacityの関連suiteが値損失・重複source・部分更新・暗黙変換なしで成功することを完了条件とする。
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4_
 
 - [ ] 7.3 production build・browser・security gateを実行する
   - production build、artifacts、boundaries、fixtures、新規タブ再訪Playwrightを実行する。

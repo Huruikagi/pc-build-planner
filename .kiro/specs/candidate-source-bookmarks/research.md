@@ -6,7 +6,7 @@
 - **Discovery Scope**: Extension（既存システムへの統合を中心とするlight discovery）
 - **主要な発見**:
   - 現行の候補集約は `product.price` と任意の単数 `sourceInfo` を持つ。候補draft、snapshot codec、backup交換形式もこの形へ密結合しているため、ドメイン型だけでなく公開契約と境界検証を同時に更新する必要がある。
-  - local data foundationには純粋な `N -> N+1` migration registry、最終root検証、単一write authority、atomic replacementが既にある。新しい移行基盤は不要で、1→2 stepの登録が最小変更となる。
+  - local data foundationには純粋な `N -> N+1` migration registry、最終root検証、単一write authority、atomic replacementが既にある。初回リリース前は変換stepを登録せず、複数ソース形式をschemaVersion 1へ直接確定し、registryだけを将来用に維持する。
   - Chrome公式資料では新規タブ作成は `tabs` 権限なしで利用できる。既存の権限集合を維持したまま、side panelから `chrome.tabs.create` を呼ぶ専用adapterを注入できる。
   - 下流の価格更新は全候補または指定候補のソース参照列挙と、候補・ソースIDによる再取得だけを必要とする。URL正規化、一致判定、曖昧さの解決を上流へ持ち込まず、candidate-managementの `public.ts` から読み取り専用portを公開するのが最小のseamである。
 
@@ -92,6 +92,17 @@
 | Chrome native tab API | port経由で `tabs.create` | 追加依存・権限不要、side panel維持 | runtime失敗の型付き処理が必要 | 採用 |
 
 ## 設計判断
+
+### 判断: 初回リリース前の旧形式互換を廃止する
+
+- **背景**: 公開リリース、配布済みテスター、保持対象の開発データが存在せず、旧保存rootと旧backupを製品互換契約に含める必要がない。
+- **検討案**: schema 1→2とbackup format 1→2を維持する、開発用変換だけを残す、複数ソース形式を初回形式へ直接統一する。
+- **採用案**: 複数ソース形式を`schemaVersion: 1`と`formatVersion: 1`のcanonical shapeに昇格し、旧単数`sourceInfo`・商品共通`price`・各1→2変換を削除する。
+- **理由**: 未公開の中間形式を永続的な互換責務へ変えず、初回リリース時の型・validator・backup契約を一つにできる。
+- **トレードオフ**: 開発中データと旧backupは破棄が必要になる。合意済みであり、製品利用者へのデータ損失は発生しない。
+- **後続確認**: production root、replacement、backup、全fixtureが同じcanonical schema 1を使うこと、旧shapeが暗黙変換されないことをcutover検証する。
+
+以降の1→2 migration採用判断は、この決定以前の調査履歴として保持するが、実装方針としては本決定が優先する。
 
 ### 判断: ソースを候補aggregate内entityとして保持する
 
