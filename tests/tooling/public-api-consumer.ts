@@ -259,3 +259,32 @@ export const invalidTransient: TransientApplicationFeatureRegistration = {
   navigation: { labelKey: "Invalid" as MessageKey, order: 0 },
   transientActivation: publicTransient.transientActivation,
 };
+
+/**
+ * settings-screen task 1.1: a new persistent consumer (settings) must be
+ * addable through the published union alone -- navigation metadata carries the
+ * label key, order, and icon, and `isPersistent` is the only narrowing seam.
+ */
+export const publicPersistentNavigationConsumer: PersistentApplicationFeatureRegistration =
+  {
+    ...publicFeatureBase,
+    id: "public-persistent-navigation" as FeatureId,
+    presentation: "persistent",
+    navigation: {
+      labelKey: "Public navigation" as MessageKey,
+      order: 60,
+      icon: "settings",
+    },
+  };
+
+export const readPersistentNavigation = (
+  feature: ApplicationFeatureRegistration,
+): { readonly order: number; readonly icon: string | undefined } | null =>
+  isPersistent(feature)
+    ? { order: feature.navigation.order, icon: feature.navigation.icon }
+    : null;
+
+/** The transient branch can never widen `navigation` beyond `undefined`. */
+export const readTransientNavigation = (
+  feature: TransientApplicationFeatureRegistration,
+): undefined => feature.navigation;

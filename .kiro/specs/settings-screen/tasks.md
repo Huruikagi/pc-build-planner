@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 設定画面の公開契約と実装前提を整える
-- [ ] 1.1 上流の常設／一過性feature契約を実装前提として検証する
+- [x] 1.1 上流の常設／一過性feature契約を実装前提として検証する
   - 上流`transient-feature-surface`のcanonical判別共用体で常設branchが`presentation: "persistent"`とnavigationを必須とし、一過性branchが`presentation: "transient"`でnavigationを禁止すること、および`product-capture-transient-migration`の一過性登録・常設navigation除外が実装済みであることを公開contractから確認する
   - 常設featureだけがnavigation、通常選択、初期選択、fallbackの対象になる既存contract検証をsettingsの前提gateとして実行する
   - 上流contractが欠ける場合は互換shimを本specへ追加せず、settings実装へ進む前に明示的に失敗させる
@@ -108,3 +108,11 @@
   - _Depends: 4.1, 4.2, 4.3_
   - _Requirements: 2.5, 4.2, 5.1, 6.6_
   - _Boundary: SettingsMessageConsumerAndLocatorContract, ValidationGate_
+
+## Implementation Notes
+
+- 1.2は`ui-message-catalog` 6.1/6.2、1.3は`backup-restore` 6.1に依存する。いずれも未完了のため、これらを先に実装するまで1.2以降へ進めない。本specへ互換shimを置く回避策は設計上禁止（design.md `Out of Boundary`）。
+- `pnpm test`は`dist/`の存在を前提とするtest（`tests/tooling/build-smoke.test.ts`、`final-validation-gate.test.ts`、`react-runtime.test.tsx`のReact bundle検証）を含む。fresh checkoutでは先に`pnpm build`を実行しないと5件が環境要因で失敗する。
+- `application-shell/public.ts`は`createFeatureRegistry`／`createSidePanelHost`を公開していない。contract testでこれらのfactoryが必要な場合はshell module pathからimportする既存規約（`tests/contracts/application-shell-contract-kit.ts`）に従い、型と`isPersistent`は`public.js`から取る。
+- 公開consumerの型レベル契約は`tests/tooling/public-api-consumer.ts`へ追加する。同ファイルは`validate:boundaries`の検査対象であり、`tests/contracts/`配下は対象外。
+- 実行環境のNodeはv22系だが`engines`は26.5.0を要求するため、全pnpm scriptでunsupported engine警告が出る。動作自体には影響しない。
