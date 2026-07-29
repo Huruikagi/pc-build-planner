@@ -39,8 +39,10 @@ const BUSY_PHASES = new Set(["exporting", "validating", "restoring"]);
 
 export function BackupRestoreView({
   state,
+  mutationAllowed = true,
 }: {
   readonly state: BackupRestoreState;
+  readonly mutationAllowed?: boolean;
 }) {
   const messages = useMessages();
   useSyncExternalStore(
@@ -75,7 +77,7 @@ export function BackupRestoreView({
         <h3>{messages("backup.exportHeading")}</h3>
         <button
           data-action="export"
-          disabled={busy}
+          disabled={busy || !mutationAllowed}
           onClick={() => void state.exportBackup()}
           type="button"
         >
@@ -102,7 +104,7 @@ export function BackupRestoreView({
         <h3>{messages("backup.restoreHeading")}</h3>
         <input
           accept="application/json"
-          disabled={busy}
+          disabled={busy || !mutationAllowed}
           onChange={handleFileChange}
           type="file"
         />
@@ -130,6 +132,7 @@ export function BackupRestoreView({
             </dl>
             <button
               data-action="confirm"
+              disabled={!mutationAllowed}
               onClick={() => void state.confirmRestore()}
               type="button"
             >

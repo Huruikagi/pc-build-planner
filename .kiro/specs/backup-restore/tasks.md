@@ -122,7 +122,7 @@
   - _Boundary: Backup restore acceptance and regression tests_
 
 - [ ] 6. バックアップ・復元をsettings-owned section境界へ移行する
-- [ ] 6.1 埋め込み可能な公開section mountを追加する
+- [x] 6.1 埋め込み可能な公開section mountを追加する
   - 既存のbackup service、restore service、state、file gateway、React rootを再利用し、完全data portをfactory依存として受けるsection adapterを追加する
   - `FeatureMountContext`を受けて`FeatureMountHandle`を返す正確な公開mount契約と、data・任意stateを受けるfactoryだけを公開入口へ加える
   - operation policyをそのまま利用し、mount失敗時は取得済みresourceを解放し、正常終了と二重終了では購読とDOMを一度だけcleanupする
