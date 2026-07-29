@@ -1,4 +1,4 @@
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
 import {
@@ -6,6 +6,7 @@ import {
   captureStartButton,
   expectedTextFor,
   extensionAction,
+  featureRoot,
   navItem,
   selectLanguage,
 } from "./locators.js";
@@ -20,7 +21,9 @@ async function extensionId(context: BrowserContext): Promise<string> {
   return id;
 }
 
-async function targetTabId(context: BrowserContext): Promise<number> {
+async function createTargetTab(
+  context: BrowserContext,
+): Promise<{ readonly page: Page; readonly tabId: number }> {
   const target = await context.newPage();
   await target.goto(
     `data:text/html,${encodeURIComponent("<!doctype html><title>SYN capture target</title>")}`,
@@ -33,7 +36,7 @@ async function targetTabId(context: BrowserContext): Promise<number> {
     if (id === undefined) throw new Error("target tab id is unavailable");
     return id;
   });
-  return tabId;
+  return { page: target, tabId };
 }
 
 async function putDurableActivation(
@@ -79,7 +82,7 @@ test("durable activationはproduction transportから実product-capture面を提
   context,
 }) => {
   const id = await extensionId(context);
-  const tabId = await targetTabId(context);
+  const { tabId } = await createTargetTab(context);
   const activationId = "e2e-durable-product-capture";
   await putDurableActivation(context, tabId, activationId);
 
@@ -120,4 +123,62 @@ test("durable activationはproduction transportから実product-capture面を提
       );
     })
     .toBe("activated");
+});
+
+async function openActivatedCapture(
+  context: BrowserContext,
+  activationId: string,
+): Promise<{ readonly panel: Page; readonly target: Page }> {
+  const id = await extensionId(context);
+  const { page: target, tabId } = await createTargetTab(context);
+  await putDurableActivation(context, tabId, activationId);
+
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${id}/side-panel.html`);
+  await expect(applicationShell(panel)).toHaveAttribute(
+    "data-runtime-state",
+    "started",
+  );
+  await expect(extensionAction(panel)).toBeVisible();
+  return { panel, target };
+}
+
+for (const invalidation of ["update", "close"] as const) {
+  test(`固定tabの${invalidation}でcaptureを終了し常設面へ復帰する`, async ({
+    context,
+  }) => {
+    const { panel, target } = await openActivatedCapture(
+      context,
+      `e2e-target-${invalidation}`,
+    );
+
+    if (invalidation === "update") {
+      await target.goto(
+        `data:text/html,${encodeURIComponent("<!doctype html><title>SYN updated target</title>")}`,
+      );
+    } else {
+      await target.close();
+    }
+
+    await expect(extensionAction(panel)).toHaveCount(0);
+    const fallback = navItem(panel, "candidate-management");
+    await expect(fallback).toHaveAttribute("aria-current", "page");
+    await expect(featureRoot(panel, "candidate-management")).toBeVisible();
+  });
+}
+
+test("常設navigation選択でcaptureを終了し選択面だけを表示する", async ({
+  context,
+}) => {
+  const { panel } = await openActivatedCapture(
+    context,
+    "e2e-persistent-navigation",
+  );
+
+  const navigation = navItem(panel, "candidate-management");
+  await navigation.click();
+
+  await expect(extensionAction(panel)).toHaveCount(0);
+  await expect(navigation).toHaveAttribute("aria-current", "page");
+  await expect(featureRoot(panel, "candidate-management")).toBeVisible();
 });

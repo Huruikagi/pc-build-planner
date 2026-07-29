@@ -218,7 +218,7 @@
   - _Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 4.6, 5.5, 5.6_
   - _Boundary: ExtensionE2E, ProductionBuild_
 
-- [ ] 6.7 失効復帰と常設navigation終了のE2Eを通す
+- [x] 6.7 失効復帰と常設navigation終了のE2Eを通す
   - capture中の対象tab更新・閉鎖で一過性面が終了し、安全な理由を示して常設面へ復帰することを確認する。
   - capture中に常設navigationを選択すると一過性面が終了し、選択した常設featureだけが表示されることを確認する。
   - durable activation以降のproduction E2Eとしてdismissal／常設復帰を自動検証し、上流要件4.5の最終closureは6.8のmanual smoke gateへ委譲する。
