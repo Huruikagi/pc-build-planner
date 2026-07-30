@@ -247,8 +247,8 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.7_
   - _Boundary: MutationGate, CoreContracts, ContractTestKit_
 
-- [ ] 6. 一過性featureを既存shell契約へ統合する
-- [ ] 6.1 常設／一過性の登録区分と選択規則を受け入れ検証する
+- [x] 6. 一過性featureを既存shell契約へ統合する
+- [x] 6.1 常設／一過性の登録区分と選択規則を受け入れ検証する
   - `ApplicationFeatureRegistration`を、`presentation: "persistent"`と型付きnavigationを必須にする常設branch、および`presentation: "transient"`とnavigation不在を必須にする一過性branchの判別共用体として公開する。共通baseのmount、availability、public API、任意のtyped activationは維持する。
   - registryのunknown入力検証、snapshot複製、contribution catalog、navigation catalog生成を同じ相関へ合わせ、常設navigation欠損、一過性navigation混入、未知／欠損presentationを隔離する。既存registration producerは常設／一過性を明示して移行する。
   - `isPersistent`を常設branchへ絞り込む型述語として、navigation、通常選択、初期選択、availability fallbackの単一判定にし、一過性featureはtyped activationまたは上流controllerからだけ表示する。
@@ -257,7 +257,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
   - _Boundary: CoreContracts, FeatureRegistry, FeatureContributionCatalog, ApplicationComposition, SidePanelHost, PublicConsumerContracts_
 
-- [ ] 6.2 (P) 一過性noticeの常設面との安全な併存を検証する
+- [x] 6.2 (P) 一過性noticeの常設面との安全な併存を検証する
   - `transient-feature-surface`がready／maintenance状態へ追加する一過性noticeを、navigationとfeature slotから独立したbannerとしてshell受け入れ回帰へ固定する
   - noticeの外部由来文字列をHTMLとして解釈せず、notice障害時も選択中の常設featureとその操作を維持する
   - 完了時、危険な文字列を含むnoticeがテキストだけで表示され、常設featureのmount identityが変化しないDOM testが成功する
@@ -265,7 +265,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   - _Boundary: ShellView, ShellPresentation_
 
-- [ ] 6.3 一過性featureのtyped activationと引き渡しを既存rollbackで受け入れ検証する
+- [x] 6.3 一過性featureのtyped activationと引き渡しを既存rollbackで受け入れ検証する
   - 上流変更後、navigationを持たない一過性featureへの有効なactivationが一度だけ配送され、同一feature再activationでは不要なunmountがないことをcontract testへ固定する
   - 一過性featureから常設featureへの引き渡し成功で引き渡し先だけを保持し、検証・mount・適用・cleanup失敗では既存の状態復元と単一表示保証を維持することを確認する
   - 完了時、成功・失敗・stale completionのcontract testで二重表示や二重配送が発生しないことを観測できる
