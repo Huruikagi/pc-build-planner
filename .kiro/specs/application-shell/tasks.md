@@ -291,7 +291,7 @@
   - _Boundary: ApplicationComposition, SidePanelFeatureContributions, ReactShellRoot_
 
 - [ ] 8. 境界とproduction回帰を完成する
-- [ ] 8.1 (P) UI contributionとworker-safe catalogの分離を固定する
+- [x] 8.1 (P) UI contributionとworker-safe catalogの分離を固定する
   - settingsと一過性viewをside panel専用graphへ閉じ、service worker catalogにはworker registrationとworker-safe metadataだけを載せる
   - source-price-refreshのfeature-owned gesture sourceが上流登録portへ接続できる一方、worker bundleからDOM、React、feature UIへ到達できないことを境界検査する
   - 完了時、public consumer型検査とproduction worker bundle検査が成功し、UI moduleの混入を意図的fixtureで拒否できる
@@ -299,7 +299,7 @@
   - _Requirements: 3.6, 6.1, 6.3, 6.4_
   - _Boundary: ProductionWorkerComposition, FeatureContributionCatalog_
 
-- [ ] 8.2 Shellの状態・navigation・activation回帰を統合検証する
+- [x] 8.2 Shellの状態・navigation・activation回帰を統合検証する
   - persistent／transient混在、settings fallback、safe-text notice、maintenance、feature failure、typed handoffの契約とcleanup順をproduction-shaped fixtureで覆う
   - Chrome 116以降相当で有効なgesture文脈、side panel bootstrap、settings到達、一過性面終了後の常設復帰を表示文言非依存で確認する
   - 完了時、関連unit／contract／DOM／runtime／E2Eと公開境界・型・build gateがすべて成功し、実サイト由来fixtureを必要としない

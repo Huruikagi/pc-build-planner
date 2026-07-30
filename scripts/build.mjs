@@ -3,10 +3,11 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import { validateArtifactDirectory } from "./validate-artifacts.mjs";
+import { validateWorkerModuleGraph } from "./validate-worker-module-graph.mjs";
 
 export async function buildUnpackedExtension(outputDirectory = "dist") {
   await rm(outputDirectory, { recursive: true, force: true });
-  await build({
+  const browserBuild = await build({
     bundle: true,
     entryPoints: {
       "build-contract": "src/build-contract.ts",
@@ -24,7 +25,12 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
     platform: "browser",
     sourcemap: false,
     target: "chrome116",
+    metafile: true,
   });
+  await validateWorkerModuleGraph(
+    browserBuild.metafile,
+    `${outputDirectory}/service-worker.js`,
+  );
   // `chrome.scripting.executeScript({ files: [...] })` injects a classic
   // (non-module) script, so this entry is built separately as an IIFE.
   await build({
