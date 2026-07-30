@@ -1,6 +1,7 @@
 import { expect, test } from "./extension-fixture.js";
 import {
   applicationShell,
+  documentRoot,
   expectedTextFor,
   featureRoot,
   navItem,
@@ -54,7 +55,7 @@ test("英語へ切り替えると4つの常設機能画面すべてで英語カ�
   // Switching happens only through the in-panel control — never a browser
   // restart, a locale environment variable, or a launch option (8.1).
   await selectLanguage(page, "en");
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(documentRoot(page)).toHaveAttribute("lang", "en");
   await expect(persistentNavigationItems(page)).toHaveCount(4);
 
   for (const { featureId, key } of FEATURE_CHECKS) {

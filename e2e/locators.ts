@@ -115,6 +115,9 @@ export const restoreFileInput = (restoreRegion: Locator): Locator =>
 /** Locates the document body for whole-page message assertions. */
 export const documentBody = (page: Page): Locator => page.locator("body");
 
+/** Locates the document root for document-level language assertions. */
+export const documentRoot = (page: Page): Locator => page.locator("html");
+
 /** Locates the stable candidate-creation affordance. */
 export const createCandidateButton = (feature: Locator): Locator =>
   feature.locator("[data-create-candidate]");

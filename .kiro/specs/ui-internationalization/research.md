@@ -52,7 +52,7 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 - `settings-screen` はpersistent feature `settings` の `SettingsView` に `data-region="language"` を設け、`ui-language/public.ts` の `LanguageSelectControl` をそこへ一度だけ配置する。settingsは言語code、store、保存結果を複製せず、配置とlifecycle合成だけを所有する。
 - `SettingsReactRoot` は `LanguageProvider` 配下でsettings viewを描画し、言語変更でsettings rootと埋め込みsection hostを再mount・置換しない。これが入力途中の値とスクロール位置を保持する接合条件である。
 - 更新済み `application-shell` は `ReactShellRoot` の `LanguageProvider` を維持する一方、headerの `LanguageSelectControl` を撤去する。ready／maintenance／feature-local failureではpersistent settings navigationを維持し、loading／global startup errorでは操作不能なselectを描画せず「設定 / Settings」の二言語案内を表示する。
-- 現行実装では `src/application-shell/shell-view.tsx` がまだheader controlを描画しており、`src/features/settings/` は未実装である。したがって既存の `ui-language` state／save契約を変更せず、上流settings実装後のplacement／identity／E2Eを受け入れる移行タスクが必要である。
+- 調査時点では `src/application-shell/shell-view.tsx` がheader controlを描画し、`src/features/settings/` も未実装だった。移行完了後は既存の `ui-language` state／save契約を変更せず、controlをsettings表示言語区画だけに配置し、placement／identity／E2Eを受け入れ検証済みである。
 - **含意**: 依存方向は `settings-screen -> ui-language/public.ts` と `application-shell -> ui-language/public.ts` のままにし、`ui-language` からsettingsまたはshellへ逆参照しない。新しい設定portや共有state抽象は不要である。
 
 ## アーキテクチャパターンの評価

@@ -241,7 +241,7 @@
   - _Requirements: 4.3, 8.6_
   - _Depends: 8.2, 6.2, 6.4, 7.1, 4.6_
 
-- [ ] 9. 言語コントロールをsettings配置へ移行する
+- [x] 9. 言語コントロールをsettings配置へ移行する
 
 - [x] 9.1 ui-language公開契約をsettingsの埋め込み利用者として固定する
   - 公開言語Providerとcontrolがsettingsからpublic entryだけを通じて利用でき、言語code、store、保存portをpropsまたはsettings stateへ複製しない契約を検証する
@@ -275,7 +275,7 @@
   - _Requirements: 1.4, 4.3, 5.1, 5.2, 8.1, 8.2_
   - _Boundary: LanguageE2ESpec_
 
-- [ ] 9.5 settings配置移行の完全検証gateを通す
+- [x] 9.5 settings配置移行の完全検証gateを通す
   - 型、公開consumer、静的検査、catalog parity、公開境界、fixture、文言、final build、単体／統合／DOM、Playwrightの全段を実行する
   - 対象specとproduction graphを検索し、旧header配置への参照が完了履歴と撤去検証以外に残らず、旧名前空間数の固定記述、catalog localeファイルの所有・deep import、settings／shellからui-language内部moduleへの参照が残らないことを確認する
   - 完了条件: 全gateが成功し、11名前空間のja/en公開resolver、表示言語の保存値、domain data、backup交換形式、manifest権限に意図しない差分がない
