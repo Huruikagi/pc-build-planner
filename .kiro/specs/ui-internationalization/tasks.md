@@ -267,7 +267,7 @@
   - _Requirements: 1.2, 1.7, 1.8, 4.3_
   - _Boundary: SettingsLanguageIntegration_
 
-- [ ] 9.4 移行済みsettings経路で国際化固有のE2Eを受け入れ検証する
+- [x] 9.4 移行済みsettings経路で国際化固有のE2Eを受け入れ検証する
   - `settings-screen 4.3` が所有するsettings locator、経路移行、再open、backup／transient検証を再実装せず、その成果を前提として既存の国際化E2Eを実行する
   - settingsで英語へ切り替えた後の全対象面の英語表示、候補の作成・編集・削除結果の不変、文書言語属性の追随という本spec固有のassertionを維持する
   - 完了条件: 国際化固有のPlaywright specが成功し、ブラウザ再起動・環境ロケール・起動オプションやheader構造へ依存しない
