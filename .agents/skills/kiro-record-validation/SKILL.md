@@ -1,6 +1,6 @@
 ---
 name: kiro-record-validation
-description: Record a successful Kiro implementation-validation checkpoint in `.kiro/steering/roadmap.md`. Use immediately after `$kiro-validate-impl feature-name` returns `GO` and the user wants an append-only record of the feature, validation time, Git state, and concise evidence.
+description: Record a successful Kiro implementation-validation checkpoint in `.kiro/steering/roadmap.md`. Use `$kiro-record-validation` without arguments immediately after `$kiro-validate-impl` returns `GO`; accept an optional feature name only as an explicit target override.
 ---
 
 # Record Implementation Validation
@@ -9,8 +9,9 @@ description: Record a successful Kiro implementation-validation checkpoint in `.
 
 ## 1. Resolve the validation target
 
-- Use `$1` as the feature name when provided.
-- Otherwise, derive the feature only when the current conversation contains exactly one unambiguous, most-recent `$kiro-validate-impl` report.
+- When `$1` is empty, derive the feature from the single most-recent `$kiro-validate-impl` report in the current conversation. This is the default path.
+- When `$1` is provided, treat it as an optional explicit target override and require it to match the feature named by the most-recent qualifying report.
+- Stop instead of selecting an older report when the most-recent report is ambiguous or does not name a feature.
 - Require `.kiro/specs/<feature>/spec.json` to exist. Stop if the feature is missing or ambiguous.
 
 ## 2. Verify eligible evidence

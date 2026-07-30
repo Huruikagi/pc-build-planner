@@ -1,7 +1,7 @@
 interface:
   display_name: "Validation Recorder"
   short_description: "Record successful implementation validation checkpoints"
-  default_prompt: "Use $kiro-record-validation to append the latest successful feature validation to the roadmap."
+  default_prompt: "Use $kiro-record-validation without arguments to append the latest successful feature validation to the roadmap."
 
 policy:
   allow_implicit_invocation: false
