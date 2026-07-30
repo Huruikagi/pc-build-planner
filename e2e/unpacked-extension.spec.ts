@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 
 import { expect, extensionPath, test } from "./extension-fixture.js";
-import { applicationShell } from "./locators.js";
+import { applicationShell } from "./models/application-shell.js";
 
 interface ExtensionInfo {
   id: string;

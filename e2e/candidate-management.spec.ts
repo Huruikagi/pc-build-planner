@@ -3,14 +3,18 @@ import type { ConsoleMessage, Page } from "@playwright/test";
 import { expect, test } from "./extension-fixture.js";
 import {
   applicationShell,
+  featureRoot,
+  navItem,
+} from "./models/application-shell.js";
+import {
   createCandidateButton,
   editCandidateButton,
-  featureRoot,
+} from "./models/candidate-management.js";
+import {
   formField,
-  navItem,
   region,
   submitButton,
-} from "./locators.js";
+} from "./models/locator-primitives.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side

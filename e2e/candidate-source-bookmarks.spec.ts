@@ -2,22 +2,26 @@ import type { BrowserContext, Page, Request } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
 import {
-  addCandidateSourceButton,
   applicationShell,
+  featureRoot,
+  navItem,
+} from "./models/application-shell.js";
+import {
+  addCandidateSourceButton,
   candidateSourceField,
   candidateSourceRows,
   candidateSources,
   createCandidateButton,
   editCandidateButton,
-  featureRoot,
-  formField,
-  navItem,
   openCandidateSourceButton,
   openPrimaryCandidateSourceButton,
   primaryCandidateSourceInput,
+} from "./models/candidate-management.js";
+import {
+  formField,
   region,
   submitButton,
-} from "./locators.js";
+} from "./models/locator-primitives.js";
 
 const primaryUrl =
   "https://manufacturer.synthetic-maker.example.invalid/products/e2e-cpu";

@@ -3,23 +3,29 @@ import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { expect, test } from "./extension-fixture.js";
 import {
-  action,
   applicationShell,
-  backupRestoreSection,
+  featureRoot,
+  navItem,
+} from "./models/application-shell.js";
+import {
   confirmDeletionButton,
   createCandidateButton,
   deleteCandidateButton,
   editCandidateButton,
-  expectedTextFor,
-  featureRoot,
+} from "./models/candidate-management.js";
+import {
+  action,
   formField,
-  languageSelect,
-  navItem,
   region,
+  submitButton,
+} from "./models/locator-primitives.js";
+import {
+  backupRestoreSection,
+  languageSelect,
   restoreFileInput,
   selectLanguage,
-  submitButton,
-} from "./locators.js";
+} from "./models/settings.js";
+import { expectedTextFor } from "./support/expected-text.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side

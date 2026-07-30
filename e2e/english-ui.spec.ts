@@ -2,12 +2,12 @@ import { expect, test } from "./extension-fixture.js";
 import {
   applicationShell,
   documentRoot,
-  expectedTextFor,
   featureRoot,
   navItem,
   persistentNavigationItems,
-  selectLanguage,
-} from "./locators.js";
+} from "./models/application-shell.js";
+import { selectLanguage } from "./models/settings.js";
+import { expectedTextFor } from "./support/expected-text.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side

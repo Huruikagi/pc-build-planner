@@ -3,13 +3,15 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./extension-fixture.js";
 import {
   applicationShell,
-  captureStartButton,
-  expectedTextFor,
-  extensionAction,
   featureRoot,
   navItem,
-  selectLanguage,
-} from "./locators.js";
+} from "./models/application-shell.js";
+import {
+  captureStartButton,
+  extensionAction,
+} from "./models/product-capture.js";
+import { selectLanguage } from "./models/settings.js";
+import { expectedTextFor } from "./support/expected-text.js";
 
 const STORAGE_KEY = "transientActivationEnvelope";
 
