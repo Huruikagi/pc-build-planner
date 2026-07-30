@@ -75,8 +75,8 @@
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 3.2, 4.2, 4.4, 4.5, 4.6, 5.4, 5.5_
   - _Boundary: SettingsFeatureRegistration, ApplicationComposition_
 
-- [ ] 4. 回帰検証とproduction E2Eを完成する
-- [ ] 4.1 (P) settings・backupのcontract／DOM回帰を固定する
+- [x] 4. 回帰検証とproduction E2Eを完成する
+- [x] 4.1 (P) settings・backupのcontract／DOM回帰を固定する
   - settings区画構造、言語controlの唯一性、host identity、backup confirmation保持、安全なtext描画を利用者視点のDOM testで覆う
   - backup ownerのsection contract testを再実行し、settings側では公開mountを通したexport、preflight、maintenance可否、分類済みerror、言語変更後の確認・結果stateだけを統合testで覆う
   - 関連node testが全件成功し、settings側にbackup内部contractの再実装や言語変更によるstate破棄が残らない状態を完了条件とする
@@ -84,7 +84,7 @@
   - _Requirements: 1.2, 2.1, 2.3, 2.4, 3.2, 4.1, 4.3, 4.4, 4.5, 4.6, 5.4, 6.4_
   - _Boundary: SettingsReactRootAdapter, SettingsView, SettingsFeatureRegistration_
 
-- [ ] 4.2 (P) shell・navigationのcontract／integration回帰を固定する
+- [x] 4.2 (P) shell・navigationのcontract／integration回帰を固定する
   - ready、maintenance、feature failure、loading、startup errorの到達または案内と、全状態でheader言語controlが存在しないことを覆う
   - persistent／transient混在navigation、settingsの一意登録、backup独立navigation不在、初期選択、fallbackをcontract／integration testで覆う
   - shell／root snapshotの関連testとcatalog ownerの公開contract gateが全件成功し、settings-owned consumerやapplication compositionに旧backup navigation期待またはheader言語control期待が残らない状態を完了条件とする
@@ -92,7 +92,7 @@
   - _Requirements: 1.1, 1.3, 1.4, 3.1, 3.3, 3.4, 3.5, 3.6, 5.2, 5.5, 6.5_
   - _Boundary: ShellLanguageRecoverySurface, SettingsFeatureContribution_
 
-- [ ] 4.3 (P) settings経由の言語・backup production E2Eへ移行する
+- [x] 4.3 (P) settings経由の言語・backup production E2Eへ移行する
   - settings navigationから言語区画とbackup区画へ到達するlocatorへ既存英語UI、言語不変性、backup restore経路を移行する
   - 英語切り替えと再open後の保持、backup export、復元確認中の言語変更、restore summary、独立backup navigation不在をproduction buildで検証する
   - 一過性商品取り込み面からsettings navigationを選ぶと一過性面が終了してsettingsだけが表示され、settingsを戻り先として一過性面が終了した場合もpersistent画面へ復帰することを検証する
@@ -101,7 +101,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 2.1, 2.2, 2.3, 2.4, 2.6, 4.1, 4.4, 4.5, 4.6, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: SettingsMessageConsumerAndLocatorContract, ExtensionE2E_
 
-- [ ] 4.4 公開境界と完全検証gateを通す
+- [x] 4.4 公開境界と完全検証gateを通す
   - settingsから許可するapplication-shell、ui-language、backup、ui-messagesのpublic依存だけをboundary検証へ反映し、backup内部、catalog定数、storage、Foundationへの直接到達を拒否する
   - 型、lint、catalog ownerのparity／dead-key、UI text、boundary、fixture、build、unit／integration／DOM、Playwrightを含む完全検証を実行する
   - 全gateが成功し、既存利用者データ・backup JSON・manifest権限・runtime messageに変更がないことを差分と検査結果から確認できる状態を完了条件とする

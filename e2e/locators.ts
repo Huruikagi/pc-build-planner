@@ -30,9 +30,17 @@ export const expectedText = defaultMessageResolver;
 /** Resolves catalog text for a specific display language, for language-switching E2E specs. */
 export const expectedTextFor = resolverFor;
 
-/** Locates the display-language switch control mounted in the shell header. */
+/** Locates the persistent settings feature. */
+export const settingsFeature = (page: Page): Locator =>
+  featureRoot(page, "settings");
+
+/** Locates the display-language switch control owned by settings. */
 export const languageSelect = (page: Page): Locator =>
-  page.locator('[data-region="language-select"]');
+  region(settingsFeature(page), "language-select");
+
+/** Locates the canonical backup/restore section hosted by settings. */
+export const backupRestoreSection = (page: Page): Locator =>
+  region(settingsFeature(page), "backup-restore-host");
 
 /**
  * Switches the display language via the in-panel control (never the browser
@@ -42,6 +50,7 @@ export const selectLanguage = async (
   page: Page,
   language: SupportedLanguage,
 ): Promise<void> => {
+  await navItem(page, "settings").click();
   await languageSelect(page).selectOption(language);
 };
 
@@ -64,6 +73,10 @@ export const action = (scope: Locator | Page, name: string): Locator =>
 /** Locates a shell navigation item by feature id, scoped to the navigation landmark. */
 export const navItem = (page: Page, featureId: string): Locator =>
   page.locator(`.shell-navigation [data-feature-id="${featureId}"]`);
+
+/** Locates all persistent navigation items without naming a legacy feature id. */
+export const persistentNavigationItems = (page: Page): Locator =>
+  page.locator(".shell-navigation [data-feature-id]");
 
 /** Observes the surface produced by the extension action activation. */
 export const extensionAction = (page: Page): Locator =>

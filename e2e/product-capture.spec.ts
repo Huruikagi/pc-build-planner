@@ -84,8 +84,6 @@ test("durable activationはproduction transportから実product-capture面を提
   const id = await extensionId(context);
   const { tabId } = await createTargetTab(context);
   const activationId = "e2e-durable-product-capture";
-  await putDurableActivation(context, tabId, activationId);
-
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${id}/side-panel.html`);
   await expect(applicationShell(panel)).toHaveAttribute(
@@ -93,7 +91,7 @@ test("durable activationはproduction transportから実product-capture面を提
     "started",
   );
   await selectLanguage(panel, "en");
-
+  await putDurableActivation(context, tabId, activationId);
   const capture = extensionAction(panel);
   await expect(capture).toBeVisible();
   await expect(captureStartButton(capture)).toBeVisible();
@@ -167,7 +165,7 @@ for (const invalidation of ["update", "close"] as const) {
   });
 }
 
-test("常設navigation選択でcaptureを終了し選択面だけを表示する", async ({
+test("settings navigation選択でcaptureを終了し設定面だけを表示する", async ({
   context,
 }) => {
   const { panel } = await openActivatedCapture(
@@ -175,10 +173,36 @@ test("常設navigation選択でcaptureを終了し選択面だけを表示する
     "e2e-persistent-navigation",
   );
 
-  const navigation = navItem(panel, "candidate-management");
+  const navigation = navItem(panel, "settings");
   await navigation.click();
 
   await expect(extensionAction(panel)).toHaveCount(0);
   await expect(navigation).toHaveAttribute("aria-current", "page");
-  await expect(featureRoot(panel, "candidate-management")).toBeVisible();
+  await expect(featureRoot(panel, "settings")).toBeVisible();
+});
+
+test("settingsを戻り先としてcaptureが自動終了すると設定面へ復帰する", async ({
+  context,
+}) => {
+  const id = await extensionId(context);
+  const { page: target, tabId } = await createTargetTab(context);
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${id}/side-panel.html`);
+  await expect(applicationShell(panel)).toHaveAttribute(
+    "data-runtime-state",
+    "started",
+  );
+  await navItem(panel, "settings").click();
+  await expect(featureRoot(panel, "settings")).toBeVisible();
+
+  await putDurableActivation(context, tabId, "e2e-return-to-settings");
+  await expect(extensionAction(panel)).toBeVisible();
+  await target.close();
+
+  await expect(extensionAction(panel)).toHaveCount(0);
+  await expect(navItem(panel, "settings")).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(featureRoot(panel, "settings")).toBeVisible();
 });

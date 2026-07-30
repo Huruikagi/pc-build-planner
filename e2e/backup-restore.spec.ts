@@ -5,11 +5,13 @@ import { expect, test } from "./extension-fixture.js";
 import {
   action,
   applicationShell,
+  backupRestoreSection,
   createCandidateButton,
   expectedText,
   featureRoot,
   formField,
   navItem,
+  persistentNavigationItems,
   region,
   restoreFileInput,
   selectLanguage,
@@ -51,7 +53,7 @@ async function openCandidateManagement(page: Page): Promise<void> {
 }
 
 async function openBackupRestore(page: Page): Promise<void> {
-  await navItem(page, "backupRestore").click();
+  await navItem(page, "settings").click();
 }
 
 test("side panelからexportしたバックアップが実storageの全データを復元し再起動後も維持される", async ({
@@ -70,7 +72,8 @@ test("side panelからexportしたバックアップが実storageの全データ
   // than depending on the test machine's ambient browser locale (8.1, 8.2).
   await selectLanguage(page, "ja");
   const candidateManagementRoot = featureRoot(page, "candidate-management");
-  const backupRestoreRoot = featureRoot(page, "backupRestore");
+  const backupRestoreRoot = backupRestoreSection(page);
+  await expect(persistentNavigationItems(page)).toHaveCount(4);
 
   // Seed a project and a classified candidate that the backup must carry.
   await openCandidateManagement(page);

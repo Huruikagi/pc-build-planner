@@ -12,7 +12,10 @@ import type {
   Uuid,
 } from "../../../src/domain/public.js";
 import { schemaValidator } from "../../../src/domain/public.js";
+import { createBackupRestoreSectionMount } from "../../../src/features/backup-restore/public.js";
+import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
+import { createSettingsFeatureRegistration } from "../../../src/features/settings/public.js";
 import {
   createInMemoryStorageAdapter,
   createInMemoryStorageState,
@@ -258,6 +261,114 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     HTMLAnchorElement.prototype.click = originalClick;
+    const mounted = handle;
+    if (mounted !== undefined) await act(async () => mounted.unmount());
+    resetUiLanguageForTest();
+  }
+});
+
+test("settings公開mount下でmaintenance、分類済みerror、安全なfilename描画を保つ", async () => {
+  const unsafe = '<img src=x onerror="alert(1)">';
+  const state = createBackupRestoreState({
+    backupService: {
+      async create() {
+        return {
+          ok: true,
+          value: {
+            filename: `${unsafe}-backup.json`,
+            mimeType: "application/json",
+            json: "{}",
+            byteLength: 2,
+          },
+        };
+      },
+    },
+    restoreService: {
+      async preflight() {
+        return {
+          ok: false,
+          error: { code: "invalid-structure", path: unsafe },
+        };
+      },
+      async commit() {
+        throw new Error("commit must not run after failed preflight");
+      },
+    },
+    fileGateway: {
+      download: () => ({ ok: true, value: undefined }),
+      read: async () => ({
+        ok: true,
+        value: { text: "{}", byteLength: 2 },
+      }),
+    },
+  });
+  let allowed = false;
+  const listeners = new Set<() => void>();
+  const operationPolicy = {
+    isAllowed: () => allowed,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  const registration = createSettingsFeatureRegistration({
+    backupRestore: createBackupRestoreSectionMount({
+      data: createFoundationPort(),
+      state,
+    }),
+  });
+  const container = document.createElement("div");
+  let handle: Awaited<ReturnType<typeof registration.mount>> | undefined;
+  try {
+    await act(async () => {
+      handle = await registration.mount({
+        container,
+        operationPolicy,
+        reportError: () => {},
+      });
+    });
+    const exportButton = container.querySelector<HTMLButtonElement>(
+      'button[data-action="export"]',
+    );
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    assert.ok(exportButton);
+    assert.ok(input);
+    assert.equal(exportButton.disabled, true);
+    assert.equal(input.disabled, true);
+
+    await act(async () => {
+      allowed = true;
+      for (const listener of listeners) listener();
+    });
+    assert.equal(exportButton.disabled, false);
+    assert.equal(input.disabled, false);
+
+    await act(async () => exportButton.click());
+    assert.equal(container.querySelector("img"), null);
+    assert.match(container.innerHTML, /&lt;img/);
+
+    const invalidFile = new File(["{}"], "invalid.json", {
+      type: "application/json",
+    });
+    Object.defineProperty(input, "files", {
+      value: fakeFileList(invalidFile),
+      configurable: true,
+    });
+    await act(async () => {
+      input.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await waitUntil(() => container.querySelector('[role="alert"]') !== null);
+    });
+    const alert = container.querySelector('[role="alert"]');
+    assert.ok(alert);
+    assert.match(
+      alert.textContent ?? "",
+      new RegExp(defaultMessageResolver("backup.errors.invalid-structure")),
+    );
+    assert.match(alert.textContent ?? "", /<img src=x/);
+    assert.equal(alert.querySelector("img"), null);
+    assert.match(container.innerHTML, /&lt;img/);
+  } finally {
     const mounted = handle;
     if (mounted !== undefined) await act(async () => mounted.unmount());
     resetUiLanguageForTest();

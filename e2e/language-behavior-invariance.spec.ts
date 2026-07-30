@@ -5,6 +5,7 @@ import { expect, test } from "./extension-fixture.js";
 import {
   action,
   applicationShell,
+  backupRestoreSection,
   confirmDeletionButton,
   createCandidateButton,
   deleteCandidateButton,
@@ -66,7 +67,7 @@ test("英語表示のまま復元しても表示言語が変わらず復元完�
   await selectLanguage(page, "en");
 
   const candidateManagementRoot = featureRoot(page, "candidate-management");
-  const backupRestoreRoot = featureRoot(page, "backupRestore");
+  const backupRestoreRoot = backupRestoreSection(page);
 
   await navItem(page, "candidate-management").click();
   await formField(page, "project-name").fill("E2E Language Invariance Project");
@@ -90,7 +91,7 @@ test("英語表示のまま復元しても表示言語が変わらず復元完�
   ).toBeVisible();
 
   // Export while English is displayed.
-  await navItem(page, "backupRestore").click();
+  await navItem(page, "settings").click();
   const backupRegion = region(backupRestoreRoot, "export");
   await expect(backupRegion).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
@@ -116,10 +117,14 @@ test("英語表示のまま復元しても表示言語が変わらず復元完�
       .filter({ hasText: "E2E Restored Away Memory" }),
   ).toBeVisible();
 
-  await navItem(page, "backupRestore").click();
+  await navItem(page, "settings").click();
   const restoreRegion = region(backupRestoreRoot, "restore");
   await restoreFileInput(restoreRegion).setInputFiles(backupPath);
   const confirmation = region(backupRestoreRoot, "restore-confirmation");
+  await expect(confirmation).toBeVisible();
+  await selectLanguage(page, "ja");
+  await expect(confirmation).toBeVisible();
+  await selectLanguage(page, "en");
   await expect(confirmation).toBeVisible();
   await action(confirmation, "confirm").click();
   await expect(restoreRegion.getByRole("status")).toContainText(
@@ -151,6 +156,7 @@ test("英語表示のまま復元しても表示言語が変わらず復元完�
     "data-runtime-state",
     "started",
   );
+  await navItem(page, "settings").click();
   await expect(languageSelect(page)).toHaveValue("en");
 
   expect(diagnostics.pageErrors).toEqual([]);

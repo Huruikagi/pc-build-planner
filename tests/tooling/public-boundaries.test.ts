@@ -202,6 +202,61 @@ test("capture・candidate-management間は公開entry pointだけを許可する
   );
 });
 
+test("settingsは許可された公開依存だけを利用する", () => {
+  const allowed = findBoundaryViolations([
+    {
+      path: "src/features/settings/allowed.ts",
+      source:
+        'import type { FeatureId } from "../../application-shell/public.js";\n' +
+        'import { LanguageSelectControl } from "../../ui-language/public.js";\n' +
+        'import { useMessages } from "../../ui-messages/public.js";\n' +
+        'import type { BackupRestoreSectionMount } from "../backup-restore/public.js";',
+    },
+  ]);
+  assert.deepEqual(allowed, []);
+
+  const violations = findBoundaryViolations([
+    {
+      path: "src/features/settings/foundation-leak.ts",
+      source:
+        'import type { FoundationDataPort } from "../../persistence/public.js";',
+    },
+    {
+      path: "src/features/settings/catalog-leak.ts",
+      source: 'import { MESSAGES } from "../../ui-messages/catalog/index.js";',
+    },
+    {
+      path: "src/features/settings/backup-leak.ts",
+      source: 'import { state } from "../backup-restore/state.js";',
+    },
+    {
+      path: "src/features/settings/storage-leak.ts",
+      source: "chrome.storage.local.get();",
+    },
+    {
+      path: "src/features/settings/domain-leak.ts",
+      source: 'import type { LocalDataRoot } from "../../domain/public.js";',
+    },
+    {
+      path: "src/features/settings/feature-leak.ts",
+      source:
+        'import type { CandidateManagementPublicApi } from "../candidate-management/public.js";',
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/settings/foundation-leak.ts: settings-public-dependencies-only",
+      "src/features/settings/catalog-leak.ts: settings-public-dependencies-only",
+      "src/features/settings/backup-leak.ts: settings-public-dependencies-only",
+      "src/features/settings/storage-leak.ts: no-direct-storage",
+      "src/features/settings/domain-leak.ts: settings-public-dependencies-only",
+      "src/features/settings/feature-leak.ts: settings-public-dependencies-only",
+    ],
+  );
+});
+
 test("source catalog公開consumerは公開facetだけを利用する", () => {
   const forbiddenSources = [
     {

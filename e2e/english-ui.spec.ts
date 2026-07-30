@@ -4,6 +4,7 @@ import {
   expectedTextFor,
   featureRoot,
   navItem,
+  persistentNavigationItems,
   selectLanguage,
 } from "./locators.js";
 
@@ -36,7 +37,7 @@ const FEATURE_CHECKS = [
   },
   { featureId: "currentBuild", key: "category.storage" },
   { featureId: "compatibility", key: "compatibility.idle" },
-  { featureId: "backupRestore", key: "backup.noticeUninstall" },
+  { featureId: "settings", key: "backup.noticeUninstall" },
 ] as const;
 
 test("英語へ切り替えると4つの常設機能画面すべてで英語カタログの解決値が表示される", async ({
@@ -53,6 +54,7 @@ test("英語へ切り替えると4つの常設機能画面すべてで英語カ�
   // Switching happens only through the in-panel control — never a browser
   // restart, a locale environment variable, or a launch option (8.1).
   await selectLanguage(page, "en");
+  await expect(persistentNavigationItems(page)).toHaveCount(4);
 
   for (const { featureId, key } of FEATURE_CHECKS) {
     await navItem(page, featureId).click();

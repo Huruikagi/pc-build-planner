@@ -152,6 +152,18 @@ const isForbiddenCrossFeatureImport = (sourcePath, specifier) => {
   );
 };
 
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenSettingsImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (!/(?:^|\/)features\/settings\//.test(normalizedSource)) return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (!normalizedSpecifier.startsWith(".")) return false;
+  if (normalizedSpecifier.startsWith("./")) return false;
+  return !/(?:^|\/)(?:application-shell|ui-language|ui-messages|features\/backup-restore|backup-restore)\/public(?:\.js|\.ts)?$/.test(
+    normalizedSpecifier,
+  );
+};
+
 /** @param {string} value */
 const canonicalApiPath = (value) =>
   value.startsWith("globalThis.") ? value.slice("globalThis.".length) : value;
@@ -632,6 +644,18 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("cross-feature-public-import-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenSettingsImport(normalizedPath, token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("settings-public-dependencies-only");
           const pathValue = memberPath(tokens, index, aliases);
           if (
             pathValue !== undefined &&
