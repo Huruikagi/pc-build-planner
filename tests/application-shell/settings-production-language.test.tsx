@@ -6,7 +6,7 @@ import { userEvent } from "@testing-library/user-event";
 import { createShellPresentation } from "../../src/application-shell/shell-presentation.js";
 import { createSettingsFeatureRegistration } from "../../src/features/settings/public.js";
 import { resetUiLanguageForTest } from "../../src/ui-language/store.js";
-import { message } from "../../src/ui-messages/public.js";
+import { message, resolverFor } from "../../src/ui-messages/public.js";
 
 afterEach(() => resetUiLanguageForTest());
 
@@ -65,11 +65,19 @@ test("settings の言語変更は navigation と状態文言を更新し mount i
     settingsRoot,
   );
   assert.equal(presentation.value.featureContainer, featureContainer);
+  const english = resolverFor("en");
   assert.notEqual(navigation.title, japaneseNavigation);
+  assert.equal(navigation.title, english("nav.settings"));
   assert.notEqual(
     shellContainer.querySelector(".shell-status--maintenance")?.textContent,
     japaneseStatus,
   );
+  assert.match(
+    shellContainer.querySelector(".shell-status--maintenance")?.textContent ??
+      "",
+    new RegExp(english("shell.maintenanceActive")),
+  );
+  assert.equal(shellContainer.querySelector("header select"), null);
 
   await settingsHandle.unmount();
   presentation.value.stop();

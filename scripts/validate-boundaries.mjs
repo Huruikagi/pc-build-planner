@@ -164,6 +164,33 @@ const isForbiddenSettingsImport = (sourcePath, specifier) => {
   );
 };
 
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenUiLanguageImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (!/(?:^|\/)ui-language\//.test(normalizedSource)) return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (!normalizedSpecifier.startsWith(".")) return false;
+  if (normalizedSpecifier.startsWith("./")) return false;
+  return !/(?:^|\/)ui-messages\/public(?:\.js|\.ts)?$/.test(
+    normalizedSpecifier,
+  );
+};
+
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenUiLanguageConsumerImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (/(?:^|\/)ui-language\//.test(normalizedSource)) return false;
+  if (
+    !/(?:^|\/)(?:application-shell|features\/settings)\//.test(normalizedSource)
+  )
+    return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (!/(?:^|\/)ui-language\//.test(normalizedSpecifier)) return false;
+  return !/(?:^|\/)ui-language\/public(?:\.js|\.ts)?$/.test(
+    normalizedSpecifier,
+  );
+};
+
 /** @param {string} value */
 const canonicalApiPath = (value) =>
   value.startsWith("globalThis.") ? value.slice("globalThis.".length) : value;
@@ -656,6 +683,30 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("settings-public-dependencies-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenUiLanguageImport(normalizedPath, token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("ui-language-public-dependencies-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenUiLanguageConsumerImport(normalizedPath, token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("ui-language-consumer-public-entry-only");
           const pathValue = memberPath(tokens, index, aliases);
           if (
             pathValue !== undefined &&

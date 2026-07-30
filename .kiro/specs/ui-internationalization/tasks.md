@@ -243,7 +243,7 @@
 
 - [ ] 9. 言語コントロールをsettings配置へ移行する
 
-- [ ] 9.1 ui-language公開契約をsettingsの埋め込み利用者として固定する
+- [x] 9.1 ui-language公開契約をsettingsの埋め込み利用者として固定する
   - 公開言語Providerとcontrolがsettingsからpublic entryだけを通じて利用でき、言語code、store、保存portをpropsまたはsettings stateへ複製しない契約を検証する
   - controlの選択肢、原語表記、現在値、保存失敗時のin-memory継続を既存owner内に維持し、settingsまたはshellへの逆依存を境界検査で拒否する
   - `settings`を含む11名前空間のja/en resolverを`src/ui-messages/public.ts`の型付き契約だけから消費し、ui-language、settings、shellからcatalog localeファイルへ直接到達しないことを検証する
@@ -251,7 +251,7 @@
   - _Requirements: 1.1, 1.6, 3.5, 4.1, 4.2, 9.1, 9.2, 9.3_
   - _Boundary: UiLanguagePublicEntry, LanguageSelectControl, LanguageCatalogConsumer_
 
-- [ ] 9.2 settings lifecycleでの表示言語追随を受け入れ検証する
+- [x] 9.2 settings lifecycleでの表示言語追随を受け入れ検証する
   - settings表示言語区画に公開controlが一度だけ存在し、言語変更時にsettings root、表示中の区画、埋め込みsection host、入力途中の値、スクロール位置を保持することを確認する
   - maintenance中はoperation policyによるデータ変更制限と独立して切り替えを受け付け、保存失敗時もsettingsと埋め込みsectionの状態を失わない既存契約を受け入れる
   - 完了条件: settings-screenが提供するDOM／integration testとui-languageのstore／Provider testが成功し、settings側に複製された言語stateが存在しない
@@ -259,7 +259,7 @@
   - _Requirements: 1.2, 1.3, 1.5, 3.5, 4.3_
   - _Boundary: SettingsLanguageIntegration, LanguageReactBinding_
 
-- [ ] 9.3 shell状態ごとのsettings到達と文言追随を受け入れ検証する
+- [x] 9.3 shell状態ごとのsettings到達と文言追随を受け入れ検証する
   - shell header、loading、global startup errorに言語controlが存在せず、ready／maintenance／feature-local failureではpersistent settings navigationが維持されることを確認する
   - settingsでの言語変更後、shell navigationと状態文言が同じresolverへ追随し、loading／global startup errorでは「設定 / Settings」と既存回復操作が提示されることを確認する
   - 完了条件: application-shellのDOM／production-shaped統合testが成功し、旧header controlへのproduction期待が残らず、shellが言語stateや保存を所有しない

@@ -203,6 +203,70 @@ test("言語保存失敗は表示と backup 操作を継続し domain data を�
   await handle.unmount();
 });
 
+test("言語変更はsettings root・section host・入力値・scroll位置を再生成しない", async () => {
+  const registration = createSettingsFeatureRegistration({
+    backupRestore: {
+      async mount(context) {
+        const input = document.createElement("input");
+        input.dataset.state = "draft";
+        context.container.append(input);
+        return { unmount: async () => {} };
+      },
+    },
+  });
+  const container = document.createElement("div");
+  const handle = await registration.mount({
+    container,
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError() {},
+  });
+  const settingsRoot = container.querySelector<HTMLElement>(
+    "[data-region='settings']",
+  );
+  const languageSection = container.querySelector<HTMLElement>(
+    "[data-region='language']",
+  );
+  const backupHost = container.querySelector<HTMLElement>(
+    "[data-region='backup-restore-host']",
+  );
+  const draft = container.querySelector<HTMLInputElement>(
+    "[data-state='draft']",
+  );
+  const language = container.querySelector<HTMLSelectElement>(
+    "[data-region='language-select']",
+  );
+  assert.ok(settingsRoot);
+  assert.ok(languageSection);
+  assert.ok(backupHost);
+  assert.ok(draft);
+  assert.ok(language);
+  assert.equal(
+    container.querySelectorAll("[data-region='language-select']").length,
+    1,
+  );
+  draft.value = "編集中";
+  settingsRoot.scrollTop = 37;
+
+  await userEvent.setup().selectOptions(language, "en");
+
+  assert.equal(
+    container.querySelector("[data-region='settings']"),
+    settingsRoot,
+  );
+  assert.equal(
+    container.querySelector("[data-region='language']"),
+    languageSection,
+  );
+  assert.equal(
+    container.querySelector("[data-region='backup-restore-host']"),
+    backupHost,
+  );
+  assert.equal(container.querySelector("[data-state='draft']"), draft);
+  assert.equal(draft.value, "編集中");
+  assert.equal(settingsRoot.scrollTop, 37);
+  await handle.unmount();
+});
+
 test("backup cross-feature mount failure は settings 部分表示を残さない", async () => {
   const registry = createFeatureRegistry();
   const states: { readonly kind: string }[] = [];

@@ -44,7 +44,16 @@ import {
   createMaintenanceSnapshotSource,
   initializeProductionFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
+import {
+  LanguageProvider,
+  LanguageSelectControl,
+} from "../../src/ui-language/public.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
+
+export const consumeUiLanguagePublicEntry = () => ({
+  LanguageProvider,
+  LanguageSelectControl,
+});
 
 export interface MockFoundationConsumer {
   readonly data: FoundationDataPort;

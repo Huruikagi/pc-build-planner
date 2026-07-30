@@ -256,6 +256,37 @@ test("settingsは許可された公開依存だけを利用する", () => {
   );
 });
 
+test("ui-languageとconsumerは公開境界を越えて逆依存・catalog deep importしない", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "src/ui-language/reverse-settings.ts",
+      source: 'import { SettingsView } from "../features/settings/view.js";',
+    },
+    {
+      path: "src/ui-language/reverse-shell.ts",
+      source: 'import { ShellView } from "../application-shell/shell-view.js";',
+    },
+    {
+      path: "src/ui-language/catalog-leak.ts",
+      source: 'import { messages } from "../ui-messages/catalog/en/index.js";',
+    },
+    {
+      path: "src/application-shell/language-internal.ts",
+      source: 'import { languageStore } from "../ui-language/store.js";',
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/ui-language/reverse-settings.ts: ui-language-public-dependencies-only",
+      "src/ui-language/reverse-shell.ts: ui-language-public-dependencies-only",
+      "src/ui-language/catalog-leak.ts: ui-language-public-dependencies-only",
+      "src/application-shell/language-internal.ts: ui-language-consumer-public-entry-only",
+    ],
+  );
+});
+
 test("backup-restoreの公開面はsettings埋め込みsectionだけに限定する", async () => {
   const publicSource = await readFile(
     "src/features/backup-restore/public.ts",
