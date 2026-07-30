@@ -6,7 +6,7 @@ import type {
 } from "../persistence/public.js";
 import { initializeProductionFoundationRuntimeContribution } from "../persistence/public.js";
 import type { WorkerRegistrationContext } from "./contracts.js";
-import type { FeatureContribution } from "./feature-contribution-catalog.js";
+import type { WorkerFeatureContribution } from "./feature-contribution-catalog.js";
 import { getWorkerContributions } from "./feature-contribution-catalog.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
@@ -30,7 +30,7 @@ export interface ProductionWorkerCompositionOptions {
     Result<FoundationRuntimeContribution, FoundationRuntimeInitializationError>
   >;
   readonly foundationTarget: WorkerMessageTarget;
-  readonly catalog: readonly FeatureContribution[];
+  readonly catalog: readonly WorkerFeatureContribution[];
   readonly workerContext: WorkerRegistrationContext;
 }
 

@@ -12,6 +12,11 @@ import {
 
 export const productCaptureFeatureId = "product-capture" as FeatureId;
 
+/** Worker-safe metadata consumed by the shell-owned worker catalog. */
+export const productCaptureWorkerContribution = Object.freeze({
+  transientSurfaceId: productCaptureFeatureId,
+});
+
 /** Minimal read-only seam consumed by source classifiers in adjacent features. */
 export type ManufacturerDomainLookup = Pick<
   ManufacturerDomainMap,

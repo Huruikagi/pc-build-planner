@@ -8,7 +8,6 @@ import type {
 import { createCandidateManagementContribution } from "../../../src/features/candidate-management/feature-contribution.js";
 import type { CandidateSourceDataPort } from "../../../src/features/candidate-management/source-data-port.js";
 import type {
-  FoundationDataPort,
   FoundationScopedDataPort,
   RootMutationCommand,
 } from "../../../src/persistence/public.js";
@@ -48,7 +47,6 @@ test("contributionのsources facetはcatalogと全mutationをfeature内portへ�
   const contribution = createCandidateManagementContribution(
     {
       data,
-      fullDataPort: data as FoundationDataPort,
       navigator: {
         async activate() {
           return { ok: true, value: undefined };

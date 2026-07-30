@@ -551,6 +551,7 @@ test("TypeScript AST gateは全TS・JS入力をrule判定前に構文preflight�
     "tests/tooling/public-api-consumer.ts",
     "src/features/candidate-management/source-catalog.ts",
     "tests/tooling/source-price-refresh-consumer.ts",
+    "tests/tooling/source-price-refresh-upstream-consumer.ts",
   ];
   for (const path of paths)
     assert.throws(

@@ -92,8 +92,9 @@ export const composeProductionFoundationRuntime = (): Promise<
 /** Downstream consumers compose the root API from the shell-provided context. */
 export const composeShellRootApi = (
   context: FeatureCompositionContext,
+  backupRestoreData: FoundationDataPort,
 ): Result<ApplicationApi, { readonly kind: string }> =>
-  composeApplicationApi(context);
+  composeApplicationApi(context, { backupRestoreData });
 
 /** Downstream consumers may reference canonical candidatePartId and quantity only. */
 export const listAdoptedCandidateQuantities = async (

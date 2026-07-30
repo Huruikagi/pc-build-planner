@@ -28,7 +28,6 @@ import type {
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
-import { getSidePanelContributions } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
 import { createLateBoundLifecycle } from "./late-bound-lifecycle.js";
 import { createPublicApiRegistry } from "./public-api-registry.js";
@@ -76,6 +75,12 @@ export interface ProductionApplicationCompositionOptions<
   /** Features are built after the foundation resolves, from the composed context. */
   readonly createContributions: (
     context: FeatureCompositionContext,
+    dependencies: {
+      readonly backupRestoreData: FoundationDataPort;
+      readonly transientSurface: ReturnType<
+        typeof createLateBoundLifecycle
+      >["port"];
+    },
   ) => ApplicationRuntimeContributions<TFeatures>;
   readonly presentation: ShellPresentationAdapter;
   readonly workerContext: WorkerRegistrationContext;
@@ -91,6 +96,12 @@ export interface ProductionApplicationCompositionOptions<
     stop(): void;
   };
 }
+
+export type ApplicationContributionDependencies = Parameters<
+  ProductionApplicationCompositionOptions<
+    readonly CompositionFeature[]
+  >["createContributions"]
+>[1];
 
 const STARTUP_ERROR = message("shell.startupFailed");
 
@@ -117,14 +128,13 @@ export function createProductionSidePanelComposition(
         dispose: () => initialized.value.dispose(),
       });
     },
-    createContributions: (context) => ({
-      features: getSidePanelContributions(
-        createSidePanelFeatureContributions(
-          context,
-          typeof chrome !== "undefined" && chrome.tabs && chrome.scripting
-            ? { tabs: chrome.tabs, scripting: chrome.scripting }
-            : undefined,
-        ),
+    createContributions: (context, dependencies) => ({
+      features: createSidePanelFeatureContributions(
+        context,
+        dependencies,
+        typeof chrome !== "undefined" && chrome.tabs && chrome.scripting
+          ? { tabs: chrome.tabs, scripting: chrome.scripting }
+          : undefined,
       ) as unknown as SidePanelFeatureContributions,
       workerRegistrations: [],
     }),
@@ -221,6 +231,7 @@ export function createProductionApplicationComposition<
     | undefined;
   let latestShellState: ShellViewState | undefined;
   let transientReadFailed = false;
+  let retryStartup: () => void = () => undefined;
 
   const diagnose = (message: string): void => {
     try {
@@ -328,7 +339,7 @@ export function createProductionApplicationComposition<
   const publishError = (): void => {
     try {
       presentation?.publish(
-        { kind: "error", message: STARTUP_ERROR, recoverable: false },
+        { kind: "error", message: STARTUP_ERROR, recoverable: true },
         [],
       );
     } catch {
@@ -354,7 +365,11 @@ export function createProductionApplicationComposition<
           void transientController.retryDismiss();
           return;
         }
-        void navigationTarget?.start();
+        if (navigationTarget) {
+          void navigationTarget.start();
+          return;
+        }
+        retryStartup();
       },
     });
     if (!mounted.ok) {
@@ -455,13 +470,14 @@ export function createProductionApplicationComposition<
     try {
       const compositionContext: FeatureCompositionContext = {
         data: validatedFoundation.dataPort,
-        fullDataPort: validatedFoundation.fullDataPort,
         navigator: shellNavigator,
-        transientSurface: lateBoundLifecycle.port,
       };
       let contributions: ApplicationRuntimeContributions<TFeatures>;
       try {
-        contributions = options.createContributions(compositionContext);
+        contributions = options.createContributions(compositionContext, {
+          backupRestoreData: validatedFoundation.fullDataPort,
+          transientSurface: lateBoundLifecycle.port,
+        });
       } catch {
         publishError();
         await cleanup().catch(() =>
@@ -634,7 +650,7 @@ export function createProductionApplicationComposition<
     }
   };
 
-  return {
+  const root: ApplicationCompositionRoot<RootApi> = {
     start() {
       if (stopPromise) {
         return stopPromise.then(
@@ -699,4 +715,8 @@ export function createProductionApplicationComposition<
       return pending;
     },
   };
+  retryStartup = () => {
+    void root.start();
+  };
+  return root;
 }

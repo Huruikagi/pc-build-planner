@@ -84,18 +84,28 @@ test("buildがroot公開bundleと共有service workerを生成する", async () 
   const artifactUrl = pathToFileURL("dist/index.js");
   artifactUrl.searchParams.set("test", `${Date.now()}-${Math.random()}`);
   const artifact = (await import(artifactUrl.href)) as {
-    readonly composeApplicationApi: (context: unknown) => {
+    readonly composeApplicationApi: (
+      context: unknown,
+      dependencies: unknown,
+    ) => {
       readonly ok: boolean;
       readonly value?: object;
     };
   };
-  const composed = artifact.composeApplicationApi({
-    data: {
-      query: async () => ({ ok: true, value: 0 }),
-      mutate: async () => ({ ok: true, value: {} }),
+  const data = {
+    query: async () => ({ ok: true, value: 0 }),
+    mutate: async () => ({ ok: true, value: {} }),
+    assessReplacement: async () => ({ ok: true, value: {} }),
+    replaceRoot: async () => ({ ok: true, value: {} }),
+    runMaintenance: async () => ({ ok: true, value: {} }),
+  };
+  const composed = artifact.composeApplicationApi(
+    {
+      data,
+      navigator: { activate: async () => ({ ok: true, value: undefined }) },
     },
-    navigator: { activate: async () => ({ ok: true, value: undefined }) },
-  });
+    { backupRestoreData: data },
+  );
   assert.equal(composed.ok, true);
   assert.ok(composed.value);
   assert.deepEqual(Object.keys(composed.value), [

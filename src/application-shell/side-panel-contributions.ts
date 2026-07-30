@@ -29,7 +29,9 @@ import {
   createSettingsContribution,
   type SettingsContribution,
 } from "../features/settings/feature-contribution.js";
+import type { FoundationDataPort } from "../persistence/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
+import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
 
 /**
  * The only module that knows the concrete side panel features.
@@ -53,6 +55,12 @@ export interface SidePanelCandidateFactories {
   readonly createSourcePagePort?: (tabs?: TabsCreatePort) => SourcePagePort;
 }
 
+export interface SidePanelContributionDependencies {
+  /** Full replacement/maintenance capability is restricted to backup/restore composition. */
+  readonly backupRestoreData: FoundationDataPort;
+  readonly transientSurface?: TransientSurfaceLifecyclePort;
+}
+
 /**
  * Used only where no `chrome` runtime is available (e.g. this module's own
  * unit tests). Never used in production: `src/runtime/side-panel.ts` always
@@ -74,6 +82,7 @@ const inertCaptureRuntimePort: CaptureRuntimePort = {
  */
 export const createSidePanelFeatureContributions = (
   context: FeatureCompositionContext,
+  dependencies: SidePanelContributionDependencies,
   chromeApis?: SidePanelChromeApis,
   factories: SidePanelCandidateFactories = {},
 ): SidePanelFeatureContributions => {
@@ -97,7 +106,7 @@ export const createSidePanelFeatureContributions = (
       chromeApis === undefined
         ? inertCaptureRuntimePort
         : createChromeCaptureRuntimePort(chromeApis),
-    transientSurface: context.transientSurface ?? {
+    transientSurface: dependencies.transientSurface ?? {
       isCurrent: () => false,
       async conclude() {
         return { ok: false, error: { kind: "not-started" } };
@@ -117,7 +126,7 @@ export const createSidePanelFeatureContributions = (
   });
   const settings = createSettingsContribution({
     backupRestore: createBackupRestoreSectionMount({
-      data: context.fullDataPort,
+      data: dependencies.backupRestoreData,
     }),
   });
   return [

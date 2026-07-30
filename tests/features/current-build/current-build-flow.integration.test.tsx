@@ -109,15 +109,17 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
   );
   assert.equal(candidateCreated.ok, true);
 
-  const contributions = createSidePanelFeatureContributions({
-    data,
-    fullDataPort: data,
-    navigator: {
-      async activate() {
-        return { ok: true as const, value: undefined };
+  const contributions = createSidePanelFeatureContributions(
+    {
+      data,
+      navigator: {
+        async activate() {
+          return { ok: true as const, value: undefined };
+        },
       },
     },
-  });
+    { backupRestoreData: data },
+  );
   const [, currentBuild] = contributions;
 
   const container = document.createElement("div");

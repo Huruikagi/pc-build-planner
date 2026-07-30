@@ -220,7 +220,7 @@ test("初期snapshot失敗はfeatureをmountせずstartup failureへ変換する
   assert.deepEqual(states.at(-1), {
     kind: "error",
     message: { key: "shell.maintenanceStartupFailed" },
-    recoverable: false,
+    recoverable: true,
   });
 });
 

@@ -1,7 +1,5 @@
-import type {
-  FoundationDataPort,
-  FoundationScopedDataPort,
-} from "../persistence/public.js";
+import { productCaptureWorkerContribution } from "../features/product-capture/public.js";
+import type { FoundationScopedDataPort } from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
@@ -9,10 +7,7 @@ import type {
   ShellNavigator,
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
-import type {
-  TransientActivationRequest,
-  TransientSurfaceLifecyclePort,
-} from "./transient-surface-ports.js";
+import type { TransientActivationRequest } from "./transient-surface-ports.js";
 
 export interface FeatureContribution<
   TKey extends string = string,
@@ -35,11 +30,7 @@ export interface FeatureContribution<
  */
 export interface FeatureCompositionContext {
   readonly data: FoundationScopedDataPort;
-  /** 置換・保守capabilityを含む完全port。backup-restore専用の依存であり、既定の絞り込みportとは別に供給する。 */
-  readonly fullDataPort: FoundationDataPort;
   readonly navigator: ShellNavigator;
-  /** Production composition always supplies the stable late-bound reference. */
-  readonly transientSurface?: TransientSurfaceLifecyclePort;
 }
 
 export type FeatureContributionFactory<
@@ -59,9 +50,19 @@ export type FeaturePublicApiContribution<
  * side panel専用contributionは`side-panel-contributions.ts`が所有し、
  * worker bundleのDOM/React非依存を保つためこのmodule graphへ持ち込まない。
  */
-export const featureContributionCatalog = Object.freeze(
-  [],
-) as readonly [] satisfies readonly FeatureContribution[];
+export interface WorkerFeatureContribution {
+  readonly registration?: ApplicationFeatureRegistration<
+    object,
+    unknown,
+    TransientActivationRequest
+  >;
+  readonly workerRegistration?: ApplicationWorkerRegistration;
+  readonly transientSurfaceId?: ApplicationFeatureRegistration["id"];
+}
+
+export const featureContributionCatalog = Object.freeze([
+  productCaptureWorkerContribution,
+] as const) satisfies readonly WorkerFeatureContribution[];
 
 export function getSidePanelContributions<
   const TCatalog extends readonly FeatureContribution[],
@@ -83,12 +84,28 @@ export function getPublicApiContributions<
 }
 
 export function getWorkerContributions<
-  const TCatalog extends readonly FeatureContribution[],
+  const TCatalog extends readonly WorkerFeatureContribution[],
 >(catalog: TCatalog): readonly ApplicationWorkerRegistration[] {
   return Object.freeze(
-    ordered(catalog).flatMap(({ workerRegistration }) =>
-      workerRegistration ? [workerRegistration] : [],
-    ),
+    [...catalog]
+      .sort((left, right) => {
+        if (left.registration === undefined || right.registration === undefined)
+          return 0;
+        const leftPersistent = isPersistent(left.registration);
+        const rightPersistent = isPersistent(right.registration);
+        if (leftPersistent !== rightPersistent) return leftPersistent ? -1 : 1;
+        const byOrder =
+          leftPersistent && rightPersistent
+            ? left.registration.navigation.order -
+              right.registration.navigation.order
+            : 0;
+        return (
+          byOrder || left.registration.id.localeCompare(right.registration.id)
+        );
+      })
+      .flatMap(({ workerRegistration }) =>
+        workerRegistration ? [workerRegistration] : [],
+      ),
   );
 }
 

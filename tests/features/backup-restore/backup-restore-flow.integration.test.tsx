@@ -122,15 +122,17 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
   );
   assert.equal(candidateCreated.ok, true);
 
-  const contributions = createSidePanelFeatureContributions({
-    data,
-    fullDataPort: data,
-    navigator: {
-      async activate() {
-        return { ok: true as const, value: undefined };
+  const contributions = createSidePanelFeatureContributions(
+    {
+      data,
+      navigator: {
+        async activate() {
+          return { ok: true as const, value: undefined };
+        },
       },
     },
-  });
+    { backupRestoreData: data },
+  );
   const [candidateManagement, , , , settings] = contributions;
 
   const originalCreateObjectURL = URL.createObjectURL.bind(URL);

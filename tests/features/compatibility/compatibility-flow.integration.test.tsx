@@ -140,15 +140,17 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
   if (!matchedMotherboard.ok)
     throw new Error("マザーボード候補を作成できません");
 
-  const contributions = createSidePanelFeatureContributions({
-    data,
-    fullDataPort: data,
-    navigator: {
-      async activate() {
-        return { ok: true as const, value: undefined };
+  const contributions = createSidePanelFeatureContributions(
+    {
+      data,
+      navigator: {
+        async activate() {
+          return { ok: true as const, value: undefined };
+        },
       },
     },
-  });
+    { backupRestoreData: data },
+  );
   const [, currentBuild, , compatibility] = contributions;
 
   // 現在構成でCPUと不一致マザーボードを選択する。
@@ -326,15 +328,17 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
   assert.equal(cpu.ok, true);
   if (!cpu.ok) throw new Error("cpu候補を作成できません");
 
-  const contributions = createSidePanelFeatureContributions({
-    data,
-    fullDataPort: data,
-    navigator: {
-      async activate() {
-        return { ok: true as const, value: undefined };
+  const contributions = createSidePanelFeatureContributions(
+    {
+      data,
+      navigator: {
+        async activate() {
+          return { ok: true as const, value: undefined };
+        },
       },
     },
-  });
+    { backupRestoreData: data },
+  );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   const candidateQuery = candidateManagement.registration.publicApi.query;
   const buildQuery = currentBuild.registration.publicApi.query;

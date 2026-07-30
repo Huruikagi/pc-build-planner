@@ -230,10 +230,12 @@ test("production contributionへ同じlate-bound lifecycle参照を一度だけ�
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    createContributions: (context) => {
-      assert.ok(context.transientSurface);
-      seen.push(context.transientSurface);
-      beforeBind = context.transientSurface.conclude(activationId, handoff);
+    createContributions: (_context, dependencies) => {
+      seen.push(dependencies.transientSurface);
+      beforeBind = dependencies.transientSurface.conclude(
+        activationId,
+        handoff,
+      );
       return {
         features: [{ key: "planner", registration: h.feature }] as const,
         workerRegistrations: [],
@@ -429,8 +431,8 @@ test("startup rollback後も注入済みlifecycleをnot-startedへ戻す", async
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
     initializeFoundation: h.initializeFoundation,
-    createContributions: (context) => {
-      lifecycle = context.transientSurface;
+    createContributions: (_context, dependencies) => {
+      lifecycle = dependencies.transientSurface;
       return {
         features: [{ key: "planner", registration: h.feature }] as const,
         workerRegistrations: [h.worker],
@@ -525,7 +527,7 @@ test("foundation失敗時はpresentationだけを開始して共通errorを表�
   assert.equal((await root.start()).ok, false);
   assert.ok(
     h.states.some(
-      (state) => state.kind === "error" && state.recoverable === false,
+      (state) => state.kind === "error" && state.recoverable === true,
     ),
   );
   assert.equal(h.events.includes("feature:mount"), false);
@@ -536,6 +538,52 @@ test("foundation失敗時はpresentationだけを開始して共通errorを表�
     "presentation:mount",
     "presentation:stop",
   ]);
+});
+
+test("production startup errorのretry操作は同じpresentationで再起動する", async () => {
+  const h = harness();
+  let attempts = 0;
+  let presentationInput:
+    | Parameters<ShellPresentationAdapter["mount"]>[0]
+    | undefined;
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: async () => {
+      attempts += 1;
+      return attempts === 1
+        ? { ok: false as const, error: { code: "fixture" } }
+        : h.initializeFoundation();
+    },
+    createContributions: () => ({
+      features: [{ key: "planner", registration: h.feature }] as const,
+      workerRegistrations: [],
+    }),
+    presentation: {
+      mount(input) {
+        presentationInput = input;
+        return h.presentation.mount(input);
+      },
+    },
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, false);
+  const failed = h.states.at(-1);
+  assert.equal(failed?.kind, "error");
+  if (failed?.kind === "error") assert.equal(failed.recoverable, true);
+
+  presentationInput?.onRetry();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(attempts, 2);
+  assert.equal(h.states.at(-1)?.kind, "ready");
+  assert.equal(
+    h.events.filter((event) => event === "presentation:mount").length,
+    1,
+  );
+  await root.stop();
 });
 
 test("foundation失敗時のpresentation例外をrejectせずtyped failureへ変換する", async () => {

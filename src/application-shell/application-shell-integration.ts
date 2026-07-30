@@ -172,7 +172,7 @@ export function createApplicationShellIntegration(
         present({
           kind: "error",
           message: STARTUP_FAILURE_MESSAGE,
-          recoverable: false,
+          recoverable: true,
         });
       }
       return startupFailure();
@@ -182,7 +182,7 @@ export function createApplicationShellIntegration(
       present({
         kind: "error",
         message: STARTUP_FAILURE_MESSAGE,
-        recoverable: false,
+        recoverable: true,
       });
       return startupFailure();
     }
@@ -201,7 +201,7 @@ export function createApplicationShellIntegration(
       present({
         kind: "error",
         message: STARTUP_FAILURE_MESSAGE,
-        recoverable: false,
+        recoverable: true,
       });
       return startupFailure();
     }
@@ -217,7 +217,7 @@ export function createApplicationShellIntegration(
         present({
           kind: "error",
           message: STARTUP_FAILURE_MESSAGE,
-          recoverable: false,
+          recoverable: true,
         });
       }
       await rollbackFailedStart();

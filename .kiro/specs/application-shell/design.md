@@ -47,11 +47,11 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
 - Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
 - dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
-- `src/runtime/side-panel.ts`はapplication-shellのproduction composition factoryだけをimportし、foundation factory、具体feature registration、worker registrationを直接importしない。
+- `src/runtime/side-panel.ts`はapplication-shellのproduction composition factory、ui-language所有の`runtime.ts` composition seam、および一過性surface用runtime adapterだけをimportする。foundation factory、具体feature registration、worker registration、ui-languageのstore実装を直接importしない。
 - `src/runtime/service-worker.ts`はproduction worker compositionとChrome message target adapterだけを所有し、Storage、Repository、foundation内部、DOM、Reactをimportしない。
 - production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 - `ui-messages`の公開型`MessageKey`・`MessageDescriptor`と解決契約`useMessages()`（`src/ui-messages/public.ts`）。ナビゲーションラベルと共通状態文言（`ShellViewState`/`ShellMaintenanceState`のmessage）の表示文字列化にだけ使用し、カタログの内部実装・言語別値へdeep importしない。
-- `ui-language`の公開Provider`LanguageProvider`（`src/ui-language/public.ts`）。shellはProviderを組み込むが、`LanguageSelectControl`の配置はsettings featureへ委ね、言語状態・永続化・解決ロジックへdeep importしない。
+- `ui-language`の公開Provider`LanguageProvider`（`src/ui-language/public.ts`）と、shell所有runtime入口だけが利用するcomposition seam（`src/ui-language/runtime.ts`）。shell viewはProviderだけを組み込み、`LanguageSelectControl`の配置はsettings featureへ委ねる。runtime入口もpreference store実装へ直接deep importせず、runtime seamから初期化する。
 - `transient-feature-surface`が確定した`PersistentApplicationFeatureRegistration`／`TransientApplicationFeatureRegistration`判別共用体、`isPersistent`型述語、`TransientNotice`、typed activation連携。shellは表示区分を解釈してhostへ投影するが、起動世代やChrome gestureを再実装しない。
 - `settings-screen`が提供するpersistent settings contribution。shellはcompositionとnavigation到達だけを所有し、settings内部の言語・backup能力を解釈しない。
 
@@ -144,7 +144,7 @@ src/
 tests/
 ├── application-shell/                 # component unit tests
 ├── contracts/                         # downstream registration contract test kit
-└── integration/application-shell.test.ts # bootstrap、遷移、障害、maintenance統合
+└── application-shell/application-shell-integration.test.ts # bootstrap、遷移、障害、maintenance統合
 ```
 
 既存の`react-shell-root.tsx`、`shell-view.tsx`、`shell-view.css`、`feature-registry.ts`、`side-panel-host.ts`、`shell-presentation.tsx`、`application-composition.ts`を常設／一過性混在とsettings回復表示へ改訂する。`feature-contribution-catalog.ts`はworker registrationだけを含められるworker-safe graphを維持し、`side-panel-contributions.ts`だけがsettingsを含むUI contributionを参照する。`src/domain/`と`src/persistence/`の実装は変更対象外である。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
@@ -168,6 +168,8 @@ type FeatureContributionFactory<
 > = (context: FeatureCompositionContext) =>
   FeatureContribution<TKey, TPublic, TActivation>;
 ```
+
+backup/restoreが必要とする完全`FoundationDataPort`と、一過性featureが必要とするlifecycle portは、全feature factory共通の`FeatureCompositionContext`へ含めない。application-shellの具体side-panel compositionだけが`SidePanelContributionDependencies`として受け取り、backup sectionとproduct-capture contributionへ個別に渡す。
 
 - `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker contributionだけを持つworker安全なcatalogを所有する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
 - `side-panel-contributions.ts`はUI contributionを具体合成する唯一の面とし、settingsをpersistent、product-capture等をtransientとして受け入れる。source-price-refreshのcontext menu worker contributionはここへ混在させない。
@@ -508,9 +510,9 @@ interface ProductionWorkerComposition {
 - `ShellPresentationAdapter.mount`はshell React rootを先にmountし、そのrootが所有する専用slotだけを`featureContainer`として返す。`featureContainer !== shellContainer`を起動時に検証する。
 - `SidePanelHost`へ渡すcontainerは常に`featureContainer`であり、feature registrationはshell navigationやstatus DOMを変更しない。公開`FeatureMountContext`は変更しない。
 - navigation commandはpresentationからcomposition/integrationの`select`へ型付きで渡す。stateとregistry snapshotは逆方向に`publish`され、React componentがhost serviceを直接importしない。
-- production composition modulesだけがfoundationの公開factoryと、存在する下流featureの公開registration・worker registrationを合成する。`src/runtime/side-panel.ts`はDOM hostを解決してproduction factoryとbootstrapを開始するだけであり、仮maintenance sourceや下流feature deep importを持たない。
+- production composition modulesだけがfoundationの公開factoryと、存在する下流featureの公開registration・worker registrationを合成する。`src/runtime/side-panel.ts`はDOM hostを解決し、production factory、ui-languageのruntime seam、一過性surface用runtime adapterを合成してbootstrapする。仮maintenance source、具体feature registration、ui-languageのstore実装へのdeep importを持たない。
 - MV3のside panelとservice workerはobject lifecycleを共有できないため、各contextがfoundationのno-arg production factoryから独立handleを初期化する。side panel compositionはmaintenance sourceとdisposeを所有し、production worker compositionはfoundation worker registration、catalog worker contribution、disposeを所有する。
-- `feature-contribution-catalog.ts`はside panel registration、worker registration、public API keyをreadonly tupleとして公開する唯一のcatalogである。catalogは下流feature実装前には空でよく、登録済みfeatureだけを決定的に合成する。side panel compositionはUI/public API項目だけを、service worker compositionはworker項目だけを選択し、worker側へHTMLElementまたはReact依存を持ち込まない。
+- `feature-contribution-catalog.ts`はworker registrationとworker-safe metadataだけをreadonly catalogとして公開する。product-captureの一過性surface IDもfeature-owned worker contributionからこのcatalogへ提供し、共有service worker入口は具体feature IDを直接importしない。side panel registrationとpublic API keyは`side-panel-contributions.ts`が具体合成し、worker側へHTMLElementまたはReact依存を持ち込まない。
 - 空catalogでの起動は成功し、navigationを表示せず安全なempty stateを提示する。後続feature specは自身の公開registrationをcatalogへ追加する統合だけを要求され、application-shellのhost、runtime entry、root公開機構を変更しない。
 - 起動順序はfoundation初期化、registry登録、shell presentation mount、feature host start、worker registrationの順とする。停止とrollbackはworker解除、feature unmount、maintenance購読解除、shell presentation stop、foundation disposeの逆依存順で全件best-effortに実行する。
 - worker contextの起動順はfoundation初期化、非同期foundation message registration、同期catalog registrationsとし、それぞれのtyped failureを`ProductionWorkerStartupError`へ正規化する。失敗時と停止はcatalog解除、foundation handler解除、foundation disposeの逆順・全件best-effort・冪等とする。start中のstopはepochを無効化し、遅延したfoundation registrationの完了後にcatalog登録せず即座cleanupする。concurrent startは単一Promiseを共有する。

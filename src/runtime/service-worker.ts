@@ -2,7 +2,7 @@ import type {
   FeatureId,
   WorkerRegistrationContext,
 } from "../application-shell/contracts.js";
-import type { FeatureContribution } from "../application-shell/feature-contribution-catalog.js";
+import type { WorkerFeatureContribution } from "../application-shell/feature-contribution-catalog.js";
 import { featureContributionCatalog } from "../application-shell/feature-contribution-catalog.js";
 import {
   createDefaultProductionWorkerComposition,
@@ -15,7 +15,6 @@ import {
   type TransientGestureRegistrationPort,
   type TransientGestureSource,
 } from "../application-shell/transient-surface-ports.js";
-import { productCaptureFeatureId } from "../features/product-capture/public.js";
 import {
   type ActivationFailureSignal,
   createChromeActivationFailureSignal,
@@ -80,7 +79,7 @@ export const createChromeWorkerRegistrationContext = (
 
 export const createProductionServiceWorkerBootstrap = (
   runtime: FoundationMessageRuntime,
-  catalog: readonly FeatureContribution[] = featureContributionCatalog,
+  catalog: readonly WorkerFeatureContribution[] = featureContributionCatalog,
   initializeFoundation?: ProductionFoundationInitializer,
 ): ProductionWorkerComposition =>
   createDefaultProductionWorkerComposition({
@@ -224,8 +223,7 @@ export interface ChromeProductionTransientApis {
 export const createProductionTransientRuntimeBootstrap = (
   runtime: ChromeProductionTransientRuntime,
   chromeApis: ChromeProductionTransientApis,
-  catalog: readonly FeatureContribution[] = featureContributionCatalog,
-  transientSurfaceId?: FeatureId,
+  catalog: readonly WorkerFeatureContribution[] = featureContributionCatalog,
 ): {
   readonly scheduler: TransientActivationScheduler;
   readonly gestureRegistration: TransientGestureRegistrationPort;
@@ -238,10 +236,9 @@ export const createProductionTransientRuntimeBootstrap = (
     chromeApis.storage.session,
     scheduler,
   );
-  const transient = catalog.find(
-    ({ registration }) => registration.presentation === "transient",
-  );
-  const surfaceId = transientSurfaceId ?? transient?.registration.id;
+  const surfaceId = catalog.find(
+    ({ transientSurfaceId }) => transientSurfaceId !== undefined,
+  )?.transientSurfaceId;
   const runtimeBootstrap = createTransientWorkerRuntimeBootstrap({
     scheduler,
     action: chromeApis.action,
@@ -348,7 +345,6 @@ if (
           sidePanel: chrome.sidePanel,
         },
         featureContributionCatalog,
-        productCaptureFeatureId,
       ).hasTransientGesture;
   }
   void createProductionServiceWorkerBootstrap(runtime).start();

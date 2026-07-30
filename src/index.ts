@@ -6,7 +6,10 @@ import type {
 import { getPublicApiContributions } from "./application-shell/feature-contribution-catalog.js";
 import { createPublicApiRegistry } from "./application-shell/public-api-registry.js";
 import type { SidePanelFeatureContributions } from "./application-shell/side-panel-contributions.js";
-import { createSidePanelFeatureContributions } from "./application-shell/side-panel-contributions.js";
+import {
+  createSidePanelFeatureContributions,
+  type SidePanelContributionDependencies,
+} from "./application-shell/side-panel-contributions.js";
 import type { Result } from "./domain/public.js";
 
 export type { FeatureCompositionContext };
@@ -26,7 +29,10 @@ export type ApplicationApi = Readonly<{
  */
 export const composeApplicationApi = (
   context: FeatureCompositionContext,
+  dependencies: SidePanelContributionDependencies,
 ): Result<ApplicationApi, PublicApiCompositionError> =>
   createPublicApiRegistry().composeEntries(
-    getPublicApiContributions(createSidePanelFeatureContributions(context)),
+    getPublicApiContributions(
+      createSidePanelFeatureContributions(context, dependencies),
+    ),
   ) as Result<ApplicationApi, PublicApiCompositionError>;

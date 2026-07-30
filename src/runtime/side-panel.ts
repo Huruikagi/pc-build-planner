@@ -1,9 +1,9 @@
 import { createProductionSidePanelComposition } from "../application-shell/application-composition.js";
-import type { LanguagePlatform } from "../ui-language/contracts.js";
 import {
   createChromeLanguagePreferencePortIfAvailable,
   createInMemoryLanguagePreferencePort,
-} from "../ui-language/preference-store.js";
+  type LanguagePlatform,
+} from "../ui-language/runtime.js";
 import { createProductionTransientPanelIntegration } from "./production-transient-panel.js";
 import { startSidePanelWithLanguage } from "./side-panel-bootstrap.js";
 import { resolveChromeTransientPanelStorage } from "./transient-activation-store.js";

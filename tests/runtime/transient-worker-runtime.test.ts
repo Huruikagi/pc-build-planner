@@ -299,8 +299,7 @@ test("production compositionはworker-safeなcanonical surface IDでgestureを�
       tabs: { onUpdated, onRemoved },
       sidePanel: { open: async () => {} },
     },
-    [],
-    "product-capture" as FeatureId,
+    [{ transientSurfaceId: "product-capture" as FeatureId }],
   );
   assert.equal(composition.hasTransientGesture, true);
   action.emit({ id: 21 });

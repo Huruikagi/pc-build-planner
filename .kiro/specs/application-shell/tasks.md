@@ -290,7 +290,7 @@
   - _Requirements: 1.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 8.1, 8.2, 8.4_
   - _Boundary: ApplicationComposition, SidePanelFeatureContributions, ReactShellRoot_
 
-- [ ] 8. 境界とproduction回帰を完成する
+- [x] 8. 境界とproduction回帰を完成する
 - [x] 8.1 (P) UI contributionとworker-safe catalogの分離を固定する
   - settingsと一過性viewをside panel専用graphへ閉じ、service worker catalogにはworker registrationとworker-safe metadataだけを載せる
   - source-price-refreshのfeature-owned gesture sourceが上流登録portへ接続できる一方、worker bundleからDOM、React、feature UIへ到達できないことを境界検査する
@@ -317,3 +317,5 @@
 - Production compositionはepoch/stop gateとcleanup成功までの所有権保持が必要で、feature unmount後にmaintenance購読を解除する。foundation failure表示経路もpresentation例外をtyped startup failureへ正規化する必要がある。
 - Task 4.8の境界gateで検出したcross-spec矛盾は、foundation所有のno-arg production factoryとshellのStorage/Web Locks非依存へ移行して解消した。
 - MV3 context間でfoundation handleを共有せず、side panelはmaintenance source、service workerはcommand registrationを各contextのno-arg factory handleから所有する。
+- `FeatureCompositionContext`はscoped data portとnavigatorだけに限定し、backup/restoreの完全data portとtransient lifecycleはside-panel compositionの専用依存として個別featureへ渡す。
+- product-captureの一過性surface IDはfeature-owned worker contributionからworker-safe catalogへ載せ、共有service worker入口から具体feature importを除去する。`source-price-refresh-upstream-consumer.ts`はcatalog/mutation/page-price/gestureの4公開portを同時に型検査し、未実装の下流specがこのseamだけを利用できる状態を固定する。

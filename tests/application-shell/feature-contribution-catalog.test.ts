@@ -34,6 +34,32 @@ const navigationMessage = (key: MessageKey) =>
 
 const id = (value: string) => value as FeatureId;
 
+const splitSidePanelContext = (context: {
+  readonly data: unknown;
+  readonly fullDataPort: unknown;
+  readonly navigator: unknown;
+  readonly transientSurface?: unknown;
+}) => ({
+  featureContext: {
+    data: context.data,
+    navigator: context.navigator,
+  } as never,
+  dependencies: {
+    backupRestoreData: context.fullDataPort,
+    transientSurface:
+      context.transientSurface ??
+      ({
+        isCurrent: () => false,
+        async conclude() {
+          return {
+            ok: false as const,
+            error: { kind: "not-started" as const },
+          };
+        },
+      } as const),
+  } as never,
+});
+
 function contribution<const TKey extends string, TPublic extends object>(
   key: TKey,
   featureId: string,
@@ -60,14 +86,15 @@ function contribution<const TKey extends string, TPublic extends object>(
 }
 
 test("worker catalogはworker contributionだけを持つreadonly catalogである", () => {
-  assert.deepEqual(featureContributionCatalog, []);
+  assert.deepEqual(featureContributionCatalog, [
+    { transientSurfaceId: "product-capture" },
+  ]);
   assert.equal(Object.isFrozen(featureContributionCatalog), true);
-  assert.deepEqual(getSidePanelContributions(featureContributionCatalog), []);
   assert.deepEqual(getWorkerContributions(featureContributionCatalog), []);
 });
 
 test("side panel contributionは合成contextから実featureを組み立てる", () => {
-  const contributions = createSidePanelFeatureContributions({
+  const context = {
     data: {
       async query() {
         return { ok: true, value: 0 } as never;
@@ -98,7 +125,12 @@ test("side panel contributionは合成contextから実featureを組み立てる"
         return { ok: true, value: undefined };
       },
     },
-  });
+  };
+  const split = splitSidePanelContext(context);
+  const contributions = createSidePanelFeatureContributions(
+    split.featureContext,
+    split.dependencies,
+  );
 
   assert.deepEqual(
     contributions.map(({ key }) => key),
@@ -225,40 +257,45 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
       },
     },
   };
-  const contributions = createSidePanelFeatureContributions(context as never, {
-    tabs: {
-      async get(tabId) {
-        return {
-          id: tabId,
-          url: "https://catalog.example.invalid/production-part",
-        };
+  const split = splitSidePanelContext(context);
+  const contributions = createSidePanelFeatureContributions(
+    split.featureContext,
+    split.dependencies,
+    {
+      tabs: {
+        async get(tabId) {
+          return {
+            id: tabId,
+            url: "https://catalog.example.invalid/production-part",
+          };
+        },
+        async create() {
+          return {};
+        },
       },
-      async create() {
-        return {};
-      },
-    },
-    scripting: {
-      async executeScript(injection) {
-        return injection.files === undefined
-          ? [
-              {
-                result: {
-                  pageUrl: "https://catalog.example.invalid/production-part",
-                  candidates: [
-                    {
-                      field: "name",
-                      rawValue: "架空 production CPU",
-                      source: "heading",
-                      sourceLabel: "h1",
-                    },
-                  ],
+      scripting: {
+        async executeScript(injection) {
+          return injection.files === undefined
+            ? [
+                {
+                  result: {
+                    pageUrl: "https://catalog.example.invalid/production-part",
+                    candidates: [
+                      {
+                        field: "name",
+                        rawValue: "架空 production CPU",
+                        source: "heading",
+                        sourceLabel: "h1",
+                      },
+                    ],
+                  },
                 },
-              },
-            ]
-          : [{}];
+              ]
+            : [{}];
+        },
       },
     },
-  });
+  );
   const candidateManagement = contributions[0];
   const productCapture = contributions[2];
   const activation = productCapture.registration.activation;
@@ -369,7 +406,8 @@ test("side panel compositionはtabs.createを候補再訪portへ注入する", a
     },
   };
   const contributions = createSidePanelFeatureContributions(
-    context as never,
+    splitSidePanelContext(context).featureContext,
+    splitSidePanelContext(context).dependencies,
     {
       tabs: {
         async get(id) {
@@ -418,7 +456,7 @@ test("production side panel compositionはcanonical dataをsource catalogとmuta
       return { ok: true as const, value: {} as never };
     },
   };
-  const contributions = createSidePanelFeatureContributions({
+  const context = {
     data,
     fullDataPort: {
       ...data,
@@ -437,7 +475,12 @@ test("production side panel compositionはcanonical dataをsource catalogとmuta
         return { ok: true as const, value: undefined };
       },
     },
-  });
+  };
+  const split = splitSidePanelContext(context);
+  const contributions = createSidePanelFeatureContributions(
+    split.featureContext,
+    split.dependencies,
+  );
   const api = contributions[0].registration.publicApi.sources;
   const listed = await api.catalog.listSourceReferences({});
   assert.equal(listed.ok && listed.value.length, 2);

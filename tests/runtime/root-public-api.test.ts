@@ -8,32 +8,26 @@ import type {
   FoundationScopedDataPort,
 } from "../../src/persistence/public.js";
 
+const data = {
+  async query() {
+    return { ok: true as const, value: 0 as never };
+  },
+  async mutate() {
+    return { ok: true as const, value: {} as never };
+  },
+  async assessReplacement() {
+    return { ok: true as const, value: {} as never };
+  },
+  async replaceRoot() {
+    return { ok: true as const, value: {} as never };
+  },
+  async runMaintenance() {
+    return { ok: true as const, value: {} as never };
+  },
+} satisfies FoundationDataPort;
+
 const context = (): FeatureCompositionContext => ({
-  data: {
-    async query() {
-      return { ok: true as const, value: 0 as never };
-    },
-    async mutate() {
-      return { ok: true as const, value: {} as never };
-    },
-  } satisfies FoundationScopedDataPort,
-  fullDataPort: {
-    async query() {
-      return { ok: true as const, value: 0 as never };
-    },
-    async mutate() {
-      return { ok: true as const, value: {} as never };
-    },
-    async assessReplacement() {
-      return { ok: true as const, value: {} as never };
-    },
-    async replaceRoot() {
-      return { ok: true as const, value: {} as never };
-    },
-    async runMaintenance() {
-      return { ok: true as const, value: {} as never };
-    },
-  } satisfies FoundationDataPort,
+  data: data satisfies FoundationScopedDataPort,
   navigator: {
     async activate() {
       return { ok: true as const, value: undefined };
@@ -42,7 +36,9 @@ const context = (): FeatureCompositionContext => ({
 });
 
 test("root公開入口はcatalogから合成したreadonly own-property辞書を提供する", () => {
-  const composed = composeApplicationApi(context());
+  const composed = composeApplicationApi(context(), {
+    backupRestoreData: data,
+  });
 
   assert.equal(composed.ok, true);
   if (!composed.ok) return;
@@ -63,7 +59,9 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
 });
 
 test("実featureの公開契約がroot入口から到達できる", () => {
-  const composed = composeApplicationApi(context());
+  const composed = composeApplicationApi(context(), {
+    backupRestoreData: data,
+  });
 
   assert.equal(composed.ok, true);
   if (!composed.ok) return;

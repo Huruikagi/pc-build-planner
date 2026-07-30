@@ -21,17 +21,16 @@ test("runtime bootstrapはfoundationの具体initializerを直接importしない
   );
 });
 
-test("production moduleはcanonical product-capture IDをgesture runtimeへ配線する", async () => {
+test("production moduleはworker-safe catalogからtransient surface IDを解決する", async () => {
   const source = await readFile("src/runtime/service-worker.ts", "utf8");
+  const catalog = await readFile(
+    "src/application-shell/feature-contribution-catalog.ts",
+    "utf8",
+  );
 
-  assert.match(
-    source,
-    /import\s*\{\s*productCaptureFeatureId\s*\}\s*from\s*["']\.\.\/features\/product-capture\/public\.js["']/,
-  );
-  assert.match(
-    source,
-    /createProductionTransientRuntimeBootstrap\([\s\S]*?productCaptureFeatureId[\s\S]*?\)\s*\.hasTransientGesture/,
-  );
+  assert.doesNotMatch(source, /features\/product-capture/);
+  assert.match(source, /catalog\.find\([\s\S]*?transientSurfaceId/);
+  assert.match(catalog, /productCaptureWorkerContribution/);
 });
 
 test("watch-ready bootstrapはruntimeとsessionの実Chrome階層を同期接続する", () => {
