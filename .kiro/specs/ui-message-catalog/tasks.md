@@ -290,7 +290,7 @@
   - _Requirements: 1.2, 1.3, 10.1, 10.2, 10.4, 10.6, 11.8_
   - _Boundary: CatalogParityGate_
 
-- [ ] 7.2 legacy navigation keyをconsumer移行後に原子的に削除する
+- [x] 7.2 legacy navigation keyをconsumer移行後に原子的に削除する
   - producer-owned consumerが移行済みであることを前提に、`nav.productCapture`と`nav.backupRestore`をja/enからaliasなしで同時削除する
   - catalog、`src/`、`tests/`、`e2e/`を対象にdead keyとdead consumerを検出し、product-captureを常設navigationへ戻す参照と独立backup navigation参照を拒否する
   - producerのstate、view layout、activation、backup処理は編集せず、catalog dataと検査だけを変更する
@@ -326,6 +326,7 @@
 - remediation-4: `MessageDefinition` は単純文字列・単一数量の `PluralDefinition`・複数数量の `MultiPluralDefinition` の3形とした。複数数量は selector 順の `zero|one|other` 組み合わせで完結文を選び、既存 caller の `projectCount` / `partCount` / `currentBuildCount` を変更せず将来 locale の表現を追加できる。旧実装では型が `count` 必須と誤判定され、実行時の複数 selector テスト2件も失敗する RED を確認した。
 - タスク1.3: `src/application-shell/shell-view.tsx` のナビゲーションボタンは現状 `data-feature-id` などの安定識別子を持たない（`data-feature-id` は選択中機能を表す `.shell-feature` セクション側にのみ存在し、ナビゲーションボタン自体には無い）。`e2e/locators.ts` の `navItem` は `.shell-navigation [data-feature-id="..."]` を前提に実装済みのため、タスク1.4でナビゲーションボタンへ `data-feature-id={item.id}` を追加する必要がある。
 - タスク3.2: キーのみの写像テーブル（`categoryLabels`→`categoryMessageKeys` 等）を `Readonly<Record<X, MessageKey>>` のように**広い** `MessageKey` へ型注釈すると、カタログにプレースホルダ付きキー（例: `compatibility.missingCategory`）が1つでも存在した時点で、そのテーブルからの参照 `messages(table[x])` が「パラメータ不足」の型エラーになる（`ParamsArgsFor` が MessageKey 全体の積集合を要求するため）。対策: テーブル宣言を `as const satisfies Record<X, MessageKey>` にして各値の literal 型を保持する（`: Record<X, MessageKey>` という直接注釈をしない）。複数フィールドを持つ入れ子テーブル（例: `RULE_LABEL_KEYS`）や `string` キーで引く `Partial<Record<string, ...>>` テーブルは、値の型を `MessageKey` ではなく実際に使う literal key の union（例: `type ReasonMessageKey = "compatibility.reasons.value-equal" | ...`）に絞る。以降のfeature移行タスク（3.3以降）でも同じ写像パターンを使う際はこの型を踏襲する。
+- タスク7.2: dead navigation key gate は `catalog`・`src`・`tests`・`e2e` を横断し、完全一致だけでなく引用符・連結演算子・空白で分割された参照も正規化して拒否する。transient navigation の境界fixtureには廃止キーを温存せず、現行の `nav.settings` を使う。
 - タスク2.5: `pnpm test`（`--test-isolation=none` で全テストが単一プロセスを共有）実行時、`tests/persistence/**` の一部が `await import("....ts")`（拡張子明示の動的import、Node型stripping用）を使うと、tsx のローダーがそれ以降 `.js` 指定子から `.tsx` ファイルへのフォールバック解決に失敗する（`ERR_MODULE_NOT_FOUND`、対象ファイルを常に `.ts` として探す）。単体で実行すれば再現しないため気づきにくい。回避策として `src/ui-messages/react.tsx` は使わず、JSX構文を避けて `createElement` で実装した `.ts` ファイル（`message-context.ts`）とする。以降 `ui-messages` 配下や関連テストヘルパへ新規ファイルを追加する際、実DOMを描画しないロジックには `.tsx` ではなく `createElement` ベースの `.ts` を優先する。
 - タスク5.3: 素朴な `scanner.scan()` ループ（`validate-boundaries.mjs` の既存 `tokenize` と同方式）は、テンプレートリテラルの `${...}` を閉じる `}` を通常token として扱ってしまい、その時点でトークン列が desync する（TypeScript の scanner は `reScanTemplateToken` の明示呼び出しでのみテンプレート継続を正しく再開できる）。JSX中心の `view.tsx` は `` `id={`${x}-error`}` `` のようなネスト構文を頻繁に含むため、desync するとファイル残り全体（数百行規模）が1個の未終端テンプレートtokenへ飲み込まれ、以降の文言リテラルやimportが検査から漏れる。`scripts/validate-ui-text.mjs` はテンプレートの穴ごとの中括弧深さをスタックで追跡し、深さ0で閉じる `}` でのみ `reScanTemplateToken(false)` を呼ぶことで対処した。同じ `createScanner` ベースのトークン走査を今後 `.tsx` ファイルへ新規適用する場合はこの対処を踏襲する。
 - タスク5.4: esbuild は生成物中の非ASCII文字列リテラルを既定で `\uXXXX`（**大文字**16進）へエスケープする（コメントは変換されない）。ビルド成果物に特定の日本語文言が静的同梱されているかを機械的に確認する場合、生の部分文字列一致や小文字16進エスケープでは検出できず、大文字16進エスケープでの一致を取るか、バンドルを実際に評価してresolverを呼び出す方式にする必要がある。

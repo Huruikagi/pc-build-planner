@@ -178,7 +178,7 @@ test("capture・candidate-management間は公開entry pointだけを許可する
     {
       path: "src/features/product-capture/registration.ts",
       source:
-        'const registration = { presentation: "transient", navigation: { labelKey: "nav.productCapture" } };',
+        'const registration = { presentation: "transient", navigation: { labelKey: "nav.settings" } };',
     },
     {
       path: "src/features/product-capture/reordered-registration.ts",
@@ -196,7 +196,6 @@ test("capture・candidate-management間は公開entry pointだけを許可する
       "product-capture-no-legacy-candidate-port",
       "product-capture-no-legacy-editor-navigation",
       "product-capture-transient-no-navigation",
-      "product-capture-no-navigation-message",
       "product-capture-transient-no-navigation",
     ],
   );

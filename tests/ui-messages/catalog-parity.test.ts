@@ -173,8 +173,13 @@ test("v0.3 gateはexact keyと旧backup navigation撤去を固定する", () => 
     "capture.retryHandoffAction",
   ]);
   assert.deepEqual(parityIssues(ja, en), []);
-  assert.equal("nav.backupRestore" in ja, false);
-  assert.equal("nav.backupRestore" in en, false);
+  for (const key of [
+    ["nav", "productCapture"].join("."),
+    ["nav", "backupRestore"].join("."),
+  ]) {
+    assert.equal(key in ja, false);
+    assert.equal(key in en, false);
+  }
 });
 
 test("v0.3移行前gateはキー欠落と余剰を拒否する", () => {
