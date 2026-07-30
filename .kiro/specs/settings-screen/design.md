@@ -69,7 +69,7 @@ settings featureは配置とlifecycle合成だけを所有する。表示言語�
 ### Existing Architecture Analysis
 
 - shellは`SidePanelFeatureContributions`を唯一の具体feature catalogとして組み立て、navigationはregistrationのorderとpresentationから導出する。
-- 言語controlはshell headerに直置きされるが、状態と保存は`ui-language`共有storeが所有する。
+- 言語controlはsettingsの表示言語区画に配置済みであり、状態と保存は`ui-language`共有storeが所有する。shell headerにはcontrolを置かず、navigation不能時だけ二言語の回復案内を表示する。
 - backup-restoreは独立registrationが専用`fullDataPort`を受け、state/service/file gatewayとReact rootを内部で構成する。
 - feature外のconsumerは`public.ts`だけを利用し、各React rootは自身の`root.unmount()`を所有する。
 

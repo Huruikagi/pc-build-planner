@@ -255,6 +255,10 @@ catalog ownerとして、producerが要求する利用者向け状態を次のex
 
 横断レビューで検出した旧「10名前空間」前提は、`ui-internationalization`を11名前空間の公開consumer契約へ改訂して解消した。`settings-screen`も意味要件・consumer・layoutだけを所有し、catalog data・parity・dead key削除は本specへ委譲する境界へ改訂済みである。今後も`settings`キーを`common`や`shell`へaliasせず、この所有権と11名前空間を再検証する。
 
+### Implementation Ownership Record
+
+`src/ui-messages/catalog/{ja,en}/`の構造・値、11名前空間の集約、parity型／テスト、dead-key checkpointは、実装時の作業名や導入順にかかわらずすべて`ui-message-catalog`の成果物として所有する。`ui-internationalization`は`src/ui-messages/public.ts`から公開されるregistry／resolverをread-only consumerとして受け入れるだけで、catalog内部の変更権限や共同ownershipを持たない。2026-07-31の横断再検証では、このowner境界、公開consumer、producer-owned表示状態、配布物への静的同梱をfreshな`pnpm validate`で再確認した。
+
 ## System Flows
 
 ### 表示文言の解決経路

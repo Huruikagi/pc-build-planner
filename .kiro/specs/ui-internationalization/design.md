@@ -58,7 +58,7 @@
 ### Allowed Dependencies
 
 - `src/ui-messages/` → `src/domain/public.js`（型のみ、上流のまま）、React 19（`createContext` / `useContext`）。
-- `src/ui-language/` → `src/ui-messages/public.js`（唯一の経路）、React 19（`useSyncExternalStore` を含む）、`chrome.storage.local` / `chrome.i18n.getUILanguage`（**アダプタ1ファイルに限定**）。
+- `src/ui-language/` → `src/ui-messages/public.js`（唯一のカタログ経路）、`src/domain/public.js`（canonical `Result` 型と `ok` / `err` だけ）、React 19（`useSyncExternalStore` を含む）。`chrome.storage.local` は `preference-store.ts`、`chrome.i18n.getUILanguage` は `runtime.ts` のproduction factoryにそれぞれ限定する。
 - `src/features/settings/` → `src/ui-language/public.js`（`LanguageProvider` と `LanguageSelectControl` の公開能力を表示言語区画へ配置するためだけ）。
 - `src/application-shell/` → `src/ui-language/public.js`（`LanguageProvider` のためだけ。`LanguageSelectControl` をheaderへ配置しない）。`src/runtime/` → `src/ui-language/runtime.js`（初期化・文書同期・platform factoryのcomposition seam）または`public.js`だけを許可する。
 - `src/application-shell/side-panel.css` → `src/ui-language/language-select.css`（settings内controlを`dist/side-panel.css`へ束ねるCSS composition seamだけ）。layout ownershipはsettings/ui-languageに残し、shell header規則を置かない。
@@ -190,7 +190,7 @@ _locales/                              # 新規。manifest とストア掲載の
 
 src/
 ├── ui-language/                       # 新規境界。言語状態とProvider選択の canonical owner
-│   ├── contracts.ts                   # 対応言語、原語表記、言語設定ポート、解決入力、ストアの型
+│   ├── contracts.ts                   # 言語設定ポート、解決入力、ストアとplatformの型
 │   ├── resolve.ts                     # 純関数。言語タグ正規化と初期値決定
 │   ├── preference-store.ts            # 専用キー1つに閉じた chrome.storage.local アダプタ
 │   ├── store.ts                       # React 外の単一ストア。購読と初期化
@@ -206,12 +206,17 @@ src/
         └── ja-price-tokens.ts         # normalizer.ts から移設した「円」表記の判定
 
 e2e/
-└── language-switching.spec.ts         # 新規。切り替え操作による英語UI検証と保持の検証
+├── english-ui.spec.ts                 # 設定操作による英語UI検証とpanel再生成後の保持
+├── language-behavior-invariance.spec.ts # 復元・候補操作の言語非依存性
+└── language-persistence-restart.spec.ts # 同一profileでブラウザプロセスを再起動する保持検証
 
 tests/
 ├── ui-language/                       # 新規。解決・保存・ストア・Provider・コントロール
-│   ├── {resolve,preference-store,store,react,language-select}.test.ts(x)
-│   └── public-consumer.test.ts        # 11名前空間の公開resolver契約とdeep import禁止を検証
+│   └── {resolve,preference-store,store,react,language-select,runtime}.test.ts(x)
+├── runtime/side-panel-language-bootstrap.test.ts # 初期化順序と失敗時の継続
+└── tooling/
+    ├── public-api-consumer.ts          # 公開consumer型検査のfixture
+    └── public-boundaries.test.ts       # catalog deep importと逆依存の拒否
 ```
 
 ### Modified Files
@@ -241,7 +246,7 @@ tests/
 | `scripts/validate-ui-text.mjs` | 本spec所有範囲では原語表記を持つ`src/ui-language/contracts.ts`と`src/features/product-capture/locale/`だけを除外へ追加し、`category-hint.ts`を除外から外す。catalog除外は`ui-message-catalog`所有のまま変更しない |
 | `tests/runtime/manifest.test.ts` | 完全一致対象へ `description` / `default_locale` / `__MSG_*` を反映。`_locales/` の実在と全キー充足、`<html>` の `lang` 非固定を検査 |
 | `tests/tooling/package.test.ts` | 合成配布物へ `_locales/` を含め、配布 zip へロケール資産が入ることを検査 |
-| `e2e/locators.ts` | 言語コントロールのロケータと、公開型付き契約による言語別の期待値解決を追加 |
+| `e2e/models/settings.ts` / `e2e/support/expected-text.ts` | 言語コントロール操作と公開型付き契約による言語別期待値解決を集約 |
 | `package.json` | 変更不要（新しい script を追加しない）。検査は既存 `validate:artifacts` / `validate:ui-text` の内部で強化する |
 
 ## System Flows
@@ -499,7 +504,7 @@ export const resolverFor: (language: SupportedLanguage) => MessageResolver;
 **Implementation Notes**
 
 - Integration: `LanguageReactBinding`が現在言語に対応するresolverを取得し、各rootの`MessageProvider`へ供給する。
-- Validation: `public-consumer.test.ts`でja/en双方の`settings.title`を含む代表keyを解決し、公開consumer型検査と境界検査を通す。
+- Validation: `tests/tooling/public-api-consumer.ts`でja/en双方の`settings.title`を含む代表keyを型検査し、`tests/tooling/public-boundaries.test.ts`で公開consumer境界とcatalog deep import拒否を固定する。
 - Risks: catalog内部型をconsumer側に複製すると所有権が分裂するため、公開型以外のimportを違反とする。
 
 ### ui-language
@@ -977,7 +982,7 @@ export const syncDocumentLanguage: (
 
 1. persistent navigationからsettingsへ移動し、表示言語区画のコントロールで英語へ切り替えると、settings、ナビゲーション、状態文言が英語カタログの解決値と一致すること。**ブラウザ再起動・ロケール環境変数・起動オプションを一切用いない**（8.1, 8.2, 4.3）。
 2. 英語のまま全対象面を順に表示し、各画面の主要文言が英語で表示されること（Provider 張り忘れの検出を兼ねる）（4.3）。
-3. 英語へ切り替えた後にサイドパネルを開き直すと、`chrome.storage.local` production portから復元され英語のまま表示されること（3.1）。これは同一ブラウザプロセス内のpanel再生成を証明し、ブラウザプロセス再起動を直接主張しない。
+3. 英語へ切り替えた後にサイドパネルを開き直すと、`chrome.storage.local` production portから復元され英語のまま表示されること（3.1）。加えて、同一persistent profileを用いてブラウザコンテキストを完全終了・再起動し、新しいプロセスでも英語が復元されることを独立E2Eで直接実測する。
 4. 英語表示のままバックアップから復元し、復元完了通知が英語の1文として表示され、復元の前後で表示言語が変わらないこと（3.3, 4.5）。
 5. 言語切り替え後も候補の作成・編集・削除が現行と同じ結果になること（1.4）。
 

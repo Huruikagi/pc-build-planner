@@ -251,7 +251,7 @@
   - _Requirements: 1.5, 2.1, 2.2, 2.3, 2.4, 8.4, 10.5_
   - _Depends: 5.3_
 
-- [ ] 6. v0.3.0のcatalog dataを追加する
+- [x] 6. v0.3.0のcatalog dataを追加する
 
 - [x] 6.1 canonical settings名前空間と設定navigationを加算的に追加する
   - 日本語・英語へ11番目の`settings`名前空間を追加し、画面見出し、表示言語区画、バックアップ・復元区画の見出しと説明をcanonical key contractどおりに定義する
@@ -279,7 +279,7 @@
   - _Requirements: 1.1, 1.4, 5.6, 10.1, 10.2, 10.6, 11.3, 11.4_
   - _Boundary: V03CatalogMigration_
 
-- [ ] 7. parity、legacy key削除、横断受入を完成する
+- [x] 7. parity、legacy key削除、横断受入を完成する
 
 - [x] 7.1 追加キーの移行前parityとexact-key contractを固定する
   - 11名前空間のja/en双方向キー網羅、全message formのplaceholder集合、4つのshell key、4つのcapture key、settings key集合を検査する
@@ -299,7 +299,7 @@
   - _Requirements: 2.1, 7.5, 7.6, 11.7, 11.8_
   - _Boundary: V03CatalogMigration, CatalogParityGate_
 
-- [ ] 7.3 producer-owned表示状態をread-onlyの横断受入として再検証する
+- [x] 7.3 producer-owned表示状態をread-onlyの横断受入として再検証する
   - 本specではcatalog-owned contract testと公開consumer fixtureだけを更新し、shell、capture、settings、languageのstate、view、layout、発火条件または業務処理を編集しない
   - producer suiteとE2Eを実行し、一過性起動失敗・失効、権限再付与、新世代起動、handoff再試行、settings両区画、loading/startup hintが公開`MessageKey`または`MessageDescriptor`だけでja/en表示されることを受け入れ検証する
   - Providerによる言語切り替え、安全なtext描画、文言非依存locatorを確認し、driftがあれば該当producer ownerへ差し戻す
@@ -308,7 +308,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.3, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
   - _Boundary: UiMessagesPublicEntry, CrossSpecAcceptance_
 
-- [ ] 7.4 完全検証gateとtask群のtraceabilityを確認する
+- [x] 7.4 完全検証gateとtask群のtraceabilityを確認する
   - typecheck、public consumer、lint、ui-text、boundary、fixture、final build、unit・integration・DOM、Playwright E2Eをfreshに実行する
   - 既存完了task 1〜5と追加task 6〜7を合わせたcoverage matrixが64受け入れ基準を欠落なく追跡することを確認し、このtask自身は列挙したgate要件だけを直接検証する
   - 配布物への静的同梱、権限・CSP不変、実サイトfixture不在、承認済みcatalog migration以外の差分不在を確認する
@@ -318,6 +318,8 @@
   - _Boundary: ValidationGate_
 
 ## Implementation Notes
+
+- 2026-07-31 task 7.3/7.4 revalidation: catalog-owned公開consumer、producer suite、settings両区画、loading/startup hint、言語Provider、安全なtext描画、文言非依存locator、dead-key/parity gateをread-onlyの横断受入として再検証した。`pnpm validate`はexit 0（Node 1157/1157、Playwright 15/15）で、typecheck、public consumer、lint、boundary、fixture、final build、ui-text、unit/integration/DOM、production E2Eをfreshに通過した。64受け入れ基準は既存task 1〜7の`_Requirements_` traceabilityで欠落なく追跡され、権限・CSP・実サイトfixture・catalog migration境界にも新規違反はない。検証中にproducer-owned state/view/layout/発火条件または業務処理は変更していない。
 
 - remediation-1: `MessageDescriptor` は非公開 `unique symbol` による nominal brand を持ち、`message()` だけを型安全な生成経路とした。runtime bootstrap と shell view の表示値はカタログキーへ移し、公開 API を広げずロジック層から生の英語文言を渡せない境界を固定した。
 - remediation-2: 5本の E2E spec から生の `locator()` 組み立てを除去し、意味単位の識別手順を `e2e/locators.ts` へ集約した。`tests/tooling/e2e-locator-boundary.test.ts` が spec への locator 再混入を拒否する。
