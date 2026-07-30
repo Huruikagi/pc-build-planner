@@ -145,7 +145,6 @@ export const createRestoreService = (
 
     return ok({
       candidate: candidate.value,
-      assessment: assessment.value,
       preview: {
         createdAt: envelope.createdAt,
         formatVersion: envelope.formatVersion,

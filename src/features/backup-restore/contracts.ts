@@ -12,7 +12,6 @@ import type {
   SourceSnapshot,
   UtcTimestamp,
 } from "../../domain/public.js";
-import type { ReplacementAssessment } from "../../persistence/public.js";
 
 export const BACKUP_PRODUCT_ID = "pc-build-planner";
 export const CURRENT_BACKUP_FORMAT_VERSION = 1;
@@ -84,7 +83,6 @@ export interface RestoreInput {
 /** preflight成功時だけ生成され、UI state外へ永続化しない非永続ticket。 */
 export interface RestoreTicket {
   readonly candidate: unknown;
-  readonly assessment: ReplacementAssessment;
   readonly preview: RestorePreview;
 }
 

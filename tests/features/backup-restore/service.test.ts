@@ -184,7 +184,7 @@ test("有効な現行envelopeのpreflightはticketとpreviewを返す", async ()
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(result.value.assessment, FAKE_ASSESSMENT);
+  assert.equal("assessment" in result.value, false);
   assert.deepEqual(result.value.preview, {
     createdAt: envelope.createdAt,
     formatVersion: envelope.formatVersion,
@@ -315,7 +315,6 @@ test("Foundationのassessがstale-assessmentを返した場合はstale-ticketへ
 
 const FAKE_TICKET = {
   candidate: { schemaVersion: 1 },
-  assessment: FAKE_ASSESSMENT,
   preview: {
     createdAt: NOW,
     formatVersion: 1,
@@ -328,7 +327,7 @@ const FAKE_TICKET = {
 
 const FAKE_FENCE = { generation: 1, ownerId: "owner", revision: 4 };
 
-/** acquire自体もrevisionを進めるため、preflight時のticket.assessmentはacquire後には必ず古くなる。 */
+/** acquire自体もrevisionを進めるため、commitでは取得後のassessmentだけを使用する。 */
 const FRESH_ASSESSMENT = {
   ...FAKE_ASSESSMENT,
   candidateDigest: "fresh-digest",
@@ -415,11 +414,9 @@ test("commit成功時はacquire・再assess・replaceRoot・releaseの順で呼�
   };
   assert.deepEqual(replaceCall.fence, FAKE_FENCE);
   assert.deepEqual(replaceCall.candidate, FAKE_TICKET.candidate);
-  // The stale preflight assessment must not reach replaceRoot; only the fresh
-  // post-acquire re-assessment does (acquire itself advances the revision,
-  // which would otherwise make the original ticket.assessment stale).
+  // Only the post-acquire assessment reaches replaceRoot. The preflight
+  // assessment is used to build the preview and is not retained in the ticket.
   assert.deepEqual(replaceCall.assessment, FRESH_ASSESSMENT);
-  assert.notDeepEqual(replaceCall.assessment, FAKE_TICKET.assessment);
 });
 
 test("release cleanup失敗時も置換成功を保ちlease失効による回復を妨げない", async () => {

@@ -29,10 +29,7 @@ const errorMessageKeys = {
 } as const satisfies Record<DisplayError["code"], MessageKey>;
 
 const messageFor = (error: DisplayError, messages: MessageResolver): string => {
-  const base = messages(errorMessageKeys[error.code]);
-  return "path" in error && error.path !== undefined
-    ? messages("backup.withPosition", { message: base, path: error.path })
-    : base;
+  return messages(errorMessageKeys[error.code]);
 };
 
 const BUSY_PHASES = new Set(["exporting", "validating", "restoring"]);

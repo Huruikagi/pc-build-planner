@@ -365,9 +365,9 @@ test("settings公開mount下でmaintenance、分類済みerror、安全なfilena
       alert.textContent ?? "",
       new RegExp(defaultMessageResolver("backup.errors.invalid-structure")),
     );
-    assert.match(alert.textContent ?? "", /<img src=x/);
+    assert.doesNotMatch(alert.textContent ?? "", /<img src=x/);
     assert.equal(alert.querySelector("img"), null);
-    assert.match(container.innerHTML, /&lt;img/);
+    assert.doesNotMatch(container.innerHTML, /&lt;img/);
   } finally {
     const mounted = handle;
     if (mounted !== undefined) await act(async () => mounted.unmount());

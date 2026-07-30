@@ -2,7 +2,7 @@
 
 - [x] 1. 交換契約とFoundation消費境界を確立する
 - [x] 1.1 バージョン付き交換契約と判別可能な結果を定義する
-  - 製品識別子、形式版、作成日時、全プロジェクト・候補・現在構成、preview、artifact、復元ticket（candidateとreplacement assessment）を型安全に表現する
+  - 製品識別子、形式版、作成日時、全プロジェクト・候補・現在構成、preview、artifact、復元ticket（candidateとpreview）を型安全に表現する
   - ファイル、形式、参照、非対応版、容量、保存、stale確認の失敗を値を含まないcodeとpathで区別し、Foundationの結果をfeature codeへ写像する形を用意する
   - 現行・旧・将来版fixtureが型検査でき、保存スキーマ版が公開交換契約へ混入しない
   - _Requirements: 1.1, 1.2, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.2, 3.6, 5.3, 6.5_
@@ -52,7 +52,7 @@
 - [x] 3.2 復元preflightとpreview生成を実装する
   - 読取前サイズ、JSON解析、交換形式移行、交換検証、保存root候補への変換を交換層で順に行う
   - 変換済み候補をFoundationの置換評価へ渡し、保存schema検証・参照整合性・容量見積り・digest付きassessment生成をFoundationへ委譲する
-  - 成功時だけ件数、作成日時、形式版、見積り容量と非永続ticket（candidateとassessment）を返す
+  - 成功時だけ件数、作成日時、形式版、見積り容量と非永続ticket（candidateとpreview）を返し、preflight assessment自体は保持しない
   - 不正形式、参照不整合、非対応版、容量超過の各fixtureがwriteなしで拒否される
   - _Depends: 1.2, 2.1, 2.2, 2.3_
   - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.3, 6.5_
@@ -60,7 +60,7 @@
 
 - [x] 3.3 検証済みticketの復元commitを実装する
   - 復元セッションのUUID owner識別子でFoundationの保守acquireを呼び、返却fenceを取得する
-  - candidate・assessment・fenceをFoundationの置換へ渡し、assessment再検証・stale検出・容量再判定・単一writeはFoundation内部に委譲する
+  - maintenance acquire後にcandidateを再評価し、candidate・最新assessment・fenceをFoundationの置換へ渡して、stale検出・容量再判定・単一writeをFoundation内部に委譲する
   - 成功時はrelease、取消・stale・検証・容量・write失敗時はabortして既存データを保持する
   - acquire前の置換、owner外fence、期限切れfenceがFoundationで拒否され、各失敗点で部分データとactive maintenanceが残らず再試行できる
   - _Depends: 3.2_
@@ -170,3 +170,4 @@
 - feature validation後の追補: design.mdのTesting Strategyが挙げるE2Eを`e2e/backup-restore.spec.ts`として追加した（export→ファイル保存→データ改変→取消→確認→復元→reload→復元後CRUDと再backup）。またvalidation中に上流`application-shell`の実バグを1件検出・修正した: `MaintenanceProjection`の初期cursor`{generation:0, revision:0}`は「未受信」を表す暫定値なのに実snapshotと`compareCursor`で比較されており、空ストレージ起動時（実snapshotも`{0,0}`）は初回観測が構造的に必ず`stale_ignored`となって起動のたびに診断エラーを出していた。projectionへ未受信フラグを持たせ最初のacceptだけ比較をスキップするよう修正済み。
 - 5.1: `FeatureCompositionContext`/`ProductionFoundationHandle`へ`fullDataPort`を追加した（既定の`data`は引き続きscoped port）。real Foundationを使う統合testで初めて判明した実バグ2件を修正: (1) `RestoreService.commit`はacquire自体がrevisionを進めるため、preflight時のassessmentをそのままreplaceRootへ渡すと必ずstale-assessmentになる — acquire後にassessReplacementを再実行してから渡すよう修正。(2) replaceRoot自体もrevisionを進めるため、releaseにacquire時のfenceをそのまま渡すとstale-fenceで黙って失敗し保守が解放されないまま残る — replaceRootが返す新revisionをfenceへ反映してからreleaseするよう修正。単体testのfake portだけでは検出できない類のバグで、実Foundationを使う結合testの価値を示す例。
 - 6.1–6.4: task 4.4と5.1で完成した独立feature registrationは移行元としてのみ残る。section contractを先に加算し、`settings-screen`のcomposition切替後にだけ旧registration/contributionを削除する。これにより移行途中の実装可能性を保ちながら、最終状態では独立navigationと二重mountを残さない。
+- validation remediation: Requirement 6.5に合わせ、検証pathは内部の分類・テストにだけ保持し、UIとログへは出さず固定code文言だけを表示する。`RestoreTicket`はcandidateとpreviewだけを保持し、preflight assessmentは見積りへ使用後に破棄する。commitはacquire後の再assessmentを唯一の置換assessmentとし、preview後の現行root変更はcommit時の再検証とfenceで安全性を判定する。

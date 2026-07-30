@@ -125,7 +125,6 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
 test("unmount後の再mountは一時ticketを破棄し購読を重複させない", async () => {
   const ticket = {
     candidate: {},
-    assessment: {} as never,
     preview: {
       createdAt: "2026-07-24T00:00:00.000Z" as never,
       formatVersion: 1,

@@ -175,7 +175,7 @@ sequenceDiagram
     Restore-->>State: success summary
 ```
 
-`RestoreTicket`は`assessReplacement`が返した`ReplacementAssessment`（digest・token・`cursor.revision`を含む）と対応するcandidateをstate内だけに保持する。ファイルを変更・再選択した場合はticketを破棄する。commit時の再検証・容量再判定・stale検出（`cursor.revision`不一致→`stale-assessment`）はFoundationの`replaceRoot`が内部で行うため、feature側で重複実装しない。commitは`runMaintenance({type:"acquire"})`でfenceを取得してから`replaceRoot`へfenceを渡し、成功・失敗・取消の全経路で`release`または`abort`する。application shellは同じFoundationのread-only maintenance購読を投影するため、復元featureが他featureのUIを直接操作せず全mutationを共通抑止できる。
+`RestoreTicket`は交換層が生成したcandidateと利用者確認用previewだけをstate内に保持する。preflight時の`ReplacementAssessment`は容量見積りをpreviewへ写すために使い、ticketへ保持しない。`acquire`自体がrevisionを進めるため、commitはmaintenance fence取得後にcandidateを再評価し、その時点のassessmentを`replaceRoot`へ渡す。preview表示後に現行rootが変化していても、その変更だけを理由にticketを失効させず、commit時の再検証・容量再判定・fence認可を通過した場合は利用者が確認した全置換を続行する。ファイルを変更・再選択した場合はticketを破棄する。commitは成功・失敗の全経路で`release`または`abort`する。application shellは同じFoundationのread-only maintenance購読を投影するため、復元featureが他featureのUIを直接操作せず全mutationを共通抑止できる。
 
 ## Requirements Traceability
 
@@ -195,7 +195,7 @@ sequenceDiagram
 | 5.1, 5.2, 5.3, 5.4 | 原子的失敗回復 | RestoreService、FoundationDataPort | replaceRoot、RestoreError | 復元 |
 | 5.5 | 再試行 | BackupRestoreState | resetSelection | 復元 |
 | 6.1, 6.2, 6.3, 6.4 | 設定内の区画と案内 | BackupRestoreView、BackupRestoreState、BackupRestoreSectionMount | ViewState、FeatureMountContext | 両フロー |
-| 6.5 | 値を露出しない診断 | 全検証・サービス | path based errors | 両フロー |
+| 6.5 | 値を露出しない診断 | 全検証・サービス・View | 分類済みerror code | 両フロー |
 | 6.6 | 非永続ドラフト | BackupRestoreState | transient state | 復元 |
 | 6.7 | 独立navigationを要求しない埋め込み | BackupRestoreSectionMount | mount | Settings mount |
 
@@ -280,7 +280,6 @@ interface FoundationDataPort {
 
 interface RestoreTicket {
   readonly candidate: unknown;                 // ExchangeMapperが生成した保存root候補
-  readonly assessment: ReplacementAssessment;  // digest・token・cursor.revisionを含む
   readonly preview: RestorePreview;
 }
 
@@ -290,7 +289,7 @@ interface RestoreInput {
 }
 ```
 
-`preflight`はサイズ上限、JSON解析、交換形式移行、交換検証、保存root候補への変換の順に交換層で行い、続けて`FoundationDataPort.assessReplacement(candidate)`へ渡す。保存schema検証（参照整合性含む）・容量見積り・digest付きassessment生成はFoundationが担い、非対応版・破損・容量超過はここで拒否される。`commit`は`runMaintenance({type:"acquire", leaseMs: 30_000})`でfenceを取得し、利用者待機やnetwork I/Oを挟まず、再評価と一回の`replaceRoot`を行う。30秒lease内の短いcommit区間として扱うため`RestoreService`はrenewしない。実測または実行環境変更で30秒以内を保証できなくなった場合は、lease値だけを延ばさずrenew policyと進行表示を再設計する。assessment再検証・stale検出・容量再判定・単一writeはFoundation内部で完結する。成功・失敗の全経路で`runMaintenance({type:"release"|"abort"})`を呼ぶ。`ownerId`は復元セッションごとに生成したUUIDを用い、ticketはUI state外へ永続化しない。
+`preflight`はサイズ上限、JSON解析、交換形式移行、交換検証、保存root候補への変換の順に交換層で行い、続けて`FoundationDataPort.assessReplacement(candidate)`へ渡す。保存schema検証（参照整合性含む）・容量見積り・digest付きassessment生成はFoundationが担い、非対応版・破損・容量超過はここで拒否される。assessmentの`requiredBytes`だけをpreviewへ写し、assessment自体はticketへ保持しない。`commit`は`runMaintenance({type:"acquire", leaseMs: 30_000})`でfenceを取得し、利用者待機やnetwork I/Oを挟まず、再評価と一回の`replaceRoot`を行う。30秒lease内の短いcommit区間として扱うため`RestoreService`はrenewしない。実測または実行環境変更で30秒以内を保証できなくなった場合は、lease値だけを延ばさずrenew policyと進行表示を再設計する。commit時assessmentのstale検出・容量再判定・単一writeはFoundation内部で完結する。成功・失敗の全経路で`runMaintenance({type:"release"|"abort"})`を呼ぶ。`ownerId`は復元セッションごとに生成したUUIDを用い、ticketはUI state外へ永続化しない。
 
 `acquire`と`replaceRoot`はいずれもrevisionを進めるため、commitは(1) acquire後に`assessReplacement`を再実行してから`replaceRoot`へ渡し、(2) `replaceRoot`が返した新revisionをfenceへ反映してから`release`する。これを怠ると前者は常に`stale-assessment`、後者は`stale-fence`で保守が解放されないまま残る。
 
@@ -401,7 +400,7 @@ interface RestorePreview {
 - `BackupError`: `corrupt-current-data`、`unsupported-current-data`、`storage`、`serialization`を判別する。
 - 失敗時は永続スナップショットを更新せず、stateは再選択・再試行可能な`failed`へ遷移する。
 
-ログは操作種別、エラーcode、path、形式版、件数だけを含め、商品名、URL、価格、ファイル本文を含めない。
+利用者向け診断とログは分類済みエラーcodeを基準とし、検証用pathは内部結果に留めて表示・記録しない。商品名、URL、価格、ファイル本文を含めない。
 
 ## Testing Strategy
 
@@ -415,7 +414,7 @@ interface RestorePreview {
 
 ## Security Considerations
 
-選択ファイルは未信頼入力として`unknown`から検証し、UIへは値でなくcodeとpathだけを出す。React componentはframework非依存のBackupRestoreState、service、FileGateway portだけに依存し、表示値は通常のJSX childとして扱う。`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。ファイル処理は信頼済みextension page内で行い、content scriptやページへRepository、ticket、ファイル本文を公開しない。Blob URLは直ちに破棄し、Reactをproduction bundleへ同梱し、リモートコード、動的評価、インラインスクリプト、runtime JSX変換を追加しない。
+選択ファイルは未信頼入力として`unknown`から検証し、UIへは値やpathを渡さず分類済みcodeに対応する固定文言だけを出す。React componentはframework非依存のBackupRestoreState、service、FileGateway portだけに依存し、表示値は通常のJSX childとして扱う。`dangerouslySetInnerHTML`、`innerHTML`、inline handlerを使用しない。ファイル処理は信頼済みextension page内で行い、content scriptやページへRepository、ticket、ファイル本文を公開しない。Blob URLは直ちに破棄し、Reactをproduction bundleへ同梱し、リモートコード、動的評価、インラインスクリプト、runtime JSX変換を追加しない。
 
 ## Performance & Capacity
 
