@@ -22,6 +22,10 @@ import type {
   CurrentBuildQuery,
   CurrentBuildSnapshot,
 } from "../../../src/features/current-build/public.js";
+import {
+  resetUiLanguageForTest,
+  uiLanguageStore,
+} from "../../../src/ui-language/store.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const buildId =
@@ -477,6 +481,32 @@ test("評価要求ごとに上流を再読取し、構成または属性変更�
   assert.equal(after.ok, true);
   if (!after.ok) return;
   assert.equal(after.value.status, "incompatible");
+});
+
+test("ja/enへ表示言語stateを切り替えても互換性判定結果は不変である", async () => {
+  resetUiLanguageForTest();
+  const evaluateForUiLanguage = async (language: "ja" | "en") => {
+    uiLanguageStore.setLanguage(language);
+    return createCompatibilityService({
+      currentBuildQuery: dynamicBuildQuery(() => ({
+        ok: true,
+        value: snapshotWith(fullBuild()),
+      })),
+      candidateQuery: dynamicCandidateQuery(() => ({
+        ok: true,
+        value: partsWith("AM5", "LGA1700"),
+      })),
+    }).evaluate(projectId);
+  };
+
+  try {
+    assert.deepEqual(
+      await evaluateForUiLanguage("en"),
+      await evaluateForUiLanguage("ja"),
+    );
+  } finally {
+    resetUiLanguageForTest();
+  }
 });
 
 test("未確認の元表記だけが変わっても互換性判定の根拠へ混入しない", async () => {

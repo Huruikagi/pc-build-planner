@@ -47,7 +47,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
 - Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
 - dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
-- `src/runtime/side-panel.ts`はapplication-shellのproduction composition factory、ui-language所有の`runtime.ts` composition seam、および一過性surface用runtime adapterだけをimportする。foundation factory、具体feature registration、worker registration、ui-languageのstore実装を直接importしない。
+- `src/runtime/side-panel.ts`と`side-panel-bootstrap.ts`はapplication-shellのproduction composition factory、ui-language所有の`runtime.ts` composition seam、および一過性surface用runtime adapterだけをimportする。foundation factory、具体feature registration、worker registration、ui-languageのstore・document sync・preference実装を直接importしない。
 - `src/runtime/service-worker.ts`はproduction worker compositionとChrome message target adapterだけを所有し、Storage、Repository、foundation内部、DOM、Reactをimportしない。
 - production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 - `ui-messages`の公開型`MessageKey`・`MessageDescriptor`と解決契約`useMessages()`（`src/ui-messages/public.ts`）。ナビゲーションラベルと共通状態文言（`ShellViewState`/`ShellMaintenanceState`のmessage）の表示文字列化にだけ使用し、カタログの内部実装・言語別値へdeep importしない。
@@ -176,7 +176,7 @@ backup/restoreが必要とする完全`FoundationDataPort`と、一過性feature
 - `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。
 - `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
 - `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
-- feature側CSSは、side panel entryのmodule graphからimportして`dist/side-panel.css`へbundleし、shellが所有する`side-panel.html`から参照する。どのentryからも到達しないCSSはproduction artifactに含まれないため、設計上の記載と実体を一致させる。
+- feature側CSSは、side panel entryのmodule graphからimportして`dist/side-panel.css`へbundleし、shellが所有する`side-panel.html`から参照する。`src/application-shell/side-panel.css`から`src/ui-language/language-select.css`へのimportはsettings内language controlをbundleへ到達させる明示的CSS composition seamであり、shell header layout ownershipを意味しない。どのentryからも到達しないCSSはproduction artifactに含まれないため、設計上の記載と実体を一致させる。
 
 ## システムフロー
 

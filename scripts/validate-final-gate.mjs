@@ -52,6 +52,8 @@ export async function runFinalGate({
           "src/application-shell",
           "src/features",
           "src/runtime",
+          "src/ui-language",
+          "src/persistence",
           "src/index.ts",
           "src/content-scripts",
           "tests/tooling/public-api-consumer.ts",

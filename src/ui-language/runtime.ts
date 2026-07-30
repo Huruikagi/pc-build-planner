@@ -4,7 +4,9 @@
  * may use this module to assemble persistence and browser-language adapters.
  */
 export type { LanguagePlatform } from "./contracts.js";
+export { syncDocumentLanguage } from "./document-language.js";
 export {
   createChromeLanguagePreferencePortIfAvailable,
   createInMemoryLanguagePreferencePort,
 } from "./preference-store.js";
+export { initializeUiLanguage } from "./store.js";

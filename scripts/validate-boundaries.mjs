@@ -171,7 +171,7 @@ const isForbiddenUiLanguageImport = (sourcePath, specifier) => {
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
   if (!normalizedSpecifier.startsWith(".")) return false;
   if (normalizedSpecifier.startsWith("./")) return false;
-  return !/(?:^|\/)ui-messages\/public(?:\.js|\.ts)?$/.test(
+  return !/(?:^|\/)(?:ui-messages|domain)\/public(?:\.js|\.ts)?$/.test(
     normalizedSpecifier,
   );
 };
@@ -181,12 +181,14 @@ const isForbiddenUiLanguageConsumerImport = (sourcePath, specifier) => {
   const normalizedSource = sourcePath.replaceAll("\\", "/");
   if (/(?:^|\/)ui-language\//.test(normalizedSource)) return false;
   if (
-    !/(?:^|\/)(?:application-shell|features\/settings)\//.test(normalizedSource)
+    !/(?:^|\/)(?:application-shell|features\/settings|runtime)\//.test(
+      normalizedSource,
+    )
   )
     return false;
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
   if (!/(?:^|\/)ui-language\//.test(normalizedSpecifier)) return false;
-  return !/(?:^|\/)ui-language\/public(?:\.js|\.ts)?$/.test(
+  return !/(?:^|\/)ui-language\/(?:public|runtime)(?:\.js|\.ts)?$/.test(
     normalizedSpecifier,
   );
 };
@@ -626,6 +628,13 @@ export const findBoundaryViolations = (sources) => {
           normalizedPath.includes("/runtime/") ||
           /\/src\/index\.(?:ts|js)$/.test(`/${normalizedPath}`);
         const isDownstreamFeature = normalizedPath.includes("/features/");
+        const ownsFoundationInternals = /(?:^|\/)src\/persistence\//.test(
+          normalizedPath,
+        );
+        const isWebLocksAdapter =
+          /(?:^|\/)src\/persistence\/web-locks-adapter\.ts$/.test(
+            normalizedPath,
+          );
         const tokens = tokenize(source);
         const aliases = new Map();
         const rules = new Set();
@@ -633,8 +642,10 @@ export const findBoundaryViolations = (sources) => {
           const token = tokens[index];
           if (token === undefined) continue;
           const string = foldedString(tokens, index);
-          if (string?.value === LOCK_NAME) rules.add("no-root-lock-bypass");
+          if (string?.value === LOCK_NAME && !isWebLocksAdapter)
+            rules.add("no-root-lock-bypass");
           if (
+            !ownsFoundationInternals &&
             token?.kind === SyntaxKind.StringLiteral &&
             isForbiddenImport(token.value) &&
             tokens
@@ -709,15 +720,7 @@ export const findBoundaryViolations = (sources) => {
             rules.add("ui-language-consumer-public-entry-only");
           const pathValue = memberPath(tokens, index, aliases);
           if (
-            pathValue !== undefined &&
-            canonicalApiPath(pathValue.value).startsWith("chrome.storage")
-          )
-            rules.add(
-              isApplicationShell
-                ? "application-shell-no-direct-storage"
-                : "no-direct-storage",
-            );
-          if (
+            !isWebLocksAdapter &&
             pathValue !== undefined &&
             canonicalApiPath(pathValue.value).startsWith("navigator.locks")
           )
@@ -860,51 +863,70 @@ export const findBoundaryViolations = (sources) => {
   );
 };
 
-// StorageAccessGuard (3.2, 3.4): `chrome.storage` reachability is confined to
-// the local data foundation's adapter and the display-language preference
-// port. In the pre-build source tree that means these exact two files; in the
-// bundled `dist/` output (where esbuild merges many source files into one
-// bundle per entry point) that means only the two bundles that legitimately
-// contain them.
-const ALLOWED_STORAGE_ACCESS_SOURCE_PATTERNS = [
-  /(?:^|\/)persistence\/chrome-storage-adapter\.ts$/,
-  /(?:^|\/)ui-language\/preference-store\.ts$/,
-  /(?:^|\/)runtime\/transient-activation-store\.ts$/,
+// StorageAccessGuard (3.2, 3.4): `chrome.storage.local` reachability is confined
+// to the local-data foundation adapter and display-language preference port.
+// The transient surface separately owns one `chrome.storage.session` adapter.
+// No other source file may reach either storage area. Bundled `dist/` output
+// merges those adapters into the three listed entry bundles.
+const STORAGE_ACCESS_SOURCE_POLICIES = [
+  {
+    pattern: /(?:^|\/)persistence\/chrome-storage-adapter\.ts$/,
+    area: "local",
+  },
+  {
+    pattern: /(?:^|\/)ui-language\/preference-store\.ts$/,
+    area: "local",
+  },
+  {
+    pattern: /(?:^|\/)runtime\/transient-activation-store\.ts$/,
+    area: "session",
+  },
 ];
-const ALLOWED_STORAGE_ACCESS_BUNDLE_BASENAMES = new Set([
-  "foundation.js",
-  "side-panel.js",
-  "service-worker.js",
+const ALLOWED_STORAGE_ACCESS_BUNDLE_PATHS = new Set([
+  "dist/foundation.js",
+  "dist/side-panel.js",
+  "dist/service-worker.js",
 ]);
 
 /** @param {string} path */
-const isAllowedStorageAccessPath = (path) => {
-  const normalized = path.replaceAll("\\", "/");
-  if (
-    ALLOWED_STORAGE_ACCESS_SOURCE_PATTERNS.some((pattern) =>
-      pattern.test(normalized),
-    )
-  )
-    return true;
-  const basename = normalized.split("/").pop() ?? "";
-  return ALLOWED_STORAGE_ACCESS_BUNDLE_BASENAMES.has(basename);
+const storageAccessPolicyFor = (path) => {
+  const normalized = path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+  const sourcePolicy = STORAGE_ACCESS_SOURCE_POLICIES.find(({ pattern }) =>
+    pattern.test(normalized),
+  );
+  if (sourcePolicy !== undefined)
+    return { kind: "source", area: sourcePolicy.area };
+  // Bundles merge several source adapters, so area mixing is expected only at
+  // these exact build-output paths. A matching basename elsewhere is not a
+  // trusted artifact and must not inherit the exemption.
+  if (ALLOWED_STORAGE_ACCESS_BUNDLE_PATHS.has(normalized))
+    return { kind: "bundle" };
+  return { kind: "forbidden" };
 };
 
 /** @param {readonly SourceFile[]} sources @returns {BoundaryViolation[]} */
 export const findStorageAccessViolations = (sources) =>
   sources.flatMap(({ path, source }) => {
-    if (isAllowedStorageAccessPath(path)) return [];
+    const policy = storageAccessPolicyFor(path);
     const tokens = tokenize(source);
     const aliases = new Map();
     for (let index = 0; index < tokens.length; index += 1) {
       const token = tokens[index];
       if (token === undefined) continue;
       const pathValue = memberPath(tokens, index, aliases);
-      if (
-        pathValue !== undefined &&
-        canonicalApiPath(pathValue.value).startsWith("chrome.storage")
-      )
-        return [{ path, rule: "no-direct-storage-access" }];
+      if (pathValue !== undefined) {
+        const apiPath = canonicalApiPath(pathValue.value);
+        if (apiPath.startsWith("chrome.storage")) {
+          if (policy.kind === "bundle") continue;
+          const area = apiPath.split(".")[2];
+          if (
+            policy.kind === "forbidden" ||
+            (policy.kind === "source" &&
+              (area === undefined || area !== policy.area))
+          )
+            return [{ path, rule: "no-direct-storage-access" }];
+        }
+      }
       if (
         token.kind === SyntaxKind.Identifier &&
         tokens[index + 1]?.kind === SyntaxKind.EqualsToken

@@ -1,5 +1,4 @@
-/* Styles for the display-language switch control, mounted in the shell's
-   header region (see shell-view.tsx's [data-region="shell-header"]). */
+/* Settings画面の表示言語sectionに埋め込まれるswitch controlの局所style。 */
 [data-region="language-select"] {
   font: inherit;
 }

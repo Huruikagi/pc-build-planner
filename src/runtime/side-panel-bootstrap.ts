@@ -5,9 +5,11 @@ import type {
 } from "../application-shell/runtime-bootstrap.js";
 import { createSidePanelBootstrap } from "../application-shell/runtime-bootstrap.js";
 import type { Result } from "../domain/public.js";
-import type { LanguagePlatform } from "../ui-language/contracts.js";
-import { syncDocumentLanguage } from "../ui-language/document-language.js";
-import { initializeUiLanguage } from "../ui-language/store.js";
+import {
+  initializeUiLanguage,
+  type LanguagePlatform,
+  syncDocumentLanguage,
+} from "../ui-language/runtime.js";
 
 export interface SidePanelLanguageBootstrapOptions<TRootApi extends object>
   extends SidePanelBootstrapOptions<TRootApi> {

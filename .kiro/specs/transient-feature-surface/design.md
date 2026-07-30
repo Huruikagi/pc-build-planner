@@ -166,7 +166,7 @@ tests/runtime/
   product-capture-production-fixture.test.ts # 実registrationのmount前activation配送
 ```
 
-`StorageAccessGuard`には`src/runtime/transient-activation-store.ts`だけを限定追加する。featureから`chrome.storage`への直接到達は引き続き禁止する。
+`StorageAccessGuard`には`chrome.storage.session`専用到達点として`src/runtime/transient-activation-store.ts`だけを限定追加する。既存の`chrome.storage.local`許可（foundation adapterとui-language preference port）とはarea別に区別し、sourceではarea未修飾alias/destructuringを拒否する。統合bundleの例外もexact `dist/{foundation,side-panel,service-worker}.js`だけとし、featureからいずれのstorage areaへの直接到達も引き続き禁止する。
 
 ## Core Contracts
 

@@ -93,6 +93,11 @@ test("専用consumer型検査と境界検査が共通validateに組み込まれ�
     packageJson.scripts["validate:boundaries"],
     /src\/application-shell/,
   );
+  assert.match(packageJson.scripts["validate:boundaries"], /src\/ui-language/);
+  assert.match(packageJson.scripts["validate:boundaries"], /src\/persistence/);
+  const finalGate = await readFile("scripts/validate-final-gate.mjs", "utf8");
+  assert.match(finalGate, /"src\/ui-language"/);
+  assert.match(finalGate, /"src\/persistence"/);
   assert.match(packageJson.scripts["validate:ci"], /typecheck:public-consumer/);
   assert.match(packageJson.scripts["validate:ci"], /validate:boundaries/);
 });
@@ -147,14 +152,7 @@ test("deep import、直接Storage、固定lock迂回を拒否する", () => {
 
   assert.deepEqual(
     violations.map(({ rule }) => rule),
-    [
-      "public-import-only",
-      "no-direct-storage",
-      "no-root-lock-bypass",
-      "public-import-only",
-      "no-direct-storage",
-      "no-direct-storage",
-    ],
+    ["public-import-only", "no-root-lock-bypass", "public-import-only"],
   );
 });
 
@@ -249,7 +247,6 @@ test("settingsは許可された公開依存だけを利用する", () => {
       "src/features/settings/foundation-leak.ts: settings-public-dependencies-only",
       "src/features/settings/catalog-leak.ts: settings-public-dependencies-only",
       "src/features/settings/backup-leak.ts: settings-public-dependencies-only",
-      "src/features/settings/storage-leak.ts: no-direct-storage",
       "src/features/settings/domain-leak.ts: settings-public-dependencies-only",
       "src/features/settings/feature-leak.ts: settings-public-dependencies-only",
     ],
@@ -274,6 +271,10 @@ test("ui-languageとconsumerは公開境界を越えて逆依存・catalog deep 
       path: "src/application-shell/language-internal.ts",
       source: 'import { languageStore } from "../ui-language/store.js";',
     },
+    {
+      path: "src/runtime/language-internal.ts",
+      source: 'import { initializeUiLanguage } from "../ui-language/store.js";',
+    },
   ]);
 
   assert.deepEqual(
@@ -283,7 +284,25 @@ test("ui-languageとconsumerは公開境界を越えて逆依存・catalog deep 
       "src/ui-language/reverse-shell.ts: ui-language-public-dependencies-only",
       "src/ui-language/catalog-leak.ts: ui-language-public-dependencies-only",
       "src/application-shell/language-internal.ts: ui-language-consumer-public-entry-only",
+      "src/runtime/language-internal.ts: ui-language-consumer-public-entry-only",
     ],
+  );
+});
+
+test("runtimeはui-languageのpublicまたはruntime seamだけを利用する", () => {
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/runtime/language-public.ts",
+        source: 'import { LanguageProvider } from "../ui-language/public.js";',
+      },
+      {
+        path: "src/runtime/language-composition.ts",
+        source:
+          'import { initializeUiLanguage, syncDocumentLanguage } from "../ui-language/runtime.js";',
+      },
+    ]),
+    [],
   );
 });
 
@@ -653,7 +672,6 @@ test("application shell固有のsecurity・ownership境界違反をowner付き�
   assert.deepEqual(
     violations.map(({ path, rule }) => `${path}: ${rule}`),
     [
-      "src/application-shell/storage.ts: application-shell-no-direct-storage",
       "src/application-shell/legacy-platform.ts: application-shell-no-foundation-platform-injection",
       "src/application-shell/legacy-initializer.ts: application-shell-no-foundation-di-initializer",
       "src/application-shell/lock.ts: application-shell-no-direct-locks",
@@ -676,7 +694,7 @@ test("存在しないscan rootをfail closedに拒否する", async () => {
   );
 });
 
-test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAccessGuard)", () => {
+test("localはdomain/language adapter、sessionはtransient adapterだけへ限定する(StorageAccessGuard)", () => {
   const violations = findStorageAccessViolations([
     {
       path: "src/persistence/chrome-storage-adapter.ts",
@@ -715,6 +733,49 @@ test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAcc
       path: "src/runtime/optional-leak.ts",
       source: "export const readSession = () => chrome.storage?.session.get();",
     },
+    {
+      path: "src/persistence/chrome-storage-adapter.ts",
+      source: "export const wrongArea = () => chrome.storage.session.get();",
+    },
+    {
+      path: "src/ui-language/preference-store.ts",
+      source: "export const wrongArea = () => chrome.storage.session.get();",
+    },
+    {
+      path: "src/runtime/transient-activation-store.ts",
+      source: "export const wrongArea = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/ui-language/preference-store.ts",
+      source:
+        "const storage = chrome.storage; export const read = () => storage.local.get();",
+    },
+    {
+      path: "src/persistence/chrome-storage-adapter.ts",
+      source:
+        "const { session } = chrome.storage; export const read = () => session.get();",
+    },
+    {
+      path: "src/runtime/transient-activation-store.ts",
+      source:
+        "const { session: storedSession } = chrome.storage; export const read = () => storedSession.get();",
+    },
+    {
+      path: "src/ui-language/preference-store.ts",
+      source: "export const read = () => chrome.storage?.session.get();",
+    },
+    {
+      path: "src/features/mock/foundation.js",
+      source: "export const read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "tmp/side-panel.js",
+      source: "export const read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "dist/unexpected/foundation.js",
+      source: "export const read = () => chrome.storage.local.get();",
+    },
   ]);
 
   assert.deepEqual(
@@ -723,6 +784,16 @@ test("chrome.storageへの到達を許可3ファイルへ限定する(StorageAcc
       "src/features/mock/leak.ts: no-direct-storage-access",
       "src/features/mock/aliased-leak.ts: no-direct-storage-access",
       "src/runtime/optional-leak.ts: no-direct-storage-access",
+      "src/persistence/chrome-storage-adapter.ts: no-direct-storage-access",
+      "src/ui-language/preference-store.ts: no-direct-storage-access",
+      "src/runtime/transient-activation-store.ts: no-direct-storage-access",
+      "src/ui-language/preference-store.ts: no-direct-storage-access",
+      "src/persistence/chrome-storage-adapter.ts: no-direct-storage-access",
+      "src/runtime/transient-activation-store.ts: no-direct-storage-access",
+      "src/ui-language/preference-store.ts: no-direct-storage-access",
+      "src/features/mock/foundation.js: no-direct-storage-access",
+      "tmp/side-panel.js: no-direct-storage-access",
+      "dist/unexpected/foundation.js: no-direct-storage-access",
     ],
   );
 });
@@ -773,7 +844,7 @@ test("validateBoundaryRootsはStorageAccessGuardの違反も返す", async () =>
     const violations = await validateBoundaryRoots([directory]);
     assert.deepEqual(
       violations.map(({ rule }) => rule),
-      ["no-direct-storage", "no-direct-storage-access"],
+      ["no-direct-storage-access"],
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

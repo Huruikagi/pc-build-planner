@@ -28,7 +28,7 @@ const commit = (language: SupportedLanguage): void => {
   for (const listener of listeners) listener(current);
 };
 
-/** 6本のReact rootが共有する単一インスタンス。 */
+/** shell、settingsを含む7本のReact rootが共有する単一インスタンス。 */
 export const uiLanguageStore: LanguageStoreContract = {
   getSnapshot: () => current,
 

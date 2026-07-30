@@ -63,13 +63,13 @@ Extension discovery（light）。既存アーキテクチャへの追加であ�
 | B. `chrome.i18n` を表示文言にも使う | 追加コードほぼゼロ | 却下。アプリ内で言語を切り替える手段が仕様上存在しない。E2E が OS 依存になる |
 | C. i18next / react-i18next | 実績ある実装 | 却下。2言語・サイドパネル1枚に対し約22KB gz は過剰。5言語以上で再検討 |
 | D. 言語状態を `FeatureMountContext` で注入 | shell が feature へ配る | 却下。上流設計が明示的に禁止している。mount/unmount 契約を汚す |
-| E. 言語状態を React Context 単独で持つ | 素直 | 却下。React root が shell1 + feature5 の計6本あり、単一 Context では共有できない |
+| E. 言語状態を React Context 単独で持つ | 素直 | 却下。現行React rootはshell1 + settingsを含むfeature6の計7本あり、単一Contextでは共有できない |
 
 ## 設計判断
 
 ### D-1. 言語状態は React 外のモジュール単一ストアに置く
 
-React root が6本に分かれているため、Context だけでは状態を共有できない。`testing.md` が既定とする「feature-owned state を React 外に持つ」パターンと一致するため、`useSyncExternalStore` で各 root が同一ストアを購読する。Provider は root ごとに張るという上流規約をそのまま守れる。
+現行React rootは7本に分かれているため、Contextだけでは状態を共有できない。`testing.md` が既定とする「feature-owned state を React 外に持つ」パターンと一致するため、`useSyncExternalStore` で各 root が同一ストアを購読する。Provider は root ごとに張るという上流規約をそのまま守れる。
 
 ### D-2. 表示言語は `chrome.storage.local` のルート外専用キーへ保存する
 

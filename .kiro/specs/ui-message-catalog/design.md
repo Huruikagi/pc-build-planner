@@ -45,7 +45,7 @@
 
 ### Out of Boundary
 
-- ロケール選択、言語切り替え UI、言語の永続化 — `ui-internationalization` が所有する。本 spec はロケール値とparityだけを所有する。
+- runtimeのロケール選択、現在言語state、初期値解決、言語切り替え UI、言語の永続化 — `ui-internationalization` が所有する。static supported-locale registry、原語表記、静的な言語別resolverは`ui-message-catalog`が所有し公開する。
 - transient lifecycle、capture state、settings view/layout、backup section mount、shell state遷移。各producer specが所有し、本specはmessage keyを供給するだけである。
 - `settings-screen`が定める区画名の意味、表示場所、見出し階層、回復状態の発火条件。`settings-screen`のcatalog作業記述は本specのkey/valueを消費・受け入れ検証する意味であり、catalog file/valueの実装ownershipを持たない。
 - 各 feature の機能要件・受け入れ条件・ドメインロジック・永続化契約。触るのは表示文言と要素識別属性のみ。
@@ -59,9 +59,10 @@
 
 - `src/ui-messages/` → `src/domain/public.js`（**型のみ**。`PartCategory` に対するカテゴリ表示名の網羅性を型で保証するため）。
 - `src/ui-messages/` → React 19（`createContext` / `useContext` のみ）。
+- `src/ui-messages/languages.ts`は対応言語の単一定義、原語表記、静的に生成した言語別resolverを所有し、`src/ui-messages/public.ts`からregistry/resolver能力だけを公開する。言語state・保存・初期値解決は`ui-language`所有であり本境界へ持ち込まない。
 - `src/application-shell/`、`src/features/*/` → `src/ui-messages/public.js`（唯一の公開入口）。
 - `e2e/`、`tests/` → `src/ui-messages/public.js`。
-- **禁止**: `src/ui-messages/` から `src/application-shell/`、`src/features/`、`src/persistence/` への依存。カタログは葉であり、参照は常に片方向。
+- **禁止**: `src/ui-messages/` から `src/ui-language/`、`src/application-shell/`、`src/features/`、`src/persistence/` への依存。registryは静的catalog能力に閉じ、言語runtimeへ逆依存しない。
 - **禁止**: view からの `src/ui-messages/catalog/` 配下の直接 import。view は `useMessages()` だけを経路とする。
 
 ### Revalidation Triggers

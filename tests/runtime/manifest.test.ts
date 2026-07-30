@@ -295,6 +295,45 @@ test("既定ロケールの資産が正しく揃っていれば違反ゼロで�
   }
 });
 
+test("default localeが全manifest keyを持てばnondefault localeの欠落をfallbackとして受理する", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "locale-fallback-"));
+  try {
+    await writeFile(
+      join(directory, "manifest.json"),
+      JSON.stringify(validManifest),
+    );
+    await writeFile(
+      join(directory, "side-panel.html"),
+      '<main id="application-shell"></main><script type="module" src="./side-panel.js"></script>',
+    );
+    await writeFile(
+      join(directory, "side-panel.js"),
+      "/* node_modules/react/cjs/react.production.js */ /* node_modules/react-dom/cjs/react-dom-client.production.js */ export {};\n",
+    );
+    await writeFile(join(directory, "service-worker.js"), "export {};\n");
+    await mkdir(join(directory, "_locales", "en"), { recursive: true });
+    await mkdir(join(directory, "_locales", "ja"), { recursive: true });
+    await writeFile(
+      join(directory, "_locales", "en", "messages.json"),
+      JSON.stringify({
+        extensionName: { message: "PC Build Planner" },
+        extensionDescription: { message: "A fixture description." },
+      }),
+    );
+    await writeFile(
+      join(directory, "_locales", "ja", "messages.json"),
+      JSON.stringify({ extensionName: { message: "PC構成プランナー" } }),
+    );
+
+    // Chrome resolves the missing Japanese description through default en.
+    // This validator proves the prerequisite: default has both referenced keys
+    // and a nondefault omission is intentionally accepted.
+    await assert.doesNotReject(validateArtifactDirectory(directory));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("side panel documentは同梱module bootstrapだけを読み込む", async () => {
   const html = await readFile("side-panel.html", "utf8");
 
