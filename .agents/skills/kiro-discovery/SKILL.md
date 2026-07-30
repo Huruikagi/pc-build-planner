@@ -196,6 +196,11 @@ Use this roadmap structure:
 - [ ] feature-a -- [one-line description]. Dependencies: none
 - [ ] feature-b -- [one-line description]. Dependencies: feature-a
 - [ ] feature-c -- [one-line description]. Dependencies: feature-a, feature-b
+
+## Implementation Validation History
+
+| Feature | Result | Validated at | Commit | Evidence |
+|---|---|---|---|---|
 ```
 
 Then write `.kiro/specs/<feature>/brief.md` for **every** feature listed under `## Specs (dependency order)` using the Path C brief format. This enables parallel spec creation via `$kiro-spec-batch`.
@@ -225,7 +230,7 @@ Path E rules:
 - Write `brief.md` only for the **new specs** listed under `## Specs (dependency order)`
 
 **Re-entry (roadmap.md already exists)**:
-Write the next new spec's brief.md to disk. Update roadmap.md if scope/ordering changed, preserving completed items and prior phases.
+Write the next new spec's brief.md to disk. Update roadmap.md if scope/ordering changed, preserving completed items, prior phases, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
 
 After writing, verify the files exist by reading them back.
 

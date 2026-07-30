@@ -74,3 +74,8 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 - [x] settings-screen -- 設定画面 feature を新設し、表示言語切り替え（shell ヘッダから移設）とバックアップ・復元を集約する（#19）。Dependencies: transient-feature-surface, product-capture-transient-migration
 - [x] source-price-refresh -- ブックマーク済みページを再訪した状態で価格を再取得し、URL 突き合わせで特定したソースの価格・取得日時へ反映する（#12）。Dependencies: transient-feature-surface, candidate-source-bookmarks
 - [x] duplicate-product-merge -- 取り込み時にプロジェクト内の既存候補との一致を検知し、新規候補として保存する代わりに既存パーツの別ソースとして統合する導線を提供する（#13）。Dependencies: candidate-source-bookmarks
+
+## Implementation Validation History
+
+| Feature | Result | Validated at | Commit | Evidence |
+|---|---|---|---|---|
