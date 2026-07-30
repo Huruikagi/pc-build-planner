@@ -273,8 +273,8 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
   - _Boundary: ActivationRouter, SidePanelHost_
 
-- [ ] 7. Settingsを常設shell表示へ統合する
-- [ ] 7.1 header撤去と状態別settings回復表示を受け入れ検証する
+- [x] 7. Settingsを常設shell表示へ統合する
+- [x] 7.1 header撤去と状態別settings回復表示を受け入れ検証する
   - `settings-screen`による変更後、ready、maintenance、feature-local failureでpersistent navigationが維持されsettingsへ到達できることをshell DOM回帰へ固定する
   - loadingとglobal startup errorで操作不能な言語controlがなく、「設定 / Settings」と利用可能なretryが同じstatusへ提示されることを確認する
   - 完了時、全shell状態のDOM testでheader selectが存在せず、navigation利用可否に応じた到達または二言語案内が一意に表示される
@@ -282,7 +282,7 @@
   - _Requirements: 4.6, 4.7, 8.1, 8.2, 8.3_
   - _Boundary: ShellView, ReactShellRoot_
 
-- [ ] 7.2 Settings contributionと表示言語追随のproduction compositionを受け入れ検証する
+- [x] 7.2 Settings contributionと表示言語追随のproduction compositionを受け入れ検証する
   - `settings-screen`が合成するsettingsを常設featureとしてnavigation、初期選択、fallbackへ一度だけ含み、独立backup navigationと一過性product-captureを常設集合へ含めないことを確認する
   - 言語変更時はnavigation labelと状態文言を同じ言語へ更新し、mount中のsettings feature rootを再mountしない
   - 完了時、production-shaped catalogとroot API snapshotでsettingsが一意に存在し、backup独立entryがなく、言語変更前後でsettings mount identityが保持される

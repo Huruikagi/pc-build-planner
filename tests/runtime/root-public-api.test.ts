@@ -55,6 +55,11 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
     "settings",
     "productCapture",
   ]);
+  assert.equal(
+    Object.keys(composed.value).filter((key) => key === "settings").length,
+    1,
+  );
+  assert.equal("backupRestore" in composed.value, false);
 });
 
 test("実featureの公開契約がroot入口から到達できる", () => {

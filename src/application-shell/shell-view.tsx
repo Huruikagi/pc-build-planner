@@ -141,9 +141,10 @@ export function ShellView({
           </aside>
         ) : null}
         {state.kind === "loading" ? (
-          <p aria-live="polite" className="shell-status">
-            {messages("shell.settingsRecoveryLoading")}
-          </p>
+          <section aria-live="polite" className="shell-status">
+            <p>{messages("shell.settingsRecoveryLoading")}</p>
+            <RetryButton onRetry={onRetry} />
+          </section>
         ) : null}
         {state.kind === "error" ? (
           <section

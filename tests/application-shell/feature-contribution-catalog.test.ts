@@ -110,6 +110,11 @@ test("side panel contributionは合成contextから実featureを組み立てる"
       "settings",
     ],
   );
+  assert.equal(contributions.filter(({ key }) => key === "settings").length, 1);
+  assert.equal(
+    contributions.some(({ key }) => (key as string) === "backupRestore"),
+    false,
+  );
   const [candidateManagement, currentBuild, productCapture, compatibility] =
     contributions;
   assert.equal(candidateManagement.registration.id, "candidate-management");
