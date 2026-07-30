@@ -16,6 +16,7 @@ import {
 } from "../../src/ui-messages/catalog-parity.js";
 import type { MessageDefinition } from "../../src/ui-messages/contracts.js";
 import { formatMessage } from "../../src/ui-messages/format.js";
+import { resolverFor } from "../../src/ui-messages/public.js";
 import { flattenNamespace } from "../../src/ui-messages/resolver.js";
 
 // Compile-time guarantee (1.2): dropping a single key from a target catalog
@@ -51,13 +52,20 @@ const placeholdersOf = (definition: MessageDefinition): ReadonlySet<string> => {
   return names;
 };
 
-/** The `selectors` tuple of a `MultiPluralDefinition`, or `undefined` for other shapes. */
-const selectorsOf = (
-  definition: MessageDefinition,
-): readonly string[] | undefined =>
-  typeof definition !== "string" && definition.selectors !== undefined
-    ? definition.selectors
-    : undefined;
+/**
+ * The ordered quantity-selector contract. Languages without plural forms use
+ * the source sentence's ordered count placeholders for the same contract.
+ */
+const selectorsOf = (definition: MessageDefinition): readonly string[] => {
+  if (typeof definition !== "string" && definition.selectors !== undefined) {
+    return definition.selectors;
+  }
+  const text =
+    typeof definition === "string" ? definition : definition.forms.other;
+  return [...text.matchAll(/\{([A-Za-z][A-Za-z0-9]*Count)\}/g)].map(
+    (match) => match[1] as string,
+  );
+};
 
 const ja = flattenNamespace(MESSAGES) as Readonly<
   Record<string, MessageDefinition>
@@ -112,6 +120,31 @@ test("candidate source操作・種別・再訪・失敗の全message keyを両�
   for (const key of keys) {
     assert.equal(typeof ja[key], "string", key);
     assert.equal(typeof en[key], "string", key);
+  }
+});
+
+test("英語の復元完了通知は実カタログで各件数に応じた単複表現を返す", () => {
+  const resolver = resolverFor("en");
+  const counts = [0, 1, 2] as const;
+
+  for (const projectCount of counts) {
+    for (const partCount of counts) {
+      for (const currentBuildCount of counts) {
+        const projectNoun = projectCount === 1 ? "project" : "projects";
+        const partNoun = partCount === 1 ? "candidate" : "candidates";
+        const currentBuildNoun =
+          currentBuildCount === 1 ? "current build" : "current builds";
+        assert.equal(
+          resolver("backup.restoreCompleted", {
+            projectCount,
+            partCount,
+            currentBuildCount,
+          }),
+          `Restore complete (${projectNoun}: ${projectCount}, ${partNoun}: ${partCount}, ${currentBuildNoun}: ${currentBuildCount}).`,
+          `${projectCount}|${partCount}|${currentBuildCount}`,
+        );
+      }
+    }
   }
 });
 
