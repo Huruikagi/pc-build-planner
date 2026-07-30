@@ -79,3 +79,4 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 | Feature | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|
+| application-shell | GO | 2026-07-30T23:46:40+09:00 | `a8bf4c12effe` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、全51受入基準FULL、unpacked-extension smoke PASS、設計・境界監査PASS |
