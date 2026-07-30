@@ -121,7 +121,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: Backup restore acceptance and regression tests_
 
-- [ ] 6. バックアップ・復元をsettings-owned section境界へ移行する
+- [x] 6. バックアップ・復元をsettings-owned section境界へ移行する
 - [x] 6.1 埋め込み可能な公開section mountを追加する
   - 既存のbackup service、restore service、state、file gateway、React rootを再利用し、完全data portをfactory依存として受けるsection adapterを追加する
   - `FeatureMountContext`を受けて`FeatureMountHandle`を返す正確な公開mount契約と、data・任意stateを受けるfactoryだけを公開入口へ加える
@@ -130,7 +130,7 @@
   - _Requirements: 1.1, 1.5, 3.1, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
   - _Boundary: BackupRestoreSectionMount, ReactRootAdapter_
 
-- [ ] 6.2 settings composition切替後に独立registrationを撤去する
+- [x] 6.2 settings composition切替後に独立registrationを撤去する
   - settings側が公開section mountだけを利用する状態になった後、独立feature registration、feature contribution、feature ID、navigation metadata、空public APIの公開を削除する
   - backup内部のservice、state、交換形式、maintenance generation、atomic restore、分類済みerrorは変更せず、settingsやshellの内部実装をbackup側へ取り込まない
   - 完了時、production catalogとbackup公開入口に独立`backupRestore` navigation/registrationが残らず、公開consumer型検査とboundary検査が成功する
@@ -138,7 +138,7 @@
   - _Requirements: 4.3, 5.1, 5.2, 6.1, 6.7_
   - _Boundary: BackupRestore public surface, legacy registration removal_
 
-- [ ] 6.3 section lifecycleと利用者操作の回帰を固定する
+- [x] 6.3 section lifecycleと利用者操作の回帰を固定する
   - 架空データをsectionへmountし、export、ファイル検証、preview、取消、確認、成功・失敗後の再試行を既存state/view契約のまま検証する
   - operation policyによる処理中抑止と安全な診断表示を確認し、商品値・完全URL・ファイル本文がsectionの表示やログへ出ないことを固定する
   - unmount後の再mountでは一時選択とticketが未選択状態へ戻り、同じcontainerへ購読やReact rootが重複しないことを確認する
@@ -147,7 +147,7 @@
   - _Requirements: 1.1, 1.3, 1.5, 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
   - _Boundary: BackupRestoreSectionMount acceptance, BackupRestoreView_
 
-- [ ] 6.4 交換形式・原子的復元・maintenanceのdomain回帰を固定する
+- [x] 6.4 交換形式・原子的復元・maintenanceのdomain回帰を固定する
   - 10MB上限、非対応版、参照不整合、stale assessment、容量・保存失敗で書込前データが保持され、部分置換や交換形式の差分がないことを既存Foundation port統合で確認する
   - 30秒leaseのacquireから再評価・置換・releaseまたはabortまでを検証し、cleanup失敗時もread-only操作を維持してlease失効後に通常mutationと再試行が回復することを確認する
   - 復元後も通常query・CRUD・再backupが成功し、候補所属、確認値、現在構成参照、数量が配置変更前と一致することを確認する

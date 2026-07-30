@@ -29,6 +29,7 @@ export const createBackupRestoreSectionMount = (
         restoreService: createRestoreService({ data: dependencies.data }),
         fileGateway,
       });
+    state.resetForMount();
 
     let root: ReturnType<typeof mountBackupRestoreReactRoot> | undefined;
     try {

@@ -401,8 +401,7 @@ test("commit成功時はacquire・再assess・replaceRoot・releaseの順で呼�
   );
   const acquireCall = calls[0]?.args as { type: string; leaseMs: number };
   assert.equal(acquireCall.type, "acquire");
-  assert.equal(typeof acquireCall.leaseMs, "number");
-  assert.ok(acquireCall.leaseMs > 0);
+  assert.equal(acquireCall.leaseMs, 30_000);
   assert.deepEqual(calls[1]?.args, FAKE_TICKET.candidate);
   const releaseCall = calls[3]?.args as { type: string; fence: unknown };
   assert.equal(releaseCall.type, "release");
@@ -421,6 +420,29 @@ test("commit成功時はacquire・再assess・replaceRoot・releaseの順で呼�
   // which would otherwise make the original ticket.assessment stale).
   assert.deepEqual(replaceCall.assessment, FRESH_ASSESSMENT);
   assert.notDeepEqual(replaceCall.assessment, FAKE_TICKET.assessment);
+});
+
+test("release cleanup失敗時も置換成功を保ちlease失効による回復を妨げない", async () => {
+  const { data, calls } = foundationDataForCommit({
+    acquire: { ok: true, value: { fence: FAKE_FENCE as never } },
+    assessReplacement: { ok: true, value: FRESH_ASSESSMENT as never },
+    replaceRoot: {
+      ok: true,
+      value: { revision: 5, beforeBytes: 1, afterBytes: 2 } as never,
+    },
+    releaseOrAbort: { ok: false, error: { code: "storage-unavailable" } },
+  });
+
+  const result = await createRestoreService({ data }).commit(
+    FAKE_TICKET as never,
+  );
+
+  assert.equal(result.ok, true);
+  const acquire = calls[0]?.args as { type: string; leaseMs: number };
+  assert.equal(acquire.type, "acquire");
+  assert.equal(acquire.leaseMs, 30_000);
+  const cleanup = calls[3]?.args as { type: string };
+  assert.equal(cleanup.type, "release");
 });
 
 test("acquireが保守競合で失敗した場合は再assessを呼ばず値を含まず拒否される", async () => {

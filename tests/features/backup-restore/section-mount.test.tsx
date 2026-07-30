@@ -89,6 +89,7 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
     subscribe() {
       throw new Error("state subscribe failed");
     },
+    resetForMount() {},
   } as unknown as ReturnType<typeof state>;
   const section = createBackupRestoreSectionMount({
     data,
@@ -119,4 +120,125 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
   }
   assert.equal(container.textContent, "");
   assert.equal(policyUnsubscribed, 1);
+});
+
+test("unmount後の再mountは一時ticketを破棄し購読を重複させない", async () => {
+  const ticket = {
+    candidate: {},
+    assessment: {} as never,
+    preview: {
+      createdAt: "2026-07-24T00:00:00.000Z" as never,
+      formatVersion: 1,
+      projectCount: 1,
+      partCount: 1,
+      currentBuildCount: 0,
+      estimatedBytes: 100,
+    },
+  };
+  const reusableState = createBackupRestoreState({
+    backupService: { create: notExpected("create") },
+    restoreService: {
+      preflight: async () => ({ ok: true, value: ticket }),
+      commit: notExpected("commit"),
+    },
+    fileGateway: {
+      read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+      download: notExpected("download"),
+    },
+  });
+  const listeners = new Set<() => void>();
+  const section = createBackupRestoreSectionMount({
+    data,
+    state: reusableState,
+  });
+  const container = document.createElement("div");
+  const context = {
+    container,
+    operationPolicy: {
+      isAllowed: () => true,
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+    reportError: () => {},
+  };
+
+  let first: FeatureMountHandle | undefined;
+  await act(async () => {
+    first = await section.mount(context);
+    await reusableState.validateFile({} as File);
+  });
+  assert.ok(container.querySelector('[data-region="restore-confirmation"]'));
+  assert.equal(listeners.size, 1);
+  await act(async () => first?.unmount());
+  assert.equal(listeners.size, 0);
+
+  let second: FeatureMountHandle | undefined;
+  await act(async () => {
+    second = await section.mount(context);
+  });
+  assert.equal(reusableState.value.phase, "idle");
+  assert.equal(
+    container.querySelector('[data-region="restore-confirmation"]'),
+    null,
+  );
+  assert.equal(listeners.size, 1);
+  await act(async () => second?.unmount());
+  assert.equal(listeners.size, 0);
+});
+
+test("validating中のunmount後は旧mountの遅延結果を再mountへ反映しない", async () => {
+  let resolveRead!: (value: {
+    ok: true;
+    value: { text: string; byteLength: number };
+  }) => void;
+  const pendingRead = new Promise<{
+    ok: true;
+    value: { text: string; byteLength: number };
+  }>((resolve) => {
+    resolveRead = resolve;
+  });
+  const reusableState = createBackupRestoreState({
+    backupService: { create: notExpected("create") },
+    restoreService: {
+      preflight: async () => {
+        throw new Error("stale preflight must not run");
+      },
+      commit: notExpected("commit"),
+    },
+    fileGateway: {
+      read: async () => pendingRead,
+      download: notExpected("download"),
+    },
+  });
+  const section = createBackupRestoreSectionMount({
+    data,
+    state: reusableState,
+  });
+  const container = document.createElement("div");
+  const context = {
+    container,
+    operationPolicy: {
+      isAllowed: () => true,
+      subscribe: () => () => {},
+    },
+    reportError: () => {},
+  };
+  const phase = () => reusableState.value.phase;
+
+  const first = await section.mount(context);
+  const staleOperation = reusableState.validateFile({} as File);
+  assert.equal(phase(), "validating");
+  await first.unmount();
+  const second = await section.mount(context);
+  assert.equal(phase(), "idle");
+  resolveRead({ ok: true, value: { text: "{}", byteLength: 2 } });
+  await staleOperation;
+  assert.equal(phase(), "idle");
+  assert.equal(
+    container.querySelector('[data-region="restore-confirmation"]'),
+    null,
+  );
+  await second.unmount();
 });

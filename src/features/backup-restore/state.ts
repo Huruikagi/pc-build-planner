@@ -45,6 +45,7 @@ const BUSY_PHASES = new Set(["exporting", "validating", "restoring"]);
 export class BackupRestoreState {
   #value: BackupRestoreStateValue = { phase: "idle" };
   #listeners = new Set<() => void>();
+  #lifecycleEpoch = 0;
 
   public constructor(
     private readonly dependencies: BackupRestoreStateDependencies,
@@ -71,9 +72,11 @@ export class BackupRestoreState {
   /** バックアップ生成からダウンロードまで一括実行する。処理中の重複要求は抑止する。 */
   public async exportBackup(): Promise<void> {
     if (this.#isBusy()) return;
+    const epoch = this.#lifecycleEpoch;
     this.#set({ phase: "exporting" });
 
     const artifact = await this.dependencies.backupService.create();
+    if (epoch !== this.#lifecycleEpoch) return;
     if (!artifact.ok) {
       this.#set({
         phase: "failed",
@@ -106,9 +109,11 @@ export class BackupRestoreState {
    */
   public async validateFile(file: File): Promise<void> {
     if (this.#isBusy()) return;
+    const epoch = this.#lifecycleEpoch;
     this.#set({ phase: "validating" });
 
     const read = await this.dependencies.fileGateway.read(file);
+    if (epoch !== this.#lifecycleEpoch) return;
     if (!read.ok) {
       this.#set({ phase: "failed", operation: "restore", error: read.error });
       return;
@@ -117,6 +122,7 @@ export class BackupRestoreState {
     const preflight = await this.dependencies.restoreService.preflight(
       read.value,
     );
+    if (epoch !== this.#lifecycleEpoch) return;
     if (!preflight.ok) {
       this.#set({
         phase: "failed",
@@ -132,10 +138,12 @@ export class BackupRestoreState {
   /** awaiting-confirmation中のticketだけを確定復元する。他phaseからの呼び出しは無視する。 */
   public async confirmRestore(): Promise<void> {
     if (this.#value.phase !== "awaiting-confirmation") return;
+    const epoch = this.#lifecycleEpoch;
     const ticket = this.#value.ticket;
     this.#set({ phase: "restoring", ticket });
 
     const result = await this.dependencies.restoreService.commit(ticket);
+    if (epoch !== this.#lifecycleEpoch) return;
     if (!result.ok) {
       this.#set({
         phase: "failed",
@@ -155,6 +163,12 @@ export class BackupRestoreState {
   /** 確認取消、または失敗・成功後の再試行準備としてidleへ戻す。処理中は無視する。 */
   public cancel(): void {
     if (this.#isBusy()) return;
+    this.#set({ phase: "idle" });
+  }
+
+  /** mount lifecycleを切り替え、旧mountの非同期結果を失効させる。 */
+  public resetForMount(): void {
+    this.#lifecycleEpoch += 1;
     this.#set({ phase: "idle" });
   }
 

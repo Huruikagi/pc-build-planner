@@ -257,6 +257,22 @@ test("settingsは許可された公開依存だけを利用する", () => {
   );
 });
 
+test("backup-restoreの公開面はsettings埋め込みsectionだけに限定する", async () => {
+  const publicSource = await readFile(
+    "src/features/backup-restore/public.ts",
+    "utf8",
+  );
+
+  assert.match(publicSource, /BackupRestoreSectionMount/);
+  assert.match(publicSource, /createBackupRestoreSectionMount/);
+  assert.doesNotMatch(publicSource, /FeatureRegistration/);
+  assert.doesNotMatch(publicSource, /backupRestoreFeatureId/);
+  await assert.rejects(readFile("src/features/backup-restore/registration.ts"));
+  await assert.rejects(
+    readFile("src/features/backup-restore/feature-contribution.ts"),
+  );
+});
+
 test("source catalog公開consumerは公開facetだけを利用する", () => {
   const forbiddenSources = [
     {

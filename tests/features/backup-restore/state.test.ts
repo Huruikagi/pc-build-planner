@@ -406,3 +406,44 @@ test("subscribeは状態変化時にlistenerを呼びunsubscribe後は呼ばな�
   state.cancel();
   assert.equal(notifications, before);
 });
+
+test("resetForMountはexportingをidle化し旧backup完了を無視する", async () => {
+  const gate = deferred<{ ok: true; value: BackupArtifact }>();
+  let downloads = 0;
+  const state = createBackupRestoreState({
+    backupService: buildBackupService(async () => gate.promise),
+    restoreService: buildRestoreService({}),
+    fileGateway: buildFileGateway({
+      download: () => {
+        downloads += 1;
+        return { ok: true, value: undefined };
+      },
+    }),
+  });
+  const stale = state.exportBackup();
+  state.resetForMount();
+  gate.resolve({ ok: true, value: FAKE_ARTIFACT });
+  await stale;
+  assert.deepEqual(state.value, { phase: "idle" });
+  assert.equal(downloads, 0);
+});
+
+test("resetForMountはrestoringをidle化し旧commit完了を無視する", async () => {
+  const gate = deferred<{ ok: true; value: RestoreSummary }>();
+  const state = createBackupRestoreState({
+    backupService: buildBackupService(notExpected("create")),
+    restoreService: buildRestoreService({
+      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
+      commit: async () => gate.promise,
+    }),
+    fileGateway: buildFileGateway({
+      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
+    }),
+  });
+  await state.validateFile(FAKE_FILE);
+  const stale = state.confirmRestore();
+  state.resetForMount();
+  gate.resolve({ ok: true, value: FAKE_SUMMARY });
+  await stale;
+  assert.deepEqual(state.value, { phase: "idle" });
+});
