@@ -11,7 +11,7 @@
   - _Requirements: 2.5, 4.1, 4.5, 6.3, 6.4_
   - _Boundary: SourcePriceRefreshPublicApi_
 
-- [ ] 1.2 保守的なsource URL同一性を実装する
+- [x] 1.2 保守的なsource URL同一性を実装する
   - HTTP/HTTPSだけを受理し、scheme、host、pathと未知queryを比較keyへ保持する。
   - host case、既定port、fragment、root以外の末尾slash、既知tracking keyを規則どおり正規化する。
   - 残るquery pairをvalue損失なく安定sortし、重複keyとpercent encodingを標準URL serializationで維持する。
@@ -177,3 +177,4 @@
 - 1.1: `NormalizedSourcePageUrl` などのbrand型はdesign.mdのstring property brand記法ではなく、既存 `src/domain/identifiers.ts` と同じ `unique symbol` brand方式に揃える。
 - 1.1: 新しい公開consumer fixtureを追加したら `package.json` の `validate:boundaries` 引数と `tsconfig.public-consumer.json` の include の両方へ登録する。
 - 1.1: feature source から application-shell 非公開moduleへのimportを止めるrule（`settings-public-dependencies-only` 相当）が `scripts/validate-boundaries.mjs` に未整備。task 5.2 のboundary coverageで対応する。
+- 1.2: URL正規化は標準 `URL` / `URLSearchParams` のserializationだけを使う。帰結として `?q=a+b` と `?q=a%20b`、`?sale` と `?sale=` は同一keyになる（form-urlencodedで同一値のためvalue損失も過剰一致もない）。末尾slashは1つだけ除去するので `/p/1//` は `/p/1` と一致しない（過小一致方向で誤更新は起きない）。

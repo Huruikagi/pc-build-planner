@@ -19,6 +19,10 @@ export type {
   SourcePriceRefreshUpstreamPorts,
   SourceUrlIdentityError,
 } from "./contracts.js";
+export {
+  normalizeSourcePageUrl,
+  sameSourcePageUrl,
+} from "./url-identity.js";
 
 export const sourcePriceRefreshFeatureId = "source-price-refresh" as FeatureId;
 

@@ -22,6 +22,7 @@ import {
   type MatchedCandidateSource,
   type MatchStoredSourceInput,
   type NormalizedSourcePageUrl,
+  normalizeSourcePageUrl,
   type RefreshCapturedPriceInput,
   type SourcePriceRefreshError,
   type SourcePriceRefreshPort,
@@ -30,6 +31,7 @@ import {
   type SourcePriceRefreshStorageError,
   type SourcePriceRefreshUpstreamPorts,
   type SourceUrlIdentityError,
+  sameSourcePageUrl,
 } from "../../src/features/source-price-refresh/public.js";
 
 /**
@@ -73,6 +75,29 @@ export const createSourcePriceRefreshPublicConsumer = (
     registerGesture: (source) => ports.gestures.register(source),
   };
 };
+
+/**
+ * Adjacent consumers reuse the feature's URL identity through the public entry
+ * before asking for a match, so a re-captured page cannot reach the workflow
+ * with a scheme the feature refuses.
+ */
+export const normalizedCatalogRequest = (
+  pageUrl: string,
+): Result<MatchStoredSourceInput, SourceUrlIdentityError> => {
+  const normalized = normalizeSourcePageUrl(pageUrl);
+  return normalized.ok
+    ? {
+        ok: true,
+        value: { scope: catalogSourceMatchScope(), pageUrl: normalized.value },
+      }
+    : { ok: false, error: normalized.error };
+};
+
+/** Same-URL re-capture check that must not add a source when it holds. */
+export const isSameStoredSourcePage = (
+  matched: MatchedCandidateSource,
+  observedPageUrl: string,
+): boolean => sameSourcePageUrl(matched.normalizedPageUrl, observedPageUrl);
 
 /** Price observation a consumer hands to the public refresh use case. */
 export interface ConsumerPriceObservation {

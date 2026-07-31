@@ -29,6 +29,8 @@ import {
 } from "../../src/features/source-price-refresh/public.js";
 import {
   createSourcePriceRefreshPublicConsumer,
+  isSameStoredSourcePage,
+  normalizedCatalogRequest,
   refreshThroughPublicApi,
   type SourcePriceRefreshConsumerPorts,
   sourcePriceRefreshRecovery,
@@ -273,6 +275,39 @@ test("公開error unionの全kindが一意の回復案内へ判別される", ()
       "check-storage",
       "review-stored-sources",
     ],
+  );
+});
+
+test("隣接consumerは公開入口のURL同一性で照合要求を正規化する", () => {
+  assert.deepEqual(
+    normalizedCatalogRequest(
+      "https://Prices.Example.invalid:443/products/synthetic-part/?utm_source=mail#spec",
+    ),
+    {
+      ok: true,
+      value: { scope: { kind: "catalog" }, pageUrl: normalizedPageUrl },
+    },
+  );
+  assert.deepEqual(
+    normalizedCatalogRequest("ftp://prices.example.invalid/products/x"),
+    { ok: false, error: { kind: "invalid-url" } },
+  );
+});
+
+test("同一URL再取り込みはtracking差を一致、商品query差を不一致として判定する", () => {
+  assert.equal(
+    isSameStoredSourcePage(
+      matched,
+      "https://prices.example.invalid/products/synthetic-part?gclid=abc",
+    ),
+    true,
+  );
+  assert.equal(
+    isSameStoredSourcePage(
+      matched,
+      "https://prices.example.invalid/products/synthetic-part?sku=9",
+    ),
+    false,
   );
 });
 
