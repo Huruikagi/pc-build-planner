@@ -65,7 +65,7 @@
 
 - [ ] 3. 価格更新use caseと一過性featureを完成させる
 
-- [ ] 3.1 price observationを現行sourceへ原子的に反映する
+- [x] 3.1 price observationを現行sourceへ原子的に反映する
   - price欠損またはconfirmed money欠損をmutation前に拒否し、旧priceとcapturedAtを保持する。
   - target sourceを更新直前に再読込し、observed URL同一性、retail kind、candidate/source IDを再検証する。
   - 既存sourceのpriceとcapturedAtだけを置換して上流mutation portへ渡し、URL、siteName、kind、他source、product、normalized attributesを維持する。
@@ -194,4 +194,9 @@
 - 2.4: money/日時のlocale対応formatterはコードベースに存在しない（`Intl.` / `toLocale*` の使用箇所ゼロ）。確定金額は message catalog の placeholder `"{amount} {currency}"`、`capturedAt` は canonical ISO文字列をそのまま描画する（`candidate-management/view.tsx` と同じ前例）。design.md も表示形式を規定していない。将来formatterを導入するなら view 側を差し替える。
 - 2.4: design.md のエラー表に無い8 kind（`invalid-url` / `restricted-page` → 対象ページで再実行、`validation` / `unsupported-data` → 保存データ修復が先、など）の回復案内は 2.2 の単一規則からの演繹。viewの案内keyとstateの `isRecoverableSourcePriceRefreshError` が乖離しないよう、全kindを `Record<SourcePriceRefreshError["kind"], …>` で突き合わせるテストで固定してある。union にメンバを足すと両方のtypecheckが落ちる。
 - 2.4: 失敗表示の `preservedNotice`（既存価格を維持した旨、要件5.1/5.4の唯一の可観測面）はテストで未固定。要素を消しても view.test.tsx は緑のまま。task 5.3 の failure-view DOM coverage で失敗kindのloopへ `preservedNotice` のassertionを1行足すこと。
+- 3.1: `CandidateSourceReference` は `siteName` / `price` / `capturedAt` を射影せず、`CandidateSourceMutationPort.updateSource` は entry を丸ごと**置換**する（`source-collection.ts` の `candidateSourcePolicy.update`）。よって catalog の射影だけで update inputを組むと siteName が消える。保持field全体は同じ `candidate-management/public.ts` の `query.getCandidateDraft(candidateId)` → `CandidateDraft.sources` から読み、`{ ...stored, price, capturedAt }` のspreadで組むこと。上流契約は一切変更しない（射影拡大・merge semantics・price patch mutation はいずれも candidate-source-bookmarks の再検証triggerを発火させ波及が大きい）。
+- 3.1: 上記に伴い design.md の「許可する依存」へ `query: CandidateQuery`（`getCandidateDraft` のみ）を追記済み（利用者承認済み、2026-08-01）。Outbound依存リストと `contracts.ts` の `SourcePriceRefreshUpstreamPorts` doc も整合済み。task 4.2 の配線では `CandidateManagementPublicApi.query` を必ず注入すること。
+- 3.1: 上流fakeを書くときは production の**置換**意味論を再現すること。mergeするfakeを書くとfield欠落が観測できず、データ損失を緑で追認してしまう（round 1 で実際に発生した）。
+- 3.1: `getCandidateDraft` は production では `candidate-management/feature-contribution.ts` の `publicQuery: service` で本物が配線される。`registration.ts` の fallback stub は `publicQuery` 省略時のみ到達するテスト専用で、`unsupported-data` を返して fail closed になるため lossy write は起きない。
+- 3.1: TOCTOU（既知・未クローズ）: draft読み出し → `getSourceReference` → `updateSource` の間に、referenceが射影しないfield（特に `siteName`）が並行更新されると、全entry置換で巻き戻る。`expectedRevision` はmutation時点で計算されるためoptimistic concurrencyでは塞げない。要件4.5が列挙するURL・種別・候補・識別子は再検証済みで規定違反ではない。塞ぐには上流契約変更が要るため、task 5.4 で許容範囲か再確認すること。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。

@@ -44,6 +44,7 @@ URL同一性と原子的価格更新は公開use caseとしてまとめ、contex
 
 - `application-shell/public.ts` 公開の `ActivationId`、`TargetTabId`、`parseTargetTabId`、`TransientSurfaceLifecyclePort`、`TransientGestureRegistrationPort`。
 - `candidate-management/public.ts` 公開の source facet `sources.catalog: CandidateSourceCatalogPort` と `sources.mutations: CandidateSourceMutationPort`。
+- `candidate-management/public.ts` 公開の `query: CandidateQuery` のうち `getCandidateDraft(id)`。保持すべきsource全フィールドの読み出しに限って利用する。
 - `product-capture/public.ts` 公開の `ProductCapturePublicApi.pagePriceExtraction: PagePriceExtractionPort`。
 - canonical `Result<T, E>`、`CandidatePartId`、`CandidateSourceId`、`SourcedValue<MoneyValue>`、`UtcTimestamp`。
 - Chrome 116 MV3の `chrome.contextMenus`、既存 `activeTab` / `scripting` / `sidePanel`、標準 `URL`。
@@ -355,7 +356,7 @@ export interface CandidateSourceCatalogPort {
 **依存**:
 
 - Inbound: transient state、duplicate-product-merge public consumer（P0）
-- Outbound: `PagePriceExtractionPort`、StoredSourceLocator、`CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`TransientSurfaceLifecyclePort`（P0）
+- Outbound: `PagePriceExtractionPort`、StoredSourceLocator、`CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`CandidateQuery`（`getCandidateDraft` のみ／保持field読み出し用）、`TransientSurfaceLifecyclePort`（P0）
 
 **契約**: Service [x]
 
@@ -421,7 +422,7 @@ export interface SourcePriceRefreshPort {
 
 `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort` は `product-page-capture/design.md` の確定済み契約を参照し、`ProductCapturePublicApi.pagePriceExtraction` から受け取る。本featureの所有契約は `RefreshCapturedPriceInput` 以降であり、価格抽出型やerror unionを再定義しない。
 
-`refreshCapturedPrice` は `getSourceReference` で対象を再読込し、現行pageUrlの正規形が `observedPageUrl` と一致し、kindが `retail` である場合だけ既存 `CandidateSourceMutationPort.updateSource` を呼ぶ。inputの `price` が欠損またはconfirmed amount/currencyを持たない場合は `price-unavailable` とし、mutationを呼ばない。update inputは既存sourceのprice/capturedAtだけを置換し、URL、siteName、kind、ID、他source、product、normalized attributesを保持する。revision conflictは後発状態を上書きせず `conflict` または `stale-target` として返す。
+`refreshCapturedPrice` は `getSourceReference` で対象を再読込し、現行pageUrlの正規形が `observedPageUrl` と一致し、kindが `retail` である場合だけ既存 `CandidateSourceMutationPort.updateSource` を呼ぶ。inputの `price` が欠損またはconfirmed amount/currencyを持たない場合は `price-unavailable` とし、mutationを呼ばない。update inputは既存sourceのprice/capturedAtだけを置換し、URL、siteName、kind、ID、他source、product、normalized attributesを保持する。`CandidateSourceReference` は `siteName` を射影しないため、保持すべきこれらのフィールドは `query.getCandidateDraft(candidateId)` が返す `CandidateDraft.sources` の該当entryから読み出し、`getSourceReference` による直前の再検証はそのまま維持する。revision conflictは後発状態を上書きせず `conflict` または `stale-target` として返す。
 
 context menu内部commandは次の順序を守る。
 

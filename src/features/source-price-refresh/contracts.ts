@@ -124,10 +124,16 @@ export interface SourcePriceRefreshPublicApi {
 }
 
 /**
- * The complete set of upstream dependencies this feature accepts. Every entry
- * is an approved producer-owned port: candidate-management `sources.catalog` /
+ * The upstream ports this feature accepts at its public surface. Every entry is
+ * an approved producer-owned port: candidate-management `sources.catalog` /
  * `sources.mutations`, product-capture `pagePriceExtraction`, and the shell's
  * synchronous transient gesture registration.
+ *
+ * The service additionally reads candidate-management `query.getCandidateDraft`
+ * to recover the stored source fields the catalog projection withholds (notably
+ * `siteName`), so a price update replaces only price and capturedAt. That facet
+ * is an internal collaborator dependency rather than part of this bundle; the
+ * composition wiring reconciles both.
  */
 export interface SourcePriceRefreshUpstreamPorts {
   readonly catalog: CandidateSourceCatalogPort;
