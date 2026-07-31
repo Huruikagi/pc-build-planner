@@ -192,7 +192,7 @@ test("pending project 作成後も既存projectの候補cacheを保持する", a
   assert.equal(state.value.candidates[0]?.id, existingCandidateId);
 });
 
-test("project 作成中の新しい pre-edit activation を古い完了で上書きしない", async () => {
+test("project 作成中の新しい pre-edit activation を成功した project で解決する", async () => {
   let complete!: (value: {
     readonly ok: true;
     readonly value: Project;
@@ -213,8 +213,15 @@ test("project 作成中の新しい pre-edit activation を古い完了で上書
   complete({ ok: true, value: project("古い作成入力") });
   await creation;
 
-  assert.equal(state.value.pendingPreEdit, newPending);
-  assert.equal(state.value.editor, null);
+  assert.equal(state.value.pendingPreEdit, null);
+  assert.equal(state.value.projects.length, 1);
+  assert.equal(state.value.projects[0]?.id, createdProjectId);
+  assert.equal(state.value.selectedProjectId, createdProjectId);
+  assert.deepEqual(state.value.editor, {
+    mode: "create",
+    projectId: createdProjectId,
+    draft: { ...newPending.draft, projectId: createdProjectId },
+  });
   assert.equal(state.value.isSaving, false);
 });
 

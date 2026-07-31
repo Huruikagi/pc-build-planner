@@ -330,14 +330,15 @@ export class ManagementState {
       { name },
       await this.dependencies.createMutationContext(),
     );
-    if (this.#value.pendingPreEdit !== pendingAtStart) {
+    if (!result.ok && this.#value.pendingPreEdit !== pendingAtStart) {
       this.#set({ isSaving: false });
       return;
     }
     if (!result.ok) return this.#mutationFailure(result.error);
-    if (pendingAtStart !== null) {
+    const pendingToResolve = this.#value.pendingPreEdit;
+    if (pendingToResolve !== null) {
       const resolvedDraft = {
-        ...pendingAtStart.draft,
+        ...pendingToResolve.draft,
         projectId: result.value.id,
       } as CandidateDraft;
       this.#set({
