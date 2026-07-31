@@ -154,15 +154,15 @@
   - _Requirements: 1.5, 2.5, 5.4, 6.2_
   - _Boundary: ManagementState, CandidateFeatureRegistration_
 
-- [ ] 8. 商品取り込みからの解決前pre-edit移行を完成する
-- [ ] 8.1 解決前draftと段階別validatorを定義する
+- [x] 8. 商品取り込みからの解決前pre-edit移行を完成する
+- [x] 8.1 解決前draftと段階別validatorを定義する
   - projectIdだけを持たないcategory判別draft、任意projectId/category hintを持つprefill、判別可能な構造エラーを候補管理の公開契約へ追加する。
   - 編集開始では必須shape、category、正規化属性とのcategory整合だけを検証して空名を許可し、保存時は既存の候補内容validatorで空名を拒否する。
   - 仮project ID、root全体の偽造、unsafe cast、保存validatorの重複定義を使わず、正常・空名・未知category・category不一致・不正project/hintを決定的に判別できることを完了条件とする。
   - _Requirements: 2.2, 2.3, 4.5, 6.6, 7.1, 7.5, 7.6, 7.7, 7.8_
   - _Boundary: PreEditValidation_
 
-- [ ] 8.2 pending pre-editとproject-required状態を管理stateへ追加する
+- [x] 8.2 pending pre-editとproject-required状態を管理stateへ追加する
   - project未指定時は直近の選択中project、一覧先頭の順に解決し、存在すればprojectId付きcanonical draftとしてeditorを開く。
   - projectが0件ならactivation成功としてpending draftを保持し、project作成成功時は返却IDで解決して再抽出せずeditorへ遷移する。作成失敗時はpendingを維持する。
   - pendingはproject作成成功、明示取消、新しいpre-edit activationだけで置換・破棄し、capture終了、通常切替、resetでは失わない。side panel document破棄後は復元しない。
@@ -171,7 +171,7 @@
   - _Requirements: 6.1, 6.6, 7.1, 7.2, 7.3, 7.4, 7.9, 7.10_
   - _Boundary: ManagementState_
 
-- [ ] 8.3 候補管理の公開APIとactivation adapterをtyped intent factoryへ移行する
+- [x] 8.3 候補管理の公開APIとactivation adapterをtyped intent factoryへ移行する
   - 公開APIをquery、`createCandidateEditorIntent`、既存の`sources: { catalog, mutations }` facetへ統一し、旧capture write port、直接navigation method、capture側project queryを除去する。
   - adapterはunknown payloadを再検証し、形式が正しい明示project不在だけを`activation_failed`、payload不正を`invalid_activation`へ写像する。project 0件の`project-required`受理は成功を返す。
   - 起動世代、stale抑止、handoff失敗intent保持は上流へ残し、候補管理へgeneration stateを追加しない。
@@ -180,7 +180,7 @@
   - _Requirements: 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.5, 7.8, 7.9_
   - _Boundary: CandidateActivation, CandidateManagementPublicApi_
 
-- [ ] 8.4 project-required表示と編集継続操作を実装する
+- [x] 8.4 project-required表示と編集継続操作を実装する
   - pending draftを保持したままproject作成フォームと取消操作を表示し、自動作成や暗黙命名を行わない。
   - 空名pre-editは候補編集面を開いて商品名入力を促し、空名保存時は項目エラーとdraftを保持する。
   - DOM操作だけでproject 0件から作成・編集継続、作成失敗からの再試行、明示取消、空名の編集開始と保存拒否を確認できることを完了条件とする。
@@ -188,7 +188,7 @@
   - _Requirements: 1.1, 1.3, 2.3, 2.5, 6.6, 7.2, 7.3, 7.4, 7.6, 7.7, 7.9_
   - _Boundary: ManagementView_
 
-- [ ] 8.5 transient handoffと下流公開consumerの回帰を統合検証する
+- [x] 8.5 transient handoffと下流公開consumerの回帰を統合検証する
   - 現行世代からのconcludeがtyped intentを一度だけ配送し、既存project解決とproject-required受理の両方でhandoff成功となることを架空fixtureで検証する。
   - stale世代では候補管理が変更されず、activation失敗時は上流がintentを保持することを上流contractとの統合で確認する。
   - 候補CRUD、保存時validation、source catalog/mutation、duplicate保存前consumer、build向けquery、snapshot version 2が回帰しないことを確認する。
@@ -200,3 +200,4 @@
 ## Implementation Notes
 
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。
+- 2026-07-31にChromeの拡張機能アクションから、抽出draftのproject-required表示、project作成後の同一draft編集継続、候補保存・一覧反映までを手動確認した。
