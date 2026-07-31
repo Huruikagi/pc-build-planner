@@ -11,6 +11,9 @@ import type { ProductCaptureTransientConsumerContract } from "../../../src/featu
 test("capture consumer contractはshell公開entry pointの一過性lifecycle型をそのまま参照する", () => {
   const lifecycle = {
     isCurrent: () => true,
+    async dismiss() {
+      return { ok: true as const, value: undefined };
+    },
     async conclude() {
       return { ok: true as const, value: undefined };
     },

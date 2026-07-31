@@ -42,7 +42,10 @@ export const createCandidateRanker = (): CandidateRanker => ({
       const currentPriority = SOURCE_PRIORITY[current.entry.source];
       if (
         priority < currentPriority ||
-        (priority === currentPriority && index < current.index)
+        (priority === currentPriority &&
+          (entry.documentOrder < current.entry.documentOrder ||
+            (entry.documentOrder === current.entry.documentOrder &&
+              index < current.index)))
       ) {
         bestByField.set(entry.field, { entry, index });
       }

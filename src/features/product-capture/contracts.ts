@@ -55,6 +55,7 @@ export interface ExtractionCandidate {
   readonly rawValue: string;
   readonly source: ExtractionSource;
   readonly sourceLabel: string;
+  readonly documentOrder: number;
 }
 
 /**
@@ -100,6 +101,7 @@ export interface NormalizedField {
   readonly rawValue: string;
   readonly source: ExtractionSource;
   readonly sourceLabel: string;
+  readonly documentOrder: number;
 }
 
 /**

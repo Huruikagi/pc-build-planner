@@ -113,6 +113,7 @@ const isNormalizedField = (value: unknown): value is NormalizedField =>
     "rawValue",
     "source",
     "sourceLabel",
+    "documentOrder",
   ]) &&
   typeof value.field === "string" &&
   (coreFields.has(value.field) || value.field.startsWith("spec:")) &&
@@ -125,7 +126,10 @@ const isNormalizedField = (value: unknown): value is NormalizedField =>
   typeof value.rawValue === "string" &&
   typeof value.source === "string" &&
   extractionSources.has(value.source) &&
-  typeof value.sourceLabel === "string";
+  typeof value.sourceLabel === "string" &&
+  typeof value.documentOrder === "number" &&
+  Number.isSafeInteger(value.documentOrder) &&
+  value.documentOrder >= 0;
 
 const isRejectedField = (value: unknown): boolean =>
   isRecord(value) &&

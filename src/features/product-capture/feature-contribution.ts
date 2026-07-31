@@ -66,6 +66,11 @@ export const createProductCaptureContribution = (
     isCurrent: (activationId) =>
       dependencies.transientSurface.isCurrent(activationId),
     handoff,
+    dismissFatal: (activationId) =>
+      dependencies.transientSurface.dismiss(
+        activationId,
+        "capture-invalidated",
+      ),
   });
   return {
     key: productCaptureContributionKey,

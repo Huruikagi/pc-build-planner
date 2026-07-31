@@ -17,6 +17,9 @@ export interface CaptureStateDependencies {
   readonly coordinator: CaptureCoordinator;
   readonly isCurrent: (activationId: ActivationId) => boolean;
   readonly handoff: CandidateEditorHandoff;
+  readonly dismissFatal?: (
+    activationId: ActivationId,
+  ) => Promise<Result<void, TransientSurfaceError>>;
   readonly createRequestId?: () => string;
 }
 
@@ -115,6 +118,37 @@ export class CaptureState {
     }
     if (!this.#accepts(generation, current.activationId)) return;
     if (!result.ok) {
+      if (
+        result.error.kind === "permission-lost" ||
+        result.error.kind === "tab-changed"
+      ) {
+        let dismissed: Result<void, TransientSurfaceError>;
+        try {
+          dismissed = (await this.dependencies.dismissFatal?.(
+            current.activationId,
+          )) ?? { ok: false, error: { kind: "not-started" } };
+        } catch {
+          dismissed = { ok: false, error: { kind: "transition-failed" } };
+        }
+        if (
+          generation !== this.#requestGeneration ||
+          this.#value?.activationId !== current.activationId
+        )
+          return;
+        if (dismissed.ok) this.deactivate();
+        else
+          this.#set({
+            status: "failed",
+            activationId: current.activationId,
+            tabId: current.tabId,
+            failure: {
+              kind: "execution",
+              error: result.error,
+              recoverable: false,
+            },
+          });
+        return;
+      }
       this.#set({
         status: "failed",
         activationId: current.activationId,

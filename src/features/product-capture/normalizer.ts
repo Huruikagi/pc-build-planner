@@ -39,6 +39,7 @@ const accept = (
     rawValue: candidate.rawValue,
     source: candidate.source,
     sourceLabel: candidate.sourceLabel,
+    documentOrder: candidate.documentOrder,
   });
 
 const normalizeWhitespaceAndControlCharacters = (

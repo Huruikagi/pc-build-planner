@@ -86,6 +86,7 @@ const createFlow = (
       },
       transientSurface: {
         isCurrent: (id) => current && id === activationId,
+        dismiss: async () => ok(undefined),
         async conclude(_id, intent) {
           concludeAttempts += 1;
           if (

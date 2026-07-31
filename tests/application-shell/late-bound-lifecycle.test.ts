@@ -22,6 +22,7 @@ test("同じport参照がbind前とunbind後にfail closedしbind中だけ委譲
   let calls = 0;
   lifecycle.bind({
     isCurrent: (value) => value === activationId,
+    dismiss: async () => ok(undefined),
     async conclude() {
       calls += 1;
       return ok(undefined);

@@ -11,7 +11,20 @@ const field = (overrides: Partial<NormalizedField> = {}): NormalizedField => ({
   rawValue: "架空品",
   source: "json-ld",
   sourceLabel: "JSON-LD name",
+  documentOrder: 0,
   ...overrides,
+});
+
+test("同一priorityのcollector間は入力配列順でなくdocumentOrderを使う", () => {
+  const draft = ranker.select([
+    field({ source: "heading", normalizedValue: "later", documentOrder: 9 }),
+    field({
+      source: "breadcrumb",
+      normalizedValue: "earlier",
+      documentOrder: 2,
+    }),
+  ]);
+  assert.equal(draft.fields[0]?.normalizedValue, "earlier");
 });
 
 test("同一項目は構造化データ、meta、見出し・パンくず、表・定義リストの順で選ぶ", () => {
@@ -123,6 +136,7 @@ test("採用値は元表記と取得根拠を保持したまま返す", () => {
       rawValue: "42800 JPY",
       source: "json-ld",
       sourceLabel: "JSON-LD offers.price",
+      documentOrder: 0,
     }),
   ]);
 
@@ -132,6 +146,7 @@ test("採用値は元表記と取得根拠を保持したまま返す", () => {
     rawValue: "42800 JPY",
     source: "json-ld",
     sourceLabel: "JSON-LD offers.price",
+    documentOrder: 0,
   });
 });
 

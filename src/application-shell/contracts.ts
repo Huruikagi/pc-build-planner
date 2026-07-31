@@ -260,7 +260,11 @@ export interface SidePanelHost {
   ): Promise<Result<void, SelectionError>>;
   restorePersistent(
     preferred: FeatureId | null,
-    reason: "navigated" | "tab-closed" | "persistent-selected",
+    reason:
+      | "navigated"
+      | "tab-closed"
+      | "capture-invalidated"
+      | "persistent-selected",
   ): Promise<Result<void, SelectionError>>;
   stop(): Promise<void>;
 }

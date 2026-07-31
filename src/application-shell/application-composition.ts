@@ -86,7 +86,10 @@ export interface ProductionApplicationCompositionOptions<
   readonly workerContext: WorkerRegistrationContext;
   readonly reportError: (message: string) => void;
   readonly createTransientMonitoring?: (
-    controller: Pick<TransientSurfaceController, "request" | "dismiss">,
+    controller: Pick<
+      TransientSurfaceController,
+      "request" | "dismiss" | "getSnapshot"
+    >,
     notices: {
       sessionReadFailed(): void;
       sessionReadSucceeded(): void;
@@ -576,6 +579,18 @@ export function createProductionApplicationComposition<
               preferred,
               reason,
             );
+            if (
+              result?.ok &&
+              reason === "capture-invalidated" &&
+              latestShellState
+            ) {
+              transientNotice = "activation-expired";
+              latestShellState = projectTransientNotice(latestShellState, {
+                kind: "activation-expired",
+                message: message("shell.transientActivationExpired"),
+              });
+              publish(latestShellState);
+            }
             return result?.ok
               ? ok(undefined)
               : err({ kind: "transition-failed" });

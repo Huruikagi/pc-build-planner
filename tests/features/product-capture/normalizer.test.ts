@@ -8,6 +8,7 @@ const normalizer = createCaptureNormalizer();
 const candidate = (
   overrides: Partial<ExtractionCandidate> = {},
 ): ExtractionCandidate => ({
+  documentOrder: 0,
   field: "name",
   rawValue: "架空CPU X100",
   source: "json-ld",

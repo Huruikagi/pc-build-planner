@@ -28,6 +28,7 @@
 
 - 汎用DOM候補収集、payload検証、正規化、固定順位、取得根拠
 - `ExtractionSource: "domain-map"`と、`manufacturer-domain-map.ts`に隔離したメーカー公式eTLD+1 metadata
+- `candidate-source-bookmarks`がsource種別判定に利用する、read-onlyな`ProductCapturePublicApi.manufacturerDomains`照合seam
 - 固定tab抽出結果からproject未解決pre-editを組み立てるproduct-capture側の写像
 - 現行activation照合、stale結果破棄、typed intent生成までのcapture integration
 - `ProductCapturePublicApi.pagePriceExtraction`と価格観測の公開型・実装
@@ -44,6 +45,7 @@
 
 - application-shell公開の`ActivationId`、`TargetTabId`、`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`
 - candidate-management公開の`UnresolvedCandidateDraft`とtyped intent factory
+- candidate-managementのsource classifierはproduct-capture公開の`ManufacturerDomainLookup`だけを利用し、domain map内部をdeep importしない
 - local data foundation公開のcanonical `Result<T, E>`、domain型、`SourcedValue<MoneyValue>`、`UtcTimestamp`
 - Chrome 116以降の既存`activeTab` / `scripting`到達、React 19、TypeScript 7 strict、標準DOM / URL API
 - `web-content-acquisition.md`で許容されたローカルmetadata。新規runtime依存は追加しない
@@ -83,6 +85,8 @@ graph LR
     Lifecycle --> Candidates[Candidate management]
     Ranker --> PriceAdapter[Price extraction adapter]
     PriceAdapter --> PricePort[Page price extraction port]
+    DomainMap --> DomainLookup[Public manufacturer lookup]
+    DomainLookup --> SourceClassifier[Candidate source classifier]
 ```
 
 - **Pattern**: page collector → boundary validation → normalization → deterministic rank → purpose-specific projection。
@@ -120,7 +124,7 @@ src/features/product-capture/
   react-root.tsx                     # FeatureMountContextとReact root lifecycle
   registration.ts                   # transient contributionとpublic APIの組立
   feature-contribution.ts            # shell公開portだけを受けるcomposition factory
-  public.ts                          # ProductCapturePublicApiとprice observation公開入口
+  public.ts                          # ProductCapturePublicApi、manufacturer lookup、price observation公開入口
   styles.css                         # 一過性表示状態
   editor-navigation.ts               # remove; concludeを迂回する旧直接navigation
   submit-draft.ts                    # remove; candidate保存は境界外
@@ -171,6 +175,8 @@ sequenceDiagram
 ```
 
 抽出前とhandoff直前に同じ`ActivationId`を照合する。失効した結果はcandidate intentへ変換しない。handoff失敗時だけ検証済みintentを現行activationのcapture stateへ保持し、同じ世代で`conclude`を再試行する。新世代受理、surface終了、unmountで破棄する。
+
+固定tab runtimeが`permission-lost`または`tab-changed`を直接返した場合、capture stateは現行activationを`TransientSurfaceLifecyclePort.dismiss(..., "capture-invalidated")`へ渡す。shell controllerが一過性面を終了して常設面へ復帰し、application compositionが`capture-invalidated`を既存のactivation失効noticeへ投影する。dismissの失敗・例外はcapture側で成功扱いせず安全な失敗状態へ戻し、遅延結果はactivation世代gateで後発起動から隔離する。`restricted-page`は対象外案内を一過性面に維持する。
 
 ### Domain map補完
 
@@ -290,6 +296,8 @@ coordinatorはactive tabを再検索せず固定`TargetTabId`だけを解決す�
 
 `CandidateEditorHandoff`はcandidate-management公開factoryでintentを作り、`TransientSurfaceLifecyclePort.conclude`へ渡す。直接navigation callback、`CaptureCandidatePort`、project query、save serviceを利用しない。
 
+`TransientSurfaceLifecyclePort.dismiss`はshell所有の終了処理を呼ぶtyped seamであり、product-captureはhost復帰やnotice描画を実装しない。capture runtimeが直接検出した権限・tab失効にだけ`capture-invalidated`を使用し、通常のcandidate handoffは引き続き`conclude`を使用する。
+
 ### PagePriceExtractionPort
 
 ```typescript
@@ -314,11 +322,14 @@ export interface PagePriceExtractionPort {
 }
 
 export interface ProductCapturePublicApi {
+  readonly manufacturerDomains: ManufacturerDomainLookup;
   readonly pagePriceExtraction: PagePriceExtractionPort;
 }
 ```
 
 このshapeは既存の`source-price-refresh` consumer契約として維持する。有効価格がない場合は観測成功かつ`price`欠損とし、更新可否はconsumerへ委ねる。`pageUrl`はpage-derived payloadから返し、target URLで代用しない。
+
+`manufacturerDomains`は`ManufacturerDomainMap`の`findManufacturer`だけを公開するread-only lookupである。`candidate-source-bookmarks`のsource classifierはこの公開seamだけを利用し、map entry、eTLD+1照合実装、抽出componentをdeep importしない。このlookupはsource分類の補助であり、DOM抽出、権限判断、サイト利用許可を有効化しない。
 
 ## Data Models
 
@@ -335,6 +346,7 @@ export interface ProductCapturePublicApi {
 - runtime error: `tab-unavailable | permission-lost | restricted-page | tab-changed | injection-failed | invalid-payload`
 - extraction result: 候補欠損は正常な部分結果。domain不一致もerrorにしない。
 - handoff error: lifecycleの`stale | target-unavailable | activation-rejected | not-started`相当を閉じたunionへ写像し、現行世代でだけintentを保持する。
+- fatal capture lifecycle: `permission-lost | tab-changed`は`capture-invalidated`としてshellへdismissし、常設面復帰と新しい明示操作が必要なnoticeをshellに委ねる。dismiss失敗・例外は非回復実行失敗として保持し、後発activationへ遅延結果を適用しない。
 - logging: error kindまたは安定コードだけを記録し、page URL、hostname、商品値、raw price、HTML、例外objectを出さない。
 
 権限・世代失効は一過性面の終了へ結び付け、同じ面に失敗する実行操作を残さない。新しいgestureは常に新しいactivationとして以前の失敗とintentを置換する。
@@ -352,6 +364,7 @@ export interface ProductCapturePublicApi {
 ### Contract / Integration
 
 - 固定tab、request ID、page-derived URL、activation世代を接続し、stale結果をhandoffしない
+- runtimeが直接返す`permission-lost | tab-changed`で`capture-invalidated` dismiss、常設面復帰、activation失効noticeを検証し、dismiss失敗・例外・遅延結果を世代内へ閉じる
 - 抽出成功、空名manual pre-edit、handoff失敗・再試行、project不存在をcandidate public test doubleで検証する
 - `PagePriceExtractionPort`の6 failure、価格欠損、元表記、同一pipeline順位をconsumer fixtureで検証する
 - `public.ts`だけをimportするsource-price-refresh相当consumerがstrict型検査を通る

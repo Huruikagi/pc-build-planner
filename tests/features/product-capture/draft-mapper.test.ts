@@ -29,6 +29,7 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         rawValue: "  架空CPU  ",
         source: "heading",
         sourceLabel: "h1",
+        documentOrder: 0,
       },
       {
         field: "manufacturer",
@@ -36,6 +37,7 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         rawValue: "架空メーカー",
         source: "meta",
         sourceLabel: "og:brand",
+        documentOrder: 1,
       },
       {
         field: "price",
@@ -43,6 +45,7 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         rawValue: "JPY 32,100",
         source: "meta",
         sourceLabel: "product:price",
+        documentOrder: 2,
       },
     ]),
   );
@@ -108,6 +111,7 @@ test("通常sourceとdomain-mapのprovenanceを公開pre-edit契約へ保持す�
         rawValue: "架空CPU",
         source: "heading",
         sourceLabel: "h1",
+        documentOrder: 0,
       },
       {
         field: "manufacturer",
@@ -115,6 +119,7 @@ test("通常sourceとdomain-mapのprovenanceを公開pre-edit契約へ保持す�
         rawValue: "架空メーカー",
         source: "domain-map",
         sourceLabel: "maker.example",
+        documentOrder: Number.MAX_SAFE_INTEGER,
       },
     ]),
   );
@@ -164,6 +169,7 @@ test("カテゴリは確定せずcandidate editorの参考値へ写像する", (
         rawValue: "PCパーツ > CPUクーラー",
         source: "breadcrumb",
         sourceLabel: "breadcrumb",
+        documentOrder: 0,
       },
     ]),
   );
@@ -213,6 +219,7 @@ test("構造不正と余分な値を拒否する", () => {
         rawValue: "架空CPU",
         source: "not-a-source",
         sourceLabel: "h1",
+        documentOrder: 0,
       },
     ]),
     {
@@ -232,6 +239,7 @@ test("構造不正と余分な値を拒否する", () => {
         rawValue: "100 JPY",
         source: "meta",
         sourceLabel: "price",
+        documentOrder: 0,
       },
     ]),
     captureResult([
@@ -241,6 +249,7 @@ test("構造不正と余分な値を拒否する", () => {
         rawValue: "JPY",
         source: "meta",
         sourceLabel: "currency",
+        documentOrder: 1,
       },
     ]),
   ]) {
@@ -258,6 +267,7 @@ test("構造不正と余分な値を拒否する", () => {
           rawValue: "https://example.invalid/canonical",
           source: "meta",
           sourceLabel: "og:url",
+          documentOrder: 0,
         },
       ]),
     ).ok,

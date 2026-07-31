@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
+import { createCaptureNormalizer } from "../../../src/features/product-capture/normalizer.js";
+import { createCandidateRanker } from "../../../src/features/product-capture/ranker.js";
 
 const parse = (html: string): Document =>
   new DOMParser().parseFromString(html, "text/html");
@@ -27,6 +29,22 @@ const byField = (
   candidates: ReturnType<typeof extractor.extract>,
   field: string,
 ) => candidates.filter((candidate) => candidate.field === field);
+
+test("documentOrder付与のために全DOM要素を列挙しない", () => {
+  const document = parse(
+    "<!doctype html><html><body><h1>bounded</h1></body></html>",
+  );
+  const querySelectorAll = document.querySelectorAll.bind(document);
+  document.querySelectorAll = ((selector: string) => {
+    if (selector === "*") throw new Error("unbounded full DOM scan");
+    return querySelectorAll(selector);
+  }) as typeof document.querySelectorAll;
+  const candidates = extractor.extract(
+    document,
+    "https://shop.example.invalid/bounded",
+  );
+  assert.equal(byField(candidates, "name")[0]?.rawValue, "bounded");
+});
 
 test("JSON-LD Productから共通商品項目と主要スペックを収集する", () => {
   const document = parse(`<!doctype html><html><body>
@@ -54,6 +72,7 @@ test("JSON-LD Productから共通商品項目と主要スペックを収集す�
     rawValue: "架空CPU X100",
     source: "json-ld",
     sourceLabel: "JSON-LD name",
+    documentOrder: 0,
   });
 
   assert.equal(byField(candidates, "category")[0]?.rawValue, "CPU");
@@ -75,6 +94,7 @@ test("JSON-LD Productから共通商品項目と主要スペックを収集す�
     rawValue: "AM5",
     source: "json-ld",
     sourceLabel: "JSON-LD ソケット",
+    documentOrder: 0,
   });
 });
 
@@ -177,6 +197,26 @@ test("表と定義リストから主要スペック候補を収集する", () =>
   assert.equal(formFactor.length, 1);
   assert.equal(formFactor[0]?.rawValue, "ATX");
   assert.equal(formFactor[0]?.source, "definition-list");
+});
+
+test("tableとdefinition-listの同順位候補はcollector順でなく実DOM順で採用する", () => {
+  const document = parse(`<!doctype html><html><body>
+    <dl><dt>ソケット</dt><dd>earlier-definition</dd></dl>
+    <table><tr><th>ソケット</th><td>later-table</td></tr></table>
+  </body></html>`);
+  const candidates = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/dom-order",
+  );
+  const normalized = candidates
+    .filter((candidate) => candidate.field === "spec:ソケット")
+    .map((candidate) => createCaptureNormalizer().normalize(candidate))
+    .filter((result) => result.ok)
+    .map((result) => result.value);
+  const draft = createCandidateRanker().select(normalized);
+  assert.equal(draft.fields[0]?.normalizedValue, "earlier-definition");
+  assert.ok(normalized[0] && normalized[1]);
+  assert.notEqual(normalized[0].documentOrder, normalized[1].documentOrder);
 });
 
 test("崩れたJSON-LDや未知の構造があっても他ソースの抽出は失敗しない", () => {
@@ -297,6 +337,7 @@ test("manufacturer欠損時だけdomain map候補を最下位sourceとして追�
       rawValue: "架空メーカー",
       source: "domain-map",
       sourceLabel: "maker.example",
+      documentOrder: Number.MAX_SAFE_INTEGER,
     },
   ]);
 });
@@ -317,6 +358,7 @@ test("ページ由来manufacturerがある場合はdomain map候補を生成し�
       rawValue: "ページ明示メーカー",
       source: "meta",
       sourceLabel: 'meta[property="product:brand"]',
+      documentOrder: 0,
     },
   ]);
 });
@@ -337,6 +379,7 @@ test("定義リストの共通メーカー項目を優先してdomain候補を�
       rawValue: "ページ明示メーカー",
       source: "definition-list",
       sourceLabel: "メーカー",
+      documentOrder: 0,
     },
   ]);
   assert.equal(
@@ -361,6 +404,7 @@ test("表の共通manufacturer項目を優先してdomain候補を生成しな�
       rawValue: "Page Maker",
       source: "table",
       sourceLabel: "Manufacturer",
+      documentOrder: 0,
     },
   ]);
   assert.equal(

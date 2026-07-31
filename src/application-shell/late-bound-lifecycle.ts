@@ -12,6 +12,9 @@ export function createLateBoundLifecycle(): LateBoundLifecycle {
   return {
     port: {
       isCurrent: (activationId) => target?.isCurrent(activationId) ?? false,
+      dismiss: (activationId, reason) =>
+        target?.dismiss(activationId, reason) ??
+        Promise.resolve(err({ kind: "not-started" })),
       conclude: (activationId, handoff) =>
         target?.conclude(activationId, handoff) ??
         Promise.resolve(err({ kind: "not-started" })),

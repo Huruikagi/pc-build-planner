@@ -29,6 +29,7 @@ export interface TransientActivationRequest {
 export type TransientDismissReason =
   | "navigated"
   | "tab-closed"
+  | "capture-invalidated"
   | "persistent-selected";
 
 export type TransientSurfaceError =
@@ -103,6 +104,10 @@ export type TransientSurfaceState =
 
 export interface TransientSurfaceLifecyclePort {
   isCurrent(activationId: ActivationId): boolean;
+  dismiss(
+    activationId: ActivationId,
+    reason: TransientDismissReason,
+  ): Promise<Result<void, TransientSurfaceError>>;
   conclude(
     activationId: ActivationId,
     handoff: FeatureActivationIntent,

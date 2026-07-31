@@ -28,18 +28,21 @@ const runtime = (
           rawValue: "$299.00",
           source: "meta",
           sourceLabel: "product:price",
+          documentOrder: 1,
         },
         {
           field: "manufacturer",
           rawValue: "Fictional Parts",
           source: "domain-map",
           sourceLabel: "parts.example.invalid",
+          documentOrder: Number.MAX_SAFE_INTEGER,
         },
         {
           field: "price",
           rawValue: "249.99 USD",
           source: "json-ld",
           sourceLabel: "offers.price",
+          documentOrder: 2,
         },
       ],
     });

@@ -40,7 +40,11 @@ export interface ApplicationShellIntegration
   ): ReturnType<SidePanelHost["showTransient"]>;
   restorePersistent?(
     preferred: FeatureId | null,
-    reason: "navigated" | "tab-closed" | "persistent-selected",
+    reason:
+      | "navigated"
+      | "tab-closed"
+      | "capture-invalidated"
+      | "persistent-selected",
   ): ReturnType<SidePanelHost["restorePersistent"]>;
 }
 

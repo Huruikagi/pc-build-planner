@@ -453,6 +453,79 @@ test("session read noticeは常設表示と併存し成功通知まで保持す�
   await root.stop();
 });
 
+test("fatal capture終了は常設fallbackへ戻り新しい明示操作noticeをshellから表示する", async () => {
+  const h = harness();
+  let controller:
+    | Parameters<
+        NonNullable<
+          Parameters<
+            typeof createProductionApplicationComposition
+          >[0]["createTransientMonitoring"]
+        >
+      >[0]
+    | undefined;
+  const transient: ApplicationFeatureRegistration = {
+    id: id("capture"),
+    presentation: "transient",
+    transientActivation: noopTransientActivation(),
+    publicApi: {},
+    getAvailability: () => ({ status: "available" }),
+    subscribeAvailability: () => () => undefined,
+    async mount() {
+      return { async unmount() {} };
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions: () => ({
+      features: [
+        { key: "planner", registration: h.feature },
+        { key: "capture", registration: transient },
+      ] as const,
+      workerRegistrations: [],
+    }),
+    presentation: h.presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+    createTransientMonitoring(value) {
+      controller = value;
+      return {
+        async start() {
+          return { ok: true as const, value: undefined };
+        },
+        stop() {},
+      };
+    },
+  });
+  assert.equal((await root.start()).ok, true);
+  const activationId = "fatal-capture" as ActivationId;
+  assert.equal(
+    (
+      await controller?.request({
+        activationId,
+        surfaceId: transient.id,
+        tabId: 1 as never,
+      })
+    )?.ok,
+    true,
+  );
+  assert.equal(
+    (await controller?.dismiss(activationId, "capture-invalidated"))?.ok,
+    true,
+  );
+  assert.deepEqual(controller?.getSnapshot(), { kind: "inactive" });
+  const state = h.states.at(-1);
+  assert.equal(state?.kind, "ready");
+  if (state?.kind === "ready") {
+    assert.equal(state.selected, h.feature.id);
+    assert.deepEqual(state.transientNotice?.message, {
+      key: "shell.transientActivationExpired",
+    });
+  }
+  await root.stop();
+});
+
 test("startup rollback後も注入済みlifecycleをnot-startedへ戻す", async () => {
   const h = harness({ workerFails: true });
   let lifecycle: TransientSurfaceLifecyclePort | undefined;

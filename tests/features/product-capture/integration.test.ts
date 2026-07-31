@@ -26,6 +26,7 @@ test("contributionはtransient registrationと同じruntime由来の価格port�
       runtime,
       transientSurface: {
         isCurrent: () => true,
+        dismiss: async () => ({ ok: true, value: undefined }),
         async conclude() {
           return { ok: true, value: undefined };
         },

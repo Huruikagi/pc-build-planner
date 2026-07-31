@@ -83,6 +83,83 @@ test("現行世代だけが固定tabの抽出を開始する", async () => {
   assert.deepEqual(calls, []);
 });
 
+test("permission-lostとtab-changedは現行transient activationをdismissし、restricted-pageは面を維持する", async () => {
+  for (const kind of ["permission-lost", "tab-changed"] as const) {
+    const dismissed: ActivationId[] = [];
+    const state = createCaptureState({
+      handoff,
+      coordinator: { captureTab: async () => err({ kind }) },
+      isCurrent: () => true,
+      dismissFatal: async (activationId) => {
+        dismissed.push(activationId);
+        return ok(undefined);
+      },
+    });
+    state.activate(A, TAB);
+    await state.startCapture();
+    assert.deepEqual(dismissed, [A]);
+    assert.equal(state.value, null);
+  }
+
+  let restrictedDismissed = false;
+  const restricted = createCaptureState({
+    handoff,
+    coordinator: { captureTab: async () => err({ kind: "restricted-page" }) },
+    isCurrent: () => true,
+    dismissFatal: async () => {
+      restrictedDismissed = true;
+      return ok(undefined);
+    },
+  });
+  restricted.activate(A, TAB);
+  await restricted.startCapture();
+  assert.equal(restrictedDismissed, false);
+  assert.equal(restricted.value?.status, "failed");
+});
+
+test("fatal dismissのerr/throwはextractingを残さずfailedにし、成功扱いしない", async () => {
+  for (const dismissFatal of [
+    async () => err({ kind: "transition-failed" as const }),
+    async () => {
+      throw new Error("dismiss failed");
+    },
+  ]) {
+    const state = createCaptureState({
+      handoff,
+      coordinator: { captureTab: async () => err({ kind: "permission-lost" }) },
+      isCurrent: () => true,
+      dismissFatal,
+    });
+    state.activate(A, TAB);
+    await assert.doesNotReject(state.startCapture());
+    assert.equal(state.value?.status, "failed");
+  }
+});
+
+test("fatal dismissの遅延結果は後発activationを終了しない", async () => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const state = createCaptureState({
+    handoff,
+    coordinator: { captureTab: async () => err({ kind: "tab-changed" }) },
+    isCurrent: () => true,
+    dismissFatal: async () => {
+      await pending;
+      return ok(undefined);
+    },
+  });
+  state.activate(A, TAB);
+  const old = state.startCapture();
+  await Promise.resolve();
+  state.activate(B, TAB);
+  release();
+  await old;
+  assert.equal(state.value?.activationId, B);
+  assert.equal(state.value?.status, "idle");
+});
+
 test("失敗は同一世代で再試行できる", async () => {
   let calls = 0;
   const state = createCaptureState({

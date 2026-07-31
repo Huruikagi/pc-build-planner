@@ -252,6 +252,10 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
         lifecycleEvents.push("isCurrent");
         return true;
       },
+      async dismiss() {
+        lifecycleEvents.push("dismiss");
+        return { ok: true as const, value: undefined };
+      },
       async conclude(activationId: unknown, intent: unknown) {
         lifecycleEvents.push({ activationId, intent });
         return { ok: true as const, value: undefined };
@@ -287,6 +291,7 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
                         rawValue: "架空 production CPU",
                         source: "heading",
                         sourceLabel: "h1",
+                        documentOrder: 0,
                       },
                     ],
                   },

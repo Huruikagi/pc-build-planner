@@ -30,6 +30,7 @@ const MAX_DEFINITION_LISTS = 10;
 interface CandidateSink {
   readonly items: ExtractionCandidate[];
   readonly pageUrl: string;
+  readonly nodes: Array<Node | undefined>;
 }
 
 const isFull = (sink: CandidateSink): boolean =>
@@ -66,6 +67,7 @@ const push = (
   rawValue: string,
   source: ExtractionSource,
   sourceLabel: string,
+  node?: Node,
 ): void => {
   if (isFull(sink)) return;
   const trimmed = rawValue.trim();
@@ -77,6 +79,31 @@ const push = (
     rawValue: resolved.slice(0, MAX_VALUE_LENGTH),
     source,
     sourceLabel,
+    documentOrder: Number.MAX_SAFE_INTEGER,
+  });
+  sink.nodes.push(node);
+};
+
+const assignDocumentOrder = (sink: CandidateSink): void => {
+  const nodes = [
+    ...new Set(sink.nodes.filter((node): node is Node => node !== undefined)),
+  ];
+  nodes.sort((left, right) => {
+    const position = left.compareDocumentPosition(right);
+    if ((position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) return -1;
+    if ((position & Node.DOCUMENT_POSITION_PRECEDING) !== 0) return 1;
+    return 0;
+  });
+  const order = new Map(nodes.map((node, index) => [node, index]));
+  sink.items.forEach((candidate, index) => {
+    sink.items[index] = {
+      ...candidate,
+      documentOrder:
+        sink.nodes[index] === undefined
+          ? Number.MAX_SAFE_INTEGER
+          : (order.get(sink.nodes[index] as Node) ??
+            Number.MAX_SAFE_INTEGER - 1),
+    };
   });
 };
 
@@ -136,7 +163,7 @@ const collectJsonLd = (document: Document, sink: CandidateSink): void => {
 
     for (const node of productNodes(parsed, 0, { visited: 0 })) {
       if (isFull(sink)) return;
-      collectProductNode(node, sink);
+      collectProductNode(node, sink, script);
     }
   }
 };
@@ -144,25 +171,35 @@ const collectJsonLd = (document: Document, sink: CandidateSink): void => {
 const collectProductNode = (
   node: Record<string, unknown>,
   sink: CandidateSink,
+  script: Element,
 ): void => {
   const name = asString(node.name);
-  if (name) push(sink, "name", name, "json-ld", "JSON-LD name");
+  if (name) push(sink, "name", name, "json-ld", "JSON-LD name", script);
 
   const category = asString(node.category);
-  if (category) push(sink, "category", category, "json-ld", "JSON-LD category");
+  if (category)
+    push(sink, "category", category, "json-ld", "JSON-LD category", script);
 
   const brand = isRecord(node.brand)
     ? asString(node.brand.name)
     : asString(node.brand);
-  if (brand) push(sink, "manufacturer", brand, "json-ld", "JSON-LD brand");
+  if (brand)
+    push(sink, "manufacturer", brand, "json-ld", "JSON-LD brand", script);
 
   const model =
     asString(node.mpn) ?? asString(node.sku) ?? asString(node.model);
   if (model)
-    push(sink, "modelNumber", model, "json-ld", "JSON-LD mpn/sku/model");
+    push(
+      sink,
+      "modelNumber",
+      model,
+      "json-ld",
+      "JSON-LD mpn/sku/model",
+      script,
+    );
 
   const url = asString(node.url);
-  if (url) push(sink, "url", url, "json-ld", "JSON-LD url");
+  if (url) push(sink, "url", url, "json-ld", "JSON-LD url", script);
 
   const offers = Array.isArray(node.offers)
     ? node.offers
@@ -181,6 +218,7 @@ const collectProductNode = (
         currency ? `${price} ${currency}` : price,
         "json-ld",
         "JSON-LD offers.price",
+        script,
       );
     }
   }
@@ -194,7 +232,14 @@ const collectProductNode = (
     const label = asString(property.name);
     const value = asString(property.value);
     if (label && value)
-      push(sink, specField(label), value, "json-ld", `JSON-LD ${label}`);
+      push(
+        sink,
+        specField(label),
+        value,
+        "json-ld",
+        `JSON-LD ${label}`,
+        script,
+      );
   }
 };
 
@@ -211,13 +256,15 @@ const META_FIELD_SELECTORS: ReadonlyArray<
 const collectMeta = (document: Document, sink: CandidateSink): void => {
   for (const [selector, field] of META_FIELD_SELECTORS) {
     if (isFull(sink)) return;
-    const content = document.querySelector(selector)?.getAttribute("content");
-    if (content) push(sink, field, content, "meta", selector);
+    const node = document.querySelector(selector);
+    const content = node?.getAttribute("content");
+    if (content && node) push(sink, field, content, "meta", selector, node);
   }
 
-  const priceAmount = document
-    .querySelector('meta[property="product:price:amount"]')
-    ?.getAttribute("content");
+  const priceNode = document.querySelector(
+    'meta[property="product:price:amount"]',
+  );
+  const priceAmount = priceNode?.getAttribute("content");
   const priceCurrency = document
     .querySelector('meta[property="product:price:currency"]')
     ?.getAttribute("content");
@@ -228,13 +275,15 @@ const collectMeta = (document: Document, sink: CandidateSink): void => {
       priceCurrency ? `${priceAmount} ${priceCurrency}` : priceAmount,
       "meta",
       'meta[property="product:price:amount"]',
+      priceNode ?? undefined,
     );
   }
 };
 
 const collectHeading = (document: Document, sink: CandidateSink): void => {
-  const text = document.querySelector("h1")?.textContent;
-  if (text) push(sink, "name", text, "heading", "h1");
+  const heading = document.querySelector("h1");
+  if (heading?.textContent)
+    push(sink, "name", heading.textContent, "heading", "h1", heading);
 };
 
 const BREADCRUMB_SELECTOR =
@@ -248,7 +297,14 @@ const collectBreadcrumb = (document: Document, sink: CandidateSink): void => {
   const categoryNode = items.length > 1 ? items[items.length - 2] : items[0];
   const text = categoryNode?.textContent;
   if (text)
-    push(sink, "category", text, "breadcrumb", "breadcrumb category segment");
+    push(
+      sink,
+      "category",
+      text,
+      "breadcrumb",
+      "breadcrumb category segment",
+      categoryNode,
+    );
 };
 
 const collectDefinitionLists = (
@@ -274,7 +330,7 @@ const collectDefinitionLists = (
           ? (definition.textContent?.trim() ?? undefined)
           : undefined;
       if (label && value)
-        push(sink, fieldForLabel(label), value, "definition-list", label);
+        push(sink, fieldForLabel(label), value, "definition-list", label, term);
     }
   }
 };
@@ -290,7 +346,8 @@ const collectTables = (document: Document, sink: CandidateSink): void => {
     if (cells.length < 2) continue;
     const label = cells[0]?.textContent?.trim();
     const value = cells[1]?.textContent?.trim();
-    if (label && value) push(sink, fieldForLabel(label), value, "table", label);
+    if (label && value)
+      push(sink, fieldForLabel(label), value, "table", label, row);
   }
 };
 
@@ -309,7 +366,7 @@ export const createGenericExtractor = (
   dependencies: GenericExtractorDependencies = {},
 ): GenericExtractor => ({
   extract(document, pageUrl) {
-    const sink: CandidateSink = { items: [], pageUrl };
+    const sink: CandidateSink = { items: [], pageUrl, nodes: [] };
     for (const collect of COLLECTORS) {
       if (isFull(sink)) break;
       try {
@@ -333,6 +390,7 @@ export const createGenericExtractor = (
         );
       }
     }
+    assignDocumentOrder(sink);
     return Object.freeze(sink.items.slice(0, MAX_CANDIDATES));
   },
 });

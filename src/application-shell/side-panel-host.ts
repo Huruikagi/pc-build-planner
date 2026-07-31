@@ -278,7 +278,11 @@ export function createSidePanelHost(
 
   const restorePersistent = (
     preferred: FeatureId | null,
-    reason: "navigated" | "tab-closed" | "persistent-selected",
+    reason:
+      | "navigated"
+      | "tab-closed"
+      | "capture-invalidated"
+      | "persistent-selected",
   ): Promise<Result<void, SelectionError>> => {
     const candidate = preferred === null ? undefined : find(preferred);
     const preferredAvailable =

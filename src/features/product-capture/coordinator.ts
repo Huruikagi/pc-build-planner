@@ -81,6 +81,9 @@ const isExtractionCandidate = (value: unknown): value is ExtractionCandidate =>
   typeof value.source === "string" &&
   EXTRACTION_SOURCES.has(value.source as ExtractionSource) &&
   typeof value.sourceLabel === "string" &&
+  typeof value.documentOrder === "number" &&
+  Number.isSafeInteger(value.documentOrder) &&
+  value.documentOrder >= 0 &&
   (value.source !== "domain-map" || value.field === "manufacturer");
 
 export const decodeCapturePagePayload = (
@@ -179,7 +182,7 @@ export const createCaptureCoordinator = (
       return ok({
         requestId,
         tabId: tab.tabId,
-        pageUrl: tab.url,
+        pageUrl: payload.pageUrl,
         capturedAt: now(),
         draft,
         rejectedFields,

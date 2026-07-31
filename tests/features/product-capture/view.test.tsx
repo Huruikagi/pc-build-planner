@@ -121,12 +121,8 @@ test("handoff失敗はDevToolsなしでも安全な固定理由を識別でき�
   );
 });
 
-test("制限page・権限喪失・対象tab失効では実行操作を隠す", async () => {
-  for (const error of [
-    { kind: "restricted-page" },
-    { kind: "permission-lost" },
-    { kind: "tab-changed" },
-  ] as const) {
+test("制限pageでは案内を維持し実行操作を隠す", async () => {
+  for (const error of [{ kind: "restricted-page" }] as const) {
     const view = render(
       <LanguageProvider>
         <CaptureView state={setup(error)} />

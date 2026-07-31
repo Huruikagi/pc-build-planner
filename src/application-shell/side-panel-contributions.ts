@@ -108,6 +108,7 @@ export const createSidePanelFeatureContributions = (
         : createChromeCaptureRuntimePort(chromeApis),
     transientSurface: dependencies.transientSurface ?? {
       isCurrent: () => false,
+      dismiss: async () => ({ ok: false, error: { kind: "not-started" } }),
       async conclude() {
         return { ok: false, error: { kind: "not-started" } };
       },
