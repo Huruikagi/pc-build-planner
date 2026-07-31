@@ -104,7 +104,7 @@
   - _Requirements: 1.4, 1.5, 3.2, 3.4, 6.1, 6.2, 6.5, 7.2, 7.4_
   - _Boundary: PagePriceExtractionIntegration, PublicBoundaryValidation_
 
-- [ ] 7. 統合・安全性・cross-spec非回帰を検証する
+- [x] 7. 統合・安全性・cross-spec非回帰を検証する
 
 - [x] 7.1 domain mapとhandoffを結ぶ受け入れflowを検証する
   - manufacturer欠損の架空メーカーdomainを抽出し、`domain-map` provenanceを保ったproject未解決pre-editがcandidate-managementへ一度だけ届くことを検証する。
@@ -121,7 +121,7 @@
   - _Requirements: 1.2, 1.3, 2.5, 3.3, 6.5, 7.1, 7.2, 7.3, 7.4_
   - _Boundary: SyntheticFixtures, SecurityLogging, ArtifactValidation_
 
-- [ ] 7.3 production E2Eと公開contract driftを閉じる
+- [x] 7.3 production E2Eと公開contract driftを閉じる
   - icon起動、明示実行、candidate editor handoff、tab失効によるsurface終了、new generation起動をChrome 116相当のproduction buildで検証する。
   - source-price-refresh consumerがprice portだけを利用し、candidate-source-bookmarks実装が廃止済み`CaptureCandidatePort`を前提にしていないことをcross-spec contract gateで確認する。
   - typecheck、lint、unit、contract、DOM、boundary、fixture、build、E2Eが共通検証flowで通ることを完了条件とする。

@@ -192,6 +192,63 @@ test("manual capture handoffはproject作成後も同じdraftを編集・保存�
   ).toBeVisible();
 });
 
+test("production buildの明示実行は抽出値をcandidate editorへhandoffする", async ({
+  context,
+}) => {
+  const id = await extensionId(context);
+  await context.route("http://pcbp.test/**", async (route) => {
+    await route.fulfill({
+      body: `<!doctype html>
+        <title>SYN production capture target</title>
+        <script type="application/ld+json">
+          {"@context":"https://schema.org","@type":"Product","name":"SYN E2E Graphics Card","brand":{"@type":"Brand","name":"SYN Vendor"}}
+        </script>`,
+      contentType: "text/html",
+      status: 200,
+    });
+  });
+  const target = await context.newPage();
+  await target.goto("http://pcbp.test/production-capture");
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${id}/side-panel.html`);
+  await expect(applicationShell(panel)).toHaveAttribute(
+    "data-runtime-state",
+    "started",
+  );
+
+  const browser = context.browser();
+  if (browser === null) throw new Error("browser CDP session is unavailable");
+  const browserCdp = await browser.newBrowserCDPSession();
+  const { targetInfos } = await browserCdp.send("Target.getTargets", {
+    filter: [{ type: "tab", exclude: false }],
+  });
+  const tabTarget = targetInfos.find(
+    (targetInfo) =>
+      targetInfo.type === "tab" &&
+      targetInfo.url === "http://pcbp.test/production-capture",
+  );
+  if (tabTarget === undefined) throw new Error("tab target is unavailable");
+  await target.bringToFront();
+  await browserCdp.send("Extensions.triggerAction", {
+    id,
+    targetId: tabTarget.targetId,
+  });
+
+  const capture = extensionAction(panel);
+  await expect(capture).toBeVisible();
+  await captureStartButton(capture).click();
+  const required = projectRequired(panel);
+  await expect(required).toBeVisible();
+  await formField(required, "project-name").fill("E2E extracted project");
+  await submitButton(required).click();
+
+  const editor = candidateEditor(panel);
+  await expect(editor).toBeVisible();
+  await expect(formField(editor, "candidate-name")).toHaveValue(
+    "SYN E2E Graphics Card",
+  );
+});
+
 async function openActivatedCapture(
   context: BrowserContext,
   activationId: string,
@@ -231,6 +288,13 @@ for (const invalidation of ["update", "close"] as const) {
     const fallback = navItem(panel, "candidate-management");
     await expect(fallback).toHaveAttribute("aria-current", "page");
     await expect(featureRoot(panel, "candidate-management")).toBeVisible();
+
+    if (invalidation === "close") {
+      const { tabId } = await createTargetTab(context);
+      await putDurableActivation(context, tabId, "e2e-new-generation");
+      await expect(extensionAction(panel)).toBeVisible();
+      await expect(captureStartButton(extensionAction(panel))).toBeVisible();
+    }
   });
 }
 

@@ -322,6 +322,69 @@ const violatesSourceCatalogConsumerImports = (sourceFile) => {
   return violation;
 };
 
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
+const violatesSourcePriceRefreshProductCaptureImports = (sourceFile) => {
+  let allowedImports = 0;
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (violation) return;
+    if (isImportDeclaration(node)) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      if (specifier === undefined) return;
+      if (!/(?:^|\/)features\/product-capture\//.test(specifier)) return;
+      const clause = node.importClause;
+      const named = clause?.namedBindings;
+      if (
+        !/^.*\/features\/product-capture\/public\.(?:js|ts)$/.test(specifier) ||
+        clause === undefined ||
+        clause.name !== undefined ||
+        named === undefined ||
+        !isNamedImports(named) ||
+        named.elements.length !== 1 ||
+        named.elements[0]?.propertyName !== undefined ||
+        named.elements[0]?.name.text !== "PagePriceExtractionPort"
+      ) {
+        violation = true;
+        return;
+      }
+      allowedImports += 1;
+      return;
+    }
+    if (isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      if (
+        specifier === undefined ||
+        /(?:^|\/)features\/product-capture\//.test(specifier)
+      )
+        violation = true;
+      return;
+    }
+    if (
+      isCallExpression(node) &&
+      node.expression.kind === AstSyntaxKind.ImportKeyword
+    ) {
+      const specifier = staticModuleText(node.arguments[0]);
+      if (
+        specifier === undefined ||
+        /(?:^|\/)features\/product-capture\//.test(specifier)
+      )
+        violation = true;
+      return;
+    }
+    if (isImportTypeNode(node)) {
+      const specifier = isLiteralTypeNode(node.argument)
+        ? staticModuleText(node.argument.literal)
+        : undefined;
+      if (
+        specifier === undefined ||
+        /(?:^|\/)features\/product-capture\//.test(specifier)
+      )
+        violation = true;
+    }
+  });
+  return violation || allowedImports !== 1;
+};
+
 /** @param {import("typescript/unstable/ast").Node} node */
 const unwrapExpression = (node) => {
   let current = node;
@@ -625,6 +688,14 @@ export const findBoundaryViolations = (sources) => {
           /(?:^|\/)tests\/tooling\/source-price-refresh-consumer\.ts$/.test(
             normalizedPath,
           );
+        const isSourcePriceRefreshUpstreamConsumer =
+          /(?:^|\/)tests\/tooling\/source-price-refresh-upstream-consumer\.ts$/.test(
+            normalizedPath,
+          );
+        const isCandidateSourceBookmarks =
+          /(?:^|\/)src\/features\/candidate-source-bookmarks\//.test(
+            normalizedPath,
+          );
         const isCandidateSourceCatalog = normalizedPath.endsWith(
           "/features/candidate-management/source-catalog.ts",
         );
@@ -784,6 +855,18 @@ export const findBoundaryViolations = (sources) => {
           violatesSourceCatalogConsumerImports(ast)
         )
           rules.add("source-catalog-consumer-public-contract-only");
+        if (isSourcePriceRefreshUpstreamConsumer) {
+          if (
+            ast !== undefined &&
+            violatesSourcePriceRefreshProductCaptureImports(ast)
+          )
+            rules.add("source-price-refresh-product-capture-price-port-only");
+        }
+        if (
+          isCandidateSourceBookmarks &&
+          /\bCaptureCandidatePort\b/.test(source)
+        )
+          rules.add("candidate-source-bookmarks-no-legacy-capture-port");
         if (
           isCandidateSourceCatalog &&
           ast !== undefined &&

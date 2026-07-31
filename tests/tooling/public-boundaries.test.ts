@@ -199,6 +199,83 @@ test("capture・candidate-management間は公開entry pointだけを許可する
   );
 });
 
+test("cross-spec consumerはcaptureのprice portだけを公開入口から利用する", () => {
+  const forbiddenSources = [
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'import type { ProductCapturePublicApi } from "../../src/features/product-capture/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'import type { PagePriceExtractionPort } from "../../src/features/product-capture/contracts.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'import type * as Capture from "../../src/features/product-capture/public.js"; type Port = Capture.ProductCapturePublicApi;',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'import Capture, { type PagePriceExtractionPort } from "../../src/features/product-capture/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'type Port = import("../../src/features/product-capture/public.js").PagePriceExtractionPort;',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'const capture = import("../../src/features/product-capture/public.js");',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source:
+        'export type { PagePriceExtractionPort } from "../../src/features/product-capture/public.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+      source: 'import type { Result } from "../../src/domain/public.js";',
+    },
+  ];
+  const violations = findBoundaryViolations([
+    ...forbiddenSources,
+    {
+      path: "src/features/candidate-source-bookmarks/integration.ts",
+      source: "const legacy: CaptureCandidatePort = dependencies.capture;",
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ rule }) => rule),
+    [
+      ...forbiddenSources.map(
+        () => "source-price-refresh-product-capture-price-port-only",
+      ),
+      "candidate-source-bookmarks-no-legacy-capture-port",
+    ],
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+        source:
+          'import type { PagePriceExtractionPort } from "../../src/features/product-capture/public.js";',
+      },
+      {
+        path: "src/features/candidate-source-bookmarks/integration.ts",
+        source:
+          'import type { CandidateSourceCatalogPort } from "../candidate-management/public.js";',
+      },
+    ]),
+    [],
+  );
+});
+
 test("settingsは許可された公開依存だけを利用する", () => {
   const allowed = findBoundaryViolations([
     {
