@@ -57,6 +57,7 @@ export function CaptureView({ state }: CaptureViewProps) {
     value.failure.error.kind === "transition-failed"
       ? value.failure.error.reason
       : undefined;
+  const isHandoffFailure = value.failure.kind === "handoff";
   return (
     <section aria-label={messages("capture.failedTitle")}>
       <p role="alert">
@@ -71,13 +72,27 @@ export function CaptureView({ state }: CaptureViewProps) {
           })}
         </p>
       )}
-      {value.failure.kind === "handoff" || value.failure.recoverable ? (
+      {isHandoffFailure ? (
+        <>
+          <p data-capture-handoff-retained>
+            {messages("capture.handoffRetainedNotice")}
+          </p>
+          <p data-capture-new-generation-hint>
+            {messages("capture.newGenerationHint")}
+          </p>
+        </>
+      ) : null}
+      {isHandoffFailure || value.failure.recoverable ? (
         <button
           data-capture-retry
           onClick={() => void state.startCapture()}
           type="button"
         >
-          {messages("capture.retryAction")}
+          {messages(
+            isHandoffFailure
+              ? "capture.retryHandoffAction"
+              : "capture.retryAction",
+          )}
         </button>
       ) : null}
       {executionError?.kind === "no-candidate" ? (

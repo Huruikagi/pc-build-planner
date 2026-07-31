@@ -11,6 +11,7 @@ import { err } from "../../../src/domain/public.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
 import { CaptureView } from "../../../src/features/product-capture/view.js";
 import { LanguageProvider } from "../../../src/ui-language/public.js";
+import { resolverFor } from "../../../src/ui-messages/public.js";
 
 afterEach(cleanup);
 const A = "activation" as ActivationId;
@@ -73,7 +74,10 @@ test("実行中は操作を隠し、失敗後は安全な案内とretryを表示
   assert.ok(start);
   await userEvent.setup().click(start);
   assert.ok(view.container.querySelector("[role='alert']"));
-  assert.ok(view.container.querySelector("[data-capture-retry]"));
+  assert.equal(
+    view.container.querySelector("[data-capture-retry]")?.textContent,
+    resolverFor("ja")("capture.retryAction"),
+  );
   assert.equal(view.container.querySelector("[data-capture-start]"), null);
 });
 
@@ -96,6 +100,20 @@ test("handoff失敗はDevToolsなしでも安全な固定理由を識別でき�
   assert.equal(
     view.container.querySelector("[data-capture-handoff-reason]")?.textContent,
     "失敗理由: operation-blocked",
+  );
+  assert.equal(
+    view.container.querySelector("[data-capture-handoff-retained]")
+      ?.textContent,
+    resolverFor("ja")("capture.handoffRetainedNotice"),
+  );
+  assert.equal(
+    view.container.querySelector("[data-capture-new-generation-hint]")
+      ?.textContent,
+    resolverFor("ja")("capture.newGenerationHint"),
+  );
+  assert.equal(
+    view.container.querySelector("[data-capture-retry]")?.textContent,
+    resolverFor("ja")("capture.retryHandoffAction"),
   );
 });
 

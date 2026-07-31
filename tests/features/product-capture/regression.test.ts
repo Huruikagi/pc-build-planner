@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { access, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
+const legacyRetryHandoffIdentifier = /\bretryHandoff\b/;
+
+test("旧retryHandoff識別子を拒否しmessage keyは許可する", () => {
+  assert.match("retryHandoff()", legacyRetryHandoffIdentifier);
+  assert.match("retryHandoff?: () => void", legacyRetryHandoffIdentifier);
+  assert.match("object.retryHandoff", legacyRetryHandoffIdentifier);
+  assert.doesNotMatch(
+    'messages("capture.retryHandoffAction")',
+    legacyRetryHandoffIdentifier,
+  );
+});
+
 test("product-capture runtimeはactive tab再解決を含まない", async () => {
   const source = await readFile(
     new URL(
@@ -41,6 +53,7 @@ test("product-capture境界から旧保存・worker・直接navigation経路を�
   ).join("\n");
   assert.doesNotMatch(
     source,
-    /CaptureCandidatePort|CaptureSubmitOutcome|\bCaptureSession\b|ConfirmedCaptureSession|submitDraft|onCaptured|retryHandoff|openCandidateEditor|captureCurrentTab|tabs\.query|getActiveTab|toCandidateDraft|data-capture-submit|data-region=["']review["']|status:\s*["'](?:review|submitting|saved)["']/,
+    /CaptureCandidatePort|CaptureSubmitOutcome|\bCaptureSession\b|ConfirmedCaptureSession|submitDraft|onCaptured|openCandidateEditor|captureCurrentTab|tabs\.query|getActiveTab|toCandidateDraft|data-capture-submit|data-region=["']review["']|status:\s*["'](?:review|submitting|saved)["']/,
   );
+  assert.doesNotMatch(source, legacyRetryHandoffIdentifier);
 });
