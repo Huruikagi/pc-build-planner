@@ -37,7 +37,7 @@
   - _Boundary: StoredSourceLocator_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.2 (P) activation世代ごとの価格更新stateを構築する
+- [x] 2.2 (P) activation世代ごとの価格更新stateを構築する
   - activation受理時に固定tabを保持したrunning状態から自動実行する。
   - succeeded receiptとrecoverable判定付きfailed errorを判別可能なsnapshotとして公開する。
   - 新世代で旧stateを置換し、旧抽出・旧mutation完了とunmount後callbackを無視する。
@@ -182,4 +182,8 @@
 - 1.3: `scripts/validate-artifacts.mjs` 末尾のmain-module guard（`import.meta.url === new URL(process.argv[1], "file:").href`）はWindowsでドライブレターをURL schemeと解釈するため発火せず、`pnpm validate:artifacts` の第1スクリプトがローカルWindowsでno-op化する既存バグがある。強制力は `validate-final-gate.mjs`（`pathToFileURL` 使用、関数を直接import）経由で維持されているため、Windowsローカルでのpermission検証は `pnpm validate:final-build` を根拠にすること。
 - 2.1: 一意性判定はretail制約より先に行う。複数一致のうち1件だけがretailでも `ambiguous-match` を返す（kindで先に絞ると要件2.7が禁じる暗黙選択規則になるため）。要件2.8の「一致したソース」は単数形で一意性解決後を前提としている。
 - 2.1: `ManagementError` の `not-found` は `SourcePriceRefreshError` に含まれないため `no-match` へ写像している。design.md 344行「catalog errorは既存 ManagementError を保持する」はunionが表現できる範囲をやや超えた記述で、task 1.1 の contracts から引き継いだ設計上の隙間。task 3.1 の再検証実装はこの写像と整合させること。
+- 2.2: `recoverable` 判定の唯一の典拠は design.md のエラー表とし、規則は「利用者の次の一手が同一context menu gestureの再実行で終わるか」に一本化する。表に無い kind（`invalid-url`、`restricted-page` は再実行可、`validation`、`unsupported-data` は保存データ修復が先で再実行不可）はこの規則からの演繹であり、task 2.4 の回復案内文言を書くときに再確認すること。
+- 2.2: state層は例外をerror kindへ翻訳しない。`SourcePriceRefreshError` union に unexpected 相当のメンバが無いため、既存kind（`injection-failed` など）を汎用fallbackに流用すると原因を偽装し、`recoverable: true` で無限再実行を招く。`runRefresh` は typed `Result` で必ず settle する契約とし、例外→typed failureの変換は task 3.2 の service が負う。
+- 2.2: task 3.3 で `state.activate(...)` を呼ぶときは rejection handler を必ず付ける。未処理rejectionは例外objectをdumpし、要件5.6とdesign.mdのsecurity方針（例外dumpを扱わない）に反する。
+- 2.2: 判別共用体の網羅性は「switch + `const exhaustive: never`」だけでなく、テスト側の期待表を `Record<Union["kind"], T>` で持つと union へのメンバ追加がtypecheckで落ちる。分類ロジックの回帰検知に有効。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。

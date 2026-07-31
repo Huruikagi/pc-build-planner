@@ -1,4 +1,8 @@
-import type { TransientGestureRegistrationPort } from "../../application-shell/public.js";
+import type {
+  ActivationId,
+  TargetTabId,
+  TransientGestureRegistrationPort,
+} from "../../application-shell/public.js";
 import type {
   CandidatePartId,
   CandidateSourceId,
@@ -91,6 +95,29 @@ export interface SourcePriceRefreshPort {
     input: RefreshCapturedPriceInput,
   ): Promise<Result<SourcePriceRefreshReceipt, SourcePriceRefreshError>>;
 }
+
+/**
+ * Every state a transient refresh surface can present. There is deliberately no
+ * idle or awaiting-button member: an accepted activation runs immediately and
+ * only ever settles into a receipt or an identifiable failure.
+ */
+export type SourcePriceRefreshStateValue =
+  | {
+      readonly status: "running";
+      readonly activationId: ActivationId;
+      readonly tabId: TargetTabId;
+    }
+  | {
+      readonly status: "succeeded";
+      readonly activationId: ActivationId;
+      readonly receipt: SourcePriceRefreshReceipt;
+    }
+  | {
+      readonly status: "failed";
+      readonly activationId: ActivationId;
+      readonly error: SourcePriceRefreshError;
+      readonly recoverable: boolean;
+    };
 
 export interface SourcePriceRefreshPublicApi {
   readonly refresh: SourcePriceRefreshPort;
