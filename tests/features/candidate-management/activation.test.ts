@@ -19,12 +19,12 @@ const featureId = "candidate-management" as FeatureId;
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const prefillProjectId =
   "10000000-0000-4000-8000-000000000002" as Uuid as ProjectId;
-const draft = {
-  projectId,
+const unresolvedNamedDraft = {
   category: "uncategorized" as const,
   product: { name: { original: "架空の候補" } },
   normalizedAttributes: { category: "uncategorized" as const },
 };
+const draft = { ...unresolvedNamedDraft, projectId };
 
 const unresolvedDraft = {
   category: "uncategorized" as const,
@@ -82,7 +82,7 @@ const createRegistration = (state: ReturnType<typeof createState>) =>
 
 test("activation は正常 prefill を一度だけ詳細編集へ適用し、不正な受信内容では既存画面を保持する", async () => {
   const state = createState();
-  const prefill = { ...draft, projectId: prefillProjectId };
+  const prefill = { ...unresolvedNamedDraft, projectId: prefillProjectId };
   await state.load();
   const registry = createFeatureRegistry();
   assert.equal(registry.register(createRegistration(state)).ok, true);
@@ -99,7 +99,7 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
   const prepared = router.prepare({
     featureId,
     target: "open-candidate-editor",
-    payload: { projectId: prefillProjectId, draft: prefill },
+    payload: { projectId: prefillProjectId, draft: unresolvedNamedDraft },
   });
   assert.equal(prepared.ok, true);
   if (!prepared.ok) return;
@@ -183,6 +183,22 @@ test("不正な未解決 prefill は invalid_activation へ写像し state を�
       detail: "candidate editor prefill is invalid",
     },
   });
+  assert.equal(state.value.editor, null);
+});
+
+test("projectIdを内包する旧resolved draftはcanonical activation境界で拒否する", async () => {
+  const state = createState();
+  await state.load();
+  const registry = createFeatureRegistry();
+  assert.equal(registry.register(createRegistration(state)).ok, true);
+
+  const result = createActivationRouter({ registry }).prepare({
+    featureId,
+    target: "open-candidate-editor",
+    payload: { projectId, draft },
+  });
+
+  assert.equal(result.ok, false);
   assert.equal(state.value.editor, null);
 });
 
@@ -294,7 +310,7 @@ test("mutation が禁止された状態の activation は編集画面を開か�
     target: "open-candidate-editor",
     payload: {
       projectId: prefillProjectId,
-      draft: { ...draft, projectId: prefillProjectId },
+      draft: unresolvedNamedDraft,
     },
   });
 
@@ -347,7 +363,7 @@ test("categoryHint は未分類 draft の初期カテゴリと属性を種付け
     target: "open-candidate-editor",
     payload: {
       projectId: prefillProjectId,
-      draft: { ...draft, projectId: prefillProjectId },
+      draft: unresolvedNamedDraft,
       categoryHint: "gpu",
     },
   });
@@ -373,7 +389,6 @@ test("categoryHint は確定済みカテゴリを上書きしない", async () =
     payload: {
       projectId: prefillProjectId,
       draft: {
-        projectId: prefillProjectId,
         category: "cpu" as const,
         product: { name: { original: "架空CPU" } },
         normalizedAttributes: {
@@ -420,10 +435,7 @@ test("存在しない project を指定した activation は draft を変更し�
     target: "open-candidate-editor",
     payload: {
       projectId: "10000000-0000-4000-8000-000000000099",
-      draft: {
-        ...draft,
-        projectId: "10000000-0000-4000-8000-000000000099",
-      },
+      draft: unresolvedNamedDraft,
     },
   });
   assert.equal(result.ok, true);

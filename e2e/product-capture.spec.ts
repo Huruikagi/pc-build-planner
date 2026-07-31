@@ -7,6 +7,12 @@ import {
   navItem,
 } from "./models/application-shell.js";
 import {
+  candidateEditor,
+  projectRequired,
+} from "./models/candidate-management.js";
+import { formField, submitButton } from "./models/locator-primitives.js";
+import {
+  captureManualEntryButton,
   captureStartButton,
   extensionAction,
 } from "./models/product-capture.js";
@@ -123,6 +129,67 @@ test("durable activationはproduction transportから実product-capture面を提
       );
     })
     .toBe("activated");
+});
+
+test("manual capture handoffはproject作成後も同じdraftを編集・保存する", async ({
+  context,
+}) => {
+  const id = await extensionId(context);
+  await context.route("http://pcbp.test/**", async (route) => {
+    await route.fulfill({
+      body: "<!doctype html><title>SYN manual capture target</title>",
+      contentType: "text/html",
+      status: 200,
+    });
+  });
+  const target = await context.newPage();
+  await target.goto("http://pcbp.test/manual-entry");
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${id}/side-panel.html`);
+  await expect(applicationShell(panel)).toHaveAttribute(
+    "data-runtime-state",
+    "started",
+  );
+  const browser = context.browser();
+  if (browser === null) throw new Error("browser CDP session is unavailable");
+  const browserCdp = await browser.newBrowserCDPSession();
+  const { targetInfos } = await browserCdp.send("Target.getTargets", {
+    filter: [{ type: "tab", exclude: false }],
+  });
+  const tabTarget = targetInfos.find(
+    (targetInfo) =>
+      targetInfo.type === "tab" &&
+      targetInfo.url === "http://pcbp.test/manual-entry",
+  );
+  if (tabTarget === undefined) throw new Error("tab target is unavailable");
+  await target.bringToFront();
+  await browserCdp.send("Extensions.triggerAction", {
+    id,
+    targetId: tabTarget.targetId,
+  });
+  const capture = extensionAction(panel);
+  await expect(capture).toBeVisible();
+  await captureStartButton(capture).click();
+  await expect(captureManualEntryButton(capture)).toBeVisible();
+  await captureManualEntryButton(capture).click();
+
+  await expect(extensionAction(panel)).toHaveCount(0);
+  const required = projectRequired(panel);
+  await expect(required).toBeVisible();
+  await formField(required, "project-name").fill("E2E handoff project");
+  await submitButton(required).click();
+
+  const editor = candidateEditor(panel);
+  await expect(editor).toBeVisible();
+  await expect(formField(editor, "candidate-name")).toHaveValue("");
+  await formField(editor, "candidate-name").fill("E2E manual candidate");
+  await submitButton(editor).click();
+  await expect(
+    featureRoot(panel, "candidate-management").getByText(
+      "E2E manual candidate",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 async function openActivatedCapture(

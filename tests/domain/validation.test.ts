@@ -5,6 +5,7 @@ import test from "node:test";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import {
   schemaValidator,
+  validateCandidatePartDraft,
   validateSerializablePayload,
 } from "../../src/domain/validation.ts";
 
@@ -90,6 +91,34 @@ test("有効なroot、command、replacementを入力を変更せず受理する"
       proposedRoot: input,
     }).ok,
     true,
+  );
+});
+
+test("project未選択draftは保存内容と同じcanonical source規則を使う", () => {
+  const saved = root().candidateParts[0];
+  const {
+    id: _id,
+    projectId: _projectId,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...draft
+  } = saved;
+  assert.strictEqual(validateCandidatePartDraft(draft).value, draft);
+
+  const duplicate = structuredClone(draft);
+  duplicate.sources.push(structuredClone(duplicate.sources[0]));
+  assertError(
+    validateCandidatePartDraft(duplicate),
+    "duplicate-id",
+    "$.sources[1].id",
+  );
+
+  const withoutSources = structuredClone(draft);
+  delete withoutSources.sources;
+  delete withoutSources.primarySourceId;
+  assert.strictEqual(
+    validateCandidatePartDraft(withoutSources).value,
+    withoutSources,
   );
 });
 

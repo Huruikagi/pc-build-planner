@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import type {
@@ -18,6 +19,17 @@ const unresolvedDraft = {
   product: { name: { original: "" } },
   normalizedAttributes: { category: "uncategorized" },
 } as const;
+
+test("pre-edit検証は仮entityを作らずproject非依存の構造だけを検証する", async () => {
+  const source = await readFile(
+    "src/features/candidate-management/pre-edit-validation.ts",
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /validateCandidatePartValue/);
+  assert.doesNotMatch(source, /00000000-0000-4000-8000-00000000000[12]/);
+  assert.doesNotMatch(source, /createdAt|updatedAt/);
+});
 
 test("pre-editはproject未解決かつ空名の構造的に正しいdraftを受理する", () => {
   assert.deepEqual(validatePreEditDraft(unresolvedDraft), {

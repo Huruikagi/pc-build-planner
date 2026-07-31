@@ -287,10 +287,23 @@ export type CandidatePartContent = Omit<
   "id" | "createdAt" | "updatedAt"
 >;
 
+/** Project selection has not been resolved yet, but the candidate shape is canonical. */
+export type CandidatePartDraft = Omit<CandidatePartContent, "projectId"> & {
+  readonly sources?: CandidatePartContent["sources"];
+};
+
 const candidateSources = (
   candidate: RecordValue,
   path: string,
+  sourcesRequired = true,
 ): ValidationError | undefined => {
+  if (!("sources" in candidate)) {
+    if (sourcesRequired)
+      return { code: "missing-field", path: `${path}.sources` };
+    if ("primarySourceId" in candidate)
+      return { code: "unexpected-field", path: `${path}.primarySourceId` };
+    return undefined;
+  }
   if (!Array.isArray(candidate.sources))
     return { code: "invalid-array", path: `${path}.sources` };
   const sourceIds = new Set<string>();
@@ -344,25 +357,34 @@ const candidateSources = (
   return undefined;
 };
 
-/**
- * 識別子と日時を伴わない候補パーツ内容のcanonical shape validator。
- * 保存前のdraftは、rootや無関係なaggregateを組み立てずにこの入口だけで検証する。
- */
-export const validateCandidatePartContent = (
+const validateCandidateShape = (
   input: unknown,
-  path = "$",
-): Result<CandidatePartContent, ValidationError> => {
+  path: string,
+  projectRequired: boolean,
+): Result<RecordValue, ValidationError> => {
   const prohibited = inspectPayload(input, path);
   if (prohibited) return err(prohibited);
+  if (
+    isRecord(input) &&
+    Object.getPrototypeOf(input) !== Object.prototype &&
+    Object.getPrototypeOf(input) !== null
+  )
+    return fail("forbidden-payload", path);
   const content = object(
     input,
     path,
-    ["projectId", "category", "product", "sources", "normalizedAttributes"],
-    ["primarySourceId", "sourceSnapshot"],
+    projectRequired
+      ? ["projectId", "category", "product", "sources", "normalizedAttributes"]
+      : ["category", "product", "normalizedAttributes"],
+    projectRequired
+      ? ["primarySourceId", "sourceSnapshot"]
+      : ["sources", "primarySourceId", "sourceSnapshot"],
   );
   if (!content.ok) return content;
-  const projectIdIssue = uuid(content.value.projectId, `${path}.projectId`);
-  if (projectIdIssue) return err(projectIdIssue);
+  if (projectRequired) {
+    const projectIdIssue = uuid(content.value.projectId, `${path}.projectId`);
+    if (projectIdIssue) return err(projectIdIssue);
+  }
   if (!PART_CATEGORIES.includes(content.value.category as never))
     return fail("category-mismatch", `${path}.category`);
   let issue = product(content.value.product, `${path}.product`);
@@ -380,9 +402,30 @@ export const validateCandidatePartContent = (
     `${path}.normalizedAttributes`,
   );
   if (issue) return err(issue);
-  issue = candidateSources(content.value, path);
+  issue = candidateSources(content.value, path, projectRequired);
   if (issue) return err(issue);
-  return ok(input as CandidatePartContent);
+  return ok(content.value);
+};
+
+/** Project未選択の編集draftを保存時と同じcanonical規則で検証する。 */
+export const validateCandidatePartDraft = (
+  input: unknown,
+  path = "$",
+): Result<CandidatePartDraft, ValidationError> => {
+  const result = validateCandidateShape(input, path, false);
+  return result.ok ? ok(input as CandidatePartDraft) : result;
+};
+
+/**
+ * 識別子と日時を伴わない候補パーツ内容のcanonical shape validator。
+ * 保存前のdraftは、rootや無関係なaggregateを組み立てずにこの入口だけで検証する。
+ */
+export const validateCandidatePartContent = (
+  input: unknown,
+  path = "$",
+): Result<CandidatePartContent, ValidationError> => {
+  const result = validateCandidateShape(input, path, true);
+  return result.ok ? ok(input as CandidatePartContent) : result;
 };
 
 /**

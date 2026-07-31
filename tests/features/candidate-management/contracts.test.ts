@@ -15,12 +15,52 @@ import {
 } from "../../../src/features/candidate-management/public.js";
 
 const sources = {
-  catalog: {} as CandidateSourceCatalogPort,
-  mutations: {} as CandidateSourceMutationPort,
+  catalog: {
+    async listSourceReferences() {
+      return { ok: true as const, value: [] };
+    },
+    async getSourceReference() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "source" as const },
+      };
+    },
+  } satisfies CandidateSourceCatalogPort,
+  mutations: {
+    async addSource() {
+      return { ok: true as const, value: undefined };
+    },
+    async updateSource() {
+      return { ok: true as const, value: undefined };
+    },
+    async removeSource() {
+      return { ok: true as const, value: undefined };
+    },
+    async setPrimarySource() {
+      return { ok: true as const, value: undefined };
+    },
+  } satisfies CandidateSourceMutationPort,
 };
 
+const query = {
+  async listProjects() {
+    return { ok: true as const, value: [] };
+  },
+  async listCandidates() {
+    return { ok: true as const, value: [] };
+  },
+  async listBuildEligible() {
+    return { ok: true as const, value: [] };
+  },
+  async getCandidateDraft() {
+    return {
+      ok: false as const,
+      error: { kind: "not-found" as const, entity: "candidate" as const },
+    };
+  },
+} satisfies CandidateQuery;
+
 test("公開入口はcanonical query・intent・sources facetを公開する", () => {
-  const query = {} as CandidateQuery;
   const api = createCandidateManagementPublicApi({
     query,
     sources,
@@ -34,7 +74,6 @@ test("公開入口はcanonical query・intent・sources facetを公開する", (
 });
 
 test("公開入口はtyped editor intentを生成する", () => {
-  const query = {} as CandidateQuery;
   const api = createCandidateManagementPublicApi({
     query,
     sources,

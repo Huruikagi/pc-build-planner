@@ -4,18 +4,10 @@ import type {
   FeatureActivationIntent,
   FeatureId,
 } from "../../application-shell/public.js";
-import {
-  err,
-  ok,
-  PART_CATEGORIES,
-  type PartCategory,
-  type ProjectId,
-  validateCandidatePartValue,
-} from "../../domain/public.js";
+import { err, ok } from "../../domain/public.js";
 import { withCategory } from "./category-draft.js";
 import type {
   CandidateDraft,
-  CandidateSourceDraft,
   UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
 import { validateCandidateEditorPrefill } from "./pre-edit-validation.js";
@@ -24,82 +16,16 @@ import type { ManagementState } from "./state.js";
 export const candidateManagementFeatureId = "candidate-management" as FeatureId;
 export const openCandidateEditorTarget = "open-candidate-editor";
 
-export interface CandidateEditorPrefill {
-  readonly projectId: ProjectId;
-  readonly draft: CandidateSourceDraft;
-  /**
-   * A non-binding category suggestion (e.g. inferred from a captured page's
-   * category label). It seeds the editor's default selection only when the
-   * draft has no confirmed category; the user still ratifies it by saving.
-   */
-  readonly categoryHint?: PartCategory;
-}
-
-export interface LegacyCandidateEditorPrefill {
-  readonly projectId: ProjectId;
-  readonly draft: CandidateDraft;
-  readonly categoryHint?: PartCategory;
-}
-
 /** Typed navigation factory owned with the candidate editor activation contract. */
 export const createCandidateEditorIntent = (
-  prefill: CandidateEditorPrefill | UnresolvedCandidateEditorPrefill,
+  prefill: UnresolvedCandidateEditorPrefill,
 ): FeatureActivationIntent => ({
   featureId: candidateManagementFeatureId,
   target: openCandidateEditorTarget,
   payload: prefill,
 });
 
-const isPartCategory = (value: unknown): value is PartCategory =>
-  typeof value === "string" &&
-  (PART_CATEGORIES as readonly string[]).includes(value);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const hasAllowedKeys = (
-  value: Record<string, unknown>,
-  keys: readonly string[],
-) => Object.keys(value).every((key) => keys.includes(key));
-
-const isDraft = (value: unknown): value is CandidateSourceDraft => {
-  if (
-    !isRecord(value) ||
-    !hasAllowedKeys(value, [
-      "projectId",
-      "category",
-      "product",
-      "normalizedAttributes",
-      "sources",
-      "primarySourceId",
-      "sourceSnapshot",
-    ]) ||
-    !isRecord(value.product) ||
-    !isRecord(value.product.name)
-  )
-    return false;
-  const name = value.product.name;
-  if (
-    !hasAllowedKeys(name, ["original", "confirmed"]) ||
-    !(
-      (typeof name.original === "string" && name.original.trim().length > 0) ||
-      (typeof name.confirmed === "string" && name.confirmed.trim().length > 0)
-    )
-  )
-    return false;
-  return validateCandidatePartValue({
-    ...value,
-    sources: value.sources ?? [],
-    id: "00000000-0000-4000-8000-000000000001",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }).ok;
-};
-
-export type CandidateActivationPrefill =
-  | CandidateEditorPrefill
-  | LegacyCandidateEditorPrefill
-  | UnresolvedCandidateEditorPrefill;
+export type CandidateActivationPrefill = UnresolvedCandidateEditorPrefill;
 
 export type CandidateActivationDiagnosticCode =
   | "prefill-invalid"
@@ -107,20 +33,6 @@ export type CandidateActivationDiagnosticCode =
   | "pending-pre-edit-unavailable"
   | "editor-mutation-disabled"
   | "editor-state-unavailable";
-
-const isUnresolvedCandidateEditorPrefill = (
-  prefill: CandidateActivationPrefill,
-): boolean => !("projectId" in prefill.draft);
-
-const isCandidateEditorPrefill = (
-  payload: unknown,
-): payload is CandidateActivationPrefill =>
-  isRecord(payload) &&
-  hasAllowedKeys(payload, ["projectId", "draft", "categoryHint"]) &&
-  typeof payload.projectId === "string" &&
-  isDraft(payload.draft) &&
-  payload.draft.projectId === payload.projectId &&
-  (payload.categoryHint === undefined || isPartCategory(payload.categoryHint));
 
 /** Revalidates shell-delivered unknown payloads before changing feature UI state. */
 export const createCandidateActivation = (
@@ -142,7 +54,6 @@ export const createCandidateActivation = (
     }
     const unresolved = validateCandidateEditorPrefill(intent.payload);
     if (unresolved.ok) return unresolved;
-    if (isCandidateEditorPrefill(intent.payload)) return ok(intent.payload);
     reportDiagnostic("prefill-invalid");
     return err<FeatureActivationError>({
       kind: "invalid_activation",
@@ -156,11 +67,7 @@ export const createCandidateActivation = (
       requestedProjectId ??
       state.value.selectedProjectId ??
       state.value.projects[0]?.id;
-    if (
-      projectId === undefined &&
-      isUnresolvedCandidateEditorPrefill(prefill) &&
-      state.value.projects.length === 0
-    ) {
+    if (projectId === undefined && state.value.projects.length === 0) {
       state.holdPendingPreEdit(prefill);
       if (state.value.pendingPreEdit !== null) return ok(undefined);
       reportDiagnostic("pending-pre-edit-unavailable");
@@ -177,11 +84,7 @@ export const createCandidateActivation = (
       });
     }
     await state.selectProject(projectId);
-    const resolvedDraft: CandidateDraft = isUnresolvedCandidateEditorPrefill(
-      prefill,
-    )
-      ? ({ ...prefill.draft, projectId } as CandidateDraft)
-      : (prefill.draft as CandidateDraft);
+    const resolvedDraft: CandidateDraft = { ...prefill.draft, projectId };
     /**
      * Apply the suggestion only when the draft carries no confirmed category,
      * so an existing formal category always wins over a hint. The seeded draft

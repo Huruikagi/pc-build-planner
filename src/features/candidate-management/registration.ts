@@ -54,6 +54,52 @@ export interface CandidateFeatureRegistrationDependencies {
   readonly state?: ManagementState;
 }
 
+const unavailableSources = {
+  catalog: {
+    async listSourceReferences() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+    async getSourceReference() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+  },
+  mutations: {
+    async addSource() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+    async updateSource() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+    async removeSource() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+    async setPrimarySource() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
+  },
+} satisfies {
+  readonly catalog: CandidateSourceCatalogPort;
+  readonly mutations: CandidateSourceMutationPort;
+};
+
 const mountManagementView =
   (state: ManagementState): CandidateManagementMount =>
   async ({ container, operationPolicy, restoredState }) => {
@@ -127,15 +173,7 @@ export const createCandidateFeatureRegistration = (
         return { ok: false, error: { kind: "unsupported-data" } };
       },
     },
-    sources:
-      dependencies.sources ??
-      ({
-        catalog: {},
-        mutations: {},
-      } as {
-        catalog: CandidateSourceCatalogPort;
-        mutations: CandidateSourceMutationPort;
-      }),
+    sources: dependencies.sources ?? unavailableSources,
   });
 
   return {

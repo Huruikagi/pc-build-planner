@@ -35,9 +35,6 @@ export type CandidateDraft = {
   };
 }[PartCategory];
 
-/** Temporary internal name retained while call sites converge on CandidateDraft. */
-export type CandidateSourceDraft = CandidateDraft;
-
 /** Editing-start draft whose project is intentionally unresolved. */
 export type UnresolvedCandidateDraft = {
   readonly [Attributes in NormalizedAttributes as Attributes["category"]]: Omit<
@@ -68,8 +65,6 @@ export interface UpdateCandidateInput {
   readonly id: CandidatePartId;
   readonly draft: CandidateDraft;
 }
-
-export type LegacyUpdateCandidateInput = UpdateCandidateInput;
 
 export interface MutationContext {
   readonly requestId: RequestId;
@@ -158,7 +153,7 @@ interface CandidateQueryBase {
 export interface CandidateQuery extends CandidateQueryBase {
   getCandidateDraft(
     id: CandidatePartId,
-  ): Promise<Result<CandidateSourceDraft, ManagementError>>;
+  ): Promise<Result<CandidateDraft, ManagementError>>;
 }
 
 export interface CandidateManagementQuery extends CandidateQueryBase {

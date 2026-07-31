@@ -11,3 +11,6 @@ export const captureStartButton = (capture: Locator): Locator =>
 
 export const captureRetryButton = (capture: Locator): Locator =>
   capture.locator("[data-capture-retry]");
+
+export const captureManualEntryButton = (capture: Locator): Locator =>
+  capture.locator("[data-capture-manual]");

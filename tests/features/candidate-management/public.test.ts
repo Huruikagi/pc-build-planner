@@ -38,8 +38,31 @@ test("公開入口はquery・純粋intent factory・sourcesのcanonical exact sh
   const api = createCandidateManagementPublicApi({
     query,
     sources: {
-      catalog: {} as CandidateSourceCatalogPort,
-      mutations: {} as CandidateSourceMutationPort,
+      catalog: {
+        async listSourceReferences() {
+          return { ok: true as const, value: [] };
+        },
+        async getSourceReference() {
+          return {
+            ok: false as const,
+            error: { kind: "not-found" as const, entity: "source" as const },
+          };
+        },
+      } satisfies CandidateSourceCatalogPort,
+      mutations: {
+        async addSource() {
+          return { ok: true as const, value: undefined };
+        },
+        async updateSource() {
+          return { ok: true as const, value: undefined };
+        },
+        async removeSource() {
+          return { ok: true as const, value: undefined };
+        },
+        async setPrimarySource() {
+          return { ok: true as const, value: undefined };
+        },
+      } satisfies CandidateSourceMutationPort,
     },
   });
 
@@ -55,4 +78,19 @@ test("公開入口はquery・純粋intent factory・sourcesのcanonical exact sh
     ok: true,
     value: eligible,
   });
+});
+
+test("公開入口はmethodを欠くsources facetを合成前に拒否する", () => {
+  const query = {} as CandidateQuery;
+  assert.throws(
+    () =>
+      createCandidateManagementPublicApi({
+        query,
+        sources: {
+          catalog: {} as CandidateSourceCatalogPort,
+          mutations: {} as CandidateSourceMutationPort,
+        },
+      }),
+    /requires query and sources dependencies/,
+  );
 });

@@ -9,6 +9,7 @@ export type {
 export { err, ok } from "./result.js";
 export type {
   CandidatePartContent,
+  CandidatePartDraft,
   ReplaceableRoot,
   SchemaValidator,
   ValidationError,
@@ -19,5 +20,6 @@ export {
   isJsonValue,
   schemaValidator,
   validateCandidatePartContent,
+  validateCandidatePartDraft,
   validateCandidatePartValue,
 } from "./validation.js";

@@ -5,7 +5,7 @@ import {
   PART_CATEGORIES,
   type PartCategory,
   type Result,
-  validateCandidatePartValue,
+  validateCandidatePartDraft,
 } from "../../domain/public.js";
 import type {
   UnresolvedCandidateDraft,
@@ -38,130 +38,19 @@ const isPartCategory = (value: unknown): value is PartCategory =>
   typeof value === "string" &&
   (PART_CATEGORIES as readonly string[]).includes(value);
 
-const isSourcedValue = (
-  value: unknown,
-  isConfirmed: (confirmed: unknown) => boolean,
-): boolean =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["original", "confirmed"]) &&
-  (typeof value.original === "string" || value.original === null) &&
-  (value.confirmed === undefined || isConfirmed(value.confirmed));
-
-const isString = (value: unknown): boolean => typeof value === "string";
-const isStringArray = (value: unknown): boolean =>
-  Array.isArray(value) && value.every(isString);
-const isProduct = (value: unknown): boolean => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, ["name", "manufacturer", "modelNumber", "notes"]) ||
-    !isSourcedValue(value.name, isString)
-  )
-    return false;
-  return (
-    (value.manufacturer === undefined ||
-      isSourcedValue(value.manufacturer, isString)) &&
-    (value.modelNumber === undefined ||
-      isSourcedValue(value.modelNumber, isString)) &&
-    (value.notes === undefined || isSourcedValue(value.notes, isString))
-  );
-};
-
-const attributeFields: Readonly<
-  Record<PartCategory, Readonly<Record<string, "string" | "strings">>>
-> = {
-  cpu: { socket: "string" },
-  "cpu-cooler": { supportedSockets: "strings" },
-  motherboard: {
-    socket: "string",
-    memoryStandard: "string",
-    formFactor: "string",
-  },
-  memory: { memoryStandard: "string" },
-  gpu: {},
-  storage: {},
-  "power-supply": { formFactor: "string" },
-  case: {
-    supportedMotherboardFormFactors: "strings",
-    supportedPowerSupplyFormFactors: "strings",
-  },
-  "case-fan": {},
-  "expansion-card": {},
-  other: {},
-  uncategorized: {},
-};
-
-const isAttributes = (
-  value: unknown,
-  category: PartCategory,
-): "valid" | "mismatch" | "invalid" => {
-  if (!isRecord(value)) return "invalid";
-  if (value.category !== category) return "mismatch";
-  const fields = attributeFields[category];
-  if (!hasOnlyKeys(value, ["category", ...Object.keys(fields)]))
-    return "invalid";
-  for (const [key, kind] of Object.entries(fields)) {
-    const field = value[key];
-    if (field === undefined) continue;
-    if (!isSourcedValue(field, kind === "string" ? isString : isStringArray))
-      return "invalid";
-    const confirmed = (field as Record<string, unknown>).confirmed;
-    if (
-      confirmed !== undefined &&
-      (kind === "string"
-        ? typeof confirmed !== "string"
-        : !Array.isArray(confirmed) ||
-          !confirmed.every((item) => typeof item === "string"))
-    )
-      return "invalid";
-  }
-  return "valid";
-};
-
-const isSourceSnapshot = (value: unknown): boolean =>
-  isRecord(value) &&
-  Object.values(value).every(
-    (item) => item === null || typeof item === "string",
-  );
-
 export const validatePreEditDraft = (
   draft: unknown,
 ): Result<UnresolvedCandidateDraft, PreEditDraftError> => {
-  if (
-    !isRecord(draft) ||
-    !hasOnlyKeys(draft, [
-      "category",
-      "product",
-      "normalizedAttributes",
-      "sources",
-      "primarySourceId",
-      "sourceSnapshot",
-    ]) ||
-    !("category" in draft) ||
-    !("product" in draft) ||
-    !("normalizedAttributes" in draft)
-  )
-    return err({ kind: "invalid-draft-shape" });
-  if (!isPartCategory(draft.category)) return err({ kind: "invalid-category" });
-  const attributes = isAttributes(draft.normalizedAttributes, draft.category);
-  if (attributes === "mismatch") return err({ kind: "category-mismatch" });
-  if (attributes === "invalid") return err({ kind: "invalid-draft-shape" });
-  if (
-    !isProduct(draft.product) ||
-    (draft.sourceSnapshot !== undefined &&
-      !isSourceSnapshot(draft.sourceSnapshot))
-  )
-    return err({ kind: "invalid-draft-shape" });
-  const validated = validateCandidatePartValue({
-    ...draft,
-    sources: draft.sources ?? [],
-    id: "00000000-0000-4000-8000-000000000001",
-    projectId: "00000000-0000-4000-8000-000000000002",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  });
-  return validated.ok
-    ? ok(draft as UnresolvedCandidateDraft)
-    : err({ kind: "invalid-draft-shape" });
+  const result = validateCandidatePartDraft(draft);
+  if (result.ok) return ok(result.value as UnresolvedCandidateDraft);
+  if (result.error.code === "category-mismatch")
+    return err({
+      kind:
+        result.error.path === "$.category"
+          ? "invalid-category"
+          : "category-mismatch",
+    });
+  return err({ kind: "invalid-draft-shape" });
 };
 
 export const validateCandidateEditorPrefill = (

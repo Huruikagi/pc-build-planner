@@ -9,10 +9,10 @@ import type {
 
 export type {
   AddCandidateSourceInput,
+  CandidateDraft,
   CandidateListQuery,
   CandidateQuery,
   CandidateSourceCatalogPort,
-  CandidateSourceDraft as CandidateDraft,
   CandidateSourceMutationPort,
   CandidateSourceReference,
   CandidateSummary,
@@ -50,10 +50,20 @@ export interface CandidateManagementPublicDependencies {
 export const createCandidateManagementPublicApi = (
   dependencies: CandidateManagementPublicDependencies,
 ): CandidateManagementPublicApi => {
+  const query = dependencies.query;
+  const catalog = dependencies.sources?.catalog;
+  const mutations = dependencies.sources?.mutations;
   if (
-    dependencies.query === undefined ||
-    dependencies.sources?.catalog === undefined ||
-    dependencies.sources.mutations === undefined
+    typeof query?.listProjects !== "function" ||
+    typeof query.listCandidates !== "function" ||
+    typeof query.listBuildEligible !== "function" ||
+    typeof query.getCandidateDraft !== "function" ||
+    typeof catalog?.listSourceReferences !== "function" ||
+    typeof catalog.getSourceReference !== "function" ||
+    typeof mutations?.addSource !== "function" ||
+    typeof mutations.updateSource !== "function" ||
+    typeof mutations.removeSource !== "function" ||
+    typeof mutations.setPrimarySource !== "function"
   ) {
     throw new TypeError(
       "Candidate management public API requires query and sources dependencies.",

@@ -58,6 +58,22 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
     "function",
   );
   assert.equal("capture" in registration.publicApi, false);
+  assert.equal(
+    typeof registration.publicApi.sources.catalog.listSourceReferences,
+    "function",
+  );
+  assert.equal(
+    typeof registration.publicApi.sources.catalog.getSourceReference,
+    "function",
+  );
+  assert.equal(
+    typeof registration.publicApi.sources.mutations.addSource,
+    "function",
+  );
+  assert.deepEqual(
+    await registration.publicApi.sources.catalog.listSourceReferences({}),
+    { ok: false, error: { kind: "unsupported-data" } },
+  );
   const violations = await collectFeatureContractViolations(registration, {
     emitAvailability: () => {
       for (const listener of availabilityListeners)
