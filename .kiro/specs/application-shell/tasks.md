@@ -309,6 +309,7 @@
 
 ## Implementation Notes
 
+- 2026-07-31 `ui-message-catalog` validation remediationを受け、起動失敗／失効の別`MessageDescriptor`をsteady-state shell noticeとして安全に描画し、session read成功または有効activation受理でclearされることをcomposition境界で受け入れ再検証した。runtime callbackと寿命監視の実装ownershipは`transient-feature-surface`に維持し、shell側では常設面との併存、完全`pnpm validate`、unpacked-extension smokeを確認した。
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
 - 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。
 - 未信頼keyからroot契約を合成する辞書はnull prototypeとown property定義を使い、`__proto__`を含む予約名でも重複検出とprototype非汚染を保つ。

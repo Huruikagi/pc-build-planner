@@ -319,6 +319,7 @@
 
 ## Implementation Notes
 
+- 2026-07-31 validation remediation: 5つのv0.3 exact keyをproducer-owned production経路へ接続し、`transient-feature-surface`、`application-shell`、`product-capture-transient-migration`で責務を保持したまま再検証した。置換元の`transientActivationUnavailable`はja/enから削除し、TypeScript 7 ASTによるexact constant-expression dead-key gateで再混入を拒否する。修正後は64/64受入基準FULL、依存方向・境界監査PASS、`pnpm validate`とunpacked-extension smokeが成功した。producer変更と再検証結果は各owner specのImplementation Notesへ記録した。
 - 2026-07-31 task 7.3/7.4 revalidation: catalog-owned公開consumer、producer suite、settings両区画、loading/startup hint、言語Provider、安全なtext描画、文言非依存locator、dead-key/parity gateをread-onlyの横断受入として再検証した。`pnpm validate`はexit 0（Node 1157/1157、Playwright 15/15）で、typecheck、public consumer、lint、boundary、fixture、final build、ui-text、unit/integration/DOM、production E2Eをfreshに通過した。64受け入れ基準は既存task 1〜7の`_Requirements_` traceabilityで欠落なく追跡され、権限・CSP・実サイトfixture・catalog migration境界にも新規違反はない。検証中にproducer-owned state/view/layout/発火条件または業務処理は変更していない。
 
 - remediation-1: `MessageDescriptor` は非公開 `unique symbol` による nominal brand を持ち、`message()` だけを型安全な生成経路とした。runtime bootstrap と shell view の表示値はカタログキーへ移し、公開 API を広げずロジック層から生の英語文言を渡せない境界を固定した。

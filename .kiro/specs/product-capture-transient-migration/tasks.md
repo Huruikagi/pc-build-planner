@@ -238,6 +238,7 @@
 
 ## Implementation Notes
 
+- 2026-07-31 `ui-message-catalog` validation remediationで、handoff失敗時の保持結果、新しい起動による置換、同activationでのhandoff再試行を3つのcanonical message keyへ接続した。viewは既存`failure.kind`だけで分岐し、state machineとretained intent再試行契約は変更せず、DOM／state／integration、完全`pnpm validate`、production E2Eを再検証した。
 - production workerのfeature catalogはDOM/React境界を保つため空なので、toolbar gestureはcanonical `productCaptureFeatureId`をcomposition rootから明示注入する。
 - cross-feature handoff前にshellがrollback snapshotを要求するため、product-captureのmount handleはページ内容を含めず`activationId`・固定`tabId`・内部世代だけをcapture/restoreする。shellはsource leaseをtarget mount前に解放し、handoff失敗時は保存した内部世代で進行中結果を受理できるsourceを復元する。復元不能時はcontrollerもinactiveへ倒し、非表示のcaptureをactiveとして残さない。
 - 2026-07-30、同一production buildをChromeへ再読み込みし、AMD Ryzen 7 9700Xの商品ページで実toolbar iconから「取り込みを開始」を実行してcandidate詳細編集画面への到達をmanual smoke確認した。

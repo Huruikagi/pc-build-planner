@@ -81,6 +81,9 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 | Feature | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|
-| application-shell | GO | 2026-07-30T23:46:40+09:00 | `a8bf4c12effe` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、全51受入基準FULL、unpacked-extension smoke PASS、設計・境界監査PASS |
+| application-shell | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | `ui-message-catalog` remediation後にnotice表示・clear順序とruntime callback／cleanup seamを再検証。`pnpm validate` exit 0（Node 1,164/1,164、Playwright 15/15）、unpacked-extension smoke PASS、設計・境界監査PASS |
 | backup-restore | GO | 2026-07-31T00:09:57+09:00 | `babceebdbf08` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、要件6/6・受入基準35/35、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
 | ui-internationalization | GO | 2026-07-31T09:57:39+09:00 | `ef73db87dfcc` | `pnpm validate` exit 0（Node 1,161/1,161、Playwright 15/15）、要件9/9・受入基準52/52、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
+| transient-feature-surface | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | 起動失敗／失効のtyped notice callback、上流task 1.4のclear順序、監視cleanupを再検証。`pnpm validate` exit 0、unpacked-extension smoke PASS、統合・境界監査PASS |
+| product-capture-transient-migration | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | handoff保持結果・新世代案内・同activation再試行をproduction view/state seamで再検証。`pnpm validate` exit 0、Playwright 15/15、境界監査PASS |
+| ui-message-catalog | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | 5つのexact key接続、旧generic key撤去、AST dead-key gate、64/64受入基準FULL。`pnpm validate` exit 0（Node 1,164/1,164、Playwright 15/15）、smoke・artifact・設計・境界監査PASS |

@@ -254,6 +254,7 @@
 
 ## Implementation Notes
 
+- 2026-07-31 `ui-message-catalog` validation remediationで、session read失敗を`transientActivationFailed`、authorization後のgeneration／tab失効を`transientActivationExpired`としてproduction shellへtyped callbackで接続した。task 1.4の契約どおり両noticeは後続session read成功または新しい有効activation受理でclearし、関連unit／integration、完全`pnpm validate`、unpacked-extension smokeを再検証した。
 - task 6.9再検証で、下流`product-capture-transient-migration` 6.6／6.7完了後のproduction E2E 4件（durable activation、固定tab更新・閉鎖、常設navigation終了）と`pnpm validate`（unit／integration 1095件、E2E 12件）が成功し、独立レビューで承認された。
 - final validation再監査で、requestのavailability／表示失敗時にpending activationを解放し、dismiss失敗のrecoverable error中はfeature slotを隠して実DOMのretry操作だけを提示する回帰を追加した。
 - validation remediation retry 2で、start前requestがaccepted activationを残すghost claimを除去した。stale conclude失敗後のnavigation／新世代、stop／restart時のclaim reset、重複dismissのsingle restoreを決定的controller testで固定した。

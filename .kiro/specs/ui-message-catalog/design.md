@@ -165,6 +165,7 @@ src/
 ├── ui-messages/                 # 既存境界。表示文言の canonical ownerをv0.3へ拡張
 │   ├── contracts.ts             # メッセージ値・パラメータ・記述子の型、キー導出の型ユーティリティ
 │   ├── catalog/                 # ja/enで同じ名前空間・キー集合を保持する
+│   │   ├── index.ts             # 型付きkey空間の唯一の集約点
 │   │   ├── ja/index.ts          # 11個の名前空間を束ねるソース形状
 │   │   ├── en/index.ts          # jaと同じ11名前空間を束ねる
 │   │   ├── common.ts            # 機能横断の短語
@@ -180,7 +181,9 @@ src/
 │   │   └── backup.ts            # バックアップ・復元
 │   ├── format.ts                # プレースホルダ展開と複数形選択（純粋関数）
 │   ├── resolver.ts              # カタログから resolver を組み立てる
-│   ├── react.tsx                # MessageProvider と useMessages
+│   ├── languages.ts             # 対応言語registryと静的resolver
+│   ├── catalog-parity.ts        # ja/en exact-key・placeholder parity gate
+│   ├── message-context.ts       # createElementベースのMessageProviderとuseMessages
 │   └── public.ts                # 唯一の公開入口
 scripts/
 └── validate-ui-text.mjs         # 既存。dead keyと追加consumer検査へ追随
