@@ -27,6 +27,10 @@ export const createProductionMonitoringIntegration = (options: {
   readonly controller: Pick<TransientSurfaceController, "request" | "dismiss">;
   readonly stages: Pick<TransientActivationScheduler, "advance">;
   readonly reportError?: (error: ProductionMonitoringError) => void;
+  readonly onActivationAccepted?: () => void;
+  readonly onActivationExpired?: (
+    reason: "invalidated" | "navigated" | "tab-closed",
+  ) => void;
 }): ProductionMonitoringIntegration => {
   let active = false;
   let cleanup: (() => void) | undefined;
@@ -40,12 +44,17 @@ export const createProductionMonitoringIntegration = (options: {
     if (!active || epoch !== lifecycleEpoch) return;
     if (outcome.kind === "ended") {
       ended.add(outcome.activationId);
+      options.onActivationExpired?.(outcome.reason);
       const dismissed = await options.controller.dismiss(
         outcome.activationId,
         outcome.reason,
       );
       if (!active || epoch !== lifecycleEpoch) return;
       if (!dismissed.ok) report({ kind: "controller-failed" });
+      return;
+    }
+    if (outcome.kind === "invalidated") {
+      options.onActivationExpired?.("invalidated");
       return;
     }
     if (outcome.kind !== "authorized") return;
@@ -62,6 +71,7 @@ export const createProductionMonitoringIntegration = (options: {
       return;
     }
     if (ended.has(record.activationId)) return;
+    options.onActivationAccepted?.();
     const advanced: Result<void, ActivationStoreError> =
       await options.stages.advance(record.activationId, "activated");
     if (!active || epoch !== lifecycleEpoch) return;

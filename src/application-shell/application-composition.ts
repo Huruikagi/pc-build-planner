@@ -90,6 +90,8 @@ export interface ProductionApplicationCompositionOptions<
     notices: {
       sessionReadFailed(): void;
       sessionReadSucceeded(): void;
+      activationAccepted(): void;
+      activationExpired(): void;
     },
   ) => {
     start(): Promise<Result<void, { readonly kind: string }>>;
@@ -230,7 +232,7 @@ export function createProductionApplicationComposition<
     | ReturnType<NonNullable<typeof options.createTransientMonitoring>>
     | undefined;
   let latestShellState: ShellViewState | undefined;
-  let transientReadFailed = false;
+  let transientNotice: "activation-failed" | "activation-expired" | undefined;
   let retryStartup: () => void = () => undefined;
 
   const diagnose = (message: string): void => {
@@ -510,13 +512,19 @@ export function createProductionApplicationComposition<
       }
 
       const publish = (state: ShellViewState): void => {
-        const projectedState = transientReadFailed
-          ? projectTransientNotice(state, {
-              kind: "session-read-failed",
-              message: message("shell.transientActivationUnavailable", {
-                detail: "retry",
-              }),
-            })
+        const projectedState = transientNotice
+          ? projectTransientNotice(
+              state,
+              transientNotice === "activation-failed"
+                ? {
+                    kind: "session-read-failed",
+                    message: message("shell.transientActivationFailed"),
+                  }
+                : {
+                    kind: "activation-expired",
+                    message: message("shell.transientActivationExpired"),
+                  },
+            )
           : state;
         latestShellState = projectedState;
         const navigation = createdRegistry
@@ -597,26 +605,48 @@ export function createProductionApplicationComposition<
       }
       if (options.createTransientMonitoring) {
         const projectNotice = (
-          kind: "session-read-failed" | "session-read-succeeded",
+          kind:
+            | "session-read-failed"
+            | "session-read-succeeded"
+            | "activation-accepted"
+            | "activation-expired",
         ) => {
           if (!latestShellState) return;
-          transientReadFailed = kind === "session-read-failed";
+          const retainExpiredAfterRead =
+            kind === "session-read-succeeded" &&
+            transientNotice === "activation-expired";
+          if (kind === "session-read-failed")
+            transientNotice = "activation-failed";
+          else if (kind === "activation-expired")
+            transientNotice = "activation-expired";
+          else if (
+            kind === "activation-accepted" ||
+            transientNotice === "activation-failed"
+          )
+            transientNotice = undefined;
           latestShellState = projectTransientNotice(
             latestShellState,
             kind === "session-read-failed"
               ? {
                   kind,
-                  message: message("shell.transientActivationUnavailable", {
-                    detail: "retry",
-                  }),
+                  message: message("shell.transientActivationFailed"),
                 }
-              : { kind },
+              : kind === "activation-expired"
+                ? {
+                    kind,
+                    message: message("shell.transientActivationExpired"),
+                  }
+                : retainExpiredAfterRead
+                  ? { kind: "panel-opened" }
+                  : { kind },
           );
           publish(latestShellState);
         };
         const monitoring = options.createTransientMonitoring(controller, {
           sessionReadFailed: () => projectNotice("session-read-failed"),
           sessionReadSucceeded: () => projectNotice("session-read-succeeded"),
+          activationAccepted: () => projectNotice("activation-accepted"),
+          activationExpired: () => projectNotice("activation-expired"),
         });
         transientMonitoring = monitoring;
         const monitoringStarted = await monitoring.start();

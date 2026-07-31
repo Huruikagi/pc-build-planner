@@ -6,6 +6,10 @@ export type TransientNoticeEvent =
       readonly kind: "session-read-failed";
       readonly message: MessageDescriptor;
     }
+  | {
+      readonly kind: "activation-expired";
+      readonly message: MessageDescriptor;
+    }
   | { readonly kind: "session-read-succeeded" }
   | { readonly kind: "activation-accepted" }
   | { readonly kind: "panel-opened" };
@@ -15,7 +19,10 @@ export function projectTransientNotice(
   event: TransientNoticeEvent,
 ): ShellViewState {
   if (state.kind !== "ready" && state.kind !== "maintenance") return state;
-  if (event.kind === "session-read-failed") {
+  if (
+    event.kind === "session-read-failed" ||
+    event.kind === "activation-expired"
+  ) {
     return {
       ...state,
       transientNotice: { message: event.message, recoverable: true },

@@ -78,6 +78,35 @@ test("authorized時だけcontroller mount後にactivatedへ進める", async () 
   assert.equal(source.cleanups, 1);
 });
 
+test("authorization後のgeneration失効とtab終了を利用者noticeへ通知する", async () => {
+  const source = adapter();
+  const expired: string[] = [];
+  const integration = createProductionMonitoringIntegration({
+    adapter: source.value,
+    controller: {
+      async request() {
+        return ok(undefined);
+      },
+      async dismiss() {
+        return ok(undefined);
+      },
+    },
+    stages: {
+      async advance() {
+        return ok(undefined);
+      },
+    },
+    onActivationExpired: (reason) => expired.push(reason),
+  });
+  await integration.start();
+  await source.emit({
+    kind: "invalidated",
+    record: { ...authorizedRecord, stage: "invalidated" },
+  });
+  await source.emit({ kind: "ended", activationId, reason: "navigated" });
+  assert.deepEqual(expired, ["invalidated", "navigated"]);
+});
+
 test("mount中失効はsurfaceを撤収しactivatedへ進めない", async () => {
   const source = adapter();
   let finishMount!: () => void;

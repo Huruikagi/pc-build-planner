@@ -27,6 +27,8 @@ void startSidePanelWithLanguage({
               controller,
               onSessionReadFailed: notices.sessionReadFailed,
               onSessionReadSucceeded: notices.sessionReadSucceeded,
+              onActivationAccepted: notices.activationAccepted,
+              onActivationExpired: notices.activationExpired,
               reportError: (code) => console.error(`transient-panel: ${code}`),
             }),
         })

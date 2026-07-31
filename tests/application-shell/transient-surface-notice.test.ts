@@ -59,3 +59,25 @@ test("loadingとglobal errorへnoticeを投影しない", () => {
     );
   }
 });
+
+test("activation失効noticeも新しい有効activation受理まで保持する", () => {
+  const initial: ShellViewState = {
+    kind: "ready",
+    selected: "planner" as FeatureId,
+  };
+  const expired = projectTransientNotice(initial, {
+    kind: "activation-expired",
+    message: message("shell.transientActivationExpired"),
+  });
+  assert.equal(expired.kind, "ready");
+  if (expired.kind !== "ready") return;
+  assert.equal(
+    expired.transientNotice?.message.key,
+    "shell.transientActivationExpired",
+  );
+  assert.equal(
+    "transientNotice" in
+      projectTransientNotice(expired, { kind: "activation-accepted" }),
+    false,
+  );
+});

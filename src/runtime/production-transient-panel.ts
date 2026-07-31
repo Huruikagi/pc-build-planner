@@ -26,6 +26,8 @@ export const createProductionTransientPanelIntegration = (options: {
   readonly reportError?: (code: string) => void;
   readonly onSessionReadFailed?: () => void;
   readonly onSessionReadSucceeded?: () => void;
+  readonly onActivationAccepted?: () => void;
+  readonly onActivationExpired?: () => void;
 }) => {
   const store = createTransientActivationStore(
     createChromeTransientSessionStorage(options.session),
@@ -66,6 +68,12 @@ export const createProductionTransientPanelIntegration = (options: {
     controller: options.controller,
     stages: createTransientStagePanelPort(options.runtime),
     reportError: (error) => options.reportError?.(error.kind),
+    ...(options.onActivationAccepted === undefined
+      ? {}
+      : { onActivationAccepted: options.onActivationAccepted }),
+    ...(options.onActivationExpired === undefined
+      ? {}
+      : { onActivationExpired: options.onActivationExpired }),
   });
   return {
     async start() {

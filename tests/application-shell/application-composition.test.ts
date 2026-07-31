@@ -385,7 +385,12 @@ test("compositionはproxy bind→host start→controller startと逆順cleanup�
 test("session read noticeは常設表示と併存し成功通知まで保持する", async () => {
   const h = harness();
   let notices:
-    | { sessionReadFailed(): void; sessionReadSucceeded(): void }
+    | {
+        sessionReadFailed(): void;
+        sessionReadSucceeded(): void;
+        activationAccepted(): void;
+        activationExpired(): void;
+      }
     | undefined;
   const root = createProductionApplicationComposition({
     shellContainer: h.shellContainer,
@@ -413,7 +418,9 @@ test("session read noticeは常設表示と併存し成功通知まで保持す�
   assert.equal(failed?.kind, "ready");
   if (failed?.kind === "ready") {
     assert.equal(failed.selected, id("planner"));
-    assert.ok(failed.transientNotice);
+    assert.deepEqual(failed.transientNotice?.message, {
+      key: "shell.transientActivationFailed",
+    });
   }
   notices?.sessionReadFailed();
   assert.ok(h.states.at(-1)?.kind === "ready");
@@ -422,6 +429,28 @@ test("session read noticeは常設表示と併存し成功通知まで保持す�
   assert.equal(recovered?.kind, "ready");
   if (recovered?.kind === "ready")
     assert.equal("transientNotice" in recovered, false);
+
+  notices?.activationExpired();
+  const expired = h.states.at(-1);
+  assert.equal(expired?.kind, "ready");
+  if (expired?.kind === "ready")
+    assert.deepEqual(expired.transientNotice?.message, {
+      key: "shell.transientActivationExpired",
+    });
+
+  notices?.sessionReadSucceeded();
+  const expiredAfterRead = h.states.at(-1);
+  assert.equal(expiredAfterRead?.kind, "ready");
+  if (expiredAfterRead?.kind === "ready")
+    assert.deepEqual(expiredAfterRead.transientNotice?.message, {
+      key: "shell.transientActivationExpired",
+    });
+
+  notices?.activationAccepted();
+  const accepted = h.states.at(-1);
+  assert.equal(accepted?.kind, "ready");
+  if (accepted?.kind === "ready")
+    assert.equal("transientNotice" in accepted, false);
   await root.stop();
 });
 
