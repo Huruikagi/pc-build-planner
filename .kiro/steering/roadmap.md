@@ -81,3 +81,4 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 |---|---|---|---|---|
 | application-shell | GO | 2026-07-30T23:46:40+09:00 | `a8bf4c12effe` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、全51受入基準FULL、unpacked-extension smoke PASS、設計・境界監査PASS |
 | backup-restore | GO | 2026-07-31T00:09:57+09:00 | `babceebdbf08` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、要件6/6・受入基準35/35、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
+| ui-internationalization | GO | 2026-07-31T09:57:39+09:00 | `ef73db87dfcc` | `pnpm validate` exit 0（Node 1,161/1,161、Playwright 15/15）、要件9/9・受入基準52/52、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
