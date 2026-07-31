@@ -68,6 +68,8 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 ## Specs (dependency order)
 
+> この一覧のチェックは仕様作成と承認の完了を示すものであり、実装タスクの完了を示すものではない。実装進捗は各specの`tasks.md`と下記のImplementation Validation Historyで確認する。
+
 - [x] transient-feature-surface -- shell/runtime に「ナビへ常設せず、付与ジェスチャーで起動し付与失効で自動的に畳まれる一過性feature」の登録・起動・終了・汎用引き渡し契約を導入する（#6、基盤部分）。Dependencies: none
 - [x] product-capture-transient-migration -- product-captureを一過性featureの最初の利用者へ移行し、実行面と候補編集・保存面を分離する（#6、業務移行部分）。Dependencies: transient-feature-surface
 - [x] candidate-source-bookmarks -- 1商品に複数の取得元ページを束ねる構造へ移行し（`sourceInfo` の 1:N 化・価格の per-source 化・プライマリ導出・`schemaVersion` 移行）、取得元ページへの再訪導線とソース種別（販売 / メーカー紹介）を提供する（#10, #9, #11）。Dependencies: product-page-capture 更新（#8, 種別自動判定のマップ参照のみ）
