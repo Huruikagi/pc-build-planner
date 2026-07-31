@@ -75,7 +75,7 @@
   - _Boundary: SourcePriceRefreshService_
   - _Depends: 2.1_
 
-- [ ] 3.2 固定tab抽出と世代gateを価格更新workflowへ接続する
+- [x] 3.2 固定tab抽出と世代gateを価格更新workflowへ接続する
   - 現行activationだけが上流price extraction portへ固定tab IDを渡す。
   - page-derived URL、capturedAt、既存rank/normalizer由来price provenanceを受け取り、catalog scopeの照合と原子的更新へ進める。
   - extraction完了後とmutation完了後に世代を照合し、旧世代の結果でstateを変更しない。
@@ -199,4 +199,8 @@
 - 3.1: 上流fakeを書くときは production の**置換**意味論を再現すること。mergeするfakeを書くとfield欠落が観測できず、データ損失を緑で追認してしまう（round 1 で実際に発生した）。
 - 3.1: `getCandidateDraft` は production では `candidate-management/feature-contribution.ts` の `publicQuery: service` で本物が配線される。`registration.ts` の fallback stub は `publicQuery` 省略時のみ到達するテスト専用で、`unsupported-data` を返して fail closed になるため lossy write は起きない。
 - 3.1: TOCTOU（既知・未クローズ）: draft読み出し → `getSourceReference` → `updateSource` の間に、referenceが射影しないfield（特に `siteName`）が並行更新されると、全entry置換で巻き戻る。`expectedRevision` はmutation時点で計算されるためoptimistic concurrencyでは塞げない。要件4.5が列挙するURL・種別・候補・識別子は再検証済みで規定違反ではない。塞ぐには上流契約変更が要るため、task 5.4 で許容範囲か再確認すること。
+- 3.2: 世代gateは3点。抽出**前**（現行でなければ `extractPrice` を一度も呼ばない）、抽出**後**（`extracted.ok` を見る**前**に判定する。旧世代は自分の失敗すら提示してはならない＝要件1.5）、mutation**後**（commit済みの更新は巻き戻さず表示だけ抑止する＝design.md「commit済みの有効な更新は巻き戻さない」）。補償mutationを足すと要件違反になる。
+- 3.2: `price-unavailable` は design の command 順どおり `matchSource` の**後**（`refreshCapturedPrice` 内）で判定される。よって「価格も取れず一致sourceも無い」ページは `no-match` になる。保持すべき既存価格も報告対象も存在しないため、より具体的な `no-match` が正しい。
+- 3.2: `product-capture/public.ts` の `unavailablePriceExtraction` fallback は `tab-unavailable`（union正規メンバ）を返す。永続化なしのtyped failureとして素通しでよい。
+- 3.2: **未解決の設計gap（要判断）**: 上流portが例外を投げた場合を表す member が `SourcePriceRefreshError` に無い。`injection-failed` / `invalid-payload` / `tab-unavailable` はいずれも原因を偽装し、かつ `recoverable: true` なので決定的defectに無限再実行を促す。現状 `runRefresh` は reject し、`state` は永久に `running` のまま（要件1.4の「理由を提示する」と 3.2 完了条件に違反）。Note 2.2 は変換を3.2に割り当てつつ唯一の手段を禁じており自己矛盾。task 3.3 も同じ判断待ち。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。

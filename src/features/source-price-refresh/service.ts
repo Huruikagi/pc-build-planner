@@ -1,3 +1,4 @@
+import type { ActivationId } from "../../application-shell/public.js";
 import {
   type CandidateSource,
   err,
@@ -14,15 +15,25 @@ import type {
   ManagementError,
 } from "../candidate-management/public.js";
 import type {
+  PagePriceExtractionPort,
+  PagePriceObservation,
+} from "../product-capture/public.js";
+import type {
   MatchedCandidateSource,
   MatchStoredSourceInput,
   NormalizedSourcePageUrl,
   RefreshCapturedPriceInput,
+  SourceMatchScope,
   SourcePriceRefreshError,
   SourcePriceRefreshPort,
   SourcePriceRefreshReceipt,
 } from "./contracts.js";
 import { createStoredSourceLocator } from "./source-locator.js";
+// Type-only: the workflow implements `SourcePriceRefreshStateDependencies.
+// runRefresh`, so it reuses that contract's input shape rather than restating
+// it. No runtime edge is created, and the runtime direction stays state →
+// service exactly as the design's dependency order requires.
+import type { SourcePriceRefreshWorkflowInput } from "./state.js";
 import { normalizeSourcePageUrl } from "./url-identity.js";
 
 export interface SourcePriceRefreshServiceDependencies {
@@ -178,5 +189,91 @@ export const createSourcePriceRefreshService = (
         isPrimary: reference.isPrimary,
       });
     },
+  };
+};
+
+const staleActivation: SourcePriceRefreshError = { kind: "stale-activation" };
+
+/**
+ * The context menu path always matches against every stored source: the gesture
+ * carries a tab, not a candidate. Candidate-scoped matching stays available on
+ * the public port for the adjacent same-URL re-capture consumer.
+ */
+const catalogScope: SourceMatchScope = Object.freeze({ kind: "catalog" });
+
+export interface SourcePriceRefreshWorkflowDependencies {
+  /** The atomic half of the use case: conservative matching plus the update. */
+  readonly refresh: SourcePriceRefreshPort;
+  readonly pagePriceExtraction: PagePriceExtractionPort;
+  /**
+   * Upstream generation check. Only the activation that is still current may
+   * touch the page or the displayed result.
+   */
+  readonly isCurrent: (activationId: ActivationId) => boolean;
+}
+
+const observedInput = (
+  target: MatchedCandidateSource,
+  observation: PagePriceObservation,
+): RefreshCapturedPriceInput => {
+  const base = {
+    target,
+    observedPageUrl: observation.pageUrl,
+    capturedAt: observation.capturedAt,
+  };
+  // The key is omitted rather than set to `undefined`: a missing price must stay
+  // distinguishable so the update half rejects it before any mutation.
+  return observation.price === undefined
+    ? base
+    : { ...base, price: observation.price };
+};
+
+/**
+ * One context menu activation, start to finish. It pins the tab that the gesture
+ * supplied, takes a price-only observation from that tab, and drives the match
+ * and the atomic update, gating on the activation generation at each of the
+ * three points the design prescribes:
+ *
+ * 1. before extraction, so a superseded activation never touches a page;
+ * 2. after extraction, so a stale observation reaches neither the match nor the
+ *    mutation;
+ * 3. after the mutation, where a committed update is deliberately left in place
+ *    and only its display is suppressed — the write was valid when it happened,
+ *    and a compensating write would be a second, unrequested mutation.
+ *
+ * Every branch returns a typed `Result`, so the state layer never has to invent
+ * an error kind. Port calls are not wrapped in `try`: all three ports are
+ * contracted to settle with a typed `Result`, and the error union has no member
+ * that could honestly describe a thrown value. Reusing an unrelated kind would
+ * misreport the cause and, since most kinds are user-retryable, invite endless
+ * retries of a deterministic defect.
+ */
+export const createSourcePriceRefreshWorkflow = (
+  dependencies: SourcePriceRefreshWorkflowDependencies,
+): ((
+  input: SourcePriceRefreshWorkflowInput,
+) => Promise<Result<SourcePriceRefreshReceipt, SourcePriceRefreshError>>) => {
+  const { refresh, pagePriceExtraction, isCurrent } = dependencies;
+  return async ({ activationId, tabId }) => {
+    if (!isCurrent(activationId)) return err(staleActivation);
+
+    const extracted = await pagePriceExtraction.extractPrice(tabId);
+    // Checked before the result is inspected: a superseded generation's failure
+    // is not the current generation's failure either.
+    if (!isCurrent(activationId)) return err(staleActivation);
+    if (!extracted.ok) return err(extracted.error);
+
+    const observation = extracted.value;
+    const matched = await refresh.matchSource({
+      scope: catalogScope,
+      pageUrl: observation.pageUrl,
+    });
+    if (!matched.ok) return err(matched.error);
+
+    const updated = await refresh.refreshCapturedPrice(
+      observedInput(matched.value, observation),
+    );
+    if (!isCurrent(activationId)) return err(staleActivation);
+    return updated;
   };
 };
