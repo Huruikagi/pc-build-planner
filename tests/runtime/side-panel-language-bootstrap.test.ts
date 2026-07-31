@@ -88,3 +88,51 @@ test("保存ポートが利用できなくても初期化はシェル起動を�
   assert.equal(started, true);
   assert.equal(result.ok, true);
 });
+
+test("ブラウザ表示言語の取得が例外になっても英語へフォールバックしてシェルを起動する", async () => {
+  const languagePlatform = {
+    preferences: {
+      read: async () => ({ ok: true as const, value: undefined }),
+      write: async () => ({ ok: true as const, value: undefined }),
+    },
+    browserUiLanguage: (): string => {
+      throw new Error("browser language unavailable");
+    },
+  };
+  let started = false;
+  const root = fakeRoot(() => {
+    started = true;
+  });
+
+  const result = await withHost(() =>
+    startSidePanelWithLanguage({ root, document, languagePlatform }),
+  );
+
+  assert.equal(started, true);
+  assert.equal(result.ok, true);
+  assert.equal(document.documentElement.lang, "en");
+});
+
+test("保存ポートのreadがrejectしてもブラウザ表示言語でシェルを起動する", async () => {
+  const languagePlatform = {
+    preferences: {
+      read: async (): Promise<never> => {
+        throw new Error("preference port rejected");
+      },
+      write: async () => ({ ok: true as const, value: undefined }),
+    },
+    browserUiLanguage: () => "ja",
+  };
+  let started = false;
+  const root = fakeRoot(() => {
+    started = true;
+  });
+
+  const result = await withHost(() =>
+    startSidePanelWithLanguage({ root, document, languagePlatform }),
+  );
+
+  assert.equal(started, true);
+  assert.equal(result.ok, true);
+  assert.equal(document.documentElement.lang, "ja");
+});

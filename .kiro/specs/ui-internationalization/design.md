@@ -61,7 +61,7 @@
 - `src/ui-language/` → `src/ui-messages/public.js`（唯一のカタログ経路）、`src/domain/public.js`（canonical `Result` 型と `ok` / `err` だけ）、React 19（`useSyncExternalStore` を含む）。`chrome.storage.local` は `preference-store.ts`、`chrome.i18n.getUILanguage` は `runtime.ts` のproduction factoryにそれぞれ限定する。
 - `src/features/settings/` → `src/ui-language/public.js`（`LanguageProvider` と `LanguageSelectControl` の公開能力を表示言語区画へ配置するためだけ）。
 - `src/application-shell/` → `src/ui-language/public.js`（`LanguageProvider` のためだけ。`LanguageSelectControl` をheaderへ配置しない）。`src/runtime/` → `src/ui-language/runtime.js`（初期化・文書同期・platform factoryのcomposition seam）または`public.js`だけを許可する。
-- `src/application-shell/side-panel.css` → `src/ui-language/language-select.css`（settings内controlを`dist/side-panel.css`へ束ねるCSS composition seamだけ）。layout ownershipはsettings/ui-languageに残し、shell header規則を置かない。
+- `src/application-shell/side-panel.css` → `src/ui-language/language-select.css`（settings内controlを`dist/styles.css`へ束ねるCSS composition seamだけ）。layout ownershipはsettings/ui-languageに残し、shell header規則を置かない。
 - `src/features/*/react-root.tsx`、`src/features/current-build/registration.ts` → `src/ui-language/public.js`（Provider の設置のみ）。
 - `e2e/`、`tests/` → `src/ui-language/public.js`、`src/ui-messages/public.js`。
 - **禁止**: `src/ui-messages/` → `src/ui-language/`。言語状態はカタログより下流であり、逆流させない。

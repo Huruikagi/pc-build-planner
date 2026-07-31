@@ -60,14 +60,27 @@ export const initializeUiLanguage = (
   if (initializePromise === undefined) {
     preferences = platform.preferences;
     initializePromise = (async () => {
+      let browserUiLanguage: unknown;
+      try {
+        browserUiLanguage = platform.browserUiLanguage();
+      } catch {
+        // Platform language detection is optional input. If the runtime API is
+        // unavailable or throws, resolve through the normal fallback path.
+        browserUiLanguage = undefined;
+      }
       commit(
         resolveInitialLanguage({
           stored: undefined,
-          browserUiLanguage: platform.browserUiLanguage(),
+          browserUiLanguage,
         }),
       );
-      const stored = await platform.preferences.read();
-      if (stored.ok && stored.value !== undefined) commit(stored.value);
+      try {
+        const stored = await platform.preferences.read();
+        if (stored.ok && stored.value !== undefined) commit(stored.value);
+      } catch {
+        // Ports normally encode failures as Result, but a rejecting adapter
+        // must not prevent the side panel from reaching its usable state.
+      }
     })();
   }
   // Read `current` only after the (possibly already-settled) resolution
