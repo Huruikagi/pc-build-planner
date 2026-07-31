@@ -16,7 +16,13 @@ const validManifest = {
   name: "Synthetic extension",
   version: "1.0.0",
   minimum_chrome_version: "116",
-  permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+  permissions: [
+    "storage",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "contextMenus",
+  ],
   action: {},
   background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
@@ -365,6 +371,14 @@ test("source境界・fixture違反とmissing rootをfail closedに伝播する",
 test("manifest・code・公開境界・fixtureのartifact違反をすべて伝播する", async () => {
   const cases = [
     builder({ ...validManifest, permissions: ["storage", "tabs"] }),
+    builder({
+      ...validManifest,
+      permissions: [...validManifest.permissions, "alarms"],
+    }),
+    builder({
+      ...validManifest,
+      permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+    }),
     builder({
       ...validManifest,
       host_permissions: ["https://example.invalid/*"],

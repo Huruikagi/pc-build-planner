@@ -21,7 +21,13 @@ const validManifest = {
   version: currentManifestVersion,
   default_locale: "en",
   minimum_chrome_version: "116",
-  permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+  permissions: [
+    "storage",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "contextMenus",
+  ],
   action: {},
   background: { service_worker: "service-worker.js", type: "module" },
   side_panel: { default_path: "side-panel.html" },
@@ -46,8 +52,17 @@ test("manifestはChrome 116以降向けの最小MV3契約である", async () =>
     "activeTab",
     "scripting",
     "sidePanel",
+    "contextMenus",
   ]);
 });
+
+const minimalPermissions = [
+  "storage",
+  "activeTab",
+  "scripting",
+  "sidePanel",
+  "contextMenus",
+];
 
 test("禁止権限と全サイト権限を拒否する", () => {
   for (const manifest of [
@@ -57,11 +72,48 @@ test("禁止権限と全サイト権限を拒否する", () => {
     { ...validManifest, permissions: ["activeTab", "scripting"] },
     { ...validManifest, permissions: ["storage", "scripting", "sidePanel"] },
     { ...validManifest, permissions: ["storage", "activeTab", "sidePanel"] },
+    // 5権限に増えても許可外permissionの上乗せは拒否し続ける。
+    { ...validManifest, permissions: [...minimalPermissions, "tabs"] },
+    { ...validManifest, permissions: [...minimalPermissions, "alarms"] },
+    {
+      ...validManifest,
+      permissions: [...minimalPermissions, "unlimitedStorage"],
+    },
+    // contextMenus自身の重複でも件数一致に紛れ込ませない。
+    {
+      ...validManifest,
+      permissions: [
+        "storage",
+        "activeTab",
+        "scripting",
+        "contextMenus",
+        "contextMenus",
+      ],
+    },
     { ...validManifest, host_permissions: ["<all_urls>"] },
     { ...validManifest, optional_host_permissions: ["https://*/*"] },
+    { ...validManifest, optional_permissions: ["contextMenus"] },
+    { ...validManifest, optional_permissions: ["alarms"] },
   ]) {
     assert.throws(() => validateManifest(manifest));
   }
+});
+
+test("contextMenusを欠いた4権限manifestを拒否する", () => {
+  assert.throws(
+    () =>
+      validateManifest({
+        ...validManifest,
+        permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+      }),
+    /storage, activeTab, scripting, sidePanel, contextMenus/,
+  );
+});
+
+test("最小5権限のmanifestを受理する", () => {
+  assert.doesNotThrow(() =>
+    validateManifest({ ...validManifest, permissions: minimalPermissions }),
+  );
 });
 
 test("actionが未宣言または不正な形状の場合は拒否する", () => {

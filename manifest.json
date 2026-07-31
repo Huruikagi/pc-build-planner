@@ -5,7 +5,13 @@
   "version": "0.2.0",
   "default_locale": "en",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "activeTab", "scripting", "sidePanel"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "contextMenus"
+  ],
   "action": {},
   "background": {
     "service_worker": "service-worker.js",

@@ -19,7 +19,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 6.3_
   - _Boundary: SourceUrlIdentity_
 
-- [ ] 1.3 context menu permissionを最小権限gateへ追加する
+- [x] 1.3 context menu permissionを最小権限gateへ追加する
   - manifestの既存permission集合へ `contextMenus` だけを追加する。
   - artifact validatorのexact allowlistと診断を5権限へ更新し、host、optional、tabs、alarms permissionは引き続き拒否する。
   - production manifestと生成物検査が `contextMenus` を受理し、許可外permissionのfixtureを失敗させることを完了条件とする。
@@ -178,3 +178,5 @@
 - 1.1: 新しい公開consumer fixtureを追加したら `package.json` の `validate:boundaries` 引数と `tsconfig.public-consumer.json` の include の両方へ登録する。
 - 1.1: feature source から application-shell 非公開moduleへのimportを止めるrule（`settings-public-dependencies-only` 相当）が `scripts/validate-boundaries.mjs` に未整備。task 5.2 のboundary coverageで対応する。
 - 1.2: URL正規化は標準 `URL` / `URLSearchParams` のserializationだけを使う。帰結として `?q=a+b` と `?q=a%20b`、`?sale` と `?sale=` は同一keyになる（form-urlencodedで同一値のためvalue損失も過剰一致もない）。末尾slashは1つだけ除去するので `/p/1//` は `/p/1` と一致しない（過小一致方向で誤更新は起きない）。
+- 1.3: manifest permissionを変更したら `.kiro/steering/security.md` の権限固定記述も同時に更新する（本タスクで4→5権限へ反映済み）。
+- 1.3: `scripts/validate-artifacts.mjs` 末尾のmain-module guard（`import.meta.url === new URL(process.argv[1], "file:").href`）はWindowsでドライブレターをURL schemeと解釈するため発火せず、`pnpm validate:artifacts` の第1スクリプトがローカルWindowsでno-op化する既存バグがある。強制力は `validate-final-gate.mjs`（`pathToFileURL` 使用、関数を直接import）経由で維持されているため、Windowsローカルでのpermission検証は `pnpm validate:final-build` を根拠にすること。

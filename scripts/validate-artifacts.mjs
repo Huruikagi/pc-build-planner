@@ -46,11 +46,16 @@ function collectMessageKeys(value, keys) {
   }
 }
 
+// Exact allowlist: the manifest's `permissions` must equal this set — no
+// subset, no superset. `contextMenus` is the only addition beyond the original
+// four and is limited to providing the menu item; host, optional and broad
+// runtime permissions stay rejected.
 const allowedPermissions = new Set([
   "storage",
   "activeTab",
   "scripting",
   "sidePanel",
+  "contextMenus",
 ]);
 
 /**
@@ -86,7 +91,7 @@ export function validateManifest(manifest) {
     )
   ) {
     fail(
-      "only the minimal storage, activeTab, scripting, sidePanel permissions are allowed",
+      `only the minimal ${[...allowedPermissions].join(", ")} permissions are allowed`,
     );
   }
   if (

@@ -13,7 +13,7 @@
 
 ## 権限とmanifest
 
-宣言する権限は `storage` / `activeTab` / `scripting` / `sidePanel` の4つに固定する。この集合は `scripts/validate-artifacts.mjs` が生成物の `manifest.json` に対して検査し、以下を**ビルドgateで失敗させる**。
+宣言する権限は `storage` / `activeTab` / `scripting` / `sidePanel` / `contextMenus` の5つに固定する。`contextMenus` はmenu item提供だけに使用し、host permissionを伴わない。この集合は `scripts/validate-artifacts.mjs` が生成物の `manifest.json` に対して検査し、以下を**ビルドgateで失敗させる**。
 
 - 許可集合外の権限、重複、`storage` の欠落
 - `host_permissions` / `optional_host_permissions` / `optional_permissions` の存在
