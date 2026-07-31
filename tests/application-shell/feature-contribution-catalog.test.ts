@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
@@ -319,11 +320,13 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
   assert.deepEqual(lifecycleEvents, []);
 
   const container = document.createElement("div");
-  const handle = await productCapture.registration.mount({
-    container,
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError: () => {},
-  });
+  const handle = await act(() =>
+    productCapture.registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    }),
+  );
   assert.equal(
     typeof candidateManagement.registration.publicApi
       .createCandidateEditorIntent,
@@ -334,7 +337,7 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
     "[data-capture-start]",
   );
   assert.ok(start);
-  start.click();
+  await act(() => start.click());
   for (
     let attempt = 0;
     attempt < 20 && lifecycleEvents.length < 3;
@@ -363,7 +366,7 @@ test("production capture compositionは公開lifecycleとintent factoryだけで
     },
   });
   const completedEventCount = lifecycleEvents.length;
-  await handle.unmount();
+  await act(() => handle.unmount());
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(lifecycleEvents.length, completedEventCount);
   assert.equal(container.childElementCount, 0);

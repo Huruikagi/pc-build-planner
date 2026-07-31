@@ -732,11 +732,13 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
   await clickNavigation("Projects <img src=x>");
   assert.equal(featureSlot.textContent, "projects-view");
 
-  const activated = await root.activate?.({
-    featureId: featureId("compatibility"),
-    target: "open-editor",
-    payload: { candidateId: "fictional-candidate" },
-  });
+  const activated = await act(() =>
+    root.activate?.({
+      featureId: featureId("compatibility"),
+      target: "open-editor",
+      payload: { candidateId: "fictional-candidate" },
+    }),
+  );
   assert.equal(activated?.ok, true);
   assert.equal(activationValidationCount, 1);
   assert.equal(activationApplyCount, 1);
