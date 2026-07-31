@@ -28,7 +28,7 @@
 
 - [ ] 2. 独立したcoreコンポーネントを構築する
 
-- [ ] 2.1 (P) scope内の保存済みsourceを一意に特定する
+- [x] 2.1 (P) scope内の保存済みsourceを一意に特定する
   - catalog scopeとcandidate scopeを上流read-only portへ写像する。
   - 欠損URLを除外し、正規化URLの0件・1件・複数件を `no-match`、matched target、`ambiguous-match` に分ける。
   - 一件一致後もkindが明示 `retail` でないsourceを `ineligible-source` とし、配列順やprimaryで暗黙選択しない。
@@ -180,3 +180,6 @@
 - 1.2: URL正規化は標準 `URL` / `URLSearchParams` のserializationだけを使う。帰結として `?q=a+b` と `?q=a%20b`、`?sale` と `?sale=` は同一keyになる（form-urlencodedで同一値のためvalue損失も過剰一致もない）。末尾slashは1つだけ除去するので `/p/1//` は `/p/1` と一致しない（過小一致方向で誤更新は起きない）。
 - 1.3: manifest permissionを変更したら `.kiro/steering/security.md` の権限固定記述も同時に更新する（本タスクで4→5権限へ反映済み）。
 - 1.3: `scripts/validate-artifacts.mjs` 末尾のmain-module guard（`import.meta.url === new URL(process.argv[1], "file:").href`）はWindowsでドライブレターをURL schemeと解釈するため発火せず、`pnpm validate:artifacts` の第1スクリプトがローカルWindowsでno-op化する既存バグがある。強制力は `validate-final-gate.mjs`（`pathToFileURL` 使用、関数を直接import）経由で維持されているため、Windowsローカルでのpermission検証は `pnpm validate:final-build` を根拠にすること。
+- 2.1: 一意性判定はretail制約より先に行う。複数一致のうち1件だけがretailでも `ambiguous-match` を返す（kindで先に絞ると要件2.7が禁じる暗黙選択規則になるため）。要件2.8の「一致したソース」は単数形で一意性解決後を前提としている。
+- 2.1: `ManagementError` の `not-found` は `SourcePriceRefreshError` に含まれないため `no-match` へ写像している。design.md 344行「catalog errorは既存 ManagementError を保持する」はunionが表現できる範囲をやや超えた記述で、task 1.1 の contracts から引き継いだ設計上の隙間。task 3.1 の再検証実装はこの写像と整合させること。
+- 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。
