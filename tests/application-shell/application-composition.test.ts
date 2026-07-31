@@ -442,10 +442,9 @@ test("session read noticeは常設表示と併存し成功通知まで保持す�
   const expiredAfterRead = h.states.at(-1);
   assert.equal(expiredAfterRead?.kind, "ready");
   if (expiredAfterRead?.kind === "ready")
-    assert.deepEqual(expiredAfterRead.transientNotice?.message, {
-      key: "shell.transientActivationExpired",
-    });
+    assert.equal("transientNotice" in expiredAfterRead, false);
 
+  notices?.activationExpired();
   notices?.activationAccepted();
   const accepted = h.states.at(-1);
   assert.equal(accepted?.kind, "ready");

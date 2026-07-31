@@ -612,18 +612,11 @@ export function createProductionApplicationComposition<
             | "activation-expired",
         ) => {
           if (!latestShellState) return;
-          const retainExpiredAfterRead =
-            kind === "session-read-succeeded" &&
-            transientNotice === "activation-expired";
           if (kind === "session-read-failed")
             transientNotice = "activation-failed";
           else if (kind === "activation-expired")
             transientNotice = "activation-expired";
-          else if (
-            kind === "activation-accepted" ||
-            transientNotice === "activation-failed"
-          )
-            transientNotice = undefined;
+          else transientNotice = undefined;
           latestShellState = projectTransientNotice(
             latestShellState,
             kind === "session-read-failed"
@@ -636,9 +629,7 @@ export function createProductionApplicationComposition<
                     kind,
                     message: message("shell.transientActivationExpired"),
                   }
-                : retainExpiredAfterRead
-                  ? { kind: "panel-opened" }
-                  : { kind },
+                : { kind },
           );
           publish(latestShellState);
         };
