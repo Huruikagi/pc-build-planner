@@ -46,7 +46,7 @@
   - _Boundary: SourcePriceRefreshState_
   - _Depends: 1.1_
 
-- [ ] 2.3 (P) feature固有のcontext menu gesture sourceを構築する
+- [x] 2.3 (P) feature固有のcontext menu gesture sourceを構築する
   - stable item ID、page context、HTTP/HTTPS document patternでmenu itemを冪等登録する。
   - click eventのitem IDと数値tab IDだけを検証し、上流gesture callbackへ固定tabを同期emitする。
   - URL、selection、link、frame dataをstoreやlogへ渡さず、別itemと不正tabを無視する。
@@ -186,4 +186,8 @@
 - 2.2: state層は例外をerror kindへ翻訳しない。`SourcePriceRefreshError` union に unexpected 相当のメンバが無いため、既存kind（`injection-failed` など）を汎用fallbackに流用すると原因を偽装し、`recoverable: true` で無限再実行を招く。`runRefresh` は typed `Result` で必ず settle する契約とし、例外→typed failureの変換は task 3.2 の service が負う。
 - 2.2: task 3.3 で `state.activate(...)` を呼ぶときは rejection handler を必ず付ける。未処理rejectionは例外objectをdumpし、要件5.6とdesign.mdのsecurity方針（例外dumpを扱わない）に反する。
 - 2.2: 判別共用体の網羅性は「switch + `const exhaustive: never`」だけでなく、テスト側の期待表を `Record<Union["kind"], T>` で持つと union へのメンバ追加がtypecheckで落ちる。分類ロジックの回帰検知に有効。
+- 2.3: menu itemの冪等登録は `removeAll()` ではなく `remove(id)` → `create(...)` にする。`removeAll()` は他featureのitemまで消す。remove失敗（item不在）は正常系なので `readLastError` で消費し、Chromeのunchecked lastError警告を出さない。
+- 2.3: `scripts/validate-boundaries.mjs` の `isForbiddenApplicationShellFeatureImport`（127-134行）は application-shell → feature のimportを `public` と `feature-contribution` だけに限定する。task 4.3 は `context-menu-source.ts` をdeep importできないため、`feature-contribution-catalog.ts` が `product-capture/public.js` から worker contribution を取る既存precedentに倣い、worker-safeな公開exportを 4.3 で追加すること（2.3 時点では未使用exportになるためあえて公開していない）。
+- 2.3: 例外を握る `catch` はbindingを書かない（`catch {`）。例外objectを変数に取れないようにすることで、要件5.6の「例外dumpを扱わない」をコード形状で担保する。
+- 2.3: cleanup の二重呼び出しガード（`active` flag）はテストで未カバー。`readLastError` が両分岐でerrorを消費するため `uncheckedErrors() === 0` の assertion が空振りする。ガードを外すと「stale な2回目teardownが新世代のmenu itemを消す」実害があるので、task 5.2 の worker再生成coverageで `remove` の呼び出し回数を直接spyして固定すること。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。
