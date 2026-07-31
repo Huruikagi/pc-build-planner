@@ -14,9 +14,10 @@ import { nav } from "./nav.js";
 import { persistenceError } from "./persistence-error.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";
+import { sourcePriceRefresh } from "./source-price-refresh.js";
 
 /**
- * 英語カタログの11個の名前空間を束ねる集約点。日本語カタログと同一の
+ * 英語カタログの12個の名前空間を束ねる集約点。日本語カタログと同一の
  * 名前空間構成に揃える。
  */
 export const EN_MESSAGES = {
@@ -31,6 +32,7 @@ export const EN_MESSAGES = {
   compatibility,
   capture,
   backup,
+  sourcePriceRefresh,
 } as const satisfies MessageNamespace;
 
 /**

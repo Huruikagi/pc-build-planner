@@ -55,7 +55,7 @@
   - _Boundary: PriceRefreshContextMenuSource_
   - _Depends: 1.1, 1.3_
 
-- [ ] 2.4 価格更新の進行・成功・失敗viewを構築する
+- [x] 2.4 価格更新の進行・成功・失敗viewを構築する
   - running時は進行、success時はconfirmed money、取得日時、primary反映有無を表示する。
   - failure kindごとにcontext menu再実行、source整理、保守終了、保存領域確認の回復案内を表示する。
   - panel内の再実行button、完全URL、raw HTML、商品値、例外dumpを表示しない。
@@ -190,4 +190,8 @@
 - 2.3: `scripts/validate-boundaries.mjs` の `isForbiddenApplicationShellFeatureImport`（127-134行）は application-shell → feature のimportを `public` と `feature-contribution` だけに限定する。task 4.3 は `context-menu-source.ts` をdeep importできないため、`feature-contribution-catalog.ts` が `product-capture/public.js` から worker contribution を取る既存precedentに倣い、worker-safeな公開exportを 4.3 で追加すること（2.3 時点では未使用exportになるためあえて公開していない）。
 - 2.3: 例外を握る `catch` はbindingを書かない（`catch {`）。例外objectを変数に取れないようにすることで、要件5.6の「例外dumpを扱わない」をコード形状で担保する。
 - 2.3: cleanup の二重呼び出しガード（`active` flag）はテストで未カバー。`readLastError` が両分岐でerrorを消費するため `uncheckedErrors() === 0` の assertion が空振りする。ガードを外すと「stale な2回目teardownが新世代のmenu itemを消す」実害があるので、task 5.2 の worker再生成coverageで `remove` の呼び出し回数を直接spyして固定すること。
+- 2.4: message namespaceを追加したら `tests/ui-messages/catalog-parity.test.ts` の `assert.deepEqual(Object.keys(MESSAGES), [...])`（v0.3 gate）へも追記が要る。追記は加算のみで、gateを緩めないこと。追記後は既存のplaceholder/selector parity機構が新namespaceを自動で覆う。
+- 2.4: money/日時のlocale対応formatterはコードベースに存在しない（`Intl.` / `toLocale*` の使用箇所ゼロ）。確定金額は message catalog の placeholder `"{amount} {currency}"`、`capturedAt` は canonical ISO文字列をそのまま描画する（`candidate-management/view.tsx` と同じ前例）。design.md も表示形式を規定していない。将来formatterを導入するなら view 側を差し替える。
+- 2.4: design.md のエラー表に無い8 kind（`invalid-url` / `restricted-page` → 対象ページで再実行、`validation` / `unsupported-data` → 保存データ修復が先、など）の回復案内は 2.2 の単一規則からの演繹。viewの案内keyとstateの `isRecoverableSourcePriceRefreshError` が乖離しないよう、全kindを `Record<SourcePriceRefreshError["kind"], …>` で突き合わせるテストで固定してある。union にメンバを足すと両方のtypecheckが落ちる。
+- 2.4: 失敗表示の `preservedNotice`（既存価格を維持した旨、要件5.1/5.4の唯一の可観測面）はテストで未固定。要素を消しても view.test.tsx は緑のまま。task 5.3 の failure-view DOM coverage で失敗kindのloopへ `preservedNotice` のassertionを1行足すこと。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。

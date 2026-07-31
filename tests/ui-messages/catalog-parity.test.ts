@@ -183,6 +183,7 @@ test("v0.3 gateはexact keyと旧backup navigation撤去を固定する", () => 
     "compatibility",
     "capture",
     "backup",
+    "sourcePriceRefresh",
   ]);
   assert.deepEqual(Object.keys(EN_MESSAGES), Object.keys(MESSAGES));
   assert.deepEqual(V03_SETTINGS_KEYS, [

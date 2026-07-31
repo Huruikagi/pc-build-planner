@@ -15,8 +15,9 @@ import { nav } from "./nav.js";
 import { persistenceError } from "./persistence-error.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";
+import { sourcePriceRefresh } from "./source-price-refresh.js";
 
-/** 日本語カタログの11個の名前空間を束ねる集約点。 */
+/** 日本語カタログの12個の名前空間を束ねる集約点。 */
 export const MESSAGES = {
   common,
   category,
@@ -29,6 +30,7 @@ export const MESSAGES = {
   compatibility,
   capture,
   backup,
+  sourcePriceRefresh,
 } as const satisfies MessageNamespace;
 
 export type MessageKey = MessageKeyOf<typeof MESSAGES>;
