@@ -27,8 +27,12 @@ const setup = (
   const state = createCaptureState({
     coordinator: { captureTab: async () => err(error) },
     isCurrent: () => true,
-    createHandoffIntent: () => err({ kind: "invalid-payload" }),
-    conclude: async () => ({ ok: true, value: undefined }),
+    handoff: {
+      prepare: () => err({ kind: "invalid-payload" }),
+      prepareManual: () => ({}) as never,
+      conclude: async () => ({ ok: true, value: undefined }),
+      retry: async () => ({ ok: true, value: undefined }),
+    },
   });
   state.activate(A, TAB);
   return state;

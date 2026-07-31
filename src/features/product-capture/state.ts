@@ -11,18 +11,12 @@ import type {
   CaptureSessionState,
 } from "./contracts.js";
 import type { CaptureCoordinator } from "./coordinator.js";
+import type { CandidateEditorHandoff } from "./editor-handoff.js";
 
 export interface CaptureStateDependencies {
   readonly coordinator: CaptureCoordinator;
   readonly isCurrent: (activationId: ActivationId) => boolean;
-  readonly createHandoffIntent: (
-    result: CaptureResult,
-  ) => Result<FeatureActivationIntent, CaptureError>;
-  readonly createManualIntent?: () => FeatureActivationIntent;
-  readonly conclude: (
-    activationId: ActivationId,
-    intent: FeatureActivationIntent,
-  ) => Promise<Result<void, TransientSurfaceError>>;
+  readonly handoff: CandidateEditorHandoff;
   readonly createRequestId?: () => string;
 }
 
@@ -134,9 +128,7 @@ export class CaptureState {
       return;
     }
 
-    const createIntent = this.dependencies.createHandoffIntent;
-    const conclude = this.dependencies.conclude;
-    const prepared = createIntent(result.value);
+    const prepared = this.dependencies.handoff.prepare(result.value);
     if (!prepared.ok) {
       this.#set({
         status: "failed",
@@ -150,7 +142,10 @@ export class CaptureState {
       });
       return;
     }
-    const concluded = await conclude(current.activationId, prepared.value);
+    const concluded = await this.dependencies.handoff.conclude(
+      current.activationId,
+      prepared.value,
+    );
     if (!this.#accepts(generation, current.activationId)) return;
     if (concluded.ok) {
       this.deactivate();
@@ -175,15 +170,14 @@ export class CaptureState {
       current.status !== "failed" ||
       current.failure.kind !== "execution" ||
       current.failure.error.kind !== "no-candidate" ||
-      this.dependencies.createManualIntent === undefined ||
       this.#handoffInFlightGeneration !== null ||
       !this.dependencies.isCurrent(current.activationId)
     )
       return;
-    const intent = this.dependencies.createManualIntent();
+    const intent = this.dependencies.handoff.prepareManual();
     const generation = ++this.#requestGeneration;
     this.#handoffInFlightGeneration = generation;
-    const concluded = await this.dependencies.conclude(
+    const concluded = await this.dependencies.handoff.conclude(
       current.activationId,
       intent,
     );
@@ -228,7 +222,7 @@ export class CaptureState {
     if (current.failure.kind !== "handoff") return;
     const generation = ++this.#requestGeneration;
     this.#handoffInFlightGeneration = generation;
-    const result = await this.dependencies.conclude(
+    const result = await this.dependencies.handoff.retry(
       current.activationId,
       current.failure.retainedIntent,
     );

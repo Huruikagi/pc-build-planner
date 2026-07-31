@@ -3,13 +3,12 @@ import type {
   FeatureContribution,
   TransientSurfaceLifecyclePort,
 } from "../../application-shell/public.js";
-import { ok } from "../../domain/public.js";
 import type { CandidateManagementPublicApi } from "../candidate-management/public.js";
 import {
   type CaptureRuntimePort,
   createCaptureCoordinator,
 } from "./coordinator.js";
-import { createCaptureDraftMapper } from "./draft-mapper.js";
+import { createCandidateEditorHandoff } from "./editor-handoff.js";
 import { createCaptureNormalizer } from "./normalizer.js";
 import { createPagePriceExtractionAdapter } from "./page-price-extraction.js";
 import {
@@ -57,22 +56,16 @@ export const createProductCaptureContribution = (
     ranker,
   });
   const publicApi = createProductCapturePublicApi({ pagePriceExtraction });
+  const handoff = createCandidateEditorHandoff({
+    createCandidateEditorIntent: dependencies.createCandidateEditorIntent,
+    conclude: (activationId, intent) =>
+      dependencies.transientSurface.conclude(activationId, intent),
+  });
   const state = createCaptureState({
     coordinator,
     isCurrent: (activationId) =>
       dependencies.transientSurface.isCurrent(activationId),
-    createHandoffIntent(result) {
-      const mapped = createCaptureDraftMapper().toEditorPrefill(result);
-      return mapped.ok
-        ? ok(dependencies.createCandidateEditorIntent(mapped.value))
-        : mapped;
-    },
-    createManualIntent: () =>
-      dependencies.createCandidateEditorIntent({
-        draft: createCaptureDraftMapper().toManualDraft(),
-      }),
-    conclude: (activationId, intent) =>
-      dependencies.transientSurface.conclude(activationId, intent),
+    handoff,
   });
   return {
     key: productCaptureContributionKey,

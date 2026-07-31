@@ -123,6 +123,43 @@ test("outer prefillはprojectIdとcategoryHintを個別のerrorへ写像する",
   );
 });
 
+test("capture diagnostics fieldはclosedかつboundedな公開契約としてfail closedにする", () => {
+  for (const field of [
+    "",
+    "unknown",
+    "spec:",
+    "spec: leading",
+    "spec:nested:key",
+    `spec:${"x".repeat(196)}`,
+    "spec:socket\u0000",
+  ]) {
+    assert.equal(
+      validateCandidateEditorPrefill({
+        draft: unresolvedDraft,
+        captureDiagnostics: [{ field, reason: "invalid-format" }],
+      }).ok,
+      false,
+      field,
+    );
+  }
+  assert.equal(
+    validateCandidateEditorPrefill({
+      draft: unresolvedDraft,
+      captureDiagnostics: [
+        { field: "name", reason: "invalid-format", rawValue: "secret" },
+      ],
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validateCandidateEditorPrefill({
+      draft: unresolvedDraft,
+      captureDiagnostics: [{ field: "specification", reason: "unresolvable" }],
+    }).ok,
+    true,
+  );
+});
+
 test("field固有型、URL、UTC日時、prototypeを構造不正として拒否する", () => {
   const invalidDrafts = [
     {

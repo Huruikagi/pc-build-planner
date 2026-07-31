@@ -50,6 +50,29 @@ export interface UnresolvedCandidateEditorPrefill {
   readonly draft: UnresolvedCandidateDraft;
   readonly projectId?: ProjectId;
   readonly categoryHint?: PartCategory;
+  /** Closed diagnostics from an untrusted capture; never persisted with the draft. */
+  readonly captureDiagnostics?: readonly CaptureDiagnostic[];
+}
+
+export type CaptureDiagnosticReason =
+  | "empty"
+  | "too-long"
+  | "control-characters"
+  | "invalid-format"
+  | "unresolvable";
+
+export type CaptureDiagnosticField =
+  | "name"
+  | "category"
+  | "manufacturer"
+  | "modelNumber"
+  | "price"
+  | "url"
+  | "specification";
+
+export interface CaptureDiagnostic {
+  readonly field: CaptureDiagnosticField;
+  readonly reason: CaptureDiagnosticReason;
 }
 
 export interface CreateProjectInput {

@@ -16,7 +16,12 @@ import {
 import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
 import { withCategory } from "./category-draft.js";
-import type { CandidateDraft, CandidateSummary } from "./contracts.js";
+import type {
+  CandidateDraft,
+  CandidateSummary,
+  CaptureDiagnosticField,
+  CaptureDiagnosticReason,
+} from "./contracts.js";
 import { safeSourcePageUrl } from "./source-page-port.js";
 import type { ManagementDisplayError, ManagementState } from "./state.js";
 
@@ -34,6 +39,46 @@ const categoryMessageKeys = {
   other: "category.other",
   uncategorized: "category.uncategorized",
 } as const satisfies Record<PartCategory, MessageKey>;
+
+const captureDiagnosticReasonMessage = (
+  reason: CaptureDiagnosticReason,
+  messages: MessageResolver,
+): string => {
+  switch (reason) {
+    case "empty":
+      return messages("candidate.captureDiagnosticReasons.empty");
+    case "too-long":
+      return messages("candidate.captureDiagnosticReasons.tooLong");
+    case "control-characters":
+      return messages("candidate.captureDiagnosticReasons.controlCharacters");
+    case "invalid-format":
+      return messages("candidate.captureDiagnosticReasons.invalidFormat");
+    case "unresolvable":
+      return messages("candidate.captureDiagnosticReasons.unresolvable");
+  }
+};
+
+const captureDiagnosticFieldMessage = (
+  field: CaptureDiagnosticField,
+  messages: MessageResolver,
+): string => {
+  switch (field) {
+    case "name":
+      return messages("candidate.captureDiagnosticFields.name");
+    case "category":
+      return messages("candidate.captureDiagnosticFields.category");
+    case "manufacturer":
+      return messages("candidate.captureDiagnosticFields.manufacturer");
+    case "modelNumber":
+      return messages("candidate.captureDiagnosticFields.modelNumber");
+    case "price":
+      return messages("candidate.captureDiagnosticFields.price");
+    case "url":
+      return messages("candidate.captureDiagnosticFields.url");
+    case "specification":
+      return messages("candidate.captureDiagnosticFields.specification");
+  }
+};
 
 function displayValue(
   value:
@@ -1035,6 +1080,29 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
             <dt>{messages("candidate.modelNumberFieldLabel")}</dt>
             <dd>{displayValue(draft.product.modelNumber, messages)}</dd>
           </dl>
+          {value.pendingPreEdit.captureDiagnostics === undefined ? null : (
+            <section data-region="capture-diagnostics">
+              <h3>{messages("candidate.captureDiagnosticsTitle")}</h3>
+              <ul>
+                {value.pendingPreEdit.captureDiagnostics.map((diagnostic) => {
+                  return (
+                    <li key={`${diagnostic.field}:${diagnostic.reason}`}>
+                      {messages("candidate.captureDiagnostic", {
+                        field: captureDiagnosticFieldMessage(
+                          diagnostic.field,
+                          messages,
+                        ),
+                        reason: captureDiagnosticReasonMessage(
+                          diagnostic.reason,
+                          messages,
+                        ),
+                      })}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
           <form onSubmit={(event) => void saveProject(event)}>
             <label>
               {messages("candidate.newProjectNameLabel")}
@@ -1298,6 +1366,30 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         </section>
       )}
       {/* Remounting per target drops raw input state left over from another candidate. */}
+      {value.editor?.mode !== "create" ||
+      value.editor.captureDiagnostics === undefined ? null : (
+        <section data-region="capture-diagnostics">
+          <h3>{messages("candidate.captureDiagnosticsTitle")}</h3>
+          <ul>
+            {value.editor.captureDiagnostics.map((diagnostic) => {
+              return (
+                <li key={`${diagnostic.field}:${diagnostic.reason}`}>
+                  {messages("candidate.captureDiagnostic", {
+                    field: captureDiagnosticFieldMessage(
+                      diagnostic.field,
+                      messages,
+                    ),
+                    reason: captureDiagnosticReasonMessage(
+                      diagnostic.reason,
+                      messages,
+                    ),
+                  })}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <CandidateEditorForm key={editorKey(value.editor)} state={state} />
     </section>
   );

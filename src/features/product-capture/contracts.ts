@@ -11,11 +11,7 @@ import type {
   UtcTimestamp,
 } from "../../domain/public.js";
 
-/** Canonical shell-owned activation delivered to the transient capture consumer. */
-export interface CaptureTransientActivation {
-  readonly activationId: ActivationId;
-  readonly tabId: TargetTabId;
-}
+import type { CaptureTransientActivation } from "./transient-activation.js";
 
 /**
  * Consumer-only seam for the upstream transient surface contract. Capture

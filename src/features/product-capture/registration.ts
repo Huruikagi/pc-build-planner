@@ -2,14 +2,13 @@ import type {
   ActivationId,
   Availability,
   FeatureActivationError,
-  FeatureActivationIntent,
   FeatureMountContext,
   FeatureMountHandle,
   TargetTabId,
   TransientActivationRequest,
   TransientApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
-import { err, ok, type Result } from "../../domain/public.js";
+import { err, ok } from "../../domain/public.js";
 import {
   createProductCapturePublicApi,
   type ProductCapturePublicApi,
@@ -17,13 +16,12 @@ import {
 } from "./public.js";
 import { mountCaptureReactRoot } from "./react-root.js";
 import type { CaptureState } from "./state.js";
+import {
+  type CaptureTransientActivation,
+  validateCaptureActivation,
+} from "./transient-activation.js";
 
 export { productCaptureFeatureId };
-
-export interface CaptureTransientActivation {
-  readonly activationId: ActivationId;
-  readonly tabId: TargetTabId;
-}
 
 export interface CaptureFeatureRegistrationDependencies {
   readonly state: CaptureState;
@@ -78,32 +76,6 @@ const decodeRollbackSnapshot = (
   return candidate as unknown as CaptureRollbackSnapshot;
 };
 
-const validateActivation = (
-  intent: FeatureActivationIntent,
-): Result<CaptureTransientActivation, FeatureActivationError> => {
-  const payload = intent.payload;
-  if (
-    intent.target !== "capture" ||
-    typeof payload !== "object" ||
-    payload === null ||
-    !("activationId" in payload) ||
-    !("tabId" in payload) ||
-    typeof payload.activationId !== "string" ||
-    payload.activationId.length === 0 ||
-    typeof payload.tabId !== "number" ||
-    !Number.isSafeInteger(payload.tabId) ||
-    payload.tabId <= 0
-  )
-    return err({
-      kind: "invalid_activation",
-      detail: "invalid product capture activation",
-    });
-  return ok({
-    activationId: payload.activationId as ActivationId,
-    tabId: payload.tabId as TargetTabId,
-  });
-};
-
 export const createProductCaptureFeatureRegistration = (
   dependencies: CaptureFeatureRegistrationDependencies,
 ): TransientApplicationFeatureRegistration<
@@ -118,7 +90,7 @@ export const createProductCaptureFeatureRegistration = (
     dependencies.getAvailability ?? (() => ({ status: "available" })),
   subscribeAvailability: dependencies.subscribeAvailability ?? (() => () => {}),
   activation: {
-    validate: validateActivation,
+    validate: validateCaptureActivation,
     async activate(input) {
       dependencies.state.activate(input.activationId, input.tabId);
       return ok(undefined);

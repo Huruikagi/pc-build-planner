@@ -12,6 +12,10 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
+import {
+  createCandidateActivation,
+  createCandidateEditorIntent,
+} from "../../../src/features/candidate-management/activation.js";
 import type {
   CandidateManagementQuery,
   CandidateManagementService,
@@ -21,6 +25,7 @@ import type {
 } from "../../../src/features/candidate-management/contracts.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { ManagementView } from "../../../src/features/candidate-management/view.js";
+import { createCaptureDraftMapper } from "../../../src/features/product-capture/draft-mapper.js";
 import {
   MessageProvider,
   resolverFor,
@@ -47,6 +52,11 @@ const pendingPrefill: UnresolvedCandidateEditorPrefill = {
     },
     normalizedAttributes: { category: "gpu" },
   },
+  captureDiagnostics: [
+    { field: "name", reason: "too-long" },
+    { field: "price", reason: "invalid-format" },
+    { field: "specification", reason: "unresolvable" },
+  ],
 };
 
 const unusedQuery: CandidateManagementQuery = {
@@ -132,6 +142,19 @@ for (const language of ["ja", "en"] as const) {
     assert.match(view.container.textContent ?? "", /架空メーカー/);
     assert.match(view.container.textContent ?? "", /SYNTH-9000/);
     assert.equal(view.container.querySelector("img"), null);
+    const diagnostics = view.query("[data-region='capture-diagnostics']");
+    assert.match(
+      diagnostics.textContent ?? "",
+      new RegExp(messages("candidate.captureDiagnosticFields.name")),
+    );
+    assert.match(
+      diagnostics.textContent ?? "",
+      new RegExp(messages("candidate.captureDiagnosticFields.price")),
+    );
+    assert.doesNotMatch(
+      diagnostics.textContent ?? "",
+      /rawValue|pageValue|onerror/,
+    );
     assert.equal(
       view.query("[data-create-pending-project]").textContent,
       messages("candidate.createProjectAction"),
@@ -222,5 +245,89 @@ for (const language of ["ja", "en"] as const) {
       unsafeExtractedName,
     );
     assert.equal(view.state.value.editor?.draft.projectId, projectId);
+    assert.deepEqual(
+      view.state.value.editor?.mode === "create"
+        ? view.state.value.editor.captureDiagnostics
+        : undefined,
+      pendingPrefill.captureDiagnostics,
+    );
+    assert.equal(
+      "captureDiagnostics" in (view.state.value.editor?.draft ?? {}),
+      false,
+    );
+    assert.ok(
+      view.container.querySelector("[data-region='capture-diagnostics']"),
+    );
   });
 }
+
+test("dynamic spec rejectionをmapperからunknown activation経由で既存project editorへ安全に1件だけ渡す", async () => {
+  const state = createManagementState({
+    query: {
+      ...unusedQuery,
+      async listProjects() {
+        return {
+          ok: true,
+          value: [{ id: projectId, name: "existing", updatedAt: timestamp }],
+        };
+      },
+      async listCandidates() {
+        return { ok: true, value: [] };
+      },
+    },
+    service: serviceWithCreate(async () => ({
+      ok: true,
+      value: project("unused"),
+    })),
+    createMutationContext: () => context,
+  });
+  await state.load();
+  const mapped = createCaptureDraftMapper().toEditorPrefill({
+    requestId: "20000000-0000-4000-8000-000000000099",
+    tabId: 1,
+    pageUrl: "https://example.invalid/item",
+    capturedAt: timestamp,
+    draft: { fields: [], missingCoreFields: [] },
+    rejectedFields: [
+      { field: "spec: leading:nested\u0000", reason: "unresolvable" },
+      { field: "spec:another-label", reason: "unresolvable" },
+    ],
+  });
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  assert.deepEqual(mapped.value.captureDiagnostics, [
+    { field: "specification", reason: "unresolvable" },
+  ]);
+  const activation = createCandidateActivation(state);
+  const validated = activation.validate(
+    createCandidateEditorIntent(mapped.value),
+  );
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  assert.equal((await activation.activate(validated.value)).ok, true);
+  assert.deepEqual(
+    state.value.editor?.mode === "create"
+      ? state.value.editor.captureDiagnostics
+      : undefined,
+    [{ field: "specification", reason: "unresolvable" }],
+  );
+  assert.equal(
+    "captureDiagnostics" in (state.value.editor?.draft ?? {}),
+    false,
+  );
+  const view = render(
+    <MessageProvider resolver={resolverFor("en")}>
+      <ManagementView state={state} />
+    </MessageProvider>,
+  );
+  const diagnostics = view.container.querySelector(
+    "[data-region='capture-diagnostics']",
+  );
+  assert.ok(diagnostics);
+  assert.equal(diagnostics.querySelectorAll("li").length, 1);
+  assert.match(diagnostics.textContent ?? "", /Specification/);
+  assert.doesNotMatch(
+    diagnostics.textContent ?? "",
+    /leading|nested|another-label/,
+  );
+});

@@ -11,13 +11,18 @@ import {
   productCaptureFeatureId,
 } from "../../../src/features/product-capture/registration.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
+import { validateCaptureActivation } from "../../../src/features/product-capture/transient-activation.js";
 
 const state = () =>
   createCaptureState({
     coordinator: { captureTab: async () => ok({} as never) },
     isCurrent: () => true,
-    createHandoffIntent: () => ok({} as never),
-    conclude: async () => ok(undefined),
+    handoff: {
+      prepare: () => ok({} as never),
+      prepareManual: () => ({}) as never,
+      conclude: async () => ok(undefined),
+      retry: async () => ok(undefined),
+    },
   });
 const intent = (payload: unknown): FeatureActivationIntent => ({
   featureId: productCaptureFeatureId,
@@ -32,6 +37,7 @@ test("registrationはnavigationを持たないcanonical transient memberであ�
   assert.equal(registration.presentation, "transient");
   assert.equal("navigation" in registration, false);
   assert.equal(typeof registration.activation?.validate, "function");
+  assert.equal(registration.activation?.validate, validateCaptureActivation);
 });
 
 test("正常activationを検証し、activateごとに新しい実行contextを構築する", async () => {

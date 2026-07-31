@@ -55,8 +55,12 @@ test("production registrationはcontroller要求をmount前に受理し拒否時
   const capture = createCaptureState({
     coordinator: { captureTab: async () => ok({} as never) },
     isCurrent: () => true,
-    createHandoffIntent: () => ok({} as never),
-    conclude: async () => ok(undefined),
+    handoff: {
+      prepare: () => ok({} as never),
+      prepareManual: () => ({}) as never,
+      conclude: async () => ok(undefined),
+      retry: async () => ok(undefined),
+    },
   });
   const persistentId = "fixture-planner" as FeatureId;
   const persistent: ApplicationFeatureRegistration = {

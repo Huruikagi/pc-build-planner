@@ -22,6 +22,9 @@ type UnresolvedCandidateDraft =
   Parameters<CandidateEditorIntentFactory>[0]["draft"];
 type UnresolvedCandidateEditorPrefill =
   Parameters<CandidateEditorIntentFactory>[0];
+type CaptureDiagnostic = NonNullable<
+  UnresolvedCandidateEditorPrefill["captureDiagnostics"]
+>[number];
 export interface CaptureDraftMapperDependencies {
   readonly createSourceId?: () => CandidateSourceId;
 }
@@ -59,6 +62,13 @@ export const createCaptureDraftMapper = (
           (() => createUuid() as CandidateSourceId),
       ),
       ...(categoryHint === undefined ? {} : { categoryHint }),
+      ...(result.rejectedFields.length === 0
+        ? {}
+        : {
+            captureDiagnostics: projectCaptureDiagnostics(
+              result.rejectedFields,
+            ),
+          }),
     });
   },
   toManualDraft() {
@@ -229,6 +239,21 @@ const unresolvedDraftFromResult = (
       ]),
     ),
   };
+};
+
+const projectCaptureDiagnostics = (
+  rejectedFields: CaptureResult["rejectedFields"],
+): NonNullable<UnresolvedCandidateEditorPrefill["captureDiagnostics"]> => {
+  const seen = new Set<string>();
+  return rejectedFields.flatMap(({ field, reason }) => {
+    const projectedField: CaptureDiagnostic["field"] = field.startsWith("spec:")
+      ? ("specification" as const)
+      : (field as CaptureDiagnostic["field"]);
+    const key = `${projectedField}:${reason}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ field: projectedField, reason }];
+  });
 };
 
 export interface UnresolvedCaptureDraftMapper {

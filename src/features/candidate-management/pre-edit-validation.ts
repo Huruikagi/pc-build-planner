@@ -38,6 +38,31 @@ const isPartCategory = (value: unknown): value is PartCategory =>
   typeof value === "string" &&
   (PART_CATEGORIES as readonly string[]).includes(value);
 
+const diagnosticReasons = new Set([
+  "empty",
+  "too-long",
+  "control-characters",
+  "invalid-format",
+  "unresolvable",
+]);
+const captureCoreFields = new Set([
+  "name",
+  "category",
+  "manufacturer",
+  "modelNumber",
+  "price",
+  "url",
+  "specification",
+]);
+const isCaptureDiagnosticField = (value: unknown): boolean =>
+  typeof value === "string" && captureCoreFields.has(value);
+const isCaptureDiagnostic = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKeys(value, ["field", "reason"]) &&
+  isCaptureDiagnosticField(value.field) &&
+  typeof value.reason === "string" &&
+  diagnosticReasons.has(value.reason);
+
 export const validatePreEditDraft = (
   draft: unknown,
 ): Result<UnresolvedCandidateDraft, PreEditDraftError> => {
@@ -58,7 +83,12 @@ export const validateCandidateEditorPrefill = (
 ): Result<UnresolvedCandidateEditorPrefill, CandidateEditorPrefillError> => {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, ["draft", "projectId", "categoryHint"]) ||
+    !hasOnlyKeys(value, [
+      "draft",
+      "projectId",
+      "categoryHint",
+      "captureDiagnostics",
+    ]) ||
     !("draft" in value)
   )
     return err({ kind: "invalid-draft-shape" });
@@ -66,16 +96,36 @@ export const validateCandidateEditorPrefill = (
     return err({ kind: "invalid-project-id" });
   if (value.categoryHint !== undefined && !isPartCategory(value.categoryHint))
     return err({ kind: "invalid-category-hint" });
+  if (
+    value.captureDiagnostics !== undefined &&
+    (!Array.isArray(value.captureDiagnostics) ||
+      !value.captureDiagnostics.every(isCaptureDiagnostic) ||
+      new Set(
+        value.captureDiagnostics.map((diagnostic) =>
+          isRecord(diagnostic)
+            ? `${String(diagnostic.field)}:${String(diagnostic.reason)}`
+            : "invalid",
+        ),
+      ).size !== value.captureDiagnostics.length)
+  )
+    return err({ kind: "invalid-draft-shape" });
   const draft = validatePreEditDraft(value.draft);
   if (!draft.ok) return draft;
   const projectId = value.projectId as
     | UnresolvedCandidateEditorPrefill["projectId"]
     | undefined;
   const categoryHint = value.categoryHint as PartCategory | undefined;
-  if (projectId !== undefined && categoryHint !== undefined)
-    return ok({ draft: draft.value, projectId, categoryHint });
-  if (projectId !== undefined) return ok({ draft: draft.value, projectId });
-  if (categoryHint !== undefined)
-    return ok({ draft: draft.value, categoryHint });
-  return ok({ draft: draft.value });
+  const validated: UnresolvedCandidateEditorPrefill = {
+    draft: draft.value,
+    ...(projectId === undefined ? {} : { projectId }),
+    ...(categoryHint === undefined ? {} : { categoryHint }),
+    ...(value.captureDiagnostics === undefined
+      ? {}
+      : {
+          captureDiagnostics: value.captureDiagnostics as NonNullable<
+            UnresolvedCandidateEditorPrefill["captureDiagnostics"]
+          >,
+        }),
+  };
+  return ok(validated);
 };

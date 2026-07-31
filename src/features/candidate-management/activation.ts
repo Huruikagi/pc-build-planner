@@ -95,7 +95,7 @@ export const createCandidateActivation = (
       resolvedDraft.category === "uncategorized"
         ? withCategory(resolvedDraft, prefill.categoryHint)
         : resolvedDraft;
-    state.beginCreate(initialDraft);
+    state.beginCreate(initialDraft, prefill.captureDiagnostics);
     /**
      * The editor stays closed when the shell forbids mutations, so reporting
      * success would tell an upstream capture feature that an editor it cannot

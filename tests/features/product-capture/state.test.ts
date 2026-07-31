@@ -12,6 +12,7 @@ import {
   type RequestId,
   type UtcTimestamp,
 } from "../../../src/domain/public.js";
+import type { CandidateEditorHandoff } from "../../../src/features/product-capture/editor-handoff.js";
 import { createCaptureState } from "../../../src/features/product-capture/state.js";
 
 const A = "activation-a" as ActivationId;
@@ -25,19 +26,31 @@ const result = {
   draft: { fields: [], missingCoreFields: [] },
   rejectedFields: [],
 };
-const handoff = {
-  createHandoffIntent: () =>
+const handoff: CandidateEditorHandoff = {
+  prepare: () =>
     ok({
       featureId: "candidate-management" as FeatureId,
       target: "open-candidate-editor",
       payload: {},
     }),
   conclude: async () => ok(undefined),
+  prepareManual: () => ({
+    featureId: "candidate-management" as FeatureId,
+    target: "open-candidate-editor",
+    payload: {},
+  }),
+  retry: async () => ok(undefined),
 };
+const withHandoff = (
+  overrides: Partial<CandidateEditorHandoff>,
+): CandidateEditorHandoff => ({
+  ...handoff,
+  ...overrides,
+});
 
 test("activationごとに固定tabを持つidleへ初期化する", () => {
   const state = createCaptureState({
-    ...handoff,
+    handoff,
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
   });
@@ -55,7 +68,7 @@ test("現行世代だけが固定tabの抽出を開始する", async () => {
   const calls: TargetTabId[] = [];
   let current = A;
   const state = createCaptureState({
-    ...handoff,
+    handoff,
     coordinator: {
       async captureTab(tabId) {
         calls.push(tabId);
@@ -73,7 +86,7 @@ test("現行世代だけが固定tabの抽出を開始する", async () => {
 test("失敗は同一世代で再試行できる", async () => {
   let calls = 0;
   const state = createCaptureState({
-    ...handoff,
+    handoff,
     coordinator: {
       async captureTab() {
         calls += 1;
@@ -97,7 +110,7 @@ test("stale callbackとunmount後のcallbackを破棄する", async () => {
   });
   let current = A;
   const state = createCaptureState({
-    ...handoff,
+    handoff,
     coordinator: { captureTab: async () => pending },
     isCurrent: (id) => id === current,
   });
@@ -122,11 +135,12 @@ test("handoff失敗intentを同一世代だけ保持し成功時に破棄する"
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: (id) => id === A,
-    createHandoffIntent: () => ok(intent),
-    async conclude(_activationId, retained) {
-      retries.push(retained);
-      return ok(undefined);
-    },
+    handoff: withHandoff({
+      async retry(_activationId, retained) {
+        retries.push(retained);
+        return ok(undefined);
+      },
+    }),
   });
   state.activate(A, TAB);
   state.retainHandoffFailure({ kind: "transition-failed" }, intent);
@@ -157,11 +171,12 @@ test("shell rollback後も復元したgenerationが進行中handoff失敗を受�
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
-    createHandoffIntent: handoff.createHandoffIntent,
-    conclude: async () => {
-      markConcludeStarted();
-      return pending;
-    },
+    handoff: withHandoff({
+      conclude: async () => {
+        markConcludeStarted();
+        return pending;
+      },
+    }),
   });
   state.activate(A, TAB);
   const capture = state.startCapture();
@@ -188,7 +203,7 @@ test("新activationと終了はretained intentを破棄する", () => {
     payload: {},
   };
   const state = createCaptureState({
-    ...handoff,
+    handoff,
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
   });
@@ -214,11 +229,13 @@ test("現行世代の抽出成功を一度だけtyped concludeし成功後に終
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: (id) => id === A,
-    createHandoffIntent: () => ok(intent),
-    async conclude(id, value) {
-      concluded.push([id, value]);
-      return ok(undefined);
-    },
+    handoff: withHandoff({
+      prepare: () => ok(intent),
+      async conclude(id, value) {
+        concluded.push([id, value]);
+        return ok(undefined);
+      },
+    }),
   });
   state.activate(A, TAB);
   await Promise.all([state.startCapture(), state.startCapture()]);
@@ -236,13 +253,19 @@ test("conclude失敗はintentを保持し同一世代のretryだけを許可す�
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: (id) => id === A,
-    createHandoffIntent: () => ok(intent),
-    async conclude() {
-      attempts += 1;
-      return attempts === 1
-        ? err({ kind: "transition-failed" })
-        : ok(undefined);
-    },
+    handoff: withHandoff({
+      prepare: () => ok(intent),
+      async conclude() {
+        attempts += 1;
+        return attempts === 1
+          ? err({ kind: "transition-failed" })
+          : ok(undefined);
+      },
+      async retry() {
+        attempts += 1;
+        return ok(undefined);
+      },
+    }),
   });
   state.activate(A, TAB);
   await state.startCapture();
@@ -270,14 +293,16 @@ test("抽出後にstaleとなった世代はintent生成もconcludeもしない"
   const state = createCaptureState({
     coordinator: { captureTab: async () => pending },
     isCurrent: (id) => id === current,
-    createHandoffIntent: () => {
-      intents += 1;
-      return ok({} as FeatureActivationIntent);
-    },
-    async conclude() {
-      concludes += 1;
-      return ok(undefined);
-    },
+    handoff: withHandoff({
+      prepare: () => {
+        intents += 1;
+        return ok({} as FeatureActivationIntent);
+      },
+      async conclude() {
+        concludes += 1;
+        return ok(undefined);
+      },
+    }),
   });
   state.activate(A, TAB);
   const run = state.startCapture();
@@ -303,11 +328,12 @@ test("retained intentの同時retryはconcludeを一度だけ呼ぶ", async () =
   const state = createCaptureState({
     coordinator: { captureTab: async () => ok(result) },
     isCurrent: () => true,
-    createHandoffIntent: handoff.createHandoffIntent,
-    async conclude() {
-      calls += 1;
-      return pending;
-    },
+    handoff: withHandoff({
+      async retry() {
+        calls += 1;
+        return pending;
+      },
+    }),
   });
   state.activate(A, TAB);
   state.retainHandoffFailure({ kind: "transition-failed" }, intent);
@@ -331,13 +357,15 @@ test("concludeの後着成功と失敗は新activationを変更しない", async
     const state = createCaptureState({
       coordinator: { captureTab: async () => ok(result) },
       isCurrent: () => true,
-      createHandoffIntent: () =>
-        ok({
-          featureId: "candidate-management" as FeatureId,
-          target: "open-candidate-editor",
-          payload: {},
-        }),
-      conclude: async () => pending,
+      handoff: withHandoff({
+        prepare: () =>
+          ok({
+            featureId: "candidate-management" as FeatureId,
+            target: "open-candidate-editor",
+            payload: {},
+          }),
+        conclude: async () => pending,
+      }),
     });
     state.activate(A, TAB);
     const run = state.startCapture();
@@ -369,12 +397,13 @@ test("候補なしの場合だけ空名manual draftをtyped concludeする", asy
   const state = createCaptureState({
     coordinator: { captureTab: async () => err({ kind: "no-candidate" }) },
     isCurrent: () => true,
-    createHandoffIntent: handoff.createHandoffIntent,
-    createManualIntent: () => intent,
-    async conclude(_id, value) {
-      concluded.push(value);
-      return ok(undefined);
-    },
+    handoff: withHandoff({
+      prepareManual: () => intent,
+      async conclude(_id, value) {
+        concluded.push(value);
+        return ok(undefined);
+      },
+    }),
   });
   state.activate(A, TAB);
   await state.startManualEntry();
@@ -401,14 +430,19 @@ test("manual conclude失敗はintentを保持し、retryでは再抽出しない
       },
     },
     isCurrent: () => true,
-    createHandoffIntent: handoff.createHandoffIntent,
-    createManualIntent: () => intent,
-    async conclude() {
-      concludes += 1;
-      return concludes === 1
-        ? err({ kind: "transition-failed" })
-        : ok(undefined);
-    },
+    handoff: withHandoff({
+      prepareManual: () => intent,
+      async conclude() {
+        concludes += 1;
+        return concludes === 1
+          ? err({ kind: "transition-failed" })
+          : ok(undefined);
+      },
+      async retry() {
+        concludes += 1;
+        return ok(undefined);
+      },
+    }),
   });
 
   state.activate(A, TAB);
@@ -436,13 +470,14 @@ test("manual handoffの後着結果は新activationを変更しない", async ()
   const state = createCaptureState({
     coordinator: { captureTab: async () => err({ kind: "no-candidate" }) },
     isCurrent: () => true,
-    createHandoffIntent: handoff.createHandoffIntent,
-    createManualIntent: () => ({
-      featureId: "candidate-management" as FeatureId,
-      target: "open-candidate-editor",
-      payload: {},
+    handoff: withHandoff({
+      prepareManual: () => ({
+        featureId: "candidate-management" as FeatureId,
+        target: "open-candidate-editor",
+        payload: {},
+      }),
+      conclude: async () => pending,
     }),
-    conclude: async () => pending,
   });
 
   state.activate(A, TAB);

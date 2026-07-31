@@ -130,6 +130,31 @@ test("通常sourceとdomain-mapのprovenanceを公開pre-edit契約へ保持す�
   });
 });
 
+test("棄却値を露出せずfieldとstable reasonだけをeditor prefillへ渡す", () => {
+  const input = {
+    ...captureResult(),
+    rejectedFields: [
+      { field: "name", reason: "too-long" },
+      { field: "price", reason: "invalid-format" },
+      { field: "spec: socket:nested\u0000", reason: "unresolvable" },
+      { field: "spec:another-page-label", reason: "unresolvable" },
+    ],
+  } as const;
+  const mapped = createCaptureDraftMapper().toEditorPrefill(input);
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  assert.deepEqual(mapped.value.captureDiagnostics, [
+    { field: "name", reason: "too-long" },
+    { field: "price", reason: "invalid-format" },
+    { field: "specification", reason: "unresolvable" },
+  ]);
+  assert.equal(
+    JSON.stringify(mapped.value.captureDiagnostics).includes("rawValue"),
+    false,
+  );
+  assert.equal("captureDiagnostics" in mapped.value.draft, false);
+});
+
 test("カテゴリは確定せずcandidate editorの参考値へ写像する", () => {
   const mapped = createCaptureDraftMapper().toEditorPrefill(
     captureResult([

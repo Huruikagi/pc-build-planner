@@ -99,7 +99,11 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
   const prepared = router.prepare({
     featureId,
     target: "open-candidate-editor",
-    payload: { projectId: prefillProjectId, draft: unresolvedNamedDraft },
+    payload: {
+      projectId: prefillProjectId,
+      draft: unresolvedNamedDraft,
+      captureDiagnostics: [{ field: "price", reason: "invalid-format" }],
+    },
   });
   assert.equal(prepared.ok, true);
   if (!prepared.ok) return;
@@ -112,7 +116,9 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
     mode: "create",
     projectId: prefillProjectId,
     draft: prefill,
+    captureDiagnostics: [{ field: "price", reason: "invalid-format" }],
   });
+  assert.equal("captureDiagnostics" in state.value.editor.draft, false);
   assert.equal((await prepared.value.activate()).ok, false);
 });
 

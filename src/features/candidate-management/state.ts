@@ -58,6 +58,9 @@ export type CandidateEditor =
       readonly mode: "create";
       readonly projectId: ProjectId;
       readonly draft: CandidateDraft;
+      readonly captureDiagnostics?: NonNullable<
+        UnresolvedCandidateEditorPrefill["captureDiagnostics"]
+      >;
     }
   | {
       readonly mode: "edit";
@@ -356,6 +359,9 @@ export class ManagementState {
           mode: "create",
           projectId: result.value.id,
           draft: resolvedDraft,
+          ...(pendingToResolve.captureDiagnostics === undefined
+            ? {}
+            : { captureDiagnostics: pendingToResolve.captureDiagnostics }),
         },
         pendingPreEdit: null,
         isSaving: false,
@@ -397,10 +403,20 @@ export class ManagementState {
     await this.load();
   }
 
-  public beginCreate(draft: CandidateDraft): void {
+  public beginCreate(
+    draft: CandidateDraft,
+    captureDiagnostics?: NonNullable<
+      UnresolvedCandidateEditorPrefill["captureDiagnostics"]
+    >,
+  ): void {
     if (this.#mutationsDisabled()) return;
     this.#set({
-      editor: { mode: "create", projectId: draft.projectId, draft },
+      editor: {
+        mode: "create",
+        projectId: draft.projectId,
+        draft,
+        ...(captureDiagnostics === undefined ? {} : { captureDiagnostics }),
+      },
       displayError: null,
       fieldErrors: emptyFieldErrors,
     });
