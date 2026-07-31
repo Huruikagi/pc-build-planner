@@ -286,3 +286,4 @@
 ## Implementation Notes
 
 - タスク3.1/3.3: `src/ui-language/react.tsx`（JSX不使用でも）や `language-select.tsx` を `pnpm test`（`--test-isolation=none` で全テストが単一プロセスを共有）のフル実行下に置くと、`tests/persistence/**` の拡張子明示 `.ts` 動的importが tsx のローダーを desync させ、以後の `.js` 指定子から `.tsx` ファイルへのフォールバック解決が `ERR_MODULE_NOT_FOUND` で失敗する（`ui-message-catalog` タスク2.5で既知の同一問題）。孤立実行では再現せず、`pnpm test` の実行順でのみ顕在化する。回避策は同じ: `src/ui-language/` 配下の新規モジュールは実DOMを描画する場合でも JSX 構文を避けて `createElement` ベースの `.ts` ファイルとする（`react.tsx`→`react.ts`、`language-select.tsx`→`language-select.ts`）。**テストファイル自体は `.tsx` のままで問題ない**（失敗するのは相対 `.js` 指定子を介した解決であり、テストランナーが直接開く entry ファイルの拡張子ではないため）。
+- validation remediation: `ui-language` consumerの許可入口はsource pathへ厳密に結び付ける。canonical `src/ui-language/`だけをowner、canonical `src/runtime/`だけをruntime seam利用者とし、application-shellと全featureは`public`のみを許可する。パス中に偽の`runtime/`または`ui-language/`を置く迂回も負例で拒否する。

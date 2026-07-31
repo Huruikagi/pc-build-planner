@@ -159,6 +159,8 @@ const isForbiddenSettingsImport = (sourcePath, specifier) => {
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
   if (!normalizedSpecifier.startsWith(".")) return false;
   if (normalizedSpecifier.startsWith("./")) return false;
+  // ui-language has a stricter source-aware seam policy below.
+  if (/(?:^|\/)ui-language\//.test(normalizedSpecifier)) return false;
   return !/(?:^|\/)(?:application-shell|ui-language|ui-messages|features\/backup-restore|backup-restore)\/public(?:\.js|\.ts)?$/.test(
     normalizedSpecifier,
   );
@@ -167,7 +169,7 @@ const isForbiddenSettingsImport = (sourcePath, specifier) => {
 /** @param {string} sourcePath @param {string} specifier */
 const isForbiddenUiLanguageImport = (sourcePath, specifier) => {
   const normalizedSource = sourcePath.replaceAll("\\", "/");
-  if (!/(?:^|\/)ui-language\//.test(normalizedSource)) return false;
+  if (!/(?:^|\/)src\/ui-language\//.test(normalizedSource)) return false;
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
   if (!normalizedSpecifier.startsWith(".")) return false;
   if (normalizedSpecifier.startsWith("./")) return false;
@@ -179,18 +181,21 @@ const isForbiddenUiLanguageImport = (sourcePath, specifier) => {
 /** @param {string} sourcePath @param {string} specifier */
 const isForbiddenUiLanguageConsumerImport = (sourcePath, specifier) => {
   const normalizedSource = sourcePath.replaceAll("\\", "/");
-  if (/(?:^|\/)ui-language\//.test(normalizedSource)) return false;
-  if (
-    !/(?:^|\/)(?:application-shell|features\/settings|runtime)\//.test(
+  if (/(?:^|\/)src\/ui-language\//.test(normalizedSource)) return false;
+  const isRuntime = /(?:^|\/)src\/runtime\//.test(normalizedSource);
+  const isPublicConsumer =
+    isRuntime ||
+    /(?:^|\/)src\/(?:application-shell|features\/[^/]+)\//.test(
       normalizedSource,
-    )
-  )
-    return false;
+    );
+  if (!isPublicConsumer) return false;
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
   if (!/(?:^|\/)ui-language\//.test(normalizedSpecifier)) return false;
-  return !/(?:^|\/)ui-language\/(?:public|runtime)(?:\.js|\.ts)?$/.test(
-    normalizedSpecifier,
-  );
+  const allowedEntry = isRuntime ? /^(?:public|runtime)$/ : /^public$/;
+  const entry = normalizedSpecifier.match(
+    /(?:^|\/)ui-language\/([^/]+?)(?:\.js|\.ts)?$/,
+  )?.[1];
+  return entry === undefined || !allowedEntry.test(entry);
 };
 
 /** @param {string} value */

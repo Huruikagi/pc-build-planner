@@ -306,6 +306,84 @@ test("runtimeはui-languageのpublicまたはruntime seamだけを利用する",
   );
 });
 
+test("ui-language consumerはsource別に許可された公開seamだけを利用する", () => {
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/application-shell/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "../ui-language/runtime.js";',
+      },
+      {
+        path: "src/features/settings/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "../../ui-language/runtime.js";',
+      },
+      {
+        path: "src/features/mock/runtime/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "../../../ui-language/runtime.js";',
+      },
+      {
+        path: "src/features/product-capture/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "../../ui-language/runtime.js";',
+      },
+      {
+        path: "src/features/candidate-management/language-internal.ts",
+        source: 'import { languageStore } from "../../ui-language/store.js";',
+      },
+      {
+        path: "src/features/mock/ui-language/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "src/ui-language/runtime.js";',
+      },
+      {
+        path: "src/application-shell/ui-language/language-internal.ts",
+        source: 'import { languageStore } from "../../ui-language/store.js";',
+      },
+    ]).map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/application-shell/language-runtime.ts: ui-language-consumer-public-entry-only",
+      "src/features/settings/language-runtime.ts: ui-language-consumer-public-entry-only",
+      "src/features/mock/runtime/language-runtime.ts: ui-language-consumer-public-entry-only",
+      "src/features/product-capture/language-runtime.ts: ui-language-consumer-public-entry-only",
+      "src/features/candidate-management/language-internal.ts: ui-language-consumer-public-entry-only",
+      "src/features/mock/ui-language/language-runtime.ts: ui-language-consumer-public-entry-only",
+      "src/application-shell/ui-language/language-internal.ts: ui-language-consumer-public-entry-only",
+    ],
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/application-shell/language-public.ts",
+        source: 'import { LanguageProvider } from "../ui-language/public.js";',
+      },
+      {
+        path: "src/features/settings/language-public.ts",
+        source:
+          'import { LanguageSelectControl } from "../../ui-language/public.js";',
+      },
+      {
+        path: "src/features/product-capture/language-public.ts",
+        source:
+          'import { LanguageProvider } from "../../ui-language/public.js";',
+      },
+      {
+        path: "src/runtime/language-public.ts",
+        source: 'import { LanguageProvider } from "../ui-language/public.js";',
+      },
+      {
+        path: "src/runtime/language-runtime.ts",
+        source:
+          'import { initializeUiLanguage } from "../ui-language/runtime.js";',
+      },
+    ]),
+    [],
+  );
+});
+
 test("backup-restoreの公開面はsettings埋め込みsectionだけに限定する", async () => {
   const publicSource = await readFile(
     "src/features/backup-restore/public.ts",
