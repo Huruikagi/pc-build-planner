@@ -2,7 +2,7 @@
 
 - [ ] 1. 公開境界と実行前提を確立する
 
-- [ ] 1.1 上流portを消費する価格更新の公開契約を確立する
+- [x] 1.1 上流portを消費する価格更新の公開契約を確立する
   - 各producer specで定義・承認済みの `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`PagePriceExtractionPort`、`TransientGestureRegistrationPort` だけを依存として受け入れる。
   - candidate-managementの `sources.catalog` / `sources.mutations`、product-captureの `pagePriceExtraction`、application shellの同期gesture registrationという確定済み公開入口をconsumer contractへ固定する。
   - URL照合scope、matched target、price observation、receipt、判別可能なerror unionを型安全に公開する。
@@ -170,3 +170,10 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.5, 2.6, 2.7, 2.8, 3.5, 3.6, 4.1, 4.2, 4.3, 5.1, 5.2, 5.5, 6.1, 6.2, 6.4, 6.5, 6.6, 6.7_
   - _Boundary: SourcePriceRefreshE2E_
   - _Depends: 5.1, 5.2, 5.3_
+
+## Implementation Notes
+
+- 1.1: 公開型exportは公開consumer fixtureから実際に参照させないと回帰検知が成立しない。type-onlyのexportは削除してもtypecheckが通るため、error unionは `switch` + `const exhaustive: never` で網羅性を固定し、値の往復（match → refresh → receipt）をfixtureで組み立てること。
+- 1.1: `NormalizedSourcePageUrl` などのbrand型はdesign.mdのstring property brand記法ではなく、既存 `src/domain/identifiers.ts` と同じ `unique symbol` brand方式に揃える。
+- 1.1: 新しい公開consumer fixtureを追加したら `package.json` の `validate:boundaries` 引数と `tsconfig.public-consumer.json` の include の両方へ登録する。
+- 1.1: feature source から application-shell 非公開moduleへのimportを止めるrule（`settings-public-dependencies-only` 相当）が `scripts/validate-boundaries.mjs` に未整備。task 5.2 のboundary coverageで対応する。

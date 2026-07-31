@@ -689,7 +689,7 @@ export const findBoundaryViolations = (sources) => {
             normalizedPath,
           );
         const isSourcePriceRefreshUpstreamConsumer =
-          /(?:^|\/)tests\/tooling\/source-price-refresh-upstream-consumer\.ts$/.test(
+          /(?:^|\/)tests\/tooling\/source-price-refresh-(?:upstream|public)-consumer\.ts$/.test(
             normalizedPath,
           );
         const isCandidateSourceBookmarks =

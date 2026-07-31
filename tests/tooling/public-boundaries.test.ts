@@ -240,6 +240,16 @@ test("cross-spec consumerはcaptureのprice portだけを公開入口から利�
       path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
       source: 'import type { Result } from "../../src/domain/public.js";',
     },
+    {
+      path: "tests/tooling/source-price-refresh-public-consumer.ts",
+      source:
+        'import type { PagePriceObservation } from "../../src/features/product-capture/contracts.js";',
+    },
+    {
+      path: "tests/tooling/source-price-refresh-public-consumer.ts",
+      source:
+        'import type { ProductCapturePublicApi } from "../../src/features/product-capture/public.js";',
+    },
   ];
   const violations = findBoundaryViolations([
     ...forbiddenSources,
@@ -263,6 +273,11 @@ test("cross-spec consumerはcaptureのprice portだけを公開入口から利�
     findBoundaryViolations([
       {
         path: "tests/tooling/source-price-refresh-upstream-consumer.ts",
+        source:
+          'import type { PagePriceExtractionPort } from "../../src/features/product-capture/public.js";',
+      },
+      {
+        path: "tests/tooling/source-price-refresh-public-consumer.ts",
         source:
           'import type { PagePriceExtractionPort } from "../../src/features/product-capture/public.js";',
       },

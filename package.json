@@ -16,7 +16,7 @@
     "install:e2e-browser": "playwright install chromium",
     "test:e2e": "pnpm build && playwright test",
     "build": "node scripts/build.mjs",
-    "validate:boundaries": "node scripts/validate-boundaries.mjs src/features src/application-shell src/runtime src/ui-language src/persistence tests/tooling/public-api-consumer.ts tests/tooling/source-price-refresh-consumer.ts tests/tooling/source-price-refresh-upstream-consumer.ts",
+    "validate:boundaries": "node scripts/validate-boundaries.mjs src/features src/application-shell src/runtime src/ui-language src/persistence tests/tooling/public-api-consumer.ts tests/tooling/source-price-refresh-consumer.ts tests/tooling/source-price-refresh-public-consumer.ts tests/tooling/source-price-refresh-upstream-consumer.ts",
     "validate:fixtures": "node --import tsx scripts/validate-fixture-assets.mjs tests/fixtures tests/fixtures/source-fixture-registry.ts",
     "validate:artifacts": "node scripts/validate-artifacts.mjs dist && node scripts/validate-boundaries.mjs dist && node scripts/validate-fixture-assets.mjs dist --exclude-executables",
     "validate:final-build": "node scripts/validate-final-gate.mjs dist",
