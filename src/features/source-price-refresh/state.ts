@@ -24,10 +24,11 @@ export interface SourcePriceRefreshStateDependencies {
    * Contract: this must always settle with a typed `Result` and never reject.
    * Turning infrastructure failures into `SourcePriceRefreshError` values is the
    * workflow's obligation (`SourcePriceRefreshService`), because only it knows
-   * which kind actually occurred. The state deliberately does not catch: there
-   * is no `unknown` member in the union to map a thrown value onto, and
-   * inventing one would both misreport the cause and, if reported as
-   * recoverable, invite endless retries of a deterministic defect.
+   * which kind actually occurred — including a port that breaks its own
+   * contract by throwing, which the workflow contains as `unexpected`. The state
+   * deliberately does not catch: mapping a thrown value here would report a
+   * containment the workflow may not actually have performed, and the boundary
+   * that owns the ports is the one that can honestly describe them.
    */
   readonly runRefresh: (
     input: SourcePriceRefreshWorkflowInput,
@@ -37,9 +38,10 @@ export interface SourcePriceRefreshStateDependencies {
 
 /**
  * Single rule, taken from the design's error table: a failure is recoverable
- * when the user's way forward ends in re-running the same context menu gesture,
- * and not recoverable when the user must first repair stored candidate source
- * data. The table's only non-retry rows are `no-match` (review stored sources)
+ * exactly when the user's way forward ends in re-running the same context menu
+ * gesture, and not recoverable when it does not — because something else must
+ * be repaired first, or because nothing the user can do makes the same gesture
+ * succeed. The table's only non-retry rows are `no-match` (review stored sources)
  * and `ambiguous-match` (de-duplicate stored sources); every other listed row
  * ends in "retry", including `ineligible-source`, whose guidance is to re-run on
  * a retail source rather than to repair anything.
@@ -50,7 +52,11 @@ export interface SourcePriceRefreshStateDependencies {
  * is repaired; `invalid-url` and `restricted-page` are the page-side analogue of
  * `ineligible-source` (re-run on an eligible page, nothing stored is broken);
  * the remaining extraction, tab, permission and generation failures are all
- * transient conditions the same gesture can clear.
+ * transient conditions the same gesture can clear. `unexpected` is the one
+ * non-recoverable kind that no stored data repair can clear either: an upstream
+ * port broke its `Result` contract, which is a deterministic defect in the
+ * extension, so the same gesture reproduces it and the rule's "ends in a re-run"
+ * test fails.
  */
 export const isRecoverableSourcePriceRefreshError = (
   error: SourcePriceRefreshError,
@@ -60,6 +66,7 @@ export const isRecoverableSourcePriceRefreshError = (
     case "ambiguous-match":
     case "validation":
     case "unsupported-data":
+    case "unexpected":
       return false;
     case "invalid-url":
     case "ineligible-source":

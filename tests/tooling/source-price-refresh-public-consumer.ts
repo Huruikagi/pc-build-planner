@@ -113,7 +113,8 @@ export type SourcePriceRefreshRecovery =
   | "check-page-price"
   | "reload-candidate"
   | "retry-after-maintenance"
-  | "check-storage";
+  | "check-storage"
+  | "report-extension-defect";
 
 export type SourcePriceRefreshOutcome =
   | {
@@ -180,6 +181,9 @@ export const sourcePriceRefreshRecovery = (
       return "retry-context-menu";
     case "stale-target":
       return "reload-candidate";
+    // 上流portの契約違反。原因が判別できないため再実行を案内しない。
+    case "unexpected":
+      return "report-extension-defect";
     case "validation":
     case "conflict":
     case "maintenance":

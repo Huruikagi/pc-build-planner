@@ -4,8 +4,9 @@
  * 文言にも埋め込まない（要件5.6）。
  *
  * `guidance` は design.md のエラー表を典拠に共有し、`errors` の各kindから
- * 参照する。保存データの修復を先に求める案内（`reviewStoredSources`、
- * `deduplicateSources`、`repairStoredSource`）にだけ再実行を書かない。
+ * 参照する。再実行では解消しない案内、すなわち保存データの修復を先に求める
+ * 三つ（`reviewStoredSources`、`deduplicateSources`、`repairStoredSource`）と、
+ * 利用者の操作では解消しない `reportExtensionDefect` にだけ再実行を書かない。
  */
 export const sourcePriceRefresh = {
   title: "価格の更新",
@@ -44,6 +45,8 @@ export const sourcePriceRefresh = {
     maintenance: "保存基盤が保守中のため、更新を確定しませんでした。",
     storage: "保存領域の障害により、更新を確定しませんでした。",
     quota: "保存容量が不足しているため、更新を確定しませんでした。",
+    unexpected:
+      "拡張機能の内部で想定外の問題が発生し、更新を完了できませんでした。",
   },
   guidance: {
     reviewStoredSources: "保存済みの取得元一覧を確認してください。",
@@ -62,5 +65,7 @@ export const sourcePriceRefresh = {
     retryAfterMaintenance: "保守が終わってから、もう一度実行してください。",
     checkStorageThenRetry:
       "保存領域の空き容量を確認してから、もう一度実行してください。",
+    reportExtensionDefect:
+      "同じ操作を繰り返しても解消しません。拡張機能の更新を確認し、それでも続く場合は開発元へ報告してください。",
   },
 } as const;

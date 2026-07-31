@@ -31,7 +31,9 @@ import type {
   PagePriceObservation,
 } from "../../../src/features/product-capture/public.js";
 import type {
+  MatchedCandidateSource,
   MatchStoredSourceInput,
+  NormalizedSourcePageUrl,
   RefreshCapturedPriceInput,
   SourcePriceRefreshError,
   SourcePriceRefreshPort,
@@ -137,6 +139,12 @@ interface StoredCandidate {
 
 interface FakeStoreOptions {
   readonly mutationFailure?: ManagementError;
+  /**
+   * Makes `updateSource` violate its `Result` contract by throwing, after the
+   * call has been recorded. Lets a test observe both the containment and the
+   * absence of any compensating second write.
+   */
+  readonly mutationThrows?: boolean;
   /** Runs after a mutation is applied, so a generation can flip mid-commit. */
   readonly onUpdate?: () => void;
 }
@@ -236,6 +244,8 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
     setPrimarySource: unsupported,
     async updateSource(input): Promise<Result<void, ManagementError>> {
       updateInputs.push(input);
+      if (options.mutationThrows === true)
+        throw new Error("mutation port contract violated");
       if (options.mutationFailure !== undefined)
         return err(options.mutationFailure);
       const index = candidate.sources.findIndex(
@@ -658,6 +668,142 @@ test("一回のactivationだけで抽出失敗から失敗表示まで進む", a
     recoverable: true,
   });
   assert.deepEqual(harness.store.updateInputs, []);
+});
+
+const matchedTarget: MatchedCandidateSource = {
+  candidateId: candidateA,
+  sourceId: primaryId,
+  normalizedPageUrl: pageUrl as NormalizedSourcePageUrl,
+  isPrimary: true,
+};
+
+/** Keeps its `Result` contract, so only the deliberately throwing half is under test. */
+const compliantRefresh: SourcePriceRefreshPort = {
+  matchSource: async () => ok(matchedTarget),
+  refreshCapturedPrice: async () =>
+    ok({
+      candidateId: candidateA,
+      sourceId: primaryId,
+      price: newPrice,
+      capturedAt: newCapturedAt,
+      isPrimary: true,
+    }),
+};
+
+const compliantExtraction: PagePriceExtractionPort = {
+  extractPrice: async () => ok(observation()),
+};
+
+test("抽出portが契約に反して例外を投げてもrejectせずunexpectedでsettleする", async () => {
+  const runRefresh = createSourcePriceRefreshWorkflow({
+    refresh: compliantRefresh,
+    pagePriceExtraction: {
+      extractPrice(): Promise<ExtractionResult> {
+        throw new Error("extraction port contract violated");
+      },
+    },
+    isCurrent: () => true,
+  });
+
+  let result: RefreshResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await runRefresh({
+      activationId: activationOf("a"),
+      tabId: targetTab,
+    });
+  });
+
+  assert.deepEqual(result, { ok: false, error: { kind: "unexpected" } });
+});
+
+test("照合portが契約に反して例外を投げてもrejectせずunexpectedでsettleする", async () => {
+  const runRefresh = createSourcePriceRefreshWorkflow({
+    refresh: {
+      ...compliantRefresh,
+      matchSource: () =>
+        Promise.reject(new Error("match port contract violated")),
+    },
+    pagePriceExtraction: compliantExtraction,
+    isCurrent: () => true,
+  });
+
+  let result: RefreshResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await runRefresh({
+      activationId: activationOf("a"),
+      tabId: targetTab,
+    });
+  });
+
+  assert.deepEqual(result, { ok: false, error: { kind: "unexpected" } });
+});
+
+test("更新portが契約に反して例外を投げてもrejectせずunexpectedでsettleする", async () => {
+  const runRefresh = createSourcePriceRefreshWorkflow({
+    refresh: {
+      ...compliantRefresh,
+      refreshCapturedPrice(): Promise<RefreshResult> {
+        throw new Error("refresh port contract violated");
+      },
+    },
+    pagePriceExtraction: compliantExtraction,
+    isCurrent: () => true,
+  });
+
+  let result: RefreshResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await runRefresh({
+      activationId: activationOf("a"),
+      tabId: targetTab,
+    });
+  });
+
+  assert.deepEqual(result, { ok: false, error: { kind: "unexpected" } });
+});
+
+test("mutation経路の例外は補償書き込みを一切発行しない", async () => {
+  const harness = createHarness({ mutationThrows: true });
+  const settled = harness.runRefresh({
+    activationId: activationOf("a"),
+    tabId: targetTab,
+  });
+  harness.extraction.settle(ok(observation()));
+
+  let result: RefreshResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await settled;
+  });
+
+  assert.deepEqual(result, { ok: false, error: { kind: "unexpected" } });
+  assert.equal(
+    harness.store.updateInputs.length,
+    1,
+    "巻き戻しのための追加mutationを発行しない",
+  );
+});
+
+test("上流portの例外でもstateはrunningに留まらずrecoverable:falseのfailedへ到達する", async () => {
+  const harness = createHarness({ mutationThrows: true });
+  const state = createSourcePriceRefreshState({
+    runRefresh: harness.runRefresh,
+    isCurrent: harness.isCurrent,
+  });
+  const activationId = activationOf("a");
+
+  const settled = state.activate(activationId, targetTab);
+  harness.extraction.settle(ok(observation()));
+  await settled;
+
+  assert.deepEqual(
+    state.value,
+    {
+      status: "failed",
+      activationId,
+      error: { kind: "unexpected" },
+      recoverable: false,
+    },
+    "理由も回復案内もないspinnerのまま固まらない",
+  );
 });
 
 test("旧世代の抽出完了はstateの表示も保存状態も変更しない", async () => {

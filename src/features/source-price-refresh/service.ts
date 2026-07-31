@@ -123,11 +123,11 @@ const updatedSource = (
  * returns before `updateSource` is called, or is reported without retrying, so
  * the previously stored price and `capturedAt` always survive.
  *
- * Port calls are not wrapped in `try`: both upstream ports are contracted to
- * settle with a typed `Result`, and the error union has no member that could
- * honestly describe a thrown value. Reusing an unrelated kind would misreport
- * the cause and, since most kinds are user-retryable, invite endless retries of
- * a deterministic defect.
+ * Port calls are not wrapped in `try` here. Both upstream ports are contracted
+ * to settle with a typed `Result`, and a violation of that contract is
+ * contained once, at the workflow that owns the whole run, rather than at every
+ * intermediate layer; catching here as well would only duplicate the same
+ * `unexpected` verdict at a boundary that has less of the run in view.
  */
 export const createSourcePriceRefreshService = (
   dependencies: SourcePriceRefreshServiceDependencies,
@@ -193,6 +193,7 @@ export const createSourcePriceRefreshService = (
 };
 
 const staleActivation: SourcePriceRefreshError = { kind: "stale-activation" };
+const unexpected: SourcePriceRefreshError = { kind: "unexpected" };
 
 /**
  * The context menu path always matches against every stored source: the gesture
@@ -242,11 +243,18 @@ const observedInput = (
  *    and a compensating write would be a second, unrequested mutation.
  *
  * Every branch returns a typed `Result`, so the state layer never has to invent
- * an error kind. Port calls are not wrapped in `try`: all three ports are
- * contracted to settle with a typed `Result`, and the error union has no member
- * that could honestly describe a thrown value. Reusing an unrelated kind would
- * misreport the cause and, since most kinds are user-retryable, invite endless
- * retries of a deterministic defect.
+ * an error kind. All three ports are contracted to settle with a typed `Result`,
+ * but a port that breaks that contract by throwing must not escape either: the
+ * state awaits this function and would be left showing progress forever, with
+ * no reason and no way forward. The whole run is therefore contained and
+ * reported as `unexpected`, the one member that claims nothing about the cause.
+ * The `catch` takes no binding on purpose, so the thrown value cannot be
+ * captured, logged or surfaced (requirement 5.6).
+ *
+ * Containment adds no compensation. A throw from the mutation path leaves
+ * whatever the upstream aggregate did in place, exactly as a superseded
+ * generation does: a rollback would be a second, unrequested mutation issued on
+ * the strength of a cause this code cannot know.
  */
 export const createSourcePriceRefreshWorkflow = (
   dependencies: SourcePriceRefreshWorkflowDependencies,
@@ -255,25 +263,29 @@ export const createSourcePriceRefreshWorkflow = (
 ) => Promise<Result<SourcePriceRefreshReceipt, SourcePriceRefreshError>>) => {
   const { refresh, pagePriceExtraction, isCurrent } = dependencies;
   return async ({ activationId, tabId }) => {
-    if (!isCurrent(activationId)) return err(staleActivation);
+    try {
+      if (!isCurrent(activationId)) return err(staleActivation);
 
-    const extracted = await pagePriceExtraction.extractPrice(tabId);
-    // Checked before the result is inspected: a superseded generation's failure
-    // is not the current generation's failure either.
-    if (!isCurrent(activationId)) return err(staleActivation);
-    if (!extracted.ok) return err(extracted.error);
+      const extracted = await pagePriceExtraction.extractPrice(tabId);
+      // Checked before the result is inspected: a superseded generation's
+      // failure is not the current generation's failure either.
+      if (!isCurrent(activationId)) return err(staleActivation);
+      if (!extracted.ok) return err(extracted.error);
 
-    const observation = extracted.value;
-    const matched = await refresh.matchSource({
-      scope: catalogScope,
-      pageUrl: observation.pageUrl,
-    });
-    if (!matched.ok) return err(matched.error);
+      const observation = extracted.value;
+      const matched = await refresh.matchSource({
+        scope: catalogScope,
+        pageUrl: observation.pageUrl,
+      });
+      if (!matched.ok) return err(matched.error);
 
-    const updated = await refresh.refreshCapturedPrice(
-      observedInput(matched.value, observation),
-    );
-    if (!isCurrent(activationId)) return err(staleActivation);
-    return updated;
+      const updated = await refresh.refreshCapturedPrice(
+        observedInput(matched.value, observation),
+      );
+      if (!isCurrent(activationId)) return err(staleActivation);
+      return updated;
+    } catch {
+      return err(unexpected);
+    }
   };
 };

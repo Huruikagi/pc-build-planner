@@ -32,22 +32,26 @@ const causeMessageKeys = {
   maintenance: "sourcePriceRefresh.errors.maintenance",
   storage: "sourcePriceRefresh.errors.storage",
   quota: "sourcePriceRefresh.errors.quota",
+  unexpected: "sourcePriceRefresh.errors.unexpected",
 } as const satisfies Record<FailureKind, MessageKey>;
 
 /**
  * Recovery guidance per failure kind, taken from design.md's error table. The
  * grouping deliberately mirrors `isRecoverableSourcePriceRefreshError`: the
- * three repair-first entries (`reviewStoredSources`, `deduplicateSources`,
- * `repairStoredSource`) are exactly the kinds that classification reports as
- * non-recoverable, so the panel never invites a re-run the state considers
- * pointless. Kinds absent from the table follow the same rule the state's
- * documentation derives them from.
+ * four non-retry entries (`reviewStoredSources`, `deduplicateSources`,
+ * `repairStoredSource`, `reportExtensionDefect`) are exactly the kinds that
+ * classification reports as non-recoverable, so the panel never invites a re-run
+ * the state considers pointless. The first three ask the user to repair stored
+ * data; `reportExtensionDefect` is the one case no user action can clear, so it
+ * points at the extension instead. Kinds absent from the table follow the same
+ * rule the state's documentation derives them from.
  */
 const guidanceMessageKeys = {
   "no-match": "sourcePriceRefresh.guidance.reviewStoredSources",
   "ambiguous-match": "sourcePriceRefresh.guidance.deduplicateSources",
   validation: "sourcePriceRefresh.guidance.repairStoredSource",
   "unsupported-data": "sourcePriceRefresh.guidance.repairStoredSource",
+  unexpected: "sourcePriceRefresh.guidance.reportExtensionDefect",
   "ineligible-source": "sourcePriceRefresh.guidance.retryOnRetailSource",
   "invalid-url": "sourcePriceRefresh.guidance.retryOnEligiblePage",
   "restricted-page": "sourcePriceRefresh.guidance.retryOnEligiblePage",

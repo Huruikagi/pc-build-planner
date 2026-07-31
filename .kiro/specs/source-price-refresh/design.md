@@ -404,6 +404,7 @@ export type SourcePriceRefreshError =
   | { readonly kind: "price-unavailable" }
   | { readonly kind: "stale-activation" }
   | { readonly kind: "stale-target" }
+  | { readonly kind: "unexpected" }
   | PagePriceExtractionError
   | Extract<
       ManagementError,
@@ -543,6 +544,7 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 - extraction・permission・tab changeは旧価格とcapturedAtを維持する。
 - validation、conflict、maintenance、quota、storageは既存management errorを保持し、UI messageへ安定mappingする。
 - source、URL、価格、例外objectはログせず、必要な場合は `error.kind` だけを報告する。
+- 上流portが `Result` 契約に反して例外を投げた場合は、context menu内部commandが実行全体を握って `unexpected` を返す。原因は本featureから判別できないため、ページ状態にも保存結果にも帰属させない。例外objectは束縛しない（`catch {`）。拡張の欠陥であり同じ操作を繰り返しても再現するため非recoverableとし、補償書き込みは行わない。
 
 | エラー | mutation | 表示・回復 |
 |---|---|---|
@@ -554,6 +556,7 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 | `stale-target` / `conflict` | commitしない | 最新候補を再読込して再実行する |
 | `maintenance` | commitしない | 保守終了後に再実行する |
 | `storage` / `quota` | commitしない | 保存領域を確認して再実行する |
+| `unexpected` | 追加で呼ばない（補償書き込みもしない） | 拡張機能の更新を確認し、続く場合は開発元へ報告する |
 
 ## テスト戦略
 

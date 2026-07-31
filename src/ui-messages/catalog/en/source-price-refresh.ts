@@ -39,6 +39,8 @@ export const sourcePriceRefresh = {
       "Storage is under maintenance, so the update wasn't committed.",
     storage: "A storage failure stopped the update from being committed.",
     quota: "Storage is full, so the update wasn't committed.",
+    unexpected:
+      "An internal problem inside the extension stopped the refresh from finishing.",
   },
   guidance: {
     reviewStoredSources: "Review the list of stored sources.",
@@ -53,5 +55,7 @@ export const sourcePriceRefresh = {
     reloadCandidateThenRetry: "Reload the latest candidate, then run it again.",
     retryAfterMaintenance: "Run it again once maintenance has finished.",
     checkStorageThenRetry: "Check the free storage space, then run it again.",
+    reportExtensionDefect:
+      "Repeating the same action won't help. Check for an extension update, and report the problem if it continues.",
   },
 } as const;

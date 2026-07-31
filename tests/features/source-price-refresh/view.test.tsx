@@ -129,6 +129,11 @@ const failureExpectations = {
     guidance: "sourcePriceRefresh.guidance.repairStoredSource",
     recoverable: false,
   },
+  unexpected: {
+    cause: "sourcePriceRefresh.errors.unexpected",
+    guidance: "sourcePriceRefresh.guidance.reportExtensionDefect",
+    recoverable: false,
+  },
   "ineligible-source": {
     cause: "sourcePriceRefresh.errors.ineligible-source",
     guidance: "sourcePriceRefresh.guidance.retryOnRetailSource",
@@ -294,6 +299,7 @@ test("回復案内の分類がstateのrecoverable判定と矛盾しない", () =
     "sourcePriceRefresh.guidance.reviewStoredSources",
     "sourcePriceRefresh.guidance.deduplicateSources",
     "sourcePriceRefresh.guidance.repairStoredSource",
+    "sourcePriceRefresh.guidance.reportExtensionDefect",
   ]);
   for (const kind of failureKinds) {
     const expectation = failureExpectations[kind];
@@ -310,6 +316,31 @@ test("回復案内の分類がstateのrecoverable判定と矛盾しない", () =
       `${kind}: 再実行できない失敗にだけ保存データ修復を案内する`,
     );
   }
+});
+
+test("上流port契約違反の原因と再実行を促さない案内を日英双方で描画する", async () => {
+  for (const language of ["ja", "en"] as const) {
+    const messages: MessageResolver = resolverFor(language);
+    const rendered = await renderFor(
+      err({ kind: "unexpected" } as SourcePriceRefreshError),
+      language,
+    );
+    const text = rendered.text();
+
+    shows(text, messages("sourcePriceRefresh.errors.unexpected"));
+    shows(text, messages("sourcePriceRefresh.guidance.reportExtensionDefect"));
+    assert.doesNotMatch(
+      text,
+      /unexpected/,
+      "error kindそのものを画面へ出さない",
+    );
+    cleanup();
+  }
+
+  assert.notEqual(
+    resolverFor("ja")("sourcePriceRefresh.guidance.reportExtensionDefect"),
+    resolverFor("en")("sourcePriceRefresh.guidance.reportExtensionDefect"),
+  );
 });
 
 test("panel内に再実行buttonを含むいかなるbuttonも置かない", async () => {

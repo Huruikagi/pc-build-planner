@@ -84,6 +84,18 @@ export type SourcePriceRefreshError =
   | { readonly kind: "price-unavailable" }
   | { readonly kind: "stale-activation" }
   | { readonly kind: "stale-target" }
+  /**
+   * An upstream port violated its own contract by throwing instead of settling
+   * with a `Result`. It says exactly that much and no more: the cause is not
+   * knowable from here, so this member never claims a page condition (the tab,
+   * the permission, the injected script, the payload) and never claims a
+   * storage outcome (validation, conflict, maintenance, storage, quota). It
+   * carries no payload, because the thrown value is deliberately never captured
+   * (requirement 5.6). A contract violation is a defect in the extension, not a
+   * transient condition, so repeating the same gesture reproduces it: it is
+   * classified non-recoverable and its guidance never ends in a re-run.
+   */
+  | { readonly kind: "unexpected" }
   | PagePriceExtractionError
   | SourcePriceRefreshStorageError;
 
