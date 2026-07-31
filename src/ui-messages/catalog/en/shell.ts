@@ -13,8 +13,6 @@ export const shell = {
   missingDependency: "A required dependency is missing",
   maintenanceActive: "Maintenance is in progress. Changes aren't available.",
   maintenanceStartupFailed: "Couldn't retrieve maintenance status",
-  transientActivationUnavailable:
-    "The temporary view couldn't start. Use the extension icon again. {detail}",
   transientActivationFailed:
     "The temporary view couldn't start. Click the extension icon again to start it with newly granted access.",
   transientActivationExpired:

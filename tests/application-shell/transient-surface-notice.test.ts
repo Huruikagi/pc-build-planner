@@ -17,9 +17,7 @@ test("noticeはread成功または有効activation受理だけでclearする", (
   };
   const failed = projectTransientNotice(initial, {
     kind: "session-read-failed",
-    message: message("shell.transientActivationUnavailable", {
-      detail: "retry",
-    }),
+    message: message("shell.transientActivationFailed"),
   });
   assert.equal(failed.kind, "ready");
   if (failed.kind !== "ready") return;
@@ -51,16 +49,14 @@ test("loadingとglobal errorへnoticeを投影しない", () => {
     assert.deepEqual(
       projectTransientNotice(state, {
         kind: "session-read-failed",
-        message: message("shell.transientActivationUnavailable", {
-          detail: "retry",
-        }),
+        message: message("shell.transientActivationFailed"),
       }),
       state,
     );
   }
 });
 
-test("activation失効noticeも新しい有効activation受理まで保持する", () => {
+test("activation失効noticeは新しい有効activation受理でclearする", () => {
   const initial: ShellViewState = {
     kind: "ready",
     selected: "planner" as FeatureId,

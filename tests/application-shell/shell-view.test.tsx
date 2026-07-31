@@ -122,8 +122,9 @@ test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで
       kind: "ready" as const,
       selected: plannerId,
       transientNotice: {
-        message: message("shell.transientActivationUnavailable", {
-          detail: unsafe,
+        message: message("shell.featureUnavailable", {
+          featureId: "capture",
+          reason: unsafe,
         }),
         recoverable: true as const,
       },
@@ -133,8 +134,9 @@ test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで
       selected: plannerId,
       message: message("shell.maintenanceActive"),
       transientNotice: {
-        message: message("shell.transientActivationUnavailable", {
-          detail: unsafe,
+        message: message("shell.featureUnavailable", {
+          featureId: "capture",
+          reason: unsafe,
         }),
         recoverable: true as const,
       },
@@ -150,7 +152,7 @@ test("一過性起動noticeをreadyとmaintenanceの常設面に安全なtextで
     assert.match(
       rendered.container.querySelector("[data-region='transient-notice']")
         ?.textContent ?? "",
-      /拡張アイコンを再操作してください/,
+      /feature capture は利用できません/,
     );
     assert.match(rendered.container.textContent ?? "", /常設操作/);
     assert.equal(rendered.container.querySelector("img"), null);
