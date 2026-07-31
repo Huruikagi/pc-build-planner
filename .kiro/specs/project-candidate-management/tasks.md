@@ -201,3 +201,4 @@
 
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。
 - 2026-07-31にChromeの拡張機能アクションから、抽出draftのproject-required表示、project作成後の同一draft編集継続、候補保存・一覧反映までを手動確認した。
+- Production compositionでは内部queryと公開`CandidateQuery`を別々明示配線し、snapshot codecは自身がcaptureする全表示エラーのround-tripを回帰テストで保証する。

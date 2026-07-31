@@ -121,6 +121,17 @@ test("未保存の編集・選択・削除確認・表示エラーだけをversi
   assert.equal("isSaving" in snapshot, false);
 });
 
+test("snapshot restore失敗の表示状態もcaptureとrestoreをround-tripできる", async () => {
+  const state = await createState();
+  state.rejectSnapshotRestore();
+  const codec = createManagementStateSnapshotCodec(state);
+
+  const snapshot = codec.capture(state);
+
+  assert.deepEqual(snapshot.displayError, { code: "snapshot-restore-failed" });
+  assert.deepEqual(codec.restore(snapshot), { ok: true, value: snapshot });
+});
+
 test("未知version、存在しない参照、無効draftを識別可能なrestore errorとして拒否し、stateを変更しない", async () => {
   const state = await createState();
   const codec = createManagementStateSnapshotCodec(state);

@@ -237,6 +237,7 @@ const isDisplayError = (value: unknown): value is ManagementDisplayError =>
     "storage",
     "quota",
     "unsupported-data",
+    "snapshot-restore-failed",
   ].includes(value.code) &&
   hasOnlyKeys(value, ["code"]);
 

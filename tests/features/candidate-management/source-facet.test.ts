@@ -56,12 +56,18 @@ test("contributionのsources facetはcatalogと全mutationをfeature内portへ�
     sourceData,
   );
   const api = contribution.registration.publicApi;
+  const candidate = root.candidateParts[0];
+  assert.ok(candidate);
+  const draft = await api.query.getCandidateDraft(candidate.id);
+  assert.equal(draft.ok, true);
+  assert.deepEqual(draft.ok && draft.value.normalizedAttributes, {
+    category: candidate.category,
+  });
+
   const listed = await api.sources.catalog.listSourceReferences({});
   assert.equal(listed.ok && listed.value.length, 2);
   assert.equal(sourceQueries, 1);
 
-  const candidate = root.candidateParts[0];
-  assert.ok(candidate);
   const target = {
     candidateId: candidate.id,
     sourceId: candidate.primarySourceId as CandidateSourceId,
