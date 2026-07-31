@@ -85,7 +85,7 @@
   - _Boundary: SourcePriceRefreshService, SourcePriceRefreshState_
   - _Depends: 2.2, 3.1_
 
-- [ ] 3.3 一過性featureのUI contributionとReact lifecycleを構築する
+- [x] 3.3 一過性featureのUI contributionとReact lifecycleを構築する
   - featureをcanonical `TransientApplicationFeatureRegistration`として登録し、`presentation: "transient"`を明示してnavigation propertyを持たせず、activationIdとfixed tabIdを境界検証する。
   - mount時にstateの自動workflowを開始し、unmountでReact root、subscription、後着callbackをcleanupする。
   - navigationを持たないUI contribution factoryをfeature-owned公開入口として用意し、side panel専用集約点からだけ取り込める契約にする。worker-safe catalog向けの入口からfeature UI registration、DOM、Reactへ到達するimport経路を作らない。
@@ -206,4 +206,10 @@
 - 3.2: 例外の封じ込めは workflow 本体**全体**を `try { … } catch {` で包む（bindingなし）。`isCurrent` も含めるのは、それがshell注入callbackであり、port3つだけを包むと同じstuck-spinner defectが残るため。世代gate3点の順序と「補償書き込みをしない」性質は封じ込めで変えないこと。
 - 3.2: `isRecoverableSourcePriceRefreshError` の規則文は「保存データの修復が先」に加えて「同じgestureを繰り返しても成功しない」を選言として追加した厳密な一般化。既存15 kindの `true` / 4 kindの `false` の分類は不変。
 - 3.2: 未解決（task 5.3 へ）: `FailureSummary` は全failure kindに `preservedNotice`（保存済み価格は残っている）を無条件表示する。`unexpected` は「画面に出るのに書き込みが既に着地しているかもしれない」最初のkind（他は全てatomicなtyped failureか、`#accepts` が表示前に落とす post-mutation `stale-activation`）。害の向きは良性（実際は反映済みなのに未反映と伝える／逆は起きない）だが、5.3 で kind 条件付きにするか判断すること。
+- 3.3: **design.md 476-479行は事実誤り**。`SourcePriceRefreshTransientActivation` は `{activationId, tabId}` だけでは成立せず `surfaceId` が必須。`FeatureRegistry.register`（`application-shell/contracts.ts` 185-187行）が `TTransientActivation` を parameterize せず `TransientActivationRequest` に固定し、`TransientActivationAdapter.validate` が共変位置で返すため、狭いpayloadは代入不可（design.md 通りの形にすると TS2375/TS2379 が4件出る）。実装が正しい。design.md の該当行は要修正。
+- 3.3: mount 内で `state.activate` を同期実行してはならない。`TransientSurfaceController` は `await host.showTransient(...)` の**解決後**に `publish({kind:"active"})` するため、mount時点では `isCurrent()` が false で、全runが `stale-activation` になる。現状は macrotask（`setTimeout`）でスケジュールし unmount で `clearTimeout` する。mount解決〜publish間は全てmicrotaskなので macrotask は必ず後になる。
+- 3.3: 上記の帰結として **task 4.4 の制約**: production の `TransientSurfaceHost` adapter は mount解決〜`publish({kind:"active"})` の連鎖に macrotask を挟んではならない（例: 実 `chrome.sidePanel.open()` の await）。挟むと全refreshが無言で `stale-activation` になる。timing非依存の恒久策は `TransientSurfaceLifecyclePort` へcurrency購読を足すか `isCurrent` に `acceptedActivation` を参照させることだが、いずれもshell契約変更で本specの境界外。
+- 3.3: shellがfeatureからimportできる入口名は `public` と `feature-contribution` の2つだけ（`scripts/validate-boundaries.mjs` 126-134行）。UI contribution factoryは `feature-contribution.ts` に置く。
+- 3.3: registration test で手動 `act` を使うのは可。steering testing.md の禁止は `render` 前提のcomponent testに向けたもので、ここはReact rootをproduction code側が作る。前例は `tests/contracts/application-shell-contract-kit.ts`。
+- 3.3: `registration.ts` の unmount 時 `clearTimeout` はテストで固定できていない（`state.ts` の `#mounted` early return が先に効くため外しても緑）。task 5.2 か 5.3 で timer clear を直接spyして固定すること。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。
