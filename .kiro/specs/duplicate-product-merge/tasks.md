@@ -10,7 +10,7 @@
 
 - [ ] 2. 一致判定と排他的な保存先ルーティングを実装する
 
-- [ ] 2.1 project内候補を判定する純粋matcherを構築する
+- [x] 2.1 project内候補を判定する純粋matcherを構築する
   - 両側が分類済みで異なるカテゴリを除外し、片側が未分類なら照合を継続する。
   - 型番一致をhigh、型番で確定できない場合のメーカー+商品名一致をsupportingとし、両型番不一致では補助keyへfallbackしない。
   - identity不足をmatchにせず、確信度、根拠、候補要約を持つ説明可能な結果を返す。
@@ -20,6 +20,7 @@
   - _Boundary: DuplicateCandidateMatcher_
 
 - [ ] 2.2 (P) 同一URLを価格更新へ、新規URLをsource追加へ振り分ける
+  - _Blocked: 設計上の `source-added` receipt は `CandidatePart` を要求するが、上流公開契約 `CandidateSourceMutationPort.addSource` は `Result<void, ManagementError>` であり、許可依存だけでは候補本体を取得または構築できない。上流契約または本specのreceipt設計の再承認が必要。_
   - source-price-refresh公開のcandidate scope照合を最初に使い、独自のURL正規化や曖昧一致を実装しない。
   - 一意一致ではcanonical candidate/source IDへ価格観測を渡し、no-matchのときだけ上流source追加を一度呼ぶ。
   - ambiguous、invalid、ineligible、stale、price欠損、管理系失敗をsource追加へfallbackせず、既存sourceと価格を維持する。
@@ -29,6 +30,7 @@
   - _Depends: 1_
 
 - [ ] 2.3 保存前評価と明示判断のcommitを調停する
+  - _Blocked: 依存タスク2.2が上流公開契約と本specのreceipt設計の不整合により未完了。_
   - 選択projectをcanonical candidate queryで読み、別projectの候補やfoundation rootを参照しない。
   - matchなしは既存createを一度だけ実行し、matchありは永続化せず順位付き判断結果を返す。
   - 明示された新規保存または一件の統合targetだけを受理し、直近match集合にないtargetをstale decisionとして拒否する。
