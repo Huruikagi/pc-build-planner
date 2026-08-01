@@ -133,3 +133,4 @@
 
 - collector横断の文書順は全DOM再走査ではなく、上限200件の収集済み候補nodeだけを`compareDocumentPosition`で比較し、`documentOrder`として未信頼payload境界からrankerまで保持する。
 - runtimeが直接検出した`permission-lost | tab-changed`は、shell所有の`capture-invalidated` dismissへ渡し、常設面復帰と新しい明示操作noticeをshellへ委ねる。dismiss失敗・例外・遅延結果はcapture世代内へ閉じる。
+- content script注入と抽出結果読取りは別々のChrome呼び出しであり、どちらの未応答も同じ有限timeoutと`injection-failed`経路へ閉じる。

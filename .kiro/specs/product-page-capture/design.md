@@ -268,12 +268,17 @@ interface ManufacturerDomainEntry {
   readonly owner: string;
 }
 
+interface ManufacturerDomainMatch {
+  readonly manufacturer: string;
+  readonly sourceLabel: string;
+}
+
 interface ManufacturerDomainMap {
-  findManufacturer(pageUrl: string): Result<ExtractionCandidate | undefined, DomainMapError>;
+  findManufacturer(pageUrl: string): Result<ManufacturerDomainMatch | undefined, DomainMapError>;
 }
 ```
 
-entryは正規化済みASCII eTLD+1をキーとし、重複domain、空manufacturer、不正URL、owner/evidence欠落をbuild/testで拒否する。照合はhostnameの完全一致またはdot-boundary subdomain一致だけを許可し、`notexample.test`のようなsuffix誤一致を拒否する。未知domainは成功・候補なしとして扱う。
+entryは正規化済みASCII eTLD+1をキーとし、重複domain、空manufacturer、不正URL、owner/evidence欠落をbuild/testで拒否する。照合はhostnameの完全一致またはdot-boundary subdomain一致だけを許可し、`notexample.test`のようなsuffix誤一致を拒否する。未知domainは成功・候補なしとして扱う。mapは照合結果だけを返し、`ExtractionCandidate`への投影はmanufacturer欠損を確認したextractorが所有する。
 
 domain mapはネットワークへ到達せず、entryの存在は権限、サイト所有、利用許可、source kindを意味しない。entry追加・変更は`web-content-acquisition.md`の根拠、owner、再審査triggerへ従う。
 
@@ -293,6 +298,8 @@ interface CandidateEditorHandoff {
 ```
 
 coordinatorはactive tabを再検索せず固定`TargetTabId`だけを解決する。page payloadの`pageUrl`と注入前target URLが一致しない場合は`tab-changed`でfail closedにする。handoff mapperはproject IDを作らず、空の商品名もpre-editとして保持する。candidate側の保存可能性は判定しない。
+
+Chrome runtime adapterはcontent script注入と抽出結果読取りの各処理に有限のtimeoutを設ける。ページ側の処理が応答しない場合は`injection-failed`へ閉じ、coordinator、state、viewの既存失敗経路から永続状態を変更せず再試行可能な案内を表示する。
 
 `CandidateEditorHandoff`はcandidate-management公開factoryでintentを作り、`TransientSurfaceLifecyclePort.conclude`へ渡す。直接navigation callback、`CaptureCandidatePort`、project query、save serviceを利用しない。
 

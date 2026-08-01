@@ -6,6 +6,7 @@ import type {
 } from "./coordinator.js";
 
 const DEFAULT_CONTENT_SCRIPT_FILE = "content-script.js";
+const DEFAULT_INJECTION_TIMEOUT_MS = 10_000;
 
 export interface ChromeTabsApi {
   get(tabId: number): Promise<{ readonly id?: number; readonly url?: string }>;
@@ -29,6 +30,8 @@ export interface ChromeCaptureRuntimeDependencies {
   readonly scripting: ChromeScriptingApi;
   /** The bundled content-script entry that defines the page-side extraction hook. */
   readonly contentScriptFile?: string;
+  /** Maximum time allowed for one Chrome script injection operation. */
+  readonly injectionTimeoutMs?: number;
 }
 
 /**
@@ -81,6 +84,28 @@ export const createChromeCaptureRuntimePort = (
 ): CaptureRuntimePort => {
   const contentScriptFile =
     dependencies.contentScriptFile ?? DEFAULT_CONTENT_SCRIPT_FILE;
+  const configuredTimeoutMs =
+    dependencies.injectionTimeoutMs ?? DEFAULT_INJECTION_TIMEOUT_MS;
+  const injectionTimeoutMs =
+    Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+      ? configuredTimeoutMs
+      : DEFAULT_INJECTION_TIMEOUT_MS;
+  const executeScript = async (injection: ChromeScriptingInjection) => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        dependencies.scripting.executeScript(injection),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("capture-injection-timeout")),
+            injectionTimeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+    }
+  };
 
   return {
     async getTab(tabId: TargetTabId) {
@@ -98,11 +123,11 @@ export const createChromeCaptureRuntimePort = (
 
     async inject(target, requestId) {
       try {
-        await dependencies.scripting.executeScript({
+        await executeScript({
           target: { tabId: target.tabId },
           files: [contentScriptFile],
         });
-        const [injected] = await dependencies.scripting.executeScript({
+        const [injected] = await executeScript({
           target: { tabId: target.tabId },
           func: readExtractionResult,
         });

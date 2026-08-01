@@ -159,3 +159,43 @@ test("activeTab権限失効と予期しない注入失敗を機密値なしで�
     console.warn = originalWarn;
   }
 });
+
+test("ページ側の注入処理が応答しない場合は有限時間で失敗する", async () => {
+  for (const unresponsiveCall of [1, 2] as const) {
+    let calls = 0;
+    const port = createChromeCaptureRuntimePort({
+      tabs: {
+        async get(id) {
+          return { id, url: "https://example.invalid/p" };
+        },
+      },
+      scripting: {
+        async executeScript(details) {
+          calls += 1;
+          if (calls === unresponsiveCall) return new Promise<never>(() => {});
+          return details.files
+            ? [{}]
+            : [
+                {
+                  result: {
+                    pageUrl: "https://example.invalid/p",
+                    candidates: [],
+                  },
+                },
+              ];
+        },
+      },
+      injectionTimeoutMs: 5,
+    });
+
+    const outcome = await Promise.race([
+      port.inject({ tabId: TAB, url: "https://example.invalid/p" }, REQUEST),
+      new Promise<"still-pending">((resolve) =>
+        setTimeout(() => resolve("still-pending"), 50),
+      ),
+    ]);
+
+    assert.deepEqual(outcome, { ok: false, error: "unknown" });
+    assert.equal(calls, unresponsiveCall);
+  }
+});
