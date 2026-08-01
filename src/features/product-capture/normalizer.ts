@@ -47,7 +47,7 @@ const accept = (
     documentOrder: candidate.documentOrder,
   });
 
-const normalizeWhitespaceAndControlCharacters = (
+export const normalizeWhitespaceAndControlCharacters = (
   rawValue: string,
 ): { readonly text: string; readonly hadControlCharacters: boolean } => {
   const hadControlCharacters = CONTROL_CHARACTERS.test(rawValue);

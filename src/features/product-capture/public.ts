@@ -11,6 +11,12 @@ import {
 } from "./manufacturer-domain-map.js";
 
 export {
+  createProductIdentityNormalizer,
+  type ProductIdentityField,
+  type ProductIdentityNormalizer,
+} from "./product-identity-normalizer.js";
+
+export {
   productCaptureFeatureId,
   productCaptureWorkerContribution,
 } from "./worker-public.js";
