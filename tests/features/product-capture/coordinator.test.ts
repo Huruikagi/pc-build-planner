@@ -49,6 +49,56 @@ test("runtime payload境界はdocumentOrder欠損・負数・小数・safe integ
   }
 });
 
+test("runtime payload境界は未知fieldと不正なspec fieldを拒否する", () => {
+  for (const field of [
+    "unexpected-field",
+    "spec:",
+    "spec:   ",
+    `spec:${"x".repeat(81)}`,
+    "spec:socket\u0000type",
+  ]) {
+    assert.equal(
+      decodeCapturePagePayload({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field,
+            rawValue: "x",
+            source: "table",
+            sourceLabel: "Socket",
+            documentOrder: 0,
+          },
+        ],
+      }),
+      undefined,
+    );
+  }
+});
+
+test("runtime payload境界は空・過長・制御文字入りsourceLabelを拒否する", () => {
+  for (const sourceLabel of ["", "x".repeat(81), "table\u0000header"]) {
+    assert.equal(
+      decodeCapturePagePayload({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field: "name",
+            rawValue: "x",
+            source: "heading",
+            sourceLabel,
+            documentOrder: 0,
+          },
+        ],
+      }),
+      undefined,
+    );
+  }
+});
+
 test("固定TargetTabIdだけをgetTabとinjectへ渡す", async () => {
   const calls: number[] = [];
   const result = await make({

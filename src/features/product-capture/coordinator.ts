@@ -16,6 +16,7 @@ import type {
   ExtractionSource,
   RawCapturePayload,
 } from "./contracts.js";
+import { isCaptureField, isCaptureSourceLabel } from "./contracts.js";
 import type { CaptureNormalizer } from "./normalizer.js";
 import type { CandidateRanker } from "./ranker.js";
 
@@ -75,12 +76,11 @@ const EXTRACTION_SOURCES: ReadonlySet<ExtractionSource> = new Set([
 
 const isExtractionCandidate = (value: unknown): value is ExtractionCandidate =>
   isRecord(value) &&
-  typeof value.field === "string" &&
-  value.field.length > 0 &&
+  isCaptureField(value.field) &&
   typeof value.rawValue === "string" &&
   typeof value.source === "string" &&
   EXTRACTION_SOURCES.has(value.source as ExtractionSource) &&
-  typeof value.sourceLabel === "string" &&
+  isCaptureSourceLabel(value.sourceLabel) &&
   typeof value.documentOrder === "number" &&
   Number.isSafeInteger(value.documentOrder) &&
   value.documentOrder >= 0 &&

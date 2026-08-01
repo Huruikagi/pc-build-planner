@@ -41,10 +41,37 @@ export const CAPTURE_CORE_FIELDS = [
   "url",
 ] as const;
 
+export const MAX_CAPTURE_LABEL_LENGTH = 80;
+
 /** Core capture item; `spec:<key>` carries a page-specific specification value. */
 export type CaptureCoreField = (typeof CAPTURE_CORE_FIELDS)[number];
 
 export type CaptureField = CaptureCoreField | `spec:${string}`;
+
+const CAPTURE_CORE_FIELD_SET: ReadonlySet<string> = new Set(
+  CAPTURE_CORE_FIELDS,
+);
+const CONTROL_CHARACTER = /\p{Cc}/u;
+
+export const isCaptureField = (value: unknown): value is CaptureField => {
+  if (typeof value !== "string") return false;
+  if (CAPTURE_CORE_FIELD_SET.has(value)) return true;
+  if (!value.startsWith("spec:")) return false;
+  const key = value.slice("spec:".length);
+  return (
+    key.length > 0 &&
+    key.length <= MAX_CAPTURE_LABEL_LENGTH &&
+    key.trim().length > 0 &&
+    !CONTROL_CHARACTER.test(key)
+  );
+};
+
+export const isCaptureSourceLabel = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= MAX_CAPTURE_LABEL_LENGTH &&
+  value.trim().length > 0 &&
+  !CONTROL_CHARACTER.test(value);
 
 /**
  * A single value read from the page before any validation or normalization.

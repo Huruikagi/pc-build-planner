@@ -200,6 +200,27 @@ test("spec項目も文字項目として同じ規則で正規化する", () => {
   });
 });
 
+test("型を迂回した未知fieldと不正sourceLabelもnormalizerで棄却する", () => {
+  assert.deepEqual(
+    normalizer.normalize(candidate({ field: "unexpected-field" as never })),
+    {
+      ok: false,
+      error: { field: "unexpected-field", reason: "invalid-format" },
+    },
+  );
+
+  for (const [sourceLabel, reason] of [
+    ["", "empty"],
+    ["x".repeat(81), "too-long"],
+    ["meta\u0000price", "control-characters"],
+  ] as const) {
+    assert.deepEqual(normalizer.normalize(candidate({ sourceLabel })), {
+      ok: false,
+      error: { field: "name", reason },
+    });
+  }
+});
+
 test("採用結果は元表記と取得根拠を保持する", () => {
   const result = normalizer.normalize(
     candidate({

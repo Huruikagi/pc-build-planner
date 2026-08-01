@@ -1,8 +1,10 @@
-import type {
-  CaptureCoreField,
-  CaptureField,
-  ExtractionCandidate,
-  ExtractionSource,
+import {
+  type CaptureCoreField,
+  type CaptureField,
+  type ExtractionCandidate,
+  type ExtractionSource,
+  isCaptureField,
+  MAX_CAPTURE_LABEL_LENGTH,
 } from "./contracts.js";
 import {
   type ManufacturerDomainMap,
@@ -19,7 +21,6 @@ export interface GenericExtractorDependencies {
 
 const MAX_CANDIDATES = 200;
 const MAX_VALUE_LENGTH = 500;
-const MAX_LABEL_LENGTH = 80;
 const MAX_JSON_LD_SCRIPTS = 20;
 const MAX_JSON_LD_DEPTH = 6;
 const MAX_JSON_LD_NODES_PER_SCRIPT = 30;
@@ -44,8 +45,15 @@ const resolveUrl = (value: string, pageUrl: string): string => {
   }
 };
 
+const normalizeCandidateLabel = (label: string): string =>
+  label
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_CAPTURE_LABEL_LENGTH);
+
 const specField = (label: string): CaptureField =>
-  `spec:${label.slice(0, MAX_LABEL_LENGTH)}` as CaptureField;
+  `spec:${normalizeCandidateLabel(label)}` as CaptureField;
 
 const MANUFACTURER_LABELS: ReadonlySet<string> = new Set([
   "manufacturer",
@@ -70,6 +78,7 @@ const push = (
   node?: Node,
 ): void => {
   if (isFull(sink)) return;
+  if (!isCaptureField(field)) return;
   const trimmed = rawValue.trim();
   if (trimmed.length === 0) return;
   const resolved =
@@ -78,7 +87,7 @@ const push = (
     field,
     rawValue: resolved.slice(0, MAX_VALUE_LENGTH),
     source,
-    sourceLabel,
+    sourceLabel: normalizeCandidateLabel(sourceLabel) || source,
     documentOrder: Number.MAX_SAFE_INTEGER,
   });
   sink.nodes.push(node);

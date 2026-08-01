@@ -199,6 +199,28 @@ test("表と定義リストから主要スペック候補を収集する", () =>
   assert.equal(formFactor[0]?.source, "definition-list");
 });
 
+test("表由来のspec fieldとsourceLabelを同じ上限へ正規化する", () => {
+  const longLabel = "x".repeat(100);
+  const document = parse(`<!doctype html><html><body>
+    <table><tr><th>${longLabel}</th><td>value</td></tr></table>
+  </body></html>`);
+
+  const candidates = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/bounded-label",
+  );
+
+  assert.deepEqual(candidates, [
+    {
+      field: `spec:${"x".repeat(80)}`,
+      rawValue: "value",
+      source: "table",
+      sourceLabel: "x".repeat(80),
+      documentOrder: 0,
+    },
+  ]);
+});
+
 test("tableとdefinition-listの同順位候補はcollector順でなく実DOM順で採用する", () => {
   const document = parse(`<!doctype html><html><body>
     <dl><dt>ソケット</dt><dd>earlier-definition</dd></dl>

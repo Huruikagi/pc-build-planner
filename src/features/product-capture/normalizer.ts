@@ -7,6 +7,11 @@ import type {
   NormalizedField,
 } from "./contracts.js";
 import {
+  isCaptureField,
+  isCaptureSourceLabel,
+  MAX_CAPTURE_LABEL_LENGTH,
+} from "./contracts.js";
+import {
   YEN_SUFFIX_PATTERN,
   YEN_SYMBOL_CURRENCY,
 } from "./locale/ja-price-tokens.js";
@@ -143,6 +148,21 @@ const normalizeTextField = (
 
 export const createCaptureNormalizer = (): CaptureNormalizer => ({
   normalize(candidate) {
+    if (!isCaptureField(candidate.field))
+      return reject(candidate.field, "invalid-format");
+    const sourceLabelIsValid: boolean = isCaptureSourceLabel(
+      candidate.sourceLabel,
+    );
+    if (!sourceLabelIsValid) {
+      const reason: CaptureFieldRejectionReason =
+        candidate.sourceLabel.length > MAX_CAPTURE_LABEL_LENGTH
+          ? "too-long"
+          : CONTROL_CHARACTERS.test(candidate.sourceLabel)
+            ? "control-characters"
+            : "empty";
+      CONTROL_CHARACTERS.lastIndex = 0;
+      return reject(candidate.field, reason);
+    }
     if (candidate.field === "url") return normalizeUrl(candidate);
     if (candidate.field === "price") return normalizePriceField(candidate);
     return normalizeTextField(candidate);

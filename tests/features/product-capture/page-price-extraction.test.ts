@@ -201,3 +201,47 @@ test("runtime境界を6種の値漏えいしないtyped failureへ写像する",
     });
   }
 });
+
+test("price portも未知fieldと不正sourceLabelをinvalid-payloadにする", async () => {
+  for (const candidate of [
+    {
+      field: "unexpected-field",
+      rawValue: "x",
+      source: "meta",
+      sourceLabel: "meta",
+      documentOrder: 0,
+    },
+    {
+      field: "price",
+      rawValue: "99.00 USD",
+      source: "meta",
+      sourceLabel: "x".repeat(81),
+      documentOrder: 0,
+    },
+    {
+      field: "price",
+      rawValue: "99.00 USD",
+      source: "meta",
+      sourceLabel: "meta\u0000price",
+      documentOrder: 0,
+    },
+  ]) {
+    const result = await adapter(
+      runtime({
+        async inject(target, requestId) {
+          return ok({
+            requestId,
+            tabId: target.tabId,
+            pageUrl: target.url,
+            candidates: [candidate],
+          });
+        },
+      }),
+    ).extractPrice(tabId);
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: { kind: "invalid-payload" },
+    });
+  }
+});
