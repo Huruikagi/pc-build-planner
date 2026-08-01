@@ -331,6 +331,7 @@ export interface TransientSurfaceHost {
 /** 下流の一過性featureへ注入する最小公開port。 */
 export interface TransientSurfaceLifecyclePort {
   isCurrent(activationId: ActivationId): boolean;
+  waitUntilCurrent(activationId: ActivationId): Promise<boolean>;
   conclude(
     activationId: ActivationId,
     handoff: FeatureActivationIntent,
@@ -386,15 +387,17 @@ sourceはChrome eventの未信頼tab IDを`parseTargetTabId`で検証し、正�
 
 組み込み`chrome.action`も`TransientGestureSource`として同じregistrarへ登録する。`source-price-refresh`など下流featureが所有するcontext menu adapterは、自身のitem登録・click検証だけを所有し、production worker compositionが公開portへsourceを登録する。cleanupでは全sourceを解除してからregistrarとschedulerを停止し、解除後に到着したcallbackはno-opにする。
 
+`waitUntilCurrent`はone-shot readiness契約であり、すでにactiveなら即時`true`、mount成功後にcontrollerがactiveをpublishした時だけ待機中の全呼出しを`true`へ解決する。unknownまたは既終端はfail closedで即時`false`とし、置換、表示・mount失敗、dismiss/conclude、stopでcurrent化前に終端した待機も`false`へ解放する。waiterは解決時に破棄し、`isCurrent`の意味は変更しない。
+
 ### Late-Bound Composition
 
 現行compositionはfeature contributionをregistry/hostより先に生成するため、controller実体をfeature factoryへ直接渡さない。composition rootは既存`ShellNavigator`と同じlate-bound proxyを先に作り、次の順序で循環を解く。
 
-1. 未bind時に`not_started`を返す内部`TransientSurfaceLifecyclePort` proxyを生成する
+1. 未bind時に`not_started`を返し、readiness待機を`false`へ解決する内部`TransientSurfaceLifecyclePort` proxyを生成する
 2. proxyだけを`FeatureCompositionContext`経由で一過性feature contribution factoryへ渡す
 3. registryとhost/integrationを構築してから`TransientSurfaceController`を生成する
 4. host start前にproxyをcontrollerへbindし、host start成功後にcontrollerをstartする
-5. cleanupではcontrollerをstopしてからproxyをunbindし、stale feature callbackを`not_started`へ閉じる
+5. cleanupではcontrollerをstopしてからproxyをunbindし、pending readinessを`false`へ解放してstale feature callbackを`not_started`へ閉じる。旧bind世代の遅延完了は再bind後へ持ち越さない
 
 proxyとbind操作はapplication composition内部契約であり、`application-shell/public.ts`へ公開しない。下流featureが利用する値は常に同じ`TransientSurfaceLifecyclePort`参照で、bind前に一過性featureがmountされる経路は作らない。
 

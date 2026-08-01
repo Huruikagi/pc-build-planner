@@ -104,6 +104,7 @@ export type TransientSurfaceState =
 
 export interface TransientSurfaceLifecyclePort {
   isCurrent(activationId: ActivationId): boolean;
+  waitUntilCurrent(activationId: ActivationId): Promise<boolean>;
   dismiss(
     activationId: ActivationId,
     reason: TransientDismissReason,

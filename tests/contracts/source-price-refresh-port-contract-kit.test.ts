@@ -216,6 +216,7 @@ const createProbe = () => {
 
   const transientSurface: TransientSurfaceLifecyclePort = {
     isCurrent: () => true,
+    waitUntilCurrent: async () => true,
     dismiss: async () => ok(undefined),
     conclude: async () => ok(undefined),
   };

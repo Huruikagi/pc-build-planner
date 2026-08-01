@@ -557,6 +557,7 @@ test("contribution factoryはnavigationを持たないUI registrationだけを�
     pagePriceExtraction,
     transientSurface: {
       isCurrent: () => true,
+      waitUntilCurrent: async () => true,
       dismiss: async () => err({ kind: "not-started" }),
       conclude: async () => err({ kind: "not-started" }),
     },
@@ -601,6 +602,7 @@ test("side-panel-contributions経由の実registrationが安全な一過性DOM�
   };
   const transientSurface: TransientSurfaceLifecyclePort = {
     isCurrent: () => true,
+    waitUntilCurrent: async () => true,
     dismiss: async () => err({ kind: "not-started" as const }),
     conclude: async () => err({ kind: "not-started" as const }),
   };

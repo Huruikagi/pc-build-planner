@@ -59,9 +59,26 @@ export function createTransientSurfaceController(options: {
     | undefined;
   let transition: Promise<unknown> = Promise.resolve();
   const listeners = new Set<(state: TransientSurfaceState) => void>();
+  const readinessWaiters = new Map<
+    ActivationId,
+    Set<(ready: boolean) => void>
+  >();
+  const settleReadiness = (
+    activationId: ActivationId,
+    ready: boolean,
+  ): void => {
+    const waiters = readinessWaiters.get(activationId);
+    if (waiters === undefined) return;
+    readinessWaiters.delete(activationId);
+    for (const resolve of waiters) resolve(ready);
+  };
+  const terminate = (activationId: ActivationId): void => {
+    settleReadiness(activationId, false);
+  };
 
   const publish = (next: TransientSurfaceState): void => {
     state = next;
+    if (next.kind === "active") settleReadiness(next.activationId, true);
     for (const listener of [...listeners]) {
       try {
         listener(next);
@@ -139,6 +156,10 @@ export function createTransientSurfaceController(options: {
       if (!started)
         return enqueue(async () => err({ kind: "not-started" as const }));
       const epoch = ++commandEpoch;
+      if (acceptedActivation !== undefined)
+        terminate(acceptedActivation.activationId);
+      if (state.kind === "active" && state.activationId !== value.activationId)
+        terminate(state.activationId);
       const returnTo =
         state.kind === "inactive" ? options.host.getSelected() : state.returnTo;
       acceptedActivation = {
@@ -155,6 +176,7 @@ export function createTransientSurfaceController(options: {
             acceptedActivation?.activationId === value.activationId
           )
             acceptedActivation = undefined;
+          terminate(value.activationId);
         };
         if (!options.host.isTransientAvailable(value.surfaceId)) {
           releasePending();
@@ -188,22 +210,32 @@ export function createTransientSurfaceController(options: {
     },
     dismiss(activationId, reason) {
       const retained = state;
+      const pending = acceptedActivation;
+      const candidate =
+        (retained.kind === "active" || retained.kind === "dismiss-failed") &&
+        retained.activationId === activationId
+          ? retained
+          : pending?.activationId === activationId
+            ? pending
+            : undefined;
       const eligible =
         started &&
-        (retained.kind === "active" || retained.kind === "dismiss-failed") &&
-        retained.activationId === activationId &&
-        (retained.kind !== "dismiss-failed" || retained.reason === reason);
+        candidate !== undefined &&
+        (candidate !== retained ||
+          retained.kind !== "dismiss-failed" ||
+          retained.reason === reason);
       const closing = eligible
         ? beginDismiss(
-            retained,
-            retained.kind === "dismiss-failed"
+            candidate,
+            candidate === retained && retained.kind === "dismiss-failed"
               ? retained.target
-              : retained.returnTo,
+              : candidate.returnTo,
             reason,
           )
         : undefined;
       const epoch = closing === undefined ? commandEpoch : ++commandEpoch;
       if (closing !== undefined) acceptedActivation = undefined;
+      if (closing !== undefined) terminate(closing.activationId);
       return enqueue(async () => {
         if (!started) return err({ kind: "not-started" });
         if (closing === undefined || epoch !== commandEpoch)
@@ -223,6 +255,7 @@ export function createTransientSurfaceController(options: {
             : undefined;
       const epoch = ++commandEpoch;
       acceptedActivation = undefined;
+      if (closing !== undefined) terminate(closing.activationId);
       return enqueue(async () => {
         if (!started) return err({ kind: "not-started" });
         if (closing !== undefined)
@@ -250,6 +283,7 @@ export function createTransientSurfaceController(options: {
           : undefined;
       const epoch = closing === undefined ? commandEpoch : ++commandEpoch;
       if (closing !== undefined) acceptedActivation = undefined;
+      if (closing !== undefined) terminate(closing.activationId);
       return enqueue(async () => {
         if (!started) return err({ kind: "not-started" });
         if (closing === undefined || epoch !== commandEpoch)
@@ -259,8 +293,16 @@ export function createTransientSurfaceController(options: {
     },
     conclude(activationId, handoff) {
       const accepted = current(activationId);
+      const pending =
+        started &&
+        !accepted &&
+        acceptedActivation?.activationId === activationId;
       if (accepted) disabledActivationId = activationId;
-      const epoch = accepted ? ++commandEpoch : commandEpoch;
+      if (accepted || pending) {
+        acceptedActivation = undefined;
+        terminate(activationId);
+      }
+      const epoch = accepted || pending ? ++commandEpoch : commandEpoch;
       return enqueue(async () => {
         if (!started) return err({ kind: "not-started" });
         if (!accepted || epoch !== commandEpoch) return ok(undefined);
@@ -292,6 +334,16 @@ export function createTransientSurfaceController(options: {
       });
     },
     isCurrent: current,
+    waitUntilCurrent(activationId) {
+      if (current(activationId)) return Promise.resolve(true);
+      if (!started || acceptedActivation?.activationId !== activationId)
+        return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => {
+        const waiters = readinessWaiters.get(activationId) ?? new Set();
+        waiters.add(resolve);
+        readinessWaiters.set(activationId, waiters);
+      });
+    },
     getSnapshot: () => state,
     subscribe(listener) {
       listeners.add(listener);
@@ -301,6 +353,8 @@ export function createTransientSurfaceController(options: {
       started = false;
       commandEpoch += 1;
       acceptedActivation = undefined;
+      for (const activationId of [...readinessWaiters.keys()])
+        terminate(activationId);
       await transition.catch(() => undefined);
       disabledActivationId = undefined;
       publish({ kind: "inactive" });

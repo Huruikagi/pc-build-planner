@@ -105,6 +105,7 @@ const createHarness = (options: {
       runtime: createChromeCaptureRuntimePort(fixture.chrome),
       transientSurface: {
         isCurrent: (id) => id === activationId,
+        waitUntilCurrent: async (id) => id === activationId,
         dismiss: async () => ok(undefined),
         async conclude(_id, intent) {
           intents.push(intent);

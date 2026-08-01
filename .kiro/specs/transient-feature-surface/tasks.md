@@ -252,7 +252,19 @@
   - _Requirements: 2.1, 2.8, 2.9, 2.10, 4.5_
   - _Boundary: CrossSpecProductionValidation_
 
+- [x] 7. validation remediationで現行activation readinessを公開する
+
+- [x] 7.1 mount済みactivationの現行化をone-shot契約で通知する
+  - `isCurrent` の意味を変更せず、mount成功後にcontrollerがactiveを公開した時だけtrueへ解決し、置換・失敗・終了・stopではfalseへ解決するone-shot lifecycle契約を追加する。
+  - late-bound lifecycleのbind/unbindと待機解放を対称化し、下流featureがevent-loopのmacrotask順序へ依存せず自動実行を開始できるようにする。
+  - active、後発置換、mount失敗、dismiss、stop、unbindの決定的contract/integration testを追加する。
+  - _Requirements: 1.4, 2.1, 2.8, 2.9, 2.10, 3.10, 4.4, 4.5_
+  - _Boundary: TransientSurfaceLifecyclePort, TransientSurfaceController, LateBoundLifecycle_
+  - _Depends: 6.9_
+
 ## Implementation Notes
+
+- 7.1: `TransientSurfaceLifecyclePort.waitUntilCurrent` を追加し、mount成功後のactive publishだけをtrue、置換・show/mount失敗・dismiss/conclude・stop・late-bound unbindをfalseへone-shot解決する。deferred mount中の同一activation dismiss/concludeはaccepted claimとepochを同期失効し、後着mount完了によるactive再公開を防ぐ。source-price-refresh 6.2はこの明示readinessを利用し、macrotask順序依存を除去する。
 
 - 2026-07-31 `ui-message-catalog` validation remediationで、session read失敗を`transientActivationFailed`、authorization後のgeneration／tab失効を`transientActivationExpired`としてproduction shellへtyped callbackで接続した。task 1.4の契約どおり両noticeは後続session read成功または新しい有効activation受理でclearし、関連unit／integration、完全`pnpm validate`、unpacked-extension smokeを再検証した。
 - task 6.9再検証で、下流`product-capture-transient-migration` 6.6／6.7完了後のproduction E2E 4件（durable activation、固定tab更新・閉鎖、常設navigation終了）と`pnpm validate`（unit／integration 1095件、E2E 12件）が成功し、独立レビューで承認された。

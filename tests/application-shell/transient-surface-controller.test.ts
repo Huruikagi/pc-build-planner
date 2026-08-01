@@ -112,6 +112,140 @@ test("有効要求だけをmountし同一tabの新世代が旧callbackを無効�
   assert.deepEqual(snapshots, ["active", "active"]);
 });
 
+test("mount成功後のactive publishだけが複数のone-shot readiness waiterをtrueにする", async () => {
+  const h = harness();
+  let release!: () => void;
+  h.host.showTransient = async () => {
+    await new Promise<void>((done) => (release = done));
+    await new Promise<void>((done) => setTimeout(done, 0));
+    return ok(undefined);
+  };
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  const id = activationId("readiness");
+  const request = controller.request({
+    activationId: id,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  const first = controller.waitUntilCurrent(id);
+  const second = controller.waitUntilCurrent(id);
+  await new Promise<void>((done) => setTimeout(done, 0));
+  release();
+  await request;
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(await controller.waitUntilCurrent(id), true);
+});
+
+test("current前の置換・show失敗・dismiss・stopはreadinessをfalseにする", async () => {
+  const h = harness();
+  let release!: () => void;
+  h.host.showTransient = async () =>
+    new Promise((done) => (release = () => done(ok(undefined))));
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  const oldId = activationId("old-pending");
+  const oldRequest = controller.request({
+    activationId: oldId,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  const oldReady = controller.waitUntilCurrent(oldId);
+  await new Promise<void>((done) => setTimeout(done, 0));
+  const replacement = controller.request({
+    activationId: activationId("replacement"),
+    surfaceId: featureId("missing"),
+    tabId: tabId(7),
+  });
+  release();
+  await Promise.all([oldRequest, replacement]);
+  assert.equal(await oldReady, false);
+  assert.equal(
+    await controller.waitUntilCurrent(activationId("unknown")),
+    false,
+  );
+
+  const activeId = activationId("active-then-dismiss");
+  h.host.showTransient = async () => ok(undefined);
+  await controller.request({
+    activationId: activeId,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  await controller.dismiss(activeId, "navigated");
+  assert.equal(await controller.waitUntilCurrent(activeId), false);
+
+  h.host.showTransient = async () => ok(undefined);
+  const stopId = activationId("stopped");
+  void controller.request({
+    activationId: stopId,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  const stopped = controller.waitUntilCurrent(stopId);
+  const stopping = controller.stop();
+  await stopping;
+  assert.equal(await stopped, false);
+});
+
+test("deferred mount中の同一activation dismissはpending readinessをfalseで終端する", async () => {
+  const h = harness();
+  let release!: () => void;
+  h.host.showTransient = async () =>
+    new Promise((done) => (release = () => done(ok(undefined))));
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  const id = activationId("pending-dismiss");
+  const snapshots: string[] = [];
+  controller.subscribe((state) => snapshots.push(state.kind));
+  const request = controller.request({
+    activationId: id,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  const ready = controller.waitUntilCurrent(id);
+  await new Promise<void>((done) => setTimeout(done, 0));
+  const dismissed = controller.dismiss(id, "navigated");
+  release();
+  await Promise.all([request, dismissed]);
+  assert.equal(await ready, false);
+  assert.notEqual(controller.getSnapshot().kind, "active");
+  assert.equal(snapshots.includes("active"), false);
+});
+
+test("deferred mount中の同一activation concludeはpending readinessをfalseで終端する", async () => {
+  const h = harness();
+  let release!: () => void;
+  h.host.showTransient = async () =>
+    new Promise((done) => (release = () => done(ok(undefined))));
+  const controller = createTransientSurfaceController({ host: h.host });
+  await controller.start();
+  const id = activationId("pending-conclude");
+  const snapshots: string[] = [];
+  controller.subscribe((state) => snapshots.push(state.kind));
+  const request = controller.request({
+    activationId: id,
+    surfaceId: featureId("capture"),
+    tabId: tabId(7),
+  });
+  const ready = controller.waitUntilCurrent(id);
+  await new Promise<void>((done) => setTimeout(done, 0));
+  const concluded = controller.conclude(id, {
+    featureId: featureId("planner"),
+    target: "edit",
+    payload: {},
+  });
+  release();
+  await Promise.all([request, concluded]);
+  assert.equal(await ready, false);
+  assert.notEqual(controller.getSnapshot().kind, "active");
+  assert.equal(snapshots.includes("active"), false);
+  assert.equal(
+    h.events.some((event) => event.startsWith("activate:")),
+    false,
+  );
+});
+
 test("3終了理由はいずれも記録した常設面へ復帰する", async () => {
   for (const reason of [
     "navigated",
