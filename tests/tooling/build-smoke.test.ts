@@ -119,3 +119,29 @@ test("buildがroot公開bundleと共有service workerを生成する", async () 
   assert.equal(Object.getPrototypeOf(composed.value), null);
   assert.equal(Object.isFrozen(composed.value), true);
 });
+
+test("production worker artifactはmenu registrationだけを取り込みUIとページ値を持たない", async () => {
+  const worker = await readFile("dist/service-worker.js", "utf8");
+
+  assert.match(
+    worker,
+    /src\/features\/source-price-refresh\/context-menu-source\.ts/,
+    "feature所有のmenu adapterをproduction bundleで実際に使う",
+  );
+  assert.match(worker, /source-price-refresh/);
+  assert.doesNotMatch(
+    worker,
+    /src\/application-shell\/side-panel-contributions\.ts|src\/features\/source-price-refresh\/(?:feature-contribution|registration|react-root|view)\.[tj]sx?/,
+  );
+  assert.doesNotMatch(worker, /node_modules[\\/](?:react|react-dom)[\\/]/);
+  assert.doesNotMatch(
+    worker,
+    /src\/features\/product-capture\/manufacturer-domain-map\.ts/,
+    "worker metadataのために商品解析catalogを取り込まない",
+  );
+  assert.doesNotMatch(
+    worker,
+    /https?:\/\/(?!\*\/)/,
+    "documentUrlPatternsのワイルドカード以外の完全URLをworkerに固定しない",
+  );
+});

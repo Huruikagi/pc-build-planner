@@ -25,6 +25,7 @@ interface ContextMenusStub {
   readonly duplicateCreateAttempts: () => number;
   readonly uncheckedErrors: () => number;
   readonly createCalls: () => number;
+  readonly removeCalls: () => number;
   click(info: unknown, tab?: unknown): void;
 }
 
@@ -45,6 +46,7 @@ const createContextMenusStub = (
   let duplicateCreateAttempts = 0;
   let uncheckedErrors = 0;
   let createCalls = 0;
+  let removeCalls = 0;
   let pendingError: { readonly message: string } | undefined;
   let consumed = false;
 
@@ -74,6 +76,7 @@ const createContextMenusStub = (
         settle(callback);
       },
       remove(menuItemId, callback) {
+        removeCalls += 1;
         if (!items.delete(menuItemId))
           pendingError = { message: "Cannot find menu item" };
         settle(callback);
@@ -96,6 +99,7 @@ const createContextMenusStub = (
     duplicateCreateAttempts: () => duplicateCreateAttempts,
     uncheckedErrors: () => uncheckedErrors,
     createCalls: () => createCalls,
+    removeCalls: () => removeCalls,
     click(info, tab) {
       for (const listener of [...listeners]) listener(info, tab);
     },
@@ -423,12 +427,16 @@ test("cleanupでlistenerとmenu itemを対称に解除する", () => {
   assert.equal(chrome.listenerCount(), 0);
   assert.equal(chrome.items.size, 0);
   assert.equal(chrome.uncheckedErrors(), 0);
+  const removeCallsAfterCleanup = chrome.removeCalls();
 
   chrome.click(validClick, { id: 42 });
   assert.deepEqual(emitted, []);
 
-  // Cleanup is idempotent: a second call must not report a missing item.
+  // Cleanup is idempotent: a second call must not even attempt to remove the
+  // item. Consuming lastError would hide this ownership bug from the warning
+  // probe, so assert the Chrome call count directly.
   started.value();
+  assert.equal(chrome.removeCalls(), removeCallsAfterCleanup);
   assert.equal(chrome.uncheckedErrors(), 0);
 });
 

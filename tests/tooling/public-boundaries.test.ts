@@ -857,6 +857,61 @@ test("application shell固有のsecurity・ownership境界違反をowner付き�
   );
 });
 
+test("source-price-refreshはshellのpublicとworker-public以外へ到達しない", async () => {
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/source-price-refresh/ui-port.ts",
+        source:
+          'import type { FeatureId } from "../../application-shell/public.js";',
+      },
+      {
+        path: "src/features/source-price-refresh/worker/menu-port.ts",
+        source:
+          'import { parseTargetTabId } from "../../../application-shell/worker-public.js";',
+      },
+    ]),
+    [],
+  );
+
+  const violations = findBoundaryViolations([
+    {
+      path: "src/features/source-price-refresh/shell-leak.ts",
+      source:
+        'import { createSidePanelHost } from "../../application-shell/side-panel-host.js";',
+    },
+  ]);
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/source-price-refresh/shell-leak.ts: source-price-refresh-shell-public-dependencies-only",
+    ],
+  );
+
+  const root = await mkdtemp(join(tmpdir(), "source-price-refresh-boundary-"));
+  try {
+    const nested = join(
+      root,
+      "src",
+      "features",
+      "source-price-refresh",
+      "nested",
+    );
+    await mkdir(nested, { recursive: true });
+    await writeFile(
+      join(nested, "shell-leak.ts"),
+      'import { createSidePanelHost } from "../../../application-shell/side-panel-host.js";',
+    );
+    assert.deepEqual(
+      (await validateBoundaryRoots([root])).map(({ rule }) => rule),
+      ["source-price-refresh-shell-public-dependencies-only"],
+      "subdirectoryを含む再帰scanでdeep importを取りこぼさない",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("存在しないscan rootをfail closedに拒否する", async () => {
   await assert.rejects(
     validateBoundaryRoots(["src/features/__missing__"]),

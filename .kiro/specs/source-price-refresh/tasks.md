@@ -144,7 +144,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 6.4_
   - _Boundary: SourcePriceRefreshTestKit_
 
-- [ ] 5.2 context menu、permission、worker境界のruntime coverageを完成させる
+- [x] 5.2 context menu、permission、worker境界のruntime coverageを完成させる
   - item冪等登録、有効click、別item、不正tab、restricted URL、cleanup、worker再生成をChrome stubで検証する。
   - manifestがexact 5権限でhost/optional permissionを持たず、許可外permissionがartifact gateで失敗することを検証する。
   - production worker bundleへ `side-panel-contributions.ts`、feature UI、DOM、React、完全URL、商品値を持ち込まず、worker-safe catalogにはmenu registrationだけが載ることを生成物検査で確認する。
@@ -173,6 +173,7 @@
 
 ## Implementation Notes
 
+- 5.2: worker catalogからfeature通常 `public.ts` をruntime importすると、公開APIが所有するmanufacturer mapや完全URLまでservice-worker bundleへ到達し得る。worker registrationはproducer-owned `worker-public.ts` へ分離し、feature sourceのapplication-shell依存は `public` / `worker-public` だけを再帰boundary scanで許可する。cleanup冪等性は同じ現行leaseの2回目で `contextMenus.remove` 回数が増えないことを直接spyする。
 - 5.1: source-price-refresh公開port contract kitはcatalog/candidate両scopeで同じ正規化target、candidate隔離、scopeごと1commit、price/capturedAt限定置換、他source不変を検査し、二重mutation decoratorを両scopeで拒否する。contract driverのsource更新fakeはmergeではなくcomplete-entry置換にする。
 - 4.4: side panel compositionはcandidate managementの実 `query` / `sources.catalog` / `sources.mutations`、product captureの実 `pagePriceExtraction`、shellの同一transient lifecycleをfeature contributionへ注入する。隣接duplicate-product-merge fixtureは公開APIだけでcandidate scope照合から `refreshCapturedPrice` へ渡し、source追加能力を持たせない。
 - 4.3: stable context menu itemの世代交代は `contextMenus` API instance単位のleaseとmutation queueで直列化する。旧世代cleanup・遅延callbackは現行leaseのitemを削除せず、callback型create失敗はlistenerを解除してfail closedにする。production workerのlabel解決はReact非依存の `ui-messages/worker-public.ts` を使う。

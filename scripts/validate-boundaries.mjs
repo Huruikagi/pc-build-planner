@@ -128,9 +128,20 @@ const isForbiddenApplicationShellFeatureImport = (specifier) => {
   const normalized = specifier.replaceAll("\\", "/");
   const match = normalized.match(/(?:^|\/)features\/[^/]+\/(.+)$/);
   if (match === null) return false;
-  return !/^(?:public|feature-contribution)(?:\.js|\.ts)?$/.test(
+  return !/^(?:public|worker-public|feature-contribution)(?:\.js|\.ts)?$/.test(
     match[1] ?? "",
   );
+};
+
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenSourcePriceRefreshShellImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (!/(?:^|\/)features\/source-price-refresh\//.test(normalizedSource))
+    return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  const match = normalizedSpecifier.match(/(?:^|\/)application-shell\/(.+)$/);
+  if (match === null) return false;
+  return !/^(?:public|worker-public)(?:\.js|\.ts)?$/.test(match[1] ?? "");
 };
 
 /** @param {string} sourcePath @param {string} specifier */
@@ -758,6 +769,21 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("cross-feature-public-import-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenSourcePriceRefreshShellImport(
+              normalizedPath,
+              token.value,
+            ) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("source-price-refresh-shell-public-dependencies-only");
           if (
             token.kind === SyntaxKind.StringLiteral &&
             isForbiddenSettingsImport(normalizedPath, token.value) &&

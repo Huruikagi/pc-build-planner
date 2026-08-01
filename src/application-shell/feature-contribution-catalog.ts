@@ -1,5 +1,5 @@
-import { productCaptureWorkerContribution } from "../features/product-capture/public.js";
-import { sourcePriceRefreshWorkerContribution } from "../features/source-price-refresh/public.js";
+import { productCaptureWorkerContribution } from "../features/product-capture/worker-public.js";
+import { sourcePriceRefreshWorkerContribution } from "../features/source-price-refresh/worker-public.js";
 import type { FoundationScopedDataPort } from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,

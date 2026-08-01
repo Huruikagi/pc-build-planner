@@ -1,4 +1,4 @@
-import type { FeatureId, TargetTabId } from "../../application-shell/public.js";
+import type { TargetTabId } from "../../application-shell/public.js";
 import type {
   MoneyValue,
   Result,
@@ -10,12 +10,10 @@ import {
   manufacturerDomainMap,
 } from "./manufacturer-domain-map.js";
 
-export const productCaptureFeatureId = "product-capture" as FeatureId;
-
-/** Worker-safe metadata consumed by the shell-owned worker catalog. */
-export const productCaptureWorkerContribution = Object.freeze({
-  transientSurfaceId: productCaptureFeatureId,
-});
+export {
+  productCaptureFeatureId,
+  productCaptureWorkerContribution,
+} from "./worker-public.js";
 
 /** Minimal read-only seam consumed by source classifiers in adjacent features. */
 export type ManufacturerDomainLookup = Pick<
