@@ -192,7 +192,7 @@ test("manual capture handoffはproject作成後も同じdraftを編集・保存�
   ).toBeVisible();
 });
 
-test("production buildの明示実行は抽出値をcandidate editorへhandoffする", async ({
+test("production buildのhandoff後に元tabが失効してもdraftを保持して保存する", async ({
   context,
 }) => {
   const id = await extensionId(context);
@@ -247,6 +247,21 @@ test("production buildの明示実行は抽出値をcandidate editorへhandoff�
   await expect(formField(editor, "candidate-name")).toHaveValue(
     "SYN E2E Graphics Card",
   );
+
+  await target.close();
+
+  await expect(editor).toBeVisible();
+  await expect(formField(editor, "candidate-name")).toHaveValue(
+    "SYN E2E Graphics Card",
+  );
+  await expect(extensionAction(panel)).toHaveCount(0);
+  await submitButton(editor).click();
+  await expect(
+    featureRoot(panel, "candidate-management").getByText(
+      "SYN E2E Graphics Card",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 async function openActivatedCapture(
