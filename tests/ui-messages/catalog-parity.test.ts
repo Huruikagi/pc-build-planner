@@ -16,7 +16,7 @@ import {
 } from "../../src/ui-messages/catalog-parity.js";
 import type { MessageDefinition } from "../../src/ui-messages/contracts.js";
 import { formatMessage } from "../../src/ui-messages/format.js";
-import { resolverFor } from "../../src/ui-messages/public.js";
+import { type MessageKey, resolverFor } from "../../src/ui-messages/public.js";
 import { flattenNamespace } from "../../src/ui-messages/resolver.js";
 
 // Compile-time guarantee (1.2): dropping a single key from a target catalog
@@ -89,6 +89,29 @@ const parityIssues = (
 
 test("ja/enはキー集合が一致する", () => {
   assert.deepEqual(Object.keys(en).sort(), Object.keys(ja).sort());
+});
+
+test("価格更新のmenu・状態・全failure・回復案内をtyped resolverで両言語解決する", () => {
+  const keysOf = <T extends object>(value: T) =>
+    Object.keys(value) as (keyof T & string)[];
+  const keys = [
+    "sourcePriceRefresh.menuLabel",
+    "sourcePriceRefresh.runningStatus",
+    "sourcePriceRefresh.succeededStatus",
+    "sourcePriceRefresh.failedStatus",
+    ...keysOf(MESSAGES.sourcePriceRefresh.errors).map(
+      (kind) => `sourcePriceRefresh.errors.${kind}` as const,
+    ),
+    ...keysOf(MESSAGES.sourcePriceRefresh.guidance).map(
+      (kind) => `sourcePriceRefresh.guidance.${kind}` as const,
+    ),
+  ] satisfies readonly MessageKey[];
+
+  for (const language of ["ja", "en"] as const) {
+    const resolve = resolverFor(language);
+    for (const key of keys)
+      assert.notEqual(resolve(key), "", `${language}:${key}`);
+  }
 });
 
 test("ja/enの全キーでプレースホルダ名の集合が一致する(4.2)", () => {

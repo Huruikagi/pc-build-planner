@@ -124,7 +124,7 @@
   - _Boundary: PriceRefreshContextMenuSource, TransientGestureComposition_
   - _Depends: 2.3, transient-feature-surface 6.3_
 
-- [ ] 4.4 side panel contribution、message catalog、隣接consumerを統合する
+- [x] 4.4 side panel contribution、message catalog、隣接consumerを統合する
   - application shell所有の `side-panel-contributions.ts` へUI contribution factoryを登録し、root runtimeをfeature内部から直接編集しない。
   - 4.3で登録済みのworker-safe catalogにmenu worker registrationだけが存在し、UI registration、React root、view、CSSが混入しないことを統合検証する。
   - context menu label、running、success、各failure、回復案内のmessage keyを日本語・英語で同時追加する。
@@ -173,6 +173,7 @@
 
 ## Implementation Notes
 
+- 4.4: side panel compositionはcandidate managementの実 `query` / `sources.catalog` / `sources.mutations`、product captureの実 `pagePriceExtraction`、shellの同一transient lifecycleをfeature contributionへ注入する。隣接duplicate-product-merge fixtureは公開APIだけでcandidate scope照合から `refreshCapturedPrice` へ渡し、source追加能力を持たせない。
 - 4.3: stable context menu itemの世代交代は `contextMenus` API instance単位のleaseとmutation queueで直列化する。旧世代cleanup・遅延callbackは現行leaseのitemを削除せず、callback型create失敗はlistenerを解除してfail closedにする。production workerのlabel解決はReact非依存の `ui-messages/worker-public.ts` を使う。
 
 - 1.1: 公開型exportは公開consumer fixtureから実際に参照させないと回帰検知が成立しない。type-onlyのexportは削除してもtypecheckが通るため、error unionは `switch` + `const exhaustive: never` で網羅性を固定し、値の往復（match → refresh → receipt）をfixtureで組み立てること。

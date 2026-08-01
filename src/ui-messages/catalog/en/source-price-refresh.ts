@@ -1,6 +1,7 @@
 /** Transient price refresh surface text. Mirrors the Japanese catalog key for key. */
 export const sourcePriceRefresh = {
   title: "Price refresh",
+  menuLabel: "Refresh price",
   runningStatus: "Refreshing the price…",
   succeededStatus: "The price was refreshed.",
   failedStatus: "The price couldn't be refreshed.",

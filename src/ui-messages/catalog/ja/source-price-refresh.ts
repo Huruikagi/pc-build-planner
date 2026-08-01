@@ -10,6 +10,7 @@
  */
 export const sourcePriceRefresh = {
   title: "価格の更新",
+  menuLabel: "価格を更新",
   runningStatus: "価格を更新しています…",
   succeededStatus: "価格を更新しました。",
   failedStatus: "価格を更新できませんでした。",

@@ -229,7 +229,7 @@ test("context menu clickは既存経路へ正しいsurfaceIdとtabIdのactivatio
   await composition.cleanup();
 });
 
-test("production bootstrapはChrome menu APIとcatalog由来titleを自動注入する", async () => {
+test("production bootstrapはChrome menu APIとcatalog由来menu labelを自動注入する", async () => {
   const harness = createHarness();
   const menus = createContextMenusStub();
   const composition = createProductionTransientRuntimeBootstrap(
@@ -245,7 +245,7 @@ test("production bootstrapはChrome menu APIとcatalog由来titleを自動注入
 
   const item = menus.items.get(MENU_ITEM_ID);
   assert.ok(item, "production依存からmenu itemを登録する");
-  assert.equal(item.title, "価格の更新", "既存ja catalogからtitleを解決する");
+  assert.equal(item.title, "価格を更新", "ja catalogのmenuLabelを解決する");
   await composition.cleanup();
 });
 

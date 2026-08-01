@@ -151,6 +151,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
       "productCapture",
       "compatibility",
       "settings",
+      "sourcePriceRefresh",
     ],
   );
   assert.equal(contributions.filter(({ key }) => key === "settings").length, 1);
@@ -222,6 +223,26 @@ test("side panel contributionは合成contextから実featureを組み立てる"
     icon: "settings",
   });
   assert.deepEqual(settings.registration.publicApi, {});
+  const sourcePriceRefresh = contributions[5];
+  assert.equal(sourcePriceRefresh.registration.id, "source-price-refresh");
+  assert.equal(sourcePriceRefresh.registration.presentation, "transient");
+  assert.equal("navigation" in sourcePriceRefresh.registration, false);
+  assert.equal(
+    typeof sourcePriceRefresh.registration.publicApi.refresh.matchSource,
+    "function",
+  );
+  assert.equal(
+    typeof sourcePriceRefresh.registration.publicApi.refresh
+      .refreshCapturedPrice,
+    "function",
+  );
+  assert.deepEqual(
+    contributions
+      .filter(({ registration }) => registration.presentation === "persistent")
+      .map(({ registration }) => registration.id),
+    ["candidate-management", "currentBuild", "compatibility", "settings"],
+    "価格更新は常設navigationへ追加しない",
+  );
 });
 
 test("production capture compositionは公開lifecycleとintent factoryだけで起動・cleanupする", async () => {

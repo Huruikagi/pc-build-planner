@@ -50,6 +50,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
     "compatibility",
     "settings",
     "productCapture",
+    "sourcePriceRefresh",
   ]);
   assert.equal(
     Object.keys(composed.value).filter((key) => key === "settings").length,
@@ -85,4 +86,12 @@ test("実featureの公開契約がroot入口から到達できる", () => {
   assert.equal(typeof currentBuild.query.getByProject, "function");
   const compatibility = composed.value.compatibility;
   assert.equal(typeof compatibility.query.evaluate, "function");
+  assert.equal(
+    typeof composed.value.sourcePriceRefresh.refresh.matchSource,
+    "function",
+  );
+  assert.equal(
+    typeof composed.value.sourcePriceRefresh.refresh.refreshCapturedPrice,
+    "function",
+  );
 });

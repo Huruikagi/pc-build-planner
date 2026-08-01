@@ -29,6 +29,10 @@ import {
   createSettingsContribution,
   type SettingsContribution,
 } from "../features/settings/feature-contribution.js";
+import {
+  createSourcePriceRefreshContribution,
+  type SourcePriceRefreshContribution,
+} from "../features/source-price-refresh/feature-contribution.js";
 import type { FoundationDataPort } from "../persistence/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
@@ -43,6 +47,7 @@ export type SidePanelFeatureContributions = readonly [
   ProductCaptureContribution,
   CompatibilityContribution,
   SettingsContribution,
+  SourcePriceRefreshContribution,
 ];
 
 /** Real `chrome.tabs`/`chrome.scripting` handles, supplied by the runtime entrypoint. */
@@ -130,11 +135,26 @@ export const createSidePanelFeatureContributions = (
       data: dependencies.backupRestoreData,
     }),
   });
+  const sourcePriceRefresh = createSourcePriceRefreshContribution({
+    query: candidateManagement.registration.publicApi.query,
+    catalog: candidateManagement.registration.publicApi.sources.catalog,
+    mutations: candidateManagement.registration.publicApi.sources.mutations,
+    pagePriceExtraction:
+      productCapture.registration.publicApi.pagePriceExtraction,
+    transientSurface: dependencies.transientSurface ?? {
+      isCurrent: () => false,
+      dismiss: async () => ({ ok: false, error: { kind: "not-started" } }),
+      async conclude() {
+        return { ok: false, error: { kind: "not-started" } };
+      },
+    },
+  });
   return [
     candidateManagement,
     currentBuild,
     productCapture,
     compatibility,
     settings,
+    sourcePriceRefresh,
   ];
 };

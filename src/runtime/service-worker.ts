@@ -246,7 +246,7 @@ export const createProductionTransientMenuDependencies = (
   const language = resolveWorkerLanguage(chromeApis.i18n?.getUILanguage());
   return {
     contextMenus: chromeApis.contextMenus,
-    title: resolverFor(language)("sourcePriceRefresh.title"),
+    title: resolverFor(language)("sourcePriceRefresh.menuLabel"),
     ...(chromeApis.readLastError === undefined
       ? {}
       : { readLastError: chromeApis.readLastError }),
