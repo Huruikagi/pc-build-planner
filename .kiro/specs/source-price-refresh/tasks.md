@@ -1,6 +1,6 @@
 # 実装計画
 
-- [ ] 1. 公開境界と実行前提を確立する
+- [x] 1. 公開境界と実行前提を確立する
 
 - [x] 1.1 上流portを消費する価格更新の公開契約を確立する
   - 各producer specで定義・承認済みの `CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`PagePriceExtractionPort`、`TransientGestureRegistrationPort` だけを依存として受け入れる。
@@ -26,7 +26,7 @@
   - _Requirements: 6.1, 6.2, 6.6_
   - _Boundary: ManifestPermissionGate_
 
-- [ ] 2. 独立したcoreコンポーネントを構築する
+- [x] 2. 独立したcoreコンポーネントを構築する
 
 - [x] 2.1 (P) scope内の保存済みsourceを一意に特定する
   - catalog scopeとcandidate scopeを上流read-only portへ写像する。
@@ -63,7 +63,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 3.5, 5.1, 5.2, 5.3, 5.4, 5.6_
   - _Boundary: SourcePriceRefreshView_
 
-- [ ] 3. 価格更新use caseと一過性featureを完成させる
+- [x] 3. 価格更新use caseと一過性featureを完成させる
 
 - [x] 3.1 price observationを現行sourceへ原子的に反映する
   - price欠損またはconfirmed money欠損をmutation前に拒否し、旧priceとcapturedAtを保持する。
@@ -95,7 +95,7 @@
   - _Boundary: SourcePriceRefreshRegistration_
   - _Depends: 2.2, 2.4, 3.2_
 
-- [ ] 4. 確定済み上流portとproduction compositionへ統合する
+- [x] 4. 確定済み上流portとproduction compositionへ統合する
 
 - [x] 4.1 product-capture公開のprice extraction portへ接続する
   - `product-page-capture` で定義済みの `ProductCapturePublicApi.pagePriceExtraction` が固定tabだけを解決し、既存extractor、ranker、normalizerでprice一件を選ぶことをcontract testで固定する。
@@ -134,7 +134,7 @@
   - _Boundary: SidePanelContributionIntegration, MessageCatalog, SourcePriceRefreshPublicApi_
   - _Depends: 3.3, 4.1, 4.2, 4.3_
 
-- [ ] 5. critical pathと非回帰を検証する
+- [x] 5. critical pathと非回帰を検証する
 
 - [x] 5.1 URL、照合、更新、stateのunit/contract coverageを完成させる
   - 全URL規則、0/1/複数一致、retail制約、price欠損、stale target、management errorを架空dataで検証する。
@@ -181,7 +181,7 @@
   - _Boundary: SourcePriceRefreshService, CandidateSourcePortIntegration_
   - _Depends: candidate-source-bookmarks 8.1_
 
-- [ ] 6.2 明示的readinessで自動実行し要件・設計を同期する
+- [x] 6.2 明示的readinessで自動実行し要件・設計を同期する
   - `transient-feature-surface` 7.1のone-shot readinessを利用し、`setTimeout(0)` とshell内部macrotask順序への依存を除去する。
   - 要件5.5を「確定前の旧世代結果は保存しない／確定後の有効commitは表示を抑止して補償更新しない」へ明確化し、抽出後staleとmutation後staleの双方を固定する。
   - activationの`surfaceId`、worker-safe公開入口、実ファイル構成、依存方向をdesignへ同期し、親rollup taskを実状態へ合わせる。
@@ -198,6 +198,8 @@
   - _Depends: 6.1, 6.2_
 
 ## Implementation Notes
+
+- 6.2: `transient-feature-surface` 7.1の`waitUntilCurrent`をmountから非同期に待ち、trueかつ未unmountの場合だけ自動実行する。timer/microtask順序依存を削除し、false・reject・unmount後late trueをwarningなしでno-opに固定した。要件5.5は確定前の旧世代結果を保存しない一方、原子的確定後の有効commitは表示だけ抑止して補償更新しないと明確化した。activation shape、worker-safe入口、実ファイル計画、承認metadataも2026-08-02の利用者承認へ同期済み。
 
 - 6.1: `candidate-source-bookmarks` 8.1の `patchSourcePrice` へ移行し、`CandidateQuery.getCandidateDraft` と古い完全entry置換を廃止した。commit直前の公開referenceからraw URL・retail kindをpreconditionとして渡し、`precondition-failed`だけを`stale-target`へ写像する。実foundation contractと破壊decoratorで、後発`siteName`保持、price/capturedAt限定1commit、不一致・競合0 patch commit、primary/non-primary・compatibility非回帰を固定した。
 
@@ -229,11 +231,7 @@
 - 2.4: money/日時のlocale対応formatterはコードベースに存在しない（`Intl.` / `toLocale*` の使用箇所ゼロ）。確定金額は message catalog の placeholder `"{amount} {currency}"`、`capturedAt` は canonical ISO文字列をそのまま描画する（`candidate-management/view.tsx` と同じ前例）。design.md も表示形式を規定していない。将来formatterを導入するなら view 側を差し替える。
 - 2.4: design.md のエラー表に無い8 kind（`invalid-url` / `restricted-page` → 対象ページで再実行、`validation` / `unsupported-data` → 保存データ修復が先、など）の回復案内は 2.2 の単一規則からの演繹。viewの案内keyとstateの `isRecoverableSourcePriceRefreshError` が乖離しないよう、全kindを `Record<SourcePriceRefreshError["kind"], …>` で突き合わせるテストで固定してある。union にメンバを足すと両方のtypecheckが落ちる。
 - 2.4: 失敗表示の `preservedNotice`（既存価格を維持した旨、要件5.1/5.4の唯一の可観測面）はテストで未固定。要素を消しても view.test.tsx は緑のまま。task 5.3 の failure-view DOM coverage で失敗kindのloopへ `preservedNotice` のassertionを1行足すこと。
-- 3.1: `CandidateSourceReference` は `siteName` / `price` / `capturedAt` を射影せず、`CandidateSourceMutationPort.updateSource` は entry を丸ごと**置換**する（`source-collection.ts` の `candidateSourcePolicy.update`）。よって catalog の射影だけで update inputを組むと siteName が消える。保持field全体は同じ `candidate-management/public.ts` の `query.getCandidateDraft(candidateId)` → `CandidateDraft.sources` から読み、`{ ...stored, price, capturedAt }` のspreadで組むこと。上流契約は一切変更しない（射影拡大・merge semantics・price patch mutation はいずれも candidate-source-bookmarks の再検証triggerを発火させ波及が大きい）。
-- 3.1: 上記に伴い design.md の「許可する依存」へ `query: CandidateQuery`（`getCandidateDraft` のみ）を追記済み（利用者承認済み、2026-08-01）。Outbound依存リストと `contracts.ts` の `SourcePriceRefreshUpstreamPorts` doc も整合済み。task 4.2 の配線では `CandidateManagementPublicApi.query` を必ず注入すること。
-- 3.1: 上流fakeを書くときは production の**置換**意味論を再現すること。mergeするfakeを書くとfield欠落が観測できず、データ損失を緑で追認してしまう（round 1 で実際に発生した）。
-- 3.1: `getCandidateDraft` は production では `candidate-management/feature-contribution.ts` の `publicQuery: service` で本物が配線される。`registration.ts` の fallback stub は `publicQuery` 省略時のみ到達するテスト専用で、`unsupported-data` を返して fail closed になるため lossy write は起きない。
-- 3.1: TOCTOU（既知・未クローズ）: draft読み出し → `getSourceReference` → `updateSource` の間に、referenceが射影しないfield（特に `siteName`）が並行更新されると、全entry置換で巻き戻る。`expectedRevision` はmutation時点で計算されるためoptimistic concurrencyでは塞げない。要件4.5が列挙するURL・種別・候補・識別子は再検証済みで規定違反ではない。塞ぐには上流契約変更が要るため、task 5.4 で許容範囲か再確認すること。
+- 3.1（6.1で解消済み）: 初期実装は`getCandidateDraft`から完全entryを再構築して`updateSource`へ渡したため、並行`siteName`更新を巻き戻すTOCTOUがあった。2026-08-02の利用者承認を受け、`candidate-source-bookmarks` 8.1が所有する条件付き`patchSourcePrice`へ移行し、最新entryのprice/capturedAtだけをcommit時precondition付きで更新する。旧`CandidateQuery/getCandidateDraft/updateSource`経路と置換fakeは削除済み。
 - 3.2: 世代gateは3点。抽出**前**（現行でなければ `extractPrice` を一度も呼ばない）、抽出**後**（`extracted.ok` を見る**前**に判定する。旧世代は自分の失敗すら提示してはならない＝要件1.5）、mutation**後**（commit済みの更新は巻き戻さず表示だけ抑止する＝design.md「commit済みの有効な更新は巻き戻さない」）。補償mutationを足すと要件違反になる。
 - 3.2: `price-unavailable` は design の command 順どおり `matchSource` の**後**（`refreshCapturedPrice` 内）で判定される。よって「価格も取れず一致sourceも無い」ページは `no-match` になる。保持すべき既存価格も報告対象も存在しないため、より具体的な `no-match` が正しい。
 - 3.2: `product-capture/public.ts` の `unavailablePriceExtraction` fallback は `tab-unavailable`（union正規メンバ）を返す。永続化なしのtyped failureとして素通しでよい。
@@ -249,10 +247,8 @@
 - 4.1: 「固定tabだけを解決する」は返り値では観測できない。fixture の `observedTabsGet` / `observedInjectionTabs` を probe の `resolvedTabs()` に流して Chrome境界で観測する。`ChromeCaptureRuntimeDependencies` は `tabs.get` と `scripting.executeScript` しか公開しないため、他経路の取りこぼしは無い。
 - 4.1: kit の `extract.unrelatedTab` は、fixture が未pin tabに `url` を与えないため実際には `permission-lost` を観測しており、「portが他tabを拒む」ことの証明にはなっていない。保証を担っているのは `resolvedTabs().includes(tabId)` の方。kit のコメントは assertion より強い主張をしているので、5.x で触るときに文言を実態へ合わせること。
 - 4.1: design.md 572行は contract kit の関心事に `invalid payload`（要件3.6）も挙げているが、kit は未カバー。4.1 のタスク項目外なので保留。5.1 か 5.2 で kit を拡張するときに追加すること。
-- 3.3: **design.md 476-479行は事実誤り**。`SourcePriceRefreshTransientActivation` は `{activationId, tabId}` だけでは成立せず `surfaceId` が必須。`FeatureRegistry.register`（`application-shell/contracts.ts` 185-187行）が `TTransientActivation` を parameterize せず `TransientActivationRequest` に固定し、`TransientActivationAdapter.validate` が共変位置で返すため、狭いpayloadは代入不可（design.md 通りの形にすると TS2375/TS2379 が4件出る）。実装が正しい。design.md の該当行は要修正。
-- 3.3: mount 内で `state.activate` を同期実行してはならない。`TransientSurfaceController` は `await host.showTransient(...)` の**解決後**に `publish({kind:"active"})` するため、mount時点では `isCurrent()` が false で、全runが `stale-activation` になる。現状は macrotask（`setTimeout`）でスケジュールし unmount で `clearTimeout` する。mount解決〜publish間は全てmicrotaskなので macrotask は必ず後になる。
-- 3.3: 上記の帰結として **task 4.4 の制約**: production の `TransientSurfaceHost` adapter は mount解決〜`publish({kind:"active"})` の連鎖に macrotask を挟んではならない（例: 実 `chrome.sidePanel.open()` の await）。挟むと全refreshが無言で `stale-activation` になる。timing非依存の恒久策は `TransientSurfaceLifecyclePort` へcurrency購読を足すか `isCurrent` に `acceptedActivation` を参照させることだが、いずれもshell契約変更で本specの境界外。
+- 3.3（6.2で同期済み）: canonical transient activationは`activationId`・`surfaceId`・`tabId`を保持する。初期実装の`setTimeout(0)`はshell内部のmicrotask/macrotask順序へ隠れて依存していたため、`transient-feature-surface` 7.1の`waitUntilCurrent`へ移行した。mountは待機で塞がず、active publish後のone-shot trueかつ未unmountの場合だけ自動実行し、false・reject・late completionはno-opにする。
 - 3.3: shellがfeatureからimportできる入口名は `public` と `feature-contribution` の2つだけ（`scripts/validate-boundaries.mjs` 126-134行）。UI contribution factoryは `feature-contribution.ts` に置く。
 - 3.3: registration test で手動 `act` を使うのは可。steering testing.md の禁止は `render` 前提のcomponent testに向けたもので、ここはReact rootをproduction code側が作る。前例は `tests/contracts/application-shell-contract-kit.ts`。
-- 3.3: `registration.ts` の unmount 時 `clearTimeout` はテストで固定できていない（`state.ts` の `#mounted` early return が先に効くため外しても緑）。task 5.2 か 5.3 で timer clear を直接spyして固定すること。
+- 3.3（6.2で解消済み）: timer/`clearTimeout`は廃止した。unmount後のreadiness完了はmounted guardで抑止し、late trueでも`state.activate`を呼ばないことをregistration testで固定する。
 - 2.1: locator は `public.ts` から公開しない。公開surfaceは task 3.1 の service が所有する `SourcePriceRefreshPort.matchSource`。locator は feature 内部の協調者に留める。

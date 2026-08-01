@@ -42,9 +42,9 @@ URL同一性と原子的価格更新は公開use caseとしてまとめ、contex
 
 ### 許可する依存
 
-- `application-shell/public.ts` 公開の `ActivationId`、`TargetTabId`、`parseTargetTabId`、`TransientSurfaceLifecyclePort`、`TransientGestureRegistrationPort`。
+- `application-shell/public.ts` 公開の `ActivationId`、`FeatureId`、`TargetTabId`、`parseTargetTabId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`、`TransientGestureRegistrationPort`。
+- `application-shell/worker-public.ts` 公開のworker-safeなgesture registration契約。worker consumerはUI向け `application-shell/public.ts` をruntime importしない。
 - `candidate-management/public.ts` 公開の source facet `sources.catalog: CandidateSourceCatalogPort` と `sources.mutations: CandidateSourceMutationPort`。
-- `candidate-management/public.ts` 公開の `query: CandidateQuery` のうち `getCandidateDraft(id)`。保持すべきsource全フィールドの読み出しに限って利用する。
 - `product-capture/public.ts` 公開の `ProductCapturePublicApi.pagePriceExtraction: PagePriceExtractionPort`。
 - canonical `Result<T, E>`、`CandidatePartId`、`CandidateSourceId`、`SourcedValue<MoneyValue>`、`UtcTimestamp`。
 - Chrome 116 MV3の `chrome.contextMenus`、既存 `activeTab` / `scripting` / `sidePanel`、標準 `URL`。
@@ -85,7 +85,7 @@ worker-safe menu adapter + worker composition
 transient gesture port
 ```
 
-featureは `candidate-management/public.ts`、`product-capture/public.ts`、`application-shell/public.ts` だけをimportする。UI contributionはapplication shell所有の `side-panel-contributions.ts` からfeatureの `feature-contribution.ts` を参照して登録する。context menu adapterはsource-price-refresh内に留まり、worker-safeなcatalog / production worker compositionから上流schedulerへgesture eventを渡すだけとする。`feature-contribution-catalog.ts` からUI、DOM、React moduleへ到達してはならない。
+featureのUI/consumer graphは `candidate-management/public.ts`、`product-capture/public.ts`、`application-shell/public.ts` だけをimportし、worker graphは `application-shell/worker-public.ts` だけをshell runtime入口としてimportする。UI contributionはapplication shell所有の `side-panel-contributions.ts` からfeatureの `feature-contribution.ts` を参照して登録する。context menu adapterはsource-price-refresh内に留まり、worker-safeなcatalog / production worker compositionから上流schedulerへgesture eventを渡すだけとする。`feature-contribution-catalog.ts` からUI、DOM、React moduleへ到達してはならない。
 
 ## アーキテクチャ
 
@@ -128,7 +128,7 @@ graph TB
 
 | 層 | 選択・版 | 本機能での役割 | 備考 |
 |---|---|---|---|
-| UI | React 19 / CSS | 一過性の進行・成功・失敗表示 | stateはReact外 |
+| UI | React 19 / 既存shell UI資産 | 一過性の進行・成功・失敗表示 | feature固有CSSなし、stateはReact外 |
 | 言語 | TypeScript 7 strict / ESM NodeNext | URL brand、port、error union | `any`禁止 |
 | Domain/Data | candidate source schema 2 / write authority | source priceとcapturedAtの原子的更新 | schema変更なし |
 | Runtime | Chrome 116 MV3 contextMenus / activeTab / scripting / sidePanel | gesture、固定tab抽出、panel表示 | `contextMenus` permission追加 |
@@ -149,10 +149,11 @@ src/
 │   ├── view.tsx                        # 進行・結果・回復案内
 │   ├── react-root.tsx                  # feature-owned mount/unmount
 │   ├── context-menu-source.ts          # Chrome menu itemとgesture source adapter
+│   ├── feature-id.ts                   # UI/workerで共有するFeatureId定数
 │   ├── registration.ts                 # transient activation validatorとmount
 │   ├── feature-contribution.ts         # portsを組み立てるfeature contribution
-│   ├── public.ts                       # URL identityとrefresh portの唯一の公開入口
-│   └── styles.css                      # feature-scoped style
+│   ├── public.ts                       # UI/隣接consumer向けURL identityとrefresh port公開入口
+│   └── worker-public.ts                # worker consumer向けmenu registration唯一の公開入口
 ├── application-shell/
 │   ├── side-panel-contributions.ts      # source-price-refresh UI contribution factoryの唯一の登録先
 │   ├── feature-contribution-catalog.ts  # worker-safeなmenu worker registrationだけを登録しUI moduleを参照しない
@@ -171,6 +172,9 @@ tests/
 
 e2e/
 ├── source-price-refresh.spec.ts        # production activation ingress後のsuccess/failure/失効
+├── source-price-refresh.native-smoke.spec.ts # browser-native menu選択の手動/OS UI gate
+├── models/source-price-refresh.ts      # source-price-refresh page model
+├── support/source-price-refresh-fixture.ts # 架空HTTPS fixture support
 └── locators.ts                         # transient status locator
 ```
 
@@ -178,7 +182,7 @@ e2e/
 
 - `manifest.json` — `contextMenus`を既存permission集合へ追加し、host/optional permissionは追加しない。
 - `scripts/validate-artifacts.mjs` — exact permission allowlistと診断文言を5権限へ更新する。
-- `scripts/build.mjs` または既存entry catalog — 新featureのCSS/UIをproduction bundleへ含める。具体entry方式は現行build patternへ合わせる。
+- `scripts/build.mjs` または既存entry catalog — 新featureのUIと必要な既存shell UI資産をproduction bundleへ含める。feature固有CSS entryは追加しない。
 - `src/application-shell/side-panel-contributions.ts` — application shell所有のside panel composition pointでsource-price-refreshのUI contribution factoryを登録する。
 - `src/application-shell/feature-contribution-catalog.ts` — worker-safe制約を維持したままsource-price-refreshのmenu worker registrationだけを登録し、UI contribution、DOM、Reactへ到達させない。
 - `src/application-shell/production-worker-composition.ts` — worker catalogのmenu registrationを上流gesture registration portへ接続し、side panel専用module graphをimportしない。
@@ -246,7 +250,7 @@ sequenceDiagram
 | 2.1, 2.2, 2.3, 2.4 | URL受理と同一性 | SourceUrlIdentity | `normalizeSourcePageUrl`、`sameSourcePageUrl` | 両フロー |
 | 2.5, 2.6, 2.7, 2.8 | 一意source・retail制約 | StoredSourceLocator | `CandidateSourceCatalogPort`、`matchSource` | 両フロー |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | priceだけの抽出 | SourcePriceRefreshService | `PagePriceExtractionPort` | context menu更新 |
-| 4.1, 4.2, 4.3, 4.4, 4.5 | 原子的反映とprojection | SourcePriceRefreshService | `CandidateSourceMutationPort.updateSource`、`refreshCapturedPrice` | 両フロー |
+| 4.1, 4.2, 4.3, 4.4, 4.5 | 原子的反映とprojection | SourcePriceRefreshService | `CandidateSourceMutationPort.patchSourcePrice`、`refreshCapturedPrice` | 両フロー |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | 保全と回復 | SourcePriceRefreshService、SourcePriceRefreshState、SourcePriceRefreshView | `SourcePriceRefreshError` | 両フロー |
 | 6.1, 6.2, 6.5, 6.6 | permission/runtime境界 | PriceRefreshContextMenuSource、SourcePriceRefreshRegistration | manifest、artifact gate、gesture port | context menu更新 |
 | 6.3 | adjacent再利用 | SourcePriceRefreshPublicApi | `SourcePriceRefreshPort` | 同一URL再取り込み |
@@ -356,7 +360,7 @@ export interface CandidateSourceCatalogPort {
 **依存**:
 
 - Inbound: transient state、duplicate-product-merge public consumer（P0）
-- Outbound: `PagePriceExtractionPort`、StoredSourceLocator、`CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`CandidateQuery`（`getCandidateDraft` のみ／保持field読み出し用）、`TransientSurfaceLifecyclePort`（P0）
+- Outbound: `PagePriceExtractionPort`、StoredSourceLocator、`CandidateSourceCatalogPort`、`CandidateSourceMutationPort`、`TransientSurfaceLifecyclePort`（P0）
 
 **契約**: Service [x]
 
@@ -423,7 +427,7 @@ export interface SourcePriceRefreshPort {
 
 `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort` は `product-page-capture/design.md` の確定済み契約を参照し、`ProductCapturePublicApi.pagePriceExtraction` から受け取る。本featureの所有契約は `RefreshCapturedPriceInput` 以降であり、価格抽出型やerror unionを再定義しない。
 
-`refreshCapturedPrice` は `getSourceReference` で対象を再読込し、現行pageUrlの正規形が `observedPageUrl` と一致し、kindが `retail` である場合だけ既存 `CandidateSourceMutationPort.updateSource` を呼ぶ。inputの `price` が欠損またはconfirmed amount/currencyを持たない場合は `price-unavailable` とし、mutationを呼ばない。update inputは既存sourceのprice/capturedAtだけを置換し、URL、siteName、kind、ID、他source、product、normalized attributesを保持する。`CandidateSourceReference` は `siteName` を射影しないため、保持すべきこれらのフィールドは `query.getCandidateDraft(candidateId)` が返す `CandidateDraft.sources` の該当entryから読み出し、`getSourceReference` による直前の再検証はそのまま維持する。revision conflictは後発状態を上書きせず `conflict` または `stale-target` として返す。
+`refreshCapturedPrice` は `getSourceReference` で対象を再読込し、現行pageUrlの正規形が `observedPageUrl` と一致し、kindが `retail` である場合だけ `CandidateSourceMutationPort.patchSourcePrice` を呼ぶ。inputの `price` が欠損またはconfirmed amount/currencyを持たない場合は `price-unavailable` とし、mutationを呼ばない。conditional patchにはcandidate/source ID、直前に確認したURLとretail kindをpreconditionとして渡し、price/capturedAtだけを原子的に確定する。並行更新されたsiteNameなど非対象fieldはmutation ownerが保持し、precondition不一致は `stale-target`、revision競合は `conflict` として返す。
 
 context menu内部commandは次の順序を守る。
 
@@ -475,6 +479,7 @@ summary-only component。runningでは進行、succeededでは価格・通貨・
 ```typescript
 export interface SourcePriceRefreshTransientActivation {
   readonly activationId: ActivationId;
+  readonly surfaceId: FeatureId;
   readonly tabId: TargetTabId;
 }
 
@@ -485,9 +490,9 @@ export type SourcePriceRefreshFeatureRegistration =
   >;
 ```
 
-registrationはcanonical `TransientApplicationFeatureRegistration`を消費し、`presentation: "transient"`、feature ID `source-price-refresh`を明示する。navigation propertyは渡さず、常設navigation metadata/keyを持たない。activation payloadを境界検証し、mount時にstateへ渡す。menu gesture以外から同じsurfaceIdを起動できても、正しいactivationId/tabIdがなければfail closedにする。
+registrationはcanonical `TransientApplicationFeatureRegistration`を消費し、`presentation: "transient"`、feature ID `source-price-refresh`を明示する。navigation propertyは渡さず、常設navigation metadata/keyを持たない。`TransientActivationRequest`のactivationId/surfaceId/tabIdを境界検証し、mount後は `TransientSurfaceLifecyclePort.waitUntilCurrent(activationId)` を非同期に一度だけ待つ。trueかつ未unmountの場合だけstateへ渡し、false、拒否、unmount後のlate trueでは開始しない。mount自身はreadinessをawaitせず、shell内部のmicrotask/macrotask順序を隠れた依存にしない。
 
-production UIへの登録は `side-panel-contributions.ts` だけが行い、source-price-refreshの `feature-contribution.ts` からregistration factory、public API、CSSをside panel module graphへ取り込む。`feature-contribution-catalog.ts` はこのUI factoryをimportせず、service workerから `side-panel-contributions.ts` へ到達する経路を作らない。
+production UIへの登録は `side-panel-contributions.ts` だけが行い、source-price-refreshの `feature-contribution.ts` からregistration factoryとUI/consumer向けpublic APIをside panel module graphへ取り込む。`feature-contribution-catalog.ts` はこのUI factoryをimportせず、`worker-public.ts` だけを通じてmenu registrationを取得し、service workerから `side-panel-contributions.ts` へ到達する経路を作らない。
 
 #### PriceRefreshContextMenuSource
 
@@ -514,9 +519,9 @@ export interface TransientGestureRegistrationPort {
 }
 ```
 
-`TransientGestureSource`、`TransientGestureRegistrationPort`、`TransientGestureRegistrationError` は `transient-feature-surface/design.md` の確定済み同期契約を参照し、`application-shell/public.ts` からimportする。context menu sourceはstable ID `source-price-refresh`、`contexts: ["page"]`、`documentUrlPatterns: ["http://*/*", "https://*/*"]` でitemを冪等登録する。click listenerはmenu IDと `parseTargetTabId` で検証したtab IDだけを受け、callback内で `emit` を同期実行する。`pageUrl`、link text、selection、frame dataをstoreやログへ渡さない。上流registration portがemitを既存scheduler、store、side panel openへ接続する。
+`TransientGestureSource`、`TransientGestureRegistrationPort`、`TransientGestureRegistrationError` は `transient-feature-surface/design.md` の確定済み同期契約を参照し、worker graphでは `application-shell/worker-public.ts` からimportする。context menu sourceはstable ID `source-price-refresh`、`contexts: ["page"]`、`documentUrlPatterns: ["http://*/*", "https://*/*"]` でitemを冪等登録する。click listenerはmenu IDと `parseTargetTabId` で検証したtab IDだけを受け、callback内で `emit` を同期実行する。`pageUrl`、link text、selection、frame dataをstoreやログへ渡さない。上流registration portがemitを既存scheduler、store、side panel openへ接続する。
 
-menu sourceのproduction登録はworker-safeなcatalog項目として `production-worker-composition.ts` が合成する。この経路が参照できるのはDOM/React非依存のcontext menu adapterとworker registrationだけであり、UI registration、view、React root、CSSは参照しない。
+menu sourceのproduction登録はworker-safeなcatalog項目として `production-worker-composition.ts` が合成する。この経路が参照できるのはDOM/React非依存のcontext menu adapterとworker registrationだけであり、UI registration、view、React root、UI資産は参照しない。
 
 ## データモデル
 
@@ -570,7 +575,8 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 ### Contract / integration tests
 
 - `PagePriceExtractionPort` contract kitで固定tab、page-derived URL、既存rank/normalize provenance、invalid payloadを検証する（3.1–3.3、3.6）。
-- catalog → match → updateSourceをin-memory portsで接続し、一回のmutationで対象sourceだけが変わることを検証する（4.1–4.4）。
+- catalog → match → conditional `patchSourcePrice`をin-memory portsで接続し、一回のmutationで対象sourceだけが変わることを検証する（4.1–4.4）。
+- registrationでmount後のone-shot readiness trueだけが開始し、任意macrotaskを挟んでも開始順序が変わらず、false・reject・unmount後のlate trueがno-opであることを検証する（1.1、1.5、5.5）。
 - duplicate-product-merge consumer fixtureがcandidate scopeでmatchし、同一URLをsource追加せず `refreshCapturedPrice` へ渡すことを検証する（6.3）。
 - `TransientGestureRegistrationPort` contract kitでmenu emitが既存activation schedulerへ一度だけ届き、別store writerを作らないことを検証する（1.1、6.6）。
 - side panel contribution contractでUI registrationがcanonical transient branchとして`presentation: "transient"`を持ちnavigation不在のまま `side-panel-contributions.ts` から取得でき、worker catalogにはmenu registrationだけが存在することを検証する（1.1、1.2、6.6）。

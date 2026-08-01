@@ -1,21 +1,27 @@
 {
   "feature_name": "source-price-refresh",
   "created_at": "2026-07-27T12:59:42.2271099+09:00",
-  "updated_at": "2026-07-27T15:57:17.1349195+09:00",
+  "updated_at": "2026-08-02T07:15:53.5207264+09:00",
   "language": "ja",
   "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": true
+      "approved": true,
+      "approved_at": "2026-08-02T07:15:53.5207264+09:00",
+      "approval_reason": "利用者がvalidation指摘への要件修正を明示承認"
     },
     "design": {
       "generated": true,
-      "approved": true
+      "approved": true,
+      "approved_at": "2026-08-02T07:15:53.5207264+09:00",
+      "approval_reason": "利用者がvalidation指摘への設計同期を明示承認"
     },
     "tasks": {
       "generated": true,
-      "approved": true
+      "approved": true,
+      "approved_at": "2026-08-02T07:15:53.5207264+09:00",
+      "approval_reason": "利用者がtask remediationの実施を明示承認"
     }
   },
   "ready_for_implementation": true

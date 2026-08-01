@@ -8,6 +8,7 @@ import type {
   TransientActivationLease,
   TransientActivationRequest,
   TransientApplicationFeatureRegistration,
+  TransientSurfaceLifecyclePort,
 } from "../../application-shell/public.js";
 import { parseTargetTabId } from "../../application-shell/public.js";
 import { err, ok } from "../../domain/public.js";
@@ -42,6 +43,7 @@ export interface SourcePriceRefreshRegistrationDependencies {
    */
   readonly createState: () => SourcePriceRefreshState;
   readonly publicApi: SourcePriceRefreshPublicApi;
+  readonly transientSurface: TransientSurfaceLifecyclePort;
   readonly getAvailability?: () => Availability;
   readonly subscribeAvailability?: (
     listener: (availability: Availability) => void,
@@ -116,34 +118,17 @@ export const createSourcePriceRefreshFeatureRegistration = (
       const root = mountSourcePriceRefreshReactRoot(context.container, {
         state,
       });
-      await new Promise<void>((resolve) => queueMicrotask(resolve));
-
-      /**
-       * The run starts by itself, with no further gesture, but not inside the
-       * mount call. The shell publishes an activation as current only once the
-       * whole transient transition has drained — accept, unmount of the previous
-       * surface, this mount — and every remaining step of that transition is a
-       * microtask. Starting synchronously here would therefore make the very
-       * first generation check see an activation the shell has not yet marked
-       * current and abandon the run as stale. Scheduling it as a macrotask puts
-       * the start strictly after that chain, so the workflow's three generation
-       * gates all read the settled lifecycle state.
-       */
-      let scheduled: ReturnType<typeof setTimeout> | undefined = setTimeout(
-        () => {
-          scheduled = undefined;
-          // The rejection handler is mandatory even though the workflow is
-          // contracted to settle with a typed `Result`: an unhandled rejection
-          // would dump an exception object, which this feature never surfaces
-          // (requirement 5.6).
+      let unmounted = false;
+      void dependencies.transientSurface
+        .waitUntilCurrent(activation.activationId)
+        .then((isCurrent) => {
+          if (!isCurrent || unmounted) return;
           void state
             .activate(activation.activationId, activation.tabId)
             .catch(() => {});
-        },
-        0,
-      );
+        })
+        .catch(() => {});
 
-      let unmounted = false;
       return {
         async unmount() {
           if (unmounted) return;
@@ -153,10 +138,6 @@ export const createSourcePriceRefreshFeatureRegistration = (
           // released, and the state generation is retired — which drops the
           // view's subscription and makes every late extraction or mutation
           // callback a no-op (requirement 5.5).
-          if (scheduled !== undefined) {
-            clearTimeout(scheduled);
-            scheduled = undefined;
-          }
           root.unmount();
           state.unmount();
         },

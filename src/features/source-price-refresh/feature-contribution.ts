@@ -48,6 +48,7 @@ export const createSourcePriceRefreshContribution = (
     key: sourcePriceRefreshContributionKey,
     registration: createSourcePriceRefreshFeatureRegistration({
       publicApi: { refresh },
+      transientSurface: dependencies.transientSurface,
       createState: () =>
         createSourcePriceRefreshState({ runRefresh, isCurrent }),
     }),

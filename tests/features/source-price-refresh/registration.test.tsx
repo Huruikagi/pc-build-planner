@@ -145,10 +145,21 @@ const createWorkflowHarness = () => {
 
 type WorkflowHarness = ReturnType<typeof createWorkflowHarness>;
 
-const registrationFor = (harness: WorkflowHarness) =>
+const alwaysCurrentLifecycle: TransientSurfaceLifecyclePort = {
+  isCurrent: () => true,
+  waitUntilCurrent: async () => true,
+  dismiss: async () => err({ kind: "not-started" }),
+  conclude: async () => err({ kind: "not-started" }),
+};
+
+const registrationFor = (
+  harness: WorkflowHarness,
+  transientSurface: TransientSurfaceLifecyclePort = alwaysCurrentLifecycle,
+) =>
   createSourcePriceRefreshFeatureRegistration({
     createState: () => harness.createState(),
     publicApi,
+    transientSurface,
   });
 
 /**
@@ -172,16 +183,10 @@ const mountRegistration = async (
   return handle;
 };
 
-/**
- * Drains the macrotask the registration schedules its run on. The shell marks
- * an activation current only after the whole mount transition (a microtask
- * chain) has drained, so the start is deliberately one macrotask later.
- */
 const flushStart = async (): Promise<void> => {
   await act(async () => {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await Promise.resolve();
+    await Promise.resolve();
   });
 };
 
@@ -213,7 +218,13 @@ const persistentRegistration = (): ApplicationFeatureRegistration => ({
  */
 const createSidePanelContractFixture = () => {
   const harness = createWorkflowHarness();
-  const registration = registrationFor(harness);
+  let controller: ReturnType<typeof createTransientSurfaceController>;
+  const registration = registrationFor(harness, {
+    isCurrent: (id) => controller.isCurrent(id),
+    waitUntilCurrent: (id) => controller.waitUntilCurrent(id),
+    dismiss: (id, reason) => controller.dismiss(id, reason),
+    conclude: (id, target) => controller.conclude(id, target),
+  });
   const registry = createFeatureRegistry();
   assert.equal(registry.register(persistentRegistration()).ok, true);
   assert.equal(registry.register(registration).ok, true);
@@ -226,7 +237,7 @@ const createSidePanelContractFixture = () => {
     onStateChange: () => {},
     reportError: (value) => diagnostics.push(value),
   });
-  const controller = createTransientSurfaceController({
+  controller = createTransientSurfaceController({
     host: {
       getSelected: host.getSelected,
       isTransientAvailable: (id) => id === sourcePriceRefreshFeatureId,
@@ -355,6 +366,95 @@ test("有効なactivationはmountだけで自動的にworkflowを開始する", 
   );
 });
 
+test("mountはreadinessを待たず、明示的にcurrentになった後だけ開始する", async () => {
+  const harness = createWorkflowHarness();
+  let resolveReady: ((value: boolean) => void) | undefined;
+  const lifecycle: TransientSurfaceLifecyclePort = {
+    ...alwaysCurrentLifecycle,
+    waitUntilCurrent: () =>
+      new Promise<boolean>((resolve) => {
+        resolveReady = resolve;
+      }),
+  };
+  const registration = registrationFor(harness, lifecycle);
+  const validated = registration.transientActivation.validate(request());
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  assert.equal(
+    (await registration.transientActivation.accept(validated.value)).ok,
+    true,
+  );
+
+  const handle = await mountRegistration(
+    registration,
+    document.createElement("div"),
+  );
+  assert.equal(harness.started.length, 0, "mountはreadinessをawaitしない");
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  assert.equal(harness.started.length, 0, "任意macrotaskでも暗黙開始しない");
+
+  await act(async () => {
+    resolveReady?.(true);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.deepEqual(harness.started, [{ activationId, tabId }]);
+  await act(async () => handle.unmount());
+});
+
+test("readiness false、reject、unmount後のlate trueは開始しない", async () => {
+  const decisions: Array<() => Promise<boolean>> = [
+    async () => false,
+    async () => {
+      throw new Error("sensitive readiness failure");
+    },
+  ];
+  for (const decision of decisions) {
+    const harness = createWorkflowHarness();
+    const registration = registrationFor(harness, {
+      ...alwaysCurrentLifecycle,
+      waitUntilCurrent: decision,
+    });
+    const validated = registration.transientActivation.validate(request());
+    assert.equal(validated.ok, true);
+    if (!validated.ok) continue;
+    await registration.transientActivation.accept(validated.value);
+    const handle = await mountRegistration(
+      registration,
+      document.createElement("div"),
+    );
+    await flushStart();
+    assert.equal(harness.started.length, 0);
+    await act(async () => handle.unmount());
+  }
+
+  const harness = createWorkflowHarness();
+  let resolveReady: ((value: boolean) => void) | undefined;
+  const registration = registrationFor(harness, {
+    ...alwaysCurrentLifecycle,
+    waitUntilCurrent: () =>
+      new Promise<boolean>((resolve) => {
+        resolveReady = resolve;
+      }),
+  });
+  const validated = registration.transientActivation.validate(request());
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  await registration.transientActivation.accept(validated.value);
+  const handle = await mountRegistration(
+    registration,
+    document.createElement("div"),
+  );
+  await act(async () => handle.unmount());
+  await act(async () => {
+    resolveReady?.(true);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.equal(harness.started.length, 0);
+});
+
 test("不正なactivationIdとtabIdは境界で拒否され実行を開始しない", async () => {
   const harness = createWorkflowHarness();
   const registration = registrationFor(harness);
@@ -446,7 +546,14 @@ test("unmountはReact root・subscription・後着callbackを破棄する", asyn
 
 test("開始前にunmountされたactivationは一度も実行を開始しない", async () => {
   const harness = createWorkflowHarness();
-  const registration = registrationFor(harness);
+  let resolveReady: ((value: boolean) => void) | undefined;
+  const registration = registrationFor(harness, {
+    ...alwaysCurrentLifecycle,
+    waitUntilCurrent: () =>
+      new Promise<boolean>((resolve) => {
+        resolveReady = resolve;
+      }),
+  });
   const container = document.createElement("div");
   const validated = registration.transientActivation.validate(request());
   assert.equal(validated.ok, true);
@@ -455,44 +562,16 @@ test("開始前にunmountされたactivationは一度も実行を開始しない
     (await registration.transientActivation.accept(validated.value)).ok,
     true,
   );
-  // Mount and unmount inside one `act` callback: `mount` only ever awaits
-  // microtasks, so the event loop cannot reach its timer phase in between and
-  // the scheduled start is provably still pending when `unmount` cancels it.
   await act(async () => {
     const handle = await registration.mount(mountContext(container));
     await handle.unmount();
   });
+  resolveReady?.(true);
   await flushStart();
 
   assert.equal(harness.started.length, 0);
   assert.equal(harness.hasPendingRun(), false);
   assert.equal(container.textContent, "");
-});
-
-test("開始前のunmountは予約済みtimerをclearTimeoutで直接破棄する", async (t) => {
-  const clearTimeoutSpy = t.mock.method(globalThis, "clearTimeout");
-  const harness = createWorkflowHarness();
-  const registration = registrationFor(harness);
-  const container = document.createElement("div");
-  const validated = registration.transientActivation.validate(request());
-  assert.equal(validated.ok, true);
-  if (!validated.ok) return;
-  assert.equal(
-    (await registration.transientActivation.accept(validated.value)).ok,
-    true,
-  );
-
-  await act(async () => {
-    const handle = await registration.mount(mountContext(container));
-    await handle.unmount();
-  });
-
-  assert.equal(
-    clearTimeoutSpy.mock.callCount(),
-    1,
-    "stateのmounted guardへ空振りさせず予約timer自体を破棄する",
-  );
-  assert.equal(harness.started.length, 0);
 });
 
 test("対象tabの失効で一過性面を終了し常設面へ戻す", async () => {
