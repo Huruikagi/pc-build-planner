@@ -13,12 +13,14 @@ export type {
   CandidateListQuery,
   CandidateQuery,
   CandidateSourceCatalogPort,
+  CandidateSourceMutationError,
   CandidateSourceMutationPort,
   CandidateSourceReference,
   CandidateSummary,
   CreateProjectInput,
   ManagementError,
   MutationContext,
+  PatchCandidateSourcePriceInput,
   ProjectSummary,
   RemoveCandidateSourceInput,
   RenameProjectInput,
@@ -62,6 +64,7 @@ export const createCandidateManagementPublicApi = (
     typeof catalog.getSourceReference !== "function" ||
     typeof mutations?.addSource !== "function" ||
     typeof mutations.updateSource !== "function" ||
+    typeof mutations.patchSourcePrice !== "function" ||
     typeof mutations.removeSource !== "function" ||
     typeof mutations.setPrimarySource !== "function"
   ) {

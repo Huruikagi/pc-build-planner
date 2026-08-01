@@ -82,6 +82,12 @@ const unavailableSources = {
         error: { kind: "unsupported-data" as const },
       };
     },
+    async patchSourcePrice() {
+      return {
+        ok: false as const,
+        error: { kind: "unsupported-data" as const },
+      };
+    },
     async removeSource() {
       return {
         ok: false as const,

@@ -40,6 +40,9 @@ export interface StoredStateObservation {
 export interface CandidateSourceIntegrationProbe {
   readonly refresh: SourcePriceRefreshPort;
   readonly catalog: CandidateSourceCatalogPort;
+  readonly mutations: import("../../src/features/candidate-management/public.js").CandidateSourceMutationPort;
+  /** Inserts one competing foundation commit after the next expected-revision read. */
+  readonly armRevisionConflict: () => void;
   readonly observe: () => Promise<StoredStateObservation>;
   /** Number of root writes the persistence layer actually committed. */
   readonly rootCommits: () => number;

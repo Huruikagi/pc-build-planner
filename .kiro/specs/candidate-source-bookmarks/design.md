@@ -394,6 +394,7 @@ interface CandidateSourcePolicy {
 interface CandidateSourceMutationPort {
   addSource(input: AddCandidateSourceInput): Promise<Result<CandidatePart, ManagementError>>;
   updateSource(input: UpdateCandidateSourceInput): Promise<Result<CandidatePart, ManagementError>>;
+  patchSourcePrice(input: PatchCandidateSourcePriceInput): Promise<Result<void, CandidateSourceMutationError>>;
   removeSource(input: RemoveCandidateSourceInput): Promise<Result<CandidatePart, ManagementError>>;
   setPrimarySource(input: SetPrimarySourceInput): Promise<Result<CandidatePart, ManagementError>>;
 }
@@ -401,6 +402,8 @@ interface CandidateSourceMutationPort {
 
 - Public portはmutation contextをconsumerへ公開せず、feature contributionが最新revisionとrequest IDを補う。
 - service内部メソッドは既存の明示 `MutationContext` を受け、candidate読込、policy適用、validator、root mutationを一回で行う。
+- `patchSourcePrice` はcandidate/source IDと期待する未加工 `pageUrl`・`retail` kindを最新candidate snapshot上で照合し、最新sourceの `price` と `capturedAt` だけを更新する。URLの正規化・同一性判断は下流所有のままとする。
+- source、URL、kindの不一致はcommitなしの専用 `precondition-failed`、foundation revision競合は既存 `conflict` として返し、通常の `ManagementError` と判別可能にする。既存 `updateSource` の完全entry置換契約は維持する。
 - 新規sourceのURLはHTTP/HTTPSを必須とし、kind未指定ならclassifierで補う。明示kindは上書きしない。
 - conflict、maintenance、quota、storage、validationを既存 `ManagementError` へ正規化する。
 

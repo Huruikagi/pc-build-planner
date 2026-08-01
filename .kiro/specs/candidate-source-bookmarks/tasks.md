@@ -219,6 +219,18 @@
   - `pnpm validate` が成功し、追加権限、実データfixture、feature内部deep import、未関係の公開契約差分がないことを完了条件とする。
   - _Requirements: 3.6, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 7.5, 8.6, 8.7_
 
+- [x] 8. validation remediationで条件付き価格patch契約を追加する
+
+- [x] 8.1 最新sourceへ価格と取得日時だけを原子的にpatchする
+  - downstreamが古いsource entry全体を再送せず、candidate/source ID、期待URL、期待種別をcommit時に検証して、最新sourceのpriceとcapturedAtだけを更新できる公開mutationを追加する。
+  - 期待source不一致を専用precondition error、revision競合を既存conflictとして区別し、siteNameなどの後発変更を保持する。
+  - 並行siteName更新、URL・kind変更、source削除、revision競合、一回のroot mutationを実stack contract testで固定する。
+  - _Requirements: 3.2, 3.3, 3.4, 6.4_
+  - _Boundary: CandidateSourceMutationPort, CandidateManagementService, CandidateSourceContractTests_
+  - _Depends: 7.3_
+
 ## Implementation Notes
+
+- 8.1: validation remediationで `patchSourcePrice` を公開source mutationへ追加した。commit時に最新sourceのraw URL・retail kindをprecondition検証し、後発`siteName`を保持してprice/capturedAtだけを1 root mutationで更新する。実foundation contractでkind変更・source削除・revision競合はいずれもpatch由来0commitになることを固定し、source-price-refresh 6.1から再利用する。
 
 - 境界・fixture gateは文字列や1段aliasの列挙ではなく、全入力のAST構文preflight、循環安全なconst固定点解析、fixture registryの双方向完全性でfail closedにする。

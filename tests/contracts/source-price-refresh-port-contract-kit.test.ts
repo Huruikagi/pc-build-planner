@@ -198,6 +198,9 @@ const createProbe = () => {
       commits += 1;
       return ok(undefined);
     },
+    async patchSourcePrice() {
+      return err({ kind: "unsupported-data" });
+    },
     async removeSource() {
       return err({ kind: "unsupported-data" });
     },

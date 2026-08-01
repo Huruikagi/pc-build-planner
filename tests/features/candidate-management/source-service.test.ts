@@ -305,6 +305,123 @@ test("update・primary変更・removeは対象sourceだけを一回の更新で�
   assert.equal(h.commands.length, 4);
 });
 
+test("条件付き価格patchは最新sourceのsiteNameを保持して価格と取得日時だけを更新する", async () => {
+  const h = harness();
+  const current = h.root().candidateParts[0]?.sources[0];
+  assert.ok(current?.pageUrl);
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+    now: () => "2026-08-01T01:00:00.000Z" as UtcTimestamp,
+  });
+  const result = await service.patchSourcePrice(
+    {
+      candidateId,
+      sourceId: current.id,
+      expectedPageUrl: current.pageUrl,
+      expectedKind: "retail",
+      price: {
+        original: "JPY 44000",
+        confirmed: { amount: 44000, currency: "JPY" },
+      },
+      capturedAt: "2026-08-01T00:00:00.000Z" as UtcTimestamp,
+    },
+    context,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(h.commands.length, 1);
+  const stored = h.root().candidateParts[0]?.sources[0];
+  assert.equal(stored?.siteName, current.siteName);
+  assert.deepEqual(stored?.price, {
+    original: "JPY 44000",
+    confirmed: { amount: 44000, currency: "JPY" },
+  });
+  assert.equal(stored?.capturedAt, "2026-08-01T00:00:00.000Z");
+});
+
+test("条件付き価格patchはURL・kind・source不一致をcommitなしで区別する", async () => {
+  const sourceId = "30000000-0000-4000-8000-000000000001" as CandidateSourceId;
+  for (const overrides of [
+    { expectedPageUrl: "https://other.example.invalid/item" },
+    { sourceId: "30000000-0000-4000-8000-000000000099" as CandidateSourceId },
+  ]) {
+    const h = harness();
+    const current = h.root().candidateParts[0]?.sources[0];
+    assert.ok(current?.pageUrl);
+    const service = createCandidateManagementService({
+      data: h.data,
+      sourceData: h.sourceData,
+    });
+    const result = await service.patchSourcePrice(
+      {
+        candidateId,
+        sourceId,
+        expectedPageUrl: current.pageUrl,
+        expectedKind: "retail",
+        price: { original: "1", confirmed: { amount: 1, currency: "JPY" } },
+        capturedAt: "2026-08-01T00:00:00.000Z" as UtcTimestamp,
+        ...overrides,
+      },
+      context,
+    );
+    assert.deepEqual(result, {
+      ok: false,
+      error: { kind: "precondition-failed" },
+    });
+    assert.equal(h.commands.length, 0);
+  }
+
+  const h = harness();
+  const current = h.root().candidateParts[0]?.sources[0];
+  assert.ok(current?.pageUrl);
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+  });
+  await service.updateSource(
+    { candidateId, source: { ...current, kind: "manufacturer" } },
+    context,
+  );
+  const result = await service.patchSourcePrice(
+    {
+      candidateId,
+      sourceId: current.id,
+      expectedPageUrl: current.pageUrl,
+      expectedKind: "retail",
+      price: { original: "1", confirmed: { amount: 1, currency: "JPY" } },
+      capturedAt: "2026-08-01T00:00:00.000Z" as UtcTimestamp,
+    },
+    context,
+  );
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "precondition-failed" },
+  });
+  assert.equal(h.commands.length, 1);
+});
+
+test("条件付き価格patchのrevision競合は既存conflictとして返す", async () => {
+  const h = harness("revision-conflict");
+  const current = h.root().candidateParts[0]?.sources[0];
+  assert.ok(current?.pageUrl);
+  const service = createCandidateManagementService({
+    data: h.data,
+    sourceData: h.sourceData,
+  });
+  const result = await service.patchSourcePrice(
+    {
+      candidateId,
+      sourceId: current.id,
+      expectedPageUrl: current.pageUrl,
+      expectedKind: "retail",
+      price: { original: "1", confirmed: { amount: 1, currency: "JPY" } },
+      capturedAt: "2026-08-01T00:00:00.000Z" as UtcTimestamp,
+    },
+    context,
+  );
+  assert.deepEqual(result, { ok: false, error: { kind: "conflict" } });
+});
+
 test("schema 2 validation失敗はmutationせず旧候補を維持する", async () => {
   const h = harness();
   const service = createCandidateManagementService({

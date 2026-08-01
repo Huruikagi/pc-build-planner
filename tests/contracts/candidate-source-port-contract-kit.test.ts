@@ -13,6 +13,8 @@ import type {
   LocalDataRoot,
   MoneyValue,
   ProjectId,
+  RequestId,
+  Revision,
   SourcedValue,
   UtcTimestamp,
 } from "../../src/domain/public.js";
@@ -268,6 +270,34 @@ const createProbe = async (
     pipeline: createMutationPipeline(schemaValidator, referenceRepairPolicy),
   });
   const data = createScopedDataPort(authority);
+  const baseSourceData = createCandidateSourceDataPort(data);
+  let injectRevisionConflict = false;
+  const sourceData = {
+    ...baseSourceData,
+    async query<T>(project: (snapshot: LocalDataRoot) => T) {
+      const result = await baseSourceData.query(project);
+      if (injectRevisionConflict) {
+        injectRevisionConflict = false;
+        const snapshot = await baseSourceData.query((root) => root);
+        assert.equal(snapshot.ok, true);
+        if (snapshot.ok) {
+          const competitor = snapshot.value.candidateParts[1];
+          assert.ok(competitor);
+          const committed = await data.mutate({
+            requestId: "90000000-0000-4000-8000-000000000001" as RequestId,
+            expectedRevision: snapshot.value.revision as Revision,
+            operation: {
+              kind: "update",
+              entity: "candidatePart",
+              value: { ...competitor, updatedAt: refreshedAt },
+            },
+          });
+          assert.equal(committed.ok, true);
+        }
+      }
+      return result;
+    },
+  };
   const context = {
     data,
     navigator: {
@@ -278,7 +308,7 @@ const createProbe = async (
   } satisfies FeatureCompositionContext;
 
   const candidates = createCandidateManagementContribution(context, {
-    sourceData: createCandidateSourceDataPort(data),
+    sourceData,
   }).registration.publicApi;
   const build = createCurrentBuildContribution(context, {
     candidates: candidates.query,
@@ -313,6 +343,10 @@ const createProbe = async (
   return {
     refresh,
     catalog: upstream.catalog,
+    mutations: candidates.sources.mutations,
+    armRevisionConflict: () => {
+      injectRevisionConflict = true;
+    },
     rootCommits: () => commits,
     async observe() {
       const read = await adapter.readRoot();
@@ -350,6 +384,123 @@ test("価格更新は実candidate source catalog・mutation・queryと統合さ�
     await collectCandidateSourcePortContractViolations(subjectWith()),
     [],
   );
+});
+
+test("公開条件付き価格patchは後発siteNameを保持し、不一致ではcommitしない", async () => {
+  const probe = await createProbe();
+  const before = await probe.observe();
+  const source = before.candidates
+    .find(({ id }) => id === primary.candidateId)
+    ?.sources.find(({ id }) => id === primary.sourceId);
+  assert.ok(source?.pageUrl);
+  const renamed = await probe.mutations.updateSource({
+    candidateId: primary.candidateId,
+    source: { ...source, siteName: "架空並行更新店" },
+  });
+  assert.equal(renamed.ok, true);
+  const commitsBeforePatch = probe.rootCommits();
+  const patched = await probe.mutations.patchSourcePrice({
+    candidateId: primary.candidateId,
+    sourceId: primary.sourceId,
+    expectedPageUrl: source.pageUrl,
+    expectedKind: "retail",
+    price: refreshedPrice,
+    capturedAt: refreshedAt,
+  });
+  assert.equal(patched.ok, true);
+  assert.equal(probe.rootCommits(), commitsBeforePatch + 1);
+  const stored = (await probe.observe()).candidates
+    .find(({ id }) => id === primary.candidateId)
+    ?.sources.find(({ id }) => id === primary.sourceId);
+  assert.equal(stored?.siteName, "架空並行更新店");
+  assert.deepEqual(stored?.price, refreshedPrice);
+
+  for (const mismatch of [
+    { expectedPageUrl: "https://changed.example.invalid/item" },
+    { sourceId: "30000000-0000-4000-8000-000000000099" as CandidateSourceId },
+  ]) {
+    const commitsBeforeFailure = probe.rootCommits();
+    const failed = await probe.mutations.patchSourcePrice({
+      candidateId: primary.candidateId,
+      sourceId: primary.sourceId,
+      expectedPageUrl: source.pageUrl,
+      expectedKind: "retail",
+      price: refreshedPrice,
+      capturedAt: refreshedAt,
+      ...mismatch,
+    });
+    assert.deepEqual(failed, {
+      ok: false,
+      error: { kind: "precondition-failed" },
+    });
+    assert.equal(probe.rootCommits(), commitsBeforeFailure);
+  }
+});
+
+test("実stackのkind変更・source削除はprecondition失敗となりupdateSource互換を維持する", async () => {
+  const kindProbe = await createProbe();
+  const original = (await kindProbe.observe()).candidates
+    .find(({ id }) => id === primary.candidateId)
+    ?.sources.find(({ id }) => id === primary.sourceId);
+  assert.ok(original?.pageUrl);
+  const changedKind = await kindProbe.mutations.updateSource({
+    candidateId: primary.candidateId,
+    source: { ...original, kind: "manufacturer" },
+  });
+  assert.equal(changedKind.ok, true);
+  const commitsAfterCompatibleUpdate = kindProbe.rootCommits();
+  const kindMismatch = await kindProbe.mutations.patchSourcePrice({
+    candidateId: primary.candidateId,
+    sourceId: primary.sourceId,
+    expectedPageUrl: original.pageUrl,
+    expectedKind: "retail",
+    price: refreshedPrice,
+    capturedAt: refreshedAt,
+  });
+  assert.deepEqual(kindMismatch, {
+    ok: false,
+    error: { kind: "precondition-failed" },
+  });
+  assert.equal(kindProbe.rootCommits(), commitsAfterCompatibleUpdate);
+
+  const removedProbe = await createProbe();
+  const removed = await removedProbe.mutations.removeSource({
+    candidateId: primary.candidateId,
+    sourceId: primary.sourceId,
+    replacementPrimarySourceId: nonPrimary.sourceId,
+  });
+  assert.equal(removed.ok, true);
+  const commitsAfterCompatibleRemove = removedProbe.rootCommits();
+  const missingSource = await removedProbe.mutations.patchSourcePrice({
+    candidateId: primary.candidateId,
+    sourceId: primary.sourceId,
+    expectedPageUrl: primary.pageUrl,
+    expectedKind: "retail",
+    price: refreshedPrice,
+    capturedAt: refreshedAt,
+  });
+  assert.deepEqual(missingSource, {
+    ok: false,
+    error: { kind: "precondition-failed" },
+  });
+  assert.equal(removedProbe.rootCommits(), commitsAfterCompatibleRemove);
+});
+
+test("期待revision取得後の別root mutationは既存conflictでpatch commitを増やさない", async () => {
+  const probe = await createProbe();
+  probe.armRevisionConflict();
+  const commitsBefore = probe.rootCommits();
+  const result = await probe.mutations.patchSourcePrice({
+    candidateId: primary.candidateId,
+    sourceId: primary.sourceId,
+    expectedPageUrl: primary.pageUrl,
+    expectedKind: "retail",
+    price: refreshedPrice,
+    capturedAt: refreshedAt,
+  });
+  assert.deepEqual(result, { ok: false, error: { kind: "conflict" } });
+  // The only increment is the deliberately injected competing mutation.
+  assert.equal(probe.rootCommits(), commitsBefore + 1);
 });
 
 test("compatibility判定は架空fixtureで実際に成立している", async () => {

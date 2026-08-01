@@ -189,6 +189,7 @@ const createFakeCandidateStore = (
     addSource: unsupported,
     removeSource: unsupported,
     setPrimarySource: unsupported,
+    patchSourcePrice: unsupported,
     async updateSource(input): Promise<Result<void, ManagementError>> {
       record("updateSource");
       updateInputs.push(input);

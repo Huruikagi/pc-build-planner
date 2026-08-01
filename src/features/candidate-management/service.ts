@@ -20,11 +20,13 @@ import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
+  CandidateSourceMutationError,
   CandidateSourceService,
   CandidateSummary,
   CreateProjectInput,
   ManagementError,
   MutationContext,
+  PatchCandidateSourcePriceInput,
   RenameProjectInput,
   UpdateCandidateInput,
 } from "./contracts.js";
@@ -201,16 +203,16 @@ export const createCandidateManagementService = (
         } as const);
   };
 
-  const mutateSource = async (
+  const mutateSource = async <ChangeError extends CandidateSourceMutationError>(
     candidateId: CandidatePartId,
     context: MutationContext,
     change: (
       candidate: CandidatePart,
     ) => Result<
       Pick<CandidatePart, "sources" | "primarySourceId">,
-      ManagementError
+      ChangeError
     >,
-  ): Promise<Result<CandidatePart, ManagementError>> => {
+  ): Promise<Result<CandidatePart, ManagementError | ChangeError>> => {
     if (sourceData === undefined)
       return { ok: false, error: { kind: "unsupported-data" } };
     const existing = await sourceData.query((snapshot) =>
@@ -247,6 +249,39 @@ export const createCandidateManagementService = (
           error: managementError(mutation.error.code, "candidate"),
         };
   };
+
+  const patchSourcePrice = async (
+    input: PatchCandidateSourcePriceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePart, CandidateSourceMutationError>> =>
+    mutateSource(input.candidateId, context, (candidate) => {
+      const index = candidate.sources.findIndex(
+        (source) => source.id === input.sourceId,
+      );
+      if (index < 0)
+        return { ok: false, error: { kind: "precondition-failed" } };
+      const current = candidate.sources[index];
+      if (
+        current?.pageUrl !== input.expectedPageUrl ||
+        current.kind !== input.expectedKind
+      )
+        return { ok: false, error: { kind: "precondition-failed" } };
+      return {
+        ok: true,
+        value: {
+          sources: candidate.sources.map((source, sourceIndex) =>
+            sourceIndex === index
+              ? {
+                  ...source,
+                  price: input.price,
+                  capturedAt: input.capturedAt,
+                }
+              : source,
+          ) as unknown as CandidatePart["sources"],
+          primarySourceId: candidate.primarySourceId,
+        } as Pick<CandidatePart, "sources" | "primarySourceId">,
+      };
+    });
 
   const ruleFailure = (kind: string): ManagementError =>
     kind === "source-not-found"
@@ -343,6 +378,7 @@ export const createCandidateManagementService = (
           : { ok: false, error: ruleFailure(result.error.kind) };
       });
     },
+    patchSourcePrice,
     async removeSource(input, context) {
       return mutateSource(input.candidateId, context, (candidate) => {
         const result = candidateSourcePolicy.remove(

@@ -56,6 +56,9 @@ test("公開入口はquery・純粋intent factory・sourcesのcanonical exact sh
         async updateSource() {
           return { ok: true as const, value: undefined };
         },
+        async patchSourcePrice() {
+          return { ok: true as const, value: undefined };
+        },
         async removeSource() {
           return { ok: true as const, value: undefined };
         },

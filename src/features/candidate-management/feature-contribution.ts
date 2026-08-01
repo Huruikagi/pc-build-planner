@@ -114,6 +114,13 @@ export const createCandidateManagementContribution = (
           );
           return result.ok ? { ok: true, value: undefined } : result;
         },
+        async patchSourcePrice(input) {
+          const result = await service.patchSourcePrice(
+            input,
+            await createSourceMutationContext(),
+          );
+          return result.ok ? { ok: true, value: undefined } : result;
+        },
         async removeSource(input) {
           const result = await service.removeSource(
             input,

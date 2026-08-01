@@ -56,6 +56,9 @@ const consumerPorts = (
     async updateSource() {
       return { ok: true, value: undefined };
     },
+    async patchSourcePrice() {
+      return { ok: true, value: undefined };
+    },
     async removeSource() {
       return { ok: true, value: undefined };
     },

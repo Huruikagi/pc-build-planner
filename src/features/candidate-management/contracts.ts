@@ -136,6 +136,11 @@ export type ManagementError =
   | { readonly kind: "quota" }
   | { readonly kind: "unsupported-data" };
 
+/** The selected source no longer has the identity observed by the caller. */
+export type CandidateSourceMutationError =
+  | ManagementError
+  | { readonly kind: "precondition-failed" };
+
 export interface CandidateManagementService {
   createProject(
     input: CreateProjectInput,
@@ -218,6 +223,16 @@ export interface UpdateCandidateSourceInput {
   readonly source: CandidateSource;
 }
 
+export interface PatchCandidateSourcePriceInput {
+  readonly candidateId: CandidatePartId;
+  readonly sourceId: CandidateSourceId;
+  /** Compared byte-for-byte; URL identity and normalization belong downstream. */
+  readonly expectedPageUrl: string;
+  readonly expectedKind: "retail";
+  readonly price: SourcedValue<import("../../domain/public.js").MoneyValue>;
+  readonly capturedAt: import("../../domain/public.js").UtcTimestamp;
+}
+
 export interface RemoveCandidateSourceInput {
   readonly candidateId: CandidatePartId;
   readonly sourceId: CandidateSourceId;
@@ -236,6 +251,9 @@ export interface CandidateSourceMutationPort {
   updateSource(
     input: UpdateCandidateSourceInput,
   ): Promise<Result<void, ManagementError>>;
+  patchSourcePrice(
+    input: PatchCandidateSourcePriceInput,
+  ): Promise<Result<void, CandidateSourceMutationError>>;
   removeSource(
     input: RemoveCandidateSourceInput,
   ): Promise<Result<void, ManagementError>>;
@@ -254,6 +272,10 @@ export interface CandidateSourceService {
     input: UpdateCandidateSourceInput,
     context: MutationContext,
   ): Promise<Result<CandidatePart, ManagementError>>;
+  patchSourcePrice(
+    input: PatchCandidateSourcePriceInput,
+    context: MutationContext,
+  ): Promise<Result<CandidatePart, CandidateSourceMutationError>>;
   removeSource(
     input: RemoveCandidateSourceInput,
     context: MutationContext,

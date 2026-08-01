@@ -553,6 +553,7 @@ test("contribution factoryはnavigationを持たないUI registrationだけを�
   const mutations: CandidateSourceMutationPort = {
     addSource: async () => err(managementError),
     updateSource: async () => err(managementError),
+    patchSourcePrice: async () => err(managementError),
     removeSource: async () => err(managementError),
     setPrimarySource: async () => err(managementError),
   };

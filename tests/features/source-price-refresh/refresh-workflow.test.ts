@@ -242,6 +242,7 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
     addSource: unsupported,
     removeSource: unsupported,
     setPrimarySource: unsupported,
+    patchSourcePrice: unsupported,
     async updateSource(input): Promise<Result<void, ManagementError>> {
       updateInputs.push(input);
       if (options.mutationThrows === true)

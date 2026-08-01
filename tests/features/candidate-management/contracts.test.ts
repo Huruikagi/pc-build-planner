@@ -33,6 +33,9 @@ const sources = {
     async updateSource() {
       return { ok: true as const, value: undefined };
     },
+    async patchSourcePrice() {
+      return { ok: true as const, value: undefined };
+    },
     async removeSource() {
       return { ok: true as const, value: undefined };
     },
