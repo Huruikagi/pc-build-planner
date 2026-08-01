@@ -106,7 +106,7 @@
   - _Boundary: PagePriceExtractionPortIntegration_
   - _Depends: product-page-capture 6.3_
 
-- [ ] 4.2 candidate source catalogとmutationへ接続する
+- [x] 4.2 candidate source catalogとmutationへ接続する
   - `candidate-source-bookmarks` で定義済みの `sources.catalog` から全sourceまたは候補内sourceの限定参照だけを取得し、同じsource facetの `sources.mutations` を更新に利用する。
   - match targetをcandidate/source IDでmutation portへ渡し、public consumerからrevision contextを隠したまま一回のroot mutationへ接続する。
   - source更新後のcandidate queryでprimary/non-primary projectionとcompatibility入力の非回帰を確認する。
@@ -206,6 +206,10 @@
 - 3.2: 例外の封じ込めは workflow 本体**全体**を `try { … } catch {` で包む（bindingなし）。`isCurrent` も含めるのは、それがshell注入callbackであり、port3つだけを包むと同じstuck-spinner defectが残るため。世代gate3点の順序と「補償書き込みをしない」性質は封じ込めで変えないこと。
 - 3.2: `isRecoverableSourcePriceRefreshError` の規則文は「保存データの修復が先」に加えて「同じgestureを繰り返しても成功しない」を選言として追加した厳密な一般化。既存15 kindの `true` / 4 kindの `false` の分類は不変。
 - 3.2: 未解決（task 5.3 へ）: `FailureSummary` は全failure kindに `preservedNotice`（保存済み価格は残っている）を無条件表示する。`unexpected` は「画面に出るのに書き込みが既に着地しているかもしれない」最初のkind（他は全てatomicなtyped failureか、`#accepts` が表示前に落とす post-mutation `stale-activation`）。害の向きは良性（実際は反映済みなのに未反映と伝える／逆は起きない）だが、5.3 で kind 条件付きにするか判断すること。
+- 4.2: integration driver は上流をfakeせず実stackを組む。`createInMemoryStorageAdapter` → `createLocalDataRepository` → `createRootTransactionRunner` → `createMutationPipeline` → `createWriteAuthority` → `createScopedDataPort` → 各feature の contribution factory。fakeは 4.1 の seam（page price extraction）と 4.3/4.4 の seam（transient surface）だけに留める。実 `candidateSourcePolicy.update` が経路に入るので Note 3.1 の merge fake 事故は構造的に再発しない。
+- 4.2: 「一回のroot mutationで確定する」は storage adapter の成功write回数（`rootCommits()`）と root revision の増分で観測する。二重mutationも失敗後の再書き込みも同じ counter が捕まえる。
+- 4.2: compatibility 非回帰は `listBuildEligible` の projection だけでなく、実judgeの verdict（`cpu-motherboard-socket` → `compatible`）を専用テストで固定してから前後比較すること。そうしないと `unknown` 同士の比較になって空振りする。
+- 4.2: 未固定（5.1/5.2 で拾う）: (a) driver の `context as unknown as FeatureCompositionContext` 二重castは、将来 context に必須memberが増えたとき typecheck ではなく実行時 undefined になる。(b) primary経路では `primarySource.price` だけを固定していて `capturedAt` / `siteName` / `pageUrl` は projection 側未固定（保存側は固定済み）。(c) 公開入口scanの `readdir` が非再帰なので、`src/features/source-price-refresh/` にsubdirectoryを作ると黙って対象外になる。
 - 4.1: cross-feature contract kit は `tests/contracts/` に kit（`*-contract-kit.ts`）と driver（`*.test.ts`）を分けて置く（`application-shell-contract-kit` が前例）。kit 自身は上流の `public.ts` だけをimportし、driver が実production portを組み立てる。fakeはChrome API seam（`tabs` / `scripting`）にだけ置き、coordinator / extractor / ranker / normalizer は本物を通す。
 - 4.1: 「固定tabだけを解決する」は返り値では観測できない。fixture の `observedTabsGet` / `observedInjectionTabs` を probe の `resolvedTabs()` に流して Chrome境界で観測する。`ChromeCaptureRuntimeDependencies` は `tabs.get` と `scripting.executeScript` しか公開しないため、他経路の取りこぼしは無い。
 - 4.1: kit の `extract.unrelatedTab` は、fixture が未pin tabに `url` を与えないため実際には `permission-lost` を観測しており、「portが他tabを拒む」ことの証明にはなっていない。保証を担っているのは `resolvedTabs().includes(tabId)` の方。kit のコメントは assertion より強い主張をしているので、5.x で触るときに文言を実態へ合わせること。
