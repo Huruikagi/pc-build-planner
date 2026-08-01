@@ -1,5 +1,5 @@
-import type { FeatureId } from "../../application-shell/public.js";
 import type { CandidatePartId } from "../../domain/public.js";
+import { createPriceRefreshContextMenuSource } from "./context-menu-source.js";
 import type {
   SourceMatchScope,
   SourcePriceRefreshUpstreamPorts,
@@ -19,12 +19,21 @@ export type {
   SourcePriceRefreshUpstreamPorts,
   SourceUrlIdentityError,
 } from "./contracts.js";
+export { sourcePriceRefreshFeatureId } from "./feature-id.js";
 export {
   normalizeSourcePageUrl,
   sameSourcePageUrl,
 } from "./url-identity.js";
 
-export const sourcePriceRefreshFeatureId = "source-price-refresh" as FeatureId;
+/**
+ * Worker-safe contribution consumed by the shell-owned worker catalog. It
+ * carries the context menu gesture factory and nothing else: no UI
+ * registration, no React root and no transient surface id, so the extension
+ * icon can never start this feature implicitly.
+ */
+export const sourcePriceRefreshWorkerContribution = Object.freeze({
+  createMenuGestureSource: createPriceRefreshContextMenuSource,
+});
 
 const catalogScope: SourceMatchScope = Object.freeze({
   kind: "catalog" as const,

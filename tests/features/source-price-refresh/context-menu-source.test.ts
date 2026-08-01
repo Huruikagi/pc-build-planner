@@ -35,7 +35,10 @@ interface ContextMenusStub {
  * logs an "unchecked" warning when nobody reads it.
  */
 const createContextMenusStub = (
-  overrides: { readonly failCreate?: boolean } = {},
+  overrides: {
+    readonly failCreate?: boolean;
+    readonly failCreateCallback?: boolean;
+  } = {},
 ): ContextMenusStub => {
   const items = new Map<string, CreatedMenuItem>();
   const listeners = new Set<ChromeContextMenuClickListener>();
@@ -58,7 +61,13 @@ const createContextMenusStub = (
         createCalls += 1;
         if (overrides.failCreate === true) throw new Error("create rejected");
         const id = properties.id;
-        if (items.has(id)) {
+        if (overrides.failCreateCallback === true) {
+          setImmediate(() => {
+            pendingError = { message: "create rejected" };
+            settle(callback);
+          });
+          return;
+        } else if (items.has(id)) {
           duplicateCreateAttempts += 1;
           pendingError = { message: "Cannot create item with duplicate id" };
         } else items.set(id, properties);
@@ -135,6 +144,135 @@ test("worker再生成でstartし直してもmenu itemが重複しない", () => 
 
   assert.equal(chrome.items.size, 1);
   assert.equal(chrome.duplicateCreateAttempts(), 0);
+  assert.equal(chrome.uncheckedErrors(), 0);
+});
+
+test("既存itemの非同期remove完了後にだけ同じstable IDをcreateする", () => {
+  const items = new Set<string>([priceRefreshContextMenuItemId]);
+  const pendingRemovals: (() => void)[] = [];
+  let duplicateCreateAttempts = 0;
+  let createCalls = 0;
+  const source = createPriceRefreshContextMenuSource({
+    contextMenus: {
+      create(properties, callback) {
+        createCalls += 1;
+        if (items.has(properties.id)) duplicateCreateAttempts += 1;
+        else items.add(properties.id);
+        callback?.();
+      },
+      remove(menuItemId, callback) {
+        pendingRemovals.push(() => {
+          items.delete(menuItemId);
+          callback?.();
+        });
+      },
+      onClicked: { addListener() {}, removeListener() {} },
+    },
+    title: MENU_TITLE,
+  });
+
+  assert.equal(source.start(() => undefined).ok, true);
+  assert.equal(createCalls, 0, "remove完了前にcreateしない");
+
+  pendingRemovals.shift()?.();
+
+  assert.equal(createCalls, 1);
+  assert.equal(duplicateCreateAttempts, 0);
+  assert.deepEqual([...items], [priceRefreshContextMenuItemId]);
+});
+
+test("deferred callbackを直列化しstale世代の完了順で現行itemを消さない", () => {
+  const items = new Set<string>([priceRefreshContextMenuItemId]);
+  const removals: (() => void)[] = [];
+  const creations: (() => void)[] = [];
+  const listeners = new Set<ChromeContextMenuClickListener>();
+  const api: ChromeContextMenusApi = {
+    create(properties, callback) {
+      items.add(properties.id);
+      creations.push(() => callback?.());
+    },
+    remove(menuItemId, callback) {
+      removals.push(() => {
+        items.delete(menuItemId);
+        callback?.();
+      });
+    },
+    onClicked: {
+      addListener: (listener) => listeners.add(listener),
+      removeListener: (listener) => listeners.delete(listener),
+    },
+  };
+  const first = createPriceRefreshContextMenuSource({
+    contextMenus: api,
+    title: MENU_TITLE,
+  }).start(() => undefined);
+  const second = createPriceRefreshContextMenuSource({
+    contextMenus: api,
+    title: MENU_TITLE,
+  }).start(() => undefined);
+  assert.equal(first.ok && second.ok, true);
+  if (!first.ok || !second.ok) return;
+
+  assert.equal(removals.length, 1, "menu mutationは世代間で直列化する");
+  removals.shift()?.();
+  assert.equal(removals.length, 1, "stale remove完了後に現行startへ進む");
+  removals.shift()?.();
+  assert.equal(creations.length, 1);
+
+  first.value();
+  creations.shift()?.();
+  assert.equal(items.size, 1, "stale cleanupは現行create後のitemを消さない");
+  second.value();
+  assert.equal(removals.length, 1, "現行cleanupだけがitemをremoveする");
+  removals.shift()?.();
+  assert.equal(items.size, 0);
+});
+
+test("旧世代cleanupは新世代itemを削除せずclickを旧sourceへ戻さない", () => {
+  const chrome = createContextMenusStub();
+  const firstEmitted: number[] = [];
+  const secondEmitted: number[] = [];
+  const first = createPriceRefreshContextMenuSource({
+    contextMenus: chrome.api,
+    title: MENU_TITLE,
+    readLastError: chrome.readLastError,
+  }).start((tabId) => firstEmitted.push(tabId));
+  const second = createPriceRefreshContextMenuSource({
+    contextMenus: chrome.api,
+    title: MENU_TITLE,
+    readLastError: chrome.readLastError,
+  }).start((tabId) => secondEmitted.push(tabId));
+  assert.equal(first.ok && second.ok, true);
+  if (!first.ok || !second.ok) return;
+
+  first.value();
+  assert.equal(chrome.items.size, 1, "旧cleanup後も現行itemを保持する");
+  chrome.click(validClick, { id: 43 });
+  assert.deepEqual(firstEmitted, []);
+  assert.deepEqual(secondEmitted, [43]);
+
+  second.value();
+  assert.equal(chrome.items.size, 0);
+});
+
+test("create callbackのlastError後はlistenerを外してemitしない", async () => {
+  const chrome = createContextMenusStub({ failCreateCallback: true });
+  const emitted: number[] = [];
+  const started = createPriceRefreshContextMenuSource({
+    contextMenus: chrome.api,
+    title: MENU_TITLE,
+    readLastError: chrome.readLastError,
+  }).start((tabId) => emitted.push(tabId));
+
+  assert.equal(
+    started.ok,
+    true,
+    "非同期callback failureは同期Resultへ遡及できない",
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(chrome.listenerCount(), 0, "失敗したsourceをfail closedにする");
+  chrome.click(validClick, { id: 44 });
+  assert.deepEqual(emitted, []);
   assert.equal(chrome.uncheckedErrors(), 0);
 });
 

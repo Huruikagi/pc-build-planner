@@ -1,4 +1,5 @@
 import { productCaptureWorkerContribution } from "../features/product-capture/public.js";
+import { sourcePriceRefreshWorkerContribution } from "../features/source-price-refresh/public.js";
 import type { FoundationScopedDataPort } from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,
@@ -7,7 +8,11 @@ import type {
   ShellNavigator,
 } from "./contracts.js";
 import { isPersistent } from "./contracts.js";
-import type { TransientActivationRequest } from "./transient-surface-ports.js";
+import type {
+  TransientActivationRequest,
+  TransientGestureSource,
+  TransientMenuGestureDependencies,
+} from "./transient-surface-ports.js";
 
 export interface FeatureContribution<
   TKey extends string = string,
@@ -50,6 +55,15 @@ export type FeaturePublicApiContribution<
  * side panel専用contributionは`side-panel-contributions.ts`が所有し、
  * worker bundleのDOM/React非依存を保つためこのmodule graphへ持ち込まない。
  */
+/**
+ * feature所有のmenu gesture source factory。
+ * production worker compositionはこれをshellの同期gesture portへ接続するだけで、
+ * UI contribution、DOM、Reactのいずれも経由しない。
+ */
+export type WorkerMenuGestureFactory = (
+  dependencies: TransientMenuGestureDependencies,
+) => TransientGestureSource;
+
 export interface WorkerFeatureContribution {
   readonly registration?: ApplicationFeatureRegistration<
     object,
@@ -58,10 +72,12 @@ export interface WorkerFeatureContribution {
   >;
   readonly workerRegistration?: ApplicationWorkerRegistration;
   readonly transientSurfaceId?: ApplicationFeatureRegistration["id"];
+  readonly createMenuGestureSource?: WorkerMenuGestureFactory;
 }
 
 export const featureContributionCatalog = Object.freeze([
   productCaptureWorkerContribution,
+  sourcePriceRefreshWorkerContribution,
 ] as const) satisfies readonly WorkerFeatureContribution[];
 
 export function getSidePanelContributions<

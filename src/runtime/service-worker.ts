@@ -5,6 +5,7 @@ import type {
 import type { WorkerFeatureContribution } from "../application-shell/feature-contribution-catalog.js";
 import { featureContributionCatalog } from "../application-shell/feature-contribution-catalog.js";
 import {
+  composeWorkerGestureRegistrations,
   createDefaultProductionWorkerComposition,
   type ProductionFoundationInitializer,
   type ProductionWorkerComposition,
@@ -14,7 +15,13 @@ import {
   parseTargetTabId,
   type TransientGestureRegistrationPort,
   type TransientGestureSource,
+  type TransientMenuGestureDependencies,
 } from "../application-shell/transient-surface-ports.js";
+import {
+  FALLBACK_LANGUAGE,
+  resolverFor,
+  type SupportedLanguage,
+} from "../ui-messages/worker-public.js";
 import {
   type ActivationFailureSignal,
   createChromeActivationFailureSignal,
@@ -218,18 +225,47 @@ export interface ChromeProductionTransientApis {
     Parameters<typeof createChromeActivationFailureSignal>[0]["action"];
   readonly tabs: TransientWorkerRuntimeDependencies["tabs"];
   readonly sidePanel: ChromeSidePanelOpenApi;
+  readonly contextMenus?: TransientMenuGestureDependencies["contextMenus"];
+  readonly i18n?: { getUILanguage(): unknown };
+  readonly readLastError?: () => unknown;
 }
+
+const resolveWorkerLanguage = (value: unknown): SupportedLanguage => {
+  if (typeof value !== "string") return FALLBACK_LANGUAGE;
+  const primary = value.trim().toLowerCase().split(/[-_]/, 1)[0];
+  return primary === "ja" || primary === "en" ? primary : FALLBACK_LANGUAGE;
+};
+
+export const createProductionTransientMenuDependencies = (
+  chromeApis: Pick<
+    ChromeProductionTransientApis,
+    "contextMenus" | "i18n" | "readLastError"
+  >,
+): TransientMenuGestureDependencies | undefined => {
+  if (chromeApis.contextMenus === undefined) return undefined;
+  const language = resolveWorkerLanguage(chromeApis.i18n?.getUILanguage());
+  return {
+    contextMenus: chromeApis.contextMenus,
+    title: resolverFor(language)("sourcePriceRefresh.title"),
+    ...(chromeApis.readLastError === undefined
+      ? {}
+      : { readLastError: chromeApis.readLastError }),
+  };
+};
 
 export const createProductionTransientRuntimeBootstrap = (
   runtime: ChromeProductionTransientRuntime,
   chromeApis: ChromeProductionTransientApis,
   catalog: readonly WorkerFeatureContribution[] = featureContributionCatalog,
+  menu?: TransientMenuGestureDependencies,
 ): {
   readonly scheduler: TransientActivationScheduler;
   readonly gestureRegistration: TransientGestureRegistrationPort;
   readonly hasTransientGesture: boolean;
   cleanup(): Promise<void>;
 } => {
+  const resolvedMenu =
+    menu ?? createProductionTransientMenuDependencies(chromeApis);
   const scheduler = createTransientWorkerScheduler(chromeApis.storage.session);
   const watchReadyCleanup = registerProductionTransientWatchReady(
     runtime,
@@ -252,6 +288,15 @@ export const createProductionTransientRuntimeBootstrap = (
     createActivationId: () => crypto.randomUUID() as ActivationId,
     reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
   });
+  // Feature-owned menu sources join the same registrar the action gesture uses,
+  // so one click reaches the existing scheduler, activation store, watch-ready
+  // listener, side panel open and tab tombstone path exactly once.
+  const menuGestureCleanup = composeWorkerGestureRegistrations({
+    catalog,
+    gestureRegistration: runtimeBootstrap.gestureRegistration,
+    ...(resolvedMenu === undefined ? {} : { menu: resolvedMenu }),
+    reportDiagnostic: (code) => console.error(`transient-runtime: ${code}`),
+  });
   let active = true;
   return {
     scheduler,
@@ -261,7 +306,11 @@ export const createProductionTransientRuntimeBootstrap = (
       if (!active) return;
       active = false;
       const errors: unknown[] = [];
-      for (const cleanup of [watchReadyCleanup, runtimeBootstrap]) {
+      for (const cleanup of [
+        menuGestureCleanup,
+        watchReadyCleanup,
+        runtimeBootstrap,
+      ]) {
         try {
           await cleanup();
         } catch (error) {
@@ -343,6 +392,39 @@ if (
           action: chrome.action,
           tabs: chrome.tabs,
           sidePanel: chrome.sidePanel,
+          ...(chrome.contextMenus === undefined
+            ? {}
+            : {
+                contextMenus: {
+                  create(properties, callback) {
+                    return chrome.contextMenus.create(
+                      {
+                        ...properties,
+                        contexts: [...properties.contexts],
+                        documentUrlPatterns: [
+                          ...properties.documentUrlPatterns,
+                        ],
+                      } as Parameters<typeof chrome.contextMenus.create>[0],
+                      callback,
+                    );
+                  },
+                  remove: chrome.contextMenus.remove.bind(chrome.contextMenus),
+                  onClicked: chrome.contextMenus.onClicked,
+                },
+              }),
+          ...(chrome.i18n === undefined
+            ? {}
+            : {
+                i18n: {
+                  getUILanguage: () => chrome.i18n.getUILanguage(),
+                },
+              }),
+          readLastError: () =>
+            (
+              runtime as unknown as {
+                readonly lastError?: unknown;
+              }
+            ).lastError,
         },
         featureContributionCatalog,
       ).hasTransientGesture;

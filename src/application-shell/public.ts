@@ -53,6 +53,11 @@ export type {
   TransientGestureRegistrationError,
   TransientGestureRegistrationPort,
   TransientGestureSource,
+  TransientMenuApi,
+  TransientMenuClickEvent,
+  TransientMenuClickListener,
+  TransientMenuGestureDependencies,
+  TransientMenuItemProperties,
   TransientSurfaceError,
   TransientSurfaceLifecyclePort,
 } from "./transient-surface-ports.js";

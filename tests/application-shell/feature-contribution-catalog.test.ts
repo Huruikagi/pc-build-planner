@@ -87,9 +87,19 @@ function contribution<const TKey extends string, TPublic extends object>(
 }
 
 test("worker catalogはworker contributionだけを持つreadonly catalogである", () => {
-  assert.deepEqual(featureContributionCatalog, [
-    { transientSurfaceId: "product-capture" },
-  ]);
+  assert.deepEqual(
+    featureContributionCatalog.map((entry) => Object.keys(entry).sort()),
+    [["transientSurfaceId"], ["createMenuGestureSource"]],
+    "worker catalogはworker-safeなmetadataとgesture factoryだけを持つ",
+  );
+  assert.equal(
+    featureContributionCatalog[0]?.transientSurfaceId,
+    "product-capture",
+  );
+  assert.equal(
+    typeof featureContributionCatalog[1]?.createMenuGestureSource,
+    "function",
+  );
   assert.equal(Object.isFrozen(featureContributionCatalog), true);
   assert.deepEqual(getWorkerContributions(featureContributionCatalog), []);
 });

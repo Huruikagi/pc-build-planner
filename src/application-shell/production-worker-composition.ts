@@ -8,6 +8,11 @@ import { initializeProductionFoundationRuntimeContribution } from "../persistenc
 import type { WorkerRegistrationContext } from "./contracts.js";
 import type { WorkerFeatureContribution } from "./feature-contribution-catalog.js";
 import { getWorkerContributions } from "./feature-contribution-catalog.js";
+import type {
+  TransientGestureRegistrationPort,
+  TransientGestureSource,
+  TransientMenuGestureDependencies,
+} from "./transient-surface-ports.js";
 import { composeWorkerContributions } from "./worker-composition.js";
 
 export type ProductionWorkerStartupError = {
@@ -181,6 +186,65 @@ export const createProductionWorkerComposition = (
       });
       return stopPromise;
     },
+  };
+};
+
+export interface WorkerGestureCompositionOptions {
+  readonly catalog: readonly WorkerFeatureContribution[];
+  /** The shell's synchronous gesture registration port. */
+  readonly gestureRegistration: TransientGestureRegistrationPort;
+  /**
+   * Runtime-owned menu APIs and the resolved label. Omitting them composes no
+   * menu source at all, so a runtime without a menu API stays inert.
+   */
+  readonly menu?: TransientMenuGestureDependencies;
+  readonly reportDiagnostic?: (code: string) => void;
+}
+
+/**
+ * Binds every worker-safe menu gesture contribution in the catalog to the
+ * shell's gesture registration port. The port owns sequencing, the activation
+ * record and any panel opening, so this composition only creates and registers
+ * sources; it never reads a UI contribution or a browser document.
+ *
+ * The returned cleanup is idempotent and releases registrations in reverse
+ * order, keeping worker bootstrap start and stop symmetric.
+ */
+export const composeWorkerGestureRegistrations = (
+  options: WorkerGestureCompositionOptions,
+): (() => void) => {
+  const report = options.reportDiagnostic ?? (() => {});
+  const cleanups: (() => void)[] = [];
+  const { menu } = options;
+  if (menu !== undefined)
+    for (const { createMenuGestureSource } of options.catalog) {
+      if (createMenuGestureSource === undefined) continue;
+      let source: TransientGestureSource;
+      try {
+        source = createMenuGestureSource(menu);
+      } catch {
+        report("source-start-failed");
+        continue;
+      }
+      const registered = options.gestureRegistration.register(source);
+      if (!registered.ok) {
+        report(registered.error.kind);
+        continue;
+      }
+      cleanups.push(registered.value);
+    }
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    for (let index = cleanups.length - 1; index >= 0; index -= 1) {
+      try {
+        cleanups[index]?.();
+      } catch {
+        report("gesture-cleanup-failed");
+      }
+    }
   };
 };
 

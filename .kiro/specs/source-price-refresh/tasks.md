@@ -115,7 +115,7 @@
   - _Boundary: CandidateSourcePortIntegration_
   - _Depends: 3.1, candidate-source-bookmarks 3.4_
 
-- [ ] 4.3 context menu sourceを上流gesture lifecycleとworker compositionへ接続する
+- [x] 4.3 context menu sourceを上流gesture lifecycleとworker compositionへ接続する
   - feature-owned sourceのmenu worker registrationだけをworker-safe catalogへ登録し、`transient-feature-surface` で定義済みの同期 `TransientGestureRegistrationPort` へ接続する。
   - click emitが既存schedulerのsequence割当、activation store、watch-ready、side panel open、tab墓標へ一度だけ流れるようcompositionする。
   - worker bootstrapの開始・停止でmenu listenerとgesture登録を対称cleanupし、worker再生成時もitem重複を残さない。
@@ -172,6 +172,8 @@
   - _Depends: 5.1, 5.2, 5.3_
 
 ## Implementation Notes
+
+- 4.3: stable context menu itemの世代交代は `contextMenus` API instance単位のleaseとmutation queueで直列化する。旧世代cleanup・遅延callbackは現行leaseのitemを削除せず、callback型create失敗はlistenerを解除してfail closedにする。production workerのlabel解決はReact非依存の `ui-messages/worker-public.ts` を使う。
 
 - 1.1: 公開型exportは公開consumer fixtureから実際に参照させないと回帰検知が成立しない。type-onlyのexportは削除してもtypecheckが通るため、error unionは `switch` + `const exhaustive: never` で網羅性を固定し、値の往復（match → refresh → receipt）をfixtureで組み立てること。
 - 1.1: `NormalizedSourcePageUrl` などのbrand型はdesign.mdのstring property brand記法ではなく、既存 `src/domain/identifiers.ts` と同じ `unique symbol` brand方式に揃える。

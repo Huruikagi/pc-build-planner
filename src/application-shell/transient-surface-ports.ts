@@ -133,3 +133,44 @@ export interface TransientGestureRegistrationPort {
     source: TransientGestureSource,
   ): Result<() => void, TransientGestureRegistrationError>;
 }
+
+export interface TransientMenuItemProperties {
+  readonly id: string;
+  readonly title: string;
+  readonly contexts: readonly string[];
+  readonly documentUrlPatterns: readonly string[];
+}
+
+export type TransientMenuClickListener = (info: unknown, tab?: unknown) => void;
+
+export interface TransientMenuClickEvent {
+  addListener(listener: TransientMenuClickListener): void;
+  removeListener(listener: TransientMenuClickListener): void;
+}
+
+/**
+ * The slice of a browser context-menu API a worker-safe gesture source needs.
+ * The shell owns the port shape so the worker catalog can type a feature-owned
+ * adapter without importing browser typings or the feature's adapter module;
+ * `info` and `tab` stay `unknown` so every payload is validated at the adapter.
+ */
+export interface TransientMenuApi {
+  create(
+    properties: TransientMenuItemProperties,
+    callback?: () => void,
+  ): unknown;
+  remove(menuItemId: string, callback?: () => void): unknown;
+  readonly onClicked: TransientMenuClickEvent;
+}
+
+export interface TransientMenuGestureDependencies {
+  readonly contextMenus: TransientMenuApi;
+  /** Resolved menu label. The message catalog owns the wording, not the adapter. */
+  readonly title: string;
+  /**
+   * Reads the runtime's last asynchronous error inside a menu callback. Menu
+   * APIs report failures there instead of throwing, and an unread error makes
+   * the browser log a warning.
+   */
+  readonly readLastError?: () => unknown;
+}
