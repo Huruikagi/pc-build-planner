@@ -5,6 +5,12 @@ interface ProductionCaptureFixtureOptions {
   readonly grantedTabId: TargetTabId | null;
   readonly pageUrl: string;
   readonly candidates?: readonly unknown[];
+  /**
+   * The URL the injected page reports for itself. Defaults to `pageUrl`, so a
+   * page that navigated between the tab lookup and the injection is expressed
+   * by setting this to a different fictional URL.
+   */
+  readonly pagePayloadUrl?: string;
 }
 
 /** Chrome-shaped fixture for the production activeTab + scripting contract. */
@@ -37,7 +43,7 @@ export const createProductionCaptureChromeFixture = (
             ? [
                 {
                   result: {
-                    pageUrl: options.pageUrl,
+                    pageUrl: options.pagePayloadUrl ?? options.pageUrl,
                     candidates: options.candidates ?? [],
                   },
                 },

@@ -97,7 +97,7 @@
 
 - [ ] 4. 確定済み上流portとproduction compositionへ統合する
 
-- [ ] 4.1 product-capture公開のprice extraction portへ接続する
+- [x] 4.1 product-capture公開のprice extraction portへ接続する
   - `product-page-capture` で定義済みの `ProductCapturePublicApi.pagePriceExtraction` が固定tabだけを解決し、既存extractor、ranker、normalizerでprice一件を選ぶことをcontract testで固定する。
   - page URLを注入先tabの推測値ではなくpage-derived payloadから返し、target URLと不一致ならtab-changedとしてfail closedにする。
   - price original、confirmed money、capturedAtだけを返し、他fieldをsource-price-refreshへ公開しない。
@@ -206,6 +206,10 @@
 - 3.2: 例外の封じ込めは workflow 本体**全体**を `try { … } catch {` で包む（bindingなし）。`isCurrent` も含めるのは、それがshell注入callbackであり、port3つだけを包むと同じstuck-spinner defectが残るため。世代gate3点の順序と「補償書き込みをしない」性質は封じ込めで変えないこと。
 - 3.2: `isRecoverableSourcePriceRefreshError` の規則文は「保存データの修復が先」に加えて「同じgestureを繰り返しても成功しない」を選言として追加した厳密な一般化。既存15 kindの `true` / 4 kindの `false` の分類は不変。
 - 3.2: 未解決（task 5.3 へ）: `FailureSummary` は全failure kindに `preservedNotice`（保存済み価格は残っている）を無条件表示する。`unexpected` は「画面に出るのに書き込みが既に着地しているかもしれない」最初のkind（他は全てatomicなtyped failureか、`#accepts` が表示前に落とす post-mutation `stale-activation`）。害の向きは良性（実際は反映済みなのに未反映と伝える／逆は起きない）だが、5.3 で kind 条件付きにするか判断すること。
+- 4.1: cross-feature contract kit は `tests/contracts/` に kit（`*-contract-kit.ts`）と driver（`*.test.ts`）を分けて置く（`application-shell-contract-kit` が前例）。kit 自身は上流の `public.ts` だけをimportし、driver が実production portを組み立てる。fakeはChrome API seam（`tabs` / `scripting`）にだけ置き、coordinator / extractor / ranker / normalizer は本物を通す。
+- 4.1: 「固定tabだけを解決する」は返り値では観測できない。fixture の `observedTabsGet` / `observedInjectionTabs` を probe の `resolvedTabs()` に流して Chrome境界で観測する。`ChromeCaptureRuntimeDependencies` は `tabs.get` と `scripting.executeScript` しか公開しないため、他経路の取りこぼしは無い。
+- 4.1: kit の `extract.unrelatedTab` は、fixture が未pin tabに `url` を与えないため実際には `permission-lost` を観測しており、「portが他tabを拒む」ことの証明にはなっていない。保証を担っているのは `resolvedTabs().includes(tabId)` の方。kit のコメントは assertion より強い主張をしているので、5.x で触るときに文言を実態へ合わせること。
+- 4.1: design.md 572行は contract kit の関心事に `invalid payload`（要件3.6）も挙げているが、kit は未カバー。4.1 のタスク項目外なので保留。5.1 か 5.2 で kit を拡張するときに追加すること。
 - 3.3: **design.md 476-479行は事実誤り**。`SourcePriceRefreshTransientActivation` は `{activationId, tabId}` だけでは成立せず `surfaceId` が必須。`FeatureRegistry.register`（`application-shell/contracts.ts` 185-187行）が `TTransientActivation` を parameterize せず `TransientActivationRequest` に固定し、`TransientActivationAdapter.validate` が共変位置で返すため、狭いpayloadは代入不可（design.md 通りの形にすると TS2375/TS2379 が4件出る）。実装が正しい。design.md の該当行は要修正。
 - 3.3: mount 内で `state.activate` を同期実行してはならない。`TransientSurfaceController` は `await host.showTransient(...)` の**解決後**に `publish({kind:"active"})` するため、mount時点では `isCurrent()` が false で、全runが `stale-activation` になる。現状は macrotask（`setTimeout`）でスケジュールし unmount で `clearTimeout` する。mount解決〜publish間は全てmicrotaskなので macrotask は必ず後になる。
 - 3.3: 上記の帰結として **task 4.4 の制約**: production の `TransientSurfaceHost` adapter は mount解決〜`publish({kind:"active"})` の連鎖に macrotask を挟んではならない（例: 実 `chrome.sidePanel.open()` の await）。挟むと全refreshが無言で `stale-activation` になる。timing非依存の恒久策は `TransientSurfaceLifecyclePort` へcurrency購読を足すか `isCurrent` に `acceptedActivation` を参照させることだが、いずれもshell契約変更で本specの境界外。
