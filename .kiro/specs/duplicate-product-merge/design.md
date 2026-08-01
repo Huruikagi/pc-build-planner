@@ -354,7 +354,7 @@ type DuplicateEvaluation =
 
 type DuplicateCommitReceipt =
   | { readonly kind: "saved-new"; readonly candidate: CandidatePart }
-  | { readonly kind: "source-added"; readonly candidate: CandidatePart }
+  | { readonly kind: "source-added"; readonly candidateId: CandidatePartId }
   | {
       readonly kind: "price-refreshed";
       readonly receipt: SourcePriceRefreshReceipt;
@@ -368,14 +368,18 @@ type DuplicateMergeError =
 interface DuplicateMergeCoordinator {
   evaluate(
     draft: CandidateDraft,
+    context: MutationContext,
   ): Promise<Result<DuplicateEvaluation, DuplicateMergeError>>;
   complete(
     draft: CandidateDraft,
     matches: readonly DuplicateCandidateMatch[],
     decision: DuplicateSaveDecision,
+    context: MutationContext,
   ): Promise<Result<DuplicateCommitReceipt, DuplicateMergeError>>;
 }
 ```
+
+`MutationContext` は既存candidate-management stateが操作ごとに生成して渡す。coordinatorはrequest IDやrevisionを生成・補完せず、`save-new` のときだけ受け取ったcontextを既存create serviceへそのまま委譲する。merge経路のcontext管理は注入済み公開mutation portのownerに留める。
 
 `CandidateDraft`に含まれる初期sourceは上流 `CaptureSourceMapper` が構築したcanonical入力を使う。coordinatorはURL、price、capturedAt、kind、siteNameのshapeを再定義せず、`AddCandidateSourceInput` へ上流mapperで写像する。
 
@@ -403,7 +407,7 @@ interface DuplicateMergeCoordinator {
 
 ```typescript
 type DuplicateUrlRouteReceipt =
-  | { readonly kind: "source-added"; readonly candidate: CandidatePart }
+  | { readonly kind: "source-added"; readonly candidateId: CandidatePartId }
   | {
       readonly kind: "price-refreshed";
       readonly receipt: SourcePriceRefreshReceipt;
@@ -420,6 +424,8 @@ interface DuplicateUrlRouter {
   ): Promise<Result<DuplicateUrlRouteReceipt, DuplicateUrlRouteError>>;
 }
 ```
+
+`CandidateSourceMutationPort` はcommandの成功を `void` で返す既存の一貫した公開契約を維持する。source追加成功receiptは変更対象の `candidateId` だけを返し、最新候補の表示が必要なconsumerは成功後にcanonical queryで再読込する。routerは更新後の `CandidatePart` を合成せず、追加queryも行わない。
 
 ### Candidate UI
 
