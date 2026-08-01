@@ -10,4 +10,5 @@ export * from "./models/current-build.js";
 export * from "./models/locator-primitives.js";
 export * from "./models/product-capture.js";
 export * from "./models/settings.js";
+export * from "./models/source-price-refresh.js";
 export * from "./support/expected-text.js";

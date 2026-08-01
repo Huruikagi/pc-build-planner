@@ -162,17 +162,18 @@
   - _Boundary: SourcePriceRefreshDomIntegrationTests_
   - _Depends: 4.2, 4.4_
 
-- [ ] 5.4 production extensionのcontext menu E2Eを完成させる
-  - 架空HTTPS販売ページと複数source候補をproduction buildへ用意し、menu click一回からprimary価格・capturedAt・代表価格の更新を確認する。
-  - price欠損、URL不一致、複数一致、manufacturer、tab遷移では旧価格が残り、型付き失敗案内が表示されることを確認する。
-  - 対象tab失効と常設navigation選択で一過性面が終了し、旧世代完了が表示・保存を変更しないことを確認する。
-  - fixture validator、型検査、lint、unit、integration、build、artifact、Playwrightを含む完全検証が通ることを完了条件とする。
+- [x] 5.4 production ingress、Playwright後段、native menu gateを完成させる
+  - runtime integrationで実context menu adapterから既存schedulerへの一回配送を固定し、headed Chromiumの手動または承認済みOS-level UI gateで架空HTTPSページから「価格を更新」を一回選択する代表成功smokeを実施する。
+  - Playwrightはproduction activation transportへ正規形activationを投入した後段を担当し、架空HTTPS販売ページと複数source候補でprimary価格・capturedAt・代表価格の更新を確認する。この投入をnative menu clickの証拠とは称さない。
+  - price欠損、URL不一致、複数一致、manufacturerでは旧価格を維持して型付き失敗案内を表示する。tab遷移、対象tab失効、常設navigationでは一過性面を終了して保存を変更しないことをPlaywrightで確認する。旧世代の遅延完了がstateを変更しないことはdeterministicなstate/runtime integrationで確認する。
+  - fixture validator、型検査、lint、unit、integration、build、artifact、Playwright、およびheaded native menu smokeを含む分割検証が通ることを完了条件とする。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.5, 2.6, 2.7, 2.8, 3.5, 3.6, 4.1, 4.2, 4.3, 5.1, 5.2, 5.5, 6.1, 6.2, 6.4, 6.5, 6.6, 6.7_
   - _Boundary: SourcePriceRefreshE2E_
   - _Depends: 5.1, 5.2, 5.3_
 
 ## Implementation Notes
 
+- 5.4: 利用者承認（2026-08-01）により検証責務を三分割した。native menu ingressはproduction runtime integration、業務critical pathはproduction activation transport投入後のPlaywright、browser-native item選択はheaded manual/OS UI gateで証明し、いずれか一つを単独のend-to-end証拠とは称さない。test-only message/storage/env/backdoorは追加しない。
 - 5.3: `unexpected` はmutation着地後の上流throwも含み保存結果へ帰属できないため、「旧価格を維持した」と断言する `preservedNotice` を表示しない。他19 failure kindは同noticeを必須DOMとして固定する。non-primary successも確定金額・通貨・capturedAt・代表価格不変を同一DOMで同時assertする。
 - 5.2: worker catalogからfeature通常 `public.ts` をruntime importすると、公開APIが所有するmanufacturer mapや完全URLまでservice-worker bundleへ到達し得る。worker registrationはproducer-owned `worker-public.ts` へ分離し、feature sourceのapplication-shell依存は `public` / `worker-public` だけを再帰boundary scanで許可する。cleanup冪等性は同じ現行leaseの2回目で `contextMenus.remove` 回数が増えないことを直接spyする。
 - 5.1: source-price-refresh公開port contract kitはcatalog/candidate両scopeで同じ正規化target、candidate隔離、scopeごと1commit、price/capturedAt限定置換、他source不変を検査し、二重mutation decoratorを両scopeで拒否する。contract driverのsource更新fakeはmergeではなくcomplete-entry置換にする。

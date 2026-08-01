@@ -170,7 +170,7 @@ tests/
 └── fixtures/                           # 架空sourceとpage price observation
 
 e2e/
-├── source-price-refresh.spec.ts        # context menuからsuccess/failureまで
+├── source-price-refresh.spec.ts        # production activation ingress後のsuccess/failure/失効
 └── locators.ts                         # transient status locator
 ```
 
@@ -578,10 +578,11 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 
 ### Runtime / DOM / E2E tests
 
-- context menu itemがHTTP/HTTPSのpage contextだけでstable IDにより冪等登録され、別item click、tabId欠損、restricted URLを無視する（1.1、1.4、6.1、6.2）。
+- context menu itemがHTTP/HTTPSのpage contextだけでstable IDにより冪等登録され、別item click、tabId欠損、restricted URLを無視し、production composition上で既存schedulerへ一回だけ配送することをruntime integrationで検証する（1.1、1.4、6.1、6.2）。
 - worker bundleが `side-panel-contributions.ts`、feature UI、DOM、Reactを含まず、manifest permissionがexact 5件でhost/optional permissionがないことをartifact gateで検証する（6.1、6.6）。
 - viewがrunning/succeeded/errorを表示し、raw URLやHTMLを描画せず再実行buttonを残さない（1.2–1.5、5.6）。
-- production extensionで架空HTTPSページのcontext menuから更新し、primary成功、price欠損、URL不一致、tab遷移のcritical pathを検証する（1.1–1.5、2.5–2.8、3.5、3.6、6.5）。
+- Playwrightはproduction activation transportへ正規形のactivationを投入した後段を担当し、架空HTTPSページとcanonical local rootでprimary成功、price欠損、URL不一致、複数一致、manufacturer、tab遷移、失効のcritical pathを検証する（1.2–1.5、2.5–2.8、3.5、3.6、6.5）。旧世代の遅延完了によるstate変更の抑止はdeterministicなstate/runtime integrationで検証する。この投入をnative menu clickの証拠とは称さない。
+- browser-native context menu itemの選択はPlaywright/CDPの公開操作面に存在しないため、headed Chromiumの手動または承認済みOS-level UI gateで架空HTTPSページから「価格を更新」を一回選択し、runtime integrationとPlaywright後段の間を代表成功ケースで確認する（1.1、6.5）。
 
 ### 非回帰
 

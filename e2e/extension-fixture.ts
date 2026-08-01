@@ -22,7 +22,7 @@ export const test = base.extend({
       testInfo.outputPath("profile"),
       {
         channel,
-        headless: true,
+        headless: process.env.SOURCE_PRICE_REFRESH_NATIVE_SMOKE !== "1",
         args: [
           `--disable-extensions-except=${extensionPath}`,
           `--load-extension=${extensionPath}`,
