@@ -122,9 +122,13 @@ test("公開入口は確定済み上流portだけを凍結済みで組み立て�
   assert.deepEqual(listed.value, [
     { candidateId, sourceId, isPrimary: true, kind: "retail" },
   ]);
-  const updated = await ports.mutations.updateSource({
+  const updated = await ports.mutations.patchSourcePrice({
     candidateId,
-    source: { id: sourceId },
+    sourceId,
+    expectedPageUrl: "https://shop.example.invalid/item",
+    expectedKind: "retail",
+    price: { original: "100 SYN", confirmed: { amount: 100, currency: "SYN" } },
+    capturedAt: "2026-08-02T00:00:00.000Z" as never,
   });
   assert.ok(updated.ok);
   const extracted = await ports.pagePriceExtraction.extractPrice(

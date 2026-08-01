@@ -14,7 +14,6 @@ import type {
 import { err, ok } from "../../src/domain/public.js";
 import type {
   CandidateDraft,
-  CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
 } from "../../src/features/candidate-management/public.js";
@@ -116,24 +115,6 @@ const createProbe = () => {
   ]);
   let commits = 0;
 
-  const query: CandidateQuery = {
-    async listProjects() {
-      return ok([]);
-    },
-    async listCandidates() {
-      return ok([]);
-    },
-    async listBuildEligible() {
-      return ok([]);
-    },
-    async getCandidateDraft(id) {
-      const value = drafts.get(id);
-      return value === undefined
-        ? err({ kind: "not-found", entity: "candidate" })
-        : ok(structuredClone(value));
-    },
-  };
-
   const catalog: CandidateSourceCatalogPort = {
     async listSourceReferences(input) {
       const entries =
@@ -198,8 +179,32 @@ const createProbe = () => {
       commits += 1;
       return ok(undefined);
     },
-    async patchSourcePrice() {
-      return err({ kind: "unsupported-data" });
+    async patchSourcePrice(input) {
+      const currentDraft = drafts.get(input.candidateId);
+      const sources = currentDraft?.sources;
+      const index = sources?.findIndex((entry) => entry.id === input.sourceId);
+      if (
+        currentDraft === undefined ||
+        sources === undefined ||
+        index === undefined ||
+        index < 0
+      )
+        return err({ kind: "not-found", entity: "source" });
+      const current = sources[index];
+      if (
+        current?.pageUrl !== input.expectedPageUrl ||
+        current.kind !== input.expectedKind
+      )
+        return err({ kind: "precondition-failed" });
+      const replacement = [...sources];
+      replacement[index] = {
+        ...current,
+        price: structuredClone(input.price),
+        capturedAt: input.capturedAt,
+      };
+      drafts.set(input.candidateId, { ...currentDraft, sources: replacement });
+      commits += 1;
+      return ok(undefined);
     },
     async removeSource() {
       return err({ kind: "unsupported-data" });
@@ -215,7 +220,6 @@ const createProbe = () => {
     conclude: async () => ok(undefined),
   };
   const refresh = createSourcePriceRefreshContribution({
-    query,
     catalog,
     mutations,
     pagePriceExtraction: {

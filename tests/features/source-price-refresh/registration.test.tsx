@@ -28,8 +28,6 @@ import {
   type UtcTimestamp,
 } from "../../../src/domain/public.js";
 import type {
-  CandidateDraft,
-  CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   ManagementError,
@@ -538,14 +536,6 @@ test("contribution factoryはnavigationを持たないUI registrationだけを�
     kind: "not-found",
     entity: "candidate",
   };
-  const query: CandidateQuery = {
-    listProjects: async () => err(managementError),
-    listCandidates: async () => err(managementError),
-    listBuildEligible: async () => err(managementError),
-    getCandidateDraft: async (): Promise<
-      Result<CandidateDraft, ManagementError>
-    > => err(managementError),
-  };
   const catalog: CandidateSourceCatalogPort = {
     listSourceReferences: async () => err(managementError),
     getSourceReference: async () => err(managementError),
@@ -562,7 +552,6 @@ test("contribution factoryはnavigationを持たないUI registrationだけを�
   };
 
   const contribution = createSourcePriceRefreshContribution({
-    query,
     catalog,
     mutations,
     pagePriceExtraction,

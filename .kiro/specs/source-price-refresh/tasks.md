@@ -171,7 +171,35 @@
   - _Boundary: SourcePriceRefreshE2E_
   - _Depends: 5.1, 5.2, 5.3_
 
+- [ ] 6. validation remediationで競合・世代・設計同期を閉じる
+
+- [x] 6.1 上流の条件付き価格patchへ切り替える
+  - `getCandidateDraft` 由来の古い完全entry置換を廃止し、`candidate-source-bookmarks` 8.1の条件付きprice-only patchを利用する。
+  - match後からcommitまでにsiteNameが並行更新されても後発値を保持し、URL・kind・識別子変更はstale-target、revision競合はconflictとして提示する。
+  - 実foundation stackで並行更新、1回commit、primary/non-primary projection、compatibility非回帰を検証する。
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2_
+  - _Boundary: SourcePriceRefreshService, CandidateSourcePortIntegration_
+  - _Depends: candidate-source-bookmarks 8.1_
+
+- [ ] 6.2 明示的readinessで自動実行し要件・設計を同期する
+  - `transient-feature-surface` 7.1のone-shot readinessを利用し、`setTimeout(0)` とshell内部macrotask順序への依存を除去する。
+  - 要件5.5を「確定前の旧世代結果は保存しない／確定後の有効commitは表示を抑止して補償更新しない」へ明確化し、抽出後staleとmutation後staleの双方を固定する。
+  - activationの`surfaceId`、worker-safe公開入口、実ファイル構成、依存方向をdesignへ同期し、親rollup taskを実状態へ合わせる。
+  - _Requirements: 1.1, 1.5, 5.5, 6.6_
+  - _Boundary: SourcePriceRefreshRegistration, SourcePriceRefreshRequirements, SourcePriceRefreshDesign_
+  - _Depends: transient-feature-surface 7.1, 6.1_
+
+- [ ] 6.3 remediation後の完全検証とnative menu gateを実施する
+  - candidate-source-bookmarks、transient-feature-surface、source-price-refresh、duplicate-product-mergeの関連contractを再検証する。
+  - `pnpm validate` とheaded native context menu smokeを実施し、実行日時・環境・結果をvalidation記録へ残す。
+  - 全機械gate、browser動線、境界監査が成功し、残存NO-GO所見がないことを完了条件とする。
+  - _Requirements: 5.2, 5.5, 6.3, 6.5_
+  - _Boundary: ValidationGates, NativeMenuSmokeRecord_
+  - _Depends: 6.1, 6.2_
+
 ## Implementation Notes
+
+- 6.1: `candidate-source-bookmarks` 8.1の `patchSourcePrice` へ移行し、`CandidateQuery.getCandidateDraft` と古い完全entry置換を廃止した。commit直前の公開referenceからraw URL・retail kindをpreconditionとして渡し、`precondition-failed`だけを`stale-target`へ写像する。実foundation contractと破壊decoratorで、後発`siteName`保持、price/capturedAt限定1commit、不一致・競合0 patch commit、primary/non-primary・compatibility非回帰を固定した。
 
 - 5.4: 利用者承認（2026-08-01）により検証責務を三分割した。native menu ingressはproduction runtime integration、業務critical pathはproduction activation transport投入後のPlaywright、browser-native item選択はheaded manual/OS UI gateで証明し、いずれか一つを単独のend-to-end証拠とは称さない。test-only message/storage/env/backdoorは追加しない。
 - 5.3: `unexpected` はmutation着地後の上流throwも含み保存結果へ帰属できないため、「旧価格を維持した」と断言する `preservedNotice` を表示しない。他19 failure kindは同noticeを必須DOMとして固定する。non-primary successも確定金額・通貨・capturedAt・代表価格不変を同一DOMで同時assertする。

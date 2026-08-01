@@ -141,11 +141,8 @@ export interface SourcePriceRefreshPublicApi {
  * `sources.mutations`, product-capture `pagePriceExtraction`, and the shell's
  * synchronous transient gesture registration.
  *
- * The service additionally reads candidate-management `query.getCandidateDraft`
- * to recover the stored source fields the catalog projection withholds (notably
- * `siteName`), so a price update replaces only price and capturedAt. That facet
- * is an internal collaborator dependency rather than part of this bundle; the
- * composition wiring reconciles both.
+ * The service revalidates through the catalog and delegates preservation of
+ * concurrent metadata to the conditional price-only mutation.
  */
 export interface SourcePriceRefreshUpstreamPorts {
   readonly catalog: CandidateSourceCatalogPort;

@@ -11,19 +11,16 @@ import {
   err,
   type MoneyValue,
   ok,
-  type ProjectId,
   type Result,
   type SourcedValue,
   type UtcTimestamp,
 } from "../../../src/domain/public.js";
 import type {
-  CandidateDraft,
-  CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSourceReference,
   ManagementError,
-  UpdateCandidateSourceInput,
+  PatchCandidateSourcePriceInput,
 } from "../../../src/features/candidate-management/public.js";
 import type {
   PagePriceExtractionError,
@@ -45,7 +42,6 @@ import {
 } from "../../../src/features/source-price-refresh/service.js";
 import { createSourcePriceRefreshState } from "../../../src/features/source-price-refresh/state.js";
 
-const projectId = "20000000-0000-4000-8000-000000000001" as ProjectId;
 const candidateA = "30000000-0000-4000-8000-00000000000a" as CandidatePartId;
 const primaryId = "40000000-0000-4000-8000-000000000001" as CandidateSourceId;
 
@@ -140,7 +136,7 @@ interface StoredCandidate {
 interface FakeStoreOptions {
   readonly mutationFailure?: ManagementError;
   /**
-   * Makes `updateSource` violate its `Result` contract by throwing, after the
+   * Makes `patchSourcePrice` violate its `Result` contract by throwing, after the
    * call has been recorded. Lets a test observe both the containment and the
    * absence of any compensating second write.
    */
@@ -150,10 +146,9 @@ interface FakeStoreOptions {
 }
 
 interface FakeStore {
-  readonly query: CandidateQuery;
   readonly catalog: CandidateSourceCatalogPort;
   readonly mutations: CandidateSourceMutationPort;
-  readonly updateInputs: readonly UpdateCandidateSourceInput[];
+  readonly updateInputs: readonly PatchCandidateSourcePriceInput[];
   snapshot(): string;
   representativePrice(): SourcedValue<MoneyValue> | undefined;
 }
@@ -170,8 +165,9 @@ const storedSource = (
 });
 
 /**
- * Mirrors the upstream aggregate's replace semantics so a dropped field is
- * observable, and derives the representative price from `primarySourceId` only.
+ * Mirrors the upstream aggregate's latest-entry merge semantics: only price and
+ * capturedAt are replaced, while concurrent metadata remains on the current
+ * source. Representative price is derived from `primarySourceId` only.
  */
 const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
   const candidate: StoredCandidate = {
@@ -179,7 +175,7 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
     primarySourceId: primaryId,
     sources: [storedSource({ id: primaryId })],
   };
-  const updateInputs: UpdateCandidateSourceInput[] = [];
+  const updateInputs: PatchCandidateSourcePriceInput[] = [];
 
   const reference = (source: CandidateSource): CandidateSourceReference => ({
     candidateId: candidate.id,
@@ -188,30 +184,6 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
     ...(source.kind === undefined ? {} : { kind: source.kind }),
     isPrimary: candidate.primarySourceId === source.id,
   });
-
-  const unusedQuery = async (): Promise<never> => {
-    throw new Error("unexpected query call");
-  };
-
-  const query: CandidateQuery = {
-    listProjects: unusedQuery,
-    listCandidates: unusedQuery,
-    listBuildEligible: unusedQuery,
-    async getCandidateDraft(
-      id,
-    ): Promise<Result<CandidateDraft, ManagementError>> {
-      if (id !== candidate.id)
-        return err({ kind: "not-found", entity: "candidate" });
-      return ok({
-        projectId,
-        category: "uncategorized",
-        normalizedAttributes: { category: "uncategorized" },
-        product: { name: { original: null, confirmed: "" } },
-        sources: candidate.sources,
-        primarySourceId: candidate.primarySourceId,
-      });
-    },
-  };
 
   const catalog: CandidateSourceCatalogPort = {
     async listSourceReferences(
@@ -242,27 +214,28 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
     addSource: unsupported,
     removeSource: unsupported,
     setPrimarySource: unsupported,
-    patchSourcePrice: unsupported,
-    async updateSource(input): Promise<Result<void, ManagementError>> {
+    async patchSourcePrice(input): Promise<Result<void, ManagementError>> {
       updateInputs.push(input);
       if (options.mutationThrows === true)
         throw new Error("mutation port contract violated");
       if (options.mutationFailure !== undefined)
         return err(options.mutationFailure);
       const index = candidate.sources.findIndex(
-        (item) => item.id === input.source.id,
+        (item) => item.id === input.sourceId,
       );
       if (index < 0) return err({ kind: "not-found", entity: "source" });
       candidate.sources = candidate.sources.map((current, currentIndex) =>
-        currentIndex === index ? input.source : current,
+        currentIndex === index
+          ? { ...current, price: input.price, capturedAt: input.capturedAt }
+          : current,
       );
       options.onUpdate?.();
       return ok(undefined);
     },
+    updateSource: unsupported,
   };
 
   return {
-    query,
     catalog,
     mutations,
     updateInputs,
@@ -293,7 +266,6 @@ const createHarness = (options: FakeStoreOptions = {}): Harness => {
     activationId === current;
   const runRefresh = createSourcePriceRefreshWorkflow({
     refresh: createSourcePriceRefreshService({
-      query: store.query,
       catalog: store.catalog,
       mutations: store.mutations,
     }),
@@ -370,11 +342,11 @@ test("page由来URL・capturedAt・price provenanceを照合と原子的更新�
   assert.deepEqual(harness.store.updateInputs, [
     {
       candidateId: candidateA,
-      source: storedSource({
-        id: primaryId,
-        capturedAt: newCapturedAt,
-        price: newPrice,
-      }),
+      sourceId: primaryId,
+      expectedPageUrl: pageUrl,
+      expectedKind: "retail",
+      capturedAt: newCapturedAt,
+      price: newPrice,
     },
   ]);
   assert.deepEqual(harness.store.representativePrice(), newPrice);
@@ -578,7 +550,6 @@ test("抽出・照合・更新の順序と回数がdesignのcommand順に一致�
   const store = createFakeStore();
   const extraction = createExtractionStub();
   const service = createSourcePriceRefreshService({
-    query: store.query,
     catalog: store.catalog,
     mutations: store.mutations,
   });

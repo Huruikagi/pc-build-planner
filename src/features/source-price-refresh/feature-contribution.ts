@@ -3,7 +3,6 @@ import type {
   TransientSurfaceLifecyclePort,
 } from "../../application-shell/public.js";
 import type {
-  CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
 } from "../candidate-management/public.js";
@@ -24,7 +23,6 @@ export type SourcePriceRefreshContribution = FeatureContribution<
 >;
 
 export interface SourcePriceRefreshContributionDependencies {
-  readonly query: CandidateQuery;
   readonly catalog: CandidateSourceCatalogPort;
   readonly mutations: CandidateSourceMutationPort;
   readonly pagePriceExtraction: PagePriceExtractionPort;
@@ -35,7 +33,6 @@ export const createSourcePriceRefreshContribution = (
   dependencies: SourcePriceRefreshContributionDependencies,
 ): SourcePriceRefreshContribution => {
   const refresh = createSourcePriceRefreshService({
-    query: dependencies.query,
     catalog: dependencies.catalog,
     mutations: dependencies.mutations,
   });

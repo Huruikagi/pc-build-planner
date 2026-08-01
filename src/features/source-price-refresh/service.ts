@@ -1,6 +1,5 @@
 import type { ActivationId } from "../../application-shell/public.js";
 import {
-  type CandidateSource,
   err,
   type MoneyValue,
   ok,
@@ -8,7 +7,6 @@ import {
   type SourcedValue,
 } from "../../domain/public.js";
 import type {
-  CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSourceReference,
@@ -37,12 +35,6 @@ import type { SourcePriceRefreshWorkflowInput } from "./state.js";
 import { normalizeSourcePageUrl } from "./url-identity.js";
 
 export interface SourcePriceRefreshServiceDependencies {
-  /**
-   * Read side of the candidate aggregate. `CandidateSourceReference` is a
-   * deliberately narrow projection, so the fields this use case must preserve
-   * (`siteName` above all) are only reachable through `getCandidateDraft`.
-   */
-  readonly query: CandidateQuery;
   readonly catalog: CandidateSourceCatalogPort;
   readonly mutations: CandidateSourceMutationPort;
 }
@@ -106,21 +98,11 @@ const stillTargets = (
  * name, kind and any field added upstream later survive the update untouched;
  * only `price` and `capturedAt` are replaced.
  */
-const updatedSource = (
-  stored: CandidateSource,
-  input: RefreshCapturedPriceInput,
-  price: SourcedValue<MoneyValue>,
-): CandidateSource => ({
-  ...stored,
-  price,
-  capturedAt: input.capturedAt,
-});
-
 /**
  * The atomic half of the refresh workflow: it validates the observation, proves
  * the stored target is still the one that was matched, and commits the new price
  * through the upstream candidate aggregate in a single mutation. Any failure
- * returns before `updateSource` is called, or is reported without retrying, so
+ * returns before `patchSourcePrice` is called, or is reported without retrying, so
  * the previously stored price and `capturedAt` always survive.
  *
  * Port calls are not wrapped in `try` here. Both upstream ports are contracted
@@ -150,19 +132,6 @@ export const createSourcePriceRefreshService = (
       const observed = normalizeSourcePageUrl(input.observedPageUrl);
       if (!observed.ok) return err(observed.error);
 
-      // The full stored entry, needed so the update can preserve every field it
-      // must not touch. A candidate or source that cannot be read here is a
-      // target that can no longer be identified, hence `no-match`.
-      const draft = await dependencies.query.getCandidateDraft(
-        input.target.candidateId,
-      );
-      if (!draft.ok) return err(managementError(draft.error));
-
-      const stored = draft.value.sources?.find(
-        (source) => source.id === input.target.sourceId,
-      );
-      if (stored === undefined) return err(noMatch);
-
       // Re-read immediately before the mutation: an earlier match may have been
       // taken against state that has since changed.
       const current = await dependencies.catalog.getSourceReference({
@@ -175,11 +144,20 @@ export const createSourcePriceRefreshService = (
       if (!stillTargets(reference, input.target, observed.value))
         return err(staleTarget);
 
-      const updated = await dependencies.mutations.updateSource({
+      const updated = await dependencies.mutations.patchSourcePrice({
         candidateId: reference.candidateId,
-        source: updatedSource(stored, input, price),
+        sourceId: reference.sourceId,
+        expectedPageUrl: reference.pageUrl,
+        expectedKind: reference.kind,
+        price,
+        capturedAt: input.capturedAt,
       });
-      if (!updated.ok) return err(managementError(updated.error));
+      if (!updated.ok)
+        return err(
+          updated.error.kind === "precondition-failed"
+            ? staleTarget
+            : managementError(updated.error),
+        );
 
       return ok({
         candidateId: reference.candidateId,

@@ -55,7 +55,7 @@ export const createSourcePriceRefreshUpstreamPorts = (
   if (
     typeof catalog?.listSourceReferences !== "function" ||
     typeof catalog.getSourceReference !== "function" ||
-    typeof mutations?.updateSource !== "function" ||
+    typeof mutations?.patchSourcePrice !== "function" ||
     typeof pagePriceExtraction?.extractPrice !== "function" ||
     typeof gestures?.register !== "function"
   )

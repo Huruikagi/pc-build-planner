@@ -136,7 +136,6 @@ export const createSidePanelFeatureContributions = (
     }),
   });
   const sourcePriceRefresh = createSourcePriceRefreshContribution({
-    query: candidateManagement.registration.publicApi.query,
     catalog: candidateManagement.registration.publicApi.sources.catalog,
     mutations: candidateManagement.registration.publicApi.sources.mutations,
     pagePriceExtraction:

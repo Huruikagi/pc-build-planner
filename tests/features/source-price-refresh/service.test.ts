@@ -7,19 +7,17 @@ import {
   err,
   type MoneyValue,
   ok,
-  type ProjectId,
   type Result,
   type SourcedValue,
   type UtcTimestamp,
 } from "../../../src/domain/public.js";
 import type {
-  CandidateDraft,
-  CandidateQuery,
   CandidateSourceCatalogPort,
+  CandidateSourceMutationError,
   CandidateSourceMutationPort,
   CandidateSourceReference,
   ManagementError,
-  UpdateCandidateSourceInput,
+  PatchCandidateSourcePriceInput,
 } from "../../../src/features/candidate-management/public.js";
 import type {
   RefreshCapturedPriceInput,
@@ -27,8 +25,6 @@ import type {
   SourcePriceRefreshReceipt,
 } from "../../../src/features/source-price-refresh/contracts.js";
 import { createSourcePriceRefreshService } from "../../../src/features/source-price-refresh/service.js";
-
-const projectId = "20000000-0000-4000-8000-000000000001" as ProjectId;
 
 const candidateA = "30000000-0000-4000-8000-00000000000a" as CandidatePartId;
 const candidateB = "30000000-0000-4000-8000-00000000000b" as CandidatePartId;
@@ -60,9 +56,8 @@ interface StoredCandidate {
 }
 
 interface FakeCandidateStoreOptions {
-  readonly draftFailure?: ManagementError;
   readonly referenceFailure?: ManagementError;
-  readonly mutationFailure?: ManagementError;
+  readonly mutationFailure?: CandidateSourceMutationError;
   /**
    * Models a catalog that answers with a different entity than the one asked
    * for. A faithful upstream never does this, so it is the only way to observe
@@ -72,14 +67,13 @@ interface FakeCandidateStoreOptions {
 }
 
 interface FakeCandidateStore {
-  readonly query: CandidateQuery;
   readonly catalog: CandidateSourceCatalogPort;
   readonly mutations: CandidateSourceMutationPort;
   /** Catalog and mutation port calls, in order. */
   readonly calls: readonly string[];
   /** Every dependency call, including the query facet, in order. */
   readonly trace: readonly string[];
-  readonly updateInputs: readonly UpdateCandidateSourceInput[];
+  readonly updateInputs: readonly PatchCandidateSourcePriceInput[];
   readonly candidates: readonly StoredCandidate[];
   snapshot(): string;
   representativePrice(
@@ -110,39 +104,12 @@ const createFakeCandidateStore = (
 ): FakeCandidateStore => {
   const calls: string[] = [];
   const trace: string[] = [];
-  const updateInputs: UpdateCandidateSourceInput[] = [];
+  const updateInputs: PatchCandidateSourcePriceInput[] = [];
   const find = (candidateId: CandidatePartId): StoredCandidate | undefined =>
     candidates.find((candidate) => candidate.id === candidateId);
   const record = (call: string): void => {
     calls.push(call);
     trace.push(call);
-  };
-
-  const unusedQuery = async (): Promise<never> => {
-    throw new Error("unexpected query call");
-  };
-
-  const query: CandidateQuery = {
-    listProjects: unusedQuery,
-    listCandidates: unusedQuery,
-    listBuildEligible: unusedQuery,
-    async getCandidateDraft(
-      id,
-    ): Promise<Result<CandidateDraft, ManagementError>> {
-      trace.push("getCandidateDraft");
-      if (options.draftFailure !== undefined) return err(options.draftFailure);
-      const candidate = find(id);
-      if (candidate === undefined)
-        return err({ kind: "not-found", entity: "candidate" });
-      return ok({
-        projectId: projectId,
-        category: "uncategorized",
-        normalizedAttributes: { category: "uncategorized" },
-        product: { name: { original: null, confirmed: "" } },
-        sources: candidate.sources,
-        primarySourceId: candidate.primarySourceId,
-      });
-    },
   };
 
   const catalog: CandidateSourceCatalogPort = {
@@ -189,9 +156,10 @@ const createFakeCandidateStore = (
     addSource: unsupported,
     removeSource: unsupported,
     setPrimarySource: unsupported,
-    patchSourcePrice: unsupported,
-    async updateSource(input): Promise<Result<void, ManagementError>> {
-      record("updateSource");
+    async patchSourcePrice(
+      input,
+    ): Promise<Result<void, CandidateSourceMutationError>> {
+      record("patchSourcePrice");
       updateInputs.push(input);
       if (options.mutationFailure !== undefined)
         return err(options.mutationFailure);
@@ -199,18 +167,26 @@ const createFakeCandidateStore = (
       if (candidate === undefined)
         return err({ kind: "not-found", entity: "candidate" });
       const index = candidate.sources.findIndex(
-        (item) => item.id === input.source.id,
+        (item) => item.id === input.sourceId,
       );
       if (index < 0) return err({ kind: "not-found", entity: "source" });
+      const current = candidate.sources[index];
+      if (
+        current?.pageUrl !== input.expectedPageUrl ||
+        current.kind !== input.expectedKind
+      )
+        return err({ kind: "precondition-failed" });
       candidate.sources = candidate.sources.map((current, currentIndex) =>
-        currentIndex === index ? input.source : current,
+        currentIndex === index
+          ? { ...current, price: input.price, capturedAt: input.capturedAt }
+          : current,
       );
       return ok(undefined);
     },
+    updateSource: unsupported,
   };
 
   return {
-    query,
     catalog,
     mutations,
     calls,
@@ -311,7 +287,6 @@ const refresh = (
   overrides: RefreshOverrides = {},
 ): Promise<Result<SourcePriceRefreshReceipt, SourcePriceRefreshError>> =>
   createSourcePriceRefreshService({
-    query: store.query,
     catalog: store.catalog,
     mutations: store.mutations,
   }).refreshCapturedPrice(refreshInput(overrides));
@@ -420,24 +395,19 @@ test("non-primary sourceの更新では代表価格と他sourceを変更しな�
   );
 });
 
-test("更新入力は対象sourceのID、URL、種別、siteNameを保持しpriceとcapturedAtだけを差し替える", async () => {
+test("更新入力は対象ID、期待raw URL・retail kind、price、capturedAtだけを渡す", async () => {
   const store = primaryTargetStore();
 
   expectReceipt(await refresh(store));
 
-  // Exact shape, so any additional or dropped key fails. `siteName` is carried
-  // over from the stored source: only `price` and `capturedAt` may change.
   assert.deepEqual(store.updateInputs, [
     {
       candidateId: candidateA,
-      source: {
-        id: primaryId,
-        pageUrl,
-        siteName: "サンプル販売店",
-        kind: "retail",
-        capturedAt: newCapturedAt,
-        price: newPrice,
-      },
+      sourceId: primaryId,
+      expectedPageUrl: pageUrl,
+      expectedKind: "retail",
+      capturedAt: newCapturedAt,
+      price: newPrice,
     },
   ]);
   assert.deepEqual(
@@ -456,21 +426,15 @@ test("mutation直前に対象sourceを再読込してから一度だけ更新す
 
   expectReceipt(await refresh(store));
 
-  assert.deepEqual(store.calls, ["getSourceReference", "updateSource"]);
+  assert.deepEqual(store.calls, ["getSourceReference", "patchSourcePrice"]);
 });
 
-test("保持すべきsource全体をdraftから読み出したうえで直前に再読込してから更新する", async () => {
+test("draftを読まず直前の公開referenceから条件付きprice patchを行う", async () => {
   const store = primaryTargetStore();
 
   expectReceipt(await refresh(store));
 
-  // The draft supplies the fields to preserve; `getSourceReference` stays the
-  // last read before the mutation so re-validation sees the freshest state.
-  assert.deepEqual(store.trace, [
-    "getCandidateDraft",
-    "getSourceReference",
-    "updateSource",
-  ]);
+  assert.deepEqual(store.trace, ["getSourceReference", "patchSourcePrice"]);
 });
 
 test("再読込した現行URLがobserved URLと一致しない場合はmutationを呼ばず stale-target", async () => {
@@ -560,7 +524,7 @@ test("再読込の not-found は no-match として提示する", async () => {
   assert.equal(store.snapshot(), before);
 });
 
-test("draftから対象sourceを取得できない場合は再読込もmutationもせず no-match", async () => {
+test("catalogから対象sourceを取得できない場合はpatchせず no-match", async () => {
   for (const target of [
     { candidateId: candidateA, sourceId: sourceId("8") },
     {
@@ -573,30 +537,7 @@ test("draftから対象sourceを取得できない場合は再読込もmutation�
 
     expectError(await refresh(store, { target }), "no-match");
 
-    assert.deepEqual(store.calls, []);
-    assert.deepEqual(store.trace, ["getCandidateDraft"]);
-    assert.equal(store.snapshot(), before);
-  }
-});
-
-test("draft読み出しのmanagement errorを安定mappingし保存状態を変更しない", async () => {
-  const failures: readonly ManagementError[] = [
-    { kind: "validation", fields: { "source.price": "invalid" } },
-    { kind: "conflict" },
-    { kind: "maintenance" },
-    { kind: "quota" },
-    { kind: "storage" },
-    { kind: "unsupported-data" },
-  ];
-
-  for (const draftFailure of failures) {
-    const store = primaryTargetStore({ draftFailure });
-    const before = store.snapshot();
-
-    const result = await refresh(store);
-
-    assert.deepEqual(result, { ok: false, error: draftFailure });
-    assert.deepEqual(store.calls, []);
+    assert.deepEqual(store.calls, ["getSourceReference"]);
     assert.equal(store.snapshot(), before);
   }
 });
@@ -687,10 +628,21 @@ test("mutationの not-found は no-match として提示し保存状態を変更
   assert.equal(store.snapshot(), before);
 });
 
+test("条件付きpatchの precondition-failed は stale-target として提示する", async () => {
+  const store = primaryTargetStore({
+    mutationFailure: { kind: "precondition-failed" },
+  });
+  const before = store.snapshot();
+
+  expectError(await refresh(store), "stale-target");
+
+  assert.equal(store.snapshot(), before);
+  assert.deepEqual(store.calls, ["getSourceReference", "patchSourcePrice"]);
+});
+
 test("matchSource は catalog scope と candidate scope の一意照合を公開する", async () => {
   const store = primaryTargetStore();
   const service = createSourcePriceRefreshService({
-    query: store.query,
     catalog: store.catalog,
     mutations: store.mutations,
   });
@@ -722,7 +674,6 @@ test("matchSource は catalog scope と candidate scope の一意照合を公開
 test("matchSource で特定した対象をそのまま refreshCapturedPrice へ渡して更新できる", async () => {
   const store = primaryTargetStore();
   const service = createSourcePriceRefreshService({
-    query: store.query,
     catalog: store.catalog,
     mutations: store.mutations,
   });

@@ -23,10 +23,7 @@ import {
   createCandidateManagementContribution,
   createCandidateSourceDataPort,
 } from "../../src/features/candidate-management/feature-contribution.js";
-import type {
-  CandidateSourceMutationPort,
-  UpdateCandidateSourceInput,
-} from "../../src/features/candidate-management/public.js";
+import type { CandidateSourceMutationPort } from "../../src/features/candidate-management/public.js";
 import { createCompatibilityContribution } from "../../src/features/compatibility/feature-contribution.js";
 import { createCurrentBuildContribution } from "../../src/features/current-build/feature-contribution.js";
 import type { PagePriceExtractionPort } from "../../src/features/product-capture/public.js";
@@ -331,7 +328,6 @@ const createProbe = async (
       ? upstream.mutations
       : options.decorate(upstream.mutations);
   const refresh = createSourcePriceRefreshContribution({
-    query: candidates.query,
     catalog: upstream.catalog,
     mutations,
     pagePriceExtraction: upstream.pagePriceExtraction,
@@ -532,26 +528,27 @@ type MutationDecorator = (
  * an assertion that stopped observing the integration would show up here as an
  * empty violation list.
  */
-const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
+const mutationBreakers: readonly [
+  string,
+  MutationDecorator,
+  readonly string[],
+][] = [
   [
     "更新が別のsourceにも及ぶ",
     (port) => ({
       ...port,
-      async updateSource(input: UpdateCandidateSourceInput) {
-        const first = await port.updateSource(input);
+      async patchSourcePrice(input) {
+        const first = await port.patchSourcePrice(input);
         if (!first.ok) return first;
         const other =
-          input.source.id === shopSourceId ? mallSourceId : shopSourceId;
-        return port.updateSource({
+          input.sourceId === shopSourceId ? mallSourceId : shopSourceId;
+        return port.patchSourcePrice({
           candidateId: input.candidateId,
-          source: {
-            id: other,
-            pageUrl: input.source.id === shopSourceId ? mallUrl : shopUrl,
-            siteName: "架空巻き添え店",
-            capturedAt: refreshedAt,
-            price: refreshedPrice,
-            kind: "retail",
-          },
+          sourceId: other,
+          expectedPageUrl: input.sourceId === shopSourceId ? mallUrl : shopUrl,
+          expectedKind: "retail",
+          price: input.price,
+          capturedAt: input.capturedAt,
         });
       },
     }),
@@ -570,13 +567,27 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
     "更新payloadからsiteNameを落とす",
     (port) => ({
       ...port,
-      async updateSource(input: UpdateCandidateSourceInput) {
-        const { siteName: _dropped, ...rest } = input.source;
-        return port.updateSource({ ...input, source: rest });
+      async patchSourcePrice(input) {
+        const patched = await port.patchSourcePrice(input);
+        if (!patched.ok) return patched;
+        return port.updateSource({
+          candidateId: input.candidateId,
+          source: {
+            id: input.sourceId,
+            pageUrl: input.expectedPageUrl,
+            capturedAt: input.capturedAt,
+            price: input.price,
+            kind: input.expectedKind,
+          },
+        });
       },
     }),
     [
+      "refresh.nonPrimary.mutation: 一回のroot mutationで確定しない",
+      "refresh.nonPrimary.mutation: root revisionが一度だけ進まない",
       "refresh.nonPrimary.stored: 対象sourceのURL・siteName・種別・IDが変わった",
+      "refresh.primary.mutation: 一回のroot mutationで確定しない",
+      "refresh.primary.mutation: root revisionが一度だけ進まない",
       "refresh.primary.stored: 対象sourceのURL・siteName・種別・IDが変わった",
       "refresh.primary.summary: primary source projectionのURL・siteNameを保持しない",
     ],
@@ -585,12 +596,12 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
     "保存失敗を報告しながら再書き込みでrevisionを進める",
     (port) => ({
       ...port,
-      async updateSource(input: UpdateCandidateSourceInput) {
-        const attempted = await port.updateSource(input);
+      async patchSourcePrice(input) {
+        const attempted = await port.patchSourcePrice(input);
         if (attempted.ok) return attempted;
         // A second, unrequested write lands while the failure is still the
         // reported outcome: exactly the partial update requirement 5.1 forbids.
-        await port.updateSource(input);
+        await port.patchSourcePrice(input);
         return attempted;
       },
     }),
@@ -603,16 +614,16 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
     "primary更新を非primary sourceへ書き換える",
     (port) => ({
       ...port,
-      async updateSource(input: UpdateCandidateSourceInput) {
-        if (input.source.id !== shopSourceId) return port.updateSource(input);
-        return port.updateSource({
+      async patchSourcePrice(input) {
+        if (input.sourceId !== shopSourceId)
+          return port.patchSourcePrice(input);
+        return port.patchSourcePrice({
           candidateId: input.candidateId,
-          source: {
-            ...input.source,
-            id: mallSourceId,
-            pageUrl: mallUrl,
-            siteName: "架空モール",
-          },
+          sourceId: mallSourceId,
+          expectedPageUrl: mallUrl,
+          expectedKind: "retail",
+          price: input.price,
+          capturedAt: input.capturedAt,
         });
       },
     }),
@@ -627,8 +638,8 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
   ],
 ];
 
-test("上流統合の保証を壊すdecoratorはcontract違反として検出される", async (t) => {
-  for (const [name, decorate, expected] of mutations) {
+test("上流統合の保証を壊すpatch decoratorはcontract違反として検出される", async (t) => {
+  for (const [name, decorate, expected] of mutationBreakers) {
     await t.test(name, async () => {
       assert.deepEqual(
         await collectCandidateSourcePortContractViolations(
