@@ -200,6 +200,7 @@ const buildSubject = async (): Promise<PagePriceExtractionContractSubject> => {
     navigatedAway: () =>
       probeFor({ candidates: priced, pagePayloadUrl: navigatedPageUrl }),
     withoutPrice: () => probeFor({ candidates: priceless }),
+    invalidPayload: () => probeFor({ candidates: [null] }),
   };
 };
 
@@ -251,6 +252,7 @@ const withDecoratedPort = (
     onTarget: () => wrap(subject.onTarget()),
     navigatedAway: () => wrap(subject.navigatedAway()),
     withoutPrice: () => wrap(subject.withoutPrice()),
+    invalidPayload: () => wrap(subject.invalidPayload()),
   };
 };
 

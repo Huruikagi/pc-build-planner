@@ -275,7 +275,7 @@ const createProbe = async (
         return ok(undefined);
       },
     },
-  } as unknown as FeatureCompositionContext;
+  } satisfies FeatureCompositionContext;
 
   const candidates = createCandidateManagementContribution(context, {
     sourceData: createCandidateSourceDataPort(data),
@@ -427,6 +427,7 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
     [
       "refresh.nonPrimary.stored: 対象sourceのURL・siteName・種別・IDが変わった",
       "refresh.primary.stored: 対象sourceのURL・siteName・種別・IDが変わった",
+      "refresh.primary.summary: primary source projectionのURL・siteNameを保持しない",
     ],
   ],
   [
@@ -470,6 +471,7 @@ const mutations: readonly [string, MutationDecorator, readonly string[]][] = [
       "refresh.primary.stored: 対象外のsourceが変わった",
       "refresh.primary.summary: primary更新後の代表価格が新価格へ追従しない",
       "refresh.primary.summary: primary source projectionが新価格を保存値と別に持った",
+      "refresh.primary.summary: primary source projectionが新しい取得日時へ追従しない",
     ],
   ],
 ];

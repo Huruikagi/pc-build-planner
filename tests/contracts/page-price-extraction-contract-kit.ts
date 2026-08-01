@@ -32,6 +32,8 @@ export interface PagePriceExtractionContractSubject {
   readonly navigatedAway: () => PagePriceExtractionProbe;
   /** The page carries no usable price candidate. */
   readonly withoutPrice: () => PagePriceExtractionProbe;
+  /** The injected document returned a payload that fails producer validation. */
+  readonly invalidPayload: () => PagePriceExtractionProbe;
 }
 
 /**
@@ -175,6 +177,19 @@ export const collectPagePriceExtractionContractViolations = async (
     keysOf(pricelessResult.value) !== PRICELESS_OBSERVATION_KEYS.join(",")
   ) {
     violations.push("extract.priceless: 価格欠損を欠損として区別しない");
+  }
+
+  const invalid = subject.invalidPayload();
+  const invalidResult = await invalid.port.extractPrice(subject.tabId);
+  if (invalidResult.ok) {
+    violations.push("extract.invalidPayload: 不正payloadを成功させた");
+  } else {
+    const breach = failureShapeViolation(
+      "extract.invalidPayload",
+      invalidResult,
+      "invalid-payload",
+    );
+    if (breach !== undefined) violations.push(breach);
   }
 
   return violations;

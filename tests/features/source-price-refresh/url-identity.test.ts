@@ -150,6 +150,18 @@ test("root以外の末尾slashだけを除去し、root pathは保持する", ()
     normalized("https://shop.example.invalid/p/1/?sku=9"),
     "https://shop.example.invalid/p/1?sku=9",
   );
+  assert.equal(
+    normalized("https://shop.example.invalid/p/1//"),
+    "https://shop.example.invalid/p/1/",
+    "pathの意味を保つため末尾slashは一つだけ除去する",
+  );
+  assert.equal(
+    sameSourcePageUrl(
+      "https://shop.example.invalid/p/1//",
+      "https://shop.example.invalid/p/1",
+    ),
+    false,
+  );
 });
 
 test("既知のtracking queryだけをcase-insensitiveに除去する", () => {
@@ -280,6 +292,11 @@ test("percent encodingは標準URL serializationのまま維持する", () => {
   assert.equal(
     normalized("https://shop.example.invalid/p/1?q=a%20b"),
     normalized("https://shop.example.invalid/p/1?q=a+b"),
+  );
+  assert.equal(
+    normalized("https://shop.example.invalid/p/1?q=~"),
+    normalized("https://shop.example.invalid/p/1?q=%7E"),
+    "URLSearchParams標準serializationで同値になる表現を独自処理しない",
   );
   assert.equal(
     sameSourcePageUrl(

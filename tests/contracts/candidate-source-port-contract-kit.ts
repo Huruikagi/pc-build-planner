@@ -355,6 +355,19 @@ const collectRefreshViolations = async (
         violations.push(
           `${label}.summary: primary source projectionが新価格を保存値と別に持った`,
         );
+      if (currentSummary.primarySource?.capturedAt !== subject.refreshedAt)
+        violations.push(
+          `${label}.summary: primary source projectionが新しい取得日時へ追従しない`,
+        );
+      if (
+        currentSummary.primarySource?.pageUrl !==
+          previousSummary.primarySource?.pageUrl ||
+        currentSummary.primarySource?.siteName !==
+          previousSummary.primarySource?.siteName
+      )
+        violations.push(
+          `${label}.summary: primary source projectionのURL・siteNameを保持しない`,
+        );
     } else {
       if (!same(currentSummary.price, previousSummary.price))
         violations.push(`${label}.summary: 非primary更新で代表価格が変わった`);

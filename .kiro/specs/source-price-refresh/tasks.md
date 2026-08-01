@@ -136,7 +136,7 @@
 
 - [ ] 5. critical pathと非回帰を検証する
 
-- [ ] 5.1 URL、照合、更新、stateのunit/contract coverageを完成させる
+- [x] 5.1 URL、照合、更新、stateのunit/contract coverageを完成させる
   - 全URL規則、0/1/複数一致、retail制約、price欠損、stale target、management errorを架空dataで検証する。
   - stateの新旧activation競合、unmount、抽出・mutationの後着順序を決定的なdeferred portで検証する。
   - 公開port contract kitでcatalog scopeとcandidate scopeが同じURL identityとatomic updateを利用することを確認する。
@@ -173,6 +173,7 @@
 
 ## Implementation Notes
 
+- 5.1: source-price-refresh公開port contract kitはcatalog/candidate両scopeで同じ正規化target、candidate隔離、scopeごと1commit、price/capturedAt限定置換、他source不変を検査し、二重mutation decoratorを両scopeで拒否する。contract driverのsource更新fakeはmergeではなくcomplete-entry置換にする。
 - 4.4: side panel compositionはcandidate managementの実 `query` / `sources.catalog` / `sources.mutations`、product captureの実 `pagePriceExtraction`、shellの同一transient lifecycleをfeature contributionへ注入する。隣接duplicate-product-merge fixtureは公開APIだけでcandidate scope照合から `refreshCapturedPrice` へ渡し、source追加能力を持たせない。
 - 4.3: stable context menu itemの世代交代は `contextMenus` API instance単位のleaseとmutation queueで直列化する。旧世代cleanup・遅延callbackは現行leaseのitemを削除せず、callback型create失敗はlistenerを解除してfail closedにする。production workerのlabel解決はReact非依存の `ui-messages/worker-public.ts` を使う。
 
