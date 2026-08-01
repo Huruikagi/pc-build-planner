@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 import type {
   ActivationId,
   FeatureActivationIntent,
@@ -104,10 +105,13 @@ test("mount前にtransient requestを受理しlease解放を冪等にする", as
   assert.equal(accepted.ok, true);
   if (!accepted.ok) return;
   assert.equal(capture.value?.activationId, request.activationId);
-  const handle = await registration.mount({
-    container: document.createElement("div"),
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError: () => {},
+  let handle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    handle = await registration.mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
   });
   assert.deepEqual(await handle.captureState?.(), {
     ok: true,
@@ -119,7 +123,7 @@ test("mount前にtransient requestを受理しlease解放を冪等にする", as
       handoffInFlightGeneration: null,
     },
   });
-  await handle.unmount();
+  await act(async () => handle.unmount());
   assert.equal(capture.value?.activationId, request.activationId);
   await accepted.value.release();
   await accepted.value.release();
@@ -146,11 +150,14 @@ test("handoff rollback snapshotはページ内容を持たず同じactivationを
     handoffInFlightGeneration: 4,
   };
 
-  const handle = await registration.mount({
-    container: document.createElement("div"),
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError: () => {},
-    restoredState: snapshot,
+  let handle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    handle = await registration.mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+      restoredState: snapshot,
+    });
   });
   assert.deepEqual(capture.value, {
     status: "extracting",
@@ -160,7 +167,7 @@ test("handoff rollback snapshotはページ内容を持たず同じactivationを
   });
   assert.equal(JSON.stringify(snapshot).includes("page"), false);
 
-  await handle.unmount();
+  await act(async () => handle.unmount());
   assert.equal(capture.value, null);
 });
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
 import { userEvent } from "@testing-library/user-event";
+import { act } from "react";
 
 import { createShellPresentation } from "../../src/application-shell/shell-presentation.js";
 import { createSettingsFeatureRegistration } from "../../src/features/settings/public.js";
@@ -13,13 +14,19 @@ afterEach(() => resetUiLanguageForTest());
 test("settings の言語変更は navigation と状態文言を更新し mount identity を保持する", async () => {
   const shellContainer = document.createElement("div");
   document.body.append(shellContainer);
-  const presentation = createShellPresentation().mount({
-    shellContainer,
-    onNavigate() {},
-    onRetry() {},
+  let presentation!: ReturnType<
+    ReturnType<typeof createShellPresentation>["mount"]
+  >;
+  await act(() => {
+    presentation = createShellPresentation().mount({
+      shellContainer,
+      onNavigate() {},
+      onRetry() {},
+    });
   });
   assert.equal(presentation.ok, true);
   if (!presentation.ok) return;
+  const presentationHandle = presentation.value;
 
   const registration = createSettingsFeatureRegistration({
     backupRestore: {
@@ -28,22 +35,27 @@ test("settings の言語変更は navigation と状態文言を更新し mount i
       },
     },
   });
-  const settingsHandle = await registration.mount({
-    container: presentation.value.featureContainer,
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError() {},
+  let settingsHandle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    settingsHandle = await registration.mount({
+      container: presentationHandle.featureContainer,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError() {},
+    });
   });
-  presentation.value.publish(
-    {
-      kind: "maintenance",
-      selected: registration.id,
-      message: message("shell.maintenanceActive"),
-    },
-    [{ id: registration.id, ...registration.navigation }],
-  );
+  await act(() => {
+    presentationHandle.publish(
+      {
+        kind: "maintenance",
+        selected: registration.id,
+        message: message("shell.maintenanceActive"),
+      },
+      [{ id: registration.id, ...registration.navigation }],
+    );
+  });
 
   const settingsRoot = shellContainer.querySelector("[data-region='settings']");
-  const featureContainer = presentation.value.featureContainer;
+  const featureContainer = presentationHandle.featureContainer;
   const navigation = shellContainer.querySelector<HTMLButtonElement>(
     "[data-feature-id='settings']",
   );
@@ -58,13 +70,15 @@ test("settings の言語変更は navigation と状態文言を更新し mount i
     ".shell-status--maintenance",
   )?.textContent;
 
-  await userEvent.setup().selectOptions(language, "en");
+  await act(async () => {
+    await userEvent.setup().selectOptions(language, "en");
+  });
 
   assert.equal(
     shellContainer.querySelector("[data-region='settings']"),
     settingsRoot,
   );
-  assert.equal(presentation.value.featureContainer, featureContainer);
+  assert.equal(presentationHandle.featureContainer, featureContainer);
   const english = resolverFor("en");
   assert.notEqual(navigation.title, japaneseNavigation);
   assert.equal(navigation.title, english("nav.settings"));
@@ -79,7 +93,9 @@ test("settings の言語変更は navigation と状態文言を更新し mount i
   );
   assert.equal(shellContainer.querySelector("header select"), null);
 
-  await settingsHandle.unmount();
-  presentation.value.stop();
+  await act(async () => {
+    await settingsHandle.unmount();
+    presentationHandle.stop();
+  });
   shellContainer.remove();
 });

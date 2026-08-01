@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { userEvent } from "@testing-library/user-event";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -150,14 +151,15 @@ const click = async (element: Element | null): Promise<void> => {
   await act(async () => (element as HTMLElement).click());
 };
 
-const setInputValue = (input: HTMLInputElement, value: string): void => {
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value",
-  )?.set;
-  if (setter === undefined) throw new Error("input value setter is missing");
-  setter.call(input, value);
-  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+const setInputValue = async (
+  input: HTMLInputElement,
+  value: string,
+): Promise<void> => {
+  const user = userEvent.setup();
+  await act(async () => {
+    await user.clear(input);
+    await user.type(input, value);
+  });
 };
 
 const input = (harness: Harness, name: string): HTMLInputElement => {
@@ -183,8 +185,10 @@ test("候補一覧の作成導線から選択中プロジェクトの候補を�
     new RegExp(defaultMessageResolver("candidate.createCandidateHeading")),
   );
 
-  setInputValue(input(harness, "candidate-name"), "画面から作成した架空候補");
-  await act(async () => undefined);
+  await setInputValue(
+    input(harness, "candidate-name"),
+    "画面から作成した架空候補",
+  );
   await submitEditor(harness);
 
   assert.equal(harness.created.length, 1);
@@ -238,8 +242,7 @@ test("編集導線から確定した変更は更新コマンドとして保存�
       `[data-edit-candidate-id='${candidateId}']`,
     ),
   );
-  setInputValue(input(harness, "candidate-name"), "編集後の架空CPU");
-  await act(async () => undefined);
+  await setInputValue(input(harness, "candidate-name"), "編集後の架空CPU");
   await submitEditor(harness);
 
   // Requirement 4.2: the confirmed value reaches the update command.
@@ -283,8 +286,10 @@ test("カテゴリ変更後は新カテゴリの属性を編集でき共通項�
     "https://example.invalid/synthetic-cpu",
   );
 
-  setInputValue(input(harness, "attribute-memoryStandard"), "架空DDR規格");
-  await act(async () => undefined);
+  await setInputValue(
+    input(harness, "attribute-memoryStandard"),
+    "架空DDR規格",
+  );
   await submitEditor(harness);
 
   assert.equal(harness.updated[0]?.draft.category, "memory");
@@ -309,8 +314,7 @@ test("項目検証の失敗は該当欄へ対応付けられ入力内容と一�
       `[data-edit-candidate-id='${candidateId}']`,
     ),
   );
-  setInputValue(input(harness, "source-0-url"), "ftp://例");
-  await act(async () => undefined);
+  await setInputValue(input(harness, "source-0-url"), "ftp://例");
   await submitEditor(harness);
 
   // Requirement 4.5: the offending field is identified, not just the operation.
@@ -477,9 +481,8 @@ test("欠損した任意項目は空欄で開き、一覧の未入力表示を�
     defaultMessageResolver("common.notEntered"),
   );
 
-  setInputValue(input(harness, "candidate-name"), "架空候補");
-  setInputValue(input(harness, "candidate-manufacturer"), "架空メーカー");
-  await act(async () => undefined);
+  await setInputValue(input(harness, "candidate-name"), "架空候補");
+  await setInputValue(input(harness, "candidate-manufacturer"), "架空メーカー");
   await submitEditor(harness);
 
   assert.equal(

@@ -226,18 +226,27 @@ test("validating中のunmount後は旧mountの遅延結果を再mountへ反映�
   };
   const phase = () => reusableState.value.phase;
 
-  const first = await section.mount(context);
-  const staleOperation = reusableState.validateFile({} as File);
+  let first!: Awaited<ReturnType<typeof section.mount>>;
+  await act(async () => {
+    first = await section.mount(context);
+  });
+  let staleOperation!: ReturnType<typeof reusableState.validateFile>;
+  await act(() => {
+    staleOperation = reusableState.validateFile({} as File);
+  });
   assert.equal(phase(), "validating");
-  await first.unmount();
-  const second = await section.mount(context);
+  await act(async () => first.unmount());
+  let second!: Awaited<ReturnType<typeof section.mount>>;
+  await act(async () => {
+    second = await section.mount(context);
+  });
   assert.equal(phase(), "idle");
   resolveRead({ ok: true, value: { text: "{}", byteLength: 2 } });
-  await staleOperation;
+  await act(async () => staleOperation);
   assert.equal(phase(), "idle");
   assert.equal(
     container.querySelector('[data-region="restore-confirmation"]'),
     null,
   );
-  await second.unmount();
+  await act(async () => second.unmount());
 });

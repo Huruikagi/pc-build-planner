@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 
 import type {
   Availability,
@@ -17,10 +18,15 @@ import type {
   CandidateQuery,
   UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
-import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
+import { createCandidateFeatureRegistration as createCandidateFeatureRegistrationImpl } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
+import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
+
+const createCandidateFeatureRegistration = actWrappedRegistrationFactory(
+  createCandidateFeatureRegistrationImpl,
+);
 
 test("候補管理registrationはshell契約へmount依存とoperation policyを注入する", async () => {
   const data = {} as FoundationScopedDataPort;
@@ -142,7 +148,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     reportError: () => {},
   });
   // The editor is opened on the mounted screen, which is what capture must keep.
-  state.beginCreate(draft);
+  await act(() => state.beginCreate(draft));
   const captured = await sourceHandle.captureState?.();
   assert.equal(captured?.ok, true);
   await sourceHandle.unmount();
@@ -252,13 +258,15 @@ test("snapshotなしの再mountは前回の未保存draftと削除確認を持�
     operationPolicy: policy,
     reportError: () => {},
   });
-  state.beginCreate({
-    projectId,
-    category: "uncategorized",
-    product: { name: { original: "未保存の架空候補" } },
-    normalizedAttributes: { category: "uncategorized" },
-  });
-  state.requestDeletion({ kind: "candidate", candidateId });
+  await act(() =>
+    state.beginCreate({
+      projectId,
+      category: "uncategorized",
+      product: { name: { original: "未保存の架空候補" } },
+      normalizedAttributes: { category: "uncategorized" },
+    }),
+  );
+  await act(() => state.requestDeletion({ kind: "candidate", candidateId }));
   await first.unmount();
 
   // Navigating back is not a rollback, so the previous screen must not reappear.
@@ -342,7 +350,14 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
   if (validated === undefined || !validated.ok)
     throw new Error("candidate activation must validate");
   // Successful activation is the handoff boundary after which capture may end.
-  const activated = await registration.activation?.activate(validated.value);
+  let activated:
+    | Awaited<
+        ReturnType<NonNullable<typeof registration.activation>["activate"]>
+      >
+    | undefined;
+  await act(async () => {
+    activated = await registration.activation?.activate(validated.value);
+  });
   assert.deepEqual(activated, { ok: true, value: undefined });
   assert.deepEqual(sessionState.value.pendingPreEdit, pending);
   const captured = await first.captureState?.();
@@ -468,12 +483,19 @@ test("mount中のactivation拒否だけをfeature診断へ安定コードで通�
   assert.equal(validated?.ok, true);
   if (validated === undefined || !validated.ok) return;
 
-  assert.equal(
-    (await registration.activation?.activate(validated.value))?.ok,
-    false,
-  );
+  let rejected:
+    | Awaited<
+        ReturnType<NonNullable<typeof registration.activation>["activate"]>
+      >
+    | undefined;
+  await act(async () => {
+    rejected = await registration.activation?.activate(validated.value);
+  });
+  assert.equal(rejected?.ok, false);
   assert.deepEqual(diagnostics, ["activation-editor-mutation-disabled"]);
   await handle.unmount();
-  await registration.activation?.activate(validated.value);
+  await act(async () => {
+    await registration.activation?.activate(validated.value);
+  });
   assert.deepEqual(diagnostics, ["activation-editor-mutation-disabled"]);
 });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 
 import type {
   Availability,
@@ -25,12 +26,17 @@ import type {
   BuildService,
   CurrentBuildQuery,
 } from "../../../src/features/current-build/contracts.js";
-import { createCurrentBuildFeatureRegistration } from "../../../src/features/current-build/registration.js";
+import { createCurrentBuildFeatureRegistration as createCurrentBuildFeatureRegistrationImpl } from "../../../src/features/current-build/registration.js";
 import {
   type BuildStateDependencies,
   createBuildState,
 } from "../../../src/features/current-build/state.js";
+import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
+
+const createCurrentBuildFeatureRegistration = actWrappedRegistrationFactory(
+  createCurrentBuildFeatureRegistrationImpl,
+);
 
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -144,8 +150,10 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     reportError: () => {},
   });
   // Unsaved screen selections are what capture must preserve.
-  sourceState.selectCategory("memory");
-  sourceState.setQuantityDraft(memoryCandidateId, "3");
+  await act(() => {
+    sourceState.selectCategory("memory");
+    sourceState.setQuantityDraft(memoryCandidateId, "3");
+  });
   const captured = await sourceHandle.captureState?.();
   assert.equal(captured?.ok, true);
   await sourceHandle.unmount();
@@ -202,8 +210,10 @@ test("snapshotなしの再mountは前回の未保存カテゴリ・数量draft�
     operationPolicy: policy,
     reportError: () => {},
   });
-  state.selectCategory("memory");
-  state.setQuantityDraft(memoryCandidateId, "9");
+  await act(() => {
+    state.selectCategory("memory");
+    state.setQuantityDraft(memoryCandidateId, "9");
+  });
   await first.unmount();
 
   // Navigating back is not a rollback, so the previous screen must not reappear.

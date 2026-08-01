@@ -104,7 +104,11 @@ test("maintenance・backup failure・transient 遷移でも policy/state と逆�
     reportError() {},
   });
 
-  assert.equal((await integration.start()).ok, true);
+  let startResult!: Awaited<ReturnType<typeof integration.start>>;
+  await act(async () => {
+    startResult = await integration.start();
+  });
+  assert.equal(startResult.ok, true);
   const backupState = container.querySelector<HTMLInputElement>(
     '[data-state="backup-failure"]',
   );
@@ -113,9 +117,11 @@ test("maintenance・backup failure・transient 遷移でも policy/state と逆�
   );
   assert.ok(backupState);
   assert.ok(language);
-  maintenance.emit(snapshot(true, 2));
+  await act(() => maintenance.emit(snapshot(true, 2)));
   assert.equal(integration.operationPolicy.isAllowed("mutation"), false);
-  await userEvent.setup().selectOptions(language, "en");
+  await act(async () => {
+    await userEvent.setup().selectOptions(language, "en");
+  });
   assert.equal(
     container.querySelector('[data-state="backup-failure"]'),
     backupState,
@@ -123,31 +129,38 @@ test("maintenance・backup failure・transient 遷移でも policy/state と逆�
   assert.equal(backupState.value, "failed-backup.json");
   assert.ok(mountedPolicy);
 
-  assert.equal(
-    (
-      await integration.showTransient?.({
-        activationId: "settings-transition" as never,
-        surfaceId: transient.id,
-        tabId: 1 as never,
-      })
-    )?.ok,
-    true,
-  );
+  let transientResult:
+    | Awaited<ReturnType<NonNullable<typeof integration.showTransient>>>
+    | undefined;
+  await act(async () => {
+    transientResult = await integration.showTransient?.({
+      activationId: "settings-transition" as never,
+      surfaceId: transient.id,
+      tabId: 1 as never,
+    });
+  });
+  assert.equal(transientResult?.ok, true);
   assert.deepEqual(events.slice(0, 4), [
     "backup:mount",
     "backup:unmount-before-root",
     "backup:unsubscribe",
     "transient:mount",
   ]);
-  assert.equal(
-    (await integration.restorePersistent?.(settings.id, "navigated"))?.ok,
-    true,
-  );
+  let restoreResult:
+    | Awaited<ReturnType<NonNullable<typeof integration.restorePersistent>>>
+    | undefined;
+  await act(async () => {
+    restoreResult = await integration.restorePersistent?.(
+      settings.id,
+      "navigated",
+    );
+  });
+  assert.equal(restoreResult?.ok, true);
   assert.equal(
     container.querySelectorAll("[data-region='settings']").length,
     1,
   );
-  await integration.stop();
+  await act(async () => integration.stop());
 });
 
 test("言語保存失敗は表示と backup 操作を継続し domain data を変更しない", async () => {
@@ -180,10 +193,13 @@ test("言語保存失敗は表示と backup 操作を継続し domain data を�
     },
   });
   const container = document.createElement("div");
-  const handle = await registration.mount({
-    container,
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError() {},
+  let handle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    handle = await registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError() {},
+    });
   });
   const language = container.querySelector<HTMLSelectElement>(
     '[data-region="language-select"]',
@@ -193,14 +209,16 @@ test("言語保存失敗は表示と backup 操作を継続し domain data を�
   );
   assert.ok(language);
   assert.ok(backup);
-  await userEvent.setup().selectOptions(language, "en");
+  await act(async () => {
+    await userEvent.setup().selectOptions(language, "en");
+  });
   await act(async () => backup.click());
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(writes, 1);
   assert.equal(backupActions, 1);
   assert.deepEqual(domain, { revision: 7, projects: 2 });
   assert.match(container.textContent ?? "", /Settings/);
-  await handle.unmount();
+  await act(async () => handle.unmount());
 });
 
 test("言語変更はsettings root・section host・入力値・scroll位置を再生成しない", async () => {
@@ -215,10 +233,13 @@ test("言語変更はsettings root・section host・入力値・scroll位置を�
     },
   });
   const container = document.createElement("div");
-  const handle = await registration.mount({
-    container,
-    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
-    reportError() {},
+  let handle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    handle = await registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError() {},
+    });
   });
   const settingsRoot = container.querySelector<HTMLElement>(
     "[data-region='settings']",
@@ -247,7 +268,9 @@ test("言語変更はsettings root・section host・入力値・scroll位置を�
   draft.value = "編集中";
   settingsRoot.scrollTop = 37;
 
-  await userEvent.setup().selectOptions(language, "en");
+  await act(async () => {
+    await userEvent.setup().selectOptions(language, "en");
+  });
 
   assert.equal(
     container.querySelector("[data-region='settings']"),
@@ -264,7 +287,7 @@ test("言語変更はsettings root・section host・入力値・scroll位置を�
   assert.equal(container.querySelector("[data-state='draft']"), draft);
   assert.equal(draft.value, "編集中");
   assert.equal(settingsRoot.scrollTop, 37);
-  await handle.unmount();
+  await act(async () => handle.unmount());
 });
 
 test("backup cross-feature mount failure は settings 部分表示を残さない", async () => {
@@ -292,9 +315,12 @@ test("backup cross-feature mount failure は settings 部分表示を残さな�
     },
     reportError() {},
   });
-  const result = await integration.start();
+  let result!: Awaited<ReturnType<typeof integration.start>>;
+  await act(async () => {
+    result = await integration.start();
+  });
   assert.equal(result.ok, true);
   assert.equal(states.at(-1)?.kind, "error");
   assert.equal(container.querySelector("[data-region='settings']"), null);
-  await integration.stop();
+  await act(async () => integration.stop());
 });

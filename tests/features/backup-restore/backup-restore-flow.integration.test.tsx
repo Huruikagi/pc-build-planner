@@ -217,7 +217,9 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
     );
     assert.ok(settingsRoot);
     assert.ok(backupHost);
-    await userEvent.setup().selectOptions(languageSelect, "en");
+    await act(async () => {
+      await userEvent.setup().selectOptions(languageSelect, "en");
+    });
     assert.equal(
       container.querySelector('[data-region="settings"]'),
       settingsRoot,

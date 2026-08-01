@@ -11,7 +11,7 @@ import type {
 } from "../../../src/domain/public.js";
 import { schemaValidator } from "../../../src/domain/validation.js";
 import type { CandidateDraft } from "../../../src/features/candidate-management/contracts.js";
-import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
+import { createCandidateFeatureRegistration as createCandidateFeatureRegistrationImpl } from "../../../src/features/candidate-management/registration.js";
 import { createCandidateManagementService } from "../../../src/features/candidate-management/service.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import {
@@ -28,6 +28,12 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
+
+const createCandidateFeatureRegistration = actWrappedRegistrationFactory(
+  createCandidateFeatureRegistrationImpl,
+);
+
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const storageKey = "localDataRoot";

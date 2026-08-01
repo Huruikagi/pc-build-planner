@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 
 import type {
   Availability,
@@ -53,13 +54,16 @@ test("settings registration は root の後に section を mount し逆順で一
   };
   const container = document.createElement("div");
   const registration = createSettingsFeatureRegistration({ backupRestore });
-  const handle = await registration.mount(context(container));
+  let handle!: Awaited<ReturnType<typeof registration.mount>>;
+  await act(async () => {
+    handle = await registration.mount(context(container));
+  });
 
   assert.ok(container.querySelector("[data-region='settings']"));
   assert.deepEqual(events, ["backup:mount"]);
-  await handle.unmount();
+  await act(async () => handle.unmount());
   events.push(`children:${container.childElementCount}`);
-  await handle.unmount();
+  await act(async () => handle.unmount());
   assert.deepEqual(events, ["backup:mount", "backup:unmount", "children:0"]);
 });
 
@@ -73,9 +77,11 @@ test("backup section mount 失敗時は settings root を rollback して失敗�
     },
   });
 
-  await assert.rejects(
-    registration.mount(context(container)),
-    /fixture section failure/,
-  );
+  await act(async () => {
+    await assert.rejects(
+      registration.mount(context(container)),
+      /fixture section failure/,
+    );
+  });
   assert.equal(container.childElementCount, 0);
 });

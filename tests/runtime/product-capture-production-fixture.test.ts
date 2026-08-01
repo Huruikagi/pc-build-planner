@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 import { createFeatureRegistry } from "../../src/application-shell/feature-registry.js";
 import type {
   ActivationId,
@@ -86,7 +87,7 @@ test("production registrationはcontroller要求をmount前に受理し拒否時
     onStateChange: () => {},
     reportError: (value) => diagnostics.push(value),
   });
-  await host.start();
+  await act(async () => host.start());
   const controller = createTransientSurfaceController({
     host: {
       getSelected: host.getSelected,
@@ -108,11 +109,14 @@ test("production registrationはcontroller要求をmount前に受理し拒否時
       },
     },
   });
-  await controller.start();
-  const accepted = await controller.request({
-    activationId: "production-fixture" as ActivationId,
-    surfaceId: productCaptureFeatureId,
-    tabId: TAB,
+  await act(async () => controller.start());
+  let accepted!: Awaited<ReturnType<typeof controller.request>>;
+  await act(async () => {
+    accepted = await controller.request({
+      activationId: "production-fixture" as ActivationId,
+      surfaceId: productCaptureFeatureId,
+      tabId: TAB,
+    });
   });
   assert.equal(accepted.ok, true);
   assert.equal(capture.value?.activationId, "production-fixture");
@@ -120,7 +124,9 @@ test("production registrationはcontroller要求をmount前に受理し拒否時
     diagnostics.some((value) => value.includes("feature-mount-failed")),
     false,
   );
-  await controller.dismiss("production-fixture" as ActivationId, "navigated");
+  await act(async () =>
+    controller.dismiss("production-fixture" as ActivationId, "navigated"),
+  );
   const rejected = await controller.request({
     activationId: "" as ActivationId,
     surfaceId: productCaptureFeatureId,
@@ -128,5 +134,5 @@ test("production registrationはcontroller要求をmount前に受理し拒否時
   });
   assert.equal(rejected.ok, false);
   assert.equal(host.getSelected(), persistentId);
-  await host.stop();
+  await act(async () => host.stop());
 });

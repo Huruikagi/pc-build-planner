@@ -20,12 +20,15 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
   const navigated: FeatureId[] = [];
   let retries = 0;
   const presentation = createShellPresentation();
-  const mounted = presentation.mount({
-    shellContainer,
-    onNavigate: (id) => navigated.push(id),
-    onRetry: () => {
-      retries += 1;
-    },
+  let mounted!: ReturnType<typeof presentation.mount>;
+  await act(() => {
+    mounted = presentation.mount({
+      shellContainer,
+      onNavigate: (id) => navigated.push(id),
+      onRetry: () => {
+        retries += 1;
+      },
+    });
   });
   assert.equal(mounted.ok, true);
   if (!mounted.ok) return;
@@ -96,35 +99,43 @@ test("shellとfeatureの別containerを維持してstateとnavigationを描画�
 test("空catalogではnavigationなしのempty stateと安定slotを表示する", async () => {
   const shellContainer = document.createElement("div");
   document.body.append(shellContainer);
-  const mounted = createShellPresentation().mount({
-    shellContainer,
-    onNavigate() {},
-    onRetry() {},
+  let mounted!: ReturnType<ReturnType<typeof createShellPresentation>["mount"]>;
+  await act(() => {
+    mounted = createShellPresentation().mount({
+      shellContainer,
+      onNavigate() {},
+      onRetry() {},
+    });
   });
   assert.equal(mounted.ok, true);
   if (!mounted.ok) return;
+  const handle = mounted.value;
 
-  await act(() => mounted.value.publish({ kind: "ready", selected: null }, []));
+  await act(() => handle.publish({ kind: "ready", selected: null }, []));
   assert.equal(shellContainer.querySelectorAll("nav button").length, 0);
   assert.match(
     shellContainer.textContent ?? "",
     new RegExp(defaultMessageResolver("shell.emptyHeading")),
   );
-  assert.equal(shellContainer.contains(mounted.value.featureContainer), true);
-  await act(() => mounted.value.stop());
+  assert.equal(shellContainer.contains(handle.featureContainer), true);
+  await act(() => handle.stop());
   shellContainer.remove();
 });
 
-test("shellContainerでない要素だけをfeature slotとして公開する", () => {
+test("shellContainerでない要素だけをfeature slotとして公開する", async () => {
   const shellContainer = document.createElement("div");
-  const mounted = createShellPresentation().mount({
-    shellContainer,
-    onNavigate() {},
-    onRetry() {},
+  let mounted!: ReturnType<ReturnType<typeof createShellPresentation>["mount"]>;
+  await act(() => {
+    mounted = createShellPresentation().mount({
+      shellContainer,
+      onNavigate() {},
+      onRetry() {},
+    });
   });
   assert.equal(mounted.ok, true);
   if (mounted.ok) {
-    assert.notEqual(mounted.value.featureContainer, shellContainer);
-    mounted.value.stop();
+    const handle = mounted.value;
+    assert.notEqual(handle.featureContainer, shellContainer);
+    await act(() => handle.stop());
   }
 });
