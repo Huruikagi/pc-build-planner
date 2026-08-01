@@ -9,11 +9,14 @@ import { createFeatureRegistry } from "../../../src/application-shell/feature-re
 import type {
   ActivationId,
   ApplicationFeatureRegistration,
+  FeatureCompositionContext,
   FeatureId,
   FeatureMountHandle,
   TargetTabId,
   TransientActivationRequest,
+  TransientSurfaceLifecyclePort,
 } from "../../../src/application-shell/public.js";
+import { createSidePanelFeatureContributions } from "../../../src/application-shell/side-panel-contributions.js";
 import { createSidePanelHost } from "../../../src/application-shell/side-panel-host.js";
 import { createTransientSurfaceController } from "../../../src/application-shell/transient-surface-controller.js";
 import {
@@ -45,6 +48,7 @@ import {
   type SourcePriceRefreshState,
   type SourcePriceRefreshWorkflowInput,
 } from "../../../src/features/source-price-refresh/state.js";
+import type { FoundationDataPort } from "../../../src/persistence/public.js";
 import type {
   MessageKey,
   MessageResolver,
@@ -157,7 +161,7 @@ const registrationFor = (harness: WorkflowHarness) =>
 const mountRegistration = async (
   registration: ApplicationFeatureRegistration<
     SourcePriceRefreshPublicApi,
-    never,
+    unknown,
     TransientActivationRequest
   >,
   container: HTMLElement,
@@ -467,6 +471,32 @@ test("開始前にunmountされたactivationは一度も実行を開始しない
   assert.equal(container.textContent, "");
 });
 
+test("開始前のunmountは予約済みtimerをclearTimeoutで直接破棄する", async (t) => {
+  const clearTimeoutSpy = t.mock.method(globalThis, "clearTimeout");
+  const harness = createWorkflowHarness();
+  const registration = registrationFor(harness);
+  const container = document.createElement("div");
+  const validated = registration.transientActivation.validate(request());
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  assert.equal(
+    (await registration.transientActivation.accept(validated.value)).ok,
+    true,
+  );
+
+  await act(async () => {
+    const handle = await registration.mount(mountContext(container));
+    await handle.unmount();
+  });
+
+  assert.equal(
+    clearTimeoutSpy.mock.callCount(),
+    1,
+    "stateのmounted guardへ空振りさせず予約timer自体を破棄する",
+  );
+  assert.equal(harness.started.length, 0);
+});
+
 test("対象tabの失効で一過性面を終了し常設面へ戻す", async () => {
   const fixture = await openFixture();
   await fixture.request();
@@ -554,6 +584,83 @@ test("contribution factoryはnavigationを持たないUI registrationだけを�
     typeof contribution.registration.publicApi.refresh.refreshCapturedPrice,
     "function",
   );
+});
+
+test("side-panel-contributions経由の実registrationが安全な一過性DOMをmountする", async () => {
+  const foundationError = { code: "validation" } as const;
+  const data: FoundationDataPort = {
+    async query() {
+      return err(foundationError);
+    },
+    async mutate() {
+      return err(foundationError);
+    },
+    async assessReplacement() {
+      return err(foundationError);
+    },
+    async replaceRoot() {
+      return err(foundationError);
+    },
+    async runMaintenance() {
+      return err(foundationError);
+    },
+  };
+  const context: FeatureCompositionContext = {
+    data,
+    navigator: { activate: async () => ok(undefined) },
+  };
+  const transientSurface: TransientSurfaceLifecyclePort = {
+    isCurrent: () => true,
+    dismiss: async () => err({ kind: "not-started" as const }),
+    conclude: async () => err({ kind: "not-started" as const }),
+  };
+  const contributions = createSidePanelFeatureContributions(context, {
+    backupRestoreData: data,
+    transientSurface,
+  });
+  const contribution = contributions[5];
+  assert.equal(
+    contribution.key,
+    "sourcePriceRefresh",
+    "production side panel catalogの決定位置に価格更新UIが存在する",
+  );
+  assert.equal("navigation" in contribution.registration, false);
+  assert.equal(contribution.registration.presentation, "transient");
+  if (contribution.registration.presentation !== "transient") return;
+
+  const hostileActivation =
+    '<img src="x" onerror="fail()">activation' as ActivationId;
+  const validated = contribution.registration.transientActivation.validate(
+    request({ activationId: hostileActivation }),
+  );
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+  assert.equal(
+    (
+      await contribution.registration.transientActivation.accept(
+        validated.value,
+      )
+    ).ok,
+    true,
+  );
+
+  const container = document.createElement("div");
+  const handle = await mountRegistration(contribution.registration, container);
+  await flushStart();
+
+  assert.match(
+    container.textContent ?? "",
+    new RegExp(messages("sourcePriceRefresh.errors.tab-unavailable")),
+  );
+  assert.equal(container.querySelector("img, script"), null);
+  assert.doesNotMatch(container.textContent ?? "", /onerror|activation/);
+  assert.equal(
+    container.querySelector("button, input, a[href], nav"),
+    null,
+    "retry controlも常設navigationも描画しない",
+  );
+
+  await act(async () => handle.unmount());
 });
 
 const featureRoot = new URL(

@@ -129,9 +129,11 @@ function FailureSummary({
       <p data-region="recovery-guidance">
         {messages(guidanceMessageKeys[kind])}
       </p>
-      <p data-region="preserved">
-        {messages("sourcePriceRefresh.preservedNotice")}
-      </p>
+      {kind !== "unexpected" && (
+        <p data-region="preserved">
+          {messages("sourcePriceRefresh.preservedNotice")}
+        </p>
+      )}
     </div>
   );
 }

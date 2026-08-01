@@ -260,6 +260,15 @@ test("非primary成功では代表価格が変わらないことを提示する"
   const rendered = await renderFor(ok(receiptFor({ isPrimary: false })));
   const text = rendered.text();
 
+  shows(text, messages("sourcePriceRefresh.succeededStatus"));
+  shows(
+    text,
+    messages("sourcePriceRefresh.priceValue", {
+      amount: 48800,
+      currency: "JPY",
+    }),
+  );
+  shows(text, capturedAt);
   shows(text, messages("sourcePriceRefresh.primaryUnchanged"));
   assert.doesNotMatch(
     text,
@@ -285,6 +294,21 @@ test("失敗kindごとに安定した原因と回復案内を提示する", asyn
 
     shows(text, messages(expectation.cause));
     shows(text, messages(expectation.guidance));
+    const preserved = rendered.container.querySelector(
+      "[data-region='preserved']",
+    );
+    if (kind === "unexpected") {
+      assert.ok(
+        preserved === null,
+        "unexpectedはcommit済みの可能性があるため旧価格維持を断言しない",
+      );
+    } else {
+      assert.ok(preserved, `${kind}: 既存価格を維持したことを提示する`);
+      shows(
+        preserved.textContent ?? "",
+        messages("sourcePriceRefresh.preservedNotice"),
+      );
+    }
     assert.doesNotMatch(
       text,
       new RegExp(escapeForRegExp(kind)),

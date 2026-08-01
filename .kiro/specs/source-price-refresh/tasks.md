@@ -153,7 +153,7 @@
   - _Boundary: SourcePriceRefreshRuntimeTests_
   - _Depends: 4.3_
 
-- [ ] 5.3 transient viewとcandidate integrationのDOM coverageを完成させる
+- [x] 5.3 transient viewとcandidate integrationのDOM coverageを完成させる
   - running、primary success、non-primary success、各failure案内をtesting-libraryとuser視点DOMで検証する。
   - UI contributionが `side-panel-contributions.ts` 経由でmountされ、raw external stringがHTMLとして解釈されず、再実行buttonや常設navigation itemが存在しないことを確認する。
   - candidate source更新後のsummary projection、normalized attributes、compatibility結果、他sourceが不変であることをintegrationで検証する。
@@ -173,6 +173,7 @@
 
 ## Implementation Notes
 
+- 5.3: `unexpected` はmutation着地後の上流throwも含み保存結果へ帰属できないため、「旧価格を維持した」と断言する `preservedNotice` を表示しない。他19 failure kindは同noticeを必須DOMとして固定する。non-primary successも確定金額・通貨・capturedAt・代表価格不変を同一DOMで同時assertする。
 - 5.2: worker catalogからfeature通常 `public.ts` をruntime importすると、公開APIが所有するmanufacturer mapや完全URLまでservice-worker bundleへ到達し得る。worker registrationはproducer-owned `worker-public.ts` へ分離し、feature sourceのapplication-shell依存は `public` / `worker-public` だけを再帰boundary scanで許可する。cleanup冪等性は同じ現行leaseの2回目で `contextMenus.remove` 回数が増えないことを直接spyする。
 - 5.1: source-price-refresh公開port contract kitはcatalog/candidate両scopeで同じ正規化target、candidate隔離、scopeごと1commit、price/capturedAt限定置換、他source不変を検査し、二重mutation decoratorを両scopeで拒否する。contract driverのsource更新fakeはmergeではなくcomplete-entry置換にする。
 - 4.4: side panel compositionはcandidate managementの実 `query` / `sources.catalog` / `sources.mutations`、product captureの実 `pagePriceExtraction`、shellの同一transient lifecycleをfeature contributionへ注入する。隣接duplicate-product-merge fixtureは公開APIだけでcandidate scope照合から `refreshCapturedPrice` へ渡し、source追加能力を持たせない。
