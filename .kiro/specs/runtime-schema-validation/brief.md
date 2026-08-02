@@ -14,13 +14,13 @@ Zod Mini を runtime dependency として採用し、信頼境界ごとに宣言
 
 ## Approach
 
-Zod Mini の canonical import 入口を一つ設け、どの schema よりも先に `jitless` を設定する。最初に最小 schema を production buildへ含める feasibility gate を実施し、`pnpm validate:artifacts` を含む生成物検査で `new Function` が残らないことを確認する。gate が通過した場合だけ、共通 primitive、strict object、JSON-safe・禁止 payload、Zod issue から既存エラーへの変換を提供する。
+Zod Mini の canonical import 入口を一つ設け、どの schema よりも先に `jitless` を設定する。最初に最小 schema を production buildへ含める feasibility gate を実施し、`pnpm validate:artifacts` を含む生成物検査と production 実行 trap により、直接記述だけでなく alias 経由を含む動的 `Function` 呼出しが実行されないことを確認する。gate が通過した場合だけ、共通 primitive、strict object、JSON-safe・禁止 payload、Zod issue から既存エラーへの変換を提供する。
 
 各業務 schema の意味と配置は既存 owner に残し、永続化 root・command・replacement、backup envelope、capture result、runtime message、activation payload、state snapshot の順に段階移行する。aggregate 横断の参照整合性、循環参照、危険 payload の再帰走査などは、エラー精度と可読性を優先し、feature-owned refinement または既存の専用ロジックとして維持する。
 
 ## Scope
 
-- **In**: Zod Mini runtime dependency、canonical import と `jitless` 初期化、MV3/CSP/build feasibility gate、UUID・UTC timestamp・HTTP(S) URL・revision・strict object などの共通 primitive、既存エラー契約への変換、feature-owned schema の配置・公開規約、永続化・backup・capture・runtime/activation/state snapshot の優先境界に対する段階移行、不要な重複型ガードと型アサーションの削除、production bundle size の記録。
+- **In**: Zod Mini runtime dependency、canonical import と `jitless` 初期化、alias 経由を含む動的 `Function` 呼出しを検出・阻止する MV3/CSP/build feasibility gate、UUID・UTC timestamp・HTTP(S) URL・revision・strict object などの共通 primitive、既存エラー契約への変換、feature-owned schema の配置・公開規約、永続化・backup・capture・runtime/activation/state snapshot の優先境界に対する段階移行、不要な重複型ガードと型アサーションの削除、production bundle size の記録、配布物への runtime dependency license notice。
 - **Out**: 保存 schema version や backup format version 自体の変更、既存データの意味・構造変更、UI 入力フォームライブラリ、互換性判定規則の変更、Zod 標準エラーの外部公開、feature API・ディレクトリ構造の全面刷新、全 validator の一括置換。
 
 ## Boundary Candidates
@@ -49,3 +49,5 @@ Zod Mini の canonical import 入口を一つ設け、どの schema よりも先
 ## Constraints
 
 PC 版 Chrome 116+ Manifest V3、extension pages CSP、TypeScript 7 strict、ESM、Node.js 26、pnpm 11、esbuild に適合すること。Zod Mini も共有 Core の JIT probe 経路を含み得るため、`jitless` 実行だけで安全とみなさず production bundle の静的検査を必須とする。runtime code はすべてローカル同梱し、CSP を弱めない。fixture は架空データだけを使い、`pnpm validate` と導入前後の bundle size 比較を完了条件へ含める。
+
+artifact scanner は文字列上の `new Function` だけを唯一の証拠にせず、constructor alias や将来の bundle 変形を含めて production 実行時に動的 Function 呼出しがないことを検証する。Zod の MIT notice を package/release artifact に含める。snapshot wave では既存 version と shape を維持し、`selectedProjectId` の authority 変更や field 削除を行わない。

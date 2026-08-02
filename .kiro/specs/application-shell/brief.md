@@ -63,27 +63,27 @@ application shellだけが共有runtime入口、ナビゲーション、公開AP
 
 ### Current State
 
-application shellはside panel host、常設navigation、feature registration、typed activation、共通状態表示を所有するが、現在projectの表示・切替面やproject-contextのcompositionは提供していない。projectの意味とCRUDは候補管理が所有している。
+application shellはside panel host、常設navigation、feature registration、typed activation、共通状態表示と共有runtime入口を所有するが、現在projectの表示slot、project-context singleton、能力別consumer port注入は提供していない。projectの意味とCRUDは候補管理が所有し、各consumer adapterはそれぞれのfeature ownerへ残す必要がある。
 
 ### Desired Outcome
 
-side panelの主要画面から現在projectを常に識別でき、共通selectorから切り替えられる。shellはproject-contextを一度だけcompositionし、公開portとして各consumerへ注入するが、project CRUD、選択fallback、未保存draftの意味は所有しない。
+side panelの主要画面から現在projectを常に識別でき、project-contextが提供する共通selector contributionから切り替えられる。shellはproject-contextを一度だけcompositionし、selector用slotへ配置し、各owner-local contributionへ必要最小限のportを注入する。contextが利用不能でもshell自体とsettings・backup recoveryは起動を継続し、project依存featureだけが識別可能な利用不能状態になる。
 
 ### Scope
 
-- **In**: 常設の現在project表示・selector host、project-contextのproduction composition、consumer port注入、初期loading・0件・無効選択・切替中の共通表示、日英messageとキーボード・読み上げ対応、feature障害分離とmount lifecycle検証。
-- **Out**: project CRUD、選択状態のcanonical owner、候補・構成・互換性データの解釈、独立project管理画面、検索・並べ替え、feature-owned draftの保存・破棄判断。
+- **In**: 常設selector slot、project-context singletonのproduction compositionと停止、project-contextのcomposition専用presentation adapter配置、candidate・current-build・compatibility・backupのowner-local contributionへの能力別port注入、context unavailable時のsettings・backup到達維持、共有shell/runtime integration test。
+- **Out**: selector component・文言・選択状態の実装、project CRUD・fallback・guard判断、feature consumer adapter、feature snapshot、候補・構成・互換性データの解釈、backup lifecycle、feature-owned draftの保存・破棄、各feature内部test・E2E。
 
 ### Boundary Impact
 
-- **Extends**: `application-shell`の常設共通面、composition root、feature context注入、共通error/loading表示。
-- **Preserves**: shellはfeature固有業務データを解釈せず、共有runtime入口とmount/unmountだけを所有する原則。
-- **Adjacent**: `project-context`が現在選択とfallbackを所有し、`project-candidate-management`がCRUDとdraft guardを所有する。
+- **Extends**: `application-shell`の常設selector slot、composition root、feature contribution context、共有runtime wiring、起動時障害分離。
+- **Preserves**: shellはfeature固有業務データ、project selection、guard結果、restore結果を解釈せず、共有runtime入口・slot・mount/unmountだけを所有する原則。
+- **Adjacent**: `project-context`がselector presentationと選択transactionを、各featureがconsumer adapter・snapshot・guard・lifecycleを所有する。shellはfeature内部をdeep importせず、確定した公開contribution signatureだけを接続する。
 
 ### Dependencies
 
-- **Upstream**: `project-context`。
-- **Downstream**: `project-candidate-management`、`current-build-management`、`compatibility-checking`の共通選択追従。
+- **Upstream**: `project-context`、`project-candidate-management` update、`current-build-management` update、`compatibility-checking` update、`backup-restore` update、`product-capture-transient-migration` updateの確定した公開contribution。
+- **Downstream**: 共通選択、restore、handoffを含むproduction composition・横断E2E・release validation。
 
 ### Source
 

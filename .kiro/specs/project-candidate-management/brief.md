@@ -56,27 +56,27 @@
 
 ### Current State
 
-本specはproject CRUD、候補CRUD、独自の選択project、project未解決pre-editの解決とsession保持を所有する。作成時は現在選択または一覧先頭へdraftを解決するが、アプリ共通のproject-contextや切替guard契約はない。
+本specはproject CRUD、候補CRUD、独自の選択project、project未解決pre-editの解決とsession保持を所有する。activationはpayloadのproject ID、feature stateの選択、一覧先頭へfallbackし得る。snapshotは`selectedProjectId`を必須fieldとして持ち、現在は選択authorityにも利用するため、runtime schema同等性を保ったままcontext authorityへ切り替えるowner-local移行が必要である。
 
 ### Desired Outcome
 
-候補管理はproject-contextの現在選択を唯一の作業対象として利用する。project作成時は新規projectを現在選択にでき、選択中projectの削除後はcontextが決定した残存projectまたは未選択へ遷移する。未保存の候補編集・pre-editがある切替では、入力を黙って破棄せず、利用者が継続または取消を判断できる。
+候補管理はproject-contextの検証済み現在選択を唯一の作業対象として利用する。owner-local adapterがCRUD前後のguard・mutation・refresh順序、candidate draftの保持、forced change通知を処理する。handoffはcurrent contextだけから保存先を解決し、未選択またはunavailableならpre-editを保持して選択・作成を求める。snapshotの`selectedProjectId`はversion/shapeを維持した一致検査用metadataとなり、contextを上書きしない。
 
 ### Scope
 
-- **In**: 独自project selectorの撤去、project-contextへの追従、作成・改名・削除成功後のcontext同期、取り込みpre-editの保存対象project明示、未保存編集・project-required状態の切替guard、0件時の作成導線、日英・アクセシビリティ・回帰検証。
-- **Out**: project-contextの永続化・fallback実装、shell共通selector、独立project管理画面、複数project同時編集、候補CRUD・保存規則の他境界への移管。
+- **In**: owner-local context consumer adapter、独自selectorとlist-first fallbackの撤去、CRUD前guard・成功後refresh・失敗時非refresh、削除・強制fallback時のdraft保持、取り込みpre-editのcurrent-context binding、未選択・unavailable時の`project-required`保持、payload IDのadvisory/legacy扱い、snapshot version/shape維持と非権威的ID検査、feature-owned unit・contract・DOM・E2E。
+- **Out**: project-context core・preference・fallback実装、shell singleton・selector slot・production wiring、snapshot field削除やversion bump、独立project管理画面、複数project同時編集、候補CRUD・保存規則の他境界への移管、product-capture側のintent retry。
 
 ### Boundary Impact
 
-- **Extends**: `project-candidate-management`のCRUD成功結果と現在projectの協調、pre-editのproject解決、feature-owned draft切替guard。
-- **Preserves**: project・candidate CRUD、保存時検証、pre-edit内容のsession保持、候補管理が確認・補正・保存を所有する境界。
-- **Adjacent**: `project-context`は選択transactionとfallbackを所有し、application shellは共通selectorを表示するが、候補draftを解釈しない。
+- **Extends**: `project-candidate-management`のcontext adapter、CRUD lifecycle hook、candidate/pre-edit guard、activationの保存先解決、snapshot restore semantics。
+- **Preserves**: project・candidate CRUD、保存時検証、pre-edit内容のsession保持、snapshot version/shape、候補管理が確認・補正・保存を所有する境界。
+- **Adjacent**: `project-context`は選択transaction・fallback・guard protocolを、application shellはport注入を、`product-capture-transient-migration`は未解決intentとretryを所有する。候補管理だけが検証済みcurrent contextへdraftをbindする。
 
 ### Dependencies
 
-- **Upstream**: `project-context`、application shellのcontext composition。
-- **Downstream**: 商品取り込みhandoff、現在構成、互換性確認が同じprojectへ追従する利用者フロー。
+- **Upstream**: `runtime-schema-validation`の既存snapshot同等性、`project-context` core contract。
+- **Downstream**: `product-capture-transient-migration`のhandoff retry、application shellのproduction wiring、現在構成・互換性確認が同じprojectへ追従する利用者フロー。
 
 ### Source
 

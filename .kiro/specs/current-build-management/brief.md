@@ -55,27 +55,27 @@ CPU、CPUクーラー、マザーボード、電源、ケースは単一選択�
 
 ### Current State
 
-本specはproject別の候補・現在構成、カテゴリ選択、数量、参照整合性を管理する。画面stateはeligible candidateと現在構成itemsを保持しているが、共通project-contextへ追従せず、カテゴリ入口に選択パーツの要約を表示していない。
+本specはproject別の候補・現在構成、カテゴリ選択、数量、参照整合性を管理する。画面stateとsnapshotは`selectedProjectId`を選択authorityとして利用し、registrationは未信頼snapshotからIDを先読みしてprojectをloadする。共通project-contextへ追従せず、カテゴリ入口に選択パーツの要約も表示していない。
 
 ### Desired Outcome
 
-現在構成はproject-contextの現在選択へ一貫して追従する。各カテゴリボタンには選択中パーツ名、複数商品と数量、または未選択が表示され、選択・置換・数量変更・解除・project切替の結果が即時反映される。
+現在構成はowner-local adapterを通じてproject-contextの検証済み現在選択へ一貫して追従する。数量draftがある切替ではownerが保存・破棄・取消を処理し、強制fallbackでも入力を別projectへ暗黙移送しない。snapshotの`selectedProjectId`はversion/shapeを維持した一致検査用metadataとなり、registrationからcontextを再選択しない。各カテゴリボタンには選択中パーツ名、複数商品と数量、または未選択が表示される。
 
 ### Scope
 
-- **In**: 独自project selectorの撤去、project-contextへの追従、カテゴリボタン上の単一選択要約、複数商品・数量の識別可能な要約、未選択表示、長い名称の安全な省略、即時更新、日英・キーボード・読み上げ対応、DOM/E2E回帰検証。
-- **Out**: project-contextの所有・永続化、候補詳細編集、現在構成の選択規則変更、複数構成案、候補比較、v1.0.0の全面UI刷新。
+- **In**: owner-local context consumer adapter、独自project selector・feature fallback・snapshot先読み選択の撤去、数量draft guardとforced-change保持、snapshot version/shape維持と非権威的ID検査、カテゴリボタン上の単一選択要約、複数商品・数量・未選択要約、長い名称の安全な省略、即時更新、日英・キーボード・読み上げ対応、feature-owned contract・DOM・E2E。
+- **Out**: project-context core・preference・fallback、application shellのport注入と共有composition、snapshot field削除・version bump、候補詳細編集、現在構成の選択規則変更、複数構成案、候補比較、v1.0.0の全面UI刷新。
 
 ### Boundary Impact
 
-- **Extends**: `current-build-management`のproject入力portと、既存現在構成から導出するカテゴリ要約表示。
-- **Preserves**: 単一・複数選択、数量、未分類禁止、参照修復、互換性結果を構成へ保存しない既存規則。
-- **Adjacent**: `project-context`が現在選択を所有し、`project-candidate-management`が候補名・分類を所有し、compatibilityは構成の評価だけを所有する。
+- **Extends**: `current-build-management`のcontext adapter、quantity draft guard、snapshot restore semanticsと、既存現在構成から導出するカテゴリ要約表示。
+- **Preserves**: snapshot version/shape、単一・複数選択、数量、未分類禁止、参照修復、互換性結果を構成へ保存しない既存規則。
+- **Adjacent**: `project-context`が現在選択・guard protocolを、application shellがport注入を、`project-candidate-management`が候補名・分類を、compatibilityが構成評価を所有する。
 
 ### Dependencies
 
-- **Upstream**: `project-context`、application shellのcontext composition。
-- **Downstream**: `compatibility-checking`の同一project評価、v1.0.0 UI刷新へ渡す構成俯瞰要件。
+- **Upstream**: `runtime-schema-validation`の既存snapshot同等性、`project-context` core contract。
+- **Downstream**: `compatibility-checking`の同一project評価、application shellのproduction wiring、v1.0.0 UI刷新へ渡す構成俯瞰要件。
 
 ### Source
 

@@ -49,3 +49,37 @@ product-captureをshellの一過性feature契約の最初の利用者へ移行�
 ## Constraints
 
 一過性面は起動だけでページを読み取らない。異なる`ActivationId`の結果を引き渡さない。候補管理のcanonical `CandidateDraft`と保存時validatorを維持し、仮project IDやunsafe castを使わない。
+
+## Change Brief: v0.4.0
+
+### Problem
+
+アプリ共通の現在project導入後に、product-capture側やlegacy payloadが保存先projectを決めると、候補管理が表示している現在projectと異なるprojectへ取り込み内容を渡す危険がある。current contextが未選択・利用不能の場合にも、抽出結果を失わず後から再開できる責務分離が必要である。
+
+### Current State
+
+本specはproject IDを持たない`UnresolvedCandidateDraft`の原子的handoff、失敗時のintent保持、retry、rollback generationを所有する。project解決はcandidate activationへ委ねているが、candidate側には一覧先頭fallbackと任意payload IDの経路が残り、project-contextとの契約が未定義である。
+
+### Desired Outcome
+
+product-captureは引き続きproject未解決のhandoff intentだけを配送し、保存先の選択やfallbackを行わない。candidate ownerが検証済みcurrent contextへbindできない場合は、取り込みintentとpre-edit内容を保持し、利用者がprojectを選択・作成した後に再抽出せずretryできる。無効・staleなproject情報でcurrent contextを上書きしない。
+
+### Scope
+
+- **In**: project未解決handoff契約の維持、context未選択・unavailable・candidate受理失敗時のintent保持、明示的な選択・作成後のretry、成功時だけの一過性面終了、rollback generation、handoff回帰検証。
+- **Out**: current projectの選択・fallback・永続化、candidate pre-editの保存先決定、project CRUD、candidate editor state、application shellのport注入、抽出schema・優先順位の変更。
+
+### Boundary Impact
+
+- **Extends**: `product-capture-transient-migration`のhandoff失敗保持、retry、conclude/rollback lifecycle。
+- **Preserves**: 一過性面は抽出実行だけを所有し、project未解決draftを送り、確認・補正・保存をcandidate ownerへ委ねる境界。
+- **Adjacent**: `project-candidate-management`が検証済みcurrent contextへのbindingとpending pre-editを、`project-context`が現在選択を、application shellがtyped activation配送を所有する。
+
+### Dependencies
+
+- **Upstream**: `project-context`、Milestone v0.4.0の`project-candidate-management` update。
+- **Downstream**: product-captureから共通current projectへ一貫して保存するproduction flow。
+
+### Source
+
+- Milestone v0.4.0 roadmap、GitHub Issue #29、cross-spec decomposition review。
