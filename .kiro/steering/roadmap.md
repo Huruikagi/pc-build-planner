@@ -89,3 +89,4 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 | ui-message-catalog | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | 5つのexact key接続、旧generic key撤去、AST dead-key gate、64/64受入基準FULL。`pnpm validate` exit 0（Node 1,164/1,164、Playwright 15/15）、smoke・artifact・設計・境界監査PASS |
 | project-candidate-management | GO | 2026-07-31T14:57:55+09:00 | `49c9eef6b637` | `pnpm validate` exit 0（Node 1,169/1,169、Playwright 16/16）、要件7/7・受入基準41/41、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
 | product-page-capture | GO | 2026-08-01T23:20:48+09:00 | `6eb99197aad8` | `pnpm validate` exit 0（Node 1,367/1,367、Playwright 25 PASS・1 SKIP）、unpacked MV3 extension smoke PASS、要件7/7・受入基準43/43、統合・設計・境界監査PASS |
+| candidate-source-bookmarks | GO | 2026-08-02T12:25:51+09:00 | `f9af8fa442ba` | `pnpm validate` exit 0（Node 1,419/1,419、Playwright 26 PASS・1 SKIP）、candidate source再訪E2E・unpacked MV3 extension smoke PASS、要件8/8・受入基準43/43、統合・設計・境界監査PASS |
