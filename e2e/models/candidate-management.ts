@@ -13,6 +13,12 @@ export type CandidateSourceFieldName =
 export const candidateEditor = (page: Page): Locator =>
   region(persistentFeature(page, "candidate-management"), "candidate-form");
 
+export const candidateManufacturerField = (editor: Locator): Locator =>
+  editor.locator('[name="candidate-manufacturer"]');
+
+export const candidateModelNumberField = (editor: Locator): Locator =>
+  editor.locator('[name="candidate-model-number"]');
+
 /** Locates the recovery surface for an unresolved project draft. */
 export const projectRequired = (page: Page): Locator =>
   region(persistentFeature(page, "candidate-management"), "project-required");
@@ -37,6 +43,11 @@ export const candidateSourceField = (
   index: number,
   name: CandidateSourceFieldName,
 ): Locator => sourceRow.locator(`[name="source-${index}-${name}"]`);
+
+export const candidateSourcePriceField = (
+  sourceRow: Locator,
+  index: number,
+): Locator => sourceRow.locator(`[name="source-${index}-price"]`);
 
 export const addCandidateSourceButton = (sources: Locator): Locator =>
   action(sources, "add-candidate-source");

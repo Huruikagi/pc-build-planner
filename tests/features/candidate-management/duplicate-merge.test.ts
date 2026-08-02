@@ -169,8 +169,8 @@ test("complete accepts save-new or one current merge target as exclusive receipt
     },
   };
   const coordinator = createDuplicateMergeCoordinator({
-    query: query(async () => ({ ok: true, value: [] })),
-    matcher: { match: () => [] },
+    query: query(async () => ({ ok: true, value: [summary] })),
+    matcher: { match: () => [match] },
     createCandidate: async () => {
       calls.push("create");
       return { ok: true, value: stored };
@@ -196,17 +196,24 @@ test("complete accepts save-new or one current merge target as exclusive receipt
 
 test("stale target, project contamination and port failures return typed errors without writes", async () => {
   let writes = 0;
+  let queryCalls = 0;
   const coordinator = createDuplicateMergeCoordinator({
-    query: query(async () => ({
-      ok: true,
-      value: [
-        {
-          ...summary,
-          projectId:
-            "10000000-0000-4000-8000-000000000099" as Uuid as ProjectId,
-        },
-      ],
-    })),
+    query: query(async () => {
+      queryCalls += 1;
+      return {
+        ok: true,
+        value:
+          queryCalls === 1
+            ? [
+                {
+                  ...summary,
+                  projectId:
+                    "10000000-0000-4000-8000-000000000099" as Uuid as ProjectId,
+                },
+              ]
+            : [summary],
+      };
+    }),
     matcher: { match: () => [match] },
     createCandidate: async () => {
       writes += 1;
@@ -296,6 +303,36 @@ test("price refresh receipt passes through without create or source-add receipt"
     { ok: true, value: { kind: "price-refreshed", receipt } },
   );
   assert.equal(createCalls, 0);
+});
+
+test("complete re-evaluates the selected target and rejects a stale match before routing", async () => {
+  let routeCalls = 0;
+  const coordinator = createDuplicateMergeCoordinator({
+    query: query(async () => ({ ok: true, value: [summary] })),
+    matcher: {
+      match() {
+        return [];
+      },
+    },
+    createCandidate: async () => ({ ok: true, value: stored }),
+    router: {
+      async route() {
+        routeCalls += 1;
+        return { ok: true, value: { kind: "source-added", candidateId } };
+      },
+    },
+  });
+
+  assert.deepEqual(
+    await coordinator.complete(
+      draft,
+      [match],
+      { kind: "merge", candidateId },
+      context,
+    ),
+    { ok: false, error: { kind: "stale-decision" } },
+  );
+  assert.equal(routeCalls, 0);
 });
 
 test("query and create failures stay typed and do not enter another write path", async () => {

@@ -23,6 +23,7 @@ import type {
   MutationContext,
   UpdateCandidateInput,
 } from "../../../src/features/candidate-management/contracts.js";
+import type { DuplicateMergeCoordinator } from "../../../src/features/candidate-management/duplicate-merge.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { ManagementView } from "../../../src/features/candidate-management/view.js";
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
@@ -100,6 +101,7 @@ const query = (draftReads: CandidatePartId[]): CandidateManagementQuery => ({
 const renderView = async (options?: {
   readonly saveFailure?: ManagementError;
   readonly operationPolicy?: OperationPolicy;
+  readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }): Promise<Harness> => {
   const created: CandidateDraft[] = [];
   const updated: UpdateCandidateInput[] = [];
@@ -124,6 +126,9 @@ const renderView = async (options?: {
     query: query(draftReads),
     service,
     createMutationContext: () => context,
+    ...(options?.duplicateMergeCoordinator === undefined
+      ? {}
+      : { duplicateMergeCoordinator: options.duplicateMergeCoordinator }),
   });
   // Mirrors registration: the shell supplies its gate at mount time.
   if (options?.operationPolicy !== undefined)
@@ -200,6 +205,44 @@ test("候補一覧の作成導線から選択中プロジェクトの候補を�
   // Requirement 2.4: an unspecified category stays uncategorized.
   assert.equal(harness.created[0]?.category, "uncategorized");
 
+  await harness.cleanup();
+});
+
+test("production editorのmatchなし保存は入力とaccessibility契約を保ち判断DOMを挟まない", async () => {
+  const evaluated: CandidateDraft[] = [];
+  const harness = await renderView({
+    duplicateMergeCoordinator: {
+      async evaluate(draft) {
+        evaluated.push(draft);
+        return {
+          ok: true,
+          value: { kind: "saved-new", candidate: {} as CandidatePart },
+        };
+      },
+      async complete() {
+        throw new Error("matchなしではcompleteしてはならない");
+      },
+    },
+  });
+
+  await click(harness.container.querySelector("[data-create-candidate]"));
+  const name = input(harness, "candidate-name");
+  await setInputValue(name, "編集中の架空候補");
+  assert.equal(name.value, "編集中の架空候補");
+  assert.equal(name.required, false);
+  assert.equal(name.getAttribute("aria-describedby"), null);
+  assert.equal(
+    harness.container.querySelector('[data-region="duplicate-merge-decision"]'),
+    null,
+  );
+
+  await submitEditor(harness);
+  assert.equal(evaluated.length, 1);
+  assert.equal(evaluated[0]?.product.name.confirmed, "編集中の架空候補");
+  assert.equal(
+    harness.container.querySelector('[data-region="duplicate-merge-decision"]'),
+    null,
+  );
   await harness.cleanup();
 });
 

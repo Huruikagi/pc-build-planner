@@ -88,9 +88,9 @@
   - _Boundary: DuplicateUrlRouter_
   - _Depends: 4.1_
 
-- [ ] 5. critical flowと回帰gateを検証する
+- [x] 5. critical flowと回帰gateを検証する
 
-- [ ] 5.1 原子的な統合と全失敗回復をintegrationで検証する
+- [x] 5.1 原子的な統合と全失敗回復をintegrationで検証する
   - 架空データでmatchなし、新規保存、source追加、同一URL価格更新を通し、candidate/source件数とprimary・product・attributesの保持を検証する。
   - query、validation、conflict、maintenance、storage、quota、ambiguous、stale、price欠損を注入し、部分writeがなくdraftとmatchが保持されることを検証する。
   - 同じ判断の二重送信がsource重複を作らず、target更新後の古い判断が再評価を要求することを検証する。
@@ -100,7 +100,7 @@
   - _Boundary: DuplicateMergeCoordinator, DuplicateUrlRouter, DuplicateMergeState_
   - _Depends: 4.2_
 
-- [ ] 5.2 (P) 判断UI、locale、安全な外部文字列をDOMで検証する
+- [x] 5.2 (P) 判断UI、locale、安全な外部文字列をDOMで検証する
   - user-eventで順位付き候補、未選択初期値、target選択、新規保存、統合、取消、再試行を操作する。
   - 日本語・英語で判断、根拠、失敗理由、回復actionが同じ挙動になることを検証する。
   - 悪意ある商品名・メーカー・型番が要素やscriptとして解釈されず、完全URLや保存payloadがDOM・ログへ現れないことを検証する。
@@ -109,7 +109,7 @@
   - _Boundary: DuplicateMergeView_
   - _Depends: 3.3_
 
-- [ ] 5.3 取り込みから統合までの実拡張E2Eを追加する
+- [x] 5.3 取り込みから統合までの実拡張E2Eを追加する
   - 架空商品ページの取り込みからcandidate editorへ引き渡し、model一致候補を選んでsourceが一件増えcandidate件数が増えない経路を検証する。
   - 同じ架空URLの再取り込みではsourceが増えず、既存sourceの価格更新receiptへ到達することを検証する。
   - matchなしと明示新規保存では従来のcandidate createが成功し、統合対象が変化しないことを検証する。
@@ -118,7 +118,7 @@
   - _Boundary: DuplicateMergeCoordinator, DuplicateMergeView_
   - _Depends: 5.1, 5.2_
 
-- [ ] 5.4 feature全体の品質gateを完了する
+- [x] 5.4 feature全体の品質gateを完了する
   - 公開境界、fixture資産、TypeScript strict、lint、unit/contract/integration/DOM test、production buildの各gateを順に実行する。
   - E2Eを含む完全検証で既存candidate-management、product-capture、source bookmark、price refresh動線の非回帰を確認する。
   - 新規権限、deep import、実サイトfixture、未追跡のschema変更が成果物へ含まれないことを機械検査する。

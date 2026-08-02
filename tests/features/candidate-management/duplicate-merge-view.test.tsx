@@ -22,9 +22,18 @@ const secondId =
 const draft = {
   projectId,
   category: "cpu" as const,
-  product: { name: { original: "draft" } },
+  product: {
+    name: { original: "draft" },
+    notes: { original: "SYN-SAVED-PAYLOAD-MUST-STAY-HIDDEN" },
+  },
   normalizedAttributes: { category: "cpu" as const },
-  sources: [],
+  sources: [
+    {
+      id: "40000000-0000-4000-8000-000000000001" as never,
+      pageUrl: "https://secret.example.invalid/private/product?token=SYN",
+      kind: "retail" as const,
+    },
+  ],
 };
 const deciding = {
   status: "deciding",
@@ -38,9 +47,13 @@ const deciding = {
         id: firstId,
         projectId,
         category: "cpu",
-        name: { original: "<script>危険</script>" },
-        manufacturer: { original: "メーカー" },
-        modelNumber: { original: "MODEL-1" },
+        name: {
+          original: '<img src=x onerror="alert(1)"><script>危険</script>',
+        },
+        manufacturer: {
+          original: '<a href="javascript:alert(1)">メーカー</a>',
+        },
+        modelNumber: { original: "MODEL-1</dd><script>alert(2)</script>" },
         hasMissingDetails: false,
         updatedAt: "2026-07-22T00:00:00.000Z" as never,
       },
@@ -65,6 +78,9 @@ afterEach(cleanup);
 
 for (const language of ["ja", "en"] as const)
   test(`${language}: 順位付き候補を安全に描画し、選択まで統合を無効化する`, async () => {
+    const logged: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logged.push(args);
     let selected: CandidatePartId | undefined;
     let merged = 0;
     const user = userEvent.setup();
@@ -89,8 +105,14 @@ for (const language of ["ja", "en"] as const)
     });
     assert.equal((merge as HTMLButtonElement).disabled, true);
     assert.equal(view.container.querySelector("script"), null);
+    assert.equal(view.container.querySelector("img"), null);
+    assert.equal(view.container.querySelector("a"), null);
     assert.match(view.container.textContent ?? "", /<script>危険<\/script>/);
     assert.doesNotMatch(view.container.textContent ?? "", /https:\/\//);
+    assert.doesNotMatch(
+      view.container.textContent ?? "",
+      /SYN-SAVED-PAYLOAD-MUST-STAY-HIDDEN/,
+    );
     const radios = screen.getAllByRole("radio");
     assert.equal(radios.length, 2);
     assert.match(radios[0]?.closest("li")?.textContent ?? "", /MODEL-1/);
@@ -119,40 +141,60 @@ for (const language of ["ja", "en"] as const)
       }),
     );
     assert.equal(merged, 1);
+    assert.deepEqual(logged, []);
+    console.error = originalError;
   });
 
-test("失敗時は取消・再試行・明示新規保存を提示する", () => {
-  render(
-    <MessageProvider resolver={resolverFor("ja")}>
-      <DuplicateMergeView
-        state={{
-          status: "failed",
-          draft,
-          matches: deciding.matches,
-          error: { kind: "stale-decision" },
-        }}
-        onCancel={() => {}}
-        onMerge={() => {}}
-        onRetry={() => {}}
-        onSaveNew={() => {}}
-        onSelect={() => {}}
-      />
-    </MessageProvider>,
-  );
-  assert.ok(
-    screen.getByRole("button", {
-      name: resolverFor("ja")("candidate.duplicate.actions.retry"),
-    }),
-  );
-  assert.ok(
-    screen.getByRole("button", {
-      name: resolverFor("ja")("candidate.duplicate.actions.saveNew"),
-    }),
-  );
-  assert.ok(
-    screen.getByRole("button", { name: resolverFor("ja")("common.cancel") }),
-  );
-});
+for (const language of ["ja", "en"] as const)
+  test(`${language}: 失敗理由と取消・再試行・明示新規保存を同じ操作契約で提示する`, async () => {
+    const user = userEvent.setup();
+    let cancelled = 0;
+    let retried = 0;
+    let savedNew = 0;
+    render(
+      <MessageProvider resolver={resolverFor(language)}>
+        <DuplicateMergeView
+          state={{
+            status: "failed",
+            draft,
+            matches: deciding.matches,
+            error: { kind: "stale-decision" },
+          }}
+          onCancel={() => {
+            cancelled += 1;
+          }}
+          onMerge={() => {}}
+          onRetry={() => {
+            retried += 1;
+          }}
+          onSaveNew={() => {
+            savedNew += 1;
+          }}
+          onSelect={() => {}}
+        />
+      </MessageProvider>,
+    );
+    assert.ok(screen.getByRole("alert"));
+    await user.click(
+      screen.getByRole("button", {
+        name: resolverFor(language)("candidate.duplicate.actions.retry"),
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: resolverFor(language)("candidate.duplicate.actions.saveNew"),
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: resolverFor(language)("common.cancel"),
+      }),
+    );
+    assert.deepEqual(
+      { cancelled, retried, savedNew },
+      { cancelled: 1, retried: 1, savedNew: 1 },
+    );
+  });
 
 test("新規保存・取消・再試行をuser-eventで一度だけ親へ通知する", async () => {
   const user = userEvent.setup();

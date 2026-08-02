@@ -113,6 +113,22 @@ export const createDuplicateMergeCoordinator = (
     if (!matches.some((match) => match.candidateId === decision.candidateId))
       return { ok: false, error: { kind: "stale-decision" } };
 
+    const listed = await dependencies.query.listCandidates({
+      projectId: draft.projectId,
+    });
+    if (!listed.ok) return managementFailure(listed.error);
+    if (
+      listed.value.some((candidate) => candidate.projectId !== draft.projectId)
+    )
+      return managementFailure({ kind: "unsupported-data" });
+    const currentMatches = dependencies.matcher.match(draft, listed.value);
+    if (
+      !currentMatches.some(
+        (match) => match.candidateId === decision.candidateId,
+      )
+    )
+      return { ok: false, error: { kind: "stale-decision" } };
+
     const source = draft.sources?.[0];
     if (source?.pageUrl === undefined)
       return {
