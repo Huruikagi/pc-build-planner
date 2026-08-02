@@ -1,0 +1,7 @@
+interface:
+  display_name: "Kiro Release"
+  short_description: "Run verified milestone releases end to end"
+  default_prompt: "Use $kiro-release to publish the next completed milestone release and archive its roadmap."
+
+policy:
+  allow_implicit_invocation: false
