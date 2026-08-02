@@ -1,3 +1,4 @@
+import type { Brand, Offer, Product, PropertyValue } from "schema-dts";
 import {
   type CaptureCoreField,
   type CaptureField,
@@ -27,6 +28,32 @@ const MAX_JSON_LD_NODES_PER_SCRIPT = 30;
 const MAX_LIST_ITEMS = 50;
 const MAX_TABLE_ROWS = 100;
 const MAX_DEFINITION_LISTS = 10;
+
+const JSON_LD_PRODUCT_KEYS = {
+  additionalProperty: "additionalProperty",
+  brand: "brand",
+  category: "category",
+  model: "model",
+  mpn: "mpn",
+  name: "name",
+  offers: "offers",
+  sku: "sku",
+  url: "url",
+} as const satisfies Record<string, keyof Product>;
+
+const JSON_LD_OFFER_KEYS = {
+  price: "price",
+  priceCurrency: "priceCurrency",
+} as const satisfies Record<string, keyof Offer>;
+
+const JSON_LD_BRAND_KEYS = {
+  name: "name",
+} as const satisfies Record<string, keyof Brand>;
+
+const JSON_LD_PROPERTY_VALUE_KEYS = {
+  name: "name",
+  value: "value",
+} as const satisfies Record<string, keyof PropertyValue>;
 
 interface CandidateSink {
   readonly items: ExtractionCandidate[];
@@ -182,21 +209,24 @@ const collectProductNode = (
   sink: CandidateSink,
   script: Element,
 ): void => {
-  const name = asString(node.name);
+  const name = asString(node[JSON_LD_PRODUCT_KEYS.name]);
   if (name) push(sink, "name", name, "json-ld", "JSON-LD name", script);
 
-  const category = asString(node.category);
+  const category = asString(node[JSON_LD_PRODUCT_KEYS.category]);
   if (category)
     push(sink, "category", category, "json-ld", "JSON-LD category", script);
 
-  const brand = isRecord(node.brand)
-    ? asString(node.brand.name)
-    : asString(node.brand);
+  const brandValue = node[JSON_LD_PRODUCT_KEYS.brand];
+  const brand = isRecord(brandValue)
+    ? asString(brandValue[JSON_LD_BRAND_KEYS.name])
+    : asString(brandValue);
   if (brand)
     push(sink, "manufacturer", brand, "json-ld", "JSON-LD brand", script);
 
   const model =
-    asString(node.mpn) ?? asString(node.sku) ?? asString(node.model);
+    asString(node[JSON_LD_PRODUCT_KEYS.mpn]) ??
+    asString(node[JSON_LD_PRODUCT_KEYS.sku]) ??
+    asString(node[JSON_LD_PRODUCT_KEYS.model]);
   if (model)
     push(
       sink,
@@ -207,19 +237,20 @@ const collectProductNode = (
       script,
     );
 
-  const url = asString(node.url);
+  const url = asString(node[JSON_LD_PRODUCT_KEYS.url]);
   if (url) push(sink, "url", url, "json-ld", "JSON-LD url", script);
 
-  const offers = Array.isArray(node.offers)
-    ? node.offers
-    : node.offers !== undefined
-      ? [node.offers]
+  const offersValue = node[JSON_LD_PRODUCT_KEYS.offers];
+  const offers = Array.isArray(offersValue)
+    ? offersValue
+    : offersValue !== undefined
+      ? [offersValue]
       : [];
   for (const offer of offers.slice(0, 5)) {
     if (isFull(sink)) return;
     if (!isRecord(offer)) continue;
-    const price = asString(offer.price);
-    const currency = asString(offer.priceCurrency);
+    const price = asString(offer[JSON_LD_OFFER_KEYS.price]);
+    const currency = asString(offer[JSON_LD_OFFER_KEYS.priceCurrency]);
     if (price) {
       push(
         sink,
@@ -232,14 +263,15 @@ const collectProductNode = (
     }
   }
 
-  const additionalProperties = Array.isArray(node.additionalProperty)
-    ? node.additionalProperty
+  const additionalPropertyValue = node[JSON_LD_PRODUCT_KEYS.additionalProperty];
+  const additionalProperties = Array.isArray(additionalPropertyValue)
+    ? additionalPropertyValue
     : [];
   for (const property of additionalProperties.slice(0, 20)) {
     if (isFull(sink)) return;
     if (!isRecord(property)) continue;
-    const label = asString(property.name);
-    const value = asString(property.value);
+    const label = asString(property[JSON_LD_PROPERTY_VALUE_KEYS.name]);
+    const value = asString(property[JSON_LD_PROPERTY_VALUE_KEYS.value]);
     if (label && value)
       push(
         sink,

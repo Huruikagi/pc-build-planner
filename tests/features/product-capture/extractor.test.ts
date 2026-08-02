@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Product, WithContext } from "schema-dts";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
 import { createCaptureNormalizer } from "../../../src/features/product-capture/normalizer.js";
@@ -47,17 +48,25 @@ test("documentOrder付与のために全DOM要素を列挙しない", () => {
 });
 
 test("JSON-LD Productから共通商品項目と主要スペックを収集する", () => {
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "架空CPU X100",
+    category: "CPU",
+    brand: { "@type": "Brand", name: "架空メーカー" },
+    mpn: "X100-JP",
+    url: "/products/x100",
+    offers: {
+      "@type": "Offer",
+      price: "42800",
+      priceCurrency: "JPY",
+    },
+    additionalProperty: [
+      { "@type": "PropertyValue", name: "ソケット", value: "AM5" },
+    ],
+  } satisfies WithContext<Product>;
   const document = parse(`<!doctype html><html><body>
-    <script type="application/ld+json">${JSON.stringify({
-      "@type": "Product",
-      name: "架空CPU X100",
-      category: "CPU",
-      brand: { name: "架空メーカー" },
-      mpn: "X100-JP",
-      url: "/products/x100",
-      offers: { price: "42800", priceCurrency: "JPY" },
-      additionalProperty: [{ name: "ソケット", value: "AM5" }],
-    })}</script>
+    <script type="application/ld+json">${JSON.stringify(productJsonLd)}</script>
   </body></html>`);
 
   const candidates = extractor.extract(
