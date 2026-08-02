@@ -336,6 +336,64 @@ test("重複判断の全commit経路は成功時だけeditorを閉じ、validati
   assert.equal(failed.value.editor?.draft, draft);
   assert.deepEqual(failed.value.fieldErrors, { "product.name": "required" });
   assert.deepEqual(failed.value.displayError, { code: "validation" });
+
+  const sourceFailed = createManagementState({
+    query: createQuery(),
+    service: createService(),
+    createMutationContext: () => context,
+    duplicateMergeCoordinator: {
+      async evaluate() {
+        return {
+          ok: true,
+          value: {
+            kind: "decision-required",
+            matches: [
+              {
+                candidateId,
+                confidence: "high",
+                evidence: { kind: "model-number" },
+                summary: {
+                  id: candidateId,
+                  projectId,
+                  category: "uncategorized",
+                  name: { original: "架空の候補" },
+                  hasMissingDetails: true,
+                  updatedAt: "2026-07-22T00:00:00.000Z" as never,
+                },
+              },
+            ],
+          },
+        };
+      },
+      async complete() {
+        return {
+          ok: false,
+          error: {
+            kind: "source-route",
+            cause: {
+              kind: "source-add",
+              cause: {
+                kind: "validation",
+                fields: { "source.pageUrl": "invalid-url" },
+              },
+            },
+          },
+        };
+      },
+    },
+  });
+  await sourceFailed.load();
+  sourceFailed.beginCreate(draft);
+  await sourceFailed.saveEditor();
+  sourceFailed.selectDuplicateCandidate(candidateId);
+  await sourceFailed.mergeDuplicateCandidate();
+  assert.deepEqual(sourceFailed.value.fieldErrors, {
+    "sources[0].pageUrl": "invalid-url",
+  });
+  sourceFailed.cancelDuplicateDecision();
+  assert.deepEqual(sourceFailed.value.fieldErrors, {
+    "sources[0].pageUrl": "invalid-url",
+  });
 });
 
 test("候補削除の失敗では確認対象と一覧を維持して再試行できる", async () => {

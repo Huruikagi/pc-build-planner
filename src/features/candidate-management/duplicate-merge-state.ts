@@ -204,6 +204,13 @@ export type DuplicateMergeSnapshotError =
   | { readonly kind: "invalid-shape" }
   | { readonly kind: "unsupported-version" };
 
+export interface DuplicateMergeStateSnapshotCodec {
+  capture(value: DuplicateDecisionState): DuplicateMergeStateSnapshot | null;
+  restore(
+    input: unknown,
+  ): Result<DuplicateDecisionState, DuplicateMergeSnapshotError>;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" &&
   value !== null &&
@@ -415,27 +422,28 @@ const restoredState = (input: unknown): DuplicateDecisionState | undefined => {
   return undefined;
 };
 
-export const createDuplicateMergeStateSnapshotCodec = () => ({
-  capture(value: DuplicateDecisionState): DuplicateMergeStateSnapshot | null {
-    if (value.status === "idle") return null;
-    const state: DuplicateMergeStateSnapshot["state"] =
-      value.status === "committing"
-        ? { status: "committing", draft: value.draft }
-        : value;
-    return { version: 1, state };
-  },
-  restore(
-    input: unknown,
-  ): Result<DuplicateDecisionState, DuplicateMergeSnapshotError> {
-    if (!isRecord(input))
-      return { ok: false, error: { kind: "invalid-shape" } };
-    if (input.version !== 1)
-      return { ok: false, error: { kind: "unsupported-version" } };
-    if (!hasOnlyKeys(input, ["version", "state"]))
-      return { ok: false, error: { kind: "invalid-shape" } };
-    const state = restoredState(input.state);
-    return state === undefined
-      ? { ok: false, error: { kind: "invalid-shape" } }
-      : { ok: true, value: state };
-  },
-});
+export const createDuplicateMergeStateSnapshotCodec =
+  (): DuplicateMergeStateSnapshotCodec => ({
+    capture(value: DuplicateDecisionState): DuplicateMergeStateSnapshot | null {
+      if (value.status === "idle") return null;
+      const state: DuplicateMergeStateSnapshot["state"] =
+        value.status === "committing"
+          ? { status: "committing", draft: value.draft }
+          : value;
+      return { version: 1, state };
+    },
+    restore(
+      input: unknown,
+    ): Result<DuplicateDecisionState, DuplicateMergeSnapshotError> {
+      if (!isRecord(input))
+        return { ok: false, error: { kind: "invalid-shape" } };
+      if (input.version !== 1)
+        return { ok: false, error: { kind: "unsupported-version" } };
+      if (!hasOnlyKeys(input, ["version", "state"]))
+        return { ok: false, error: { kind: "invalid-shape" } };
+      const state = restoredState(input.state);
+      return state === undefined
+        ? { ok: false, error: { kind: "invalid-shape" } }
+        : { ok: true, value: state };
+    },
+  });

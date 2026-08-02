@@ -1,11 +1,12 @@
 import type { OperationPolicy } from "../../application-shell/public.js";
-import type {
-  CandidatePartId,
-  CandidateSource,
-  CandidateSourceId,
-  CandidateSourceState,
-  PartCategory,
-  ProjectId,
+import {
+  type CandidatePartId,
+  type CandidateSource,
+  type CandidateSourceId,
+  type CandidateSourceState,
+  candidateSourcePageUrlPath,
+  type PartCategory,
+  type ProjectId,
 } from "../../domain/public.js";
 import type {
   CandidateDraft,
@@ -127,6 +128,33 @@ const displayError = (error: ManagementError): ManagementDisplayError => ({
 const fieldErrorsOf = (error: ManagementError): ManagementFieldErrors =>
   error.kind === "validation" ? error.fields : emptyFieldErrors;
 
+const duplicateManagementFailure = (
+  decision: DuplicateDecisionState,
+): ManagementError | undefined => {
+  if (decision.status !== "failed") return undefined;
+  if (decision.error.kind === "management") return decision.error.cause;
+  return decision.error.kind === "source-route" &&
+    decision.error.cause.kind === "source-add"
+    ? decision.error.cause.cause
+    : undefined;
+};
+
+const duplicateFieldErrorsOf = (
+  error: ManagementError | undefined,
+): ManagementFieldErrors => {
+  if (error?.kind !== "validation") return emptyFieldErrors;
+  return Object.fromEntries(
+    Object.entries(error.fields).map(([field, code]) => {
+      if (field === "source" || field === "source.pageUrl")
+        return [
+          candidateSourcePageUrlPath(0),
+          code === "invalid-source" ? "invalid-url" : code,
+        ];
+      return [field, code];
+    }),
+  );
+};
+
 /** Framework-independent UI state; persistence is accessed only through feature ports. */
 export class ManagementState {
   #allCandidates: readonly CandidateSummary[] = [];
@@ -170,11 +198,7 @@ export class ManagementState {
       const duplicateDecision = this.#duplicateMerge?.value ?? {
         status: "idle" as const,
       };
-      const managementFailure =
-        duplicateDecision.status === "failed" &&
-        duplicateDecision.error.kind === "management"
-          ? duplicateDecision.error.cause
-          : undefined;
+      const managementFailure = duplicateManagementFailure(duplicateDecision);
       this.#set({
         duplicateDecision,
         isSaving:
@@ -184,7 +208,7 @@ export class ManagementState {
           ? {}
           : {
               displayError: displayError(managementFailure),
-              fieldErrors: fieldErrorsOf(managementFailure),
+              fieldErrors: duplicateFieldErrorsOf(managementFailure),
             }),
       });
     });
@@ -259,6 +283,7 @@ export class ManagementState {
    * snapshot.
    */
   public resetTransientState(): void {
+    this.#duplicateMerge?.restore({ status: "idle" });
     this.#set({
       editor: null,
       deletion: null,
@@ -266,6 +291,7 @@ export class ManagementState {
       fieldErrors: emptyFieldErrors,
       sourceOperationError: null,
       sourceOpenError: null,
+      duplicateDecision: { status: "idle" },
     });
   }
 
@@ -276,7 +302,9 @@ export class ManagementState {
     readonly editor: CandidateEditor | null;
     readonly deletion: DeletionConfirmation | null;
     readonly displayError: ManagementDisplayError | null;
+    readonly duplicateDecision: DuplicateDecisionState;
   }): void {
+    this.#duplicateMerge?.restore(snapshot.duplicateDecision);
     this.#set({
       selectedProjectId: snapshot.selectedProjectId,
       selectedCategory: snapshot.selectedCategory,
@@ -287,6 +315,7 @@ export class ManagementState {
       editor: snapshot.editor,
       deletion: snapshot.deletion,
       displayError: snapshot.displayError,
+      duplicateDecision: snapshot.duplicateDecision,
     });
   }
 

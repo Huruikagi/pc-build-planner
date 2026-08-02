@@ -261,3 +261,40 @@ test("新規保存・取消・再試行をuser-eventで一度だけ親へ通知�
   assert.equal(retried, 1);
   assert.equal(deciding.draft, draft);
 });
+
+for (const language of ["ja", "en"] as const)
+  test(`${language}: source validationは修正対象のURL fieldを表示する`, () => {
+    const view = render(
+      <MessageProvider resolver={resolverFor(language)}>
+        <DuplicateMergeView
+          fieldErrors={{ "sources[0].pageUrl": "invalid-url" }}
+          state={{
+            status: "failed",
+            draft,
+            matches: deciding.matches,
+            error: {
+              kind: "source-route",
+              cause: {
+                kind: "source-add",
+                cause: {
+                  kind: "validation",
+                  fields: { "source.pageUrl": "invalid-url" },
+                },
+              },
+            },
+          }}
+          onCancel={() => {}}
+          onMerge={() => {}}
+          onRetry={() => {}}
+          onSaveNew={() => {}}
+          onSelect={() => {}}
+        />
+      </MessageProvider>,
+    );
+
+    const fieldError = view.container.querySelector(
+      '[data-field-error="sources[0].pageUrl"]',
+    );
+    assert.ok(fieldError);
+    assert.match(fieldError.textContent ?? "", /URL/i);
+  });

@@ -68,7 +68,7 @@
   - _Boundary: DuplicateMergeView_
   - _Depends: 3.1, 3.2_
 
-- [ ] 4. candidate-managementとadjacent public portを統合する
+- [x] 4. candidate-managementとadjacent public portを統合する
 
 - [x] 4.1 create modeの保存をcoordinatorとstateへ接続する
   - candidate-management内部で既存create保存を保存前評価へ差し替え、edit modeのupdateと既存validationを維持する。
@@ -126,3 +126,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
   - _Boundary: DuplicateProductMergeIntegration_
   - _Depends: 5.3_
+
+## Implementation Notes
+
+- feature-localな判断substateを追加するときは、単体snapshot codecだけでなくshellのopaque capture/restore経路へ合成し、serialized snapshotと復号済みstateを型で分離して検証する。

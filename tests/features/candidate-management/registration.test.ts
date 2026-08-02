@@ -18,6 +18,7 @@ import type {
   CandidateQuery,
   UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
+import type { DuplicateMergeCoordinator } from "../../../src/features/candidate-management/duplicate-merge.js";
 import { createCandidateFeatureRegistration as createCandidateFeatureRegistrationImpl } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
@@ -95,6 +96,8 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
 
 test("React rootはopaque snapshotを復元し、captureとunmountを一度だけ行う", async () => {
   const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
+  const candidateId =
+    "30000000-0000-4000-8000-000000000001" as Uuid as CandidatePartId;
   const draft = {
     projectId,
     category: "uncategorized" as const,
@@ -116,7 +119,19 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       };
     },
     async listCandidates() {
-      return { ok: true as const, value: [] };
+      return {
+        ok: true as const,
+        value: [
+          {
+            id: candidateId,
+            projectId,
+            category: "uncategorized" as const,
+            name: { original: "保存済みの架空候補" },
+            hasMissingDetails: true,
+            updatedAt: "2026-07-22T00:00:00.000Z" as never,
+          },
+        ],
+      };
     },
     async listBuildEligible() {
       return { ok: true as const, value: [] };
@@ -128,6 +143,35 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       };
     },
   } satisfies CandidateQuery;
+  const matchedSummary = {
+    id: candidateId,
+    projectId,
+    category: "uncategorized" as const,
+    name: { original: "保存済みの架空候補" },
+    hasMissingDetails: true,
+    updatedAt: "2026-07-22T00:00:00.000Z" as never,
+  };
+  const duplicateMergeCoordinator: DuplicateMergeCoordinator = {
+    async evaluate() {
+      return {
+        ok: true,
+        value: {
+          kind: "decision-required",
+          matches: [
+            {
+              candidateId,
+              confidence: "high",
+              evidence: { kind: "model-number" },
+              summary: matchedSummary,
+            },
+          ],
+        },
+      };
+    },
+    async complete() {
+      throw new Error("not used");
+    },
+  };
   const state = createManagementState({
     query,
     service: {} as CandidateManagementService,
@@ -135,6 +179,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       requestId: "20000000-0000-4000-8000-000000000001" as never,
       expectedRevision: 0 as Revision,
     }),
+    duplicateMergeCoordinator,
   });
   const sourceRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
@@ -149,6 +194,8 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   });
   // The editor is opened on the mounted screen, which is what capture must keep.
   await act(() => state.beginCreate(draft));
+  await act(() => state.saveEditor());
+  await act(() => state.selectDuplicateCandidate(candidateId));
   const captured = await sourceHandle.captureState?.();
   assert.equal(captured?.ok, true);
   await sourceHandle.unmount();
@@ -161,6 +208,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       requestId: "20000000-0000-4000-8000-000000000001" as never,
       expectedRevision: 0 as Revision,
     }),
+    duplicateMergeCoordinator,
   });
   const targetRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
@@ -179,6 +227,13 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     projectId,
     draft,
   });
+  assert.equal(restoredState.value.duplicateDecision.status, "deciding");
+  assert.equal(
+    restoredState.value.duplicateDecision.status === "deciding"
+      ? restoredState.value.duplicateDecision.selectedCandidateId
+      : undefined,
+    candidateId,
+  );
   await targetHandle.unmount();
   assert.equal(targetContainer.textContent, "");
 

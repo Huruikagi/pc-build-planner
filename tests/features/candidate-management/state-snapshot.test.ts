@@ -15,6 +15,7 @@ import type {
   CandidateQuery,
   MutationContext,
 } from "../../../src/features/candidate-management/contracts.js";
+import { createDuplicateMergeStateSnapshotCodec } from "../../../src/features/candidate-management/duplicate-merge-state.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import { createManagementStateSnapshotCodec } from "../../../src/features/candidate-management/state-snapshot.js";
 
@@ -103,20 +104,27 @@ test("未保存の編集・選択・削除確認・表示エラーだけをversi
   const state = await createState();
   state.beginEdit(candidateId, draft);
   state.requestDeletion({ kind: "candidate", candidateId });
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
 
   const snapshot = codec.capture(state);
   const restored = codec.restore(snapshot);
 
   assert.deepEqual(snapshot, {
-    version: 2,
+    version: 3,
     selectedProjectId: projectId,
     selectedCategory: null,
     editor: { mode: "edit", projectId, candidateId, draft },
     deletion: { kind: "candidate", candidateId },
     displayError: null,
+    duplicateDecision: null,
   });
-  assert.deepEqual(restored, { ok: true, value: snapshot });
+  assert.deepEqual(restored, {
+    ok: true,
+    value: { ...snapshot, duplicateDecision: { status: "idle" } },
+  });
   assert.equal("projects" in snapshot, false);
   assert.equal("isSaving" in snapshot, false);
 });
@@ -124,17 +132,26 @@ test("未保存の編集・選択・削除確認・表示エラーだけをversi
 test("snapshot restore失敗の表示状態もcaptureとrestoreをround-tripできる", async () => {
   const state = await createState();
   state.rejectSnapshotRestore();
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
 
   const snapshot = codec.capture(state);
 
   assert.deepEqual(snapshot.displayError, { code: "snapshot-restore-failed" });
-  assert.deepEqual(codec.restore(snapshot), { ok: true, value: snapshot });
+  assert.deepEqual(codec.restore(snapshot), {
+    ok: true,
+    value: { ...snapshot, duplicateDecision: { status: "idle" } },
+  });
 });
 
 test("未知version、存在しない参照、無効draftを識別可能なrestore errorとして拒否し、stateを変更しない", async () => {
   const state = await createState();
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
   const before = state.value;
 
   assert.deepEqual(codec.restore({ version: 1 }), {
@@ -143,23 +160,32 @@ test("未知version、存在しない参照、無効draftを識別可能なresto
   });
   assert.deepEqual(
     codec.restore({
-      version: 2,
+      ...codec.capture(state),
+      duplicateDecision: { version: 99, state: { status: "idle" } },
+    }),
+    { ok: false, error: { kind: "invalid-shape" } },
+  );
+  assert.deepEqual(
+    codec.restore({
+      version: 3,
       selectedProjectId: otherProjectId,
       selectedCategory: null,
       editor: null,
       deletion: null,
       displayError: null,
+      duplicateDecision: null,
     }),
     { ok: false, error: { kind: "invalid-reference" } },
   );
   assert.deepEqual(
     codec.restore({
-      version: 2,
+      version: 3,
       selectedProjectId: projectId,
       selectedCategory: null,
       editor: { mode: "create", projectId, draft: { product: {} } },
       deletion: null,
       displayError: null,
+      duplicateDecision: null,
     }),
     { ok: false, error: { kind: "invalid-draft" } },
   );
@@ -168,7 +194,10 @@ test("未知version、存在しない参照、無効draftを識別可能なresto
 
 test("構造だけが正しい不正draftは属性、source、余剰fieldをfail-closedで拒否する", async () => {
   const state = await createState();
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
   const validSnapshot = codec.capture(state);
 
   for (const invalidDraft of [
@@ -203,12 +232,16 @@ test("カテゴリ切替で表示から外れた編集対象も完全な候補�
   const state = await createState();
   state.beginEdit(candidateId, draft);
   await state.selectCategory("cpu");
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
 
   assert.equal(state.value.candidates.length, 0);
-  assert.deepEqual(codec.restore(codec.capture(state)), {
+  const snapshot = codec.capture(state);
+  assert.deepEqual(codec.restore(snapshot), {
     ok: true,
-    value: codec.capture(state),
+    value: { ...snapshot, duplicateDecision: { status: "idle" } },
   });
 });
 
@@ -256,7 +289,10 @@ test("別projectへ所属すると偽装したcandidate editorはrestoreしな�
     createMutationContext: () => context,
   });
   await state.load();
-  const codec = createManagementStateSnapshotCodec(state);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
 
   assert.deepEqual(
     codec.restore({

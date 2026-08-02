@@ -7,6 +7,11 @@ import {
 } from "../../domain/public.js";
 import type { CandidateDraft } from "./contracts.js";
 import type {
+  DuplicateDecisionState,
+  DuplicateMergeStateSnapshot,
+  DuplicateMergeStateSnapshotCodec,
+} from "./duplicate-merge-state.js";
+import type {
   CandidateEditor,
   DeletionConfirmation,
   ManagementDisplayError,
@@ -14,12 +19,18 @@ import type {
 } from "./state.js";
 
 export interface ManagementStateSnapshot {
-  readonly version: 2;
+  readonly version: 3;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   readonly editor: CandidateEditor | null;
   readonly deletion: DeletionConfirmation | null;
   readonly displayError: ManagementDisplayError | null;
+  readonly duplicateDecision: DuplicateMergeStateSnapshot | null;
+}
+
+export interface RestoredManagementStateSnapshot
+  extends Omit<ManagementStateSnapshot, "duplicateDecision"> {
+  readonly duplicateDecision: DuplicateDecisionState;
 }
 
 export type ManagementSnapshotError =
@@ -32,7 +43,7 @@ export interface ManagementStateSnapshotCodec {
   capture(state: ManagementState): ManagementStateSnapshot;
   restore(
     input: unknown,
-  ): Result<ManagementStateSnapshot, ManagementSnapshotError>;
+  ): Result<RestoredManagementStateSnapshot, ManagementSnapshotError>;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -280,7 +291,7 @@ const hasReference = (state: ManagementState, projectId: string): boolean =>
 
 const hasValidReferences = (
   state: ManagementState,
-  snapshot: ManagementStateSnapshot,
+  snapshot: RestoredManagementStateSnapshot,
 ): boolean => {
   if (
     snapshot.selectedProjectId !== null &&
@@ -301,16 +312,34 @@ const hasValidReferences = (
     return false;
   }
   const deletion = snapshot.deletion;
-  if (deletion === null) return true;
-  return deletion.kind === "project"
-    ? hasReference(state, deletion.projectId)
-    : state.value.projects.some((project) =>
-        state.hasCandidateReference(deletion.candidateId, project.id),
-      );
+  if (
+    deletion !== null &&
+    !(deletion.kind === "project"
+      ? hasReference(state, deletion.projectId)
+      : state.value.projects.some((project) =>
+          state.hasCandidateReference(deletion.candidateId, project.id),
+        ))
+  )
+    return false;
+
+  const duplicate = snapshot.duplicateDecision;
+  if (duplicate.status === "idle") return true;
+  if (
+    snapshot.editor?.mode !== "create" ||
+    snapshot.editor.projectId !== duplicate.draft.projectId ||
+    JSON.stringify(snapshot.editor.draft) !== JSON.stringify(duplicate.draft)
+  )
+    return false;
+  if (duplicate.status !== "deciding" && duplicate.status !== "failed")
+    return true;
+  return duplicate.matches.every((match) =>
+    state.hasCandidateReference(match.candidateId, duplicate.draft.projectId),
+  );
 };
 
 export const createManagementStateSnapshotCodec = (
   state: ManagementState,
+  duplicateCodec: DuplicateMergeStateSnapshotCodec,
 ): ManagementStateSnapshotCodec => ({
   capture(current): ManagementStateSnapshot {
     const {
@@ -319,21 +348,23 @@ export const createManagementStateSnapshotCodec = (
       editor,
       deletion,
       displayError,
+      duplicateDecision,
     } = current.value;
     return {
-      version: 2,
+      version: 3,
       selectedProjectId,
       selectedCategory,
       editor,
       deletion,
       displayError,
+      duplicateDecision: duplicateCodec.capture(duplicateDecision),
     };
   },
 
   restore(input) {
     if (!isRecord(input))
       return { ok: false, error: { kind: "invalid-shape" } };
-    if (input.version !== 2) {
+    if (input.version !== 3) {
       return { ok: false, error: { kind: "unsupported-version" } };
     }
     const editor = input.editor;
@@ -345,6 +376,7 @@ export const createManagementStateSnapshotCodec = (
         "editor",
         "deletion",
         "displayError",
+        "duplicateDecision",
       ]) ||
       (input.selectedProjectId !== null &&
         typeof input.selectedProjectId !== "string") ||
@@ -352,7 +384,8 @@ export const createManagementStateSnapshotCodec = (
         !isPartCategory(input.selectedCategory)) ||
       (editor !== null && !isEditorEnvelope(editor)) ||
       (input.deletion !== null && !isDeletion(input.deletion)) ||
-      (input.displayError !== null && !isDisplayError(input.displayError))
+      (input.displayError !== null && !isDisplayError(input.displayError)) ||
+      !("duplicateDecision" in input)
     ) {
       return { ok: false, error: { kind: "invalid-shape" } };
     }
@@ -364,13 +397,21 @@ export const createManagementStateSnapshotCodec = (
       return { ok: false, error: { kind: "invalid-draft" } };
     }
 
-    const snapshot: ManagementStateSnapshot = {
-      version: 2,
+    const restoredDuplicate =
+      input.duplicateDecision === null
+        ? ({ ok: true, value: { status: "idle" } } as const)
+        : duplicateCodec.restore(input.duplicateDecision);
+    if (!restoredDuplicate.ok)
+      return { ok: false, error: { kind: "invalid-shape" } };
+
+    const snapshot: RestoredManagementStateSnapshot = {
+      version: 3,
       selectedProjectId: input.selectedProjectId as ProjectId | null,
       selectedCategory: input.selectedCategory as PartCategory | null,
       editor: input.editor as CandidateEditor | null,
       deletion: input.deletion as DeletionConfirmation | null,
       displayError: input.displayError as ManagementDisplayError | null,
+      duplicateDecision: restoredDuplicate.value,
     };
     return hasValidReferences(state, snapshot)
       ? { ok: true, value: snapshot }

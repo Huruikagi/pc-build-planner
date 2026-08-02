@@ -9,8 +9,10 @@ import { useMessages } from "../../ui-messages/public.js";
 import type { DuplicateCandidateMatch } from "./duplicate-matcher.js";
 import type { DuplicateMergeError } from "./duplicate-merge.js";
 import type { DuplicateDecisionState } from "./duplicate-merge-state.js";
+import type { ManagementFieldErrors } from "./state.js";
 
 export interface DuplicateMergeViewProps {
+  readonly fieldErrors?: ManagementFieldErrors;
   readonly state: DuplicateDecisionState;
   readonly onSelect: (candidateId: CandidatePartId) => void;
   readonly onSaveNew: () => void;
@@ -118,6 +120,7 @@ function MatchSummary({
 }
 
 export function DuplicateMergeView({
+  fieldErrors = {},
   state,
   onSelect,
   onSaveNew,
@@ -129,6 +132,9 @@ export function DuplicateMergeView({
   if (state.status !== "deciding" && state.status !== "failed") return null;
   const selectedCandidateId =
     state.status === "deciding" ? state.selectedCandidateId : undefined;
+  const sourceFieldError = Object.keys(fieldErrors).find((field) =>
+    /^sources\[\d+\]\.pageUrl$/u.test(field),
+  );
 
   return (
     <section
@@ -140,6 +146,11 @@ export function DuplicateMergeView({
       {state.status === "failed" ? (
         <p role="alert">{messages(errorKey(state.error))}</p>
       ) : null}
+      {sourceFieldError === undefined ? null : (
+        <p data-field-error={sourceFieldError} role="alert">
+          {messages("candidate.duplicate.errors.invalidSource")}
+        </p>
+      )}
       <fieldset>
         <legend>{messages("candidate.duplicate.candidateLabel")}</legend>
         <ol>

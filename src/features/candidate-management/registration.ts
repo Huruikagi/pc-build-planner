@@ -17,6 +17,7 @@ import type {
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
 } from "./contracts.js";
+import { createDuplicateMergeStateSnapshotCodec } from "./duplicate-merge-state.js";
 import {
   type CandidateManagementPublicApi,
   createCandidateManagementPublicApi,
@@ -116,7 +117,10 @@ const mountManagementView =
     let unmounted = false;
 
     await state.load();
-    const codec = createManagementStateSnapshotCodec(state);
+    const codec = createManagementStateSnapshotCodec(
+      state,
+      createDuplicateMergeStateSnapshotCodec(),
+    );
     if (restoredState !== undefined) {
       const restored = codec.restore(restoredState);
       if (restored.ok) state.applySnapshot(restored.value);

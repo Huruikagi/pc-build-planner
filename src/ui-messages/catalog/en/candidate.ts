@@ -104,6 +104,7 @@ export const candidate = {
       ambiguous: "The saved source couldn't be identified uniquely.",
       source:
         "The source couldn't be merged. The existing candidate wasn't changed.",
+      invalidSource: "Correct the source URL, then try the merge again.",
       storage: "Storage is unavailable. Your input has been kept.",
       stale: "The match is out of date. Check for matches again.",
       unexpected: "The merge couldn't be completed. Your input has been kept.",

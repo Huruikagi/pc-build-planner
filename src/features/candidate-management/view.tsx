@@ -506,6 +506,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   if (state.value.duplicateDecision.status !== "idle")
     return (
       <DuplicateMergeView
+        fieldErrors={state.value.fieldErrors}
         onCancel={() => state.cancelDuplicateDecision()}
         onMerge={() => void state.mergeDuplicateCandidate()}
         onRetry={() => void state.retryDuplicateEvaluation()}
