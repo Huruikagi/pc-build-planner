@@ -48,8 +48,8 @@ export const createBackupRestoreSectionMount = (
     return {
       async unmount() {
         if (unmounted) return;
-        unmounted = true;
         root?.unmount();
+        unmounted = true;
       },
     };
   },

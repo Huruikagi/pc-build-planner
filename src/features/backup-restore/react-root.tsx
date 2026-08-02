@@ -55,17 +55,24 @@ export const mountBackupRestoreReactRoot = (
     });
     if (mountError !== undefined) throw mountError;
   } catch (error) {
-    unmounted = true;
-    root.unmount();
-    container.replaceChildren();
+    try {
+      root.unmount();
+      container.replaceChildren();
+      unmounted = true;
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "Backup restore root mount rollback failed",
+      );
+    }
     throw error;
   }
   return {
     unmount() {
       if (unmounted) return;
-      unmounted = true;
       root.unmount();
       container.replaceChildren();
+      unmounted = true;
     },
   };
 };

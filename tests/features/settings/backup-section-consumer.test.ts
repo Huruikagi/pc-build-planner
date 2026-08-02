@@ -98,3 +98,68 @@ test("backupとsettings rootのcleanup失敗を順序付きで集約する", asy
     return true;
   });
 });
+
+test("cleanup失敗後は未解放resourceだけを再試行する", async () => {
+  let backupAttempts = 0;
+  let rootAttempts = 0;
+  const root = {
+    backupRestoreHost: document.createElement("div"),
+    unmount() {
+      rootAttempts += 1;
+      if (rootAttempts === 1) throw new Error("root cleanup failed once");
+    },
+  };
+  const backupRestore: BackupRestoreSectionMount = {
+    async mount() {
+      return {
+        async unmount() {
+          backupAttempts += 1;
+          if (backupAttempts === 1)
+            throw new Error("backup cleanup failed once");
+        },
+      };
+    },
+  };
+  const handle = await mountSettingsSectionResources(
+    root,
+    backupRestore,
+    context(document.createElement("div")),
+  );
+
+  await assert.rejects(handle.unmount(), AggregateError);
+  await handle.unmount();
+  await handle.unmount();
+
+  assert.equal(backupAttempts, 2);
+  assert.equal(rootAttempts, 2);
+});
+
+test("backup mount失敗とsettings rollback失敗を順序付きで保持する", async () => {
+  const mountError = new Error("backup mount failed");
+  const rollbackError = new Error("settings rollback failed");
+  const root = {
+    backupRestoreHost: document.createElement("div"),
+    unmount() {
+      throw rollbackError;
+    },
+  };
+  const backupRestore: BackupRestoreSectionMount = {
+    async mount() {
+      throw mountError;
+    },
+  };
+
+  await assert.rejects(
+    mountSettingsSectionResources(
+      root,
+      backupRestore,
+      context(document.createElement("div")),
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.message, "Settings section mount rollback failed");
+      assert.deepEqual(error.errors, [mountError, rollbackError]);
+      return true;
+    },
+  );
+});

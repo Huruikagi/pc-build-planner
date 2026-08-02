@@ -32,12 +32,19 @@ export function mountSettingsReactRoot(
       backupRestoreHost,
       unmount() {
         if (unmounted) return;
-        unmounted = true;
         root.unmount();
+        unmounted = true;
       },
     };
   } catch (error) {
-    root.unmount();
+    try {
+      root.unmount();
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "Settings root mount rollback failed",
+      );
+    }
     throw error;
   }
 }

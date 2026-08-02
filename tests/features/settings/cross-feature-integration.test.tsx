@@ -163,6 +163,72 @@ test("maintenance・backup failure・transient 遷移でも policy/state と逆�
   await act(async () => integration.stop());
 });
 
+test("persistent切替のcleanup失敗後はsettings handleを保持して未解放backupを再試行する", async () => {
+  const registry = createFeatureRegistry();
+  let backupUnmountAttempts = 0;
+  let backupSubscribed = false;
+  const settings = createSettingsFeatureRegistration({
+    backupRestore: {
+      async mount() {
+        backupSubscribed = true;
+        return {
+          async unmount() {
+            backupUnmountAttempts += 1;
+            if (backupUnmountAttempts === 1)
+              throw new Error("backup cleanup failed once");
+            backupSubscribed = false;
+          },
+        };
+      },
+    },
+  });
+  const target = {
+    id: id("target"),
+    presentation: "persistent" as const,
+    navigation: { labelKey: "nav.settings" as const, order: 70 },
+    publicApi: {},
+    getAvailability: () => ({ status: "available" as const }),
+    subscribeAvailability: () => () => {},
+    async mount(context: { readonly container: HTMLElement }) {
+      context.container.textContent = "target";
+      return { unmount: async () => context.container.replaceChildren() };
+    },
+  };
+  assert.equal(registry.register(settings).ok, true);
+  assert.equal(registry.register(target).ok, true);
+  const integration = createApplicationShellIntegration({
+    registry,
+    container: document.createElement("div"),
+    maintenanceSource: maintenanceFixture().source,
+    onStateChange() {},
+    reportError() {},
+  });
+  let startResult!: Awaited<ReturnType<typeof integration.start>>;
+  await act(async () => {
+    startResult = await integration.start();
+  });
+  assert.equal(startResult.ok, true);
+
+  let first!: Awaited<ReturnType<typeof integration.select>>;
+  await act(async () => {
+    first = await integration.select(target.id);
+  });
+  assert.equal(first.ok, false);
+  assert.equal(backupSubscribed, true);
+  assert.equal(backupUnmountAttempts, 1);
+
+  let second!: Awaited<ReturnType<typeof integration.select>>;
+  await act(async () => {
+    second = await integration.select(target.id);
+  });
+  assert.equal(second.ok, true);
+  assert.equal(backupSubscribed, false);
+  assert.equal(backupUnmountAttempts, 2);
+  assert.equal(integration.getSelected?.(), target.id);
+
+  await act(async () => integration.stop());
+});
+
 test("言語保存失敗は表示と backup 操作を継続し domain data を変更しない", async () => {
   const domain = Object.freeze({ revision: 7, projects: 2 });
   let writes = 0;

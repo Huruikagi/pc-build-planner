@@ -26,25 +26,37 @@ export async function mountSettingsSectionResources(
       container: root.backupRestoreHost,
     });
   } catch (error) {
-    root.unmount();
+    try {
+      root.unmount();
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "Settings section mount rollback failed",
+      );
+    }
     throw error;
   }
 
-  let unmounted = false;
+  let backupUnmounted = false;
+  let rootUnmounted = false;
   return {
     async unmount() {
-      if (unmounted) return;
-      unmounted = true;
       const failures: unknown[] = [];
-      try {
-        await backupHandle.unmount();
-      } catch (error) {
-        failures.push(error);
+      if (!backupUnmounted) {
+        try {
+          await backupHandle.unmount();
+          backupUnmounted = true;
+        } catch (error) {
+          failures.push(error);
+        }
       }
-      try {
-        root.unmount();
-      } catch (error) {
-        failures.push(error);
+      if (!rootUnmounted) {
+        try {
+          root.unmount();
+          rootUnmounted = true;
+        } catch (error) {
+          failures.push(error);
+        }
       }
       if (failures.length === 1) throw failures[0];
       if (failures.length > 1)

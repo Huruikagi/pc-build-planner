@@ -112,3 +112,4 @@
 ## Implementation Notes
 
 - 2026-08-02: feature mountの部分失敗はfeature内cleanupだけでなく、通常navigation側で直前persistent featureを復元するtransactionalな切替契約が必要。複数resourceのcleanup失敗は順序を保持して集約する。
+- 2026-08-02: cleanup handleは開始時ではなく各resourceの解放成功後に完了状態を記録し、shellがownershipを保持した再試行では未解放resourceだけを再度cleanupする。
