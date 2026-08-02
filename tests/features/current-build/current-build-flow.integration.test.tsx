@@ -27,6 +27,7 @@ import { createRootTransactionRunner } from "../../../src/persistence/root-trans
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000071" as Uuid as ProjectId;
@@ -118,7 +119,7 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
         },
       },
     },
-    { backupRestoreData: data },
+    { backupRestoreData: data, transientSurface: idleTransientSurface },
   );
   const [, currentBuild] = contributions;
 

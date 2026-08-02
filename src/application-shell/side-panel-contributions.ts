@@ -67,7 +67,7 @@ export interface SidePanelCandidateFactories {
 export interface SidePanelContributionDependencies {
   /** Full replacement/maintenance capability is restricted to backup/restore composition. */
   readonly backupRestoreData: FoundationDataPort;
-  readonly transientSurface?: TransientSurfaceLifecyclePort;
+  readonly transientSurface: TransientSurfaceLifecyclePort;
 }
 
 /**
@@ -136,14 +136,7 @@ export const createSidePanelFeatureContributions = (
       chromeApis === undefined
         ? inertCaptureRuntimePort
         : createChromeCaptureRuntimePort(chromeApis),
-    transientSurface: dependencies.transientSurface ?? {
-      isCurrent: () => false,
-      waitUntilCurrent: async () => false,
-      dismiss: async () => ({ ok: false, error: { kind: "not-started" } }),
-      async conclude() {
-        return { ok: false, error: { kind: "not-started" } };
-      },
-    },
+    transientSurface: dependencies.transientSurface,
     createCandidateEditorIntent:
       candidateManagement.registration.publicApi.createCandidateEditorIntent,
   });
@@ -166,14 +159,7 @@ export const createSidePanelFeatureContributions = (
     mutations: candidateManagement.registration.publicApi.sources.mutations,
     pagePriceExtraction:
       productCapture.registration.publicApi.pagePriceExtraction,
-    transientSurface: dependencies.transientSurface ?? {
-      isCurrent: () => false,
-      waitUntilCurrent: async () => false,
-      dismiss: async () => ({ ok: false, error: { kind: "not-started" } }),
-      async conclude() {
-        return { ok: false, error: { kind: "not-started" } };
-      },
-    },
+    transientSurface: dependencies.transientSurface,
   });
   composedSourcePriceRefresh =
     sourcePriceRefresh.registration.publicApi.refresh;

@@ -1,3 +1,4 @@
+import type { WorkerFeatureContribution } from "../../src/application-shell/feature-contribution-catalog.js";
 import {
   type ApplicationFeatureRegistration,
   type FeatureId,
@@ -102,7 +103,15 @@ export const composeProductionFoundationRuntime = (): Promise<
 export const composeShellRootApi = (
   context: FeatureCompositionContext,
   backupRestoreData: FoundationDataPort,
+  transientSurface: TransientSurfaceLifecyclePort,
 ): Result<ApplicationApi, { readonly kind: string }> =>
+  composeApplicationApi(context, { backupRestoreData, transientSurface });
+
+export const rejectMissingTransientSurface = (
+  context: FeatureCompositionContext,
+  backupRestoreData: FoundationDataPort,
+) =>
+  // @ts-expect-error side-panel composition requires the real transient lifecycle seam
   composeApplicationApi(context, { backupRestoreData });
 
 /** Downstream consumers may reference canonical candidatePartId and quantity only. */
@@ -227,6 +236,11 @@ export const publicPersistent: PersistentApplicationFeatureRegistration = {
   id: "public-persistent" as FeatureId,
   presentation: "persistent",
   navigation: { labelKey: "Public" as MessageKey, order: 1 },
+};
+
+export const invalidWorkerCatalogEntry: WorkerFeatureContribution = {
+  // @ts-expect-error worker-safe catalog entries cannot carry UI registrations
+  registration: publicPersistent,
 };
 
 export const publicTransient: TransientApplicationFeatureRegistration = {

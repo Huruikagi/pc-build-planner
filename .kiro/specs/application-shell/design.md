@@ -169,12 +169,13 @@ type FeatureContributionFactory<
   FeatureContribution<TKey, TPublic, TActivation>;
 ```
 
-backup/restoreが必要とする完全`FoundationDataPort`と、一過性featureが必要とするlifecycle portは、全feature factory共通の`FeatureCompositionContext`へ含めない。application-shellの具体side-panel compositionだけが`SidePanelContributionDependencies`として受け取り、backup sectionとproduct-capture contributionへ個別に渡す。
+backup/restoreが必要とする完全`FoundationDataPort`と、一過性featureが必要とするlifecycle portは、全feature factory共通の`FeatureCompositionContext`へ含めない。application-shellの具体side-panel compositionだけが`SidePanelContributionDependencies`の必須依存として受け取り、backup section、product-capture、source-price-refresh contributionへ個別に渡す。productionとroot公開APIのどちらもlifecycle欠落時のno-op fallbackを合成せず、呼び出し側へ実portの供給を型で要求する。
 
-- `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker contributionだけを持つworker安全なcatalogを所有する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
+- `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker registration・worker-safe metadataだけを持つworker安全なcatalogを所有する。worker catalogの公開型はUI registrationを受け入れず、宣言順を決定順序として維持する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
 - `side-panel-contributions.ts`はUI contributionを具体合成する唯一の面とし、settingsをpersistent、product-capture等をtransientとして受け入れる。source-price-refreshのcontext menu worker contributionはここへ混在させない。
 - `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。
 - `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
+- candidate-managementのduplicate mergeからsource-price-refreshを呼ぶ依存は、`side-panel-contributions.ts`が所有するlate-bound `SourcePriceRefreshPort` proxyで循環を解消する。proxyはsource-price-refreshの公開portだけを委譲し、未bind時は安定したtyped failureを返す。価格更新や重複判定の業務規則をshellへ持ち込まない。
 - `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
 - feature側CSSは、side panel entryのmodule graphからimportして`dist/side-panel.css`へbundleし、shellが所有する`side-panel.html`から参照する。`src/application-shell/side-panel.css`から`src/ui-language/language-select.css`へのimportはsettings内language controlをbundleへ到達させる明示的CSS composition seamであり、shell header layout ownershipを意味しない。どのentryからも到達しないCSSはproduction artifactに含まれないため、設計上の記載と実体を一致させる。
 

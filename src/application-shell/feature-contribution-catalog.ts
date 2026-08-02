@@ -4,6 +4,7 @@ import type { FoundationScopedDataPort } from "../persistence/public.js";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
+  FeatureId,
   PublicApiEntry,
   ShellNavigator,
 } from "./contracts.js";
@@ -65,13 +66,8 @@ export type WorkerMenuGestureFactory = (
 ) => TransientGestureSource;
 
 export interface WorkerFeatureContribution {
-  readonly registration?: ApplicationFeatureRegistration<
-    object,
-    unknown,
-    TransientActivationRequest
-  >;
   readonly workerRegistration?: ApplicationWorkerRegistration;
-  readonly transientSurfaceId?: ApplicationFeatureRegistration["id"];
+  readonly transientSurfaceId?: FeatureId;
   readonly createMenuGestureSource?: WorkerMenuGestureFactory;
 }
 
@@ -103,25 +99,9 @@ export function getWorkerContributions<
   const TCatalog extends readonly WorkerFeatureContribution[],
 >(catalog: TCatalog): readonly ApplicationWorkerRegistration[] {
   return Object.freeze(
-    [...catalog]
-      .sort((left, right) => {
-        if (left.registration === undefined || right.registration === undefined)
-          return 0;
-        const leftPersistent = isPersistent(left.registration);
-        const rightPersistent = isPersistent(right.registration);
-        if (leftPersistent !== rightPersistent) return leftPersistent ? -1 : 1;
-        const byOrder =
-          leftPersistent && rightPersistent
-            ? left.registration.navigation.order -
-              right.registration.navigation.order
-            : 0;
-        return (
-          byOrder || left.registration.id.localeCompare(right.registration.id)
-        );
-      })
-      .flatMap(({ workerRegistration }) =>
-        workerRegistration ? [workerRegistration] : [],
-      ),
+    catalog.flatMap(({ workerRegistration }) =>
+      workerRegistration ? [workerRegistration] : [],
+    ),
   );
 }
 

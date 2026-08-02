@@ -13,7 +13,6 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
       "build-contract": "src/build-contract.ts",
       foundation: "src/persistence/public.ts",
       index: "src/index.ts",
-      "react-runtime": "src/application-shell/runtime-baseline.tsx",
       "service-worker": "src/runtime/service-worker.ts",
       "side-panel": "src/runtime/side-panel.ts",
       // Styles are a CSS entry so the Node test runtime never imports CSS.

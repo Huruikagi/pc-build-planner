@@ -35,6 +35,7 @@ import {
   defaultMessageResolver,
   resolverFor,
 } from "../../../src/ui-messages/public.js";
+import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
@@ -131,7 +132,7 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
         },
       },
     },
-    { backupRestoreData: data },
+    { backupRestoreData: data, transientSurface: idleTransientSurface },
   );
   const [candidateManagement, , , , settings] = contributions;
 

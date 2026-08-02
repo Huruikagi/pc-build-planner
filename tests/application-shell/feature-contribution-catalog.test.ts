@@ -575,7 +575,7 @@ test("複数contributionを決定順でside panel・public API入力へ型付き
   assert.equal(Object.isFrozen(publicEntries), true);
 });
 
-test("worker入力はworker registrationだけを同じ決定順で提供する", () => {
+test("worker入力はworker-safe catalogの宣言順でregistrationだけを提供する", () => {
   const firstWorker: ApplicationWorkerRegistration = {
     id: id("first"),
     register: () => ({ ok: true, value: () => {} }),
@@ -590,7 +590,7 @@ test("worker入力はworker registrationだけを同じ決定順で提供する"
     contribution("first", "first", 10, {}, firstWorker),
   ] as const);
 
-  assert.deepEqual(selected, [firstWorker, secondWorker]);
+  assert.deepEqual(selected, [secondWorker, firstWorker]);
   assert.equal(Object.isFrozen(selected), true);
 });
 

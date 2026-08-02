@@ -28,6 +28,7 @@ import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
+import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000081" as Uuid as ProjectId;
@@ -149,7 +150,7 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
         },
       },
     },
-    { backupRestoreData: data },
+    { backupRestoreData: data, transientSurface: idleTransientSurface },
   );
   const [, currentBuild, , compatibility] = contributions;
 
@@ -337,7 +338,7 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
         },
       },
     },
-    { backupRestoreData: data },
+    { backupRestoreData: data, transientSurface: idleTransientSurface },
   );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   const candidateQuery = candidateManagement.registration.publicApi.query;
