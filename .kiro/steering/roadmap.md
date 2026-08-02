@@ -53,8 +53,8 @@ Milestone [v0.4.0](https://github.com/Huruikagi/pc-build-planner/milestone/4) �
 
 ## Specs (dependency order)
 
-- [ ] runtime-schema-validation -- Zod Mini の CSP/build gate、共通 primitive・エラー変換、feature-owned schema の公開規約、優先信頼境界の段階移行を定義する。Dependencies: none
-- [ ] project-context -- 現在選択中 project の core contract、catalog projection、UI preference、選択・再検証 transaction、切替 guard protocol、共通 selector、公開境界 gate を定義し、feature 内 adapter と shell wiring は所有しない。Dependencies: runtime-schema-validation
+- [x] runtime-schema-validation -- Zod Mini の CSP/build gate、共通 primitive・エラー変換、feature-owned schema の公開規約、優先信頼境界の段階移行を定義する。Dependencies: none
+- [x] project-context -- 現在選択中 project の core contract、catalog projection、UI preference、選択・再検証 transaction、切替 guard protocol、共通 selector、公開境界 gate を定義し、feature 内 adapter と shell wiring は所有しない。Dependencies: runtime-schema-validation
 
 ## Implementation Validation History
 
