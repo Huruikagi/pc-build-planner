@@ -1,6 +1,6 @@
 /** 常設featureのナビゲーションラベル。 */
 export const nav = {
-  candidateManagement: "候補管理",
+  candidateManagement: "パーツ管理",
   currentBuild: "現在構成",
   compatibility: "互換性確認",
   settings: "設定",

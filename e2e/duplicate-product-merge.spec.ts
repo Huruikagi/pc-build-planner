@@ -205,7 +205,7 @@ test("capture merge, same-URL refresh, no-match create and explicit save-new rem
   await expect(explicitDecision).toBeVisible();
   await explicitDecision
     .getByRole("button", {
-      name: /新規候補として保存|Save as a new candidate/,
+      name: /新しいパーツとして保存|Save as a new part/,
     })
     .click();
   await expect(

@@ -1,6 +1,6 @@
 /** Candidate management screen text. */
 export const candidate = {
-  title: "Candidate Management",
+  title: "Parts",
   projectsNav: "Projects",
   categoryNav: "Category",
   allCategories: "All",
@@ -11,8 +11,8 @@ export const candidate = {
   createProjectAction: "Create project",
   projectRequiredTitle: "Create a project to continue",
   projectRequiredReason:
-    "A project is needed before this extracted candidate can be edited and saved.",
-  projectRequiredExtractedSummary: "Extracted candidate",
+    "A project is needed before this extracted part can be edited and saved.",
+  projectRequiredExtractedSummary: "Extracted part",
   captureDiagnosticsTitle: "Fields that could not be imported",
   captureDiagnostic: "{field}: {reason}",
   captureDiagnosticFields: {
@@ -33,8 +33,8 @@ export const candidate = {
   },
   saveProjectNameAction: "Save project name",
   projectNameRequiredError: "Enter a project name",
-  createCandidateAction: "Create candidate",
-  candidateListLabel: "Candidates",
+  createCandidateAction: "Add part",
+  candidateListLabel: "Parts",
   categoryFieldLabel: "Category",
   manufacturerFieldLabel: "Manufacturer",
   modelNumberFieldLabel: "Model number",
@@ -46,12 +46,12 @@ export const candidate = {
   deleteCandidateAction: "Delete {name}",
   deleteConfirmationTitle: "Confirm Deletion",
   deleteConfirmationHeading: "Confirm deletion",
-  deleteProjectMessage: 'This also deletes the candidates in project "{name}".',
-  deleteCandidateMessage: 'This deletes candidate "{name}".',
+  deleteProjectMessage: 'This also deletes the parts in project "{name}".',
+  deleteCandidateMessage: 'This deletes part "{name}".',
   confirmDeleteAction: "Delete",
-  editorFormTitle: "Edit Candidate",
-  createCandidateHeading: "Create candidate",
-  editCandidateHeading: "Edit candidate",
+  editorFormTitle: "Edit Part",
+  createCandidateHeading: "Add part",
+  editCandidateHeading: "Edit part",
   nameRequiredError: "Enter a product name",
   nameFieldLabel: "Product name",
   priceNotNumberError: "Enter a number",
@@ -77,10 +77,9 @@ export const candidate = {
     },
   },
   duplicate: {
-    title: "Review possible existing candidates",
-    description:
-      "Review the matches, then save a new candidate or merge into one.",
-    candidateLabel: "Candidate to merge into",
+    title: "Review possible existing parts",
+    description: "Review the matches, then save a new part or merge into one.",
+    candidateLabel: "Part to merge into",
     fields: {
       manufacturer: "Manufacturer",
       modelNumber: "Model number",
@@ -94,16 +93,16 @@ export const candidate = {
       manufacturerName: "Manufacturer and product name match",
     },
     actions: {
-      saveNew: "Save as a new candidate",
-      merge: "Merge into selected candidate",
+      saveNew: "Save as a new part",
+      merge: "Merge into selected part",
       retry: "Try again",
     },
     errors: {
-      query: "Candidates couldn't be loaded. Your input has been kept.",
-      conflict: "The candidate changed. Check for matches again.",
+      query: "Parts couldn't be loaded. Your input has been kept.",
+      conflict: "The part changed. Check for matches again.",
       ambiguous: "The saved source couldn't be identified uniquely.",
       source:
-        "The source couldn't be merged. The existing candidate wasn't changed.",
+        "The source couldn't be merged. The existing part wasn't changed.",
       invalidSource: "Correct the source URL, then try the merge again.",
       storage: "Storage is unavailable. Your input has been kept.",
       stale: "The match is out of date. Check for matches again.",

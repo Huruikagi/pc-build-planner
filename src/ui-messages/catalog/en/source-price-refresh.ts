@@ -46,14 +46,14 @@ export const sourcePriceRefresh = {
   guidance: {
     reviewStoredSources: "Review the list of stored sources.",
     deduplicateSources: "Tidy up the duplicated stored sources.",
-    repairStoredSource: "Fix the stored source on the target candidate.",
+    repairStoredSource: "Fix the stored source on the target part.",
     retryOnRetailSource: "Run it again on a page stored as a retail source.",
     retryOnEligiblePage:
       "Open a page eligible for a price refresh and run it again.",
     checkPageThenRetry: "Check the price shown on the page, then run it again.",
     retryFromContextMenu:
       "Open the target page again and run it from the context menu.",
-    reloadCandidateThenRetry: "Reload the latest candidate, then run it again.",
+    reloadCandidateThenRetry: "Reload the latest part, then run it again.",
     retryAfterMaintenance: "Run it again once maintenance has finished.",
     checkStorageThenRetry: "Check the free storage space, then run it again.",
     reportExtensionDefect:

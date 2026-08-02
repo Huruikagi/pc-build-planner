@@ -1,6 +1,6 @@
 /** Navigation labels for persistent features. */
 export const nav = {
-  candidateManagement: "Candidate Management",
+  candidateManagement: "Parts",
   currentBuild: "Current Build",
   compatibility: "Compatibility Check",
   settings: "Settings",

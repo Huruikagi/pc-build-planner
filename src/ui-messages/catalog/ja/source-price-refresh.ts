@@ -18,7 +18,7 @@ export const sourcePriceRefresh = {
   /** 確定済みの金額と通貨だけを表示する。元表記は表示しない。 */
   priceValue: "{amount} {currency}",
   capturedAtLabel: "取得日時",
-  primaryLabel: "候補一覧の代表価格",
+  primaryLabel: "パーツ一覧の代表価格",
   primaryUpdated: "この取得元は代表価格に反映されました。",
   primaryUnchanged: "この取得元は代表ではないため、代表価格は変わりません。",
   preservedNotice: "保存済みの価格と取得日時はそのまま残しています。",
@@ -52,7 +52,7 @@ export const sourcePriceRefresh = {
   guidance: {
     reviewStoredSources: "保存済みの取得元一覧を確認してください。",
     deduplicateSources: "重複している取得元を整理してください。",
-    repairStoredSource: "対象候補の取得元の内容を修正してください。",
+    repairStoredSource: "対象パーツの取得元の内容を修正してください。",
     retryOnRetailSource:
       "販売ページとして保存した取得元のページで、もう一度実行してください。",
     retryOnEligiblePage:
@@ -62,7 +62,7 @@ export const sourcePriceRefresh = {
     retryFromContextMenu:
       "対象のページを表示し直し、コンテキストメニューからもう一度実行してください。",
     reloadCandidateThenRetry:
-      "最新の候補を読み込み直してから、もう一度実行してください。",
+      "最新のパーツを読み込み直してから、もう一度実行してください。",
     retryAfterMaintenance: "保守が終わってから、もう一度実行してください。",
     checkStorageThenRetry:
       "保存領域の空き容量を確認してから、もう一度実行してください。",

@@ -87,8 +87,26 @@ const parityIssues = (
     bilingualHintKeys: V03_BILINGUAL_HINT_KEYS,
   });
 
+const textsOf = (definition: MessageDefinition): readonly string[] =>
+  typeof definition === "string"
+    ? [definition]
+    : Object.values(definition.forms);
+
 test("ja/enはキー集合が一致する", () => {
   assert.deepEqual(Object.keys(en).sort(), Object.keys(ja).sort());
+});
+
+test("利用者向け対象名は日本語・英語ともパーツ表記に統一する", () => {
+  for (const [key, definition] of Object.entries(ja)) {
+    for (const text of textsOf(definition)) {
+      assert.doesNotMatch(text, /候補/, key);
+    }
+  }
+  for (const [key, definition] of Object.entries(en)) {
+    for (const text of textsOf(definition)) {
+      assert.doesNotMatch(text, /\bcandidates?\b/i, key);
+    }
+  }
 });
 
 test("価格更新のmenu・状態・全failure・回復案内をtyped resolverで両言語解決する", () => {
@@ -178,7 +196,7 @@ test("英語の復元完了通知は実カタログで各件数に応じた単�
     for (const partCount of counts) {
       for (const currentBuildCount of counts) {
         const projectNoun = projectCount === 1 ? "project" : "projects";
-        const partNoun = partCount === 1 ? "candidate" : "candidates";
+        const partNoun = partCount === 1 ? "part" : "parts";
         const currentBuildNoun =
           currentBuildCount === 1 ? "current build" : "current builds";
         assert.equal(

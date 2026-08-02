@@ -49,7 +49,7 @@ Milestone [v0.4.0](https://github.com/Huruikagi/pc-build-planner/milestone/4) �
 ## Direct Implementation Candidates
 
 - [x] schema-dts-type-support -- #22。`schema-dts` を devDependency / type-only で導入し、JSON-LD extractor と synthetic fixture の編集時型支援だけを追加する。利用者挙動、runtime validation、公開契約を変えないため直接実装とする。
-- [ ] user-facing-parts-terminology -- #25。内部の `Candidate` モデルを維持したまま、typed message catalog と関連する DOM/E2E 期待値の利用者向け「候補」を文脈に応じて「パーツ」へ変更する。新しい業務規則や責務境界を作らないため直接実装とする。
+- [x] user-facing-parts-terminology -- #25。内部の `Candidate` モデルを維持したまま、typed message catalog と関連する DOM/E2E 期待値の利用者向け「候補」を文脈に応じて「パーツ」へ変更する。新しい業務規則や責務境界を作らないため直接実装とする。
 
 ## Specs (dependency order)
 

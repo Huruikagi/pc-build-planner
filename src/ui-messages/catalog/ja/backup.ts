@@ -20,13 +20,13 @@ export const backup = {
   createdAtLabel: "作成日時",
   formatVersionLabel: "形式版",
   projectCountLabel: "プロジェクト数",
-  partCountLabel: "候補数",
+  partCountLabel: "パーツ数",
   currentBuildCountLabel: "現在構成数",
   confirmAction: "復元を確定",
   restoring: "復元しています…",
   /** 「復元が完了しました（プロジェクト{n}件、候補{n}件、現在構成{n}件）。」の再設計。 */
   restoreCompleted:
-    "復元が完了しました（プロジェクト{projectCount}件、候補{partCount}件、現在構成{currentBuildCount}件）。",
+    "復元が完了しました（プロジェクト{projectCount}件、パーツ{partCount}件、現在構成{currentBuildCount}件）。",
   /** `${base}（位置: ${path}）` の再設計。`{message}` は解決済みの基本文を受け取る。 */
   withPosition: "{message}（位置: {path}）",
   errors: {

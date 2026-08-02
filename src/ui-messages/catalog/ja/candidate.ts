@@ -4,7 +4,7 @@
  * 独立キーへ再設計する。
  */
 export const candidate = {
-  title: "候補管理",
+  title: "パーツ管理",
   projectsNav: "プロジェクト",
   categoryNav: "カテゴリ",
   allCategories: "すべて",
@@ -15,8 +15,8 @@ export const candidate = {
   createProjectAction: "プロジェクトを作成",
   projectRequiredTitle: "続行するにはプロジェクトを作成してください",
   projectRequiredReason:
-    "抽出した候補を編集して保存するには、所属するプロジェクトが必要です。",
-  projectRequiredExtractedSummary: "抽出済みの候補",
+    "抽出したパーツを編集して保存するには、所属するプロジェクトが必要です。",
+  projectRequiredExtractedSummary: "抽出済みのパーツ",
   captureDiagnosticsTitle: "取り込めなかった項目",
   captureDiagnostic: "{field}: {reason}",
   captureDiagnosticFields: {
@@ -37,8 +37,8 @@ export const candidate = {
   },
   saveProjectNameAction: "プロジェクト名を保存",
   projectNameRequiredError: "プロジェクト名を入力してください",
-  createCandidateAction: "候補を作成",
-  candidateListLabel: "候補一覧",
+  createCandidateAction: "パーツを追加",
+  candidateListLabel: "パーツ一覧",
   categoryFieldLabel: "カテゴリ",
   manufacturerFieldLabel: "メーカー",
   modelNumberFieldLabel: "型番",
@@ -53,13 +53,13 @@ export const candidate = {
   deleteConfirmationTitle: "削除確認",
   deleteConfirmationHeading: "削除を確認",
   /** 「プロジェクト「{name}」と所属する候補も削除します。」のJSX子要素列を1つの文へ再設計。 */
-  deleteProjectMessage: "プロジェクト「{name}」と所属する候補も削除します。",
+  deleteProjectMessage: "プロジェクト「{name}」と所属するパーツも削除します。",
   /** 「候補「{name}」を削除します。」の再設計。 */
-  deleteCandidateMessage: "候補「{name}」を削除します。",
+  deleteCandidateMessage: "パーツ「{name}」を削除します。",
   confirmDeleteAction: "削除する",
-  editorFormTitle: "候補編集",
-  createCandidateHeading: "候補を作成",
-  editCandidateHeading: "候補を編集",
+  editorFormTitle: "パーツ編集",
+  createCandidateHeading: "パーツを追加",
+  editCandidateHeading: "パーツを編集",
   nameRequiredError: "商品名を入力してください",
   nameFieldLabel: "商品名",
   priceNotNumberError: "数値で入力してください",
@@ -86,9 +86,10 @@ export const candidate = {
     },
   },
   duplicate: {
-    title: "既存候補との一致を確認",
-    description: "一致候補を確認し、新規保存または統合を選択してください。",
-    candidateLabel: "統合先候補",
+    title: "既存パーツとの一致を確認",
+    description:
+      "一致するパーツを確認し、新規保存または統合を選択してください。",
+    candidateLabel: "統合先パーツ",
     fields: {
       manufacturer: "メーカー",
       modelNumber: "型番",
@@ -102,18 +103,18 @@ export const candidate = {
       manufacturerName: "メーカーと商品名が一致",
     },
     actions: {
-      saveNew: "新規候補として保存",
-      merge: "選択候補へ統合",
+      saveNew: "新しいパーツとして保存",
+      merge: "選択したパーツへ統合",
       retry: "再試行",
     },
     errors: {
-      query: "候補一覧を読み込めませんでした。入力内容は保持されています。",
-      conflict: "候補が更新されています。もう一度照合してください。",
+      query: "パーツ一覧を読み込めませんでした。入力内容は保持されています。",
+      conflict: "パーツが更新されています。もう一度照合してください。",
       ambiguous: "保存済みソースを一意に特定できませんでした。",
-      source: "ソースを統合できませんでした。既存候補は変更されていません。",
+      source: "ソースを統合できませんでした。既存パーツは変更されていません。",
       invalidSource: "取得元URLを修正してから、もう一度統合してください。",
       storage: "保存領域を利用できません。入力内容は保持されています。",
-      stale: "一致候補が古くなりました。もう一度照合してください。",
+      stale: "一致するパーツが古くなりました。もう一度照合してください。",
       unexpected: "統合を完了できませんでした。入力内容は保持されています。",
     },
   },

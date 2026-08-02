@@ -61,7 +61,7 @@ const PRE_MIGRATION_PERSISTENCE_ERROR: Readonly<Record<string, string>> = {
   validation: "入力内容を確認してください。",
   maintenance: "保守操作の実行中です。完了後にもう一度お試しください。",
   quota:
-    "保存容量が不足しています。不要な候補を削除してからもう一度お試しください。",
+    "保存容量が不足しています。不要なパーツを削除してからもう一度お試しください。",
   conflict:
     "他の変更と競合しました。最新の内容を読み込んでからもう一度お試しください。",
   snapshotRestoreFailed: "前回の画面状態を復元できませんでした。",

@@ -18,7 +18,7 @@ export const backup = {
   createdAtLabel: "Created at",
   formatVersionLabel: "Format version",
   projectCountLabel: "Projects",
-  partCountLabel: "Candidates",
+  partCountLabel: "Parts",
   currentBuildCountLabel: "Current builds",
   confirmAction: "Confirm restore",
   restoring: "Restoring…",
@@ -26,45 +26,45 @@ export const backup = {
     selectors: ["projectCount", "partCount", "currentBuildCount"],
     forms: {
       "one|zero|zero":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current builds: {currentBuildCount}).",
       "one|zero|one":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       "one|zero|other":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current builds: {currentBuildCount}).",
       "one|one|zero":
-        "Restore complete (project: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "one|one|one":
-        "Restore complete (project: {projectCount}, candidate: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, part: {partCount}, current build: {currentBuildCount}).",
       "one|one|other":
-        "Restore complete (project: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "one|other|zero":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current builds: {currentBuildCount}).",
       "one|other|one":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       "one|other|other":
-        "Restore complete (project: {projectCount}, candidates: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (project: {projectCount}, parts: {partCount}, current builds: {currentBuildCount}).",
       "zero|zero|one":
-        "Restore complete (projects: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       "zero|one|zero":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "zero|one|one":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current build: {currentBuildCount}).",
       "zero|one|other":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "zero|other|one":
-        "Restore complete (projects: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       "other|zero|one":
-        "Restore complete (projects: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       "other|one|zero":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "other|one|one":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current build: {currentBuildCount}).",
       "other|one|other":
-        "Restore complete (projects: {projectCount}, candidate: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, part: {partCount}, current builds: {currentBuildCount}).",
       "other|other|one":
-        "Restore complete (projects: {projectCount}, candidates: {partCount}, current build: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, parts: {partCount}, current build: {currentBuildCount}).",
       other:
-        "Restore complete (projects: {projectCount}, candidates: {partCount}, current builds: {currentBuildCount}).",
+        "Restore complete (projects: {projectCount}, parts: {partCount}, current builds: {currentBuildCount}).",
     },
   },
   withPosition: "{message} (at {path})",
