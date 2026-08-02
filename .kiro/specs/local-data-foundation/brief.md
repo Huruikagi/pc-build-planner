@@ -46,3 +46,37 @@ Chrome 116以降のManifest V3拡張として読み込め、プロジェクト�
 ## Constraints
 
 Chrome 116以降、既定10MB上限、生HTML・画像の保存禁止、service workerメモリへの永続状態依存禁止、content scriptからのストレージ直接アクセス禁止、MV3 CSP準拠。
+
+## Change Brief: v0.4.0
+
+### Problem
+
+schema versionの定数が永続化、replacement、backup境界へ重複し、version変更時の追従漏れが起こり得る。また、canonical rootが破損または未対応versionの場合、利用者が有効なbackupから明示的に回復するproduction経路の契約と証拠が不足している。
+
+### Current State
+
+foundationは現行rootの検証、未知version拒否、原子的置換、maintenance fencingを提供する。一方、現行schema versionのliteralが複数箇所にあり、replacementの事前評価が既存rootの正常性を前提とする経路では、破損rootを上書きせずに評価済みbackupへ置換する回復を開始できない。
+
+### Desired Outcome
+
+保存schema versionはfoundationの一つの公開定数を唯一のsource of truthとする。破損・未対応rootを正常値として公開せず、利用者の明示操作と検証済みreplacement候補がある場合だけ、安全な回復を実行できる。失敗時は既存rootを暗黙更新せず、回復後は通常の候補管理を再利用できる。
+
+### Scope
+
+- **In**: canonical schema versionの一元化、foundation・replacement・backup round tripの同一定数参照、未知version拒否、既存root非置換を保つ回復評価・置換契約、破損rootからの明示的回復に必要なerror区分、原子的commit、foundation/replacement関連の回帰検証。
+- **Out**: schema versionの値自体の変更、保存データの意味・構造変更、backup file I/O・確認UI、暗黙の初期化や自動破棄、maintenance fencing・write authorityの弱体化。
+
+### Boundary Impact
+
+- **Extends**: `local-data-foundation`のschema version所有、replacement評価、破損root回復、原子的置換契約。
+- **Preserves**: 単一write authority、`Result`とcanonical error path、未知versionのfail-closed拒否、既存有効データの保持、commit直前のgeneration・owner検証。
+- **Adjacent**: `backup-restore`は回復候補のfile入出力・利用者確認・E2Eを所有し、schema versionやreplacementの安全性を再定義しない。
+
+### Dependencies
+
+- **Upstream**: `runtime-schema-validation`。
+- **Downstream**: `backup-restore`の破損canonical data回復とproduction E2E。
+
+### Source
+
+- Milestone v0.4.0 roadmap `local-data-foundation` update、GitHub Issue #24。

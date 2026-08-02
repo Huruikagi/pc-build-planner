@@ -54,3 +54,37 @@ application shellだけが共有runtime入口、ナビゲーション、公開AP
 - maintenance排他をprocess-local memoryだけに依存させない。
 - 共有表示を含め、ページ由来文字列を実行可能なmarkupとして扱わない。
 - ライブラリは実装開始時点の最新stable majorを使用し、対象Node/Chromeとの互換性を検証する。
+
+## Change Brief: v0.4.0
+
+### Problem
+
+主要featureがそれぞれproject選択UIを持つため、利用者は画面を移動するたびに現在の作業対象を確認・選択し直す必要がある。現在選択中projectを常に識別できる共通面と、各featureへ安全に配布するcompositionがない。
+
+### Current State
+
+application shellはside panel host、常設navigation、feature registration、typed activation、共通状態表示を所有するが、現在projectの表示・切替面やproject-contextのcompositionは提供していない。projectの意味とCRUDは候補管理が所有している。
+
+### Desired Outcome
+
+side panelの主要画面から現在projectを常に識別でき、共通selectorから切り替えられる。shellはproject-contextを一度だけcompositionし、公開portとして各consumerへ注入するが、project CRUD、選択fallback、未保存draftの意味は所有しない。
+
+### Scope
+
+- **In**: 常設の現在project表示・selector host、project-contextのproduction composition、consumer port注入、初期loading・0件・無効選択・切替中の共通表示、日英messageとキーボード・読み上げ対応、feature障害分離とmount lifecycle検証。
+- **Out**: project CRUD、選択状態のcanonical owner、候補・構成・互換性データの解釈、独立project管理画面、検索・並べ替え、feature-owned draftの保存・破棄判断。
+
+### Boundary Impact
+
+- **Extends**: `application-shell`の常設共通面、composition root、feature context注入、共通error/loading表示。
+- **Preserves**: shellはfeature固有業務データを解釈せず、共有runtime入口とmount/unmountだけを所有する原則。
+- **Adjacent**: `project-context`が現在選択とfallbackを所有し、`project-candidate-management`がCRUDとdraft guardを所有する。
+
+### Dependencies
+
+- **Upstream**: `project-context`。
+- **Downstream**: `project-candidate-management`、`current-build-management`、`compatibility-checking`の共通選択追従。
+
+### Source
+
+- Milestone v0.4.0 roadmap `application-shell` update、GitHub Issue #29。

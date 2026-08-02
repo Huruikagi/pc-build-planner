@@ -1,6 +1,6 @@
 ---
 name: kiro-discovery
-description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed) and refines ideas through structured dialogue.
+description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed), refines ideas through structured dialogue, and persists new briefs or append-only existing-spec Change Briefs.
 ---
 
 
@@ -22,6 +22,7 @@ Gather **only metadata** to determine the action path. Do NOT read full file con
 - **Specs inventory**: Scan `.kiro/specs/*/spec.json` for `name`, `phase` fields and `approvals` status. Note feature names and their current status.
 - **Steering existence**: Check which files exist in `.kiro/steering/` (product.md, tech.md, structure.md, roadmap.md). Do NOT read their contents yet.
 - **Roadmap check**: If `.kiro/steering/roadmap.md` exists, read it. This contains project-level context (approach, scope, constraints, spec list) from a previous discovery session. Use it to restore project context.
+- **Change Brief check**: For every existing spec named under roadmap `## Existing Spec Updates`, note whether its `brief.md` contains a matching `## Change Brief:` section. The roadmap is the global dependency plan, not a substitute for feature-local change context.
 - **Top-level structure**: List the project root directory to note key directories and files. Do NOT recurse into subdirectories.
 
 This step should consume minimal context. If `specs/` is empty and no steering exists, note "greenfield project" and move to Step 2.
@@ -30,11 +31,11 @@ This step should consume minimal context. If `specs/` is empty and no steering e
 
 Based on the user's request and the metadata from Step 1, determine which path applies:
 
-**Path A: Existing spec covers this**
+**Path A: Existing spec update**
 - The request is an extension, enhancement, or fix within an existing spec's domain
 - Every meaningful part of the request fits that same spec boundary
 - Any remaining small follow-up work can be handled directly without creating a new spec
-- Skip remaining steps
+- Continue through Steps 3-7 in **Change Brief mode**; do not create a new spec boundary
 
 **Path B: No spec needed**
 - The request is a bug fix, config change, simple refactor, or trivial addition
@@ -52,16 +53,17 @@ Based on the user's request and the metadata from Step 1, determine which path a
 - The request contains a mix of: existing spec extensions, one or more new spec candidates, and optional direct-implementation work
 - Use this path only when at least one genuinely new spec boundary is needed
 
-For Path C/D/E, present the determined path (or mixed decomposition) to the user and confirm before proceeding.
-For Path A/B, recommend the next action and stop.
+For Path A/C/D/E, present the determined path (or mixed decomposition) to the user and confirm before proceeding.
+For Path B, recommend direct implementation and stop.
 
 ## Step 3: Deep Context Loading
 
-**Only for Path C, D, and E.** Now load the context needed for discovery.
+**Only for Path A, C, D, and E.** Now load the context needed for discovery.
 
 **In main context** (essential for dialogue with user):
 - **Steering documents**: Read product.md and tech.md (if they exist) for project goals, constraints, and tech stack
 - **Relevant specs**: If the request is adjacent to an existing spec, read that spec's requirements.md to understand boundaries and avoid overlap
+- **Existing spec brief**: For Path A and every Path E existing-spec update, read the full `brief.md` when present so the original discovery record and prior Change Briefs are preserved
 
 **Delegate to sub-agent** (keeps exploration out of main context):
 - **Codebase exploration**: Spawn a sub-agent to explore the codebase and return a structured summary. Ask it to summarize: (1) tech stack and frameworks, (2) directory structure and key modules, (3) patterns and conventions used, (4) areas relevant to the user's request. The sub-agent returns findings under 200 lines.
@@ -119,6 +121,53 @@ If the viability check reveals issues, present them to the user and revisit the 
 ## Step 7: Write Files to Disk
 
 **CRITICAL: You MUST write these files to disk BEFORE suggesting any next command. Conversation text does not survive session boundaries. If you skip this step, all discovery analysis is lost when the session ends.**
+
+**Change Brief format for existing specs (Path A and Path E)**:
+
+Append or update a feature-local section in `.kiro/specs/<existing-feature>/brief.md` using this structure:
+
+```
+## Change Brief: <change-id>
+
+### Problem
+[who has the problem, what pain the change addresses]
+
+### Current State
+[what the existing spec and implementation already provide, and the remaining gap]
+
+### Desired Outcome
+[what should become true after this update]
+
+### Scope
+- **In**: [what this update adds or changes]
+- **Out**: [what remains outside this update]
+
+### Boundary Impact
+- **Extends**: [responsibilities added to this existing spec]
+- **Preserves**: [existing responsibilities and contracts that must remain unchanged]
+- **Adjacent**: [neighbor specs or modules and the seam to preserve]
+
+### Dependencies
+- **Upstream**: [work that must land first]
+- **Downstream**: [work enabled or affected by this update]
+
+### Source
+- [roadmap phase, milestone, issue, or user request that created this change]
+```
+
+Change Brief rules:
+- Use a stable change ID such as a milestone (`v0.4.0`) or concise kebab-case request ID.
+- Preserve the original brief and every prior Change Brief; never rewrite history wholesale.
+- If the same change ID already exists, update that section in place instead of appending a duplicate.
+- Append new Change Briefs in chronological order so the latest section is the active requirements delta.
+- If `brief.md` does not exist, create it with `# Brief: <feature-name>` followed by the Change Brief.
+- Keep implementation choices out of the Change Brief unless they are hard project constraints; requirements owns WHAT and design owns HOW.
+
+**For Path A (existing spec update)**:
+
+- Write or update the target spec's Change Brief.
+- If roadmap.md exists and the change belongs to its current phase, add or update the matching item under `## Existing Spec Updates` without disturbing completed items or validation history.
+- Do not create a new spec directory or add the existing feature under `## Specs (dependency order)`.
 
 **For Path C (single spec)**:
 
@@ -227,10 +276,11 @@ Path E rules:
 - Keep `## Specs (dependency order)` reserved for **new specs only** so `$kiro-spec-batch` can still parse it unchanged
 - Record existing-spec extensions under `## Existing Spec Updates`
 - Record true no-spec work under `## Direct Implementation Candidates`
-- Write `brief.md` only for the **new specs** listed under `## Specs (dependency order)`
+- Write the full `brief.md` for every **new spec** listed under `## Specs (dependency order)`
+- Write or update a Change Brief for **every existing spec** listed under `## Existing Spec Updates`; each roadmap item and Change Brief must describe the same scope and dependencies
 
 **Re-entry (roadmap.md already exists)**:
-Write the next new spec's brief.md to disk. Update roadmap.md if scope/ordering changed, preserving completed items, prior phases, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
+Write the next new spec's brief.md and any newly discovered or changed existing-spec Change Briefs to disk. Update roadmap.md if scope/ordering changed, preserving completed items, prior phases, prior Change Briefs, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
 
 After writing, verify the files exist by reading them back.
 
@@ -238,7 +288,7 @@ After writing, verify the files exist by reading them back.
 
 Suggest the next command and stop. Do NOT automatically run downstream spec generation from this skill.
 
-- Path A: `$kiro-spec-requirements {feature}` to update the existing spec
+- Path A: `$kiro-spec-requirements {feature}` to integrate the latest Change Brief into the existing requirements
 - Path B: Recommend direct implementation without creating a spec
 - Path C: Default to `$kiro-spec-init <feature-name>`
   - Optional fast path: `$kiro-spec-quick <feature-name>` when the user explicitly wants to continue immediately
@@ -247,7 +297,7 @@ Suggest the next command and stop. Do NOT automatically run downstream spec gene
 - Path E: Choose the next command based on the new-spec portion of the decomposition
   - If there is exactly one new spec: `$kiro-spec-init <new-feature-name>`
   - If there are multiple new specs: `$kiro-spec-batch`
-  - Also note which existing specs should be revisited with `$kiro-spec-requirements <feature>`
+  - Also note which existing specs now have Change Briefs ready for `$kiro-spec-requirements <feature>`
 - Re-entry: `$kiro-spec-init <next-feature-name>` or `$kiro-spec-batch` if multiple specs remain
 
 If the decomposition contains only existing-spec updates plus direct implementation candidates, do NOT use Path E. Prefer Path A when one existing spec is the clear home, or recommend the existing-spec update plus direct implementation work without creating roadmap entries.
@@ -255,7 +305,7 @@ If the decomposition contains only existing-spec updates plus direct implementat
 </instructions>
 
 ## Critical Constraints
-- **Files on disk are the source of continuity**: For Path C/D/E, write brief.md and roadmap.md to disk as needed before suggesting the next command. Do NOT leave discovery results only in conversation text.
+- **Files on disk are the source of continuity**: For Path A/C/D/E, write full briefs, existing-spec Change Briefs, and roadmap.md to disk as applicable before suggesting the next command. Do NOT leave discovery results only in conversation text.
 
 ## Safety & Fallback
 

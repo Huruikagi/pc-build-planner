@@ -1,6 +1,6 @@
 ---
 name: kiro-spec-requirements
-description: Generate comprehensive requirements for a specification
+description: Generate or update comprehensive requirements for a specification, integrating feature-local discovery briefs and the latest existing-spec Change Brief while preserving unaffected approved behavior.
 metadata:
   shared-rules: "ears-format.md, requirements-review-gate.md"
 ---
@@ -22,8 +22,15 @@ metadata:
 
 1. **Load Context**:
    - Read `.kiro/specs/$1/spec.json` for language and metadata
-   - Read `.kiro/specs/$1/brief.md` if it exists (discovery context: problem, approach, scope decisions, boundary candidates)
-   - Read `.kiro/specs/$1/requirements.md` for project description
+   - Read `.kiro/specs/$1/brief.md` if it exists (original discovery context plus append-only `## Change Brief:` sections)
+     - Treat the latest Change Brief as the active requirements delta
+     - Treat earlier Change Briefs as history and use the current requirements document to determine which earlier behavior is already integrated
+     - Preserve the Change Brief's In/Out scope and boundary impact; defer implementation choices to design
+   - Read `.kiro/specs/$1/requirements.md` as the current approved behavior to preserve and update, not as disposable project description
+   - If `.kiro/steering/roadmap.md` exists, read it and locate `$1` under `## Existing Spec Updates` or `## Specs (dependency order)`
+     - Use roadmap for project-level scope, dependency order, and cross-spec coordination
+     - Use the target feature's brief/Change Brief as the authoritative feature-local requirements delta
+     - If roadmap lists `$1` under `## Existing Spec Updates` but no matching Change Brief exists, stop and ask the user to run discovery or provide the missing feature-local scope; do not infer requirements from the one-line roadmap item alone
    - Core steering context: `product.md`, `tech.md`, `structure.md`
    - Additional steering files only when directly relevant to feature scope, user personas, business/domain rules, compliance/security constraints, operational constraints, or existing product boundaries
    - Relevant local agent skills or playbooks only when they clearly match the feature's host environment or use case and contain domain terminology or workflow rules that shape user-observable requirements
@@ -38,7 +45,8 @@ metadata:
 The following research areas are independent. Decide the optimal decomposition based on project complexity -- split, merge, add, or skip sub-agents as needed.
 
 **In main context** (essential for requirements generation):
-- Spec files: spec.json, brief.md, requirements.md (project description)
+- Spec files: spec.json, brief.md including the latest Change Brief, requirements.md (current approved behavior)
+- Roadmap entry and dependencies when roadmap.md exists
 - EARS format rules, requirements review gate, requirements template
 - Core steering: product.md, tech.md (directly inform scope and constraints)
 
@@ -52,7 +60,12 @@ For greenfield projects with minimal codebase, skip sub-agent dispatch and load 
 After all research completes, synthesize findings in main context before generating requirements.
 
 3. **Generate Requirements Draft**:
-   - Create initial requirements draft based on project description
+   - For a new spec, create the initial requirements draft from the base brief
+   - For an existing spec with a Change Brief, revise the current requirements in place:
+     - Integrate every user-observable behavior in the latest Change Brief
+     - Preserve unaffected requirements, numbering, terminology, and approved behavior
+     - Add, split, or renumber requirements only where the change makes it necessary
+     - Do not broaden scope from adjacent roadmap items or implementation dependencies
    - Group related functionality into logical requirement areas
    - Apply EARS format to all acceptance criteria
    - Use language specified in spec.json
@@ -68,6 +81,7 @@ After all research completes, synthesize findings in main context before generat
    - Run the `Requirements Review Gate` from `rules/requirements-review-gate.md`
    - Review coverage, EARS compliance, ambiguity, adjacent expectations, and scope boundaries before finalizing
    - If issues are local to the draft, repair the requirements and review again
+   - For an existing-spec update, verify traceability from every latest Change Brief In-scope item to at least one requirement or explicit adjacent expectation, and verify every Out-of-scope item remains excluded
    - Keep the review bounded to at most 2 repair passes
    - If the draft exposes a real scope ambiguity or contradiction, stop and ask the user to clarify instead of writing guessed requirements
 
@@ -76,6 +90,7 @@ After all research completes, synthesize findings in main context before generat
    - Set `phase: "requirements-generated"`
    - Set `approvals.requirements.generated: true`
    - Update `updated_at` timestamp
+   - Do not delete, rewrite, or mark prior Change Briefs as consumed; they remain append-only discovery history
 
 ## Important Constraints
 
@@ -108,7 +123,7 @@ Requirements describe user-observable behavior, not implementation. Use this to 
 Provide output in the language specified in spec.json with:
 
 1. **Generated Requirements Summary**: Brief overview of major requirement areas (3-5 bullets)
-2. **Document Status**: Confirm requirements.md updated and spec.json metadata updated
+2. **Document Status**: Confirm requirements.md updated, spec.json metadata updated, and identify the Change Brief/roadmap entry used when applicable
 3. **Review Gate**: Confirm the requirements review gate passed
 4. **Next Steps**: Guide user on how to proceed (approve and continue, or modify)
 
@@ -121,6 +136,8 @@ Provide output in the language specified in spec.json with:
 
 ### Error Scenarios
 - **Missing Project Description**: If requirements.md lacks project description, ask user for feature details
+- **Missing Change Brief for Roadmap Update**: If roadmap lists the target under `## Existing Spec Updates` but the target brief has no corresponding current Change Brief, stop before writing and ask for discovery to persist the feature-local delta
+- **Change Brief / Roadmap Conflict**: If the target Change Brief conflicts with its roadmap scope or dependencies, stop and ask the user to resolve the contradiction; do not choose one silently
 - **Template Missing**: If template files don't exist, use inline fallback structure with warning
 - **Language Undefined**: Default to English (`en`) if spec.json doesn't specify language
 - **Incomplete Requirements**: After generation, explicitly ask user if requirements cover all expected functionality
