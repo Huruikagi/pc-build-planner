@@ -20,7 +20,7 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 
 **目的**: 一つの利用者能力に関する内部実装と公開境界を所有する。
 
-**原則**: 外部へは `public.ts` と登録portだけを公開し、他featureから内部ファイルを直接importさせない。
+**原則**: 通常consumer向け契約は`public.ts`、worker専用契約は`worker-public.ts`、application shellのcomposition rootだけが読む登録factoryは`feature-contribution.ts`を公開入口とする。これら以外のfeature内部ファイルを外部から直接importさせない。
 
 ### Local data foundation
 
@@ -69,7 +69,7 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 - root `src/index.ts`、`src/runtime/side-panel.ts`、`src/runtime/service-worker.ts`、`side-panel.html` はapplication shellだけがcompositionする。
 - 各featureは自身の内部実装、`public.ts`、登録モジュール、必要なworker registration port/runtime adapterを所有する。
 - cross-feature遷移はshell所有の `ShellNavigator` / `FeatureActivationIntent` などのtyped activation contractを使用する。
-- feature間の利用は明示された上流featureの `public.ts` に限定し、deep import、DOMを介した暗黙連携、共有runtimeの直接操作を禁止する。
+- feature間の通常利用は明示された上流featureの`public.ts`に限定する。`worker-public.ts`はworker-safeな登録・契約だけ、`feature-contribution.ts`はapplication shellのcomposition rootによる登録factory合成だけに限定し、その他のdeep import、DOMを介した暗黙連携、共有runtimeの直接操作を禁止する。
 - 共通ドメイン型、結果型、保存primitiveをfeatureごとに再定義しない。local data foundationをcanonical ownerとする。
 - 永続化mutationは単一write authorityへ集約し、成功後イベントによる別writeで参照整合性を修復しない。
 - composition rootだけが具体featureの登録と公開契約を知り、feature内部はshellの具体実装へ依存しない。
@@ -91,14 +91,17 @@ Chrome adapters and composition runtime
 ## 公開APIとimport規約
 
 ```typescript
-// feature外からは公開入口だけを利用する
+// 通常consumerはpublic.tsだけを利用する
 import type { CandidateQuery } from "../features/candidate-management/public.js";
+
+// application shellのcomposition rootだけが登録factory入口を利用できる
+import { createCandidateManagementContribution } from "../features/candidate-management/feature-contribution.js";
 
 // 禁止: 他featureの内部実装へのdeep import
 // import { CandidateService } from "../features/candidate-management/service.js";
 ```
 
-- feature外のconsumerはfeature-owned `public.ts` だけをimportする。
+- feature外の通常consumerはfeature-owned `public.ts`だけをimportする。例外は、worker compositionが利用するworker-safeな`worker-public.ts`と、application shellのcomposition rootが利用する登録factory専用`feature-contribution.ts`に限定する。
 - root barrelはapplication shellだけが合成し、featureはroot barrelへ自己登録しない。
 - 同一feature内では相対importを使用し、featureをまたぐ依存は公開入口によって見える形にする。
 - path aliasは導入しない。TypeScriptは `NodeNext` module resolutionで運用し、相対importには実行時のESM解決に合わせて `.js` 拡張子を明示する（`.tsx` を指す場合も `.js`）。
@@ -106,7 +109,7 @@ import type { CandidateQuery } from "../features/candidate-management/public.js"
 ## 命名規約
 
 - **ディレクトリと通常ファイル**: kebab-case（例: `application-shell/`、`feature-registry.ts`）
-- **feature公開入口**: `public.ts`
+- **feature公開入口**: 通常consumer向け`public.ts`、worker-safe契約向け`worker-public.ts`、application shellのcomposition専用`feature-contribution.ts`
 - **型、interface、class、判別共用体**: PascalCase
 - **関数、method、変数**: camelCase
 - **定数**: 既存のWeb/TypeScript慣習に従い、共有契約上の固定識別子は意図が分かる名前にする

@@ -309,6 +309,7 @@
 
 ## Implementation Notes
 
+- 2026-08-02 source-price-refresh trigger revalidation: `source-price-refresh` task 6.3のheaded native menu smoke（1 pass、exit 0）と関連4 specの再監査完了後、worker-safe catalog／`TransientGestureRegistrationPort` seamを再確認した。`pnpm validate`はNode 1429/1429、Playwright 26 pass（記録済みnative gate 1 skip）でexit 0、unpacked-extension smokeも同suiteで通過し、要件8/8、cross-task統合、設計・境界、blocked taskなしを再監査してGO。feature公開入口のsteeringは実装とboundary gateに合わせ、通常`public.ts`、worker専用`worker-public.ts`、application shell composition専用`feature-contribution.ts`へ明確化した。
 - 2026-08-02 settings-screen validation remediation: 通常のpersistent navigationでtarget mountが失敗した場合に直前persistent featureを新しいhandleで復元する契約は、下流settings固有処理ではなく`SidePanelHost`所有の共通transactionとしてdesignへ明記した。mount完了後にstale化したtargetのcleanup失敗でもhandle ownershipを保持し、queued fallbackが未解放handleのcleanupに成功してからだけ次featureをmountする回帰を追加した。
 - 2026-08-02 owner revalidation: persistent rollback／stale cleanup triggerを要件8/8、設計・境界・blocked taskなしで再監査しGO。`pnpm validate`はNode 1429/1429、Playwright 26 pass（別scopeのmanual headed smoke 1 skip）、unpacked-extension smokeをfreshに通過した。
 

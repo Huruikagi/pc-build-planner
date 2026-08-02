@@ -81,7 +81,7 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 
 | Feature | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|
-| application-shell | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | `ui-message-catalog` remediation後にnotice表示・clear順序とruntime callback／cleanup seamを再検証。`pnpm validate` exit 0（Node 1,164/1,164、Playwright 15/15）、unpacked-extension smoke PASS、設計・境界監査PASS |
+| application-shell | GO | 2026-08-02T16:03:56+09:00 | `25db9a2` | `source-price-refresh` 6.3のheaded native menu gate・関連4 spec再監査後にtrigger seamを再検証。`pnpm validate` exit 0（Node 1,429/1,429、Playwright 26 PASS・記録済みnative 1 SKIP）、unpacked MV3 smoke PASS、要件8/8・51/51、統合・設計・境界監査PASS |
 | backup-restore | GO | 2026-07-31T00:09:57+09:00 | `babceebdbf08` | `pnpm validate` exit 0（Node 1,151/1,151、Playwright 14/14）、要件6/6・受入基準35/35、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
 | ui-internationalization | GO | 2026-07-31T09:57:39+09:00 | `ef73db87dfcc` | `pnpm validate` exit 0（Node 1,161/1,161、Playwright 15/15）、要件9/9・受入基準52/52、unpacked-extension smoke PASS、統合・設計・境界監査PASS |
 | transient-feature-surface | GO | 2026-07-31T11:49:54+09:00 | `4ac4ad6` | 起動失敗／失効のtyped notice callback、上流task 1.4のclear順序、監視cleanupを再検証。`pnpm validate` exit 0、unpacked-extension smoke PASS、統合・境界監査PASS |
