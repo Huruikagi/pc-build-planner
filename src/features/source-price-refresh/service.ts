@@ -93,12 +93,6 @@ const stillTargets = (
 };
 
 /**
- * Rebuilds the stored entry with a new captured price. The stored source read
- * from the candidate draft is spread verbatim, so the identifier, URL, site
- * name, kind and any field added upstream later survive the update untouched;
- * only `price` and `capturedAt` are replaced.
- */
-/**
  * The atomic half of the refresh workflow: it validates the observation, proves
  * the stored target is still the one that was matched, and commits the new price
  * through the upstream candidate aggregate in a single mutation. Any failure

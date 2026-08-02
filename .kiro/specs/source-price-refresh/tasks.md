@@ -171,7 +171,7 @@
   - _Boundary: SourcePriceRefreshE2E_
   - _Depends: 5.1, 5.2, 5.3_
 
-- [ ] 6. validation remediationで競合・世代・設計同期を閉じる
+- [x] 6. validation remediationで競合・世代・設計同期を閉じる
 
 - [x] 6.1 上流の条件付き価格patchへ切り替える
   - `getCandidateDraft` 由来の古い完全entry置換を廃止し、`candidate-source-bookmarks` 8.1の条件付きprice-only patchを利用する。
@@ -189,7 +189,7 @@
   - _Boundary: SourcePriceRefreshRegistration, SourcePriceRefreshRequirements, SourcePriceRefreshDesign_
   - _Depends: transient-feature-surface 7.1, 6.1_
 
-- [ ] 6.3 remediation後の完全検証とnative menu gateを実施する
+- [x] 6.3 remediation後の完全検証とnative menu gateを実施する
   - candidate-source-bookmarks、transient-feature-surface、source-price-refresh、duplicate-product-mergeの関連contractを再検証する。
   - `pnpm validate` とheaded native context menu smokeを実施し、実行日時・環境・結果をvalidation記録へ残す。
   - 全機械gate、browser動線、境界監査が成功し、残存NO-GO所見がないことを完了条件とする。
@@ -198,6 +198,8 @@
   - _Depends: 6.1, 6.2_
 
 ## Implementation Notes
+
+- 6.3: 2026-08-02 15:45 JST、Windows 11 Home（NT 10.0.26200.0）・Playwright 1.61.1のheaded Chromiumで `SOURCE_PRICE_REFRESH_NATIVE_SMOKE=1 pnpm exec playwright test e2e/source-price-refresh.native-smoke.spec.ts --workers=1` を実行し、利用者がbrowser-native「価格を更新」を選択して1 passed（23.6秒、exit 0）。続けて `pnpm validate` はexit 0（Node 1,429/1,429、Playwright 26 passed・native gate 1 skipped）で、native選択証拠は前者、production activation transport後段と全機械gateは後者として分離記録した。要件38件は37件の自動証拠と要件6.5のheaded実選択証拠で全件充足し、関連contract・設計・境界の独立再監査に新たなNO-GO所見はない。
 
 - 6.2: `transient-feature-surface` 7.1の`waitUntilCurrent`をmountから非同期に待ち、trueかつ未unmountの場合だけ自動実行する。timer/microtask順序依存を削除し、false・reject・unmount後late trueをwarningなしでno-opに固定した。要件5.5は確定前の旧世代結果を保存しない一方、原子的確定後の有効commitは表示だけ抑止して補償更新しないと明確化した。activation shape、worker-safe入口、実ファイル計画、承認metadataも2026-08-02の利用者承認へ同期済み。
 
@@ -230,7 +232,7 @@
 - 2.4: message namespaceを追加したら `tests/ui-messages/catalog-parity.test.ts` の `assert.deepEqual(Object.keys(MESSAGES), [...])`（v0.3 gate）へも追記が要る。追記は加算のみで、gateを緩めないこと。追記後は既存のplaceholder/selector parity機構が新namespaceを自動で覆う。
 - 2.4: money/日時のlocale対応formatterはコードベースに存在しない（`Intl.` / `toLocale*` の使用箇所ゼロ）。確定金額は message catalog の placeholder `"{amount} {currency}"`、`capturedAt` は canonical ISO文字列をそのまま描画する（`candidate-management/view.tsx` と同じ前例）。design.md も表示形式を規定していない。将来formatterを導入するなら view 側を差し替える。
 - 2.4: design.md のエラー表に無い8 kind（`invalid-url` / `restricted-page` → 対象ページで再実行、`validation` / `unsupported-data` → 保存データ修復が先、など）の回復案内は 2.2 の単一規則からの演繹。viewの案内keyとstateの `isRecoverableSourcePriceRefreshError` が乖離しないよう、全kindを `Record<SourcePriceRefreshError["kind"], …>` で突き合わせるテストで固定してある。union にメンバを足すと両方のtypecheckが落ちる。
-- 2.4: 失敗表示の `preservedNotice`（既存価格を維持した旨、要件5.1/5.4の唯一の可観測面）はテストで未固定。要素を消しても view.test.tsx は緑のまま。task 5.3 の failure-view DOM coverage で失敗kindのloopへ `preservedNotice` のassertionを1行足すこと。
+- 2.4（5.3で解消済み）: 失敗表示の `preservedNotice` は、保存結果へ帰属できる19 failure kindを走査するDOMテストで固定した。mutation着地後の上流throwも含み得る `unexpected` だけは「旧価格を維持した」と断言しないことも専用assertionで固定済み。
 - 3.1（6.1で解消済み）: 初期実装は`getCandidateDraft`から完全entryを再構築して`updateSource`へ渡したため、並行`siteName`更新を巻き戻すTOCTOUがあった。2026-08-02の利用者承認を受け、`candidate-source-bookmarks` 8.1が所有する条件付き`patchSourcePrice`へ移行し、最新entryのprice/capturedAtだけをcommit時precondition付きで更新する。旧`CandidateQuery/getCandidateDraft/updateSource`経路と置換fakeは削除済み。
 - 3.2: 世代gateは3点。抽出**前**（現行でなければ `extractPrice` を一度も呼ばない）、抽出**後**（`extracted.ok` を見る**前**に判定する。旧世代は自分の失敗すら提示してはならない＝要件1.5）、mutation**後**（commit済みの更新は巻き戻さず表示だけ抑止する＝design.md「commit済みの有効な更新は巻き戻さない」）。補償mutationを足すと要件違反になる。
 - 3.2: `price-unavailable` は design の command 順どおり `matchSource` の**後**（`refreshCapturedPrice` 内）で判定される。よって「価格も取れず一致sourceも無い」ページは `no-match` になる。保持すべき既存価格も報告対象も存在しないため、より具体的な `no-match` が正しい。
@@ -238,11 +240,11 @@
 - 3.2: 上流portが例外を投げた場合の member が無く、`state` が永久に `running` になる設計gapがあった。利用者承認のうえ（2026-08-01）`SourcePriceRefreshError` へ `{ kind: "unexpected" }` を追加して解消済み。意味は「上流portが `Result` 契約に違反して throw した」のみで、page条件もstorage結果も主張しない。payloadは持たない（例外objectを捕まえない＝要件5.6）。決定的defectなので `recoverable: false`、回復案内は再実行で終わらない。design.md の union・エラー方針・エラー表も追記済み。
 - 3.2: 例外の封じ込めは workflow 本体**全体**を `try { … } catch {` で包む（bindingなし）。`isCurrent` も含めるのは、それがshell注入callbackであり、port3つだけを包むと同じstuck-spinner defectが残るため。世代gate3点の順序と「補償書き込みをしない」性質は封じ込めで変えないこと。
 - 3.2: `isRecoverableSourcePriceRefreshError` の規則文は「保存データの修復が先」に加えて「同じgestureを繰り返しても成功しない」を選言として追加した厳密な一般化。既存15 kindの `true` / 4 kindの `false` の分類は不変。
-- 3.2: 未解決（task 5.3 へ）: `FailureSummary` は全failure kindに `preservedNotice`（保存済み価格は残っている）を無条件表示する。`unexpected` は「画面に出るのに書き込みが既に着地しているかもしれない」最初のkind（他は全てatomicなtyped failureか、`#accepts` が表示前に落とす post-mutation `stale-activation`）。害の向きは良性（実際は反映済みなのに未反映と伝える／逆は起きない）だが、5.3 で kind 条件付きにするか判断すること。
+- 3.2（5.3で解消済み）: `FailureSummary` は `unexpected` のときだけ `preservedNotice` を表示せず、他19 failure kindでは表示する。これにより、mutation着地後の上流throwを保存結果へ誤帰属せず、atomicなtyped failureでは既存価格維持を明示する。両分岐はview DOMテストで固定済み。
 - 4.2: integration driver は上流をfakeせず実stackを組む。`createInMemoryStorageAdapter` → `createLocalDataRepository` → `createRootTransactionRunner` → `createMutationPipeline` → `createWriteAuthority` → `createScopedDataPort` → 各feature の contribution factory。fakeは 4.1 の seam（page price extraction）と 4.3/4.4 の seam（transient surface）だけに留める。実 `candidateSourcePolicy.update` が経路に入るので Note 3.1 の merge fake 事故は構造的に再発しない。
 - 4.2: 「一回のroot mutationで確定する」は storage adapter の成功write回数（`rootCommits()`）と root revision の増分で観測する。二重mutationも失敗後の再書き込みも同じ counter が捕まえる。
 - 4.2: compatibility 非回帰は `listBuildEligible` の projection だけでなく、実judgeの verdict（`cpu-motherboard-socket` → `compatible`）を専用テストで固定してから前後比較すること。そうしないと `unknown` 同士の比較になって空振りする。
-- 4.2: 未固定（5.1/5.2 で拾う）: (a) driver の `context as unknown as FeatureCompositionContext` 二重castは、将来 context に必須memberが増えたとき typecheck ではなく実行時 undefined になる。(b) primary経路では `primarySource.price` だけを固定していて `capturedAt` / `siteName` / `pageUrl` は projection 側未固定（保存側は固定済み）。(c) 公開入口scanの `readdir` が非再帰なので、`src/features/source-price-refresh/` にsubdirectoryを作ると黙って対象外になる。
+- 4.2（5.1/5.2で解消済み）: (a) driver contextは `FeatureCompositionContext` へ直接代入して必須member追加をtypecheckで検知する。(b) primary経路は実production portのcontract kitでprice/capturedAt更新と、それ以外のsiteName/pageUrlを含むsource field不変を固定する。(c) 公開入口scanは `collectSources` でsubdirectoryを再帰走査する。初期レビューで挙がった三つの検証穴はいずれも回帰テストまたはboundary gateへ反映済み。
 - 4.1: cross-feature contract kit は `tests/contracts/` に kit（`*-contract-kit.ts`）と driver（`*.test.ts`）を分けて置く（`application-shell-contract-kit` が前例）。kit 自身は上流の `public.ts` だけをimportし、driver が実production portを組み立てる。fakeはChrome API seam（`tabs` / `scripting`）にだけ置き、coordinator / extractor / ranker / normalizer は本物を通す。
 - 4.1: 「固定tabだけを解決する」は返り値では観測できない。fixture の `observedTabsGet` / `observedInjectionTabs` を probe の `resolvedTabs()` に流して Chrome境界で観測する。`ChromeCaptureRuntimeDependencies` は `tabs.get` と `scripting.executeScript` しか公開しないため、他経路の取りこぼしは無い。
 - 4.1: kit の `extract.unrelatedTab` は、fixture が未pin tabに `url` を与えないため実際には `permission-lost` を観測しており、「portが他tabを拒む」ことの証明にはなっていない。保証を担っているのは `resolvedTabs().includes(tabId)` の方。kit のコメントは assertion より強い主張をしているので、5.x で触るときに文言を実態へ合わせること。
