@@ -309,6 +309,9 @@
 
 ## Implementation Notes
 
+- 2026-08-02 settings-screen validation remediation: 通常のpersistent navigationでtarget mountが失敗した場合に直前persistent featureを新しいhandleで復元する契約は、下流settings固有処理ではなく`SidePanelHost`所有の共通transactionとしてdesignへ明記した。mount完了後にstale化したtargetのcleanup失敗でもhandle ownershipを保持し、queued fallbackが未解放handleのcleanupに成功してからだけ次featureをmountする回帰を追加した。
+- 2026-08-02 owner revalidation: persistent rollback／stale cleanup triggerを要件8/8、設計・境界・blocked taskなしで再監査しGO。`pnpm validate`はNode 1429/1429、Playwright 26 pass（別scopeのmanual headed smoke 1 skip）、unpacked-extension smokeをfreshに通過した。
+
 - 2026-07-31 `ui-message-catalog` validation remediationを受け、起動失敗／失効の別`MessageDescriptor`をsteady-state shell noticeとして安全に描画し、session read成功または有効activation受理でclearされることをcomposition境界で受け入れ再検証した。runtime callbackと寿命監視の実装ownershipは`transient-feature-surface`に維持し、shell側では常設面との併存、完全`pnpm validate`、unpacked-extension smokeを確認した。
 - Contract test kitでは、下流提供callbackをruntime境界として検証し、例外を安定診断へ正規化したうえで、取得済みresourceを逆順・全件best-effort・冪等にcleanupする。
 - 非同期mountはlifecycle epochと完了時availabilityでstale化を検出し、unmountに失敗したhandleはcleanup成功まで所有権を保持して再試行する。

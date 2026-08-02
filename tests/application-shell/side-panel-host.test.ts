@@ -664,10 +664,11 @@ test("mount contextへoperation policyとfeature診断をそのまま接続す�
   await host.stop();
 });
 
-test("stale viewのcleanup失敗を診断しfallback遷移を継続する", async () => {
+test("stale viewのcleanup失敗はownershipを保持しfallback前に再試行する", async () => {
   const mountResult = deferred<FeatureMountHandle>();
   const mountStarted = deferred<void>();
   const events: string[] = [];
+  let unmountAttempts = 0;
   let availability: Availability = { status: "available" };
   const listeners = new Set<(value: Availability) => void>();
   const pending: ApplicationFeatureRegistration = {
@@ -691,8 +692,9 @@ test("stale viewのcleanup失敗を診断しfallback遷移を継続する", asyn
   for (const listener of listeners) listener(availability);
   mountResult.resolve({
     async unmount() {
+      unmountAttempts += 1;
       events.push("unmount:pending");
-      throw new Error("cleanup detail");
+      if (unmountAttempts === 1) throw new Error("cleanup detail");
     },
   });
 
@@ -701,6 +703,7 @@ test("stale viewのcleanup失敗を診断しfallback遷移を継続する", asyn
 
   assert.deepEqual(events, [
     "mount:pending",
+    "unmount:pending",
     "unmount:pending",
     "mount:fallback",
   ]);

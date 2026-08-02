@@ -158,6 +158,9 @@
 
 ## Implementation Notes
 
+- 2026-08-02 settings-screen validation remediation: settings配下の見出し階層（export／restoreは`h4`）と、React root／section handleのcleanup成功後にだけ完了flagを更新して失敗resourceを再試行可能にする契約をbackup ownerのdesignへ明記した。settingsには引き続き公開`BackupRestoreSectionMount`だけを渡す。
+- 2026-08-02 owner revalidation: section mount／settings host lifecycle triggerを要件6/6、設計・境界・blocked taskなしで再監査しGO。`pnpm validate`はNode 1429/1429、Playwright 26 pass（別scopeのmanual headed smoke 1 skip）、unpacked-extension smokeをfreshに通過した。
+
 - 1.1: 現行交換形式版は1が初出のため、対応対象の旧版fixtureは存在しない。`tests/fixtures/backup.ts`は現行版・空データ・将来版(2)のfixtureのみを提供する。旧版fixtureは形式版2以降を追加する時点で用意する。
 - 1.2: `MaintenanceOwnerId`は既に`domain/public.ts`経由で公開済みだったため追加不要。`MaintenanceFence`のみ`persistence/public.ts`へ追加公開した。`tests/tooling/public-boundaries.test.ts`のFoundation非公開境界guardは`MaintenanceFence`だけを許可するよう意図的に更新済み（他の内部型は引き続き禁止）。
 - 2.1: `tests/fixtures/`配下は`scripts/validate-fixture-assets.mjs`のraw-html等asset policyでスキャンされる（`.test.ts`ファイルはスキャン対象外）。生HTML文字列を含む不正値fixtureは`tests/fixtures/`に置かず、対象の`.test.ts`内へ直接記述する。

@@ -165,7 +165,14 @@ export function createSidePanelHost(
         try {
           await handle.unmount();
         } catch {
+          mounted = handle;
+          selected = feature.id;
           reportDiagnostic("stale-feature-unmount-failed", id);
+          const descriptor = message("shell.featureUnmountFailed", {
+            featureId: id,
+          });
+          publish({ kind: "error", message: descriptor, recoverable: true });
+          return err({ kind: "mount_failed", message: descriptor });
         }
         return err({
           kind: "unavailable",

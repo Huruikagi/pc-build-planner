@@ -199,7 +199,7 @@ sequenceDiagram
     H-->>V: mutation availability update
 ```
 
-起動は冪等であり、二回目の`start`は既存instanceを返すか明示的な`already_started`結果を返す。feature切替では前viewのunmount完了後に次viewをmountする。mount失敗はhost全体を停止させない。
+起動は冪等であり、二回目の`start`は既存instanceを返すか明示的な`already_started`結果を返す。feature切替では前viewのunmount完了後に次viewをmountする。persistent navigationによる切替でtarget mountが失敗した場合、shellは直前のpersistent registrationを新しいmount handleとして復元し、targetの部分表示を残さない。復元にも失敗した場合だけrecoverable error stateを表示する。mount失敗はhost全体を停止させない。
 
 ## 要件トレーサビリティ
 
@@ -524,7 +524,7 @@ interface ProductionWorkerComposition {
 
 - 不正・重複登録: 該当featureを隔離し型付きdiagnosticを返す。
 - 必須foundation初期化失敗: hostをerror stateにしてfeatureをmountしない。
-- feature mount/unmount失敗: 安全なテキストmessageを表示し、他featureのnavigationを維持する。
+- feature mount/unmount失敗: persistent navigationのtarget mount失敗では直前のpersistent featureを再mountして表示を復元し、その復元にも失敗した場合は安全なテキストmessageを表示する。cleanup失敗時は未解放handleの所有権を保持し、重複mountせず再試行可能にする。他featureのnavigationは維持する。
 - 一過性起動情報の読出し失敗: persistent表示を維持し、`transientNotice`だけをsafe-text bannerとして提示する。
 - startup failure: settingsを利用可能と偽らず、「設定 / Settings」と既存retryを同じstatusへ提示する。
 - stale maintenance通知: stateを変更せず診断hookへ記録する。
@@ -544,7 +544,7 @@ interface ProductionWorkerComposition {
 ### Integration Tests
 - compositionが一回だけ実行され、root APIがfeature単位で合成される（3.1–3.4）。
 - persistent／transient混在時もfeature切替でunmount→mount順序となり同時表示が発生せず、transientをnavigation・初期選択・fallbackへ載せない（1.1–1.5, 1.7–1.8）。
-- mount失敗後も別featureへ遷移できる（4.2–4.3）。
+- persistent navigationのtarget mount失敗時は直前featureを新しいhandleで復元し、targetの部分DOMを残さない。復元失敗時も別featureへ遷移できる（4.2–4.3）。
 - maintenance通知が全navigationへ反映され、readは維持されmutationが無効になる（5.1–5.5）。
 - foundation通知portの初期snapshot、順序逆転、購読解除を模擬し、shellがStorage APIを直接参照しないことをcontract/boundary testで確認する（5.1, 5.4, 5.5, 5.6）。
 - production-shaped fixtureでshell React rootとfeature outletが別DOM要素であること、2つの模擬featureが独立rootを切替時にunmountすること、navigation clickがhost selectionへ届くことを確認する（1.1–1.5, 3.1, 6.1, 6.4）。

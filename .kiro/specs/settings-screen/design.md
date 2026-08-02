@@ -130,18 +130,30 @@ application-shell composition
 
 ```text
 src/features/settings/
+  contracts.ts                  # settings id、semantic message consumer、stable locator契約
   feature-contribution.ts       # SettingsFeatureContribution
   registration.ts               # SettingsFeatureRegistration
   react-root.tsx                # SettingsReactRootAdapter
+  section-resources.ts          # settings rootとbackup sectionのmount transaction／逆順cleanup
   view.tsx                      # SettingsView
   styles.css                    # settings区画layout
-  public.ts                     # settings idとfactoryの公開入口
+  public.ts                     # settings id／locator契約とregistration factoryの最小公開入口
 tests/features/settings/
-  registration.test.tsx
+  backup-section-consumer.test.ts
+  contracts.test.tsx
+  cross-feature-integration.test.tsx
+  react-root.test.tsx
+  registration.test.ts
+  styles.test.ts
+  upstream-contract.test.ts
   view.test.tsx
-  integration.test.tsx
 e2e/
-  settings-screen.spec.ts       # SettingsMessageConsumerAndLocatorContractの主要E2E
+  models/settings.ts            # settings-owned stable locator model
+  backup-restore.spec.ts
+  english-ui.spec.ts
+  language-behavior-invariance.spec.ts
+  language-persistence-restart.spec.ts
+  product-capture.spec.ts       # transient終了とsettings fallback
 ```
 
 ### Modified Files
@@ -160,6 +172,8 @@ e2e/
 - `scripts/validate-boundaries.mjs` — settingsから許可する公開依存とbackup deep import拒否を検証する
 
 `BackupRestoreSectionMount`の実装・公開と旧backup registration／contributionの削除は`backup-restore`のFile Structure Planが所有する。catalog dataとその検証ファイルは`ui-message-catalog`のFile Structure Planが所有し、本specのfile planへ重複計上しない。
+
+`react-root.tsx`と`section-resources.ts`はsettings registration内部のlifecycle実装であり、`public.ts`から公開しない。feature-local testは内部moduleを直接検証できるが、productionおよびcross-feature consumerはregistration factoryと識別子契約だけを公開入口から利用する。
 
 ## System Flows
 

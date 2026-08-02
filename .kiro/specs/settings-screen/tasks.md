@@ -111,5 +111,8 @@
 
 ## Implementation Notes
 
+- 2026-08-02 validation remediation: `public.ts`はsettings識別子・message/locator契約・registration factoryだけへ縮小し、React rootとsection resource transactionはfeature内部moduleへ限定した。File Structure Planは実装済みの`contracts.ts`、`section-resources.ts`、owner別test／E2E配置へ同期した。
+- 2026-08-02 final revalidation: application-shellとbackup-restoreのtrigger再検証GO後にsettings-screenを再監査し、要件34/34、設計・境界・cross-task統合、blocked taskなしを確認してGO。`pnpm validate`はNode 1429/1429、Playwright 26 pass（別scopeのmanual headed smoke 1 skip）、unpacked-extension smokeをfreshに通過した。
+
 - 2026-08-02: feature mountの部分失敗はfeature内cleanupだけでなく、通常navigation側で直前persistent featureを復元するtransactionalな切替契約が必要。複数resourceのcleanup失敗は順序を保持して集約する。
 - 2026-08-02: cleanup handleは開始時ではなく各resourceの解放成功後に完了状態を記録し、shellがownershipを保持した再試行では未解放resourceだけを再度cleanupする。

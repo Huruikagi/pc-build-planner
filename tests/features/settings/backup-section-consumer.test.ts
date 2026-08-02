@@ -6,7 +6,7 @@ import type {
   FeatureMountHandle,
 } from "../../../src/application-shell/public.js";
 import type { BackupRestoreSectionMount } from "../../../src/features/backup-restore/public.js";
-import { mountSettingsSectionResources } from "../../../src/features/settings/public.js";
+import { mountSettingsSectionResources } from "../../../src/features/settings/section-resources.js";
 
 const context = (container: HTMLElement): FeatureMountContext => ({
   container,

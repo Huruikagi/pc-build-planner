@@ -343,7 +343,7 @@ JSONファイルを一つだけ受け、サイズを読取前に確認する。�
 
 stateは`idle`、`exporting`、`validating`、`awaiting-confirmation`、`restoring`、`succeeded`、`failed`の判別共用体とし、成功時だけpreview・summaryを更新する。ファイル再選択、取消、画面再生成でticketを破棄する。feature内の重複要求はstateで抑止し、他featureを含むmutation抑止はFoundationの永続maintenance状態をapplication shellのMutationGateへ投影して実現する。
 
-viewはバックアップと復元をReact componentの別領域として表示し、消失リスク、自動保存・同期なし、置換確認、件数summary、pathベースのエラーを通常のJSX childとして描画する。
+viewはバックアップと復元をReact componentの別領域として表示し、消失リスク、自動保存・同期なし、置換確認、件数summary、pathベースのエラーを通常のJSX childとして描画する。settingsの`h3`区画見出し配下へ埋め込まれるexport／restore見出しは`h4`とし、owner内部で見出し階層を維持する。
 
 #### BackupRestoreSectionMount
 
@@ -362,7 +362,7 @@ export function createBackupRestoreSectionMount(
 ): BackupRestoreSectionMount;
 ```
 
-factoryは既存`BackupService`、`RestoreService`、`BackupRestoreState`、`FileGateway`を構成し、`context.container`へReact rootを一つだけmountする。`state?`はsettings-screenで確定済みの正確なfactory契約と既存contract testを保つ注入seamであり、production compositionは指定せずmountごとに新しいidle stateを生成する。stateを戻り値やsettings public APIとして公開する能力ではない。`context.operationPolicy`をそのままviewへ渡し、settings独自のmutation判定を導入しない。mount成功後のhandleは購読とDOMを一度だけcleanupし、二重unmountを安全に無視する。mount途中の失敗では取得済みresourceを解放して失敗を返す。公開入口はこのinterface、factory、factory入力型だけとし、独立feature registration、navigation metadata、public API entry、React component、service、state accessorを公開しない。
+factoryは既存`BackupService`、`RestoreService`、`BackupRestoreState`、`FileGateway`を構成し、`context.container`へReact rootを一つだけmountする。`state?`はsettings-screenで確定済みの正確なfactory契約と既存contract testを保つ注入seamであり、production compositionは指定せずmountごとに新しいidle stateを生成する。stateを戻り値やsettings public APIとして公開する能力ではない。`context.operationPolicy`をそのままviewへ渡し、settings独自のmutation判定を導入しない。mount成功後のhandleは購読とDOMを一度だけcleanupし、二重unmountを安全に無視する。cleanup完了flagはroot解放が成功した後にだけ更新し、失敗時は未解放resourceのownershipを保持して次のunmountで再試行できる。mount途中の失敗では取得済みresourceを解放し、rollback自体も失敗した場合は元のmount errorと順序付きで集約する。公開入口はこのinterface、factory、factory入力型だけとし、独立feature registration、navigation metadata、public API entry、React component、service、state accessorを公開しない。
 
 ## Data Models
 
@@ -408,7 +408,7 @@ interface RestorePreview {
 - **Foundation port integration**: `assessReplacement`/`replaceRoot`経由の再検証、容量境界、単一write、書込失敗時の保存値不変、通常mutationとの直列化を、本機能の呼び出し経路で検証する（Foundation内部実装は再テストせず消費側契約を対象とする）。
 - **Maintenance integration**: 30秒leaseのacquire後だけfence付き置換を許可し、commit中にrenewしないこと、成功release、失敗abort、cleanup失敗時の診断・最長30秒後の回復、shell全体のmutation抑止とread-only navigation維持を検証する。
 - **Service integration**: 空・全データexport、決定的ファイル名、preflight順序、preview件数、stale ticket、commit成功と全失敗点の不変性を検証する。
-- **State/React UI**: 処理中抑止、取消、再選択、確認前commit不可、警告文、値を露出しないエラー、再表示時の未選択状態、unmount cleanupを検証する。
+- **State/React UI**: 処理中抑止、取消、再選択、確認前commit不可、警告文、値を露出しないエラー、settings配下の`h4`見出し階層、再表示時の未選択状態、unmount cleanup失敗後に未解放rootだけを再試行できることを検証する。
 - **E2E**: 設定画面のバックアップ・復元区画を架空データで操作し、export、既存変更、import確認、再起動後の完全復元を検証する。
 - **Regression**: 復元後にCandidateQueryとCurrentBuildQueryが同じ所属・候補ID・数量を返し、通常CRUDを継続できることを検証する。
 

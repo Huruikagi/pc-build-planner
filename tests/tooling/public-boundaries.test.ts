@@ -345,6 +345,19 @@ test("settingsは許可された公開依存だけを利用する", () => {
   );
 });
 
+test("settings公開入口はregistration契約だけを公開する", async () => {
+  const publicSource = await readFile(
+    "src/features/settings/public.ts",
+    "utf8",
+  );
+
+  assert.match(publicSource, /createSettingsFeatureRegistration/);
+  assert.doesNotMatch(publicSource, /mountSettingsReactRoot/);
+  assert.doesNotMatch(publicSource, /SettingsReactRoot/);
+  assert.doesNotMatch(publicSource, /mountSettingsSectionResources/);
+  assert.doesNotMatch(publicSource, /SettingsSectionHostRoot/);
+});
+
 test("ui-languageとconsumerは公開境界を越えて逆依存・catalog deep importしない", () => {
   const violations = findBoundaryViolations([
     {
