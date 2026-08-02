@@ -143,6 +143,7 @@ export function createSidePanelHost(
     }
     if (selected === id && mounted !== undefined) return ok(undefined);
 
+    const previous = selected === null ? undefined : find(selected);
     const unmounted = await unmountCurrent();
     if (!unmounted.ok) return unmounted;
     const mountEpoch = lifecycleEpoch;
@@ -184,7 +185,9 @@ export function createSidePanelHost(
     } catch {
       reportDiagnostic("feature-mount-failed", id);
       const descriptor = message("shell.featureMountFailed", { featureId: id });
-      publish({ kind: "error", message: descriptor, recoverable: true });
+      const restored = await restorePrevious(previous, undefined);
+      if (!restored)
+        publish({ kind: "error", message: descriptor, recoverable: true });
       return err({ kind: "mount_failed", message: descriptor });
     }
   }

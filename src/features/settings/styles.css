@@ -1,0 +1,17 @@
+.settings {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings__section {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
+  border-radius: 0.5rem;
+}
+
+.settings__section > :first-child,
+.settings__section > p {
+  margin-block: 0;
+}

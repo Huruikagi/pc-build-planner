@@ -66,3 +66,35 @@ test("backup mount 失敗時は settings root を rollback する", async () => 
   );
   assert.deepEqual(events, ["root"]);
 });
+
+test("backupとsettings rootのcleanup失敗を順序付きで集約する", async () => {
+  const backupError = new Error("backup cleanup failed");
+  const rootError = new Error("root cleanup failed");
+  const root = {
+    backupRestoreHost: document.createElement("div"),
+    unmount() {
+      throw rootError;
+    },
+  };
+  const backupRestore: BackupRestoreSectionMount = {
+    async mount() {
+      return {
+        async unmount() {
+          throw backupError;
+        },
+      };
+    },
+  };
+  const handle = await mountSettingsSectionResources(
+    root,
+    backupRestore,
+    context(document.createElement("div")),
+  );
+
+  await assert.rejects(handle.unmount(), (error: unknown) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.message, "Settings section cleanup failed");
+    assert.deepEqual(error.errors, [backupError, rootError]);
+    return true;
+  });
+});

@@ -342,6 +342,31 @@ test("開始時に決定順の利用可能featureだけを選び、切替はunmo
   assert.equal(states.at(-1)?.kind, "ready");
 });
 
+test("通常navigationのmount失敗は直前のpersistent featureを復元する", async () => {
+  const events: string[] = [];
+  const previous = feature("previous", 0, events);
+  const broken = feature("broken", 1, events, { failMount: true });
+  const { container, host, states } = setup([previous, broken]);
+  await host.start();
+
+  const result = await host.select(broken.id);
+
+  assert.equal(result.ok, false);
+  assert.equal(host.getSelected(), previous.id);
+  assert.equal(
+    container.querySelector("[data-feature]")?.getAttribute("data-feature"),
+    "previous",
+  );
+  assert.deepEqual(events, [
+    "mount:previous",
+    "unmount:previous",
+    "mount:broken",
+    "mount:previous",
+  ]);
+  assert.deepEqual(states.at(-1), { kind: "ready", selected: previous.id });
+  await host.stop();
+});
+
 test("一過性面から利用不可の戻り先を避けて常設fallbackと理由noticeを提示する", async () => {
   const events: string[] = [];
   const unavailable = feature("previous", 0, events, {

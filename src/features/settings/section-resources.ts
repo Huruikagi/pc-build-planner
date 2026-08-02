@@ -35,11 +35,20 @@ export async function mountSettingsSectionResources(
     async unmount() {
       if (unmounted) return;
       unmounted = true;
+      const failures: unknown[] = [];
       try {
         await backupHandle.unmount();
-      } finally {
-        root.unmount();
+      } catch (error) {
+        failures.push(error);
       }
+      try {
+        root.unmount();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1)
+        throw new AggregateError(failures, "Settings section cleanup failed");
     },
   };
 }

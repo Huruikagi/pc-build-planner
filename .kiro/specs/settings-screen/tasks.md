@@ -108,3 +108,7 @@
   - _Depends: 4.1, 4.2, 4.3_
   - _Requirements: 2.5, 4.2, 5.1, 6.6_
   - _Boundary: SettingsMessageConsumerAndLocatorContract, ValidationGate_
+
+## Implementation Notes
+
+- 2026-08-02: feature mountの部分失敗はfeature内cleanupだけでなく、通常navigation側で直前persistent featureを復元するtransactionalな切替契約が必要。複数resourceのcleanup失敗は順序を保持して集約する。

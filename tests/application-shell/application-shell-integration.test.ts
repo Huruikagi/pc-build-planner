@@ -719,13 +719,15 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
   assert.equal(featureSlot.textContent, "compatibility-view");
 
   await clickNavigation("Broken");
-  assert.equal(featureSlot.textContent, "");
-  assert.match(
-    shellContainer.textContent ?? "",
-    new RegExp(
-      defaultMessageResolver("shell.featureMountFailed", {
-        featureId: "broken",
-      }),
+  assert.equal(featureSlot.textContent, "compatibility-view");
+  assert.deepEqual(events.slice(4, 7), [
+    "compatibility:unmount",
+    "broken:mount",
+    "compatibility:mount",
+  ]);
+  assert.ok(
+    diagnostics.some((message) =>
+      message.includes("feature-mount-failed featureId=broken"),
     ),
   );
   assert.equal(shellContainer.querySelector("script"), null);

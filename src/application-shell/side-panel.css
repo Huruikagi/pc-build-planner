@@ -5,4 +5,5 @@
 @import "../features/current-build/styles.css";
 @import "../features/product-capture/styles.css";
 @import "../features/compatibility/styles.css";
+@import "../features/settings/styles.css";
 @import "../features/backup-restore/styles.css";
