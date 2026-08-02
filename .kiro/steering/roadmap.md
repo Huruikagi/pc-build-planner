@@ -91,3 +91,4 @@ v0.3.0 は、v0.1.0 / v0.2.0 を実際に使って見えてきた課題を解消
 | product-page-capture | GO | 2026-08-01T23:20:48+09:00 | `6eb99197aad8` | `pnpm validate` exit 0（Node 1,367/1,367、Playwright 25 PASS・1 SKIP）、unpacked MV3 extension smoke PASS、要件7/7・受入基準43/43、統合・設計・境界監査PASS |
 | candidate-source-bookmarks | GO | 2026-08-02T12:25:51+09:00 | `f9af8fa442ba` | `pnpm validate` exit 0（Node 1,419/1,419、Playwright 26 PASS・1 SKIP）、candidate source再訪E2E・unpacked MV3 extension smoke PASS、要件8/8・受入基準43/43、統合・設計・境界監査PASS |
 | duplicate-product-merge | GO | 2026-08-02T13:45:28+09:00 | `8851f48cfa00` | `pnpm validate` exit 0（Node 1,421/1,421、Playwright 26 PASS・1 SKIP）、duplicate merge critical E2E・unpacked MV3 extension smoke PASS、要件7/7・受入基準46/46、統合・設計・境界監査PASS |
+| source-price-refresh | GO | 2026-08-02T15:55:03+09:00 | `38bfde2a45c1` | `pnpm validate` exit 0（Node 1,429/1,429、Playwright 26 PASS・native 1 SKIP）、headed native menu smoke 1 PASS（exit 0）、要件38/38、統合・設計・境界監査PASS |
