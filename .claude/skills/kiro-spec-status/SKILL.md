@@ -22,6 +22,7 @@ argument-hint: <feature-name>
 - Read existing files: `requirements.md`, `design.md`, `tasks.md` (if they exist)
 - Check `.kiro/specs/$ARGUMENTS/` directory for available files
 - Read `.kiro/steering/roadmap.md` if it exists and this spec appears in it
+- From roadmap.md, read the `## Implementation Validation History` section if present and collect every row whose Feature cell matches `$ARGUMENTS`
 
 ### Step 2: Analyze Status
 
@@ -34,6 +35,12 @@ argument-hint: <feature-name>
   - From brief.md: note `Boundary Candidates`, `Upstream / Downstream`, and `Existing Spec Touchpoints` if present
   - From design.md: note `Boundary Commitments`, `Out of Boundary`, `Allowed Dependencies`, and `Revalidation Triggers` if present
   - From roadmap.md: note upstream dependencies and whether this spec is adjacent to `Existing Spec Updates`
+- **Validation history**:
+  - Report the matching rows as recorded; the roadmap is reset per release, so treat them as the current milestone's record only
+  - Do not compare the recorded commit against the current `HEAD`. Within a milestone almost any later commit would make the comparison fire, so it carries no signal
+  - Note when tasks are fully checked off but no validation row exists for this spec
+  - Treat a row whose commit cell ends with `+dirty` as a blocker: the validated repository state was not committed
+  - Note when multiple rows exist for this spec, which indicates repeated validation
 - **Revalidation watchlist**:
   - Identify downstream specs, neighboring existing-spec updates, or rollout-sensitive design notes that may need revalidation if this spec changes
   - Call out when the current spec shape looks too broad and may want roadmap/design splitting instead of more local repair
@@ -45,9 +52,10 @@ Create report in the language specified in spec.json covering:
 2. **Completion Status**: Percentage complete for each phase
 3. **Task Breakdown**: If tasks exist, show completed/remaining counts
 4. **Boundary Context**: Upstream/downstream, out-of-boundary, and allowed dependency notes when available
-5. **Revalidation Watchlist**: Downstream or adjacent work likely affected by changes to this spec
-6. **Next Actions**: What needs to be done next
-7. **Blockers**: Any issues preventing progress
+5. **Validation History**: Latest recorded `/kiro-record-validation` result for this spec (result, timestamp, commit marker, evidence), or "not recorded in this milestone" when absent
+6. **Revalidation Watchlist**: Downstream or adjacent work likely affected by changes to this spec
+7. **Next Actions**: What needs to be done next
+8. **Blockers**: Any issues preventing progress
 
 **Format**: Clear, scannable format with emojis for status
 
@@ -58,6 +66,10 @@ Create report in the language specified in spec.json covering:
 **Spec Not Found**:
 - **Message**: "No spec found for `$ARGUMENTS`. Check available specs in `.kiro/specs/`"
 - **Action**: List available spec directories
+
+**No Validation History**:
+- **Behavior**: When the roadmap has no `## Implementation Validation History` section, or no row matches this spec, report validation as not recorded for this milestone
+- **Action**: Do not treat this as an error; suggest `/kiro-validate-impl` then `/kiro-record-validation` when tasks are complete
 
 **Incomplete Spec**:
 - **Warning**: Identify which files are missing
