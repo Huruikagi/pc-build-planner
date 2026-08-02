@@ -126,6 +126,22 @@ test("バックアップと復元を分離し消失リスク・保管責任・�
   await rendered.cleanup();
 });
 
+test("設定区画へ埋め込む操作見出しを区画見出しより一段下げる", async () => {
+  const state = buildState({});
+  const rendered = await renderView(state);
+
+  for (const region of ["export", "restore"] as const) {
+    const section = rendered.container.querySelector<HTMLElement>(
+      `[data-region="${region}"]`,
+    );
+    assert.ok(section);
+    assert.ok(section.querySelector("h4"));
+    assert.equal(section.querySelector("h3"), null);
+  }
+
+  await rendered.cleanup();
+});
+
 test("バックアップ作成ボタンでexportBackupを呼び成功時にファイル名を表示する", async () => {
   const downloadCalls: BackupArtifact[] = [];
   const state = buildState({

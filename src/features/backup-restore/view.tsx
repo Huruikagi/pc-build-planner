@@ -71,7 +71,7 @@ export function BackupRestoreView({
         className="backup-restore-export"
         data-region="export"
       >
-        <h3>{messages("backup.exportHeading")}</h3>
+        <h4>{messages("backup.exportHeading")}</h4>
         <button
           data-action="export"
           disabled={busy || !mutationAllowed}
@@ -98,7 +98,7 @@ export function BackupRestoreView({
         className="backup-restore-import"
         data-region="restore"
       >
-        <h3>{messages("backup.restoreHeading")}</h3>
+        <h4>{messages("backup.restoreHeading")}</h4>
         <input
           accept="application/json"
           disabled={busy || !mutationAllowed}
