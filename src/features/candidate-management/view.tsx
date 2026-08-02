@@ -22,6 +22,7 @@ import type {
   CaptureDiagnosticField,
   CaptureDiagnosticReason,
 } from "./contracts.js";
+import { DuplicateMergeView } from "./duplicate-merge-view.js";
 import { safeSourcePageUrl } from "./source-page-port.js";
 import type { ManagementDisplayError, ManagementState } from "./state.js";
 
@@ -502,6 +503,17 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
   const errorFor = (key: string) =>
     fieldErrorMessage(fieldErrors[key], messages);
   if (editor === null) return null;
+  if (state.value.duplicateDecision.status !== "idle")
+    return (
+      <DuplicateMergeView
+        onCancel={() => state.cancelDuplicateDecision()}
+        onMerge={() => void state.mergeDuplicateCandidate()}
+        onRetry={() => void state.retryDuplicateEvaluation()}
+        onSaveNew={() => void state.saveDuplicateAsNew()}
+        onSelect={(candidateId) => state.selectDuplicateCandidate(candidateId)}
+        state={state.value.duplicateDecision}
+      />
+    );
   const { draft } = editor;
   const update = (next: CandidateDraft) => {
     state.updateEditorDraft(next);

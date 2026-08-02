@@ -24,7 +24,10 @@ import {
   createProductCaptureContribution,
   type ProductCaptureContribution,
 } from "../features/product-capture/feature-contribution.js";
-import { createProductCapturePublicApi } from "../features/product-capture/public.js";
+import {
+  createProductCapturePublicApi,
+  createProductIdentityNormalizer,
+} from "../features/product-capture/public.js";
 import {
   createSettingsContribution,
   type SettingsContribution,
@@ -33,6 +36,7 @@ import {
   createSourcePriceRefreshContribution,
   type SourcePriceRefreshContribution,
 } from "../features/source-price-refresh/feature-contribution.js";
+import type { SourcePriceRefreshPort } from "../features/source-price-refresh/public.js";
 import type { FoundationDataPort } from "../persistence/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
@@ -92,6 +96,25 @@ export const createSidePanelFeatureContributions = (
   factories: SidePanelCandidateFactories = {},
 ): SidePanelFeatureContributions => {
   const productCapturePublic = createProductCapturePublicApi();
+  let composedSourcePriceRefresh: SourcePriceRefreshPort | undefined;
+  const duplicateRefreshPort: SourcePriceRefreshPort = {
+    async matchSource(input) {
+      return (
+        composedSourcePriceRefresh?.matchSource(input) ?? {
+          ok: false,
+          error: { kind: "unexpected" },
+        }
+      );
+    },
+    async refreshCapturedPrice(input) {
+      return (
+        composedSourcePriceRefresh?.refreshCapturedPrice(input) ?? {
+          ok: false,
+          error: { kind: "unexpected" },
+        }
+      );
+    },
+  };
   const candidateManagement = createCandidateManagementContribution(context, {
     sourceData: createCandidateSourceDataPort(context.data),
     classifier: createSourceKindClassifier(
@@ -102,6 +125,8 @@ export const createSidePanelFeatureContributions = (
         ? undefined
         : { create: chromeApis.tabs.create.bind(chromeApis.tabs) },
     ),
+    identityNormalizer: createProductIdentityNormalizer(),
+    sourcePriceRefresh: duplicateRefreshPort,
   });
   const currentBuild = createCurrentBuildContribution(context, {
     candidates: candidateManagement.registration.publicApi.query,
@@ -150,6 +175,8 @@ export const createSidePanelFeatureContributions = (
       },
     },
   });
+  composedSourcePriceRefresh =
+    sourcePriceRefresh.registration.publicApi.refresh;
   return [
     candidateManagement,
     currentBuild,

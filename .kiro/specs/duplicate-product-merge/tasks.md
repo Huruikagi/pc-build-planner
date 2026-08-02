@@ -70,7 +70,7 @@
 
 - [ ] 4. candidate-managementとadjacent public portを統合する
 
-- [ ] 4.1 create modeの保存をcoordinatorとstateへ接続する
+- [x] 4.1 create modeの保存をcoordinatorとstateへ接続する
   - candidate-management内部で既存create保存を保存前評価へ差し替え、edit modeのupdateと既存validationを維持する。
   - source追加用のcanonical inputを上流capture/source mapperから受け、商品値、正規化属性、抽出元表記、primaryを独自にマージしない。
   - match判断中はwriteせず、成功時だけ一覧・editorを更新し、失敗時は既存field errorとdraft保持規則へ写像する。
@@ -79,7 +79,7 @@
   - _Boundary: DuplicateMergeCoordinator, DuplicateMergeState_
   - _Depends: 3.3_
 
-- [ ] 4.2 application shellで公開portを一度だけcompositionする
+- [x] 4.2 application shellで公開portを一度だけcompositionする
   - candidate query、candidate source mutation、source-price-refresh port、identity normalizerを各featureの `public.ts` から取得してcandidate contributionへ注入する。
   - shellは具体portの配線だけを行い、match、URL判断、source選択、保存判断を持たない。
   - foundation root、Storage adapter、他feature内部module、context menu、transient gesture、価格抽出portへ依存しない。

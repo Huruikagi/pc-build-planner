@@ -3,7 +3,15 @@ import type {
   FeatureContribution,
 } from "../../application-shell/public.js";
 import { createUuid, type RequestId } from "../../domain/public.js";
-import type { MutationContext } from "./contracts.js";
+import type { ProductIdentityNormalizer } from "../product-capture/public.js";
+import type { SourcePriceRefreshPort } from "../source-price-refresh/public.js";
+import type {
+  CandidateSourceMutationPort,
+  MutationContext,
+} from "./contracts.js";
+import { createDuplicateCandidateMatcher } from "./duplicate-matcher.js";
+import { createDuplicateMergeCoordinator } from "./duplicate-merge.js";
+import { createDuplicateUrlRouter } from "./duplicate-url-router.js";
 import type { CandidateManagementPublicApi } from "./public.js";
 import { createCandidateFeatureRegistration } from "./registration.js";
 import { createCandidateManagementService } from "./service.js";
@@ -38,6 +46,8 @@ export interface CandidateManagementContributionDependencies {
   readonly sourceData?: CandidateSourceDataPort;
   readonly classifier?: SourceKindClassifier;
   readonly sourcePage?: SourcePagePort;
+  readonly identityNormalizer?: ProductIdentityNormalizer;
+  readonly sourcePriceRefresh?: SourcePriceRefreshPort;
 }
 
 /**
@@ -84,6 +94,59 @@ export const createCandidateManagementContribution = (
     };
   };
 
+  const sourceMutations: CandidateSourceMutationPort = {
+    async addSource(input) {
+      const result = await service.addSource(
+        input,
+        await createSourceMutationContext(),
+      );
+      return result.ok ? { ok: true, value: undefined } : result;
+    },
+    async updateSource(input) {
+      const result = await service.updateSource(
+        input,
+        await createSourceMutationContext(),
+      );
+      return result.ok ? { ok: true, value: undefined } : result;
+    },
+    async patchSourcePrice(input) {
+      const result = await service.patchSourcePrice(
+        input,
+        await createSourceMutationContext(),
+      );
+      return result.ok ? { ok: true, value: undefined } : result;
+    },
+    async removeSource(input) {
+      const result = await service.removeSource(
+        input,
+        await createSourceMutationContext(),
+      );
+      return result.ok ? { ok: true, value: undefined } : result;
+    },
+    async setPrimarySource(input) {
+      const result = await service.setPrimarySource(
+        input,
+        await createSourceMutationContext(),
+      );
+      return result.ok ? { ok: true, value: undefined } : result;
+    },
+  };
+  const duplicateMergeCoordinator =
+    dependencies.identityNormalizer === undefined ||
+    dependencies.sourcePriceRefresh === undefined
+      ? undefined
+      : createDuplicateMergeCoordinator({
+          query: service,
+          matcher: createDuplicateCandidateMatcher(
+            dependencies.identityNormalizer,
+          ),
+          router: createDuplicateUrlRouter({
+            refresh: dependencies.sourcePriceRefresh,
+            sourceMutations,
+          }),
+          createCandidate: service.createCandidate.bind(service),
+        });
+
   const state = createManagementState({
     query: service,
     service,
@@ -91,6 +154,9 @@ export const createCandidateManagementContribution = (
     ...(dependencies.sourcePage === undefined
       ? {}
       : { sourcePage: dependencies.sourcePage }),
+    ...(duplicateMergeCoordinator === undefined
+      ? {}
+      : { duplicateMergeCoordinator }),
   });
 
   const registration = createCandidateFeatureRegistration({
@@ -99,43 +165,7 @@ export const createCandidateManagementContribution = (
     publicQuery: service,
     sources: {
       catalog,
-      mutations: {
-        async addSource(input) {
-          const result = await service.addSource(
-            input,
-            await createSourceMutationContext(),
-          );
-          return result.ok ? { ok: true, value: undefined } : result;
-        },
-        async updateSource(input) {
-          const result = await service.updateSource(
-            input,
-            await createSourceMutationContext(),
-          );
-          return result.ok ? { ok: true, value: undefined } : result;
-        },
-        async patchSourcePrice(input) {
-          const result = await service.patchSourcePrice(
-            input,
-            await createSourceMutationContext(),
-          );
-          return result.ok ? { ok: true, value: undefined } : result;
-        },
-        async removeSource(input) {
-          const result = await service.removeSource(
-            input,
-            await createSourceMutationContext(),
-          );
-          return result.ok ? { ok: true, value: undefined } : result;
-        },
-        async setPrimarySource(input) {
-          const result = await service.setPrimarySource(
-            input,
-            await createSourceMutationContext(),
-          );
-          return result.ok ? { ok: true, value: undefined } : result;
-        },
-      },
+      mutations: sourceMutations,
     },
     state,
   });

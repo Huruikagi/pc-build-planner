@@ -17,6 +17,12 @@ import type {
   ProjectSummary,
   UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
+import type { DuplicateMergeCoordinator } from "./duplicate-merge.js";
+import {
+  createDuplicateMergeState,
+  type DuplicateDecisionState,
+  type DuplicateMergeState,
+} from "./duplicate-merge-state.js";
 import {
   type CandidateSourceRuleError,
   candidateSourcePolicy,
@@ -93,6 +99,7 @@ export interface ManagementStateValue extends CandidatePreEditState {
   readonly isLoading: boolean;
   readonly isSaving: boolean;
   readonly mutationsDisabled: boolean;
+  readonly duplicateDecision: DuplicateDecisionState;
 }
 
 export interface ManagementStateDependencies {
@@ -105,6 +112,7 @@ export interface ManagementStateDependencies {
   /** Shell-owned gate; mutations stay unavailable while the shell forbids them. */
   readonly operationPolicy?: OperationPolicy;
   readonly sourcePage?: SourcePagePort;
+  readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }
 
 const isTerminalReadError = (error: ManagementError): boolean =>
@@ -139,11 +147,48 @@ export class ManagementState {
     isLoading: false,
     isSaving: false,
     mutationsDisabled: false,
+    duplicateDecision: { status: "idle" },
   };
+
+  readonly #duplicateMerge: DuplicateMergeState | null;
 
   public constructor(
     private readonly dependencies: ManagementStateDependencies,
-  ) {}
+  ) {
+    this.#duplicateMerge =
+      dependencies.duplicateMergeCoordinator === undefined
+        ? null
+        : createDuplicateMergeState({
+            coordinator: dependencies.duplicateMergeCoordinator,
+            createMutationContext: dependencies.createMutationContext,
+            onCommitted: async () => {
+              this.#set({ editor: null, isSaving: false });
+              await this.load();
+            },
+          });
+    this.#duplicateMerge?.subscribe(() => {
+      const duplicateDecision = this.#duplicateMerge?.value ?? {
+        status: "idle" as const,
+      };
+      const managementFailure =
+        duplicateDecision.status === "failed" &&
+        duplicateDecision.error.kind === "management"
+          ? duplicateDecision.error.cause
+          : undefined;
+      this.#set({
+        duplicateDecision,
+        isSaving:
+          duplicateDecision.status === "evaluating" ||
+          duplicateDecision.status === "committing",
+        ...(managementFailure === undefined
+          ? {}
+          : {
+              displayError: displayError(managementFailure),
+              fieldErrors: fieldErrorsOf(managementFailure),
+            }),
+      });
+    });
+  }
 
   #mountedPolicy: OperationPolicy | null = null;
   #unsubscribePolicy: (() => void) | undefined;
@@ -553,6 +598,26 @@ export class ManagementState {
     });
   }
 
+  public selectDuplicateCandidate(candidateId: CandidatePartId): void {
+    this.#duplicateMerge?.selectCandidate(candidateId);
+  }
+
+  public async mergeDuplicateCandidate(): Promise<void> {
+    await this.#duplicateMerge?.mergeSelected();
+  }
+
+  public async saveDuplicateAsNew(): Promise<void> {
+    await this.#duplicateMerge?.saveNew();
+  }
+
+  public async retryDuplicateEvaluation(): Promise<void> {
+    await this.#duplicateMerge?.retry();
+  }
+
+  public cancelDuplicateDecision(): void {
+    this.#duplicateMerge?.cancel();
+  }
+
   public requestDeletion(deletion: DeletionConfirmation): void {
     if (this.#mutationsDisabled()) return;
     this.#set({
@@ -570,6 +635,11 @@ export class ManagementState {
     const editor = this.#value.editor;
     if (editor === null || this.#value.isSaving || this.#mutationsDisabled())
       return;
+    if (editor.mode === "create" && this.#duplicateMerge !== null) {
+      this.#set({ displayError: null, fieldErrors: emptyFieldErrors });
+      await this.#duplicateMerge.evaluate(editor.draft);
+      return;
+    }
     this.#set({
       isSaving: true,
       displayError: null,
