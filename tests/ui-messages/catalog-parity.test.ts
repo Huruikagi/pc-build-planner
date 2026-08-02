@@ -146,6 +146,30 @@ test("candidate source操作・種別・再訪・失敗の全message keyを両�
   }
 });
 
+test("重複候補判断の根拠・確信度・action・安定failure keyを両言語で提供する", () => {
+  const keys = [
+    "candidate.duplicate.confidence.high",
+    "candidate.duplicate.confidence.supporting",
+    "candidate.duplicate.evidence.modelNumber",
+    "candidate.duplicate.evidence.manufacturerName",
+    "candidate.duplicate.actions.saveNew",
+    "candidate.duplicate.actions.merge",
+    "candidate.duplicate.actions.retry",
+    "candidate.duplicate.errors.query",
+    "candidate.duplicate.errors.conflict",
+    "candidate.duplicate.errors.ambiguous",
+    "candidate.duplicate.errors.source",
+    "candidate.duplicate.errors.storage",
+    "candidate.duplicate.errors.stale",
+    "candidate.duplicate.errors.unexpected",
+  ];
+  for (const key of keys) {
+    assert.equal(typeof ja[key], "string", key);
+    assert.equal(typeof en[key], "string", key);
+    assert.equal(placeholdersOf(ja[key] as MessageDefinition).size, 0, key);
+  }
+});
+
 test("英語の復元完了通知は実カタログで各件数に応じた単複表現を返す", () => {
   const resolver = resolverFor("en");
   const counts = [0, 1, 2] as const;

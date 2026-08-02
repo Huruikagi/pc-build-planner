@@ -76,6 +76,39 @@ export const candidate = {
       runtimeUnavailable: "Sources can't be opened in this environment",
     },
   },
+  duplicate: {
+    title: "Review possible existing candidates",
+    description:
+      "Review the matches, then save a new candidate or merge into one.",
+    candidateLabel: "Candidate to merge into",
+    fields: {
+      manufacturer: "Manufacturer",
+      modelNumber: "Model number",
+      category: "Category",
+      confidence: "Confidence",
+      evidence: "Match evidence",
+    },
+    confidence: { high: "High", supporting: "Supporting" },
+    evidence: {
+      modelNumber: "Model number matches",
+      manufacturerName: "Manufacturer and product name match",
+    },
+    actions: {
+      saveNew: "Save as a new candidate",
+      merge: "Merge into selected candidate",
+      retry: "Try again",
+    },
+    errors: {
+      query: "Candidates couldn't be loaded. Your input has been kept.",
+      conflict: "The candidate changed. Check for matches again.",
+      ambiguous: "The saved source couldn't be identified uniquely.",
+      source:
+        "The source couldn't be merged. The existing candidate wasn't changed.",
+      storage: "Storage is unavailable. Your input has been kept.",
+      stale: "The match is out of date. Check for matches again.",
+      unexpected: "The merge couldn't be completed. Your input has been kept.",
+    },
+  },
   attributeLabels: {
     socket: "Socket",
     supportedSockets: "Supported sockets",

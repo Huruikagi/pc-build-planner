@@ -75,7 +75,7 @@ const isUtcTimestamp = (value: unknown): value is string => {
   );
 };
 
-const isSourcedValue = (
+export const isSourcedValueSnapshot = (
   value: unknown,
   confirmed: "string" | "strings" | "money" = "string",
 ): value is {
@@ -112,10 +112,11 @@ const isProduct = (value: unknown): boolean => {
   const fields = ["name", "manufacturer", "modelNumber", "notes"];
   if (!Object.keys(value).every((key) => fields.includes(key))) return false;
   return (
-    (!("name" in value) || isSourcedValue(value.name)) &&
-    (!("manufacturer" in value) || isSourcedValue(value.manufacturer)) &&
-    (!("modelNumber" in value) || isSourcedValue(value.modelNumber)) &&
-    (!("notes" in value) || isSourcedValue(value.notes))
+    (!("name" in value) || isSourcedValueSnapshot(value.name)) &&
+    (!("manufacturer" in value) ||
+      isSourcedValueSnapshot(value.manufacturer)) &&
+    (!("modelNumber" in value) || isSourcedValueSnapshot(value.modelNumber)) &&
+    (!("notes" in value) || isSourcedValueSnapshot(value.notes))
   );
 };
 
@@ -135,7 +136,7 @@ const isHttpUrl = (value: unknown): value is string => {
   }
 };
 
-const isCandidateSource = (value: unknown): boolean =>
+export const isCandidateSourceSnapshot = (value: unknown): boolean =>
   isRecord(value) &&
   Object.keys(value).every((key) =>
     ["id", "pageUrl", "siteName", "capturedAt", "price", "kind"].includes(key),
@@ -144,13 +145,16 @@ const isCandidateSource = (value: unknown): boolean =>
   (!("pageUrl" in value) || isHttpUrl(value.pageUrl)) &&
   (!("siteName" in value) || isSafeString(value.siteName)) &&
   (!("capturedAt" in value) || isUtcTimestamp(value.capturedAt)) &&
-  (!("price" in value) || isSourcedValue(value.price, "money")) &&
+  (!("price" in value) || isSourcedValueSnapshot(value.price, "money")) &&
   (!("kind" in value) ||
     value.kind === "retail" ||
     value.kind === "manufacturer");
 
 const isSourceState = (value: Record<string, unknown>): boolean => {
-  if (!Array.isArray(value.sources) || !value.sources.every(isCandidateSource))
+  if (
+    !Array.isArray(value.sources) ||
+    !value.sources.every(isCandidateSourceSnapshot)
+  )
     return false;
   const ids = value.sources.map((source) => (source as { id: string }).id);
   if (new Set(ids).size !== ids.length) return false;
@@ -193,12 +197,16 @@ const isAttributes = (value: unknown, category: PartCategory): boolean => {
   return (
     Object.keys(value).every((key) => key === "category" || key in fields) &&
     Object.entries(fields).every(
-      ([key, kind]) => !(key in value) || isSourcedValue(value[key], kind),
+      ([key, kind]) =>
+        !(key in value) || isSourcedValueSnapshot(value[key], kind),
     )
   );
 };
 
-const isDraft = (value: unknown): value is CandidateDraft => {
+/** Shared fail-closed validator for feature-local UI snapshots. */
+export const isCandidateDraftSnapshot = (
+  value: unknown,
+): value is CandidateDraft => {
   if (!isRecord(value) || !isPartCategory(value.category)) return false;
   const name = isRecord(value.product) ? value.product.name : undefined;
   return (
@@ -216,7 +224,7 @@ const isDraft = (value: unknown): value is CandidateDraft => {
     ) &&
     typeof value.projectId === "string" &&
     isProduct(value.product) &&
-    isSourcedValue(name) &&
+    isSourcedValueSnapshot(name) &&
     ((typeof name.original === "string" && name.original.trim().length > 0) ||
       (typeof name.confirmed === "string" &&
         name.confirmed.trim().length > 0)) &&
@@ -348,7 +356,11 @@ export const createManagementStateSnapshotCodec = (
     ) {
       return { ok: false, error: { kind: "invalid-shape" } };
     }
-    if (editor !== null && isRecord(editor) && !isDraft(editor.draft)) {
+    if (
+      editor !== null &&
+      isRecord(editor) &&
+      !isCandidateDraftSnapshot(editor.draft)
+    ) {
       return { ok: false, error: { kind: "invalid-draft" } };
     }
 

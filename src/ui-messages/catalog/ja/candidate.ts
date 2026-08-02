@@ -85,6 +85,37 @@ export const candidate = {
       runtimeUnavailable: "この環境ではソースを開けません",
     },
   },
+  duplicate: {
+    title: "既存候補との一致を確認",
+    description: "一致候補を確認し、新規保存または統合を選択してください。",
+    candidateLabel: "統合先候補",
+    fields: {
+      manufacturer: "メーカー",
+      modelNumber: "型番",
+      category: "カテゴリ",
+      confidence: "確信度",
+      evidence: "一致根拠",
+    },
+    confidence: { high: "高", supporting: "補助" },
+    evidence: {
+      modelNumber: "型番が一致",
+      manufacturerName: "メーカーと商品名が一致",
+    },
+    actions: {
+      saveNew: "新規候補として保存",
+      merge: "選択候補へ統合",
+      retry: "再試行",
+    },
+    errors: {
+      query: "候補一覧を読み込めませんでした。入力内容は保持されています。",
+      conflict: "候補が更新されています。もう一度照合してください。",
+      ambiguous: "保存済みソースを一意に特定できませんでした。",
+      source: "ソースを統合できませんでした。既存候補は変更されていません。",
+      storage: "保存領域を利用できません。入力内容は保持されています。",
+      stale: "一致候補が古くなりました。もう一度照合してください。",
+      unexpected: "統合を完了できませんでした。入力内容は保持されています。",
+    },
+  },
   attributeLabels: {
     socket: "ソケット",
     supportedSockets: "対応ソケット",

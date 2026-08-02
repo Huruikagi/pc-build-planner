@@ -38,9 +38,9 @@
   - _Boundary: DuplicateMergeCoordinator_
   - _Depends: 2.1, 2.2_
 
-- [ ] 3. candidate editorへ判断状態と明示確認UIを追加する
+- [x] 3. candidate editorへ判断状態と明示確認UIを追加する
 
-- [ ] 3.1 create modeの判断lifecycleとrollback snapshotを追加する
+- [x] 3.1 create modeの判断lifecycleとrollback snapshotを追加する
   - 評価中、判断待ち、commit中、失敗を既存editor draftと分離して保持し、edit modeの保存には適用しない。
   - target未選択を初期状態とし、処理中の二重送信、古いmatch target、取消、再試行、明示新規保存を判別可能にする。
   - 成功時だけeditorを閉じて一覧を再読込し、失敗・取消では入力とmatchを保持する。
@@ -50,7 +50,7 @@
   - _Boundary: DuplicateMergeState_
   - _Depends: 2.3_
 
-- [ ] 3.2 (P) 統合判断と失敗文言を日本語・英語へ追加する
+- [x] 3.2 (P) 統合判断と失敗文言を日本語・英語へ追加する
   - 一致根拠、確信度、新規保存、統合、取消、再試行、曖昧・競合・source失敗の安定したmessage keyを定義する。
   - 商品値や完全URLを固定文言へ埋め込まず、viewが安全なparameterとして渡せる契約にする。
   - 日本語・英語catalogのkey parityとformat parameter整合を既存catalog testで検証する。
@@ -58,7 +58,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 6.1, 6.3, 6.4, 7.4_
   - _Boundary: DuplicateMergeView_
 
-- [ ] 3.3 順位付き候補と明示的な統合判断を描画する
+- [x] 3.3 順位付き候補と明示的な統合判断を描画する
   - 候補名、メーカー、型番、カテゴリ、確信度、一致根拠をmatcher順で表示する。
   - 統合targetは未選択で開始し、「新規候補として保存」と「選択候補へ統合」を別actionとして提示する。
   - target未選択の統合を無効化し、取消時はeditor入力へ戻り、失敗時は再試行と明示新規保存を提示する。
