@@ -1,6 +1,6 @@
 {
   "name": "pc-build-planner",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first PC build planner Chrome extension",
   "private": true,
   "packageManager": "pnpm@11.13.1",
