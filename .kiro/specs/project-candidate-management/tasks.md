@@ -197,6 +197,120 @@
   - _Requirements: 2.1, 2.3, 3.1, 4.1, 4.5, 6.1, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10_
   - _Boundary: CandidateFeatureRegistration, CandidateManagementPublicApi_
 
+> **実装前提**: Task 9以降は`project-context` Task 2.4の能力別public facadeが利用可能になってから開始する。Task 12.4は、application shell側のproject-context singleton、共通selector slot、public port注入を扱う更新taskが生成・完了してから開始し、候補管理側へ代替compositionを追加しない。
+
+- [ ] 9. project-contextへの追従基盤を追加する
+- [ ] 9.1 現在プロジェクトの購読と解決を候補管理へ導入する
+  - 検証済みcontext snapshotを購読し、`ready`の選択IDだけを候補一覧、候補作成、pre-edit bindingの作業対象として扱う。
+  - `empty`または`unavailable`では別projectやpayload内IDへfallbackせず、選択、作成または回復が必要な状態へ遷移する。
+  - 候補管理画面には現在projectを決める独自selectorを追加せず、共通selectorの選択へ一方向に追従する。
+  - adapter testでready時は選択projectの候補だけが返り、empty/unavailable時は保存不能な`project-required`となることを確認する。
+  - _Depends: project-context 2.4_
+  - _Requirements: 2.1, 2.6, 3.1, 3.6, 3.7, 7.1, 7.2, 7.3, 7.5_
+  - _Boundary: ProjectContextAdapter_
+- [ ] 9.2 project CRUDとcontext再検証を一つの成功フローへ統合する
+  - projectの作成、改名、削除が成功した場合だけcontext refreshを一度実行し、最新catalogに対する現在projectの再検証後に表示を確定する。
+  - project mutation失敗時はrefreshを呼ばず、既存表示と入力を保持して同じ操作を再試行できる状態にする。
+  - project CRUDが未保存draftの作業対象へ影響する場合は永続mutation前に破棄確認を完了し、取消時はservice mutationとrefreshのどちらも呼ばない。
+  - integration testでmutation、確認、refresh、表示確定の順序と呼出回数を観測できることを完了条件とする。
+  - _Depends: 9.1_
+  - _Requirements: 1.5, 1.6, 1.8_
+  - _Boundary: CandidateManagementService, ProjectContextAdapter, ManagementState_
+- [ ] 9.3 refresh失敗からの再検証専用回復を実装する
+  - project mutation成功後のrefresh失敗を`context-refresh-failed`として区別し、保存済みmutationを再送せずrefreshだけを再試行する。
+  - pending pre-editはproject作成成功だけでは解決せず、続くrefreshが`ready`を返した時点で選択IDへbindingする。
+  - project作成またはrefreshが失敗した場合はpendingと入力を保持し、重複project作成を起こさず回復できるようにする。
+  - state testでrefresh-only再試行、ready後の一度だけのbinding、失敗中のdraft保持を確認する。
+  - _Depends: 9.2_
+  - _Requirements: 1.7, 7.3, 7.4_
+  - _Boundary: ProjectContextAdapter, ManagementState_
+
+- [ ] 10. プロジェクト切替時のdraft保護を実装する
+- [ ] 10.1 project-context guard protocolへ候補管理を参加させる
+  - stable guard IDで登録し、候補draftまたはpending pre-editのdirty状態に応じて切替許可または破棄確認要求を返す。
+  - guard評価と確認結果をcontext generationおよびrequest IDへ結び付け、古い確認完了をstateへ適用しない。
+  - start失敗を判別可能にし、停止時はguardと購読を一度だけ解除する。
+  - adapter testでclean許可、dirty確認要求、stale結果のno-op、冪等cleanupを決定的に確認する。
+  - _Depends: 9.1; project-context 2.1, 2.3, 2.4_
+  - _Requirements: 8.1, 8.2, 8.6_
+  - _Boundary: ProjectContextAdapter_
+- [ ] 10.2 通常切替の確認とdraft破棄を管理画面へ統合する
+  - dirtyな候補draftまたはpre-editを保持したまま破棄確認を表示し、確認処理中も入力を変更しない。
+  - 取消ではdraftと現在projectを維持し、確定した切替だけが旧draftを破棄して新しい現在projectの候補を表示する。
+  - project CRUD前の確認にも同じdirty判定と確認結果を使用し、取消時は永続操作を開始しない。
+  - DOM testで確認表示、取消後の入力保持、確定後のdraft破棄と一覧切替を利用者操作だけから観測する。
+  - _Depends: 10.1_
+  - _Requirements: 1.8, 8.2, 8.3, 8.4_
+  - _Boundary: ManagementState, ManagementView_
+- [ ] 10.3 強制切替後も旧projectのdraftを安全に保持する
+  - project削除またはcatalog置換のforced通知ではdirty draftを破棄せず、変更前projectへ固定した回復待ち状態へ移す。
+  - draftのproject IDを新しい現在projectへ書き換えず、暗黙の再bindingや保存を禁止する。
+  - 利用者へ取消または明示的な再開始を案内し、保存操作が新projectへ到達しないようにする。
+  - integration testでforced切替後も入力が残り、新projectへのmutationが発行されないことを確認する。
+  - _Depends: 10.1_
+  - _Requirements: 8.5_
+  - _Boundary: ProjectContextAdapter, ManagementState_
+
+- [ ] 11. activation・snapshot・registrationを現在projectへ統合する
+- [ ] 11.1 pre-edit activationの保存先を現在projectだけから解決する
+  - activation受理時にcontext snapshotを読み、`ready`の選択IDだけをunresolved draftへ付与してeditorを開く。
+  - payload内project IDはshape検査だけに使い、保存先、fallback、context変更には使用しない。
+  - `empty`または`unavailable`はactivation成功の`project-required`としてpendingを保持し、入力元へ失敗を返さない。
+  - activation testでcurrent binding、payload ID非権威性、pending受理、未信頼payload拒否を確認する。
+  - _Depends: 9.1, 9.3_
+  - _Requirements: 6.6, 7.1, 7.2, 7.3, 7.5, 7.8_
+  - _Boundary: CandidateActivation_
+- [ ] 11.2 snapshotのproject metadataを一致検査だけに限定する
+  - snapshot version 2と既存shapeを維持し、`selectedProjectId`を現在projectとの一致検査にだけ使用する。
+  - contextが`ready`でIDが一致し、参照とdraftが検証可能な場合だけ編集状態を復元する。
+  - 不一致、ID不存在、empty、unavailable、不正version・shape・内容ではcontextと永続データを変更せず、安全な初期状態または既存pending保持状態へ退避する。
+  - snapshot integration testで一致時の復元と全拒否分岐を確認し、context commandが一度も呼ばれないことを観測する。
+  - _Depends: 9.1, 10.3_
+  - _Requirements: 6.1, 6.2, 9.1, 9.2, 9.3, 9.4, 9.5_
+  - _Boundary: ManagementStateSnapshotCodec, ProjectContextAdapter, ManagementState_
+- [ ] 11.3 context adapterをfeature lifecycleとproduction contributionへ接続する
+  - composition専用入口からproject-contextのread、command、guard portだけを受け、preference storeやservice内部へ依存しない。
+  - mount開始時に通常draftを初期化して検証済みrollback snapshotだけを復元し、同一document sessionのpending pre-editは長寿命state上で保持する。
+  - unmount時にcontext購読とguardを一度だけ解除し、再mount後に重複通知や重複guardが残らないようにする。
+  - registration contract testでport注入、pending保持、snapshot restore、cleanup後の非通知を確認する。
+  - _Depends: 9.1, 10.1, 11.1, 11.2; application-shell 5.2; project-context 2.4_
+  - _Requirements: 3.1, 3.6, 6.1, 7.2, 7.3, 7.9, 7.10, 8.1, 9.4_
+  - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, ManagementState_
+
+- [ ] 12. UIと横断回帰で現在projectの一貫性を検証する
+- [ ] 12.1 project未解決・refresh失敗・強制切替の回復表示を完成する
+  - `project-required`、`context-refresh-failed`、`project-changed-with-draft`を利用者が区別できる文言と操作へ写像する。
+  - 通常のdirty切替では破棄確認と取消・確定操作を表示し、候補管理内に共通selectorを重複表示しない。
+  - project未解決または強制切替回復待ちではmutation操作を開始不能にし、serviceを呼ばず読取と案内を維持する。
+  - DOM testで各状態の表示、確認結果、入力保持、操作抑止、selector非存在を確認する。
+  - _Depends: 9.3, 10.2, 10.3, 11.1, 11.2_
+  - _Requirements: 1.7, 2.6, 3.6, 3.7, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4, 8.5, 9.4_
+  - _Boundary: ManagementState, ManagementView_
+- [ ] 12.2 context切替とproject CRUDの横断契約を検証する
+  - ready、empty、unavailableの追従、clean切替、dirty確認、取消、確定、stale確認、forced切替を同じ架空context harnessで検証する。
+  - project mutation成功時のrefresh一回、mutation失敗時のrefreshなし、mutation成功・refresh失敗後のrefresh-only回復を検証する。
+  - project CRUD前確認の取消ではmutationもrefreshも発行されず、確定時だけ順序どおり実行されることを確認する。
+  - 全分岐で候補が検証済みの現在project以外へ表示・保存されないことを完了条件とする。
+  - _Depends: 9.1, 9.2, 9.3, 10.1, 10.2, 10.3, 12.1_
+  - _Requirements: 1.5, 1.6, 1.7, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+  - _Boundary: CandidateManagement Context Integration_
+- [ ] 12.3 activationとsnapshotの非権威性を統合検証する
+  - payload内project IDとsnapshot内project IDがcontextを変更せず、検証済みの現在projectだけが保存先となることを確認する。
+  - readyへのpre-edit binding、empty/unavailableのpending、refresh後の継続、snapshot一致時の復元を検証する。
+  - snapshot不一致・不存在・不正時の安全退避と、pendingが同一document sessionだけで保持され再生成後は復元されないことを確認する。
+  - public activationとshell rollback経路を通したtestが全分岐で入力・永続データを意図どおり保持することを完了条件とする。
+  - _Depends: 11.1, 11.2, 11.3, 12.1_
+  - _Requirements: 6.1, 6.2, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.8, 7.9, 7.10, 9.1, 9.2, 9.3, 9.4, 9.5_
+  - _Boundary: CandidateActivation, ManagementStateSnapshotCodec, CandidateFeatureRegistration_
+- [ ] 12.4 production E2Eで共通project選択との一貫性を確認する
+  - application shellが合成する共通selectorでprojectを切り替え、候補管理が同じ選択の候補だけへ更新されることを実artifactで確認する。
+  - dirty draftの取消・確定、project作成後のrefreshとpre-edit継続、一致する現在projectでのrollback復元を利用者操作から検証する。
+  - empty/unavailableと強制切替時に別projectへ暗黙保存せず、回復案内が表示されることを確認する。
+  - boot時のconsole/runtime errorがなく、既存の候補CRUD、source、build向け公開契約が回帰しない状態を完了条件とする。
+  - _Depends: 12.2, 12.3; project-context 3.3, 4.4_
+  - _Requirements: 1.1, 1.5, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 6.1, 6.6, 7.1, 7.2, 7.3, 8.2, 8.3, 8.4, 8.5, 9.3, 9.4_
+  - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, Production Candidate Management E2E_
+
 ## Implementation Notes
 
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。

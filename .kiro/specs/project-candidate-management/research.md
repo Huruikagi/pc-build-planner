@@ -69,7 +69,7 @@
 
 ### 2026-07-27 transient product capture移行への追従
 - **Sources Consulted**: `product-capture-transient-migration/{requirements.md,design.md}`、`transient-feature-surface/design.md`、`application-shell/design.md`、候補管理の既存コード。
-- **Findings**: captureは`CandidateManagementPublicApi.createCandidateEditorIntent`でpayloadを作り、現行`activationId`とともに`TransientSurfaceLifecyclePort.conclude`へ渡す。候補管理は世代を所有せず、`FeatureActivationAdapter`のvalidate/activate結果だけを返す。project未指定は候補管理の直近stateで解決し、0件なら有効な`project-required`受理となる。
+- **Findings**: captureは`CandidateManagementPublicApi.createCandidateEditorIntent`でpayloadを作り、現行`activationId`とともに`TransientSurfaceLifecyclePort.conclude`へ渡す。候補管理は世代を所有せず、`FeatureActivationAdapter`のvalidate/activate結果だけを返す。project解決方法は2026-08-03の判断で置換し、現在は`project-context`だけをauthorityとする。
 - **Implications**: 旧`CaptureCandidatePort`、`openCandidateEditor`、capture側project queryを公開契約から除去する。`pendingPreEdit`は長寿命ManagementStateへsession限定で保持し、永続root・backup・opaque snapshotへ含めない。
 
 ### 2026-07-27 下流source・duplicate契約の保全
@@ -87,3 +87,28 @@
 
 ### Simplification
 - 公開操作をintent factoryへ縮小し、capture向けwrite portと直接navigation methodを削除する。`pendingPreEdit`は既存ManagementStateへの一field追加とし、別storeや永続schemaを導入しない。
+
+## 2026-08-03 project-context統合の再設計
+
+### Summary
+
+本specは既存候補管理の拡張であるためlight discoveryを実施した。更新要件は新規ライブラリや外部APIを導入せず、隣接`project-context`の公開portを利用して、旧来のfeature内selector・一覧先頭fallback・snapshot ID authorityを撤去する統合変更である。
+
+### Research Log
+
+- `project-context`は`read`、`commands`、`guards`を能力別に公開し、ready/empty/unavailable snapshot、generation付き確認、forced notification、refreshを所有する。候補管理はこの公開境界だけへ依存できる。
+- 現行候補管理設計はproject未指定pre-editを「選択中→一覧先頭」で解決し、snapshot内`selectedProjectId`を復元根拠としていた。これは現在projectを唯一のauthorityとする更新要件に反する。
+- project CRUDとcontext preferenceは異なる整合性境界である。mutation成功後のrefresh失敗をmutation失敗と同一視すると同じCRUDを再送する危険があるため、保存済み結果とcontext再検証失敗を別状態にする必要がある。
+
+### Design Decisions
+
+- **Generalization**: candidate draftとpending pre-editを「project切替で失ってはならないdirty work」として一つのguard判定へ集約する。forced切替は確認可能なuser切替と分け、旧project bindingを保持した回復待ちへ移す。
+- **Build vs. Adopt**: 独自selector、preference、fallback、確認tokenを実装せず、`project-context`のread/command/guard portを採用する。新規依存は追加しない。
+- **Simplification**: `CandidateEditorPrefill.projectId`とsnapshotの`selectedProjectId`は既存shape互換の検査用metadataとして残すが、保存先やcontext変更には使用しない。snapshot versionを上げず、adapter一つへ購読・guard・refresh調停を閉じる。
+
+### Risks & Mitigations
+
+- CRUD成功後のrefresh失敗による二重mutation: `context-refresh-failed`でrefresh-only recoveryを提供する。
+- async確認中のcontext更新によるdraft消失: generationとrequest IDが一致する結果だけを適用する。
+- forced切替後の誤保存: draftのproject IDを書き換えず保存不能な回復待ち状態にする。
+- legacy snapshotによるauthority逆流: current snapshotとの一致検査だけに使い、不一致時はcontextを変更しないcontract testを置く。
