@@ -1,6 +1,8 @@
 # Research & Design Decisions
 
 ## Summary
+
+2026-08-03のlight discoveryでは、追加要件4.6–4.7と7.9–7.14を既存実装へ統合する境界を調査した。通常Repositoryは破損・未対応版を既にfail-closedに分類できるが、既存の置換評価・maintenance取得・置換commitはいずれも最初にcurrent rootの正常decodeを要求するため、異常rootからの回復には到達できない。現行schema値を変えず、公開正規値の一元化、raw fingerprint、root外の最小RecoveryControl、用途別RecoveryDataPortを追加する設計を採用する。
 - **Feature**: `local-data-foundation`
 - **Discovery Scope**: Complex Integration（full discovery、Task 4.1 blocker再設計）
 - **Key Findings**:
@@ -72,12 +74,25 @@
 - **Findings**: compile-time型だけではstorage/JSONを検証できない。10MB以内の単一rootは参照整合性の全体検証と一括`set`に適する。
 - **Implications**: boundary inputは`unknown`として検証し、`assessReplacement`は副作用なし、`replaceRoot`は評価tokenとmaintenance fenceを要求する。移行は純粋な`N -> N+1`連鎖とする。
 
+### 異常rootからの回復境界
+- **Context**: 7.9–7.14は、current rootが破損または未対応版でも候補評価と明示的回復を要求する。
+- **Sources Consulted**: `src/persistence/{repository,root-transaction-runner,replacement,maintenance,runtime-contribution,schema}.ts`、関連contract/integration tests、Chrome StorageとWeb Locksの既存調査結果
+- **Findings**: Repositoryの通常readは異常種別を返せるが、runnerの評価・maintenance・置換は検証済みrootのrevisionとroot内maintenanceを前提とする。異常root内へ新しいowner stateを書けば元データ保持に反し、worker memoryだけでは再生成耐性を満たさない。`schema.ts`の正規値がpublic entryから未公開で、`replacement.ts`に同値のローカル定義もある。
+- **Implications**: raw rootを公開せずcanonical fingerprintだけをcursorへ束縛する。回復owner/generation/leaseは別keyの最小RecoveryControlへ永続化し、全writerが固定Web Lock内で確認する。回復root write後にcontrolをreleaseする二段階とし、中断時はactiveのまま安全側に停止する。schema版は`CURRENT_SCHEMA_VERSION`だけを公開・参照する。
+
+### 候補draftとruntime portの既存統合点
+- **Context**: 3.10、3.11の設計反映と変更範囲を確認した。
+- **Sources Consulted**: `src/domain/validation.ts`、`src/domain/public.ts`、`src/persistence/{write-authority,runtime-contribution,public}.ts`、関連tests
+- **Findings**: ID・日時なし候補内容のcanonical validatorとfield path error、query/mutateだけのfrozen scoped portは実装済みである。一方、runtime contributionには広いfull data portも存在するため、通常UIと復元機能の注入境界を設計上明示する必要がある。
+- **Implications**: validatorは新規規則を作らず既存canonical契約を公開・回帰する。通常UIは`FoundationScopedDataPort`、backup-restoreは最小`RecoveryDataPort`を受け取り、汎用full capabilityのconsumer注入を禁止する。
+
 ## Architecture Pattern Evaluation
 
 | Option | Description | Strengths | Risks / Limitations | Notes |
 |---|---|---|---|---|
 | Ports and adapters + single write authority | domain契約をChrome APIから分離し、mutationを一つのauthorityへ集約 | 型安全、テスト容易、整合性境界が明確 | worker message contractが必要 | 採用 |
 | Web Lock + durable fence | 同名exclusive lockで協調writerを線形化し、ownershipはrootへ永続化 | StoragePortを純粋に保ち、worker再生成後もfail-closed | lock迂回writerを技術的には防げない | 採用 |
+| raw fingerprint + sidecar RecoveryControl | 異常rootをdecodeせず状態を束縛し、回復ownerを別keyへ永続化 | 元rootを変更せずbootstrapでき、worker再生成に耐える | root writeとcontrol releaseは二段階 | 異常root回復に限定して採用 |
 | Adapter内Promise/WeakMap queue | Storage adapterごとにread-check-writeを直列化 | 同一realmでは簡単 | worker再生成、別API facadeで消失しtest doubleが過剰保証 | 不採用 |
 | IndexedDB transaction | readwrite transactionで厳密なatomicityを得る | 複数realmでもtransactional | chrome.storage.local単一root、容量・backup設計を変更 | MVPでは不採用、crash durability必須時に再検討 |
 | 各featureからStorage API直接利用 | featureごとにread-modify-write | 初期コードが少ない | lost update、検証・排他の分散 | 不採用 |
@@ -142,6 +157,13 @@
 - **Selected Approach**: `Result<T, E>`とfoundation error unionを`src/domain/result.ts`で所有する。Chrome以外のadapter、同期、export I/Oは実装しない。
 - **Rationale**: 小さい安定契約で追加runtime依存を避ける。
 
+### Decision: 異常root回復はraw fingerprintとRecoveryControlでfenceする
+- **Context**: 破損・未対応版rootではrevisionとroot内maintenanceを信頼できないが、候補評価・commit間の保存状態変化とstale ownerを拒否する必要がある。
+- **Alternatives Considered**: 異常rootへmaintenance stateを書き込む、worker memory lease、Web Lockだけ、root外の永続control。
+- **Selected Approach**: raw rootのcanonical SHA-256 fingerprintを評価cursorへ束縛し、別keyのRecoveryControlへgeneration、owner、lease、activeだけを保存する。commit時は同じ固定Web Lock内でfingerprint、候補digest、schema、capacity、control fenceを再照合する。
+- **Rationale**: 異常rootを正常値として公開・変更せず、worker再生成後もstale operationを拒否できる最小の追加境界である。
+- **Trade-offs**: root writeとcontrol releaseは複数keyのdurable transactionではない。rootを先にwriteし、controlを後でreleaseすることで中断時は書込を許可せず、ownerのreleaseまたはlease切替で回復する。
+
 ## Risks & Mitigations
 - authorityを迂回した直接write — `TRUSTED_CONTEXTS`、公開port限定、import境界test、禁止API scanで抑止する。
 - Web Lock callback中のworker終了 — lockは解放されるが成功を返さず、永続active fenceを次workerが再読込してfail-closedにする。
@@ -150,6 +172,8 @@
 - 容量見積り差 — `getBytesInUse`と直列化見積りに加え、実write rejectを正規化し既存rootを保持する。
 - root全体書換性能 — 10MB近傍でread/validate/repair/writeを計測し、閾値超過時だけstorage設計を再検討する。
 - migration/validation失敗による上書き — source値を変更せず、current root検証成功後だけ明示mutationで保存する。
+- 回復中断でcontrolがactiveのまま残る — 通常writeをfail-closedに保ち、同じgeneration/ownerのreleaseまたは期限後の新generation取得だけを許可する。
+- schema正規値の重複 — `schema.ts`の公開`CURRENT_SCHEMA_VERSION`だけを保存・migration・replacement・交換形式からimportし、リテラル重複をboundary testで拒否する。
 
 ## References
 - [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage/) — 10MB quota、`getBytesInUse`、access level、write failure

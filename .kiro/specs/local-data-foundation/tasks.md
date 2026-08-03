@@ -332,6 +332,103 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 3.1, 3.8, 3.10, 6.1, 6.4, 8.2_
   - _Boundary: FoundationRuntimeContribution, FoundationDataPort_
 
+- [ ] 7. 現行schema契約と異常root回復の基礎を追加する
+- [ ] 7.1 現行schema versionの正規契約を一元化する
+  - 既存のruntime schema基盤を利用し、初期root、migration、通常置換、回復候補評価が同じ公開正規値を参照する
+  - 保存schemaの数値を別moduleやconsumerで重複定義せず、schemaの値と保存構造自体は変更しない
+  - 公開consumerが唯一の正規値を参照でき、各保存経路と交換形式向け写像で一致することを検証できる状態を完了条件とする
+  - _Requirements: 4.6, 4.7_
+  - _Boundary: SchemaContract_
+
+- [ ] 7.2 保存rootの固定形状をcanonical検証へ統合する
+  - 業務rootの固定keyだけを受理し、表示言語などroot外の利用者設定を予期しないfieldとして拒否する
+  - root外の回復controlをdomain rootと交換形式へ含めず、既存の有効な保存root形状を維持する
+  - root外設定または回復controlが混入した入力をfield位置付きで拒否し、正規rootだけが保存経路へ進めることを完了条件とする
+  - _Requirements: 2.8, 3.2, 4.7_
+  - _Boundary: SchemaValidator_
+
+- [ ] 7.3 (P) 異常rootと回復制御を扱う保存adapter契約を追加する
+  - 正常decodeを前提にせずraw rootを読み、root外の最小回復controlを独立keyで読み書きできる保存契約を提供する
+  - 容量計測はrootと回復controlの両keyを含み、Storage例外を機械判別可能な失敗へ変換する
+  - raw rootや回復owner・leaseを公開portへ露出せず、正常・破損・未対応rootとcontrol欠損を架空adapterで再現できる状態を完了条件とする
+  - _Depends: 7.1_
+  - _Requirements: 5.1, 5.3, 6.1, 7.9, 7.10, 7.12_
+  - _Boundary: ChromeStorageAdapter_
+
+- [ ] 7.4 (P) root外の回復generation・owner・lease方針を実装する
+  - control欠損をinactive generation 0として扱い、取得・更新・終了・中止を純粋な状態遷移として判定する
+  - stale generation、owner、leaseを拒否し、通常writerがactive回復中を識別できる認可結果を返す
+  - worker memoryを共有しない再生成後も永続controlだけから同じactive判定と次generationを得られることを完了条件とする
+  - _Depends: 7.1_
+  - _Requirements: 1.3, 7.12, 7.13_
+  - _Boundary: RecoveryControlPolicy_
+
+- [ ] 7.5 異常root分類と回復候補評価を統合する
+  - raw rootを正常値として公開せず、canonical fingerprint付きの破損または未対応versionへ分類する
+  - 既存の置換評価を回復境界へ接続し、候補をmigration、全体検証、容量判定してcurrent anomalyと候補拒否理由を別fieldで返す
+  - 同じraw rootと候補ではcursorが安定し、raw値・候補digest・schema・必要bytes・control generationの変化を検出でき、評価中に保存値が変わらないことを完了条件とする
+  - _Depends: 7.2, 7.3, 7.4_
+  - _Requirements: 4.2, 4.3, 4.7, 5.1, 5.3, 7.9, 7.10, 7.11, 7.13_
+  - _Boundary: RecoveryCoordinator, ReplacementCoordinator_
+
+- [ ] 8. 回復fencing・原子的置換・用途別公開portを統合する
+- [ ] 8.1 すべてのwriterへactive回復controlのfencingを統合する
+  - 通常mutation、通常置換、root内保守操作、回復操作が同じ固定Web Lock内で最新controlを確認する
+  - active回復中はownerを持たない通常writerを一貫して拒否し、worker再生成や並行要求でもrootを変更しない
+  - 回復controlの読取失敗や不正値ではfail closedとなり、既存rootを保持する統合結果を完了条件とする
+  - _Depends: 7.3, 7.4_
+  - _Requirements: 1.3, 3.5, 3.8, 7.4, 7.5, 7.6, 7.12, 7.13_
+  - _Boundary: RootTransactionRunner_
+
+- [ ] 8.2 回復保守操作をlock付きtransactionへ統合する
+  - 異常rootをdecodeせず、同じ固定Web Lock内で回復controlの取得・更新・終了・中止を直列化する
+  - 同時取得は一件だけ成功させ、stale owner・generation・leaseと再生成前ownerの操作を拒否する
+  - 正常終了または明示中止後だけ後続writerが再開し、中断時はactive controlが残ることを完了条件とする
+  - _Depends: 7.5, 8.1_
+  - _Requirements: 7.4, 7.5, 7.6, 7.7, 7.12, 7.13_
+  - _Boundary: RootTransactionRunner, RecoveryControlPolicy_
+
+- [ ] 8.3 評価済み候補による回復root置換を完成する
+  - commit直前にraw fingerprint、candidate digest、target schema、required bytes、control generation・owner・leaseを再照合する
+  - 一致した候補だけをroot keyへ一回writeし、各stale条件、容量不足、保存失敗では異常rootを変更しない
+  - 成功後は検証済み通常queryとmutationが利用可能になるまでcontrolをactiveに保ち、確認後のreleaseで通常利用へ復帰できることを完了条件とする
+  - _Depends: 8.2_
+  - _Requirements: 3.3, 3.5, 4.7, 5.3, 7.12, 7.13, 7.14_
+  - _Boundary: RootTransactionRunner, RecoveryCoordinator_
+
+- [ ] 8.4 通常UIと回復機能の用途別公開portを是正する
+  - 通常UI handleはqueryと原子的mutationだけを維持し、置換・保守・回復・Storage・lockへ到達不能にする
+  - backup-restore専用handleへ回復候補評価、回復保守、評価済み回復置換だけを公開し、通常CRUDとraw rootを公開しない
+  - production factoryのaccess restriction失敗時は両portを含むhandleを公開せず、旧完全portのproduction到達を境界検査で拒否できる状態を完了条件とする
+  - _Depends: 8.3_
+  - _Requirements: 3.10, 6.1, 6.3, 7.10, 7.12, 7.14_
+  - _Boundary: RuntimeContributionFactory, FoundationScopedDataPort, RecoveryDataPort_
+
+- [ ] 9. 架空データによる回復回帰と最終gateを完成する
+- [ ] 9.1 異常root・回復control・候補評価の決定的回帰を追加する
+  - 架空の破損rootと将来version rootだけで分類、fingerprint、候補不正・未対応・容量超過、二重診断を検証する
+  - control遷移、stale generation・owner・lease、worker再生成、raw非露出と評価時非変更を検証する
+  - unit・contract suiteが実サイト由来assetなしで全拒否理由を安定して再現できることを完了条件とする
+  - _Depends: 7.5, 8.2_
+  - _Requirements: 7.9, 7.10, 7.11, 7.12, 7.13, 8.1, 8.2, 8.3_
+  - _Boundary: Recovery Validation_
+
+- [ ] 9.2 回復transactionと公開runtime境界の統合回帰を追加する
+  - 各stale cursor、並行writer、worker再生成、root write失敗、中断後active controlを公開port経由で検証する
+  - 回復成功後の通常query・mutation復帰と、通常UI・回復portの相互capability非露出を検証する
+  - production-shaped graphと架空Storageで単一root write、旧root保持、fail-closed初期化が観測できることを完了条件とする
+  - _Depends: 8.4, 9.1_
+  - _Requirements: 1.3, 3.3, 3.5, 3.8, 6.1, 6.3, 7.12, 7.13, 7.14, 8.1, 8.2_
+  - _Boundary: Recovery Transaction and Runtime Contract Validation_
+
+- [ ] 9.3 schema正規値・回復境界・生成物の最終gateを統合する
+  - schema正規値の重複、root外設定の混入、raw root・回復control・旧完全portの公開、Storage・lock迂回をsourceとartifactで拒否する
+  - fixture資産、MV3権限、CSP、remote code、動的評価、inline JavaScriptの既存検査を維持する
+  - typecheck、Biome、全test、build、boundary・fixture・artifact scanが共通検証commandで連続成功することを完了条件とする
+  - _Depends: 9.2_
+  - _Requirements: 1.1, 1.2, 1.4, 2.8, 4.6, 4.7, 5.4, 5.5, 6.3, 7.9, 7.10, 7.12, 7.14, 8.1, 8.2, 8.3_
+  - _Boundary: Recovery and Schema Final Validation_
+
 ## Implementation Notes
 
 - 候補取得元の欠損や元表記snapshotは下流で補完せず、Foundationのoptional canonical契約へそのまま保存する。
