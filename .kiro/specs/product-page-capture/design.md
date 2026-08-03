@@ -4,12 +4,13 @@
 
 商品ページ取り込みは、一過性surfaceで固定タブの抽出だけを実行し、成功結果を候補管理の非一過性pre-editへ即時handoffする。確認、補正、project解決、保存はcandidate-managementへ委譲し、対象タブの権限寿命と編集寿命を分離する。
 
-抽出pipelineはJSON-LD、meta、見出し・パンくず、表・定義リストの汎用候補を収集し、メーカーが欠損する場合だけローカルなメーカーdomain mapを最下位候補として追加する。固定tabから同じpipelineで価格だけを返す`PagePriceExtractionPort`は維持し、`source-price-refresh`の公開consumer契約を変更しない。
+抽出pipelineはJSON-LD、明示allowlistに含まれるOpenGraph・Twitter Card・product metadata、見出し・パンくず、表・定義リストの汎用候補を収集し、メーカーが欠損する場合だけローカルなメーカーdomain mapを最下位候補として追加する。`og:site_name`は任意のsource表示名として商品項目と分離して扱い、URL同一性やページ種別判定には用いない。固定tabから同じpipelineで価格だけを返す`PagePriceExtractionPort`は維持し、`source-price-refresh`の公開consumer契約を変更しない。
 
 ### Goals
 
 - 現行activationの固定タブだけを一回抽出し、stale結果をhandoffしない
 - 取得候補、正規化、順位、provenanceのcanonical ownerをproduct-captureへ維持する
+- metadata propertyと取得先項目の対応をclosed allowlistで固定し、任意の取得元サイト名を安全にhandoffする
 - メーカー公式domainによる欠損メーカー名の補完を最下位優先度で追加する
 - 抽出結果をproject未解決pre-editとしてcandidate-managementへ即時handoffする
 - `PagePriceExtractionPort`のshapeと同一pipeline利用を維持する
@@ -26,7 +27,8 @@
 
 ### This Spec Owns
 
-- 汎用DOM候補収集、payload検証、正規化、固定順位、取得根拠
+- 汎用DOM候補収集、metadata allowlist、payload検証、正規化、固定順位、取得根拠
+- `og:site_name`から任意のsource `siteName`候補を生成し、元表記とOpenGraph provenanceを保持する写像
 - `ExtractionSource: "domain-map"`と、`manufacturer-domain-map.ts`に隔離したメーカー公式eTLD+1 metadata
 - `candidate-source-bookmarks`がsource種別判定に利用する、read-onlyな`ProductCapturePublicApi.manufacturerDomains`照合seam
 - 固定tab抽出結果からproject未解決pre-editを組み立てるproduct-capture側の写像
@@ -39,6 +41,7 @@
 - candidate-managementによるpre-edit受理、project解決、編集state、保存時validation、永続化
 - domain entryの存在を利用したサイト固有DOM抽出、権限拡張、利用許可判定
 - candidate sourceの種別判定、複数source化、価格反映
+- `siteName`によるURL同一性、source永続識別、source種別またはページ種別の判定
 - メーカー公式であることを推測したentry、販売代理店や地域domainの自動同一視
 
 ### Allowed Dependencies
@@ -55,10 +58,11 @@
 - `TransientSurfaceLifecyclePort.conclude`、activation世代、固定tabまたは失効条件が変わる
 - `UnresolvedCandidateDraft`、candidate editor intent、pre-edit受理条件が変わる
 - 抽出source priority、`ExtractionSource`、manufacturer provenanceが変わる
+- metadata property allowlist、propertyから取得先項目への写像、`siteName`上限またはsource draft契約が変わる
 - domain entryの所有者、根拠、対象eTLD+1または取得ポリシーが変わる
 - `PagePriceObservation`、`PagePriceExtractionError`、固定tab/page-derived URL照合が変わる
 - `candidate-source-bookmarks`が参照するdomain map契約、または`source-price-refresh`が参照するprice portが変わる
-- **Cross-spec remediation**: `candidate-source-bookmarks/design.md`のExisting Architecture Analysisおよび`CaptureSourceMapper`依存が旧`CaptureCandidatePort`を参照している。一方、`product-capture-transient-migration/design.md`は同contractをcandidate-management公開APIから廃止し、`UnresolvedCandidateDraft` + typed intent factory + `TransientSurfaceLifecyclePort.conclude`へ置換すると確定している。前者を実装前に再検証し、旧contractをsource初期化の前提にしない。
+- **Cross-spec verification**: `candidate-source-bookmarks`は再検証済みで、現行設計は`CandidateEditorPrefill`、typed intent factory、`TransientSurfaceLifecyclePort.conclude`を参照し、旧`CaptureCandidatePort`依存は残っていない。今後このhandoff seamが変わる場合だけ再検証する。
 
 ## Architecture
 
@@ -68,6 +72,7 @@
 - `product-capture-transient-migration`はcapture stateを`idle | extracting | failed`へ縮小し、固定tabとgeneration gate、candidate-managementへの原子的handoffを確定している。
 - `source-price-refresh`は`ProductCapturePublicApi.pagePriceExtraction`からpage-derived URL、取得時点、任意の価格provenanceを受け取る。
 - domain mapは新しいDOM collectorではなく、汎用抽出後にメーカー欠損だけを補うローカル候補供給源として追加できる。
+- metadataは名前空間単位で包括採用せず、propertyと取得先項目の組をclosed allowlistとして検証する。`og:site_name`だけが任意のsource表示名を供給する。
 
 ### Architecture Pattern & Boundary Map
 
@@ -76,6 +81,7 @@ graph LR
     Surface[Transient surface] --> Coordinator[Capture coordinator]
     Coordinator --> Runtime[Fixed tab runtime]
     Runtime --> Extractor[Generic extractor]
+    Extractor --> MetadataPolicy[Metadata allowlist]
     Extractor --> DomainMap[Manufacturer domain map]
     Extractor --> Normalizer[Normalizer]
     DomainMap --> Normalizer
@@ -108,17 +114,19 @@ graph LR
 
 ```text
 src/features/product-capture/
-  contracts.ts                       # ExtractionSourceを含む抽出・payload・session型
-  manufacturer-domain-map.ts         # new; 公式eTLD+1 metadata、照合、domain-map候補生成
-  extractor.ts                       # 汎用DOM候補収集とdomain-map候補の合成
-  normalizer.ts                      # 文字列、URL、価格、属性の境界検証
-  ranker.ts                          # domain-mapを最下位とする決定的順位
-  chrome-runtime-port.ts             # activation固定tabの解決・注入
-  coordinator.ts                     # request、tab、page URL、generation結果の調停
+  contracts.ts                       # modify; metadata family provenance、任意siteName、payload型
+  metadata-property-map.ts           # create; 対応metadata propertyと取得先項目のclosed allowlist
+  manufacturer-domain-map.ts         # modify; 公式eTLD+1 metadata、照合、domain-map候補生成
+  extractor.ts                       # modify; 汎用DOM候補、allowlist、domain-map候補の合成
+  content-script.ts                  # modify; allowlist対象metadataだけを収集するisolated page hook
+  normalizer.ts                      # modify; siteNameを含む文字列、URL、価格、属性の境界検証
+  ranker.ts                          # modify; metadata family同順位とdomain-map最下位の決定的順位
+  chrome-runtime-port.ts             # modify; 拡張payload decoderのclosed source union追従
+  coordinator.ts                     # modify; request、tab、page URL、metadata payloadの境界検証
   transient-activation.ts            # transient activation payload validation
-  draft-mapper.ts                    # 抽出結果からproject未解決pre-editへの写像
+  draft-mapper.ts                    # modify; 抽出結果と任意siteNameからproject未解決pre-editへの写像
   editor-handoff.ts                  # typed candidate intent生成とconclude再試行入力
-  page-price-extraction.ts           # fixed-tab価格観測port実装
+  page-price-extraction.ts           # modify; source union移行後も維持するfixed-tab価格観測port
   state.ts                           # idle、extracting、failedのみ
   view.tsx                           # 実行、実行中、失敗、handoff再試行のみ
   react-root.tsx                     # FeatureMountContextとReact root lifecycle
@@ -130,22 +138,22 @@ src/features/product-capture/
   submit-draft.ts                    # remove; candidate保存は境界外
   worker-registration.ts             # remove; gesture配送はshell transient基盤が所有
 tests/features/product-capture/
-  manufacturer-domain-map.test.ts    # new; eTLD+1、優先度、誤一致、未知domain
-  extractor.test.ts
-  normalizer.test.ts
-  ranker.test.ts
-  coordinator.test.ts
-  draft-mapper.test.ts
+  metadata-property-map.test.ts      # create; metadata family別の採用組と未列挙property拒否
+  manufacturer-domain-map.test.ts    # modify; eTLD+1、優先度、誤一致、未知domain
+  content-script.test.ts             # modify; synthetic meta収集と未列挙property拒否
+  extractor.test.ts                  # modify; family provenanceとsiteName部分欠損
+  normalizer.test.ts                 # modify; siteName正規化、長さ、制御文字
+  ranker.test.ts                     # modify; metadata family同順位と既存priority
+  coordinator.test.ts                # modify; runtime source decoderとinvalid payload
+  draft-mapper.test.ts               # modify; CandidateSource.siteName handoff
   editor-handoff.test.ts
-  page-price-extraction.test.ts
+  page-price-extraction.test.ts      # modify; metadata移行後の価格port非回帰
   state.test.ts
   view.test.tsx
   integration.test.ts
 tests/contracts/
-  product-capture-price-extraction.test.ts
-  product-capture-candidate-handoff.test.ts
-  product-capture-cross-spec-consumers.test.ts
-tests/fixtures/product-capture/             # synthetic data only
+  page-price-extraction-contract-kit.test.ts # modify; canonical consumer shape非回帰
+tests/fixtures/product-capture/              # create; metadata allowlist用synthetic data only
 ```
 
 application shellのruntime入口、candidate-management内部、manifest permission集合、source-price-refreshは本specの実装で直接編集しない。product-captureの一過性composition変更は`product-capture-transient-migration`の所有タスクと同じファイルへ着地するため、実装時は同specを先行させて統合する。
@@ -186,6 +194,14 @@ sequenceDiagram
 4. 汎用collectorにmanufacturer候補がない場合だけ`source: "domain-map"`の候補を追加する。
 5. rankerでも`domain-map`を全sourceの後に置き、将来のcollector合成順変更でも上書きを防ぐ。
 
+### Metadata allowlistと取得元サイト名
+
+1. `metadata-property-map.ts`はOpenGraph、Twitter Card、product拡張を区別し、対応propertyと`CaptureField`または`source.siteName`の組をreadonlyなclosed tableとして定義する。
+2. extractorはproperty名を正規化して完全一致したentryだけを候補化し、名前空間prefix一致や未知propertyの推測採用を行わない。
+3. `og:site_name`は`source.siteName`専用候補として、OpenGraph provenanceと元表記を保持したまま通常の文字列normalizerへ渡す。
+4. 欠損、空、上限超過、制御文字だけの値はsite nameだけを未取得にし、商品項目の抽出とhandoffを継続する。
+5. 有効なsite nameはcandidate-managementの任意source表示名へ写像するが、URL照合、source ID、source kind、ページ種別の入力には渡さない。
+
 ### 公開portからの価格観測
 
 ```mermaid
@@ -217,12 +233,16 @@ domain-mapはmanufacturerだけを生成するため価格順位へ影響しな�
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | 保存責務分離 | DraftMapper、EditorHandoff、Registration | candidate intent factory | 抽出handoff |
 | 6.1, 6.2, 6.3, 6.4, 6.5 | 世代単位の回復 | Coordinator、State、View | CaptureError、ActivationId | 抽出handoff |
 | 7.1, 7.2, 7.3, 7.4 | synthetic検証 | 全component | contract fixtures | 全フロー |
+| 7.5, 7.6 | metadata対応表と未列挙property拒否 | GenericExtractor、MetadataPropertyMap | MetadataPropertyRule | metadata allowlist |
+| 8.1, 8.2, 8.3, 8.4 | 任意取得元サイト名 | GenericExtractor、CaptureNormalizer、DraftMapper | SourcedSiteName | metadata allowlist、抽出handoff |
+| 8.5, 8.6, 8.7, 8.8 | metadata採用範囲とsite name非推測・非識別 | MetadataPropertyMap、GenericExtractor、DraftMapper | MetadataPropertyRule | metadata allowlist |
 
 ## Components and Interfaces
 
 | Component | Layer | Intent | Requirements | Key Dependencies | Contract |
 |---|---|---|---|---|---|
 | GenericExtractor | Page | 汎用候補を収集 | 2.1–2.6, 7.1, 7.4 | DOM P0 | Service |
+| MetadataPropertyMap | Config / pure rule | 対応metadata propertyと取得先項目を限定 | 7.5, 7.6, 8.1–8.8 | contracts P0 | Service |
 | ManufacturerDomainMap | Config / pure rule | 公式eTLD+1からメーカー欠損候補を供給 | 2.7–2.10, 7.3 | URL P0 | Service |
 | CaptureNormalizer | Feature | 未信頼値を正規化 | 3.1–3.6, 7.1 | contracts P0 | Service |
 | CandidateRanker | Feature | source優先度で一件を選択 | 2.2, 2.4, 2.8, 7.1, 7.3 | normalizer P0 | Service |
@@ -239,7 +259,9 @@ domain-mapはmanufacturerだけを生成するため価格順位へ影響しな�
 ```typescript
 export type ExtractionSource =
   | "json-ld"
-  | "meta"
+  | "open-graph"
+  | "twitter-card"
+  | "product-meta"
   | "heading"
   | "breadcrumb"
   | "table"
@@ -253,9 +275,30 @@ export interface ExtractionCandidate {
   readonly sourceLabel: string;
   readonly documentOrder: number;
 }
+
+export type MetadataNamespace = "open-graph" | "twitter-card" | "product";
+
+export interface MetadataPropertyRule {
+  readonly namespace: MetadataNamespace;
+  readonly property: string;
+  readonly target: CaptureField | "source-site-name";
+}
+
+export interface SourcedSiteName {
+  readonly value: string;
+  readonly rawValue: string;
+  readonly source: "open-graph";
+  readonly sourceLabel: "og:site_name";
+}
 ```
 
-coordinatorのruntime payload validator、viewのmessage-key mapping、normalizer、rankerを同じclosed unionへ追従させる。`domain-map`候補は`field: "manufacturer"`だけを許可し、page DOM由来と偽装しない。
+既存`"meta"` sourceはOpenGraph、Twitter Card、product拡張へ分割し、同じ「ページメタ情報」優先度内ではdocument orderで決定する。coordinatorのruntime payload validator、draft mapperのsource snapshot、normalizer、rankerを同じclosed unionへ原子的に追従させる。`domain-map`候補は`field: "manufacturer"`だけを許可し、page DOM由来と偽装しない。
+
+### MetadataPropertyMap
+
+`MetadataPropertyMap`は対応するOpenGraph、Twitter Card、product拡張propertyを明示列挙し、各propertyを一つの取得先へだけ写像する純粋configである。namespace全体の採用、未知propertyのsuffix/prefix推測、hostnameやtitleからのsite name補完を許可しない。`og:site_name`は必須`CaptureField`へ追加せず、欠損集合から分離した任意の`SourcedSiteName`へ写像する。
+
+allowlistの変更は取得範囲の変更として`web-content-acquisition.md`に照らして再レビューし、synthetic fixtureで全採用組と代表的な未列挙propertyをcontract testする。
 
 ### ManufacturerDomainMap
 
@@ -342,7 +385,7 @@ export interface ProductCapturePublicApi {
 
 - `RawCapturePayload`: 注入側から返る未信頼値。request、tab、page URL、candidate shapeを境界検証する。
 - `NormalizedField`: field、normalizedValue、rawValue、source、sourceLabel、validationを持つ。
-- `CaptureResult`: 固定tab、page URL、capturedAt、採用値、欠損、棄却理由を持つ一時値。
+- `CaptureResult`: 固定tab、page URL、capturedAt、採用値、任意の`SourcedSiteName`、欠損、棄却理由を持つ一時値。site nameは必須core fieldの欠損集合へ含めない。
 - `UnresolvedCandidateDraft`: project未解決のcandidate-management公開pre-edit契約。captureは保存可能なcanonical draftへ昇格しない。
 - `PagePriceObservation`: page-derived URL、取得時点、任意価格だけを持つread-only一時値。
 
@@ -352,6 +395,7 @@ export interface ProductCapturePublicApi {
 
 - runtime error: `tab-unavailable | permission-lost | restricted-page | tab-changed | injection-failed | invalid-payload`
 - extraction result: 候補欠損は正常な部分結果。domain不一致もerrorにしない。
+- metadata result: 未列挙propertyは無視し、不正な`og:site_name`はsite nameだけを棄却して他項目を維持する。
 - handoff error: lifecycleの`stale | target-unavailable | activation-rejected | not-started`相当を閉じたunionへ写像し、現行世代でだけintentを保持する。
 - fatal capture lifecycle: `permission-lost | tab-changed`は`capture-invalidated`としてshellへdismissし、常設面復帰と新しい明示操作が必要なnoticeをshellに委ねる。dismiss失敗・例外は非回復実行失敗として保持し、後発activationへ遅延結果を適用しない。
 - logging: error kindまたは安定コードだけを記録し、page URL、hostname、商品値、raw price、HTML、例外objectを出さない。
@@ -363,6 +407,8 @@ export interface ProductCapturePublicApi {
 ### Unit
 
 - JSON-LD、meta、見出し、パンくず、表、定義リストの候補収集と有界走査
+- OpenGraph、Twitter Card、product拡張の全対応property写像、family別provenance、未列挙propertyの拒否
+- `og:site_name`の正規化、上限、OpenGraph provenance、欠損時非推測
 - domain entryの完全一致、subdomain一致、dot-boundary誤一致、未知domain、不正entry
 - manufacturer既存時の非上書きと`domain-map`最下位順位
 - 文字列、URL、価格、カテゴリ参考値の正規化
@@ -373,6 +419,7 @@ export interface ProductCapturePublicApi {
 - 固定tab、request ID、page-derived URL、activation世代を接続し、stale結果をhandoffしない
 - runtimeが直接返す`permission-lost | tab-changed`で`capture-invalidated` dismiss、常設面復帰、activation失効noticeを検証し、dismiss失敗・例外・遅延結果を世代内へ閉じる
 - 抽出成功、空名manual pre-edit、handoff失敗・再試行、project不存在をcandidate public test doubleで検証する
+- 有効なsite nameを任意source表示名としてhandoffし、不正・欠損時も他の商品項目を維持する
 - `PagePriceExtractionPort`の6 failure、価格欠損、元表記、同一pipeline順位をconsumer fixtureで検証する
 - `public.ts`だけをimportするsource-price-refresh相当consumerがstrict型検査を通る
 - 旧`CaptureCandidatePort`、project query、直接navigation、save serviceへの依存がproduct-captureから消える

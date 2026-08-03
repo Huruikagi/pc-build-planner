@@ -8,7 +8,8 @@
   - 既存extractor / normalizer / rankerは根拠付き候補を分離しており、domain mapはmanufacturer専用の候補供給源として追加できる。
   - `product-capture-transient-migration`はcapture面を`idle | extracting | failed`へ縮小し、project未解決pre-editを`TransientSurfaceLifecyclePort.conclude`でcandidate-managementへ渡す契約を確定している。
   - `PagePriceExtractionPort`は`source-price-refresh`の確定済みconsumer契約であり、domain mapやhandoff移行後もshapeを維持する必要がある。
-  - `candidate-source-bookmarks/design.md`には廃止予定の`CaptureCandidatePort`参照が残り、実装前のcross-spec remediationが必要である。
+  - `candidate-source-bookmarks`の現行設計はtyped pre-edit intentへ更新済みで、旧`CaptureCandidatePort`依存は解消されている。
+  - metadataはnamespace全体ではなくproperty-to-targetのclosed allowlistで採用し、`og:site_name`だけを任意のsource表示名として扱う必要がある。
 
 ## Research Log
 
@@ -49,10 +50,21 @@
 - **Context**: source model移行とcapture transient移行が同じcandidate作成seamを異なる時点の設計で参照している。
 - **Sources Consulted**: `candidate-source-bookmarks/design.md` Existing Architecture Analysis、Requirements Traceability、CaptureSourceMapper component、`product-capture-transient-migration/design.md` Existing Feature Contracts / Existing Spec Revisions。
 - **Findings**:
-  - `candidate-source-bookmarks/design.md`はproduct-captureがcandidate-management公開の`CaptureCandidatePort`へdraftを渡す前提を記載する。
-  - `product-capture-transient-migration/design.md`は`CaptureCandidatePort`に他の公開consumerがないとして公開APIから削除し、`UnresolvedCandidateDraft`、candidate-managementのtyped intent factory、`TransientSurfaceLifecyclePort.conclude`へ置換する。
-  - 同じsource初期化責務が旧save portと新pre-edit handoffの両方を前提にすると、production compositionと公開境界が矛盾する。
-- **Implications**: `candidate-source-bookmarks`は実装前にcapture source初期化の入力点を新handoff経路へ再検証する必要がある。本spec外のため編集せず、designのRevalidation Triggersへexact contract名と証拠を記録する。
+  - `candidate-source-bookmarks`の現行design、research、tasksに`CaptureCandidatePort`参照はなく、`CandidateEditorPrefill`からtyped intentを作り`TransientSurfaceLifecyclePort.conclude`へ渡す契約へ更新済みである。
+  - `product-capture-transient-migration`とsource初期化の入力点は同じpre-edit handoff seamで整合している。
+- **Implications**: 旧contract remediationは完了扱いとし、今後typed intentまたはpre-edit source契約が変わる場合だけ再検証する。
+
+### Metadata採用範囲と取得元サイト名
+
+- **Context**: 要件7.5、7.6、8.1–8.8が、対応metadataの網羅検証と任意`siteName`のhandoffを追加した。
+- **Sources Consulted**: `requirements.md`、既存`extractor.ts` / `contracts.ts` / `normalizer.ts` / `draft-mapper.ts`、`web-content-acquisition.md`、candidate-managementのsource draft契約。
+- **Findings**:
+  - OpenGraph、Twitter Card、product拡張はnamespace単位で包括採用せず、propertyと取得先項目の組を明示列挙する必要がある。
+  - 現行`ExtractionSource: "meta"`ではmetadata familyを区別できないため、closed unionと境界decoderを同時に移行する必要がある。
+  - `og:site_name`は商品項目ではなく任意のsource表示名であり、OpenGraph provenanceと元表記を保持する。
+  - `CandidateSource.siteName`と編集UIは既に存在するため、永続modelを変更せずdraft mapperだけでhandoffできる。
+  - site nameの欠損または不正は部分欠損であり、商品抽出とhandoffを止めない。
+- **Implications**: `metadata-property-map.ts`へclosed allowlistを隔離し、`SourcedSiteName`を必須field欠損集合から分離する。全対応組と未列挙propertyをsynthetic contract testで固定する。
 
 ## Architecture Pattern Evaluation
 
@@ -64,6 +76,8 @@
 | entry eTLD+1とのboundary一致 | 審査済みentryにだけexact/subdomain match | 未知domainを推測しない、依存なし | entry整備が必要 | 採用 |
 | capture内で確認・保存を継続 | 旧state/viewを維持 | 移行量が少ない | 一過性寿命と欺瞞的操作が残る | 不採用 |
 | typed intent + conclude | candidate pre-editへ原子的handoff | 権限寿命と編集寿命を分離 | 上流contract実装が前提 | 採用 |
+| metadata closed allowlist | propertyと取得先の組を明示列挙 | 取得範囲が監査可能、未知propertyを拒否 | 対応追加ごとに契約更新が必要 | 採用 |
+| namespace包括採用 | prefixが一致するmetadataを汎用採用 | 実装が短い | 未承認propertyと意味の誤写像を招く | 不採用 |
 
 ## Design Decisions
 
@@ -97,11 +111,21 @@
 - **Rationale**: domain mapとhandoff変更は価格観測のconsumer concernを変えない。
 - **Trade-offs**: product-captureのcomposition変更時に同じport instanceを再配線する必要がある。
 
+### Decision: metadataをproperty-to-target allowlistで限定する
+
+- **Context**: 対応propertyを検証可能にし、未列挙metadataを目的外に取得しない。
+- **Alternatives Considered**: namespace prefixによる包括採用、collector内の分散switch、中央closed table。
+- **Selected Approach**: namespace、完全property名、取得先を持つreadonly tableを中央定義し、`og:site_name`だけを`source-site-name`へ写像する。
+- **Rationale**: 取得範囲と型境界を一箇所で監査でき、synthetic fixtureから全組を列挙検証できる。
+- **Trade-offs**: 新しいproperty対応はtable、decoder、contract testの同時更新が必要。
+- **Follow-up**: allowlist変更を取得範囲変更として再レビューする。
+
 ## Synthesis Outcomes
 
 - **Generalization**: domain mapをmanufacturerへの特別な後処理にせず、既存`ExtractionCandidate`のsource追加として一般化した。実装scopeはmanufacturerだけに制限する。
 - **Build vs Adopt**: 外部public suffix libraryは採用せず、審査済みentry基準の照合を構築する。未知suffixの一般解析は要求されない。
 - **Simplification**: capture-owned review/save state、direct editor navigation、save portを設計から除去し、extract → typed handoffへ縮小した。
+- **Simplification**: site name専用rankerは作らず、単一対応propertyを通常の文字列normalizerで検証して任意値として写像する。
 
 ## Risks & Mitigations
 
@@ -110,7 +134,9 @@
 - domain mapが権限として誤用される — map moduleは候補生成だけを公開し、runtime/permission判断へimportしない。
 - stale activationからhandoff — 抽出前後の`isCurrent`と`conclude`でfail closedにする。
 - price port drift — public consumer contract testでshapeと同一pipelineを固定する。
-- source bookmark設計の旧save port依存 — cross-spec remediation triggerとして明示し、実装前に再検証する。
+- typed pre-edit契約の将来drift — canonical public contract importとconsumer contract testで検出する。
+- metadata scope creep — property-to-target closed allowlistと未列挙propertyのnegative contract testで防止する。
+- site nameの誤用 — source表示名専用型とmapper境界でURL同一性・source kind・ページ種別から分離する。
 
 ## References
 

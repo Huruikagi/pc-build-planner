@@ -129,6 +129,125 @@
   - _Requirements: 1.1, 1.4, 1.5, 4.1, 4.2, 4.3, 4.7, 5.5, 5.6, 6.1, 6.2, 6.4, 7.1, 7.2, 7.3, 7.4_
   - _Boundary: ProductCaptureE2E, CrossSpecConsumerContracts, FinalValidation_
 
+- [ ] 8. metadataの明示的な採用境界と取得元表示名を確立する
+
+- [ ] 8.1 metadata propertyと取得先のclosed mappingを確定する
+  - OpenGraph、Twitter Card、product拡張を別familyとして扱い、明示propertyだけを商品項目または任意site nameへ一意に対応付ける。
+  - namespace prefixやsuffix、未知propertyの推測採用を拒否し、site nameを必須商品fieldや欠損集合へ混入させない。
+  - 全対応組と代表的な未列挙propertyがsynthetic contract testで観測できることを完了条件とする。
+  - _Requirements: 7.5, 7.6, 8.1, 8.5, 8.6_
+  - _Boundary: MetadataPropertyMap_
+
+- [ ] 8.2 metadata familyのsource契約とpayload検証を移行する
+  - 旧generic meta provenanceをOpenGraph、Twitter Card、product拡張へ分割し、site name専用の任意契約を商品fieldから分離する。
+  - runtime payloadのclosed source unionを移行し、未列挙sourceとfieldの不正な組み合わせを境界で拒否する。
+  - 3 family、任意site name、manufacturer専用domain-mapの有効payloadが通り、不正な組み合わせが`invalid-payload`として観測できるcontract testを完了条件とする。
+  - _Depends: 8.1_
+  - _Requirements: 2.3, 2.10, 3.4, 7.5, 7.6, 8.2, 8.5, 8.6_
+  - _Boundary: ProductCaptureContracts, CapturePayloadValidation_
+
+- [ ] 8.3 allowlist対象metadataだけをページ候補として収集する
+  - propertyを正規化して完全一致した規則だけを収集し、family別provenance、元表記、文書順を未信頼payload境界まで保持する。
+  - `og:site_name`を商品fieldと分離した任意候補として収集し、hostnameやtitleによる代替推測を行わない。
+  - 対応property以外が抽出結果へ現れず、有効site nameの有無にかかわらず他の商品候補が維持されるunit・contract testを完了条件とする。
+  - _Depends: 8.1, 8.2_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 7.1, 7.5, 7.6, 8.1, 8.5, 8.6, 8.7_
+  - _Boundary: GenericExtractor, PageMetadataCollector_
+
+- [ ] 8.4 (P) 取得元サイト名を未信頼文字列として正規化する
+  - 通常の文字列正規化と上限を適用し、空、制御文字だけ、長すぎる値をsite nameだけの棄却へ閉じる。
+  - OpenGraph provenanceと元表記を保ち、商品項目の欠損・棄却結果とは独立させる。
+  - 有効・欠損・不正の各入力で、商品抽出を失敗させず任意の正規化済みsite nameだけが観測できるunit testを完了条件とする。
+  - _Depends: 8.2_
+  - _Requirements: 3.1, 3.3, 3.4, 8.2, 8.4, 8.7_
+  - _Boundary: CaptureNormalizer_
+
+- [ ] 8.5 metadata familyの順位とsource unionを既存pipelineへ統合する
+  - 3 familyを同じページメタ情報優先度へ置き、同順位では文書順で決定する。
+  - collector、normalizer、ranker、価格観測を同じclosed source unionへ追従させ、domain-mapの最下位順位を維持する。
+  - 同一synthetic候補集合から通常取り込みと価格観測が同じ価格provenanceを選び、domain-mapが価格順位へ影響しないことを完了条件とする。
+  - _Depends: 8.3, 8.4_
+  - _Requirements: 2.2, 2.3, 2.7, 2.8, 2.10, 3.4, 7.1, 7.3, 7.5, 8.5, 8.6_
+  - _Boundary: ExtractionPipelineIntegration_
+
+- [ ] 9. 抽出結果を公開境界と候補編集へ統合する
+
+- [ ] 9.1 site nameをproject未解決pre-editへ安全に引き渡す
+  - 有効なsite nameを任意source表示名と元表記・provenance付きで候補編集開始情報へ写像する。
+  - 欠損・不正時もURLと他の商品項目を維持し、site nameをURL同一性、source ID、source kind、ページ種別へ利用しない。
+  - 有効・欠損・不正site nameのhandoffと、空名・project未解決の既存経路がcandidate公開test doubleで観測できることを完了条件とする。
+  - _Depends: 8.5_
+  - _Requirements: 3.5, 4.1, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 8.3, 8.4, 8.7, 8.8_
+  - _Boundary: CaptureDraftMapper, CandidatePreEditIntegration_
+
+- [ ] 9.2 (P) manufacturer domain照合をread-only公開契約として提供する
+  - map内部やentryを公開せず、照合結果だけをproduct-capture公開APIから利用できるようにする。
+  - candidate source classifier相当consumerが公開入口だけで型検査を通り、lookupがDOM抽出、権限判断、利用許可を有効化しないことをcontract testで固定する。
+  - source-price-refreshの価格portと並存する組立済み公開APIがproduction-like compositionで一度だけ提供されることを完了条件とする。
+  - _Depends: 4.1, 4.3_
+  - _Requirements: 2.7, 2.8, 2.9, 2.10, 7.3_
+  - _Boundary: ProductCapturePublicAPI, ManufacturerDomainLookup_
+
+- [ ] 10. 固定tab runtimeの失効と未応答を有限に閉じる
+
+- [ ] 10.1 (P) 注入と結果読取りに有限timeoutを適用する
+  - content処理の注入と結果読取りをそれぞれ有限時間で終了させ、未応答を安定したinjection failureへ写像する。
+  - timeout後の遅延結果を現行・後発activationへ適用せず、永続状態や商品値をログへ残さない。
+  - 両段階の未応答が決定的なruntime testで失敗表示と同世代再試行へ到達することを完了条件とする。
+  - _Depends: 5.1, 5.4_
+  - _Requirements: 6.2, 6.3, 6.4, 6.5, 7.2_
+  - _Boundary: CaptureRuntimePort, CaptureTimeoutPolicy_
+
+- [ ] 10.2 権限・tab失効を一過性surfaceの終了理由へ配線する
+  - runtimeが直接検出した`permission-lost`と`tab-changed`だけを`capture-invalidated`へ写像し、restricted pageは対象外案内として面に維持する。
+  - 通常handoffの`conclude`と失効時の終了経路を混同せず、永続状態を変更しない。
+  - permission loss、tab change、restricted pageの各経路がcoordinator・state testで異なる結果として観測できることを完了条件とする。
+  - _Depends: 10.1_
+  - _Requirements: 1.4, 1.5, 4.2, 4.5, 6.1, 6.2, 7.2_
+  - _Boundary: CaptureCoordinator, CaptureState_
+
+- [ ] 10.3 lifecycle終了の失敗と世代隔離を固定する
+  - 終了失敗・例外を成功扱いせず現行世代の安全な失敗へ閉じ、遅延結果を後発activationへ適用しない。
+  - shell側の常設面復帰と新しい明示操作案内をtyped lifecycle seamだけから要求し、capture側でhost表示を再実装しない。
+  - surface終了、終了失敗、例外、新世代置換、遅延結果隔離がlifecycle integration testで観測できることを完了条件とする。
+  - _Depends: 10.2_
+  - _Requirements: 1.4, 4.2, 4.5, 6.1, 6.4, 7.2_
+  - _Boundary: TransientSurfaceLifecycleIntegration_
+
+- [ ] 11. metadata・handoff・公開consumerの非回帰を閉じる
+
+- [ ] 11.1 metadata allowlistからcandidate editorまでの受け入れflowを検証する
+  - 3 familyの対応property、任意site name、domain補完、欠損・不正site nameをproduction-like compositionで通す。
+  - site nameが表示用任意値として一度だけpre-editへ届き、capture側の保存mutationやidentity判定が発生しないことを確認する。
+  - synthetic fixtureだけで全対応mapping、未列挙拒否、空名manual handoff、handoff retryが一つのintegration suiteで観測できることを完了条件とする。
+  - _Depends: 9.1, 10.3_
+  - _Requirements: 4.1, 4.2, 4.4, 4.5, 4.6, 5.1, 5.4, 5.5, 5.6, 7.1, 7.2, 7.4, 7.5, 7.6, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
+  - _Boundary: ProductCaptureCandidateIntegration_
+
+- [ ] 11.2 (P) 公開consumerと価格観測のcontract driftを検証する
+  - manufacturer lookup consumerとprice refresh consumerが公開入口だけを利用し、deep importなしでstrict型検査を通す。
+  - metadata source union移行後も価格欠損、6種failure、page-derived URL、元表記、同一pipeline順位を維持する。
+  - boundary validationとconsumer contract suiteが公開APIの2つのread-only能力だけを観測できることを完了条件とする。
+  - _Depends: 8.5, 9.2_
+  - _Requirements: 1.1, 1.4, 2.2, 2.3, 3.2, 3.5, 6.1, 6.2, 6.5, 7.2, 7.4, 7.5_
+  - _Boundary: CrossSpecConsumerContracts, PublicBoundaryValidation_
+
+- [ ] 11.3 production UIとsecurity artifact gateを検証する
+  - 一過性面が実行、実行中、失敗、handoff再試行だけを表示し、site name確認、project選択、保存操作を持たないことをDOMで確認する。
+  - ページ由来文字列が安全なtextとして描画され、unsafe HTML、remote code、恒久的host permissionが追加されていないことを検証する。
+  - DOM、permission、CSP、fixture、artifact gateがsynthetic資産だけで通ることを完了条件とする。
+  - _Depends: 11.1_
+  - _Requirements: 1.2, 1.3, 2.5, 3.3, 4.7, 6.5, 7.1, 7.4, 8.3, 8.4_
+  - _Boundary: ProductCaptureDOM, SecurityValidation, ArtifactValidation_
+
+- [ ] 11.4 Chrome production E2Eと最終共通検証を完了する
+  - icon起動からsite name付きcandidate editor到達、tab失効によるsurface終了、新gestureによる新世代起動をChrome 116相当のproduction buildで検証する。
+  - source-price-refreshとcandidate-source-bookmarks相当consumerが公開契約だけを使い、旧save・navigation境界へ回帰していないことを確認する。
+  - typecheck、lint、unit、contract、DOM、boundary、fixture、artifact、build、E2Eの共通検証flowが通ることを完了条件とする。
+  - _Depends: 11.2, 11.3_
+  - _Requirements: 1.1, 1.4, 1.5, 4.2, 4.3, 6.1, 6.2, 6.4, 7.2, 8.3, 8.4_
+  - _Boundary: ProductCaptureE2E, FinalValidation_
+
 ## Implementation Notes
 
 - collector横断の文書順は全DOM再走査ではなく、上限200件の収集済み候補nodeだけを`compareDocumentPosition`で比較し、`documentOrder`として未信頼payload境界からrankerまで保持する。
