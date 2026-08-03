@@ -59,6 +59,64 @@
 - `docs/requirements-v0.1.0.md`
 - `docs/project-overview.md`
 
+## 2026-08-03 project-context追従の再設計
+
+### Summary
+
+本specは実装済み互換性機能の拡張であるためlight discoveryを実施した。純粋な5規則、対象展開、集約器、`CompatibilityQuery`は維持できる。一方、現行production compositionは候補一覧の先頭projectをmount時に一度だけ解決しており、共通の現在projectへの追従、stale評価の排除、0件・利用不能・再試行を満たさない。
+
+### Research Log
+
+#### project-context公開契約と上流不変条件
+- **Context**: 互換性機能がproject選択authorityを持たず、現在projectへ追従する必要がある。
+- **Sources Consulted**: `.kiro/specs/project-context/{requirements.md,design.md,tasks.md}`、`.kiro/steering/roadmap.md`。
+- **Findings**: `project-context`は`ready | empty | unavailable`とgenerationを持つsnapshot、および`getSnapshot`/`subscribe`のread portを公開予定である。`ready`は必ず有効な選択を持ち、catalogが空なら`empty`となるため、「projectあり・未選択」は公開不変条件上発生しない。
+- **Implications**: compatibilityはread portだけをowner-local adapterへ注入し、`ready`だけを評価する。要件7.6は削除し、7.2はunavailableからreadyへの回復に限定した。project-context実装とcurrent-buildのcontext更新を実装前提とする。
+
+#### 現行実装とproduction統合差分
+- **Context**: 既存の純粋判定を保ちながらproject追従へ移行する範囲を特定する。
+- **Sources Consulted**: `src/features/compatibility/*`、`src/application-shell/side-panel-contributions.ts`、`src/features/current-build/public.ts`、`src/features/candidate-management/public.ts`。
+- **Findings**: 現行serviceは`CurrentBuildQuery`と`CandidateQuery.listBuildEligible`だけで決定的なreportを生成する。stateは評価要求世代で遅延完了を破棄できる。shellの`listProjects()[0]` fallbackとregistrationのone-shot `getProjectId`が更新対象である。
+- **Implications**: rule/service公開契約は原則維持し、context adapter、state lifecycle、retry、messageをfeature owner内へ追加する。shell共有fileのproduction wiringはapplication-shell更新specが所有する。
+
+#### 日英表示・アクセシビリティ・テスト基盤
+- **Context**: 新しい空・失敗・回復状態を既存UI規約で表示する必要がある。
+- **Sources Consulted**: `.kiro/steering/testing.md`、`.kiro/steering/security.md`、`src/ui-messages/catalog/{ja,en}/compatibility.ts`、`src/ui-language/public.ts`、既存compatibility DOM tests。
+- **Findings**: UIは`LanguageProvider`とtyped message keyを利用し、Node標準test runner、testing-library、user-eventで検証する。外部文字列はJSX child、状態通知はlive region、失敗はalertを既存方針として拡張できる。Vitestは採用しない。
+- **Implications**: 両言語へ同一keyを追加し、context切替、旧完了破棄、再試行、ARIA通知、安全描画をcontract/DOM/E2Eへ割り当てる。新規runtime依存は追加しない。
+
+### Design Decisions
+
+#### Decision: project-context read portを採用し独自選択を撤去する
+- **Context**: 複数featureで同じ現在projectを参照し、fallbackの不一致を防ぐ。
+- **Alternatives Considered**: 候補一覧先頭の継続、compatibility専用selector、project-context購読。
+- **Selected Approach**: `ProjectContextReadPort`をowner-local adapterへ注入し、ready snapshotだけを評価する。
+- **Rationale**: 選択authorityを一元化し、compatibilityがpreferenceやcatalogを複製しない。
+- **Trade-offs**: project-context coreとcurrent-build更新が実装前提になる。
+- **Follow-up**: upstream snapshot unionまたはgeneration契約変更時に本specを再検証する。
+
+#### Decision: context generationと評価要求番号を組み合わせる
+- **Context**: 切替前の遅い評価が新projectの表示を上書きしてはならない。
+- **Selected Approach**: context通知時に旧reportを外し、context generationと評価要求番号が双方一致する完了だけを採用する。
+- **Rationale**: serviceやrule engineへcancel責務を持ち込まず、既存generation patternを一般化できる。
+- **Trade-offs**: 旧Promise自体は完了するが結果は破棄される。
+
+#### Decision: 新規ライブラリと永続状態を追加しない
+- **Context**: context追従、i18n、アクセシビリティはいずれも既存公開基盤で実現できる。
+- **Selected Approach**: project-context、ui-messages、ui-language、React external-store patternを採用する。
+- **Rationale**: MV3/CSP、境界、bundle、migrationへの影響を最小化する。
+
+### Synthesis
+- **Generalization**: project 0件、利用不能、readyを`CompatibilityProjectAvailability`へ射影し、画面・再試行・stale制御の共通入力にする。
+- **Build vs. Adopt**: 独自selector/preference/event busは作らず、project-context read portと既存message/language基盤を採用する。
+- **Simplification**: 既存`CompatibilityQuery.evaluate(projectId)`、固定rule registry、派生reportを維持し、context adapter以外の抽象化を追加しない。
+
+### Risks & Mitigations
+- project-context未実装 — dependency順を明示し、port contract kitによるconsumer testを先に用意する。
+- 旧project結果の残留 — context通知時にreportを除去し、二重generationで完了を検査する。
+- fallback再混入 — `listProjects()[0]`とone-shot resolverをproduction compositionから削除し、boundary/contract testで禁止する。
+- 構成recordなしとitem 0件の混同 — `no-build`と`empty-build`を分離して表示・testする。
+
 ### 2026-07-19 React UI方針更新
 - **背景**: 集約区分、個別根拠、不足項目、loading/empty/errorを同じ画面で安全に切り替える必要がある。
 - **判断**: `view.tsx`をReact function componentとし、feature固有の`react-root.tsx`で既存`FeatureMountContext`へ接続する。
