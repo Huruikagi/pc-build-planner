@@ -1,109 +1,110 @@
 # Research & Design Decisions
 
 ## Summary
+
 - **Feature**: `current-build-management`
-- **Discovery Scope**: Extension
+- **Discovery Scope**: Extension / light discovery
 - **Key Findings**:
-  - Foundationは参照と正整数数量を検証するが、projectごと最大一構成、item重複、カテゴリ別選択数は本featureが検証する。
-  - CandidateQueryはcanonical literal `uncategorized`を除く`listBuildEligible`を公開し、候補の所有権は候補管理境界に残る。
-  - 最新shellはopaque stateのcapture/restoreを公開するため、current-build registrationもsnapshot-aware lifecycleへ追従する。
+  - 現行実装の独自project selector、先頭project fallback、snapshot projectへの先行切替は、`project-context` をselection authorityとする現行要件に反する。
+  - `project-context` はread portとswitch guard registration portを分離しており、current-buildはowner-local adapterだけで追従とdraft保護を実現できる。
+  - 既存snapshot v1はshapeを維持でき、`selectedProjectId`を現在contextとの一致検査専用metadataへ意味変更すればversion bumpは不要である。
+  - 現行カテゴリnavigationには選択要約がなく、load済み候補とcurrent buildから純粋なsummary projectionを追加するのが最小変更である。
 
 ## Research Log
 
-### 上流データ契約と統合点
-- **Context**: 現在構成が候補や保存基盤の責務を重複して所有しない境界を確認した。
-- **Sources Consulted**: `local-data-foundation` と `project-candidate-management` のrequirements、design、tasks。
-- **Findings**: `LocalDataRoot.currentBuilds`、`putCurrentBuild`、`CandidateQuery.listBuildEligible`が利用可能である。Repositoryは全体検証、容量、移行、直列更新を所有する。
-- **Implications**: 本機能は選択ポリシー、構成更新コマンド、UI状態、下流照会に限定し、Storage APIへ直接依存しない。
+### 既存current-buildの統合点
 
-### カテゴリ変更時の整合性
-- **Context**: 選択済み候補の分類変更が選択数規則を変える可能性がある。
-- **Sources Consulted**: roadmapのShared seams、current-build-management brief。
-- **Findings**: 未分類化と削除は参照除去で決定的に処理できる。一方、単一選択カテゴリの競合には利用者の意思決定が必要である。
-- **Implications**: 整合性調停を明示的コマンドとし、競合中は有効な保存状態を変更しない。
+- **Context**: 実装済みfeatureを新要件7〜9へ拡張する境界を確認した。
+- **Sources Consulted**: `src/features/current-build/*`、関連unit/integration/E2E、`tech.md`、`structure.md`、`security.md`。
+- **Findings**: service/query/category policyは再利用可能である。変更中心はstate、snapshot codec、view、registration、feature contributionである。現行stateはproject一覧を候補queryから取得して先頭へfallbackし、viewは独自selectorを持つ。
+- **Implications**: persistence/domain境界は維持し、project selectionだけをproject-context adapterへ置換する。root runtimeとshellは本specから編集しない。
+
+### project-context公開契約
+
+- **Context**: draft保護と共通選択追従に必要な最小能力を確認した。
+- **Sources Consulted**: `.kiro/specs/project-context/requirements.md`、`.kiro/specs/project-context/design.md`。
+- **Findings**: `ProjectContextReadPort` はcoherent snapshotとgenerationを公開し、`ProjectSwitchGuardRegistrationPort` はdraft内容を解釈せず `allow | confirmation-required` を調停する。command portはselector/lifecycle owner向けである。
+- **Implications**: current-buildはread/guardだけを受け取り、project選択やconfirmation commitを直接所有しない。guard request identityとgenerationをowner-local stateで照合する。
+
+### snapshot互換性
+
+- **Context**: 要件8は既存version/shape維持とproject metadataの非権威化を同時に要求する。
+- **Sources Consulted**: `state-snapshot.ts`、application shell mount/capture contract、project-context 8.6。
+- **Findings**: v1の `selectedProjectId` を削除せず、復元前のproject選択に使用しないことで互換性を維持できる。現在contextと一致する場合だけcategory/draft referenceを検証すればよい。
+- **Implications**: registrationの `peekSelectedProjectId` とsnapshot起点の `selectProject` を廃止する。不一致は識別可能な案内と安全な初期状態へ落とす。
+
+### カテゴリ要約と安全な表示
+
+- **Context**: 全カテゴリを開かずに採用品と数量を把握する必要がある。
+- **Sources Consulted**: 現行 `view.tsx`、ui message/language方針、security rendering規約。
+- **Findings**: candidate名称はload済みデータから取得でき、保存モデルへのdenormalizationは不要である。React text childとCSS ellipsisを組み合わせれば、markup実行を防ぎながら視覚省略と完全なaccessible textを両立できる。
+- **Implications**: framework非依存の `category-summary.ts` を追加し、viewはprojectionだけを描画する。
 
 ## Architecture Pattern Evaluation
 
-| Option | Description | Strengths | Risks / Limitations | Notes |
+| Option | Description | Strengths | Risks / Limitations | Decision |
 |---|---|---|---|---|
-| Feature service + UI state | 選択規則をサービスへ、保存中・競合状態をUI stateへ分離 | 上流パターンと整合しテスト可能 | 候補変更との統合契約が必要 | 採用 |
-| UI直接Repository更新 | 画面イベントから構成を組み立てて保存 | ファイル数が少ない | 規則が表示へ漏れ下流契約を再利用できない | 不採用 |
-| イベント駆動同期 | 候補変更イベントで構成を更新 | 疎結合 | MVPにイベント基盤がなく過剰 | 不採用 |
+| Owner-local context adapter | read/guard portをfeature stateへ変換 | authorityが一つ、境界が明確 | lifecycle/stale testが必要 | 採用 |
+| Stateがcontext portを直接利用 | file数を抑える | 単純 | guardと購読責務がstateへ集中 | 不採用 |
+| 独自selector/fallbackを維持 | 既存変更が少ない | 短期的に容易 | 共通authorityと矛盾 | 不採用 |
+| Summary projection | load済みdataから派生 | 保存schema変更なし | candidate欠損時はquery errorが必要 | 採用 |
 
 ## Design Decisions
 
-### Decision: カテゴリポリシーを純粋な共有契約に集約する
-- **Context**: UI、更新サービス、テストで選択方式が分岐する。
-- **Alternatives Considered**: 各コンポーネントへ列挙、カテゴリメタデータ契約へ集約。
-- **Selected Approach**: カテゴリから`single`、`multiple`、`ineligible`を返す純粋契約を一つ定義する。
-- **Rationale**: 実装範囲を増やさず規則の重複と不一致を防ぐ。
-- **Trade-offs**: カテゴリ追加時にポリシー更新と下流再検証が必要になる。
-- **Follow-up**: 全カテゴリの網羅テストを追加する。
+### Decision: project-contextを唯一のselection authorityとする
 
-### Superseded Decision: 候補変更の整合性を明示的調停にする
-- **Status**: 2026-07-20のFoundation原子的参照修復への追従により不採用へ変更した。以下は判断履歴として残す。
-- **Context**: 単一カテゴリ競合を暗黙に置換すると利用者の選択を失う。
-- **Alternatives Considered**: 新候補を常に優先、既存候補を常に優先、競合解決を要求。
-- **Selected Approach**: 未分類化・削除は自動除去し、単一カテゴリ競合だけは選択確定まで保存を保留する。
-- **Rationale**: 決定可能な修復は自動化し、情報を失う判断だけ利用者へ戻す。
-- **Trade-offs**: UI stateに競合状態が増える。
-- **Follow-up**: 候補管理との統合テストで全遷移を検証する。
+- **Context**: 1.5、1.6、7、8がconsumer独自fallbackとsnapshot起点切替を禁止する。
+- **Alternatives Considered**: state内fallback継続、context readのみ採用、readとguardをadapterで採用。
+- **Selected Approach**: read/guard portをowner-local adapterへ注入し、ready projectだけをstateへ公開する。
+- **Rationale**: 共通selector、preference、fallbackを重複実装せずfeature draftの所有も維持できる。
+- **Trade-offs**: project-context未実装中はproduction compositionが未完となるため、実装task順序に依存する。
+- **Follow-up**: project-context public contract確定後にconsumer contract testを再実行する。
+
+### Decision: snapshot v1 project IDを一致検査専用にする
+
+- **Context**: shape/version互換性と非権威性の両立が必要である。
+- **Selected Approach**: fieldを維持し、現在ready projectとの比較にだけ使う。
+- **Rationale**: migrationなしで古いsnapshotによる誤project切替を防ぐ。
+- **Trade-offs**: project不一致時はcategory/draftを復元できない。
+- **Follow-up**: mismatch、empty、unavailable、invalid referenceのcontract testを追加する。
+
+### Decision: 要約を純粋projectionとして構築する
+
+- **Context**: 9.1〜9.9は表示能力であり、保存schema変更を要求しない。
+- **Selected Approach**: candidate mapとcurrent buildから全カテゴリのsummary modelを導出する。
+- **Rationale**: 候補名をcurrent buildへ複製せず、成功直後に同じstate更新で反映できる。
+- **Trade-offs**: candidate参照が欠損する破損状態では要約を表示せず既存query errorへ閉じる。
+
+### Decision: draft内容と処理をguard protocolから隔離する
+
+- **Context**: project-contextは確認要否だけを調停し、draftの保存・破棄を解釈しない。
+- **Selected Approach**: guard評価中にowner-local confirmation stateがsave/discard/cancelを実行する。save/discardだけが `allow` を返し、cancel・失敗・staleはtyped guard failureとしてcontext transactionを中止する。
+- **Rationale**: feature ownershipと能力分離を維持する。
+- **Trade-offs**: 非同期guard評価とfeature confirmationのowner-local tokenを厳密に同期する必要がある。
+- **Follow-up**: generation、target、registry変更を含むstale race testを追加する。
+
+### Superseded Decision: 候補変更後にfeatureがreconcile writeする
+
+- **Status**: foundationの原子的参照修復により不採用。
+- **Decision**: candidate/project lifecycleと同じroot transactionでfoundationが修復し、本featureは再queryのみ行う。
+
+## Synthesis
+
+- **Generalization**: project切替保護をcurrent-build専用selector処理ではなく、project-context guardを受けるowner-local adapterとして一般化した。ただし実装対象は数量draftだけに限定する。
+- **Build vs Adopt**: 新規状態管理libraryやdialog libraryは採用せず、既存external-store state、React、project-context公開protocol、CSSを利用する。
+- **Simplification**: persistence schema、下流DTO、event bus、snapshot version bumpを追加しない。summaryは保存せず派生させる。
 
 ## Risks & Mitigations
-- 上流カテゴリ集合の変更 — 網羅的ポリシーテストとRevalidation Triggerで検出する。
-- 候補変更と構成更新の競合 — Repositoryの最新ルート検証と競合結果を利用する。
-- 不正参照の表示漏れ — 読込時に構成ビューを検証し、変更操作を停止する。
+
+- project-context contract変更 — Revalidation Triggerとconsumer contract testで検出する。
+- switch確認中のstale completion — request identity、base generation、from/toを全て照合する。
+- 複数dirty draftの部分保存 — 全draftを検証して一つの `CurrentBuild` updateへまとめる `set-quantities` commandで原子化する。
+- forced変更でdraft誤保存 — orphaned draftとして隔離し、新projectのcommandに流さない。
+- 長い名称で操作不能 — visual textだけellipsisにし、button semanticsとaccessible textを維持する。
 
 ## References
-- `.kiro/steering/roadmap.md` — 依存順、カテゴリ・参照整合性の共有シーム。
-- `.kiro/specs/local-data-foundation/design.md` — 保存ルート、Repository、CurrentBuild契約。
-- `.kiro/specs/project-candidate-management/design.md` — `CandidateQuery.listBuildEligible`と候補所有境界。
 
-### 2026-07-19 React UI方針更新
-- **背景**: カテゴリ別候補、単一・複数選択、数量、競合、保存失敗を同一画面で一貫して表示する必要がある。
-- **判断**: `view.tsx`をReact function componentとし、feature registrationが既存`FeatureMountContext`とReact root lifecycleを接続する。独立`react-root.tsx`案は、実装済みcandidate registrationとの整合と単純化のため2026-07-22に統合した。
-- **境界**: BuildState、service、query、category policyはframework非依存を維持する。表示値は通常のJSX childとし、`dangerouslySetInnerHTML`と`innerHTML`を禁止する。
-- **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
-- **検証**: React DOM操作とroot cleanupを統合testで確認する。
-- **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)
-
-### 2026-07-20 Foundation原子的参照修復への追従
-- **Sources Consulted**: `local-data-foundation/design.md`、`project-candidate-management/design.md`、`roadmap.md`、`cross-spec-review.md`
-- **Findings**: FoundationのReferenceRepairPolicyは候補削除・未分類化・保持不能なカテゴリ変更をcandidate mutationと同じtransactionで修復する。成功後のcurrent-build reconcile writeは原子性を破る。
-- **Decision**: BuildServiceからcandidate lifecycle command、`reconcile`、手動single-conflict resolutionを除去する。本featureは利用者による構成編集と修復済みqueryの表示だけを所有する。
-- **Trade-offs**: カテゴリ変更された候補を新カテゴリで採用したい場合は、修復後に利用者が現在構成画面から明示的に選び直す。
-- **Verification**: Foundation contract fixtureで単一commit、他選択維持、無効参照除去、本featureからの追加writeなしを検証する。
-
-### 2026-07-22 実装済み上流契約との再照合
-- **Context**: `local-data-foundation`、`application-shell`、`project-candidate-management`の設計・実装更新後に、既存current-build設計の実装可能性を再確認した。
-- **Sources Consulted**: 上流3 specのrequirements/design/tasks、`src/domain/public.ts`、`src/persistence/public.ts`、`src/application-shell/public.ts`、`src/features/candidate-management/public.ts`、`package.json`。
-- **Findings**:
-  - canonical保存契約は`BuildItem.candidatePartId`、`PositiveInteger`、`UtcTimestamp`、`CurrentBuildId`であり、旧設計の`partId`と`UtcIsoDateTime`は存在しない。
-  - Foundationの書込は専用putではなく、`requestId`、`expectedRevision`、`RootOperation`を持つ`RootMutationCommand`である。currentBuildの初回はcreate、既存時はIDを保持したupdateが必要である。
-  - Foundationはprojectごと一構成やカテゴリ別選択数を保証しないため、CurrentBuildQueryが同じroot内のcandidateと照合してfeature不変条件を検証する。
-  - shellの公開mount契約には`restoredState`と`captureState`が実装済みである。activation rollback時に未保存UI状態を安全に戻すにはfeature-owned snapshot codecが必要である。
-  - テスト基盤はVitestではなくNode.js test runner、tsx、jsdomであり、E2EだけPlaywrightを使用する。
-  - Foundationの最新参照修復はcandidate変更・削除だけでなくproject削除時のcandidateとCurrentBuildカスケードも同一commitで扱う。
-- **Implications**: designの型名、mutation flow、query validation、file plan、shell registration、test stackを更新する。候補・project lifecycle後の追加reconcile write禁止は維持する。
-
-### 2026-07-22 上流文書と公開実装の差異
-- **Context**: application-shell設計本文のinterface例と、同specのrequirements/tasksおよび実装済み公開契約に差異があった。
-- **Sources Consulted**: `application-shell/design.md`、`application-shell/tasks.md`、`src/application-shell/contracts.ts`。
-- **Findings**: 設計中の古いinterface例にはsnapshot fieldがない一方、requirements/tasksと実装には`FeatureMountContext.restoredState`、`FeatureMountHandle.captureState`が存在する。
-- **Implications**: 実装済みpublic contractと承認済みlifecycle要件をcurrent-buildの統合基準とする。上流契約が再変更された場合はRevalidation Triggerで再確認する。
-
-### Decision: canonical CurrentBuildをprojectionで改名せず公開する
-- **Context**: 旧設計の公開snapshotが`partId`と`number`へ再定義され、Foundation modelとの変換責任が不明だった。
-- **Alternatives Considered**: feature固有DTOへrenameする、canonical `CurrentBuild`をread-onlyで包む。
-- **Selected Approach**: `CurrentBuildSnapshot`はrootの`Revision`と`Readonly<CurrentBuild> | null`を持ち、itemは`candidatePartId`と`PositiveInteger`を維持する。
-- **Rationale**: 候補詳細や互換性結果を増やさず、下流の解釈ずれと重複型を防げる。
-- **Trade-offs**: 下流はFoundationの安定したdomain型へ依存するため、その形状変更時は再検証が必要になる。
-- **Follow-up**: public consumer typecheckでfield名とreadonly性を固定する。
-
-### Decision: snapshot-aware registrationを最小構成で採用する
-- **Context**: cross-feature activation失敗時、shellはsource featureのopaque snapshotを使ってrollback mountする。
-- **Alternatives Considered**: snapshot非対応としてactivationを拒否する、永続状態だけ再queryする、未保存UI状態だけをcodecでcaptureする。
-- **Selected Approach**: 選択project/categoryと数量draftだけをversion付きsnapshotに含め、永続root、保存中request、React objectは含めない。
-- **Rationale**: shell境界へ業務stateを漏らさず、利用者の未保存入力をactivation rollback後も維持できる。
-- **Trade-offs**: restore時に永続参照の再検証が必要になる。
-- **Follow-up**: invalid shape、unknown version、stale reference、cleanupをregistration contract testで検証する。
+- `.kiro/specs/project-context/design.md` — read/guard port、generation、confirmation protocol。
+- `.kiro/specs/local-data-foundation/design.md` — root mutation、参照修復、保存authority。
+- `.kiro/specs/project-candidate-management/design.md` — build eligible candidate query。
+- `.kiro/steering/tech.md`、`structure.md`、`security.md` — runtime、境界、表示安全性。

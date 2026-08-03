@@ -122,6 +122,131 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: Current build acceptance validation_
 
+- [ ] 6. 共通の現在プロジェクトへ追従する連携基盤を追加する
+- [ ] 6.1 現在プロジェクトのavailabilityをfeature状態へ投影する
+  - 共通contextの確定済みsnapshotからready、empty、unavailableとgenerationだけをowner-localな状態へ投影する。
+  - ready時だけproject IDを公開し、emptyまたはunavailable時は独自のproject選択やfallbackを行わない。
+  - context通知を購読し、古いgenerationを無視しながら同じ値の不要な再通知を抑止する。
+  - 完了時、ready、empty、unavailable、generation逆転、購読解除のadapter testが成功し、独自selectorを必要としないavailability契約を確認できる。
+  - _Requirements: 1.1, 1.5, 1.6, 7.1, 8.2, 8.4_
+  - _Boundary: CurrentBuildProjectContextAdapter_
+
+- [ ] 6.2 数量draftの切替guardをowner-localに調停する
+  - stableなguard所有者として登録し、評価ごとのtoken、切替元・切替先、base generationを保持してfeature側の判断へ渡す。
+  - 確認完了前に要求またはgenerationが古くなった場合はallowせず、古い結果をproject-contextへ返さない。
+  - forced変更は保存や破棄を代行せずfeature所有者へ通知し、draft内容や保存関数をcontext境界の外へ漏らさない。
+  - unmount時はguard登録を一度だけ解除し、解除後の評価や通知がfeature状態を変更しないようにする。
+  - 完了時、allow、確認要求、stale、forced通知、二重解除のadapter testがowner fakeを使って成功する。
+  - _Requirements: 7.1, 7.7, 7.8_
+  - _Boundary: CurrentBuildProjectContextAdapter_
+
+- [ ] 7. authority追従stateと安全なdraft保存・復元を実装する
+- [ ] 7.1 複数の数量draftを一つの原子的更新として保存する
+  - 全dirty draftを正整数として先に検証し、一件でも不正ならmutationを発行せず直前の構成を維持する。
+  - 有効な数量群は旧projectの一つの現在構成更新へまとめ、request IDと読込revisionによる競合検査を適用する。
+  - 成功時はcommit後の構成を再照会し、失敗時は保存済み構成と入力値を変更せず回復可能な失敗を返す。
+  - 完了時、複数数量の一括成功、validation失敗、revision競合、保存失敗を検証するservice testで、成功時の保存が一回、失敗時の保存がゼロ回になる。
+  - _Requirements: 3.3, 3.4, 5.1, 5.3, 7.3, 7.4_
+  - _Boundary: BuildService_
+
+- [ ] 7.2 検証済みの現在プロジェクトだけを画面stateへ反映する
+  - ready通知では同じprojectの候補と現在構成を読み込み、選択projectをcontext snapshotのprojectionとして保持する。
+  - emptyまたはunavailable通知ではproject ID、候補、構成を安全に解放し、project固有の変更操作を停止して理由を示せる状態にする。
+  - generationと読込開始時のprojectを照合し、遅れて完了した旧projectの結果を現在stateへ適用しない。
+  - lifecycle修復後は追加writeを発行せず構成を再照会し、有効な候補参照だけを表示stateへ反映する。
+  - 完了時、ready切替、empty、unavailable、no fallback、stale load、修復後再読込のstate testが成功する。
+  - _Depends: 6.1_
+  - _Requirements: 1.1, 1.4, 1.5, 1.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.2, 5.4, 7.1, 7.7, 7.8_
+  - _Boundary: BuildState_
+
+- [ ] 7.3 project切替確認と数量draftのlifecycleを管理する
+  - 保存済み数量と異なる入力だけをdirty draftとして追跡し、draftがなければ切替を直ちに許可する。
+  - 確認中は対象token、切替元・切替先、base generation、対象draftを保持し、保存、破棄、取消の結果を一度だけ確定する。
+  - 保存は旧projectへ全dirty draftを一括commitできた場合だけ、破棄は対象draftを除去した場合だけ切替を許可する。
+  - validation・保存失敗、取消、stale結果では入力と旧projectを維持し、同じ確認操作や保存操作の重複送信を抑止する。
+  - forced変更ではdraftを隔離状態へ移して新projectへ暗黙保存せず、利用者が明示的に破棄するまで内容と案内を保持する。
+  - 完了時、draftなし、保存、破棄、取消、validation・保存失敗、stale、forced変更、二重送信のstate testが成功する。
+  - _Depends: 6.2, 7.1, 7.2_
+  - _Requirements: 5.3, 5.5, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
+  - _Boundary: BuildState_
+
+- [ ] 7.4 version 1 snapshotを非権威的metadataとして復元する
+  - 既存のversionとshapeを維持し、unknown入力のfield、値、候補参照をfeature境界で厳密に検証する。
+  - snapshotのproject IDは現在のready projectとの一致検査だけに使い、一致時だけカテゴリと参照可能な数量draftを復元する。
+  - 不一致、不存在、empty、unavailableでは現在projectを変更せず、安全な初期状態または隔離中draftを維持して案内を返す。
+  - 不正shape、未知version、不正参照では永続データと現在projectを変更せず復元を拒否する。
+  - 完了時、exact shape、project一致、不一致、不存在、unavailable、invalid、stale referenceのcodec testが成功する。
+  - _Depends: 7.2, 7.3_
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: BuildStateSnapshotCodec_
+
+- [ ] 8. カテゴリ別の採用要約と操作UIを実装する
+- [ ] 8.1 (P) 全カテゴリの安全な選択要約を日英で生成する
+  - 全選択可能カテゴリをcanonical順で返し、単一選択はパーツ名、複数選択は全パーツ名と各数量、空は未選択として表現する。
+  - 表示用の短縮とは別に完全なaccessible textを生成し、カテゴリ名、選択内容、数量または未選択状態を識別可能にする。
+  - 日本語と英語のmessage catalogから同じ意味の要約を構成し、外部由来名称を実行可能な内容として解釈しない。
+  - 完了時、single、multiple、empty、日英、長い名称、markup風名称のunit testが完全な安全textを確認できる。
+  - _Depends: 7.2_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.7, 9.8, 9.9_
+  - _Boundary: CategorySummary, UI message catalogs_
+
+- [ ] 8.2 共通project対応の構成管理viewを更新する
+  - 独自project selectorを撤去し、ready、empty、unavailable、候補なし、構成なし、保存・validation errorを区別して表示する。
+  - 保存、破棄、取消の切替確認と隔離中draftの継続案内を表示し、処理中は重複操作を受け付けない。
+  - 各カテゴリ操作へカテゴリ名と現在要約を併記し、選択・解除・置換・数量保存の成功と同じstate更新で要約を反映する。
+  - 長い要約は操作を妨げず視覚的に省略し、完全な内容をaccessible nameへ残してkeyboard focusと現在カテゴリを識別可能にする。
+  - 外部由来名称は安全なJSX textとして描画し、実行可能なHTMLとして扱わない。
+  - 完了時、availability、確認3分岐、隔離draft、即時要約、日英、keyboard、aria、長文省略、安全textのDOM testが成功する。
+  - _Depends: 7.2, 7.3, 8.1_
+  - _Requirements: 1.2, 1.4, 1.5, 1.6, 3.3, 3.4, 3.5, 5.3, 5.4, 5.5, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
+  - _Boundary: BuildView_
+
+- [ ] 9. feature lifecycleへcontext連携を統合する
+  - feature mount時にcontext adapterの購読とdraft guardを登録し、authorityが確定したprojectを読み込んでからsnapshotを検査する。
+  - feature contributionへproject-contextのread・guard public portを注入し、command portやcontext内部serviceへ依存しない。
+  - captureでは既存version 1 shapeだけを返し、unmountではcontext、guard、operation policy、state、React rootを各一度だけ解放する。
+  - application-shellとroot runtimeのproduction wiringは所有せず、public portを使うcontract harnessでcurrent-build側の統合境界を検証する。
+  - 完了時、登録shape、authority先行load、restore/capture、operation policy、cleanup、public-port限定依存のcontract・integration testが成功する。
+  - _Depends: 6.1, 6.2, 7.2, 7.3, 7.4, 8.2_
+  - _Requirements: 1.1, 1.5, 1.6, 5.2, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: CurrentBuildFeatureRegistration, FeatureContribution integration_
+
+- [ ] 10. 更新された構成管理契約を横断検証する
+- [ ] 10.1 project切替guardとsnapshot復元を統合検証する
+  - project-context public portのcontract harnessから共通selector相当の切替要求と確定通知を発行し、独自selectorやfallbackなしで追従することを確認する。
+  - draft保存、破棄、取消、validation・保存失敗、stale要求、forced変更を検証し、旧projectまたは隔離状態へ正しいdraftが残ることを確認する。
+  - 再表示とrollback復元でversion 1 snapshotが現在projectを変更せず、一致時だけ画面stateを復元することを確認する。
+  - 完了時、guardとsnapshotのintegration suiteが全分岐で成功し、production shell wiringへ依存せずowner境界の契約を再現できる。
+  - _Depends: 9_
+  - _Requirements: 1.1, 1.5, 1.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: Project context and current build contract integration_
+
+- [ ] 10.2 カテゴリ要約の表示品質を回帰検証する
+  - 単一、複数、未選択の全カテゴリ要約が選択操作と同じUI内に表示され、保存成功直後に更新されることを確認する。
+  - 日本語と英語、keyboard操作、focus、aria-current、screen reader向け完全textをDOMとbrowser harnessで確認する。
+  - 長い名称と複数項目が視覚的に省略されても操作可能で、markup風の外部名称がtextとして扱われることを確認する。
+  - 完了時、要約・国際化・accessibility・安全表示のDOM回帰とE2E相当harnessが成功する。
+  - _Depends: 8.2_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
+  - _Boundary: Current build presentation validation_
+
+- [ ] 10.3 参照修復と下流公開契約の回帰を検証する
+  - 候補のカテゴリ変更、未分類化、削除、project削除が上流mutationと同じcommitで参照を修復し、current-buildから追加writeが出ないことを再確認する。
+  - 不存在、別project、重複、カテゴリ規則違反の参照を採用品として返さず、識別可能な停止errorになることを確認する。
+  - 下流queryがprojectごと最大一つの構成を候補IDと正整数数量だけで返し、候補詳細や互換性結果を含めないことを確認する。
+  - 完了時、repair integrationとpublic consumer contract testが成功し、保存回数と公開shapeを観測できる。
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4_
+  - _Boundary: Foundation repair and CurrentBuildPublicApi validation_
+
+- [ ] 10.4 全53受入基準のcanonical validationを完了する
+  - 要件1から9の全53受入基準をunit、contract、DOM、integration、browser harnessのいずれかへ対応付け、未追跡項目がないことを監査する。
+  - 型検査、境界検査、lint、unit、contract、DOM、integration、production buildをproject標準の一括検証で実行する。
+  - 失敗があれば該当boundaryの実装またはtestを修正し、全suiteを再実行して回帰がないことを確認する。
+  - 完了時、canonical validationが成功し、53件すべての追跡結果と合格した検証出力を確認できる。
+  - _Depends: 10.1, 10.2, 10.3_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
+  - _Boundary: Current build acceptance validation_
+
 ## Implementation Notes
 
 - BuildService.execute（2.2）はBuildCommandの3種を単一のswitchで扱うため、CategoryPolicyのmode分岐（single/multiple）は2.2の時点で自然に実装済みとなった。2.3は新規実装ではなく、2.2で未検証だった複数選択カテゴリ経路（追加・数量変更・解除・重複防止・不正数量拒否）へservice testを追加してcanonical構成規則を証明するタスクだった。src側の変更は不要だった。
