@@ -169,7 +169,6 @@ When Path A or Path E adds a new Change Brief or materially updates an existing 
 
 - Set `phase: "change-brief-created"`.
 - Set `approvals.requirements.approved`, `approvals.design.approved`, and `approvals.tasks.approved` to `false`.
-- Remove `approved_at` and `approval_reason` from each invalidated approval entry when present; those fields must not describe an approval that is no longer current.
 - Preserve every phase's existing `generated` value. The prior requirements, design, and tasks still exist as revision inputs even though they are no longer approved for the active change.
 - Set `ready_for_implementation: false`.
 - Update `updated_at` to the current timestamp while preserving all unrelated metadata.
