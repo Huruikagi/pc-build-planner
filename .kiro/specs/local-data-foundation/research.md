@@ -2,7 +2,7 @@
 
 ## Summary
 
-2026-08-03のlight discoveryでは、追加要件4.6–4.7と7.9–7.14を既存実装へ統合する境界を調査した。通常Repositoryは破損・未対応版を既にfail-closedに分類できるが、既存の置換評価・maintenance取得・置換commitはいずれも最初にcurrent rootの正常decodeを要求するため、異常rootからの回復には到達できない。現行schema値を変えず、公開正規値の一元化、raw fingerprint、root外の最小RecoveryControl、用途別RecoveryDataPortを追加する設計を採用する。
+2026-08-04のfull discoveryでは、追加要件4.6–4.7と7.9–7.17を既存実装へ統合する境界を、現行コードとChrome公式契約に照らして再検証した。通常Repositoryは破損・未対応版を既にfail-closedに分類できるが、既存の置換評価・maintenance取得・置換commitはいずれも最初にcurrent rootの正常decodeを要求するため、異常rootからの回復には到達できない。現行schema値を変えず、公開正規値の一元化、raw fingerprint、root外の最小RecoveryControlを追加し、正常置換と異常回復だけを束ねる用途別`BackupRestoreDataPort`をproduction handleから公開する設計を採用する。
 - **Feature**: `local-data-foundation`
 - **Discovery Scope**: Complex Integration（full discovery、Task 4.1 blocker再設計）
 - **Key Findings**:
@@ -11,8 +11,17 @@
   - Storage APIは比較交換トランザクションを提供しない。commit前再読込やworker内Promise queueだけではread-check-write競合を閉じられない。
   - Web Locks APIはWorker contextへexclusiveな協調排他を提供する。永続root内のgeneration/owner fenceと組み合わせることで、同時writerの線形化とworker再生成後のfail-closed認可を分離できる。
   - foundationはmanifestとデータruntime登録契約を所有し、共有service worker composition入口は後続`application-shell`へ委譲する。
+  - backup-restoreへ完全`FoundationDataPort`を渡さず、正常置換3操作と異常回復3操作だけを一つのfrozen facadeへ限定できる。
 
 ## Research Log
+
+### 2026-08-04 platform契約の再検証
+
+- **Context**: `BackupRestoreDataPort`を既存の単一write authorityへ統合する前提として、容量、信頼済みcontext制限、worker再生成、協調排他のplatform制約が現行仕様でも成立するかを確認した。
+- **Sources Consulted**: Chrome Storage API、Chrome Extension service worker lifecycle、Web Locks API仕様とWorker利用契約、既存`src/persistence/`実装、`package.json`。
+- **Findings**: `storage.local`は10MB上限、`getBytesInUse()`、`setAccessLevel(TRUSTED_CONTEXTS)`を提供する一方、複数contextをまたぐCAS transactionは提供しない。MV3 service workerのglobal stateは停止時に失われる。Web Locksは同一originのtab/worker間で名前付きexclusive lockを協調取得でき、callback完了時に解放される。
+- **Implications**: Storage adapterは永続化と容量・access restrictionだけを所有し、比較交換を仮定しない。固定名Web Lockをread-check-writeの線形化点、root revisionと永続maintenance/recovery controlを再生成後の認可根拠とする既存判断を維持する。backup専用facadeは同じrunnerへ委譲し、独自queue・lock・Storage adapterを追加しない。
+- **Synthesis**: Build vs. AdoptではChrome StorageとWeb Locksを採用し、transaction protocolだけを既存foundation内で構成する。Generalizationは正常置換と異常回復の公開commit/finalize形状に限定し、保存algorithmを統合し直さない。Simplificationとして新authority、第二のrepository、backup固有adapterを作らない。
 
 ### 候補取得元契約の下流整合性
 - **Context**: `project-candidate-management` task 2.3のレビューで、取得元がない手入力候補をcanonical `CandidatePart`へ変換できず、元表記snapshotも永続化できないことが判明した。
@@ -174,6 +183,32 @@
 - migration/validation失敗による上書き — source値を変更せず、current root検証成功後だけ明示mutationで保存する。
 - 回復中断でcontrolがactiveのまま残る — 通常writeをfail-closedに保ち、同じgeneration/ownerのreleaseまたは期限後の新generation取得だけを許可する。
 - schema正規値の重複 — `schema.ts`の公開`CURRENT_SCHEMA_VERSION`だけを保存・migration・replacement・交換形式からimportし、リテラル重複をboundary testで拒否する。
+
+### 2026-08-03 backup restore capability統合のlight discovery
+
+- **Context**: backup-restoreは正常rootの原子的置換と、破損・未対応rootからの回復を同じfeature内で扱うが、production handleの回復専用portだけでは正常置換を実行できなかった。
+- **Sources Consulted**: `.kiro/specs/local-data-foundation/{brief,requirements,design}.md`、`.kiro/specs/backup-restore/requirements.md`、`.kiro/steering/{roadmap,tech,structure,security}.md`。
+- **Findings**: 正常置換と異常回復は既に同じWriteAuthority、Web Lock、replacement validationを共有する。新しいalgorithmは不要で、公開facadeの能力集合だけが不足している。完全`FoundationDataPort`をbackupへ渡すとquery/mutateまで漏れ、通常feature向け`FoundationScopedDataPort`へ置換能力を足すと全consumerの権限が広がる。
+- **Implications**: 正常/異常rootのassessment、commit point付き置換、finalize-only retryだけを束ねる`BackupRestoreDataPort`を追加し、runtime contributionからbackup compositionだけへ渡す。
+- **Synthesis**: 一般化するのは実装ではなく公開interfaceだけとする。既存ReplacementCoordinator、RecoveryCoordinator、maintenance/recovery fenceを採用し、二つ目のauthorityやadapterを作らない。
+
+### Decision: backup専用capability facadeを公開する
+
+- **Context**: 正常復元と異常root回復を最小権限で同じfeatureへ提供する必要がある。
+- **Alternatives Considered**: 完全`FoundationDataPort`を公開、`FoundationScopedDataPort`を拡張、正常/回復portを二つ注入、専用統合facade。
+- **Selected Approach**: `BackupRestoreDataPort`が`assessReplacement`、`assessRecovery`、`commit`、`finalize`だけを公開する。`commit`はroot write後を通常errorへ変換せず、cleanup未完了ならopaque ticket付き`committed-finalization-required`を返す。
+- **Rationale**: backupの両経路を満たしつつ、query、mutate、raw root、Storage、lock、fence、Repository、authority factoryを型とruntime objectの両方から除外し、置換済みrootの二重writeを防げる。
+- **Trade-offs**: application-shellとbackup-restoreのdependency propertyを`backupRestoreDataPort`へ更新する必要がある。
+- **Follow-up**: public consumer typecheck、runtime key negative test、正常/回復統合contractでcapability集合とfinalize中root write 0件を固定する。
+
+### Decision: pre-commit cleanupは同じassessment ticketで再開する
+
+- **Context**: persistent control取得後かつroot write前の失敗でcleanupも完了しない場合、rootは保持されても通常mutationと同じ復元が停止し続ける可能性がある。
+- **Alternatives Considered**: 一般storage errorとして返す、cleanup専用opaque ticketと第三のoutcomeを追加する、同じassessment ticketへ再開能力を限定する。
+- **Selected Approach**: `precommit-cleanup-pending`をroot未変更のtyped errorとして返し、同じassessment ticketの次回`commit`だけが一致するowner/generationのcleanupをroot write 0件で再開する。cleanup完了後は最新rootとcandidateを再assessmentしてからcommitへ進む。
+- **Rationale**: 新しい公開outcomeやconsumer stateを追加せず、既存ticketのcandidate/mode bindingを再利用して最小権限と冪等性を維持できる。
+- **Trade-offs**: assessment ticketはpre-commit control owner/generationも内部的に識別し、worker再生成後に永続controlから再開できる必要がある。
+- **Follow-up**: 別ticket拒否、worker再生成、cleanup中root write 0件、cleanup後stale assessment、ticket喪失後のlease失効と新generation取得をcontract testで固定する。
 
 ## References
 - [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage/) — 10MB quota、`getBytesInUse`、access level、write failure

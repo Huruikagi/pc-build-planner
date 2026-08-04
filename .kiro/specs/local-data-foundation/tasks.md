@@ -384,6 +384,7 @@
   - 異常rootをdecodeせず、同じ固定Web Lock内で回復controlの取得・更新・終了・中止を直列化する
   - 同時取得は一件だけ成功させ、stale owner・generation・leaseと再生成前ownerの操作を拒否する
   - 正常終了または明示中止後だけ後続writerが再開し、中断時はactive controlが残ることを完了条件とする
+  - root write前のcleanup中断はassessment ticketとowner/generationを結び付け、同じticketだけがworker再生成後もcleanupをroot write 0件で冪等再開できることを固定する
   - _Depends: 7.5, 8.1_
   - _Requirements: 7.4, 7.5, 7.6, 7.7, 7.12, 7.13_
   - _Boundary: RootTransactionRunner, RecoveryControlPolicy_
@@ -396,13 +397,22 @@
   - _Requirements: 3.3, 3.5, 4.7, 5.3, 7.12, 7.13, 7.14_
   - _Boundary: RootTransactionRunner, RecoveryCoordinator_
 
-- [ ] 8.4 通常UIと回復機能の用途別公開portを是正する
-  - 通常UI handleはqueryと原子的mutationだけを維持し、置換・保守・回復・Storage・lockへ到達不能にする
-  - backup-restore専用handleへ回復候補評価、回復保守、評価済み回復置換だけを公開し、通常CRUDとraw rootを公開しない
-  - production factoryのaccess restriction失敗時は両portを含むhandleを公開せず、旧完全portのproduction到達を境界検査で拒否できる状態を完了条件とする
+- [ ] 8.4 commit後finalizationを再開可能な用途限定処理として完成する
+  - root write後のcontrol cleanup失敗を、commit済みrootを再書込せず再開できる識別可能なfinalization要求として返す
+  - opaque ticketを永続状態から再発見し、別consumerまたはworker再生成後もowner・generation・commit結果を照合してfinalizeだけを冪等に再試行する
+  - finalize再試行でroot writeが0件となり、完了後はticketが再発見されず通常操作が再開可能になることを完了条件とする
   - _Depends: 8.3_
-  - _Requirements: 3.10, 6.1, 6.3, 7.10, 7.12, 7.14_
-  - _Boundary: RuntimeContributionFactory, FoundationScopedDataPort, RecoveryDataPort_
+  - _Requirements: 7.14, 7.15, 7.17_
+  - _Boundary: RecoveryCoordinator, RecoveryControlPolicy_
+
+- [ ] 8.5 通常UIとbackup-restoreの用途別公開portを統合する
+  - 通常UI handleはqueryと原子的mutationだけを維持し、置換・保守・回復・Storage・lockへ到達不能にする
+  - backup-restore専用handleへ正常rootの評価・保守・全体置換と、異常rootの候補評価・回復保守・評価済み全体置換・finalization再開だけを一つの用途限定契約として公開する
+  - backup専用contractから通常CRUD、未検証root、保存adapter、排他制御、内部write authorityへ到達できず、opaque ticketからroot writeを開始できないようにする
+  - production factoryのaccess restriction失敗時は両portを含むhandleを公開せず、composition ownerがbackup専用能力をbackup-restoreだけへ提供できる状態を完了条件とする
+  - _Depends: 8.4_
+  - _Requirements: 3.10, 6.1, 6.3, 7.1, 7.2, 7.3, 7.10, 7.12, 7.14, 7.15, 7.16, 7.17_
+  - _Boundary: RuntimeContributionFactory, FoundationScopedDataPort, BackupRestoreDataPort_
 
 - [ ] 9. 架空データによる回復回帰と最終gateを完成する
 - [ ] 9.1 異常root・回復control・候補評価の決定的回帰を追加する
@@ -415,10 +425,12 @@
 
 - [ ] 9.2 回復transactionと公開runtime境界の統合回帰を追加する
   - 各stale cursor、並行writer、worker再生成、root write失敗、中断後active controlを公開port経由で検証する
+  - control取得後かつroot write前のcleanup失敗から同じassessment ticketで再開し、cleanup中のroot write 0件、別ticket拒否、cleanup後の再assessmentを検証する
+  - root write後のcleanup失敗を新しいconsumerがopaque ticketとして再発見し、finalize-only retryが追加root write 0件で完了することとticketからwrite capabilityへ到達できないことを検証する
   - 回復成功後の通常query・mutation復帰と、通常UI・回復portの相互capability非露出を検証する
   - production-shaped graphと架空Storageで単一root write、旧root保持、fail-closed初期化が観測できることを完了条件とする
-  - _Depends: 8.4, 9.1_
-  - _Requirements: 1.3, 3.3, 3.5, 3.8, 6.1, 6.3, 7.12, 7.13, 7.14, 8.1, 8.2_
+  - _Depends: 8.5, 9.1_
+  - _Requirements: 1.3, 3.3, 3.5, 3.8, 6.1, 6.3, 7.12, 7.13, 7.14, 7.15, 7.17, 8.1, 8.2_
   - _Boundary: Recovery Transaction and Runtime Contract Validation_
 
 - [ ] 9.3 schema正規値・回復境界・生成物の最終gateを統合する

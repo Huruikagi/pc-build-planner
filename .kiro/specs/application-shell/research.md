@@ -159,9 +159,20 @@
 - **理由**: service worker bundleのDOM／React非依存を維持し、gesture sourceをcanonical `TransientGestureRegistrationPort`へ接続するownerを変えない。
 - **Follow-up**: module graphとproduction worker bundleのboundary testでsettings／feature UI importを拒否する。
 
+### 判断: 保存root異常はrecovery-requiredとしてdegraded startupする
+- **背景**: maintenance初期snapshotの全失敗をglobal startup errorへ変換すると、破損・未対応rootを正常backupで回復するsettings区画へ到達できない。
+- **代替案**:
+  1. startup errorのまま案内だけを表示する — 復元操作へ到達できないため不採用。
+  2. inactive snapshotへfallbackする — 保存状態を正常と偽りmutationを許可するため不採用。
+  3. typed anomalyだけを`recovery-required`へ写像する — 採用。
+- **選択**: `corrupt-data | unsupported-version`ではhostとsettingsを起動し、`read`と`recovery`だけを許可する。通常`mutation`はfail closedで拒否する。購読後の最初の正常snapshotで通常projectionへ復帰する。
+- **理由**: shellがStorageや復元protocolを所有せず、保存状態を捏造せずに回復面だけを利用可能にできる。
+- **Follow-up**: corrupt/future root起動、settings mount、通常mutation拒否、正常snapshot後のready復帰をproduction-shaped testで固定する。
+
 ### 追加リスクと緩和
 - transient registrationのnavigation漏れ／persistent registrationのnavigation欠損 — 判別共用体、runtime相関検証、`isPersistent`型述語、混在contract testで防ぐ。
 - header撤去後の回復経路喪失 — loading／startup errorの二言語案内と状態別DOM testで固定する。
+- corrupt/unsupported rootでbackup区画へ到達不能 — recovery-required projectionと`recovery` operation gateでsettingsだけを回復可能にする。
 - worker bundleへのUI混入 — UI／worker catalog分離とartifact boundary gateで拒否する。
 
 ## 参照

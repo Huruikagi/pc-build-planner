@@ -6,9 +6,9 @@
 
 ## Boundary Context
 
-- **In scope**: 現在 project の snapshot と catalog projection、選択 preference の復元・修復、選択と再検証の transaction、generation と購読、切替 guard protocol、能力別公開 port、共通 selector、日英表示、アクセシビリティ、project-context 専用保存・公開境界 gate。
+- **In scope**: 現在 project の snapshot と catalog projection、選択 preference の復元・修復、選択と再検証の transaction、generation と購読、project 選択と catalog 全体置換を扱う change guard protocol、能力別公開 port、共通 selector、日英表示、アクセシビリティ、project-context 専用保存・公開境界 gate。
 - **Out of scope**: project の作成・改名・削除、backup 復元 transaction、商品取り込み handoff の保存先決定、各 feature の state・snapshot・draft・consumer adapter、application shell の slot・singleton composition・production wiring、既存 selector の撤去、独立した project 管理画面、検索・並べ替え・アーカイブ、複数 project の同時表示。
-- **Adjacent expectations**: project catalog と lifecycle 通知は既存 owner から提供され、各 feature は owner-local adapter で context を利用する。既存 snapshot の `selectedProjectId` は shape を維持した非権威的 metadata であり、現在選択を上書きしない。context が unavailable でも application shell は settings と backup recovery を起動できる。
+- **Adjacent expectations**: project catalog と lifecycle 通知は既存 owner から提供され、各 feature は owner-local adapter で context を利用する。backup owner は catalog 置換前に change guard を準備し、置換結果を通知する。既存 snapshot の `selectedProjectId` は shape を維持した非権威的 metadata であり、現在選択を上書きしない。context が unavailable でも application shell は settings と backup recovery を起動できる。
 
 ## Requirements
 
@@ -66,20 +66,25 @@
 5. If refresh 中の catalog 読み取りまたは preference 修復に失敗する, the project context shall `unavailable` 状態へ移行し、削除済みまたは置換前の選択を利用可能として公開しない
 6. When unavailable の原因が解消して refresh が成功する, the project context shall 保存値と最新 catalog を再検証し、`ready` または `empty` 状態へ回復する
 
-### Requirement 5: feature-owned draft を保護する switch guard
+### Requirement 5: feature-owned draft を保護する change guard
 
-**目的:** 入力途中の内容を持つ利用者として、project 切替前に未保存作業への影響を確認したい。これにより意図しない draft の喪失を避けられる。
+**目的:** 入力途中の内容を持つ利用者として、project 切替または全データ置換の前に未保存作業への影響を確認したい。これにより意図しない draft の喪失を避けられる。
 
 #### Acceptance Criteria
 
-1. When feature owner が switch guard を登録する, the project context shall 解除可能な登録として保持し、以後の利用者起点の project 切替時にその guard の判断を求める
-2. When 別 project への利用者起点の選択要求を受ける, the project context shall transaction 開始時点で登録済みの全 guard を一回ずつ評価する
-3. When 全 guard が切替を許可する, the project context shall 追加確認なしで通常の選択 transaction を継続する
+1. When feature owner が change guard を登録する, the project context shall 解除可能な登録として保持し、以後の project 選択または catalog 全体置換の準備時にその guard の判断を求める
+2. When 別 project への利用者起点の選択要求または catalog 全体置換の準備要求を受ける, the project context shall transaction 開始時点で登録済みの全 guard を一回ずつ評価する
+3. When 全 guard が変更を許可する, the project context shall 追加確認なしで選択 transaction または downstream の置換処理を継続可能にする
 4. When 一つ以上の guard が確認を要求する, the project context shall 現在選択を維持したまま一つの確認要求を返す
 5. When 利用者が確認要求を取り消す, the project context shall 現在 snapshot、preference、generation を変更せず、強制切替通知を送らない
-6. When 利用者が有効な確認要求を承認して選択が確定する, the project context shall その切替が強制確認済みであることを登録 guard へ通知する
-7. If guard の評価が失敗するか確認要求が stale である, the project context shall 切替を拒否し、現在 snapshot と preference を変更しない
+6. When 利用者が有効な確認要求を承認して選択が確定する, the project context shall その選択変更が強制確認済みであることを登録 guard へ通知する
+7. If guard の評価が失敗するか確認要求が stale である, the project context shall 変更を拒否し、現在 snapshot と preference を変更しない
 8. The project context shall feature-owned draft の内容、保存方法、破棄方法を取得または解釈せず、guard の判定結果だけを調停する
+9. When catalog 全体置換の準備を要求する, the project context shall 現在 snapshot と guard registry revision に結び付いた一時的な許可または確認要求を返し、それ自体では snapshot、preference、generation を変更しない
+10. When 利用者が catalog 全体置換の確認要求を取り消す, the project context shall 現在 snapshot、preference、generation を変更せず、置換確定通知を送らない
+11. When downstream owner が許可済みまたは確認済み catalog 全体置換の成功を通知する, the project context shall 登録 guard へ置換が確定したことを一回通知し、最新 catalog に対する refresh を別 transaction として実行可能にする
+12. If catalog 全体置換が失敗または取り消されたと downstream owner が通知する, the project context shall 置換確定通知を送らず、同じ置換候補を再評価可能にする
+13. If catalog 全体置換の許可または確認要求が snapshot generation、guard registry revision、取消、または別の変更 transaction により stale になる, the project context shall 置換開始を拒否し、登録 guard を再評価するよう安定した結果を返す
 
 ### Requirement 6: 能力別 port と購読契約
 
@@ -89,10 +94,11 @@
 
 1. The project context shall snapshot の取得と購読だけを許す read port を提供する
 2. The project context shall project 選択、確認、取消、refresh を必要な owner だけへ許す command port として read port から分離する
-3. The project context shall switch guard の登録と解除だけを許す guard registration port を提供する
+3. The project context shall change guard の登録と解除だけを許す guard registration port を提供する
 4. When consumer が snapshot を購読する, the project context shall 登録後の確定済み変化を generation 順に通知し、解除後は通知しない
 5. If 一つの購読 listener または強制切替通知が例外を送出する, the project context shall 他の listener、確定済み snapshot、後続 transaction を破損させない
 6. The project context shall feature 内 consumer adapter、feature snapshot、CRUD・restore hook、handoff、application shell composition を公開 port の内部へ取り込まない
+7. The project context shall catalog 全体置換の準備、確認、取消、成功または失敗通知だけを許す replacement guard port を、project 選択 command port と guard registration port から分離して提供する
 
 ### Requirement 7: 共通 project selector の表示と操作
 
@@ -104,7 +110,7 @@
 2. While project context が `empty` 状態である, the 共通 project selector shall project がないことを表示し、project 選択操作を無効にする
 3. While project context が `unavailable` 状態である, the 共通 project selector shall project context を利用できないことと再試行操作を表示し、別 project を推測して表示しない
 4. While 共通 project selector が開始した選択または再試行が進行中である, the 共通 project selector shall 重複操作を防ぎ、進行中であることを利用者へ伝える
-5. When switch guard が確認を要求する, the 共通 project selector shall 日本語または英語の確認表示から承認または取消を選べるようにする
+5. When change guard が project 選択の確認を要求する, the 共通 project selector shall 日本語または英語の確認表示から承認または取消を選べるようにする
 6. The 共通 project selector shall keyboard だけで project 選択、確認、取消、再試行を操作でき、現在の目的と状態を読み上げ可能な label と status で示す
 7. When 表示言語が日本語と英語の間で変わる, the 共通 project selector shall 現在選択と進行中でない context state を維持したまま文言を切り替える
 8. When project 名に markup と解釈可能な文字列が含まれる, the 共通 project selector shall その値を text として表示し、実行可能な HTML を生成しない

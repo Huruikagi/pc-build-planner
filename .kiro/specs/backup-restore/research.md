@@ -139,6 +139,18 @@
 
 ## Risks & Mitigations
 
+### 2026-08-04 design validation remediation: retry・finalization再開・容量不変条件
+
+- **Context**: `kiro-validate-design backup-restore`で、stale assessmentの同ticket再送、section unmount後のfinalization ticket喪失、10 MiB付近でのexport artifact自己復元不能が指摘された。
+- **Sources Consulted**: `backup-restore` requirements/design、`local-data-foundation` design、`project-context` permit lifecycle、FileGatewayとBackupServiceの現行実装、容量steering。
+- **Findings**:
+  - `stale-assessment`は評価時rootとの不一致を確定するため、同じticketの再送では成功しない。candidateを再assessmentして新ticketとpreviewを発行し、置換確認もやり直す必要がある。
+  - post-commit controlは永続する一方、finalization ticketをUI stateだけに置くとunmountで再開能力を失う。Foundationがcandidate digestと期待commit revisionをcontrolへroot write前から保持し、現在rootとの一致でpost-commitを判定して用途限定ticketを再構築する必要がある。
+  - 保存rootの10 MiB上限と交換Envelopeの安全な読取上限を同値にすると、Envelope overheadにより正常exportがrestore preflightで拒否され得る。
+- **Selected Approach**: stale時は`reassess-restore`へ分離し、`precommit-cleanup-pending`だけが同ticket再送を使用する。Foundationへ`findPendingFinalization`を追加し、mount時にfinalize-only stateを再水和する。ファイル入力上限は保存上限と分離した`RestoreFileCapacityPolicy`が16 MiBとして所有し、現行Mapperのworst-case artifactを受理できることを機械検査で固定する。
+- **Trade-offs**: state初期化にpending finalization照会が一つ増え、容量policyにworst-case fixtureの保守が必要になる。一方でroot再置換能力やraw control情報は公開しない。
+- **Follow-up**: stale ticket再送0回、新ticket発行、unmount/remount後のfinalize-only、保存上限rootのexport→file preflightをcontract/integration/E2Eで固定する。
+
 ### 2026-08-04 design review remediation
 
 - **Context**: `kiro-validate-design backup-restore`で、shellの`OperationKind`重複定義、日英UI契約の設計欠落、error codeから再試行可能性への一意な写像不足が指摘された。
@@ -181,3 +193,15 @@
 - **統合**: featureは`public.ts`と`section-mount.ts`から埋め込み可能なmount契約だけを公開し、独立registration/contributionはsettings composition切替後に削除する。共有side panel runtime、settings registration、HTML host、root barrelは編集しない。復元時はFoundationの永続maintenance fenceを取得し、shellは同じ状態のread-only projectionから全feature mutationを抑止する。
 - **検証**: React DOM表示、確認操作、Blob URLとReact rootのcleanupを統合testで確認する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[Chrome MV3 CSP](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)
+
+### 2026-08-04 pre-commit cleanup再開契約のlight discovery
+- **Context**: design validationで、persistent maintenance/recovery control取得後かつroot write前に失敗し、そのcleanupも完了しない場合の再試行契約が未定義と判定された。
+- **Sources Consulted**: `backup-restore` requirements/design/tasks、`local-data-foundation` design/tasks、`project-context` replacement guard契約、steeringの原子的置換・worker再生成規約。
+- **Findings**:
+  - root write前なので復元成功やpost-commit finalizationとして扱えない一方、active controlを通常errorだけで失うと同じ復元と通常mutationが継続的に拒否される。
+  - cleanup専用の新しい公開ticketを追加すると、stateへ第三のcommit outcomeとassessment更新経路が必要になり、既存の`RestoreTicket`保持規則より複雑になる。
+  - assessment ticketはcandidate、mode、pre-commit control owner/generationへ結び付けられるため、同じticketの再送をcleanup再開能力として限定できる。
+- **Selected Approach**: Foundationは`precommit-cleanup-pending`をroot未変更のtyped errorとして返す。同じassessment ticketの次回`commit`だけが一致controlのcleanupをroot write 0件で冪等再開し、cleanup後に最新rootとcandidateを再assessmentしてからcommitへ進む。backup stateは元ticketを保持し、新しいguard permitから`retry-restore`を実行する。
+- **Alternatives Considered**: pre-commit cleanup専用opaque ticketと専用stateを追加する案、cleanup失敗を一般storage errorへ潰す案。前者は不要な公開状態を増やし、後者は回復可能性を表現できないため不採用とした。
+- **Risks & Mitigations**: 別ticketによるcontrol奪取はowner/generation照合で拒否する。worker再生成後も永続controlだけを根拠に再開する。ticket喪失時はlease失効後に新しいassessmentとgenerationを要求し、古いownerを暗黙再利用しない。
+- **Synthesis**: 新しいcommit outcomeやUI phaseを増やさず、既存の未commit ticket保持とretry policyを拡張するのが最小の安全な設計である。

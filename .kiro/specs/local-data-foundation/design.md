@@ -29,6 +29,7 @@
 - 単一write authorityのcommand contract、worker registration factory、revision/request-id競合制御
 - foundation不変条件としてのCurrentBuild参照修復、project削除時の所属candidate・CurrentBuildカスケード削除、root評価・置換、maintenance generation/owner fencing
 - 異常rootの分類とraw fingerprint、回復候補評価、root外の最小RecoveryControl、評価済み回復置換
+- 正常root置換と異常root回復のcommit point、opaque finalization ticket、finalize-only retryを束ね、通常CRUDと内部primitiveを公開しない`BackupRestoreDataPort`
 - 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
 - Chrome Storage・Web Locksとcanonical runtime policyをfoundation内で解決し、Repository、write authority、maintenance source、worker registrationを一度だけ組み立てる引数なしproduction runtime contribution factory
 
@@ -48,7 +49,7 @@
 - `application-shell`はfoundationのproduction runtime contribution factoryだけを公開入口から利用し、返されたworker registrationとmaintenance sourceをcompositionする。foundationからshellへimportしない
 - production factoryは`globalThis.chrome.storage.local`、`chrome.storage.onChanged`、`globalThis.navigator.locks`をfoundation所有adapter内で解決する。application-shellはこれらのplatform primitiveを構築・注入しない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
-- 通常UI featureは`FoundationScopedDataPort`だけを受け取る。`RecoveryDataPort`はbackup-restore compositionだけへ注入し、Storage、lock、Repositoryを公開しない
+- 通常UI featureは`FoundationScopedDataPort`だけを受け取る。`BackupRestoreDataPort`はbackup-restore compositionだけへ注入し、正常/異常rootの評価、commit point付き置換、opaque ticketによるfinalize-only retryだけを公開する。通常CRUD、raw root、Storage、lock、fence、Repository、内部write authorityを公開しない
 - **明示的な例外**: `src/ui-language/preference-store.ts`（`ui-internationalization`所有）は`chrome.storage.local`の専用キー`uiLanguage`1つに限定して直接読み書きしてよい。表示言語はプロジェクト・候補パーツ・現在構成のいずれにも属さないドメイン外の利用者設定であり、`localDataRoot`へは一切触れず、単一write authorityが統制する対象（バージョン付きroot、参照整合性、maintenance fencing、交換形式、容量監視）に加わらない。この例外は到達点を2ファイル（本adapterと`preference-store.ts`）に限定する機械検査（`ui-internationalization`が追加する`scripts/validate-boundaries.mjs`のStorageAccessGuard規則）で固定され、それ以外からの`chrome.storage`直接利用は引き続き拒否される
 
 ### Revalidation Triggers
@@ -58,7 +59,7 @@
 - root write lock名、`RootWriteLock`契約、またはWeb Locks APIを使わない排他方式への変更
 - storage key分割、quota前提、Storage API以外への移行、runtime registration契約の変更
 - production runtime contributionのglobal platform解決、公開handle、caller policy、初期access restriction、cleanup責務の変更
-- recovery control key、raw root fingerprint、回復owner/generation、回復用評価cursorまたはRecoveryDataPortの変更
+- recovery control key、raw root fingerprint、回復owner/generation、回復用評価cursor、commit outcomeまたはfinalization ticketの変更
 - `chrome.storage`直接到達を許可される例外ファイルの追加・変更（現在は`src/persistence/chrome-storage-adapter.ts`と`src/ui-language/preference-store.ts`の2ファイルに限定）、またはドメイン外設定が`localDataRoot`・交換形式・容量監視の対象へ混入する変更提案
 
 ## Architecture
@@ -71,7 +72,8 @@
 
 ```mermaid
 graph LR
-    Feature[Feature consumers] --> Ports[Foundation public ports]
+    Feature[Feature consumers] --> Ports[Foundation scoped data port]
+    Backup[Backup restore] --> BackupPort[Backup restore data port]
     Shell[Application shell] --> Registration[Worker registration]
     Shell --> Factory[Runtime contribution factory]
     Factory --> Registration
@@ -80,6 +82,7 @@ graph LR
     Factory --> Lock
     Registration --> Authority[Write authority]
     Ports --> Authority
+    BackupPort --> Authority
     Authority --> Runner[Root transaction runner]
     Runner --> Lock[Root write lock]
     Runner --> Mutation[Mutation pipeline]
@@ -100,7 +103,7 @@ graph LR
 - **Linearization boundary**: 全writerは同一名のexclusive Web Lockを取得してからrootを再読込し、検証、変更、一回の`set`を完了する。`StoragePort`は排他を所有せず、lockを迂回するwriterを公開しない。
 - **Restart boundary**: Web Lockはworker終了時に失われる一時的な排他である。generation、owner、lease、revisionを含む永続rootだけを再生成後の認可根拠とし、新workerはlock取得後に必ずrootを再読込する。
 - **Atomicity boundary**: 一つのstorage keyに一つのrootを保存し、候補変更、project削除カスケード、参照修復、検証、revision更新、maintenance state更新を一回の`set`へまとめる。これは協調writer間の論理的一括commitであり、Chrome crash時のdurable transaction保証は主張しない。
-- **Recovery boundary**: 正常decode不能なrootは公開せず、raw bytes相当のcanonical fingerprintと`corrupt-data`または`unsupported-version`だけを扱う。`RecoveryControl`は別keyにgeneration、owner、lease、activeだけを保持し、全writerが同じWeb Lock内で確認する。回復rootのwriteを先、control releaseを後に行い、中断時はactive controlを残して安全側に停止する。
+- **Recovery boundary**: 正常decode不能なrootは公開せず、raw bytes相当のcanonical fingerprintと`corrupt-data`または`unsupported-version`だけを扱う。`RecoveryControl`は別keyにgeneration、owner、lease、active、candidate digest、期待commit revisionを保持し、全writerが同じWeb Lock内で確認する。回復rootのwriteを先、control releaseを後に行う。write後に中断した場合はactive controlと期待commit identityを残して安全側に停止し、root再置換不能なopaque finalization ticketだけを返す。
 
 ### Technology Stack
 
@@ -119,7 +122,7 @@ graph LR
 manifest.json                                      # 最小MV3、Chrome 116、storage権限、CSP
 package.json                                       # typecheck、build、test、validate scripts
 tsconfig.json                                      # strict ESM TypeScript設定
-scripts/build.ts                                   # 同梱artifact生成と禁止コード検査
+scripts/build.mjs                                  # 同梱artifact生成と禁止コード検査
 src/domain/result.ts                               # canonical Result<T E>と共通error envelope
 src/domain/identifiers.ts                          # branded ID、UUID、UTC timestamp規約
 src/domain/model.ts                                # Project、CandidatePart、CurrentBuild、LocalDataRoot
@@ -136,6 +139,7 @@ src/persistence/web-locks-adapter.ts                # navigator.locksのexclusiv
 src/persistence/maintenance.ts                     # 純粋なgeneration、owner、lease、fence policy
 src/persistence/maintenance-snapshot-source.ts     # 検証済みmaintenance snapshotと変更通知
 src/persistence/runtime-contribution.ts            # canonical production graphと最小公開handleの生成
+src/persistence/backup-restore-data-port.ts         # 正常置換と異常root回復だけを束ねるbackup専用facade
 src/persistence/root-transaction-runner.ts          # lock内のread-check-write実行境界
 src/persistence/replacement.ts                     # canonical digest、assessment、replacement候補
 src/persistence/recovery.ts                        # 異常root分類、raw fingerprint、回復評価・commit契約
@@ -159,6 +163,7 @@ tests/persistence/recovery.test.ts                   # 異常root分類、候補
 tests/persistence/recovery-transaction.integration.test.ts # 破損・未対応rootからの原子的回復
 tests/persistence/write-authority.contract.test.ts   # command、request dedupe、single authority routing
 tests/persistence/foundation-public-regression.test.ts # 公開facade経由の主要成功・失敗契約
+tests/persistence/backup-restore-data-port.contract.test.ts # 正常/回復capabilityと禁止能力のnegative contract
 tests/performance/local-data-foundation.performance.test.ts # 10MB近傍の各処理時間とbytes計測
 tests/persistence/concurrency-restart.integration.test.ts # lock待機、同時mutation、worker restart
 tests/tooling/build-smoke.test.ts                    # MV3、Chrome 116、権限、CSP、access restriction
@@ -166,8 +171,9 @@ tests/tooling/final-validation-gate.test.ts          # boundary、fixture、arti
 ```
 
 ### Modified Files
-- `package.json` — 仮のtest scriptを再現可能なtypecheck/build/test/validate契約へ置換し、互換性確認済みdev dependencyを固定する。
-- `.gitignore` — build/test生成物だけを除外し、fixtureを隠さない。
+- `src/persistence/schema.ts`、`src/persistence/chrome-storage-adapter.ts` — 現行schema正規値と、domain rootから分離した回復control key・raw read契約を追加する。
+- `src/persistence/root-transaction-runner.ts`、`src/persistence/runtime-contribution.ts`、`src/persistence/public.ts` — 全writerの回復fencingと用途別`BackupRestoreDataPort`をcanonical graph・公開入口へ統合する。
+- `scripts/validate-boundaries.mjs`、`tests/tooling/public-api-consumer.ts` — backup専用portから通常CRUD・raw root・Storage・lock・authorityへ到達できないことを機械検査する。
 
 `src/index.ts`と`src/runtime/service-worker.ts`は本仕様では作成・変更しない。worker registrationの実体compositionは`application-shell`のfile boundaryで行う。
 
@@ -214,14 +220,14 @@ sequenceDiagram
     participant Lock
     participant Evaluator
     participant Store
-    Backup->>Authority: acquire maintenance
+    Backup->>Authority: commit candidate and expected mode
     Authority->>Runner: execute maintenance acquire
     Runner->>Lock: acquire exclusive root lock
     Runner->>Store: persist generation owner lease
     Runner->>Lock: release root lock
-    Backup->>Evaluator: assess replacement unknown root
+    Authority->>Evaluator: assess replacement unknown root
     Evaluator-->>Backup: assessment token
-    Backup->>Authority: replace token generation owner
+    Authority->>Authority: replace token generation owner
     Authority->>Runner: execute replacement
     Runner->>Lock: acquire exclusive root lock
     Runner->>Store: read generation owner revision
@@ -232,12 +238,13 @@ sequenceDiagram
     Runner->>Lock: release root lock
     Runner-->>Authority: replaced or typed failure
     Authority-->>Backup: replaced or typed failure
-    Backup->>Authority: release maintenance
+    Authority->>Authority: release or issue finalization ticket
+    Authority-->>Backup: committed outcome
 ```
 
-assessment tokenは候補rootのdigest、target schema、必要bytes、評価時revisionを束ねる。置換時に再検証し、stale token、owner、generation、revisionのいずれかが不一致なら保存しない。
+assessment tokenは候補rootのdigest、target schema、必要bytes、評価時revisionを束ねる。置換時に再検証し、stale token、owner、generation、revisionのいずれかが不一致なら保存しない。backup専用portはacquire、再assessment、replace、cleanupを一つのprotocolとして隠蔽する。root write前の失敗だけを`Result`のerrorとし、root write後はcleanup成否にかかわらずcommitted outcomeを返す。control取得後かつroot write前にcleanupを完了できない場合は`precommit-cleanup-pending`を返し、control owner/generationをassessment ticketへ結び付けて保持する。同じticketの再送だけがcleanupを先に冪等再開し、cleanup中はroot writeを行わない。
 
-異常rootからの回復では`RecoveryDataPort`が同じ固定名Web Lock内でraw rootと`RecoveryControl`を読む。事前評価はcurrent anomalyとraw fingerprintをcursorへ保持し、候補のmigration・全体validation・容量評価を独立して行う。利用者確認後、backup-restoreはrecovery maintenanceを取得して再評価し、commit時にcandidate digest、raw fingerprint、control generation・owner・leaseを再照合する。一致した場合だけroot keyを一回writeする。成功直後もcontrolはactiveのため通常writeは停止したままであり、検証済み通常queryが成功することを確認してからownerがreleaseする。
+異常rootからの回復では`BackupRestoreDataPort`の回復capabilityが同じ固定名Web Lock内でraw rootと`RecoveryControl`を読む。事前評価はcurrent anomalyとraw fingerprintをcursorへ保持し、候補のmigration・全体validation・容量評価を独立して行う。利用者確認後の`commit`はrecovery maintenance取得、再評価、candidate digest、raw fingerprint、control generation・owner・leaseの再照合を内部で完結する。一致した場合だけroot keyを一回writeする。root write前の失敗でcontrol releaseを完了できない場合、同じassessment ticketによる再commitは一致するowner/generationのcleanupをroot write 0件で先に再開し、cleanup後に最新raw fingerprintとcandidateを再評価する。別ticket、stale owner、期限切れleaseは暗黙再利用しない。成功直後もcontrolがactiveなら通常writeを停止したまま`committed-finalization-required`を返し、`finalize`が通常query確認とcontrol releaseだけを再試行する。
 
 ## Requirements Traceability
 
@@ -283,19 +290,22 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 6.3 | content scriptへ直接APIなし | WorkerRegistration、import boundary | public ports | contract test |
 | 6.4 | 不許可caller拒否 | WorkerRegistration | authorization result | contract test |
 | 7.1 | 副作用なし置換評価 | ReplacementEvaluator | assessReplacement | replacement flow |
-| 7.2 | root全体置換 | ReplacementCoordinator | replaceRoot | replacement flow |
+| 7.2 | root全体置換 | ReplacementCoordinator | commit outcome | replacement flow |
 | 7.3 | 置換失敗時の既存root保持 | ReplacementCoordinator | replacement error | replacement flow |
 | 7.4 | maintenance owner外write拒否 | MaintenancePolicy、RootTransactionRunner | fence、RootWriteLock | 両flow |
 | 7.5 | stale owner・generation拒否 | MaintenancePolicy、RootTransactionRunner | MaintenanceCursor | replacement flow |
 | 7.6 | worker再生成耐性 | MaintenancePolicy、RootTransactionRunner | persisted state、new lock request | restart test |
-| 7.7 | 終了・中止後の再開 | MaintenancePolicy、RootTransactionRunner | release/abort transition | replacement flow |
+| 7.7 | 終了・中止後の再開 | MaintenancePolicy、RootTransactionRunner | finalize-only transition | replacement flow |
 | 7.8 | 検証済み保守状態のread-only通知 | MaintenanceSnapshotSource、LocalDataRepository、RuntimeContributionFactory | getSnapshot、subscribe、production contribution | maintenance observation |
 | 7.9 | 異常rootを正常値として公開しない | LocalDataRepository、RecoveryCoordinator | CurrentRootAnomaly | read and recovery flow |
 | 7.10 | 異常rootを変更しない回復候補評価 | RecoveryCoordinator、ReplacementCoordinator | assessRecovery | recovery flow |
 | 7.11 | current異常と候補拒否理由の分離 | RecoveryCoordinator | RecoveryAssessmentError | recovery flow |
-| 7.12 | owner・generation再確認後の原子的回復 | RecoveryControlPolicy、RootTransactionRunner | replaceFromRecovery | recovery flow |
+| 7.12 | owner・generation再確認後の原子的回復 | RecoveryControlPolicy、RootTransactionRunner | commit / finalize | recovery flow |
 | 7.13 | 候補・保存状態・owner・generation変化の拒否 | RecoveryCoordinator、RootTransactionRunner | RecoveryCursor、RecoveryFence | recovery flow |
 | 7.14 | 回復後の通常操作復帰 | LocalDataRepository、WriteAuthority | query、mutate | recovery regression |
+| 7.15 | backup向け正常置換・異常回復の単一用途契約 | BackupRestoreDataPort | assess / commit / finalize | both replacement flows |
+| 7.16 | backup portから通常CRUD・内部primitiveを非公開 | BackupRestoreDataPort、RuntimeContributionFactory | capability facade | negative contract |
+| 7.17 | production handleの用途別capability分離 | RuntimeContributionFactory | dataPort、backupRestoreDataPort | production initialization |
 | 8.1 | 架空dataのみ | FoundationFixtures | fixture builders | all tests |
 | 8.2 | 主要失敗・成功の自動検証 | FoundationFixtures | in-memory ports | all tests |
 | 8.3 | 実サイトasset不要 | FoundationFixtures | synthetic values | artifact scan |
@@ -307,21 +317,22 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | BuildPipeline | Tooling | MV3 artifact生成と禁止コード検査 | 1.1–1.2 | Node.js P0 | Batch |
 | IdentifierPolicy | Domain | branded IDとUTC日時を統一 | 2.5 | Web Crypto P1 | Service |
 | NormalizedAttributeModel | Domain | category別確認済み属性を表現 | 2.2–2.4 | なし | State |
-| DomainModel | Domain | 保存可能な共有modelと不変条件 | 2.1–2.7, 4.1 | なし | State |
+| DomainModel | Domain | 保存可能な共有modelと不変条件 | 2.1–2.8, 4.1 | なし | State |
 | SchemaContract | Persistence contract | 現行schema版とstorage keyの正規値を公開 | 4.1, 4.6, 4.7 | DomainModel P0 | State |
-| SchemaValidator | Domain | unknown root・command・候補draftをcanonical契約へ絞る | 2.1–2.7, 3.2–3.4, 3.11, 5.4, 6.2 | DomainModel P0 | Service |
+| SchemaValidator | Domain | unknown root・command・候補draftをcanonical契約へ絞る | 2.1–2.8, 3.2–3.4, 3.11, 5.4, 6.2 | DomainModel P0 | Service |
 | MigrationRegistry | Persistence | 旧schemaを純粋に連続移行 | 4.1–4.7 | SchemaValidator P0、SchemaContract P0 | Service |
 | ReferenceRepairPolicy | Persistence | candidate変更によるbuild参照修復とproject削除カスケード | 3.7, 3.9 | DomainModel P0 | Service |
 | CapacityPolicy | Persistence | bytesとquotaからwarning・拒否を純粋判定 | 5.1–5.3 | 直列化済みcapacity input P0 | Service |
 | MutationPipeline | Persistence | 検証済みsnapshotからcommit候補を構築 | 3.1, 3.2, 3.7, 3.9, 5.1–5.3 | Validator P0、Repair P0、CapacityPolicy P0 | Service |
 | MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
 | MaintenanceSnapshotSource | Persistence adapter | 検証済みmaintenance cursorをread-onlyで公開 | 7.8 | LocalDataRepository P0、Storage change P1 | Service、State |
-| RuntimeContributionFactory | Composition adapter | platform portから用途別portを持つcanonical foundation graphを一度だけ生成 | 1.1, 1.3, 3.1, 3.10, 6.1, 7.8, 7.10–7.14 | ChromeStorageAdapter P0、RootWriteLock P0、WriteAuthority P0 | Service |
+| RuntimeContributionFactory | Composition adapter | platform portから用途別portを持つcanonical foundation graphを一度だけ生成 | 1.1, 1.3, 3.1, 3.10, 6.1, 7.8, 7.10–7.17 | ChromeStorageAdapter P0、RootWriteLock P0、WriteAuthority P0 | Service |
 | RootWriteLock | Persistence port | 協調writerのread-check-writeを線形化 | 1.3, 3.8, 7.4–7.7 | Web Locks API P0 | Service |
 | RootTransactionRunner | Persistence | lock内で最新rootまたはraw fingerprintを読み単一root setまで実行 | 1.3, 3.1–3.8, 7.2–7.7, 7.12–7.14 | RootWriteLock P0、StoragePort P0 | Service |
 | ReplacementCoordinator | Persistence | 正常・回復候補を移行・検証しcommit候補を構築 | 4.7, 7.1–7.3, 7.10–7.13 | Validator P0、SchemaContract P0 | Service |
 | RecoveryCoordinator | Persistence | 異常root分類、raw fingerprint、回復評価cursorを所有 | 7.9–7.14 | ReplacementCoordinator P0、StoragePort P0 | Service |
 | RecoveryControlPolicy | Persistence | root外の回復generation・owner・leaseを純粋遷移 | 7.12, 7.13 | RootWriteLock P0 | Service、State |
+| BackupRestoreDataPort | Public capability | commit point付き正常置換・異常root回復とfinalize-only retryをbackupへ公開 | 7.1–7.17 | WriteAuthority P0、RecoveryCoordinator P0 | Service |
 | WriteAuthority | Application adapter | 全writeをlock付きrunnerへdispatch | 1.3, 3.6, 3.8, 6.2–6.4 | RootTransactionRunner P0 | Service |
 | ChromeStorageAdapter | Chrome adapter | root、bytes、access levelを操作 | 3.5, 5.1–5.5, 6.1 | Chrome API P0 | Service |
 | WorkerRegistration | Runtime adapter | shellへtyped handlerを提供 | 6.2–6.4 | WriteAuthority P0 | Service |
@@ -517,7 +528,7 @@ type RecoveryAssessmentError = {
   readonly candidate: ValidationError | MigrationError | CapacityError;
 };
 
-interface RecoveryDataPort {
+interface RecoveryOperations {
   assessRecovery(candidate: unknown): Promise<Result<RecoveryAssessment, RecoveryAssessmentError | FoundationError>>;
   runRecoveryMaintenance(command: RecoveryMaintenanceCommand): Promise<Result<RecoveryFence, FoundationError>>;
   replaceFromRecovery(command: RecoveryReplacementCommand): Promise<Result<ReplacementReceipt, FoundationError>>;
@@ -526,7 +537,65 @@ interface RecoveryDataPort {
 
 `RootFingerprint`はStorageから読んだraw rootをcanonical JSON UTF-8化してSHA-256で求めるが、raw値自体をconsumerへ返さない。unsupported版はversion fieldだけを安全に抽出し、それ以外は`corrupt-data`へ分類する。候補評価失敗はcurrent anomalyとcandidate rejectionを同じerror envelopeの別fieldで返す。
 
-`RecoveryControlPolicy`は`foundationRecoveryControl` keyのgeneration、owner、lease、activeを管理する。このkeyはdomain rootや交換形式へ含めず、通常rootがdecode不能でも取得・更新できる。通常mutation、通常置換、保守操作、回復置換は同じ固定Web Lock内でactive recovery controlを確認する。回復commitはraw fingerprint、candidate digest、target schema、required bytes、control generation・owner・leaseを再照合し、root keyだけを一回writeする。失敗時はraw rootを変更しない。成功後は通常Repositoryで新rootを検証できるまでcontrolをreleaseしない。
+`RecoveryControlPolicy`は`foundationRecoveryControl` keyのgeneration、owner、lease、active、candidate digest、期待commit revisionを管理する。このkeyはdomain rootや交換形式へ含めず、通常rootがdecode不能でも取得・更新できる。通常mutation、通常置換、保守操作、回復置換は同じ固定Web Lock内でactive recovery controlを確認する。回復commitはraw fingerprint、candidate digest、target schema、required bytes、control generation・owner・leaseを再照合し、期待commit identityをcontrolへ永続化してからroot keyだけを一回writeする。失敗時はraw rootを変更しない。成功後は通常Repositoryで新rootを検証できるまでcontrolをreleaseしない。worker再生成後は現在rootのdigestとrevisionがcontrolの期待値へ両方一致した場合だけpost-commit finalization pendingと分類し、一致しないactive controlをpre-commit cleanup pendingとして扱う。
+
+#### BackupRestoreDataPort
+
+```typescript
+type BackupRestoreCommitMode = "normal" | "recovery";
+
+interface BackupRestoreCommitCommand {
+  readonly candidate: unknown;
+  readonly expectedMode: BackupRestoreCommitMode;
+  readonly assessment: BackupRestoreAssessmentTicket;
+}
+
+declare const backupRestoreAssessmentTicketBrand: unique symbol;
+type BackupRestoreAssessmentTicket = string & {
+  readonly [backupRestoreAssessmentTicketBrand]: "assessment";
+};
+
+interface BackupRestoreAssessment {
+  readonly mode: BackupRestoreCommitMode;
+  readonly requiredBytes: number;
+  readonly currentAnomaly?: CurrentRootAnomaly;
+  readonly ticket: BackupRestoreAssessmentTicket;
+}
+
+interface BackupRestoreCommitReceipt {
+  readonly mode: BackupRestoreCommitMode;
+  readonly revision: Revision;
+}
+
+declare const backupRestoreFinalizationTicketBrand: unique symbol;
+type BackupRestoreFinalizationTicket = string & {
+  readonly [backupRestoreFinalizationTicketBrand]: "finalization";
+};
+
+type BackupRestoreCommitOutcome =
+  | { readonly kind: "committed"; readonly receipt: BackupRestoreCommitReceipt }
+  | {
+      readonly kind: "committed-finalization-required";
+      readonly receipt: BackupRestoreCommitReceipt;
+      readonly finalization: BackupRestoreFinalizationTicket;
+    };
+
+interface BackupRestoreDataPort {
+  assessReplacement(input: unknown): Promise<Result<BackupRestoreAssessment, FoundationError>>;
+  assessRecovery(candidate: unknown): Promise<Result<BackupRestoreAssessment, RecoveryAssessmentError | FoundationError>>;
+  commit(command: BackupRestoreCommitCommand): Promise<Result<BackupRestoreCommitOutcome, FoundationError>>;
+  findPendingFinalization(): Promise<Result<BackupRestoreFinalizationTicket | null, FoundationError>>;
+  finalize(ticket: BackupRestoreFinalizationTicket): Promise<Result<BackupRestoreCommitReceipt, FoundationError>>;
+}
+```
+
+このportは同じ`WriteAuthority`、`ReplacementCoordinator`、`RecoveryCoordinator`へ委譲するfrozen facadeであり、正常/回復protocolの内部primitiveを公開しない。assessmentはroot revisionまたはraw fingerprint、candidate digest、modeへ結び付くopaque ticketだけをconsumerへ返す。`commit`は固定名Web Lock内でticket、`expectedMode`、最新root分類を再照合し、preflight後に確定した先行mutationがあればwrite前の`stale-assessment`として拒否する。照合成功と同じ排他区間でpersistent maintenance/recovery controlをactiveにし、後続の通常mutationをcleanup完了まで拒否する。root write前の全失敗はerrorであり、control cleanup未完了時だけ`precommit-cleanup-pending`を返す。同じassessment ticketによる次の`commit`は一致するcontrolのcleanupをroot write 0件で再開し、完了後の最新rootで再assessmentしてから通常commitへ進む。root write後は`committed`または`committed-finalization-required`であり、後者を通常失敗へ変換しない。
+
+`BackupRestoreAssessmentTicket`と`BackupRestoreFinalizationTicket`はいずれもopaque値である。前者はpreflight世代、candidate、pre-commit control owner/generationをcommitへ結び付け、後者はcommit mode、owner/generation、置換後revisionまたはrecovery control cursorへ結び付く。raw fingerprint、候補値、digest、fenceをconsumerへ公開しない。前者の再送は`precommit-cleanup-pending`となった一致controlのcleanupとcleanup後の再assessmentだけを再開でき、再assessmentがstaleになった場合は終了して新規assessmentを要求する。別ticketや通常mutationへowner能力を移譲しない。正常maintenance controlとRecoveryControlはcandidate digestと期待commit revisionをroot write前に永続化し、現在rootが両方へ一致した場合だけpost-commitと分類する。`findPendingFinalization`はこの判定を満たすactive controlからだけ同じopaque ticketを再構築し、pre-commit controlや内部cursorを返さない。`finalize`は対応するmaintenance/control cleanupと通常query確認だけを実行し、candidate assessmentまたはroot writeへ到達できない。既に完了したticketの再送は同じreceiptを返すか型付きstale resultとなり、rootを変更しない。`query`、`mutate`、raw root、fingerprint生成、StoragePort、RootWriteLock、runner、authority factory、maintenance sourceは公開しない。
+
+**Preconditions**: production runtime contributionのaccess restrictionが成功し、composition ownerがbackup-restore section factoryへ直接注入していること。
+
+**Postconditions**: 正常置換と異常回復のcommitは既存の同一Web Lock、owner/generation、opaque assessment ticket再検証を通る。先行mutationはticketをstale化して保持され、commit線形化後の後続mutationはpersistent maintenance/recovery controlで拒否される。facade生成やmethod取得だけでは永続状態を変更しない。
 
 ### Runtime and Adapter Layer
 
@@ -551,7 +620,7 @@ interface FoundationRuntimeContribution {
   readonly maintenanceSource: MaintenanceSnapshotSource;
   readonly workerRegistration: DataWorkerRegistration;
   readonly dataPort: FoundationScopedDataPort;
-  readonly recoveryDataPort: RecoveryDataPort;
+  readonly backupRestoreDataPort: BackupRestoreDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -566,9 +635,9 @@ factoryは解決したplatformを`initializeFoundationRuntimeContributionFromPla
 
 初期化時にStorage accessを`TRUSTED_CONTEXTS`へ制限し、失敗時はtyped failureを返してcontributionを公開しない。worker registrationへは同じ成功結果を再利用するfail-closedなrestrict callbackを渡し、side panel起動とworker登録の順序へ安全性を依存させない。
 
-公開handleはread-only maintenance source、未登録のworker registration、通常UI用`FoundationScopedDataPort`、backup-restore専用`RecoveryDataPort`を用途別に返す。Repository、StoragePort、RootWriteLock、runner、pipeline、raw rootは返さない。完全な内部authorityを単一の汎用portとしてUIへ注入しない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
+公開handleはread-only maintenance source、未登録のworker registration、通常UI用`FoundationScopedDataPort`、backup-restore専用`BackupRestoreDataPort`を用途別に返す。Repository、StoragePort、RootWriteLock、runner、pipeline、raw rootは返さない。完全な内部authorityを単一の汎用portとしてUIへ注入しない。`dispose`は冪等でinitializerが所有するresourceだけを解放する。maintenance購読のunsubscribeとworker registration成功後のdisposerは、それぞれを開始したapplication-shell側consumerが所有する。
 
-`FoundationScopedDataPort`は同一handle内のwrite authorityへ委譲するfrozen viewであり、置換・保守・回復操作を公開しない。`RecoveryDataPort`はbackup-restore contributionだけへ注入し、通常CRUDを公開しない。複数contextが同時にwriteしても、固定名Web Lockが線形化点、永続rootのrevision・maintenance fence・RecoveryControlが認可根拠であるため、単一write authorityの不変条件とworker再生成耐性を維持する。Storage access restriction失敗時は両portを含むcontributionを一切公開しない。
+`FoundationScopedDataPort`は同一handle内のwrite authorityへ委譲するfrozen viewであり、置換・保守・回復操作を公開しない。`BackupRestoreDataPort`はbackup-restore contributionだけへ注入し、正常置換・異常root回復・finalize-only retry以外の通常CRUDを公開しない。複数contextが同時にwriteしても、固定名Web Lockが線形化点、永続rootのrevision・maintenance fence・RecoveryControlが認可根拠であるため、単一write authorityの不変条件とworker再生成耐性を維持する。Storage access restriction失敗時は両portを含むcontributionを一切公開しない。
 
 factoryは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。global property参照を含むplatform解決・shape検証を先に完了し、不足時は`invalid-platform`を返す。Storage access restriction、購読登録、handler生成、Repository生成はその後にだけ行う。解決中のglobal getter例外も`invalid-platform`へ正規化し、foundation側の観測可能な副作用を開始しない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
 
@@ -629,7 +698,7 @@ erDiagram
 
 ## Error Handling
 
-`FoundationError`は`validation`、`corrupt-data`、`unsupported-version`、`migration-failed`、`repair-failed`、`revision-conflict`、`request-conflict`、`maintenance-active`、`recovery-active`、`stale-fence`、`stale-assessment`、`stale-recovery-state`、`quota-exceeded`、`access-denied`、`lock-unavailable`、`storage-unavailable`を判別子に持つ。quota warningは失敗ではなく成功receiptのmetadataとする。回復候補の拒否は`RecoveryAssessmentError`でcurrent anomalyとcandidate reasonを分離し、raw rootや候補値を含めない。
+`FoundationError`は`validation`、`corrupt-data`、`unsupported-version`、`migration-failed`、`repair-failed`、`revision-conflict`、`request-conflict`、`maintenance-active`、`recovery-active`、`stale-fence`、`stale-assessment`、`stale-recovery-state`、`precommit-cleanup-pending`、`quota-exceeded`、`access-denied`、`lock-unavailable`、`storage-unavailable`を判別子に持つ。`precommit-cleanup-pending`はroot未変更かつ同じassessment ticketによるcleanup再開が可能な場合だけ返す。quota warningは失敗ではなく成功receiptのmetadataとする。回復候補の拒否は`RecoveryAssessmentError`でcurrent anomalyとcandidate reasonを分離し、raw rootや候補値を含めない。
 
 Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ出さない。予期しないadapter例外は`storage-unavailable`へ正規化し、commit成功を確認できない場合は成功を返さない。
 
@@ -660,13 +729,14 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `ReplacementCoordinator`で副作用なし評価、schema migration、容量不足、stale token、単一成功/失敗置換を検証する（7.1–7.3）。
 - `RecoveryCoordinator`でcorrupt/future rootの分類とfingerprint安定性、候補不正・未対応・容量超過時の二重診断、raw root非変更を検証する（7.9–7.11）。
 - recovery transactionでowner・generation・lease・raw fingerprint・candidate digestの各stale拒否、単一root write、成功後の通常query/mutate復帰を検証する（7.12–7.14）。
+- `BackupRestoreDataPort` contractで正常/異常rootのassessmentとcommitを同じcanonical graphから実行し、各経路が既存fence・cursorを迂回しないことを検証する。control取得後かつroot write前のcleanup失敗は`precommit-cleanup-pending`となり、同じassessment ticketだけがworker再生成後もowner/generationを照合してcleanupをroot write 0件で再開し、別ticketを拒否することを固定する。cleanup後の再assessmentがstaleなら古いticketを終了し、新規assessmentだけを許可する。root write後のcleanup失敗は`committed-finalization-required`となり、新しいconsumer instanceが`findPendingFinalization`でticketを再発見でき、finalize retry中のroot writeが0件であることも固定する（7.15, 7.17）。
 - `WorkerRegistration`でunknown payload、unauthorized caller、content-script直接accessなし、access restriction失敗時のfail-closedを検証する（6.1–6.4）。
 - 公開maintenance sourceがread-onlyであり、Storage primitiveやlease/write操作をconsumerへ公開しないことをcontract testで検証する（7.8）。
 
 ### Fixture and Public Port Regression
 - fixture builderは全12category、欠損値、元表記・確認値、参照整合root、破損rootを架空値だけで生成し、実サイトHTML、画像、商品dataを含まないことを独立検査する（8.1, 8.3）。
 - `FoundationDataPort`だけを使う回帰suiteでCRUD、project削除カスケード、破損読取、容量不足、移行成功・失敗、access拒否、参照修復、request conflict、maintenance fence、replacementを検証する（3.1–3.9, 4.2–4.4, 5.1–5.3, 6.1–6.4, 7.1–7.7, 8.2）。
-- runtime contributionのnegative contractで`FoundationScopedDataPort`から置換・保守・回復・Storage・lockへ到達できず、`RecoveryDataPort`から通常CRUDとraw rootへ到達できないことを検証する（3.10, 6.3）。
+- runtime contributionのnegative contractで`FoundationScopedDataPort`から置換・保守・回復・Storage・lockへ到達できず、`BackupRestoreDataPort`からquery、mutate、raw root、Storage、lock、fence、Repository、authority factoryへ到達できないこと、およびfinalization ticketからroot writeを開始できないことを型検査とruntime key検査で検証する（3.10, 6.3, 7.16, 8.2）。
 - 架空のcorrupt/future rootだけを使い、候補評価拒否、worker再生成、回復成功、通常操作復帰を公開port経由で検証する（7.9–7.14, 8.2）。
 
 ### Performance and Concurrency Validation
@@ -700,4 +770,4 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 
 application shell導入時は、foundationの`initializeProductionFoundationRuntimeContribution()`をshell-owned production compositionから引数なしで呼び、返されたworker registrationを`src/runtime/service-worker.ts`へ、maintenance sourceをside panel compositionへ接続する。shellはStorage、change event、Web Locks、clock、foundation command policyを注入しない。foundationが一時的な共有runtime入口を作成して移管するmigrationは行わない。
 
-`CURRENT_SCHEMA_VERSION`の値と`LocalDataRoot` schemaは変更しない。RecoveryControlはdomain root・backup交換形式とは独立した内部control recordとして追加する。導入時にcontrol keyが存在しなければinactive generation 0として扱い、最初の回復maintenance取得時にのみ作成する。旧consumerの`FoundationScopedDataPort`はshapeと挙動を維持し、application shellは`RecoveryDataPort`をbackup-restoreだけへ配線する。
+`CURRENT_SCHEMA_VERSION`の値と`LocalDataRoot` schemaは変更しない。RecoveryControlはdomain root・backup交換形式とは独立した内部control recordとして追加する。導入時にcontrol keyが存在しなければinactive generation 0として扱い、最初の回復maintenance取得時にのみ作成する。旧consumerの`FoundationScopedDataPort`はshapeと挙動を維持する。application shellは旧`recoveryDataPort`依存を`backupRestoreDataPort`へ置換し、backup-restoreだけへ配線する。通常置換は既存`FoundationDataPort`実装への委譲、異常回復は既存`RecoveryCoordinator`への委譲であり、保存data migrationは発生しない。

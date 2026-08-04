@@ -53,3 +53,26 @@
 ## Constraints
 
 既存の feature-first、`public.ts` / `worker-public.ts` / `feature-contribution.ts`、application shell 単一 composition owner、React mount/unmount 規約を維持する。選択状態は検証前の storage 値を公開せず、project catalog との整合確認後にだけ利用する。preference store は専用 key に限定し、storage boundary gate と negative test を同時に更新する。context 初期化失敗は `unavailable` として表現し、settings と backup recovery の起動を妨げない。切替は同時に一つだけを確定し、競合や遅延通知で古い選択へ後退しない。既存 snapshot の version/shape や feature 内 `selectedProjectId` をこの spec で変更しない。全表示は日本語・英語、キーボード操作、読み上げラベルへ対応し、架空 fixture による unit・contract・DOM・Playwright E2E で検証可能にする。
+
+## Change Brief: 2026-08-03 backup restore replacement guard
+
+### Problem
+
+backup restore は全 catalog を置換する前に feature-owned draft への影響を確認する必要があるが、現行 guard protocol は別 project への利用者起点選択だけを扱う。`select` を流用すると置換後 catalog が未確定であり、同一 project 選択や全 project 消失を正しく表現できない。
+
+### In Scope
+
+- guard 対象を project 選択と catalog 全体置換の判別可能な change intent へ一般化する。
+- catalog 置換前に登録 guard を評価し、許可または一つの opaque confirmation request を返す公開 capability を追加する。
+- 取消、stale、guard failure では snapshot、preference、generation を変更せず、downstream owner が置換 ticket を保持して再試行できるようにする。
+- 確認済み置換の commit 後に、登録 guard へ draft 破棄を確定できる forced notification を送る lifecycle を定義する。
+
+### Out of Scope
+
+- backup file の検証、置換 transaction、RecoveryDataPort、復元結果 UI、復元後 refresh の実装。
+- feature-owned draft の内容、保存、破棄処理。
+- application shell の production wiring と backup section composition。
+
+### Boundary Impact
+
+`project-context` が guard registry と confirmation authority を引き続き単独所有し、backup-restore は新しい置換 guard capability の consumer となる。project 選択 command と catalog 置換 preparation は能力別 port として分離し、通常 consumer へ不要な権限を渡さない。

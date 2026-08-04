@@ -11,6 +11,7 @@
 - [ ] 1.2 (P) Foundationのbackup専用公開契約をconsumer側で固定する
   - assessment結果がmode、必要bytes、current anomaly、opaque ticketだけを公開し、revision、fingerprint、digest、fence、通常CRUDへ到達できないことを検証する
   - commit commandがcandidate、expected mode、assessment ticketを必須とし、commit point付き結果とfinalize-only ticketを判別できるconsumer fixtureを追加する
+  - control取得後かつroot write前のcleanup失敗が`precommit-cleanup-pending`となり、同じassessment ticketだけがcleanupを冪等再開できるconsumer contractを固定する
   - 公開型とruntime keyのnegative contractが、raw root、Storage、lock、Repository、authority factoryを拒否すれば完了とする
   - _Requirements: 3.4, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7_
   - _Boundary: BackupRestoreDataPort consumer contract_
@@ -75,6 +76,7 @@
 - [ ] 3.2 commit pointとfinalize-only retryを実装する
   - candidate、expected mode、assessment ticketをFoundation commitへ渡し、write前errorと二つのcommitted outcomeを区別する
   - stale assessment、mode変化、capacity、storage、maintenance/recovery競合は既存rootを保持し、ticketを再検証可能な状態へ返す
+  - `precommit-cleanup-pending`では元ticketを保持し、新しいguard permitから同じticketを再送してcleanupを先に再開し、cleanup中にroot writeを行わない
   - write後cleanup失敗では成功summaryとopaque finalization ticketだけを返し、finalize retryがroot writeや再確認を行わないことを証明できれば完了とする
   - _Depends: 3.1_
   - _Requirements: 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
@@ -84,6 +86,7 @@
   - preflight後に先行mutationが確定した場合、assessment ticketがstale拒否され先行変更が保持されることを検証する
   - commit線形化後の後続mutationがpersistent maintenance/recovery controlで拒否され、read-only queryは継続できることを検証する
   - write前の全失敗でroot不変、write後cleanup失敗で一回だけwrite、finalize retryでwrite 0件となれば完了とする
+  - control取得後のwrite前cleanup失敗では同じassessment ticketだけがworker再生成後もowner/generationを照合してcleanupを再開し、別ticketを拒否し、cleanup中のwriteが0件となれば完了とする
   - _Depends: 1.2, 3.2_
   - _Requirements: 3.4, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
   - _Boundary: BackupRestoreDataPort integration_
@@ -102,6 +105,7 @@
   - 取消、guard拒否、commit前失敗ではfile ticketとpreviewを保持し、section unmountまたはfile再選択だけで未commit ticketを破棄する
   - commit後はrestore retryを公開せず、finalize-onlyまたはrefresh-only actionに固定し、同一区画の重複操作を受理しなければ完了とする
   - commit前errorを`retryable | action-required | unsupported`へ網羅的に写像し、同一入力の再試行、別file選択、draft解決、容量確保、再試行不可をstateの許可actionで区別する
+  - `precommit-cleanup-pending`をroot未変更のretryable状態として表示し、保持中ticketと新しいguard permitによるretry以外のcommit actionを許可しない
   - _Depends: 2.4, 3.2, 4.1_
   - _Requirements: 1.5, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 4.8, 5.1, 5.2, 5.4, 5.5, 5.6, 5.7, 6.4, 6.6, 6.9, 6.10, 6.11_
   - _Boundary: BackupRestoreState_
@@ -145,6 +149,7 @@
   - 全カテゴリの架空データをexportし、既存変更後に同じfileを確認付きで復元して再起動する
   - 復元後にproject、part、source、normalized attributes、current build参照・数量が一致し、通常CRUDと再backupが成功することを検証する
   - 取消、invalid file、10 MiB境界、guard拒否、commit前失敗で既存rootと選択が保持されれば完了とする
+  - control取得後のwrite前cleanup失敗から同じticketでcleanupを再開し、cleanup中のroot write 0件、別ticket拒否、再試行後の正常復元を検証する
   - _Depends: 3.3, 4.3, 5.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
   - _Boundary: Backup restore normal E2E_
@@ -152,6 +157,7 @@
 - [ ] 6.2 破損・未対応rootからの回復E2Eを追加する
   - corrupt rootとfuture version rootからdegraded settingsを起動し、正常backupのpreflight、明示確認、recovery commitを完了する
   - cleanup失敗時はfinalize-only、context refresh失敗時はrefresh-onlyを実行し、どちらもroot writeが一回だけであることを検証する
+  - recovery control取得後のwrite前cleanup失敗では同じticketによるcleanup再開だけを許可し、cleanup中のroot write 0件とworker再生成後の回復を検証する
   - 正常snapshot復帰後に現在projectがreadyまたはemptyへ再検証され、候補管理が利用可能になれば完了とする
   - _Depends: 5.2_
   - _Requirements: 5.1, 5.2, 5.4, 5.5, 5.6, 5.7, 6.8, 6.9, 6.10, 6.11_

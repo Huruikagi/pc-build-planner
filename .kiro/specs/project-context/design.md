@@ -4,7 +4,7 @@
 
 本機能は、application shell や既存 feature の内部へ選択 authority を置かず、横断的な `project-context` 境界として現在 project を一元管理する。既存 owner から注入された project catalog を最小 projection へ変換し、専用 UI preference を現行 catalog に照合してから、`ready | empty | unavailable` の判別可能な snapshot として公開する。
 
-選択と refresh は一つの直列 transaction とし、preference の永続化成功後にだけ snapshot を更新する。feature-owned draft は switch guard の判定だけを受け取り、内容を解釈しない。共通 selector と composition 専用 presentation contribution はこの spec が提供するが、application shell の slot、singleton composition、各 feature adapter、CRUD・restore hook、handoff、legacy selector 撤去は downstream owner に残す。
+選択、refresh、catalog置換guardは一つの直列 transaction authorityで順序付け、preference の永続化成功後にだけ snapshot を更新する。feature-owned draft は change guard の判定だけを受け取り、内容を解釈しない。共通 selector と composition 専用 presentation contribution はこの spec が提供するが、application shell の slot、singleton composition、各 feature adapter、CRUD・restore hook、handoff、legacy selector 撤去は downstream owner に残す。
 
 ### Goals
 
@@ -29,8 +29,8 @@
 - `ProjectContextSnapshot`、catalog projection、generation、不変条件。
 - preference version 1 の schema、専用 key、Chrome local storage adapter と in-memory adapter。
 - initialize、select、confirm、cancel、refresh の直列 transaction。
-- switch guard の登録、評価、確認 request、確定後の forced 通知。
-- read・command・guard registration の能力別公開 port。
+- project 選択と catalog 全体置換を判別する change guard の登録、評価、確認 request、確定後の forced 通知。
+- read・command・guard registration・replacement guard の能力別公開 port。
 - 共通 selector、日英 message、React root の mount/unmount を行う presentation contribution。
 - project-context の public import と preference storage を守る source boundary gate。
 
@@ -39,6 +39,7 @@
 - local data foundation の project aggregate、query 実装、write authority。
 - application shell の selector slot、singleton composition、root API、feature port injection。
 - feature-owned consumer adapter、snapshot、draft、CRUD/restore lifecycle hook、handoff、E2E model。
+- backup file の検証、root 置換、復元後 refresh の実行、復元結果 UI。
 - legacy `selectedProjectId` の削除、version bump、fallback 利用。
 - context unavailable 時の settings / backup recovery 画面そのもの。
 
@@ -47,12 +48,13 @@
 - `src/domain/public.ts` の `ProjectId`、`UtcTimestamp`、canonical `Result<T, E>`。
 - 上流 `runtime-schema-validation` が提供する設定済み `src/domain/runtime-schema/public.ts` と共通 UUID・strict object・issue mapping。
 - owner から注入される絞り込み済み `ProjectCatalogSource`。project-context は candidate-management 内部を import しない。
+- backup-restore などの downstream lifecycle owner。project-context は置換候補、Foundation port、backup ticket を受け取らない。
 - `src/ui-messages/public.ts` と `src/ui-language/public.ts` の message resolver / provider。
 - React 19.2.7、React DOM 19.2.7、TypeScript 7.0.2 strict、Node 26、Chrome 116、既存 Node test runner と Playwright。
 
 ### Revalidation Triggers
 
-- snapshot union、generation、selection result、guard protocol、能力別 port の shape 変更。
+- snapshot union、generation、selection result、change intent、guard protocol、replacement guard port の shape 変更。
 - preference key、version、保存 field、runtime schema primitive、storage area の変更。
 - catalog entry shape・順序契約、fallback 規則、project ownership の変更。
 - transaction の保存順、stale 判定、forced notification の時点変更。
@@ -80,7 +82,7 @@ graph LR
     Validation[Runtime validation public]
     Catalog[Catalog projection]
     Preference[Preference store]
-    Guards[Switch guards]
+    Guards[Change guards]
     Service[Project context service]
     PublicPorts[Capability ports]
     Selector[Project selector]
@@ -119,12 +121,12 @@ Dependency directionは `domain/runtime validation → contracts/catalog/prefere
 
 ```text
 src/project-context/
-├── contracts.ts                    # snapshot、error、catalog、guard、capability port
+├── contracts.ts                    # snapshot、error、catalog、change intent、guard、capability port
 ├── catalog.ts                      # owner source から最小 catalog projection と不変条件
 ├── preference-store.ts             # version 1 schema、専用 key、Chrome/in-memory port
-├── switch-guards.ts                # guard registry、評価、確認 request、forced 通知
-├── service.ts                      # initialize/select/confirm/cancel/refresh transaction
-├── public.ts                       # read/command/guard port と factory の通常公開入口
+├── switch-guards.ts                # change guard registry、評価、確認 request、forced 通知
+├── service.ts                      # initialize/select/confirm/cancel/refresh/replacement guard transaction
+├── public.ts                       # read/command/guard/replacement port と factory の通常公開入口
 ├── selector.tsx                    # selector、確認、retry、ARIA live state
 ├── selector.css                    # project selector 固有 style
 ├── react-root.tsx                  # LanguageProvider と React root cleanup
@@ -151,7 +153,7 @@ e2e/
 - `src/ui-messages/catalog/ja/index.ts`、`src/ui-messages/catalog/en/index.ts` — 両言語で同じ project-context namespace を catalog へ登録する。
 - `scripts/validate-boundaries.mjs` — project-context の通常・composition 入口、Chrome local storage source path と専用 key の allowlist。
 - `tests/tooling/public-boundaries.test.ts` — deep import、別 storage area、別 key、dynamic key、alias access の negative fixture。
-- `tests/tooling/public-api-consumer.ts` — read/command/guard port の正しい consumer と禁止 import の型検査。
+- `tests/tooling/public-api-consumer.ts` — read/command/guard/replacement port の正しい consumer と禁止 import の型検査。
 - `package.json` — `src/project-context` を boundary / UI text gate の scan root に追加する。
 
 downstream spec だけが `src/application-shell/*`、`src/features/*`、`src/runtime/side-panel.ts`、既存 feature E2E を変更する。本 spec の実装 task はそれらへ触れない。
@@ -202,16 +204,39 @@ sequenceDiagram
 
 confirmation request は target、base generation、guard registry revision に結び付く opaque ID である。いずれかが変化した request は stale として拒否する。preference 保存が失敗した場合は snapshot を commit しない。確定後の forced notification は best effort で隔離し、既に確定した選択を rollback しない。
 
+### Guarded Catalog Replacement
+
+```mermaid
+sequenceDiagram
+    participant Backup as Replacement owner
+    participant Context as Project context
+    participant Guard as Change guards
+
+    Backup->>Context: Prepare catalog replacement
+    Context->>Guard: Evaluate replacement intent
+    Guard-->>Context: Allow or confirmation
+    Context-->>Backup: Permit or confirmation request
+    Backup->>Context: Confirm request
+    Context-->>Backup: Confirmed permit
+    Backup->>Backup: Commit atomic replacement
+    Backup->>Context: Complete permit with success
+    Context-->>Guard: Notify forced replacement
+    Backup->>Context: Refresh latest catalog
+```
+
+`ReplacementGuardPermit` は opaque ID、base generation、guard registry revision に結び付き、一回だけ `complete` または `cancel` できる。prepare と confirm は root を変更せず、downstream owner は permit 取得後にだけ置換を開始する。`complete`はoutcomeにかかわらずpermitをterminal closedへ先に遷移させ、その後に`succeeded`だけがforced notificationを送る。通知失敗を返す場合もpermitは閉鎖済みであり、置換失敗時の`failed`は通知せず閉じる。成功通知と refresh は分離し、refresh 失敗で既に成功した置換を rollback しない。
+
 ## Requirements Traceability
 
 | Requirement | Summary | Components | Interfaces / Flows |
 |---|---|---|---|
 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | coherent context snapshot | ProjectCatalogProjection, ProjectContextService, ProjectContextPublicApi | `ProjectContextSnapshot`、initialization flow |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | preference restore and fallback | ProjectPreferenceStore, ProjectCatalogProjection, ProjectContextService | `ProjectPreferenceRead`、initialization flow |
-| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7 | atomic selection and concurrency | ProjectContextService, ProjectSwitchGuardCoordinator | `ProjectContextCommandPort`、guarded selection flow |
+| 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7 | atomic selection and concurrency | ProjectContextService, ProjectChangeGuardCoordinator | `ProjectContextCommandPort`、guarded selection flow |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | lifecycle refresh | ProjectCatalogProjection, ProjectContextService | `refresh`、initialization flow |
-| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8 | switch guard protocol | ProjectSwitchGuardCoordinator, ProjectContextService, ProjectSelector | guard registry、guarded selection flow |
-| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | capability ports and subscription | ProjectContextPublicApi, ProjectContextService, ProjectSwitchGuardCoordinator | read/command/guard ports |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8 | project selection guard | ProjectChangeGuardCoordinator, ProjectContextService, ProjectSelector | guard registry、guarded selection flow |
+| 5.9, 5.10, 5.11, 5.12, 5.13 | catalog replacement guard | ProjectChangeGuardCoordinator, ProjectContextService | `ProjectContextReplacementGuardPort`、guarded catalog replacement flow |
+| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7 | capability ports and subscription | ProjectContextPublicApi, ProjectContextService, ProjectChangeGuardCoordinator | read/command/guard/replacement ports |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8 | selector presentation | ProjectSelector, ProjectContextPresentationContribution | React state、presentation mount |
 | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8 | storage/public boundaries and validation | ProjectPreferenceStore, ProjectContextBoundaryGate, ProjectContextPublicApi | runtime seam、boundary gate、contract kit |
 
@@ -221,9 +246,9 @@ confirmation request は target、base generation、guard registry revision に�
 |---|---|---|---|---|---|
 | ProjectCatalogProjection | Domain | ordered project source を最小・一意 catalog へ射影 | 1.1–1.6, 2.3–2.5, 4.1–4.6 | domain types P0、catalog source P0 | Service |
 | ProjectPreferenceStore | Adapter | 専用 key の strict preference を read/write/clear | 2.1–2.7, 3.1, 3.6, 8.1–8.4 | runtime validation P0、Chrome storage P1 | Service, State |
-| ProjectSwitchGuardCoordinator | Application | guard registry と確認 lifecycle を調停 | 3.1–3.5, 5.1–5.8, 6.3, 6.5 | domain Result P0 | Service, State |
-| ProjectContextService | Application | coherent snapshot と transaction authority | 1.1–6.6 | catalog P0、preference P0、guards P0 | Service, State |
-| ProjectContextPublicApi | Public boundary | consumer 能力を read/command/guard に分離 | 1.6, 6.1–6.6, 8.5–8.7 | context service P0 | API |
+| ProjectChangeGuardCoordinator | Application | 選択・catalog置換のguard registryと確認 lifecycleを調停 | 3.1–3.5, 5.1–5.13, 6.3, 6.5, 6.7 | domain Result P0 | Service, State |
+| ProjectContextService | Application | coherent snapshot と transaction authority | 1.1–6.7 | catalog P0、preference P0、guards P0 | Service, State |
+| ProjectContextPublicApi | Public boundary | consumer 能力を read/command/guard/replacement に分離 | 1.6, 6.1–6.7, 8.5–8.7 | context service P0 | API |
 | ProjectSelector | UI | project 選択、確認、empty/unavailable、retry 表示 | 5.4–5.6, 7.1–7.8 | public ports P0、messages P0 | State |
 | ProjectContextPresentationContribution | UI adapter | selector root の mount/unmount を composition owner へ提供 | 6.6, 7.1–7.8, 8.5 | ProjectSelector P0、LanguageProvider P0 | Service |
 | ProjectContextBoundaryGate | Tooling | public import と storage source/area/key scope を機械検証 | 8.1–8.5, 8.8 | TypeScript AST scanner P0 | Batch |
@@ -303,14 +328,16 @@ interface ProjectPreferencePort {
 
 ### Application Layer
 
-#### ProjectSwitchGuardCoordinator
+#### ProjectChangeGuardCoordinator
 
 **Responsibilities & Constraints**
 
-- stable guard ID ごとに一件を登録し、登録順の snapshot を transaction 開始時に固定する。
+- stable guard ID ごとに一件を登録し、登録順の snapshot を change transaction 開始時に固定する。
 - guard decision は `allow` または `confirmation-required` だけとし、draft data を受け取らない。
-- confirmation は opaque request ID、from/to、base generation、registry revision を保持する。cancel、generation 変更、target 消失、registry 変更で無効化する。
-- confirmed commit 後と catalog invalidation 後に forced change を通知する。listener failure は隔離する。
+- `ProjectContextChangeIntent` は `select-project` と `replace-catalog` の判別共用体とし、置換候補や backup data を含めない。
+- confirmation と replacement permit は opaque ID、intent、base generation、registry revision を保持する。cancel、generation 変更、target 消失、registry 変更、別 transaction で無効化する。
+- confirmed selection commit、catalog invalidation、確認済み replacement success 後に forced change を通知する。listener failure は隔離する。
+- replacement completionはoutcomeにかかわらずpermitを通知前に閉じる。failure/cancel は forced notification を送らず、success通知の失敗でもpermitを再開しない。通知自体は snapshot を変更せず、refresh は downstream owner が別途要求する。
 
 **Dependencies**
 
@@ -321,24 +348,29 @@ interface ProjectPreferencePort {
 **Contracts**: Service [x] / State [x]
 
 ```typescript
-type ProjectSwitchCause = "user" | "catalog-invalidated";
+type ProjectContextChangeIntent =
+  | {
+      readonly kind: "select-project";
+      readonly from: ProjectId;
+      readonly to: ProjectId;
+      readonly cause: "user" | "catalog-invalidated";
+    }
+  | {
+      readonly kind: "replace-catalog";
+      readonly from: ProjectId | null;
+      readonly cause: "backup-restore";
+    };
 
-interface ProjectSwitch {
-  readonly from: ProjectId;
-  readonly to: ProjectId;
-  readonly cause: ProjectSwitchCause;
-}
-
-type ProjectSwitchGuardDecision =
+type ProjectContextChangeGuardDecision =
   | { readonly kind: "allow" }
   | { readonly kind: "confirmation-required" };
 
-interface ProjectSwitchGuard {
+interface ProjectContextChangeGuard {
   readonly id: string;
   evaluate(
-    change: ProjectSwitch,
-  ): Promise<Result<ProjectSwitchGuardDecision, { readonly kind: "guard-failed" }>>;
-  notifyForced?(change: ProjectSwitch): void | Promise<void>;
+    intent: ProjectContextChangeIntent,
+  ): Promise<Result<ProjectContextChangeGuardDecision, { readonly kind: "guard-failed" }>>;
+  notifyForced?(intent: ProjectContextChangeIntent): void | Promise<void>;
 }
 ```
 
@@ -350,6 +382,8 @@ interface ProjectSwitchGuard {
 - immutable snapshot を保持し、commit 時だけ generation を一増加して listener へ同期通知する。
 - initialize / refresh の選択優先順位は「現 snapshot の有効選択 → 有効 preference → catalog 先頭 → empty」である。initialize には現 snapshot がない。
 - user select は「target validation → guard evaluation → optional confirmation → preference write → snapshot commit → forced notification」の順とする。
+- catalog replacement は「prepare intent → optional confirmation → begin時stale検証 → downstream commit → outcome completion」の順とし、prepare/confirm/beginでは snapshot と preference を変更しない。
+- replacement success completion は forced notification だけを行い、catalog refresh を暗黙実行しない。downstream owner が置換成功確定後に command port の `refresh` を呼ぶ。
 - stale async completion は transaction sequence、base generation、confirmation registry revision で拒否する。
 - unavailable への遷移でも generation を増加するが、preference write failure による user select 失敗では snapshot を変更しない。
 
@@ -412,7 +446,7 @@ type ProjectContextCommandError =
 
 **Responsibilities & Constraints**
 
-- 通常 consumer へ read-only port、lifecycle owner へ command port、draft owner へ guard registration port を別 object として提供する。
+- 通常 consumer へ read-only port、lifecycle owner へ command port、draft owner へ guard registration port、catalog置換ownerへ replacement guard port を別 object として提供する。
 - port は frozen facade であり、service instance、preference port、catalog source、guard collection を公開しない。
 - `public.ts` は domain contract と factory だけを export し、React、Chrome、runtime schema instance を module graph に含めない。
 
@@ -431,16 +465,54 @@ interface ProjectContextCommandPort {
   refresh(): Promise<Result<ProjectContextSnapshot, ProjectContextCommandError>>;
 }
 
-interface ProjectSwitchGuardRegistrationPort {
-  register(guard: ProjectSwitchGuard): Result<() => void, { readonly kind: "duplicate-guard" }>;
+interface ProjectContextChangeGuardRegistrationPort {
+  register(guard: ProjectContextChangeGuard): Result<() => void, { readonly kind: "duplicate-guard" }>;
+}
+
+interface ProjectContextReplacementConfirmation {
+  readonly id: string;
+  readonly baseGeneration: number;
+}
+
+interface ProjectContextReplacementPermit {
+  readonly id: string;
+  readonly baseGeneration: number;
+}
+
+type ProjectContextReplacementPreparation =
+  | { readonly kind: "permitted"; readonly permit: ProjectContextReplacementPermit }
+  | {
+      readonly kind: "confirmation-required";
+      readonly confirmation: ProjectContextReplacementConfirmation;
+    };
+
+type ProjectContextReplacementGuardError =
+  | { readonly kind: "guard-failed" }
+  | { readonly kind: "confirmation-stale" }
+  | { readonly kind: "permit-stale" }
+  | { readonly kind: "permit-not-started" }
+  | { readonly kind: "permit-already-completed" };
+
+interface ProjectContextReplacementGuardPort {
+  prepare(): Promise<Result<ProjectContextReplacementPreparation, ProjectContextReplacementGuardError>>;
+  confirm(confirmationId: string): Promise<Result<ProjectContextReplacementPermit, ProjectContextReplacementGuardError>>;
+  cancel(confirmationId: string): Result<void, ProjectContextReplacementGuardError>;
+  begin(permitId: string): Result<void, ProjectContextReplacementGuardError>;
+  complete(
+    permitId: string,
+    outcome: "succeeded" | "failed" | "cancelled",
+  ): Promise<Result<void, ProjectContextReplacementGuardError>>;
 }
 
 interface ProjectContextPublicApi {
   readonly read: ProjectContextReadPort;
   readonly commands: ProjectContextCommandPort;
-  readonly guards: ProjectSwitchGuardRegistrationPort;
+  readonly guards: ProjectContextChangeGuardRegistrationPort;
+  readonly replacementGuard: ProjectContextReplacementGuardPort;
 }
 ```
+
+`prepare` は `unavailable` snapshot でも実行可能であり、intent の `from` を `null` とする。`begin` は permit の generation と guard registry revision を現在値へ再照合して一回だけ開始済みにし、stale permit では downstream commit を開始させない。`complete`はpermit閉鎖をforced notificationより先に確定し、`complete("succeeded")` だけが登録 guard へ通知する。通知callbackが失敗して`guard-failed`を返してもpermitは閉鎖済みで再利用できない。`failed` と `cancelled` は通知せず lifecycle を閉じ、同じ backup ticketから新しい`prepare`を行える。
 
 ### Presentation Layer
 
@@ -507,6 +579,8 @@ interface ProjectContextPresentationContribution {
 - `ProjectContextSnapshot`: catalog と選択の一貫性境界。`ready` だけが non-null selection を持つ。
 - `ProjectPreferenceDocumentV1`: root 外の UI preference。version と ID だけを持つ。
 - `ProjectSwitchConfirmation`: memory-only の一時 request。永続化、snapshot、backup へ含めない。
+- `ProjectContextChangeIntent`: project 選択または catalog 全体置換の種類と、guard 判断に必要な最小 context。draft や置換候補を含めない。
+- `ProjectContextReplacementConfirmation` / `ProjectContextReplacementPermit`: memory-only の一時 lifecycle。generation と guard registry revision に結び付き、永続化、snapshot、backup へ含めない。
 
 不変条件:
 
@@ -516,6 +590,8 @@ interface ProjectContextPresentationContribution {
 4. generation は commit ごとに単調増加し、process 内で後退しない。
 5. preference は snapshot commit より先に永続化される。
 6. legacy snapshot ID は入力に含まれない。
+7. replacement permit は一回だけ begin でき、begin 済み permit は一回だけ complete できる。complete後の通知成否にかかわらずterminal closedである。
+8. replacement success completion だけが forced replacement notification を発生させ、snapshot の変更は後続 refresh でのみ確定する。
 
 ### Logical Data Model
 
@@ -542,6 +618,9 @@ interface ProjectPreferenceDocumentV1 {
 | User selection unknown ID | `project-not-found`、state 不変 | catalog refresh 後に再選択 |
 | Guard failure | `guard-failed`、state 不変 | draft owner の回復後に再選択 |
 | Stale confirmation | `confirmation-stale`、state 不変 | select をやり直して再評価 |
+| Stale replacement permit | `permit-stale`、state 不変 | backup ticketを保持してprepareから再評価 |
+| Replacement failed or cancelled | permitを通知なしでclose、state不変 | 同じ候補または別候補でprepareを再実行 |
+| Replacement succeeded but refresh failed | forced通知後にsnapshotがunavailable | 置換を再実行せずrefreshだけを再試行 |
 | Preference write rejection | `preference-write-failed`、state 不変 | retry |
 | Subscriber / forced notifier throw | listener のみ隔離 | stable error code の best-effort diagnostic |
 
@@ -553,15 +632,17 @@ error と log には project name、project ID、storage value、draft、excepti
 
 - ProjectCatalogProjection: source 順保持、duplicate ID、invalid entry、empty、failure の全-or-nothing。
 - ProjectPreferenceStore: missing/valid/invalid/unknown version、別 key 非接触、read/write/clear rejection、in-memory parity。
-- ProjectSwitchGuardCoordinator: 登録順、duplicate、allow、confirmation、cancel、stale、registry revision、forced notifier isolation。
-- ProjectContextService: ready/empty/unavailable、restore priority、fallback repair、generation、same-selection no-op、write-before-commit、serialized select/refresh、stale result。
+- ProjectChangeGuardCoordinator: 登録順、duplicate、両intentのallow/confirmation、cancel、stale generation、registry revision、permit begin/complete、terminal close後の成功通知とlistener failure isolation。
+- ProjectContextService: ready/empty/unavailable、restore priority、fallback repair、generation、same-selection no-op、write-before-commit、serialized select/refresh/replacement guard、stale result。
 
 ### Contract and Integration Tests
 
-- read/command/guard facade が内部 capability を漏らさず、unsubscribe 後に通知しない。
+- read/command/guard/replacement facade が内部 capability を漏らさず、unsubscribe 後に通知しない。
 - create/delete/restore を表す synthetic catalog replacement で、選択維持、fallback、empty、unavailable recovery を検証する。
 - guard confirmation 中に refresh、guard unregister、target deletion が起きた場合に confirmation を stale とする。
-- catalog invalidation の forced notification と listener failure isolation を検証する。
+- replacement prepare/confirmation後にgenerationまたはregistry revisionが変わった場合はbeginを拒否し、失敗・取消ではforced通知なし、成功では一回だけ通知する。
+- backup owner相当のsynthetic consumerで `prepare → confirm → begin → complete succeeded → refresh` の順序と、refresh失敗後にreplacementを再実行しないことを検証する。
+- catalog invalidation の forced notification と listener failure isolationを検証し、通知失敗後もpermitが閉鎖済みで通常操作と次のprepareを阻害しないことを確認する。
 - reusable contract kit で downstream adapter が legacy snapshot ID を authority にしないこと、null/unavailable を扱うことを検証可能にする。
 
 ### DOM Tests

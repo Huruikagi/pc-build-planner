@@ -42,9 +42,10 @@ Milestone [v0.4.0](https://github.com/Huruikagi/pc-build-planner/milestone/4) �
 - [ ] project-candidate-management -- context consumer adapter、CRUD 前後の guard・refresh、候補 draft 保持、handoff の current-project 解決、snapshot の非権威的 legacy ID 扱いを owner 内で実装する。Dependencies: project-context
 - [ ] current-build-management -- context consumer adapter、数量 draft guard、snapshot の非権威的 legacy ID 扱いと独自選択撤去を owner 内で実装し、#28 のカテゴリ別選択パーツ・数量・未選択要約を表示する。Dependencies: project-context
 - [ ] compatibility-checking -- owner 内の one-shot/list-first project 解決を context 購読へ置換し、null・unavailable・stale 評価を扱う。Dependencies: project-context, current-build-management update
-- [ ] backup-restore -- foundation の回復契約を利用する破損 root 回復に加え、restore 前 guard、commit 成功後の context refresh、refresh 失敗の回復表示を owner 内で実装し、context unavailable でも設定から復元可能にする。Dependencies: local-data-foundation update, project-context
+- [ ] application-shell recovery contract gate -- `OperationKind`の`recovery`分類、`recovery-required` projection、通常mutationを拒否するgate契約だけを先行提供する。production feature wiringは行わない。Dependencies: local-data-foundation update
+- [ ] backup-restore -- foundation のassessment ticket付き回復契約を利用する破損 root 回復に加え、restore 前 guard、commit 成功後の context refresh、refresh 失敗の回復表示を owner 内で実装し、context unavailable でも設定から復元可能にする。Dependencies: runtime-schema-validation, local-data-foundation update, project-context, application-shell recovery contract gate
 - [ ] product-capture-transient-migration -- project 未解決 handoff intent と失敗時 retry/rollback を保持し、保存先解決を candidate owner の検証済み current context に委ねる。Dependencies: project-context, project-candidate-management update
-- [ ] application-shell -- project-context singleton と selector slot を composition し、owner-local contribution へ能力別 port を注入する。共有 shell/runtime ファイルの唯一 owner とし、context unavailable でも settings・backup recovery を起動する。Dependencies: project-context, project-candidate-management update, current-build-management update, compatibility-checking update, backup-restore update, product-capture-transient-migration update
+- [ ] application-shell production wiring -- project-context singleton と selector slot を composition し、owner-local contribution へ能力別 port を注入する。先行済みrecovery contract gateへbackup sectionを接続する共有 shell/runtime ファイルの唯一 owner とし、context unavailable でも settings・backup recovery を起動する。Dependencies: project-context, project-candidate-management update, current-build-management update, compatibility-checking update, backup-restore update, product-capture-transient-migration update
 
 ## Direct Implementation Candidates
 

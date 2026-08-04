@@ -80,3 +80,24 @@ foundationは現行rootの検証、未知version拒否、原子的置換、maint
 ### Source
 
 - Milestone v0.4.0 roadmap `local-data-foundation` update、GitHub Issue #24。
+
+## Change Brief: 2026-08-03 backup restore capability unification
+
+### Problem
+
+正常rootの置換操作は内部の完全`FoundationDataPort`にあり、破損・未対応rootの回復操作はbackup専用`RecoveryDataPort`に分かれている。一方、production runtime handleは通常feature向けのscoped data portと回復専用portだけを公開するため、backup-restoreが通常復元と異常root回復の両方を最小権限で実行できない。
+
+### Desired Outcome
+
+backup-restoreだけが利用する一つの能力別契約から、正常rootの評価・保守・原子的置換と、異常rootの評価・回復保守・原子的回復を実行できる。通常CRUD、raw root、Storage、lock、内部write authorityは公開しない。
+
+### Scope
+
+- **In**: backup復元専用公開capability、正常置換と異常root回復のfacade統合、production runtime handle、公開境界とnegative contract test。
+- **Out**: 置換・回復アルゴリズム、保存schema、RecoveryControl、backup交換形式・file UI、通常feature向けCRUD portの意味変更。
+
+### Boundary Impact
+
+- **Extends**: foundation runtime contributionの用途別公開handleとbackup向けcapability facade。
+- **Preserves**: 単一write authority、同一Web Lock、maintenance/recovery fencing、raw root非公開、通常featureの最小権限。
+- **Adjacent**: backup-restoreは専用portを消費して正常/回復経路を選び、application-shellは完成済みportをbackup section factoryへだけ注入する。
