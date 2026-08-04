@@ -2,13 +2,13 @@
 
 ## はじめに
 
-application shellは、PC build plannerのside panelにおける共有ホスト、ナビゲーション、feature登録、公開API合成、共通状態表示を一元化する。利用者は、独立した各featureを一貫した画面から利用でき、復元などのmaintenance中には誤ってデータ変更操作を実行しないで済む。feature実装者は共有runtime入口を編集せず、安定した登録契約を介してshellへ参加できる。
+application shellは、PC build plannerのside panelにおける共有ホスト、ナビゲーション、現在プロジェクト表示面、feature登録、公開API合成、共通状態表示を一元化する。利用者は、独立した各featureを一貫した画面から利用し、現在の作業対象を常に識別できる。保存データが回復を必要とする場合は通常の変更操作を実行せず、設定画面から明示的な回復操作だけを利用できる。feature実装者は共有runtime入口を編集せず、安定した登録契約を介してshellへ参加できる。
 
 ## 境界コンテキスト
 
-- **対象内**: side panel host、常設featureナビゲーション、一過性featureを含む登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance表示、設定画面への到達・回復案内のcomposition、mutation操作の共通抑止、composition root、root公開API合成。
-- **対象外**: feature固有の業務ロジック・state・view、永続化、maintenance lease管理、復元、商品抽出、互換性判定、表示言語の意味・保存・解決。
-- **隣接する期待**: local-data-foundationは信頼できるmaintenance状態をread-only契約で提供し、各featureは登録情報・view lifecycle・公開契約を提供する。`transient-feature-surface`は一過性featureの起動世代と寿命を、`settings-screen`は表示言語・backup区画を持つ常設設定画面を提供する。ui-messages/ui-languageはメッセージカタログと表示言語の状態・永続化・解決を所有し、application shellはそれらを合成・表示するだけで、文言・言語の意味や保存を解釈しない。
+- **対象内**: side panel host、常設featureナビゲーション、現在プロジェクトの共通表示領域、一過性featureを含む登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance/recovery-required表示、設定画面への到達・回復案内のcomposition、通常mutationと回復操作を区別する共通操作gate、composition root、root公開API合成。
+- **対象外**: feature固有の業務ロジック・state・view、canonical dataの正常性評価、assessment ticket、復元の事前検証・確認・commit、永続化、maintenance lease管理、project CRUD・選択規則・fallback、商品抽出、互換性判定、表示言語の意味・保存・解決。
+- **隣接する期待**: local-data-foundationは信頼できるmaintenance状態と評価済みの回復要否をread-only契約で提供し、backup-restoreは回復操作の検証・確認・実行を所有する。project-contextは現在プロジェクトの表示・選択と再検証を提供し、各featureは登録情報・view lifecycle・consumer adapter・公開契約を提供する。`transient-feature-surface`は一過性featureの起動世代と寿命を、`settings-screen`は表示言語・backup区画を持つ常設設定画面を提供する。application shellはこれらを合成・表示するが、feature固有の値や判断結果を解釈しない。
 
 ## 要件
 
@@ -47,6 +47,8 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 5. When production compositionがfeatureを合成するとき, the application shell shall foundationの絞り込みdata portとshell navigatorを合成contextとして各feature contributionへ注入し、feature内部実装へdeep importしない
 6. When service worker contextでcatalogを合成するとき, the application shell shall side panel専用contributionのmodule graphを取り込まず、worker bundleをDOMおよびReact非依存に保つ
 7. When root公開APIが参照されるとき, the application shell shall catalogから導出した型と合成contextを受け取る合成関数だけを提供し、data portなしの空の即時値をfeatureの公開契約として提示しない
+8. When 現在プロジェクトを利用するfeatureを合成するとき, the application shell shall 各featureが必要とする能力だけを合成contextとして提供する
+9. If project contextを初期化できないとき, the application shell shall shellとsettingsおよびbackup回復操作面の起動を継続し、project依存featureを利用不能として扱う
 
 ### 要件4: 共通状態表示と障害分離
 **目的:** 利用者として、shellやfeatureの待機・失敗状態を理解したい。それにより次に取れる操作を判断できる。
@@ -71,6 +73,9 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 5. If 古い世代または順序が逆転したmaintenance通知を受け取ったとき, the application shell shall 現在の新しい状態を後退させない
 6. The application shell shall maintenance leaseの取得、更新、解放または永続化を行わない
 7. When mount中のfeatureに対してmutationの可否が変化したとき, the application shell shall その変化をfeatureが購読できる形で通知し、featureの再mountを要求せずに表示を更新できるようにする
+8. When 操作が登録されたとき, the application shell shall 閲覧、通常mutation、回復操作を区別して共通の操作可否を判定する
+9. While 保存データが回復を必要とする状態にある間, the application shell shall 通常mutationを開始不能にし、回復操作として登録された操作だけを開始可能にする
+10. If 回復操作として登録されていない操作が回復経路を要求したとき, the application shell shall その操作を拒否して通常mutationの抑止を維持する
 
 ### 要件6: Runtime互換性と検証可能性
 **目的:** 開発者として、対象Chrome環境でshell統合を再現可能に検証したい。それによりfeature追加時の共有境界の回帰を防げる。
@@ -102,3 +107,24 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 2. While 常設navigationを利用できる状態にある間, the application shell shall 通常表示、maintenance表示、およびfeature表示失敗からsettings featureへの移動を受け付ける
 3. The application shell shall shellヘッダに表示言語コントロールを配置せず、表示言語とバックアップ・復元の操作面をsettings featureへ委ねる
 4. When settings featureの表示言語が変化したとき, the application shell shall 現在mount中のsettings featureを不要に再mountせずnavigation表示を同じ言語へ更新する
+5. While 保存データが回復を必要とする状態にある間, the application shell shall settings featureとそのbackup回復操作面への到達を維持する
+
+### 要件9: 共通の現在プロジェクト表示
+**目的:** 利用者として、画面を移動しても現在の作業対象を識別して切り替えたい。それにより異なるプロジェクトへ誤って操作することを避けられる。
+
+#### 受け入れ基準
+1. While project contextが利用可能な間, the application shell shall 主要画面から現在プロジェクトを識別できる共通表示領域を提示する
+2. When 利用者が共通表示領域から別のプロジェクトを選択したとき, the application shell shall project-contextが提供する選択操作へ要求を委ねる
+3. When 現在プロジェクトが変化したとき, the application shell shall 共通表示領域とproject依存featureへ新しい状態を通知する
+4. If project contextが利用不能になったとき, the application shell shall project依存featureに識別可能な利用不能状態を提示し、別のプロジェクトを推測して選択しない
+5. The application shell shall projectの作成・更新・削除、選択のfallback、切替時の未保存編集判断を行わない
+
+### 要件10: 回復が必要な状態の共通表示
+**目的:** 利用者として、保存データが通常利用できない理由と安全な回復経路を理解したい。それにより通常操作で状態を悪化させず、明示的に復元へ進める。
+
+#### 受け入れ基準
+1. When 上流契約が保存データに回復が必要であると通知したとき, the application shell shall 通常の起動失敗と区別できる回復必須状態を表示する
+2. While 回復必須状態にある間, the application shell shall 利用者がsettingsのbackup回復操作面へ移動できる案内を提示する
+3. When 回復必須状態が解消されたと通知されたとき, the application shell shall 最新の操作可否とfeature利用可能状態を再評価する
+4. If 回復操作が失敗または取り消されたとき, the application shell shall 回復必須表示と通常mutationの抑止を維持する
+5. The application shell shall 保存データの正常性、復元対象、回復の成功可否を独自に判定しない

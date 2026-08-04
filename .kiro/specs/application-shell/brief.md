@@ -59,32 +59,32 @@ application shellだけが共有runtime入口、ナビゲーション、公開AP
 
 ### Problem
 
-主要featureがそれぞれproject選択UIを持つため、利用者は画面を移動するたびに現在の作業対象を確認・選択し直す必要がある。現在選択中projectを常に識別できる共通面と、各featureへ安全に配布するcompositionがない。
+主要featureがそれぞれproject選択UIを持つため、利用者は画面を移動するたびに現在の作業対象を確認・選択し直す必要がある。現在選択中projectを常に識別できる共通面と、各featureへ安全に配布するcompositionがない。また、canonical dataが破損して通常起動できない状態で、通常mutationを閉じたまま明示的な回復操作だけを許可する共通gate契約がない。
 
 ### Current State
 
-application shellはside panel host、常設navigation、feature registration、typed activation、共通状態表示と共有runtime入口を所有するが、現在projectの表示slot、project-context singleton、能力別consumer port注入は提供していない。projectの意味とCRUDは候補管理が所有し、各consumer adapterはそれぞれのfeature ownerへ残す必要がある。
+application shellはside panel host、常設navigation、feature registration、typed activation、共通状態表示と共有runtime入口を所有するが、現在projectの表示slot、project-context singleton、能力別consumer port注入は提供していない。既存の操作可否契約は通常mutationと回復操作を区別せず、破損時の`recovery-required`状態を安全に投影できない。projectの意味とCRUDは候補管理が所有し、各consumer adapterはそれぞれのfeature ownerへ残す必要がある。
 
 ### Desired Outcome
 
-side panelの主要画面から現在projectを常に識別でき、project-contextが提供する共通selector contributionから切り替えられる。shellはproject-contextを一度だけcompositionし、selector用slotへ配置し、各owner-local contributionへ必要最小限のportを注入する。contextが利用不能でもshell自体とsettings・backup recoveryは起動を継続し、project依存featureだけが識別可能な利用不能状態になる。
+side panelの主要画面から現在projectを常に識別でき、project-contextが提供する共通selector contributionから切り替えられる。shellはproject-contextを一度だけcompositionし、selector用slotへ配置し、各owner-local contributionへ必要最小限のportを注入する。canonical dataが回復を必要とする場合は`recovery-required`状態を表示し、通常mutationを拒否したまま、回復として分類された操作だけを利用可能にする。contextが利用不能でもshell自体とsettings・backup recoveryは起動を継続し、project依存featureだけが識別可能な利用不能状態になる。
 
 ### Scope
 
-- **In**: 常設selector slot、project-context singletonのproduction compositionと停止、project-contextのcomposition専用presentation adapter配置、candidate・current-build・compatibility・backupのowner-local contributionへの能力別port注入、context unavailable時のsettings・backup到達維持、共有shell/runtime integration test。
-- **Out**: selector component・文言・選択状態の実装、project CRUD・fallback・guard判断、feature consumer adapter、feature snapshot、候補・構成・互換性データの解釈、backup lifecycle、feature-owned draftの保存・破棄、各feature内部test・E2E。
+- **In**: `OperationKind`の`recovery`分類、`recovery-required`状態の共通projection、通常mutationを拒否し回復操作だけを許可するgate契約、常設selector slot、project-context singletonのproduction compositionと停止、project-contextのcomposition専用presentation adapter配置、candidate・current-build・compatibility・backupのowner-local contributionへの能力別port注入、context unavailable時のsettings・backup到達維持、共有shell/runtime integration test。
+- **Out**: recovery判定元となるcanonical dataの評価、assessment ticket、復元のpreflight・確認・commit、backup sectionのfeature lifecycle、selector component・文言・選択状態の実装、project CRUD・fallback・guard判断、feature consumer adapter、feature snapshot、候補・構成・互換性データの解釈、feature-owned draftの保存・破棄、各feature内部test・E2E。
 
 ### Boundary Impact
 
-- **Extends**: `application-shell`の常設selector slot、composition root、feature contribution context、共有runtime wiring、起動時障害分離。
-- **Preserves**: shellはfeature固有業務データ、project selection、guard結果、restore結果を解釈せず、共有runtime入口・slot・mount/unmountだけを所有する原則。
-- **Adjacent**: `project-context`がselector presentationと選択transactionを、各featureがconsumer adapter・snapshot・guard・lifecycleを所有する。shellはfeature内部をdeep importせず、確定した公開contribution signatureだけを接続する。
+- **Extends**: `application-shell`の操作分類・共通gate・`recovery-required` projection、常設selector slot、composition root、feature contribution context、共有runtime wiring、起動時障害分離。
+- **Preserves**: shellはcanonical dataの正常性、feature固有業務データ、project selection、guard結果、restore結果を解釈せず、上流の評価済み状態を操作可否と共通表示へ投影し、共有runtime入口・slot・mount/unmountだけを所有する原則。
+- **Adjacent**: `local-data-foundation`がcanonical dataの評価と回復用置換契約を、`backup-restore`がassessment ticketを利用したpreflight・確認・commitとsection lifecycleを、`project-context`がselector presentationと選択transactionを、各featureがconsumer adapter・snapshot・guard・lifecycleを所有する。shellはfeature内部をdeep importせず、確定した公開contribution signatureだけを接続する。
 
 ### Dependencies
 
-- **Upstream**: `project-context`、`project-candidate-management` update、`current-build-management` update、`compatibility-checking` update、`backup-restore` update、`product-capture-transient-migration` updateの確定した公開contribution。
-- **Downstream**: 共通選択、restore、handoffを含むproduction composition・横断E2E・release validation。
+- **Upstream**: recovery contract gateは`local-data-foundation` updateの評価済み状態契約。production wiringは`project-context`、`project-candidate-management` update、`current-build-management` update、`compatibility-checking` update、`backup-restore` update、`product-capture-transient-migration` updateの確定した公開contribution。
+- **Downstream**: `backup-restore` updateの回復操作面、共通選択・restore・handoffを含むproduction composition、横断E2E、release validation。
 
 ### Source
 
-- Milestone v0.4.0 roadmap `application-shell` update、GitHub Issue #29。
+- Milestone v0.4.0 roadmap `application-shell recovery contract gate`・`application-shell production wiring` updates、GitHub Issues #24・#29。
