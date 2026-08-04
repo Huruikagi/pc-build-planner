@@ -239,8 +239,8 @@ importers:
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.17)
       chrome-types:
-        specifier: ^0.1.435
-        version: 0.1.435
+        specifier: ^0.1.436
+        version: 0.1.436
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -729,8 +729,8 @@ packages:
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
 
-  chrome-types@0.1.435:
-    resolution: {integrity: sha512-JCJ1mkEmqfULW5O6bc+uL3RfuqhHhsR2CDJ/fVo90AyUTbeOu+AM8l0JvJol8uub0hyTfwy2rEaqvnVneBzRdg==}
+  chrome-types@0.1.436:
+    resolution: {integrity: sha512-/GtvUUa9G9w2yZgfErvczpql5KjvaBsTEyJ+n47LPcGg8/8UiUeurYyrhdIFz5Uv0Gmim80eYco2oXU0r43kfw==}
 
   css-tree@3.2.1:
     resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
@@ -1216,7 +1216,7 @@ snapshots:
     dependencies:
       require-from-string: 2.0.2
 
-  chrome-types@0.1.435: {}
+  chrome-types@0.1.436: {}
 
   css-tree@3.2.1:
     dependencies:
