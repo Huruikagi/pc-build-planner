@@ -163,9 +163,21 @@ Change Brief rules:
 - If `brief.md` does not exist, create it with `# Brief: <feature-name>` followed by the Change Brief.
 - Keep implementation choices out of the Change Brief unless they are hard project constraints; requirements owns WHAT and design owns HOW.
 
+**Invalidate approvals for a changed existing spec**:
+
+When Path A or Path E adds a new Change Brief or materially updates an existing Change Brief, update that feature's `spec.json` in the same write operation:
+
+- Set `phase: "change-brief-created"`.
+- Set `approvals.requirements.approved`, `approvals.design.approved`, and `approvals.tasks.approved` to `false`.
+- Remove `approved_at` and `approval_reason` from each invalidated approval entry when present; those fields must not describe an approval that is no longer current.
+- Preserve every phase's existing `generated` value. The prior requirements, design, and tasks still exist as revision inputs even though they are no longer approved for the active change.
+- Set `ready_for_implementation: false`.
+- Update `updated_at` to the current timestamp while preserving all unrelated metadata.
+- If discovery writes no semantic Change Brief difference, leave `spec.json` unchanged. An idempotent re-run must not invalidate approvals or churn timestamps.
+
 **For Path A (existing spec update)**:
 
-- Write or update the target spec's Change Brief.
+- Write or update the target spec's Change Brief and, when its content changed, invalidate the target spec's approvals as defined above.
 - If roadmap.md exists and the change belongs to its current phase, add or update the matching item under `## Existing Spec Updates` without disturbing completed items or validation history.
 - Do not create a new spec directory or add the existing feature under `## Specs (dependency order)`.
 
@@ -278,6 +290,7 @@ Path E rules:
 - Record true no-spec work under `## Direct Implementation Candidates`
 - Write the full `brief.md` for every **new spec** listed under `## Specs (dependency order)`
 - Write or update a Change Brief for **every existing spec** listed under `## Existing Spec Updates`; each roadmap item and Change Brief must describe the same scope and dependencies
+- For every existing spec whose Change Brief changed, invalidate that spec's approvals as defined above
 
 **Re-entry (roadmap.md already exists)**:
 Write the next new spec's brief.md and any newly discovered or changed existing-spec Change Briefs to disk. Update roadmap.md if scope/ordering changed, preserving completed items, prior phases, prior Change Briefs, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
