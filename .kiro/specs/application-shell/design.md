@@ -26,6 +26,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - side panel host、ナビゲーション、共通loading/error/maintenance React viewとroot adapter。
 - `ApplicationCompositionRoot`とroot公開APIの合成。
 - 世代付きmaintenance状態のread-only projectionとUI mutation gate。
+- `corrupt-data | unsupported-version`を通常startup failureと分離する`recovery-required` projectionと、復元専用`recovery` operation gate。
 - 共有runtime入口、HTML host、shell統合test kit。
 - shell containerとfeature mount containerを分離するpresentation lifecycle契約。
 - foundationと下流registrationを一度だけ合成するproduction application composition module。
@@ -38,7 +39,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - feature公開契約の内容そのもの。
 - feature固有のactivation payload、targetの意味、payloadからfeature stateへの変換。
 - 一過性featureの起動世代、固定tab、寿命監視、gesture ingressおよびstore。これらは`transient-feature-surface`が所有する。
-- Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleだけを利用する。
+- Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleとtyped snapshot failureだけを利用する。
 - 表示言語の意味・保存・解決、言語control、settings画面layout、backup区画、メッセージカタログの内容と言語別値（`settings-screen`、`ui-messages`、`ui-language`、`backup-restore`所有）。shellヘッダへ言語controlを配置しない。
 
 ### 許可する依存
@@ -54,10 +55,12 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `ui-language`の公開Provider`LanguageProvider`（`src/ui-language/public.ts`）と、shell所有runtime入口だけが利用するcomposition seam（`src/ui-language/runtime.ts`）。shell viewはProviderだけを組み込み、`LanguageSelectControl`の配置はsettings featureへ委ねる。runtime入口もpreference store実装へ直接deep importせず、runtime seamから初期化する。
 - `transient-feature-surface`が確定した`PersistentApplicationFeatureRegistration`／`TransientApplicationFeatureRegistration`判別共用体、`isPersistent`型述語、`TransientNotice`、typed activation連携。shellは表示区分を解釈してhostへ投影するが、起動世代やChrome gestureを再実装しない。
 - `settings-screen`が提供するpersistent settings contribution。shellはcompositionとnavigation到達だけを所有し、settings内部の言語・backup能力を解釈しない。
+- 下流featureが公開する`recovery` operation分類。shellは復元protocolを解釈せず、recovery-required時の可否だけを判定する。
 
 ### 再検証トリガー
 - registration、mount context、availability、activation、public API registryの型変更。
 - foundationのmaintenance世代・購読契約の変更。
+- foundationの`corrupt-data | unsupported-version` typed failure、または正常root復帰後のsnapshot通知契約の変更。
 - root entry、side panel起動順序、`sidePanel.open()` gesture入口の変更。
 - shellとfeature間のファイル所有権または依存方向の変更。
 - foundationの`MaintenanceSnapshot`または`MaintenanceSnapshotSource`公開契約、`local-data-foundation` task 5.5の完了状態が変更された場合。
@@ -242,7 +245,7 @@ sequenceDiagram
 
 ```typescript
 type FeatureId = string & { readonly __brand: "FeatureId" };
-type OperationKind = "read" | "mutation";
+type OperationKind = "read" | "mutation" | "recovery";
 type Availability =
   | { readonly status: "available" }
   | { readonly status: "unavailable"; readonly reason: string };
@@ -366,7 +369,12 @@ type MaintenanceCursor = {
 };
 type ShellMaintenanceState =
   | { readonly status: "inactive"; readonly cursor: MaintenanceCursor }
-  | { readonly status: "active"; readonly cursor: MaintenanceCursor; readonly message: string };
+  | { readonly status: "active"; readonly cursor: MaintenanceCursor; readonly message: string }
+  | {
+      readonly status: "recovery-required";
+      readonly reason: "corrupt-data" | "unsupported-version";
+      readonly message: string;
+    };
 
 interface MaintenancePresentationPort {
   getSnapshot(): ShellMaintenanceState;
@@ -375,6 +383,7 @@ interface MaintenancePresentationPort {
 
 interface MaintenanceProjection {
   accept(next: FoundationMaintenanceSnapshot): "applied" | "stale_ignored";
+  requireRecovery(reason: "corrupt-data" | "unsupported-version"): void;
   getSnapshot(): ShellMaintenanceState;
   subscribe(listener: (state: ShellMaintenanceState) => void): () => void;
 }
@@ -391,11 +400,12 @@ interface MutationGate extends OperationPolicy {}
 全registrationは`presentation`を明示する。常設branchだけが`navigation`を必須とし、一過性branchは`navigation` property自体を許可しない。runtime validatorもこの相関を検証し、常設のnavigation欠損、一過性のnavigation混入、未知presentationを隔離する。`isPersistent`をnavigation catalog生成、通常`select()`、初期選択、availability fallbackの単一型述語にし、transient registrationはtyped activationまたは上流の一過性controllerからのみ表示する。`ApplicationWorkerRegistration`はUI registrationとは独立したままにし、worker-safe catalogからDOM、React、side panel contributionへ到達させない。
 
 - `(generation, revision)`を辞書順の単調cursorとして比較し、現在cursor以下の通知を無視する。foundationはmaintenance開始・更新・終了ごとにrevisionを増加させるため、同一generationの正当な終了と遅延した開始通知を決定的に区別できる。generationまたはrevisionが負、あるいは有限整数でない通知は契約違反として拒否する。
-- gateは`read`を常に許可し、`mutation`をactive中だけ拒否する。shellはdomain側の最終的なwrite拒否を代替しない。
+- `recovery-required`はcursorを捏造せず、初期snapshotの`corrupt-data | unsupported-version`だけから生成する。購読開始後に最初の正常snapshotを受信した場合はcursor比較前に通常projectionをseedし、recovery-requiredを解除する。
+- gateは`read`を常に許可する。`mutation`はinactiveだけ、`recovery`はinactiveまたはrecovery-requiredで許可し、activeでは両方を拒否する。shellはdomain側の最終的なwrite拒否を代替しない。
 - shellはmaintenance遷移でfeatureを再mountしないため、gateはmount中のfeatureが観測できる唯一の可否source of truthである。よってgateは値の提供だけでなく変更通知も所有する。`subscribe`はprojectionの購読を内部に隠し、`isAllowed("mutation")`の結果が実際に変化したときだけ通知する。同一generationのrevision前進などで可否が変わらない通知は購読者へ伝播させない。最初の購読でprojectionへ接続し、最後の解除で切断する冪等なlifecycleを持つ。
 - featureはmount時に`FeatureMountContext.operationPolicy`を購読し、unmountで解除する。shellはfeature側の表示更新方法を解釈しない。
 - `FoundationMaintenanceSnapshot`はfoundationのcanonical `MaintenanceSnapshot`をalias importした型であり、`MaintenanceSnapshotSource`とともにshell内で再定義しない。sourceは`generation`、root `revision`、`active`だけを通知する。
-- shellはsourceの初期snapshot取得失敗をstartup failureへ変換し、成功snapshotを単調projectionへ渡す。active表示文言はshell所有の固定安全文字列から生成し、foundationへmessage責務を追加しない。
+- shellはsourceの初期snapshotが`corrupt-data | unsupported-version`の場合だけrecovery-requiredとしてhostを起動し、settingsを初期選択またはfallbackでmountする。購読は継続し、復元後の正常snapshotで通常projectionへ復帰する。それ以外の取得失敗はstartup failureへ変換する。active/recovery表示文言はshell所有の固定安全文字列から生成し、foundationへmessage責務を追加しない。
 
 ### SidePanelHost and Presentation
 
@@ -404,6 +414,7 @@ type ShellViewState =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly selected: FeatureId | null; readonly transientNotice?: TransientNotice }
   | { readonly kind: "maintenance"; readonly selected: FeatureId | null; readonly message: string; readonly transientNotice?: TransientNotice }
+  | { readonly kind: "recovery-required"; readonly selected: FeatureId | null; readonly message: string }
   | { readonly kind: "error"; readonly message: string; readonly recoverable: boolean };
 
 interface TransientNotice {
@@ -423,7 +434,7 @@ ShellViewと各feature viewは外部由来文字列を通常のJSX childとし�
 
 `ShellView`は`useMessages()`を用い、`ShellNavigationItem.labelKey`と`ShellViewState`/`ShellMaintenanceState`のmessage記述子を、現在の表示言語の文字列へ解決してから描画する（1.6）。カタログ自体の内容・言語別値には関与せず、解決契約を呼び出すだけである。
 
-`ShellView`は共通ヘッダ領域と`LanguageSelectControl`を撤去する。ready、maintenance、feature-local failureではpersistent navigationを維持し、settingsへ到達させる。loadingとglobal startup errorでは操作不能なselectを描画せず、status内にカタログ解決済みの「設定 / Settings」案内と既存retryを表示する（4.6、4.7、8.1–8.3）。
+`ShellView`は共通ヘッダ領域と`LanguageSelectControl`を撤去する。ready、maintenance、recovery-required、feature-local failureではpersistent navigationを維持し、recovery-requiredではsettingsを選択して復元区画へ到達させる。loadingとglobal startup errorでは操作不能なselectを描画せず、status内にカタログ解決済みの「設定 / Settings」案内と既存retryを表示する（4.6、4.7、8.1–8.3、およびbackup-restore 5.6、6.8）。
 
 `transientNotice`はready／maintenanceにだけ付加でき、navigation・主表示slotと独立したbannerへ解決済みテキストとして描画する。noticeは一過性起動障害を示しても選択中のpersistent featureを置き換えず、外部値をmarkupとして解釈しない（4.5）。
 
@@ -518,13 +529,14 @@ interface ProductionWorkerComposition {
 - 起動順序はfoundation初期化、registry登録、shell presentation mount、feature host start、worker registrationの順とする。停止とrollbackはworker解除、feature unmount、maintenance購読解除、shell presentation stop、foundation disposeの逆依存順で全件best-effortに実行する。
 - worker contextの起動順はfoundation初期化、非同期foundation message registration、同期catalog registrationsとし、それぞれのtyped failureを`ProductionWorkerStartupError`へ正規化する。失敗時と停止はcatalog解除、foundation handler解除、foundation disposeの逆順・全件best-effort・冪等とする。start中のstopはepochを無効化し、遅延したfoundation registrationの完了後にcatalog登録せず即座cleanupする。concurrent startは単一Promiseを共有する。
 - Chrome message senderのclassificationはservice worker runtime adapterが所有する。`sender.id === chrome.runtime.id`、`sender.tab` なし、`sender.url`が`chrome.runtime.getURL("")`以下の場合だけ`trusted-extension`、同一extensionでtabありは`content-script`、それ以外は`web-page`とし、分類済みcallerをfoundation handlerへ渡す。runtime API欠落、URL欠落・getter例外・parse失敗は`trusted-extension`にせず、adapter初期化失敗または`web-page`へfail closedに分類する。
-- canonical `MaintenanceSnapshotSource`は`initializeFoundation`の成功handleからだけ取得する。shellはinactive stubへのfallbackやStorage API直接購読を行わず、取得不能時はfeatureをmountせず共通startup errorを表示する。
+- canonical `MaintenanceSnapshotSource`は`initializeFoundation`の成功handleからだけ取得する。shellはinactive stubへのfallbackやStorage API直接購読を行わない。初期値が`corrupt-data | unsupported-version`のtyped failureならrecovery-requiredでsettingsをmountし、その他の取得不能時はfeatureをmountせず共通startup errorを表示する。
 - `initializeProductionFoundationRuntimeContribution()`の実装と公開はlocal-data-foundation所有であり、task 5.8・6.8で公開・統合検証済みである。application-shellは公開consumer型だけを利用し、persistence内部へdeep importして回避しない。
 
 ## エラー処理
 
 - 不正・重複登録: 該当featureを隔離し型付きdiagnosticを返す。
 - 必須foundation初期化失敗: hostをerror stateにしてfeatureをmountしない。
+- 保存rootの`corrupt-data | unsupported-version`: startup failureへ潰さずrecovery-requiredとしてsettingsをmountし、通常mutationを抑止して`recovery`操作だけを許可する。
 - feature mount/unmount失敗: persistent navigationのtarget mount失敗では直前のpersistent featureを再mountして表示を復元し、その復元にも失敗した場合は安全なテキストmessageを表示する。cleanup失敗時は未解放handleの所有権を保持し、重複mountせず再試行可能にする。他featureのnavigationは維持する。
 - 一過性起動情報の読出し失敗: persistent表示を維持し、`transientNotice`だけをsafe-text bannerとして提示する。
 - startup failure: settingsを利用可能と偽らず、「設定 / Settings」と既存retryを同じstatusへ提示する。
@@ -535,8 +547,8 @@ interface ProductionWorkerComposition {
 
 ### Unit Tests
 - FeatureRegistryの不正値、重複、未知／欠損presentation、常設navigation欠損、一過性navigation混入、常設だけの決定的navigation順序、購読解除（1.1, 1.7, 2.1–2.6）。
-- MaintenanceProjectionの世代前進・stale拒否・終了反映（5.1, 5.4–5.5）。
-- MutationGateのread維持とmutation抑止（5.2–5.3）。
+- MaintenanceProjectionの世代前進・stale拒否・終了反映と、recovery-requiredから最初の正常snapshotへの復帰（5.1, 5.4–5.5、backup-restore 5.6、6.8）。
+- MutationGateのread維持、mutation抑止、inactive／active／recovery-required別の`recovery`可否（5.2–5.3、backup-restore 4.5、6.8）。
 - ShellViewが外部文字列と`transientNotice`を通常のJSX textとして描画し、危険なHTML APIを使用しないこと（4.4–4.5）。
 - ReactShellRootとfeature adapterが再mount、切替、停止時にReact rootと購読を確実にcleanupすること（1.2–1.5, 6.4）。
 - ShellViewが`labelKey`と`message`記述子を`useMessages()`経由で現在の表示言語の文字列へ解決して描画すること（1.6）。
@@ -548,6 +560,7 @@ interface ProductionWorkerComposition {
 - persistent navigationのtarget mount失敗時は直前featureを新しいhandleで復元し、targetの部分DOMを残さない。復元失敗時も別featureへ遷移できる（4.2–4.3）。
 - maintenance通知が全navigationへ反映され、readは維持されmutationが無効になる（5.1–5.5）。
 - foundation通知portの初期snapshot、順序逆転、購読解除を模擬し、shellがStorage APIを直接参照しないことをcontract/boundary testで確認する（5.1, 5.4, 5.5, 5.6）。
+- 初期snapshotがcorrupt/unsupportedならhostとsettingsだけが回復可能状態で起動し、通常mutationが拒否され、正常snapshot通知後に再起動なしでreadyへ復帰することを確認する（backup-restore 5.6、6.8–6.11）。
 - production-shaped fixtureでshell React rootとfeature outletが別DOM要素であること、2つの模擬featureが独立rootを切替時にunmountすること、navigation clickがhost selectionへ届くことを確認する（1.1–1.5, 3.1, 6.1, 6.4）。
 - settingsでの言語変更時に`LanguageProvider`がnavigationを更新し、選択中settings feature rootを再mountしないことを確認する（8.4）。
 - side panelのUI contributionとservice workerのworker-safe catalogを分離し、worker bundleへsettings、feature UI、DOM、React依存を含めないことを確認する（2.1, 3.1, 3.4, 3.6, 6.3）。
