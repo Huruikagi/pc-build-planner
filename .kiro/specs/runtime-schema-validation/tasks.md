@@ -9,7 +9,7 @@
   - _Requirements: 1.1, 1.2, 2.1, 2.6, 3.2, 3.3_
   - _Boundary: ConfiguredZodMini_
 
-- [ ] 1.2 Production schema feasibility gate を実装する
+- [x] 1.2 Production schema feasibility gate を実装する
   - 本番と同じ ESM、browser platform、Chrome 116 target、production define で最小 schema probe を bundle する。
   - bundle import 前に global `Function` の apply と construct を捕捉する trap を置き、直接呼び出しと alias 呼び出しの negative fixture を検出する。
   - build、静的 scan、runtime trap のいずれかが失敗した場合は非 zero で停止し、owner schema wave を開始できない結果にする。
