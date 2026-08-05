@@ -17,6 +17,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { build } from "esbuild";
@@ -161,8 +162,208 @@ async function assertManifestContractUnchanged() {
 }
 
 /**
+ * Production entries measured by the size report. Mirrors the browser entry
+ * points of `scripts/build.mjs`; the CSS entry carries no JavaScript and is
+ * therefore excluded.
+ */
+export const PRODUCTION_ENTRIES = /** @type {const} */ ([
+  { name: "build-contract", source: "src/build-contract.ts", format: "esm" },
+  { name: "foundation", source: "src/persistence/public.ts", format: "esm" },
+  { name: "index", source: "src/index.ts", format: "esm" },
+  {
+    name: "service-worker",
+    source: "src/runtime/service-worker.ts",
+    format: "esm",
+  },
+  { name: "side-panel", source: "src/runtime/side-panel.ts", format: "esm" },
+  {
+    name: "content-script",
+    source: "src/features/product-capture/content-script.ts",
+    format: "iife",
+  },
+]);
+
+const canonicalZodModule = /runtime-schema[\\/]zod-mini\.js$/;
+const zodStubNamespace = "runtime-schema-zod-stub";
+
+/**
+ * Replaces the canonical Zod module with a side-effect-free stub so the
+ * baseline is regenerated inside the same run. Anchoring the baseline to a
+ * hand-written constant or a previously published artifact would make the
+ * delta unreproducible on an arbitrary commit; this keeps both numbers derived
+ * from the tree being measured. Gate-only: neither the application build nor
+ * the package flow uses this plugin.
+ */
+const zodStubPlugin = {
+  name: "runtime-schema-zod-stub",
+  /** @param {import("esbuild").PluginBuild} pluginBuild */
+  setup(pluginBuild) {
+    pluginBuild.onResolve({ filter: canonicalZodModule }, () => ({
+      path: "zod-mini-stub",
+      namespace: zodStubNamespace,
+    }));
+    pluginBuild.onLoad({ filter: /.*/, namespace: zodStubNamespace }, () => ({
+      contents: "export const z = {};\n",
+      loader: /** @type {const} */ ("js"),
+    }));
+  },
+};
+
+/**
+ * Measures an arbitrary source under production conditions. Exported so the
+ * stub mechanism itself stays verifiable even while no production entry
+ * imports the canonical Zod module yet.
+ *
+ * @param {string} source
+ * @param {boolean} withZodStub
+ * @returns {Promise<number>}
+ */
+export async function measureSourceBytes(source, withZodStub) {
+  const built = await build({
+    ...productionBuildOptions,
+    stdin: {
+      contents: source,
+      loader: "ts",
+      resolveDir: process.cwd(),
+      sourcefile: "runtime-schema-measure.ts",
+    },
+    ...(withZodStub ? { plugins: [zodStubPlugin] } : {}),
+  });
+  const output = built.outputFiles?.[0];
+  if (!output) fail("measured source produced no bundle");
+  return output.contents.byteLength;
+}
+
+/**
+ * @param {(typeof PRODUCTION_ENTRIES)[number]} entry
+ * @param {boolean} withZodStub
+ * @returns {Promise<number>}
+ */
+async function measureEntryBytes(entry, withZodStub) {
+  const built = await build({
+    ...productionBuildOptions,
+    entryPoints: { [entry.name]: entry.source },
+    format: entry.format,
+    metafile: true,
+    // `write: false` keeps the measurement in memory; esbuild still needs an
+    // outdir to derive output names, but nothing reaches the filesystem.
+    outdir: "runtime-schema-gate",
+    ...(withZodStub ? { plugins: [zodStubPlugin] } : {}),
+  });
+  const output = built.outputFiles?.find((file) => file.path.endsWith(".js"));
+  if (!output) fail(`production entry ${entry.name} produced no bundle`);
+  return output.contents.byteLength;
+}
+
+/**
+ * @returns {Promise<Array<{ entry: string, baselineBytes: number,
+ *   currentBytes: number, deltaBytes: number }>>}
+ */
+export async function measureProductionBundles() {
+  const bundles = [];
+  for (const entry of PRODUCTION_ENTRIES) {
+    const baselineBytes = await measureEntryBytes(entry, true);
+    const currentBytes = await measureEntryBytes(entry, false);
+    bundles.push({
+      entry: entry.name,
+      baselineBytes,
+      currentBytes,
+      deltaBytes: currentBytes - baselineBytes,
+    });
+  }
+  return bundles;
+}
+
+/** Notice asset required in the build staging directory and release archive. */
+export const LICENSE_NOTICE_FILE_NAME = "THIRD_PARTY_NOTICES.txt";
+
+const noticeRequiredFragments = [/zod/i, /MIT License/, /Permission is hereby/];
+
+/**
+ * Contract shared by build staging and archive verification: the notice must
+ * exist, be non-empty, and actually reproduce the runtime dependency's terms.
+ *
+ * @param {string} directory
+ * @returns {Promise<true>}
+ */
+export async function validateLicenseNoticeAsset(directory) {
+  const path = join(directory, LICENSE_NOTICE_FILE_NAME);
+  let notice;
+  try {
+    notice = await readFile(path, "utf8");
+  } catch {
+    fail(`license notice is missing: ${path}`);
+  }
+  if (notice.trim() === "") fail(`license notice is empty: ${path}`);
+  for (const fragment of noticeRequiredFragments) {
+    if (!fragment.test(notice)) {
+      fail(`license notice does not cover the runtime dependency: ${path}`);
+    }
+  }
+  return true;
+}
+
+/** @param {unknown} value @returns {boolean} */
+function isByteCount(value) {
+  return Number.isSafeInteger(value) && /** @type {number} */ (value) >= 0;
+}
+
+/**
+ * Rejects a missing report or a size result that cannot be trusted, so a gate
+ * run can never report success without real measurements.
+ *
+ * @param {unknown} report
+ * @returns {asserts report is { dynamicFunctionCalls: number,
+ *   bundles: Array<{ entry: string, baselineBytes: number,
+ *     currentBytes: number, deltaBytes: number }>,
+ *   licenseNoticePresent: true }}
+ */
+export function assertGateReport(report) {
+  if (report === null || typeof report !== "object" || Array.isArray(report)) {
+    fail("gate report is missing");
+  }
+  const candidate = /** @type {Record<string, unknown>} */ (report);
+  if (candidate.dynamicFunctionCalls !== 0) {
+    fail("gate report must record zero dynamic Function calls");
+  }
+  if (candidate.licenseNoticePresent !== true) {
+    fail("gate report must record the license notice as present");
+  }
+  const bundles = candidate.bundles;
+  if (!Array.isArray(bundles) || bundles.length === 0) {
+    fail("gate report must record at least one production bundle size");
+  }
+  for (const bundle of bundles) {
+    if (bundle === null || typeof bundle !== "object") {
+      fail("gate report contains an invalid bundle size result");
+    }
+    const entry = /** @type {Record<string, unknown>} */ (bundle);
+    if (typeof entry.entry !== "string" || entry.entry === "") {
+      fail("gate report bundle is missing an entry name");
+    }
+    if (
+      !isByteCount(entry.baselineBytes) ||
+      !isByteCount(entry.currentBytes) ||
+      !Number.isSafeInteger(entry.deltaBytes)
+    ) {
+      fail(`gate report bundle ${entry.entry} has invalid byte counts`);
+    }
+    if (
+      entry.deltaBytes !==
+      /** @type {number} */ (entry.currentBytes) -
+        /** @type {number} */ (entry.baselineBytes)
+    ) {
+      fail(`gate report bundle ${entry.entry} has an inconsistent delta`);
+    }
+  }
+}
+
+/**
  * @param {string} [probeSource]
- * @returns {Promise<{ dynamicFunctionCalls: number }>}
+ * @returns {Promise<{ dynamicFunctionCalls: number,
+ *   bundles: Array<{ entry: string, baselineBytes: number,
+ *     currentBytes: number, deltaBytes: number }>,
+ *   licenseNoticePresent: true }>}
  */
 export async function validateRuntimeSchemaFeasibility(
   probeSource = CONFIGURED_PROBE_SOURCE,
@@ -179,7 +380,14 @@ export async function validateRuntimeSchemaFeasibility(
       `production probe performed ${inspection.dynamicFunctionCalls} dynamic Function call(s)`,
     );
   }
-  return { dynamicFunctionCalls: 0 };
+  const licenseNoticePresent = await validateLicenseNoticeAsset(".");
+  const report = {
+    dynamicFunctionCalls: 0,
+    bundles: await measureProductionBundles(),
+    licenseNoticePresent,
+  };
+  assertGateReport(report);
+  return report;
 }
 
 if (

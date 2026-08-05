@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Runtime schema の導入可否と supply chain を確立する
+- [x] 1. Runtime schema の導入可否と supply chain を確立する
 
 - [x] 1.1 Zod Mini の設定済み canonical import を追加する
   - Zod Mini 4.4.3 を exact runtime dependency とし、schema 生成前に `jitless` を設定する唯一の入口を公開する。
@@ -17,7 +17,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 8.1, 8.4_
   - _Boundary: ProductionSchemaGate_
 
-- [ ] 1.3 Bundle size report と license notice の独立 gate を追加する
+- [x] 1.3 Bundle size report と license notice の独立 gate を追加する
   - production entry ごとの baseline、current、delta bytes を machine-readable result と検証出力へ記録する。
   - baseline は同一 run 内で canonical Zod module を副作用のない stub へ esbuild alias した build として生成し、固定値や過去 artifact に依存せず任意 commit で再現できるようにする。stub 差し替えは gate 専用とし、application build と package flow へ波及させない。
   - Zod の MIT notice を配布用 notice asset として用意し、build staging と archive で検証できる契約を定義する。
@@ -240,3 +240,9 @@
   - _Requirements: 2.6, 3.4, 4.5, 5.5, 6.6, 7.5, 8.2, 8.3, 8.5, 8.6_
   - _Boundary: Runtime Schema Final Validation_
   - _Depends: 8.1_
+
+## Implementation Notes
+
+- esbuild は TypeScript の未使用 import を除去するため、build 失敗 fixture は import した binding を実際に使う必要がある。
+- Zod の production bundle には `const F = Function; new F("")` という jitless 判定 probe が実在する。alias 代入を静的に拒否すると configured probe が誤検出になるため、alias 検出は runtime の `Function` Proxy trap が担当する（`jitless` 有効時の実行回数は実測 0）。
+- `esbuild` を `write: false` + `entryPoints` で使う場合は `outdir` の指定が必要（未指定だと outputFiles が空になる）。
