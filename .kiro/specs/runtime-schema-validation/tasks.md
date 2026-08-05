@@ -2,7 +2,7 @@
 
 - [ ] 1. Runtime schema の導入可否と supply chain を確立する
 
-- [ ] 1.1 Zod Mini の設定済み canonical import を追加する
+- [x] 1.1 Zod Mini の設定済み canonical import を追加する
   - Zod Mini 4.4.3 を exact runtime dependency とし、schema 生成前に `jitless` を設定する唯一の入口を公開する。
   - canonical entry 以外の direct package import を禁止する前提を固定し、vendor error や schema instance を外部契約へ含めない。
   - 最小 schema が有効値を型付き値へ decode し、不正値を内部 issue として返す unit test が通る状態を完了とする。
@@ -19,6 +19,7 @@
 
 - [ ] 1.3 Bundle size report と license notice の独立 gate を追加する
   - production entry ごとの baseline、current、delta bytes を machine-readable result と検証出力へ記録する。
+  - baseline は同一 run 内で canonical Zod module を副作用のない stub へ esbuild alias した build として生成し、固定値や過去 artifact に依存せず任意 commit で再現できるようにする。stub 差し替えは gate 専用とし、application build と package flow へ波及させない。
   - Zod の MIT notice を配布用 notice asset として用意し、build staging と archive で検証できる契約を定義する。
   - notice 欠落、report 欠落、不正な size result の negative test が非 zero になり、正常 fixture が再現可能な report を返す状態を完了とする。
   - _Requirements: 1.4, 1.5, 8.4, 8.6_
@@ -29,6 +30,7 @@
 - [ ] 2.1 共通 primitive と plain strict object を実装する
   - UUID、UTC timestamp、HTTP(S) URL、revision、positive safe integer の受理集合を既存 canonical predicate と parity させる。
   - array、unknown key、必須 key 欠落、非 plain prototype、enumerable symbol を coercion や key stripping なしで拒否する。
+  - 各 primitive に owner の error code 語彙を `tagged()` failure tag として付与し、共有層は tag を不透明な文字列として運ぶ。
   - 境界値 table に対し旧 validator と同じ accept/reject 結果になり、成功値だけが型付き output になることを完了条件とする。
   - _Requirements: 2.1, 2.2, 2.3, 3.2_
   - _Boundary: SharedSchemaPrimitives_
@@ -43,9 +45,9 @@
   - _Depends: 1.3_
 
 - [ ] 2.3 (P) Validation issue と canonical path の adapter を実装する
-  - vendor issue を code と string/number path segment だけの内部 view へ射影し、入力値と vendor object を parse call の外へ出さない。
-  - `$` base、property、array index を既存形式へ組み立て、owner profile が既存 error union を返せるようにする。
-  - 複数 issue の優先順を固定し、error code/path parity test が deterministic に通る状態を完了とする。
+  - vendor issue を code、owner failure tag、string/number path segment だけの内部 view へ射影し、入力値と vendor object を parse call の外へ出さない。
+  - `$` base、property、array index を既存形式へ組み立て、owner profile が tag を第一根拠として既存 error union を返せるようにする。tag なしの structural issue（未知 key、必須 key 欠落）だけを issue code から写像し、path 文字列から error code を推測しない。
+  - `selectPrimaryIssue` の優先順（path 深さ→schema 宣言順→tag 付き優先）を固定し、error code/path parity test が deterministic に通る状態を完了とする。
   - _Requirements: 2.5, 2.6_
   - _Boundary: ValidationIssueAdapter_
   - _Depends: 1.3_
@@ -197,16 +199,16 @@
   - _Boundary: StateSnapshotSchemaSet Current Build_
   - _Depends: 6.7_
 
-- [ ] 7.2 (P) Candidate management version 2 snapshot を移行する
-  - `project-candidate-management` の version 2 base contract と、`candidate-source-bookmarks` が同じ snapshot shape へ追加した source collection、primary reference、price、kind、URL safety を owner-local schema と helper に分割する。
+- [ ] 7.2 (P) Candidate management version 3 snapshot を移行する
+  - `project-candidate-management` の version 3 base contract と、`candidate-source-bookmarks` が同じ snapshot shape へ追加した source collection、primary reference、price、kind、URL safety を owner-local schema と helper に分割する。
   - `selectedProjectId` と draft/source/project の reference validation、失敗時の state 不変性を維持する。
-  - candidate-source-bookmarks の複数 source editor fixture を含む version 2 snapshot が同じ restored value/error になり、旧・未知 version を永続状態へ触れず拒否し、不要な手書き shape guard/cast が削減された状態を完了とする。
+  - candidate-source-bookmarks の複数 source editor fixture を含む version 3 snapshot が同じ restored value/error になり、旧・未知 version を永続状態へ触れず拒否し、不要な手書き shape guard/cast が削減された状態を完了とする。
   - _Requirements: 7.1, 7.2, 7.3, 7.5, 8.2, 8.3_
   - _Boundary: StateSnapshotSchemaSet Candidate Management_
   - _Depends: 6.7_
 
-- [ ] 7.3 Duplicate merge の current snapshot version と stale recovery を移行する
-  - candidate-management v2 の source-aware 公開 helper を利用し、duplicate merge owner が定義する current version の match、summary、evidence、error、decision state を strict schema として維持する。
+- [ ] 7.3 Duplicate merge の version 1 snapshot と stale recovery を移行する
+  - candidate-management v3 の source-aware 公開 helper を利用し、duplicate merge owner の version 1 contract で match、summary、evidence、error、decision state を strict schema として維持する。
   - evaluating/committing snapshot は既存どおり `stale-decision` failure へ復元し、自動 commit を再開しない。
   - selected match/reference の invalid fixture を拒否し、有効 deciding/failed state が同じ結果へ復元されることを完了条件とする。
   - _Requirements: 7.1, 7.3, 7.4, 7.5, 8.2, 8.3_
@@ -214,7 +216,7 @@
   - _Depends: 7.2_
 
 - [ ] 7.4 Snapshot wave の no-mutation parity を完成する
-  - current-build v1、candidate-management v2 と candidate-source-bookmarks 拡張済み shape、duplicate-merge current version の version/shape/reference error table を一つの wave gate として実行する。
+  - current-build v1、candidate-management v3 と candidate-source-bookmarks 拡張済み shape、duplicate-merge v1 の version/shape/reference error table を一つの wave gate として実行する。
   - restore failure では current state が変更されず、成功値だけが一度適用されることを contract test で確認する。
   - owner ごとの snapshot version/field と `selectedProjectId` が不変で、全 snapshot focused tests が通る状態を完了とする。
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.4_
