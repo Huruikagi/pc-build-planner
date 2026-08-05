@@ -37,7 +37,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "26.1.1",
-    "@types/react": "19.2.17",
+    "@types/react": "19.2.18",
     "@types/react-dom": "19.2.3",
     "chrome-types": "^0.1.435",
     "esbuild": "0.28.1",
@@ -48,7 +48,7 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "react": "19.2.7",
+    "react": "19.2.8",
     "react-dom": "19.2.7",
     "zod": "4.4.3"
   }
