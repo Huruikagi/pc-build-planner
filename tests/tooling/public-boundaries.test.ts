@@ -116,6 +116,61 @@ test("模擬feature consumerの公開importだけを許可する", () => {
   assert.deepEqual(findBoundaryViolations(sources), []);
 });
 
+test("owner schema は共通validation入口と設定済みvendor moduleだけを許可する", () => {
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/features/mock/schema.ts",
+        source:
+          'import { plainObject, uuid } from "../../domain/runtime-schema/public.js";\n' +
+          "export const schema = plainObject({ id: uuid() });",
+      },
+      {
+        path: "src/domain/runtime-schema/zod-mini.ts",
+        source:
+          'import * as zodMini from "zod/mini";\n' +
+          "zodMini.config({ jitless: true });\n" +
+          "export { zodMini as z };",
+      },
+    ]),
+    [],
+  );
+
+  const violations = findBoundaryViolations([
+    {
+      path: "src/features/mock/direct-vendor.ts",
+      source:
+        'import { object } from "zod/mini";\nexport const s = object({});',
+    },
+    {
+      path: "src/domain/candidate-schema.ts",
+      source: 'import * as z from "zod";\nexport const s = z.string();',
+    },
+    {
+      path: "src/features/mock/kernel-deep.ts",
+      source:
+        'import { tagged } from "../../domain/runtime-schema/primitives.js";\n' +
+        "export const t = tagged;",
+    },
+    {
+      path: "src/features/mock/feature-schema-deep.ts",
+      source:
+        'import { candidateSchema } from "../candidate-management/candidate-schema.js";\n' +
+        "export const s = candidateSchema;",
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/mock/direct-vendor.ts: canonical-runtime-schema-import-only",
+      "src/domain/candidate-schema.ts: canonical-runtime-schema-import-only",
+      "src/features/mock/kernel-deep.ts: public-import-only",
+      "src/features/mock/feature-schema-deep.ts: cross-feature-public-import-only",
+    ],
+  );
+});
+
 test("deep import、直接Storage、固定lock迂回を拒否する", () => {
   const violations = findBoundaryViolations([
     {

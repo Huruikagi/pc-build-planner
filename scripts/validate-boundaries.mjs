@@ -113,15 +113,33 @@ const memberPath = (tokens, start, aliases) => {
   return { value, end };
 };
 
+// The shared validation kernel is a second allowed domain entry: owners declare
+// their schemas through it, and its internals stay unreachable.
+const ALLOWED_DOMAIN_ENTRY =
+  /^(?:public|runtime-schema\/public)(?:\.js|\.ts)?$/;
+
 /** @param {string} specifier */
 const isForbiddenImport = (specifier) => {
   const normalized = specifier.replaceAll("\\", "/");
   const match = normalized.match(/\/(domain|persistence|runtime)\/(.+)$/);
   if (match === null) return false;
-  return (
-    match[1] === "runtime" || !/^public(?:\.js|\.ts)?$/.test(match[2] ?? "")
-  );
+  if (match[1] === "runtime") return true;
+  const entry = match[2] ?? "";
+  return match[1] === "domain"
+    ? !ALLOWED_DOMAIN_ENTRY.test(entry)
+    : !/^public(?:\.js|\.ts)?$/.test(entry);
 };
+
+// Zod must be reached only through the module that configures `jitless` before
+// any schema exists; a second package import would make that ordering
+// unprovable and could ship an eval-capable code path into the extension.
+const CANONICAL_VENDOR_SCHEMA_MODULE =
+  /(?:^|\/)src\/domain\/runtime-schema\/zod-mini\.ts$/;
+
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenVendorSchemaImport = (sourcePath, specifier) =>
+  /^zod(?:\/.*)?$/.test(specifier.replaceAll("\\", "/")) &&
+  !CANONICAL_VENDOR_SCHEMA_MODULE.test(sourcePath.replaceAll("\\", "/"));
 
 /** @param {string} specifier */
 const isForbiddenApplicationShellFeatureImport = (specifier) => {
@@ -744,6 +762,18 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("public-import-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenVendorSchemaImport(normalizedPath, token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("canonical-runtime-schema-import-only");
           if (
             isApplicationShell &&
             token.kind === SyntaxKind.StringLiteral &&

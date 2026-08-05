@@ -25,9 +25,9 @@
   - _Requirements: 1.4, 1.5, 8.4, 8.6_
   - _Boundary: ProductionSchemaGate_
 
-- [ ] 2. 共通 validation kernel を構築する
+- [x] 2. 共通 validation kernel を構築する
 
-- [ ] 2.1 共通 primitive と plain strict object を実装する
+- [x] 2.1 共通 primitive と plain strict object を実装する
   - UUID、UTC timestamp、HTTP(S) URL、revision、positive safe integer の受理集合を既存 canonical predicate と parity させる。
   - array、unknown key、必須 key 欠落、非 plain prototype、enumerable symbol を coercion や key stripping なしで拒否する。
   - 各 primitive に owner の error code 語彙を `tagged()` failure tag として付与し、共有層は tag を不透明な文字列として運ぶ。
@@ -36,7 +36,7 @@
   - _Boundary: SharedSchemaPrimitives_
   - _Depends: 1.3_
 
-- [ ] 2.2 (P) JSON safety inspector を実装する
+- [x] 2.2 (P) JSON safety inspector を実装する
   - own enumerable property を deterministic order で走査し、non-JSON 値、cycle、data URL、raw HTML、禁止 key、unsafe object を値を漏らさず分類する。
   - nested property と array index から最初の違反 canonical path を返し、owner が error code を写像できる内部 issue に限定する。
   - synthetic nested/cyclic fixture が期待する issue kind/path で拒否され、有効 JSON が変更されず返ることを完了条件とする。
@@ -44,7 +44,7 @@
   - _Boundary: JsonSafetyInspector_
   - _Depends: 1.3_
 
-- [ ] 2.3 (P) Validation issue と canonical path の adapter を実装する
+- [x] 2.3 (P) Validation issue と canonical path の adapter を実装する
   - vendor issue を code、owner failure tag、string/number path segment だけの内部 view へ射影し、入力値と vendor object を parse call の外へ出さない。
   - `$` base、property、array index を既存形式へ組み立て、owner profile が tag を第一根拠として既存 error union を返せるようにする。tag なしの structural issue（未知 key、必須 key 欠落）だけを issue code から写像し、path 文字列から error code を推測しない。
   - `selectPrimaryIssue` の優先順（path 深さ→schema 宣言順→tag 付き優先）を固定し、error code/path parity test が deterministic に通る状態を完了とする。
@@ -52,7 +52,7 @@
   - _Boundary: ValidationIssueAdapter_
   - _Depends: 1.3_
 
-- [ ] 2.4 共通 kernel の公開入口と source boundary gate を統合する
+- [x] 2.4 共通 kernel の公開入口と source boundary gate を統合する
   - configured namespace と共通 helper だけを validation 公開入口から提供し、業務 schema を共有層へ追加しない。
   - schema output と既存公開型の双方向 assignability を typecheck fixture で固定する。
   - direct Zod import、validation 内部 deep import、feature 間 schema deep import の negative fixture が boundary gate で失敗する状態を完了とする。
@@ -246,3 +246,10 @@
 - esbuild は TypeScript の未使用 import を除去するため、build 失敗 fixture は import した binding を実際に使う必要がある。
 - Zod の production bundle には `const F = Function; new F("")` という jitless 判定 probe が実在する。alias 代入を静的に拒否すると configured probe が誤検出になるため、alias 検出は runtime の `Function` Proxy trap が担当する（`jitless` 有効時の実行回数は実測 0）。
 - `esbuild` を `write: false` + `entryPoints` で使う場合は `outdir` の指定が必要（未指定だと outputFiles が空になる）。
+- owner tag は vendor issue の `message` に `tag:` prefix で載せる（Zod が node 単位で保持する唯一の channel）。共有層の structural failure は `structural:` prefix。`tagged()` は `z.clone` で node を複製するため元の primitive は untagged のまま再利用できる。
+- 共通 primitive は factory 関数（`uuid<ProjectId>()`）。branded 公開型を owner が cast なしで満たすための形。
+- optional field は `z.optional` ではなく `optionalField()` を使う。`z.optional` は present-undefined を silently strip するが、設計は key stripping を禁止しているため `plainObject` が field tag 付きで拒否する。
+- `plainObject` は not-object → unsafe prototype/symbol → missing key → unknown key → present-undefined を pipe 前段で判定してから値を検証する。この順序が既存 `object()` の error code/path 順と parity する根拠。
+- `z.output` の optional key は `T | undefined` になり `exactOptionalPropertyTypes` の公開型へ代入できない。`SchemaOutput<S>` が exact-optional へ正規化する（assignability fixture: `tests/domain/runtime-schema-assignability.ts`）。
+- `inspectJsonSafety` は旧 `inspectPayload` より厳しい: 非 JSON 値を base path ではなく違反した nested path で `not-json` として返し、nested の非 plain prototype/enumerable symbol も `unsafe-object` として拒否する。owner wave は kind→既存 code の写像でこの差を吸収すること。
+- boundary gate に `canonical-runtime-schema-import-only`（`zod*` の直接 import 禁止）を追加し、`validate:boundaries` の scan root へ `src/domain` を追加した。domain の許可 entry は `public` と `runtime-schema/public` の 2 つ。

@@ -57,7 +57,16 @@
 - `src/domain/validation.ts` は root・command・replacement と candidate shape を順序付きで検証し、`ValidationErrorCode` と canonical path を返す。参照整合性は aggregate 全体を走査している。
 - `src/features/backup-restore/exchange.ts` は JSON safety、禁止 payload、strict shape、format version、cross-aggregate reference を feature error へ写像する。
 - capture result、runtime request/response、transient activation store、feature activation、state snapshot は各 owner が `isRecord`、key allowlist、enum、型アサーションを個別実装している。
-- snapshot の権威ある契約は owner ごとに異なる。current build は version 1、candidate management の base contract は `project-candidate-management` が定義する version 2 であり、`candidate-source-bookmarks` が同じ v2 draft shape に source collection、primary reference、price、kind を追加済みである。duplicate merge snapshot は duplicate merge owner の current version を独立して維持する。
+- snapshot の権威ある契約は owner ごとに異なる。現行実装の version は以下のとおりであり、移行時はこの値を正とする。
+
+| Snapshot owner | Module | 現行 version |
+|---|---|---|
+| current build | `src/features/current-build/state-snapshot.ts` | 1 |
+| candidate management | `src/features/candidate-management/state-snapshot.ts` | 3 |
+| duplicate merge | `src/features/candidate-management/duplicate-merge-state.ts` | 1 |
+| transient activation store | `src/runtime/transient-activation-store.ts` | 1 |
+
+  candidate management の base contract は `project-candidate-management` が定義し、`candidate-source-bookmarks` が同じ v3 draft shape に source collection、primary reference、price、kind を追加済みである。duplicate merge snapshot は duplicate merge owner が version 1 として独立に維持する。
 - `scripts/validate-artifacts.mjs` は `eval` と直接の `new Function` を拒否するが、constructor alias の実行有無を証明しない。build と package は同じ artifact validator を利用する。
 - Zod Mini の公式 entry は `zod/mini` である。Zod `4.4.2` では `jitless` を最初の schema access 前に設定した場合に eval probe を避ける修正が含まれ、調査時点の stable は `4.4.3` である。したがって exact version と production trap を併用し、設定だけを安全性の証拠にしない。
 
@@ -133,7 +142,7 @@ THIRD_PARTY_NOTICES.txt      # 配布 archive に含める Zod MIT notice
 - `src/runtime/foundation-message-target.ts`, `src/runtime/transient-activation-transport.ts`, `src/runtime/transient-activation-store.ts` — runtime request/response/store schema。sender authorization は維持する。
 - `src/application-shell/activation-router.ts` — activation adapter result の内部 schema decode。
 - `src/features/current-build/state-snapshot.ts` — current-build version 1 snapshot schema と reference recovery。
-- `src/features/candidate-management/state-snapshot.ts` — candidate-management version 2 と candidate-source-bookmarks 拡張済み source draft shape の schema・reference recovery。
+- `src/features/candidate-management/state-snapshot.ts` — candidate-management version 3 と candidate-source-bookmarks 拡張済み source draft shape の schema・reference recovery。
 - `src/features/candidate-management/duplicate-merge-state.ts` — duplicate-merge owner の current snapshot version と stale-decision recovery。
 - `scripts/build.mjs`, `scripts/validate-final-gate.mjs`, `scripts/validate-artifacts.mjs`, `scripts/validate-boundaries.mjs`, `scripts/package.mjs` — feasibility、direct import、artifact、notice gate の接続。
 - `tests/domain/validation.test.ts`, `tests/features/backup-restore/exchange.test.ts`, `tests/features/product-capture/draft-mapper.test.ts`, `tests/runtime/*.test.ts`, `tests/application-shell/activation-router.test.ts`, `tests/features/*/state-snapshot.test.ts` — valid/invalid parity と error/path 回帰。
@@ -227,6 +236,7 @@ export { z }; // configured namespace from zod/mini
 - UUID、UTC timestamp、HTTP(S) URL、non-negative revision、positive safe integer を既存 canonical predicate と parity させる。
 - plain object は array、非 plain prototype、未知 key、enumerable symbol を拒否する。Zod default の unknown-key stripping は使用しない。
 - boundary ごとに既存受理集合が異なる値は無理に共通化せず、owner schema が明示的な追加 check を持つ。
+- 各 primitive は owner が期待する失敗分類を **schema 側の tag** として保持する。Zod issue code は `invalid_type` / `invalid_format` 程度の粒度しか持たず、既存の細粒度 code（`invalid-uuid`、`invalid-utc-timestamp`、`invalid-url`、`invalid-integer`、`invalid-positive-integer`、`invalid-boolean`、`invalid-array` など）を issue code と path 文字列だけからは復元できないため、path pattern 表による推測を禁止する。
 
 **Contracts**: API [x]
 
@@ -235,8 +245,16 @@ interface SchemaDecoder<T, E> {
   decode(input: unknown, basePath?: string): Result<T, E>;
 }
 
+/** Owner-declared failure tag attached to a primitive schema node. */
+type SchemaFailureTag = string;
+
+/** Wraps a schema node so that its failures carry a stable owner-side tag. */
+function tagged<S>(schema: S, tag: SchemaFailureTag): S;
+
 type SchemaOutput<S> = S extends { readonly _output: infer O } ? O : never;
 ```
+
+tag 値は owner の error code 語彙そのものを用いる（例: foundation は `ValidationErrorCode`）。共有層は tag を不透明な文字列として運び、意味を解釈しない。
 
 型推論結果と既存公開型は双方向 assignability test で固定する。上記 `SchemaOutput` は契約の概念形であり、実装は Zod Mini の公開 `z.output` を使用する。
 
@@ -273,21 +291,29 @@ function inspectJsonSafety(
 
 **Responsibilities & Constraints**
 
-- vendor issue を `{ code, path segments }` の内部 view へ即時変換し、Zod object の寿命を parse call 内に閉じる。
+- vendor issue を `{ code, tag, path segments }` の内部 view へ即時変換し、Zod object の寿命を parse call 内に閉じる。
 - property は `.name`、index は `[n]` として base path に連結する。特殊 key は既存 path helper と同じ escape policy を用いる。
-- owner mapping profile が issue code、schema node、path に基づき既存 error union を返す。複数 issue は既存 validation order と parity する優先規則で一件を選ぶ。
+- owner mapping profile は **tag を第一の根拠**として既存 error union を返す。tag を持たない issue（未知 key、必須 key 欠落など object 構造由来の失敗）だけを issue code から写像し、path 文字列から error code を推測しない。
+- 複数 issue からの一件選択は次の決定規則で固定する: (1) path segment 数が少ないものを優先（浅い失敗が先）、(2) 同深さなら owner schema の宣言順、(3) 同一 node なら tag 付き issue を優先。これにより既存 validator の「外側から順に、宣言順で最初の違反を返す」挙動と parity する。
 
 **Contracts**: Service [x]
 
 ```typescript
 interface SchemaIssueView {
   readonly code: string;
+  /** Owner-declared tag from `tagged()`, absent for structural failures. */
+  readonly tag?: SchemaFailureTag;
   readonly path: readonly (string | number)[];
 }
 
 interface IssueMappingProfile<E> {
   toError(issue: SchemaIssueView, canonicalPath: string): E;
 }
+
+/** Deterministic single-issue selection shared by all owner profiles. */
+function selectPrimaryIssue(
+  issues: readonly SchemaIssueView[],
+): SchemaIssueView;
 ```
 
 ### Tooling
@@ -299,6 +325,7 @@ interface IssueMappingProfile<E> {
 - 最小 schema probe を本番同等 esbuild option で一時 bundle し、既存 artifact scan と Function Proxy trap を実行する。
 - production entry の direct `zod` import、`eval`、direct/alias `Function` call pattern を静的にも拒否する。
 - baseline/current/delta bytes と動的呼出し回数を machine-readable report と CI output に残す。size は記録値とし、閾値追加は別判断とする。
+- baseline は同一 gate run 内で再生成する。各 production entry を (a) 通常 build と (b) canonical Zod module を副作用のない stub へ esbuild alias で差し替えた build の二通りで生成し、(b) を baseline、(a) を current とする。これにより導入後の任意 commit で delta を再現でき、手書きの固定値や過去 artifact への依存を作らない。stub 差し替えは gate 専用であり、application build と package flow には適用しない。
 - `THIRD_PARTY_NOTICES.txt` を build と release archive の必須 artifact にする。
 
 **Contracts**: Batch [x]
@@ -349,8 +376,8 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 
 #### StateSnapshotSchemaSet
 
-- current build は version 1、candidate management の base snapshot は version 2、duplicate merge は owner が定義する current version として、三つの契約を混同せず owner-local schema にする。
-- candidate-management version 2 は `candidate-source-bookmarks` が同じ snapshot shape へ追加した source collection、primary reference、price、kind、URL safety を含む draft 全体を parity 対象とし、単一 source 以前の shape へ戻さない。
+- current build は version 1、candidate management の base snapshot は version 3、duplicate merge は version 1 として、三つの契約を混同せず owner-local schema にする。version 値は「Existing Architecture Analysis」の表を唯一の根拠とし、schema 側で再定義しない。
+- candidate-management version 3 は `candidate-source-bookmarks` が同じ snapshot shape へ追加した source collection、primary reference、price、kind、URL safety を含む draft 全体を parity 対象とし、単一 source 以前の shape へ戻さない。
 - `selectedProjectId` を shape に残し、owner state に対する reference check を schema 成功後に行う。
 - duplicate の evaluating/committing は既存どおり stale-decision failure へ変換し、自動処理を再開しない。
 - restore は成功値を構築してから一度だけ state へ適用し、失敗時は state を不変にする。
@@ -360,7 +387,7 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 永続データ model は変更しない。本仕様が新たに定義するのは内部 validation contract と build report のみである。
 
 - `JsonSafetyIssue`: 値を含まず、kind と canonical path だけを保持する。
-- `SchemaIssueView`: vendor issue の最小内部 projection。owner boundary を越えない。
+- `SchemaIssueView`: vendor issue の最小内部 projection（code、owner tag、path segment）。owner boundary を越えない。
 - `RuntimeSchemaGateReport`: bundle entry ごとの baseline/current/delta bytes、dynamic call count、notice presence。
 - owner schema output: 既存 `LocalDataRoot`、`DataCommand`、`CurrentBackupEnvelope`、`CaptureResult`、runtime contract、snapshot contract と型・意味の両方で同等。
 
@@ -383,7 +410,7 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 
 - `SharedSchemaPrimitives`: UUID version/range、UTC canonicalization、HTTP(S)、revision/positive integer、unknown key、prototype、symbol の境界値。
 - `JsonSafetyInspector`: nested array/object の最初の path、cycle、data URL、raw HTML、禁止 key、non-finite number。
-- `ValidationIssueAdapter`: `$` base、property/index path、owner mapping、複数 issue の deterministic priority。
+- `ValidationIssueAdapter`: `$` base、property/index path、tag 由来の owner mapping、tag なし structural issue の写像、`selectPrimaryIssue` の deterministic priority（深さ→宣言順→tag 優先）。
 - 各 owner schema: 現行 valid/invalid fixture table を旧期待値と同じ value/error/path で検証する。
 
 ### Integration and Contract Tests
@@ -391,7 +418,7 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 - Foundation root/command/replacement が invalid input を write authority へ渡さず、有効 root を保持する。
 - Backup envelope の shape → reference → version/mapping の順序と atomic replacement contract を維持する。
 - Capture result から editor prefill、runtime request/response、activation router まで invalid payload が state へ到達しない。
-- Snapshot restore は current-build v1、candidate-management v2 の candidate-source-bookmarks 拡張済み fixture、duplicate-merge current version を別々に検証し、version/shape/reference failure で current state を変更せず、duplicate in-flight state を stale failure へ変換する。
+- Snapshot restore は current-build v1、candidate-management v3 の candidate-source-bookmarks 拡張済み fixture、duplicate-merge v1 を別々に検証し、version/shape/reference failure で current state を変更せず、duplicate in-flight state を stale failure へ変換する。
 - 公開 consumer の typecheck と source boundary negative fixture で vendor error・schema deep import・direct Zod import を拒否する。
 
 ### Build, Package, and E2E Tests
@@ -411,7 +438,7 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 
 ## Performance & Scalability
 
-- 導入前後の entry bytes を記録し、Zod Mini tree-shaking の実効値を production metafile/outputs で測定する。
+- 同一 run 内の stub build と通常 build の entry bytes を記録し、Zod Mini tree-shaking の実効値を production metafile/outputs で測定する。
 - 再帰 JSON safety と aggregate reference scan は入力サイズに対して線形を維持する。schema と semantic pass の重複 traversal は parity を壊さない範囲で owner ごとに統合する。
 - bundle size の hard threshold は本仕様で推測せず、実測値と release artifact をレビュー可能にする。
 
@@ -437,7 +464,7 @@ flowchart LR
     Snapshot --> Final
 ```
 
-各 wave は既存 validator の fixture table を先に固定し、schema 実装、semantic refinement、error/path parity、重複 guard/cast 削除の順で完了する。wave の test が失敗した場合は次 wave を開始しない。snapshot wave では current-build v1、candidate-management v2 と candidate-source-bookmarks 拡張済み shape、duplicate-merge current version をそれぞれ維持し、`selectedProjectId` の authority を変更しない。
+各 wave は既存 validator の fixture table を先に固定し、schema 実装、semantic refinement、error/path parity、重複 guard/cast 削除の順で完了する。wave の test が失敗した場合は次 wave を開始しない。snapshot wave では current-build v1、candidate-management v3 と candidate-source-bookmarks 拡張済み shape、duplicate-merge v1 をそれぞれ維持し、`selectedProjectId` の authority を変更しない。
 
 ## Supporting References
 
