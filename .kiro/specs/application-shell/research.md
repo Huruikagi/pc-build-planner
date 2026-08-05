@@ -13,6 +13,8 @@
   - 現行実装は全registrationへnavigationを必須化して全件をnavigationへ投影し、`ShellView`がheaderへ`LanguageSelectControl`を直置きしている。常設／一過性をnavigation有無まで相関させる判別共用体、常設判定の単一化、settingsへの配置移行が必要である。
   - `source-price-refresh`が依存するworker-safe catalogとUI contributionの分離は、shell更新後も維持する必要がある。
   - 現行runtime baselineは同じDOM containerをshell React rootとfeature mountへ割り当て、仮のinactive maintenance sourceを共有entryで生成しているためproduction compositionへ進めない。空feature catalog自体は下流feature実装前の正規状態として扱える。
+  - `project-context`は`ready | empty | unavailable` snapshot、選択transaction、共通selector、read/command portを所有する。application shellはその意味やfallbackを再実装せず、共通slotとsingleton composition、project依存featureへの絞り込み能力注入だけを所有する。
+  - 回復必須状態では既存の二値`read | mutation`だけでは復元操作を安全に例外化できないため、shellの操作分類を`read | mutation | recovery`へ閉じ、`recovery-required`時はreadと明示的recoveryだけを許可する。
 
 ## 調査ログ
 
@@ -33,6 +35,18 @@
 - **参照元**: roadmapとbriefの確定制約。
 - **所見**: `sidePanel.open()`のユーザージェスチャー制約をcomposition後の非同期処理へ移さない。実行コードはすべて同梱する。
 - **影響**: gesture entryは薄いruntime adapterとし、host初期化とは契約を分離する。
+
+### Project context統合境界
+- **背景**: 主要画面で現在projectを一貫して表示しつつ、選択authorityやfallbackをshellへ重複させてはならない。
+- **参照元**: `.kiro/specs/project-context/{brief,requirements,design}.md`、`.kiro/steering/structure.md`。
+- **所見**: project-contextは`ProjectContextReadPort`、`ProjectContextCommandPort`、共通selectorのpresentation contributionを分離して公開する計画である。`unavailable`ではcurrent projectを公開せず、settingsとbackup recoveryの起動を妨げない契約を持つ。
+- **影響**: shell presentationにproject-context専用slotを一つ設け、production compositionだけがread/command portとpresentation contributionを合成する。shellはsnapshotを表示用adapterへ転送するだけで、project IDの選択、fallback、CRUD、未保存編集判断を行わない。project依存featureには必要能力だけを注入し、project-context失敗時もsettingsとbackup recoveryを起動する。
+
+### 回復操作の明示分類
+- **背景**: 破損または未対応versionのrootから復元するには、通常mutationを抑止したまま復元commitだけを許可する必要がある。
+- **参照元**: application-shell要件5・10、backup-restore公開operation分類、local-data-foundationのtyped startup failure。
+- **所見**: 操作種別を二値のままにしてsettingsやbackupを例外扱いすると、任意mutationが回復経路を名乗れる曖昧な権限境界になる。
+- **影響**: canonical `OperationKind`を`read | mutation | recovery`の閉じたunionとする。shellは登録された分類だけを判定し、復元protocolや成功可否を解釈しない。未知分類と通常mutationからの回復要求はfail closedで拒否する。
 
 ### Runtime composition blocker
 - **背景**: task 4.1で、shell navigation/state、feature mount container、canonical maintenance source、下流registrationの接続責任が設計上未確定だった。
@@ -174,6 +188,18 @@
 - header撤去後の回復経路喪失 — loading／startup errorの二言語案内と状態別DOM testで固定する。
 - corrupt/unsupported rootでbackup区画へ到達不能 — recovery-required projectionと`recovery` operation gateでsettingsだけを回復可能にする。
 - worker bundleへのUI混入 — UI／worker catalog分離とartifact boundary gateで拒否する。
+
+### 判断: Project selectorはproject-context所有のpresentation contributionとして合成する
+- **背景**: shellの全主要画面に現在projectを表示する一方、選択authorityと表示実装はproject-contextに定義されている。
+- **選択**: shellはproject selector slotとlifecycleだけを所有し、project-contextのpresentation contributionを一度だけmountする。production compositionはread/command portを必要なconsumerへ能力別に注入する。
+- **理由**: 共通表示をshell layoutへ統合しつつ、catalog解釈、fallback、選択transaction、文言をcanonical ownerへ残せる。
+- **トレードオフ**: project-contextはapplication-shellより後に実装されるため、shell単独ではslotのempty/unavailable状態をcontract fixtureで検証し、production wiringは下流specとの統合gateで再検証する。
+
+### 判断: Project context障害はshell全体のstartup failureへ昇格させない
+- **背景**: project catalogまたはpreferenceが利用不能でもsettingsとbackup recoveryは利用可能でなければならない。
+- **選択**: project-context初期化失敗または`unavailable` snapshotではproject依存featureだけをunavailableにし、shell、settings、backup recoveryを継続する。
+- **理由**: projectを推測せずfail closedにしながら、回復経路を保持できる。
+- **Follow-up**: unavailableからrefresh成功への復帰、project依存featureの再評価、settings継続をintegration testで固定する。
 
 ## 参照
 - `.kiro/steering/roadmap.md`

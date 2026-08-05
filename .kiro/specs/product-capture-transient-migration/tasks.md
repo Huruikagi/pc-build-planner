@@ -236,6 +236,69 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
   - _Boundary: QualityGates, SpecTraceability_
 
+- [ ] 7. current context authorityとrollback境界を追補する
+- [ ] 7.1 candidate activationを検証済みcurrent contextへ統一する
+  - 編集開始payloadを境界で再検証し、保存先はproject-contextが返す検証済みcurrent projectだけから解決する。
+  - payload、画面snapshot、legacy handoffに含まれるstaleまたは無効なproject情報を保存先へ使わず、current contextも変更しない。
+  - current contextが未選択または利用不能な場合は失敗や先頭projectへのfallbackにせず、project未解決pre-editとして受理する。
+  - current projectへのbinding、未解決保持、stale project入力の各経路が判別可能な受理結果となり、受理済みprojectが置換されないcontract testが通ることを完了条件とする。
+  - _Requirements: 1.3, 1.6, 4.1, 4.2, 4.5, 4.7, 4.8_
+  - _Boundary: Candidate Pre-edit Boundary, Candidate Activation_
+
+- [ ] 7.2 pending pre-editを明示操作とcontext回復から再開する
+  - projectの明示選択、作成成功、またはcurrent contextの回復を受けて、保持中の同じpre-editを再抽出せずeditor stateへ移す。
+  - binding済みprojectをその後のfallbackや再解決で置換せず、作成時はserviceが返したproject IDをそのまま維持する。
+  - pending stateは受理成功、明示取消、新しいpre-edit activation、panel session終了という設計済み条件だけで破棄する。
+  - 未選択、利用不能、選択回復、作成成功・失敗、取消、session cleanupのstate／integration testで保持と破棄を観測できることを完了条件とする。
+  - _Depends: 7.1_
+  - _Requirements: 1.4, 1.6, 1.8, 4.2, 4.6, 4.7, 4.8_
+  - _Boundary: Pending Pre-edit State_
+
+- [ ] 7.3 candidate側のproject回復UIをcurrent context契約へ合わせる
+  - pending pre-editを保持したまま、projectの選択、作成、取消、context回復の利用可能な操作と理由を候補管理画面へ提示する。
+  - 作成またはcontext回復の失敗は安全な文言で同じ画面に表示し、draftを失わず再試行できるようにする。
+  - 回復成功後は同じpre-editのeditorへ切り替わり、capture面へ戻らず再抽出も要求しない。
+  - 日英message catalogを含むDOM testでpending、失敗、取消、回復後editorの各表示と操作が確認できることを完了条件とする。
+  - _Depends: 7.2_
+  - _Requirements: 1.4, 1.6, 1.8, 4.6, 5.3_
+  - _Boundary: Candidate View, Message Catalog_
+
+- [ ] 7.4 (P) capture registrationのrollback snapshotを実行identityだけへ限定する
+  - rollback snapshotにはactivation、固定tab、request generation、handoff中generationだけを保持し、URL、HTML、抽出値、project情報を含めない。
+  - source復元時は保存されたgenerationを再構築し、別世代のcallbackやintentを現行結果として受理しない。
+  - mount失敗、target受理失敗、restore成功・失敗のregistration contractを上流lifecycle規約に沿って検証する。
+  - snapshot exact-shapeと復元後の世代照合testが通り、機密的なページ由来値がstateやlogへ残らないことを完了条件とする。
+  - _Depends: 3.1_
+  - _Requirements: 1.9, 2.5, 5.2, 5.7_
+  - _Boundary: Product Capture Registration_
+
+- [ ] 7.5 candidate受理と原子的終了をretained intentへ統合する
+  - candidate activationの安定した受理結果を利用し、current projectへのbindingまたはpending pre-edit保持が成功した場合だけ一過性面を終了する。
+  - candidate受理失敗と原子的conclude失敗を区別し、どちらもcaptureを終了済みにせず検証済みintentを現行rollback世代へ保持する。
+  - retryは保持intentだけを再利用し、ページ再抽出を行わず、stale世代、二重完了、新activation後の旧retryを無効化する。
+  - 受理成功、受理失敗、conclude失敗、rollback復元、retry成功、stale retryのintegration testで終了条件と保持状態を観測できることを完了条件とする。
+  - _Depends: 7.1, 7.4_
+  - _Requirements: 1.3, 1.9, 2.5, 5.2, 5.3, 5.7_
+  - _Boundary: Capture State, Draft Mapper and Handoff, Shell Lifecycle Integration_
+
+- [ ] 7.6 current-context handoffをproduction compositionへ統合する
+  - product-captureのruntime、transient lifecycle、candidate intent factoryという3依存を維持したまま、current-context awareなcandidate受理結果を配線する。
+  - current projectへbindした場合とpending保持した場合はcapture終了後も同じpre-editを継続し、受理または終了失敗時はcaptureをrollback世代で復元する。
+  - stale project入力がcurrent contextを変更せず、context回復後に同じdraftへ戻ることをproduction同形のcompositionで確認する。
+  - Chrome-shaped integration testがbinding、pending、明示回復、受理失敗、atomic rollback retryの全経路で通ることを完了条件とする。
+  - _Depends: 7.2, 7.3, 7.5_
+  - _Requirements: 1.2, 1.3, 1.4, 1.6, 1.8, 1.9, 4.2, 4.6, 4.7, 4.8, 5.3, 5.5, 5.7_
+  - _Boundary: Application Composition, Candidate Activation, Product Capture Handoff Integration_
+
+- [ ] 7.7 更新仕様の回帰gateと同一build smokeを完了する
+  - state、runtime、candidate activation、pending recovery、atomic handoffのunit／integration／DOM testを実行し、全36要件のtraceabilityを確認する。
+  - typecheck、lint、E2E、公開境界、permission、fixture、artifact、production buildの各gateを実行し、実サイト由来assetや旧capture保存・navigation経路がないことを確認する。
+  - 同じcommitの更新production buildをChrome 116以降へ未パッケージロードし、toolbar icon、activeTab付与、固定tabへの実script注入、candidate editor到達をmanual smokeする。
+  - `pnpm validate`と全補助gateがfresh evidenceで通り、manual smoke未実施または失敗時は`MANUAL_VERIFY_REQUIRED`としてGOを保留することを完了条件とする。
+  - _Depends: 7.6_
+  - _Requirements: 3.3, 3.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
+  - _Boundary: Quality Gates, Spec Traceability_
+
 ## Implementation Notes
 
 - 2026-07-31 `ui-message-catalog` validation remediationで、handoff失敗時の保持結果、新しい起動による置換、同activationでのhandoff再試行を3つのcanonical message keyへ接続した。viewは既存`failure.kind`だけで分岐し、state machineとretained intent再試行契約は変更せず、DOM／state／integration、完全`pnpm validate`、production E2Eを再検証した。

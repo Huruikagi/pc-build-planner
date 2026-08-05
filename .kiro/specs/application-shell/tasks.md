@@ -307,6 +307,99 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4_
   - _Boundary: ContractTestKit, RuntimeAdapters, ShellIntegration_
 
+- [ ] 9. 回復必須状態と操作分類をshellへ統合する
+- [ ] 9.1 閲覧・通常mutation・回復操作の閉じた分類を実装する
+  - 操作登録で受理する分類を閲覧、通常mutation、回復操作に限定し、未知分類を安全に拒否する
+  - 通常時、maintenance中、回復必須状態ごとの許可集合を一貫して判定し、domain側の最終的なwrite拒否を代替しない
+  - 回復操作の失敗または取消では通常mutationを再許可せず、上流から正常状態を受信するまで抑止を維持する
+  - 完了時、各状態と各操作分類の組合せ、および未知分類の拒否を決定的なunit testで観測できる
+  - _Requirements: 5.8, 5.9, 5.10, 10.4, 10.5_
+  - _Boundary: MutationGate, CoreContracts_
+
+- [ ] 9.2 回復必須snapshot projectionと正常復帰を実装する
+  - 保存rootの破損または未対応versionだけを通常の起動失敗と区別し、回復必須状態として安全な共通表示へ投影する
+  - 上流の正常snapshotを受信したときだけ最新の操作可否を再評価し、cursorを捏造せず通常projectionへ復帰する
+  - stale通知で回復必須状態や復帰後の通常状態を後退させず、購読停止時にresourceを冪等に解放する
+  - 回復操作の成否、復元対象、保存データの正常性をshellで独自判定せず、上流の評価済み状態だけを使用する
+  - 完了時、破損・未対応version・その他の取得失敗・正常復帰・stale通知をprojection testで識別できる
+  - _Depends: local-data-foundation 6.8_
+  - _Requirements: 3.3, 5.8, 5.9, 5.10, 10.1, 10.3, 10.4, 10.5_
+  - _Boundary: MaintenanceProjection_
+
+- [ ] 9.3 回復必須表示とsettings到達をhost lifecycleへ統合する
+  - 回復必須状態ではsettingsを初期選択またはfallbackとして表示し、backup回復操作面への到達とread-only navigationを維持する
+  - 正常projectionへの復帰時に最新のfeature availabilityを再評価し、shellを再起動せず通常表示へ戻す
+  - 回復操作の失敗または取消では回復必須表示と通常mutation抑止を維持し、他の起動失敗と異なる安全な案内を提示する
+  - 完了時、settings到達、正常復帰、回復失敗／取消、通常startup failureの各flowをhostとDOM testで識別できる
+  - _Depends: 9.2, backup-restore 5.2, settings-screen 4.2_
+  - _Requirements: 5.9, 5.10, 8.5, 10.1, 10.2, 10.3, 10.4, 10.5_
+  - _Boundary: SidePanelHost, ShellView_
+
+- [ ] 9.4 Settingsとbackupの回復登録をproduction compositionへ接続する
+  - settingsとbackupが公開する回復操作だけを明示的な回復分類で登録し、通常mutationとの分類境界を維持する
+  - 起動、途中失敗、停止で回復登録と購読を逆依存順かつbest-effort、冪等に解放する
+  - recovery-requiredでもsettingsとbackup回復面を利用可能に保ち、他の通常mutation featureを利用不能として合成する
+  - 完了時、production-shaped fixtureで回復操作だけが許可され、未登録操作が拒否され、停止後にresourceが残らないことを観測できる
+  - _Depends: backup-restore 6.8, settings-screen 4.2_
+  - _Requirements: 3.1, 3.9, 5.8, 5.9, 5.10, 8.5, 10.2, 10.4, 10.5_
+  - _Boundary: ApplicationComposition, SidePanelFeatureContributions_
+
+- [ ] 10. 共通の現在project表示をproduction shellへ統合する
+- [ ] 10.1 Project selector専用slotとsingleton lifecycleを実装する
+  - navigationとfeature主表示領域から分離した共通project selector専用slotをshell presentationに提供する
+  - project-context所有のpresentationを一度だけmountし、停止と起動rollbackで購読と表示handleを冪等に解放する
+  - 選択操作をproject-contextのcommand能力へそのまま委譲し、project名、catalog順、fallback、guard判断をshellで解釈しない
+  - 完了時、selectorとfeature viewが別containerへ同時に表示され、選択要求の一回配送と停止時cleanupをcontract testで観測できる
+  - _Depends: project-context 3.3_
+  - _Requirements: 9.1, 9.2, 9.5_
+  - _Boundary: ShellPresentation, ProjectContextShellAdapter_
+
+- [ ] 10.2 Project snapshotを依存featureのavailabilityへ投影する
+  - project-contextの同一snapshotを共通selectorとproject依存featureへ同じgenerationで通知する
+  - readyだけをproject依存能力の利用可能条件とし、emptyまたはunavailableから別projectを推測せず理由付き利用不能状態へ投影する
+  - snapshot generationを後退させず、project-context障害時もsettingsとbackup回復面、およびproject非依存featureの利用を維持する
+  - 完了時、ready、empty、unavailable、stale通知の各scenarioでselectorと依存featureの状態が一致し、非依存featureが継続する
+  - _Depends: project-context 2.5, project-context 3.3_
+  - _Requirements: 3.8, 3.9, 9.1, 9.3, 9.4, 9.5_
+  - _Boundary: ProjectContextShellAdapter, FeatureRegistry_
+
+- [ ] 10.3 能力別project portをproduction featureへ注入する
+  - 各project依存featureへ必要なread、command、guard能力だけを合成contextとして渡し、project-context内部へdeep importしない
+  - project-contextの初期化失敗をshell全体のstartup failureへ昇格させず、依存featureだけを利用不能として起動を継続する
+  - production start、途中rollback、stopでproject-context handle、selector、feature contributionを逆依存順かつbest-effort、冪等に解放する
+  - 完了時、public consumer型検査とproduction-shaped testで能力の過剰公開が拒否され、degraded startupとcleanupが成功する
+  - _Depends: 10.1, 10.2, project-context 4.3, project-context 4.4_
+  - _Requirements: 3.5, 3.8, 3.9, 9.3, 9.4, 9.5_
+  - _Boundary: ApplicationComposition, FeatureCompositionContext, RootPublicApi_
+
+- [ ] 11. Project contextと回復flowの横断回帰を完成する
+- [ ] 11.1 Contract・DOM・runtime flowを統合検証する
+  - current projectのready、empty、unavailableとrecovery-required、maintenance、settings fallbackを同じproduction-shaped scenarioで検証する
+  - selector操作、依存feature availability、回復操作分類、正常snapshot後の再評価、全resource cleanupの順序を決定的に観測する
+  - 外部由来文字列を安全なtextとして表示し、feature障害時もproject非依存の操作を維持する
+  - 完了時、関連unit、contract、DOM、runtime testが連続成功し、状態遷移とcleanupを一つのfixtureで再現できる
+  - _Depends: 9.4, 10.3_
+  - _Requirements: 3.8, 3.9, 4.4, 5.8, 5.9, 5.10, 6.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5_
+  - _Boundary: ContractTestKit, ShellIntegration_
+
+- [ ] 11.2 公開consumer・worker・artifact境界を検証する
+  - project-contextの能力別portと回復操作分類が公開入口だけから到達でき、内部実装へのdeep importを拒否する
+  - worker bundleへproject selector、DOM、React、feature UI依存を混入させず、side panel専用graphとの分離を維持する
+  - remote code、動的評価、inline JavaScript、危険なHTML描画APIを生成物へ含めない
+  - 完了時、公開consumer型検査、source boundary、worker bundle、security artifact gateが連続成功する
+  - _Depends: 9.4, 10.3_
+  - _Requirements: 3.6, 3.8, 3.9, 4.4, 6.3, 6.4, 9.5, 10.5_
+  - _Boundary: PublicConsumerContracts, ApplicationShellArtifactValidation_
+
+- [ ] 11.3 Chrome side panelで共通project表示と回復到達を検証する
+  - Chrome 116以降相当のproduction buildで共通selector、project切替、project依存featureの状態更新を表示文言に依存せず確認する
+  - 回復必須状態からsettingsのbackup回復面へ到達でき、失敗または取消後も通常mutationが抑止されることを確認する
+  - project-context利用不能時もsettingsとbackup回復面が利用でき、別projectが暗黙選択されないことを確認する
+  - 完了時、架空fixtureだけを使うE2Eと完全validationが成功し、全追加要件のproduction経路を再現できる
+  - _Depends: 11.1, 11.2, project-context 4.5_
+  - _Requirements: 3.9, 6.1, 6.2, 6.3, 6.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5_
+  - _Boundary: ApplicationShellE2E, ApplicationShellArtifactValidation_
+
 ## Implementation Notes
 
 - 2026-08-02 validation remediation: worker-safe catalog型からUI registrationを除去してcatalog宣言順へ固定し、side-panelのtransient lifecycleを必須依存化した。未参照`react-runtime.js` entryとbaseline sourceを撤去し、React同梱gateを実`side-panel.js`へ集約した。candidate-management→source-price-refreshのlate-bound公開port seamもdesignへ明記した。

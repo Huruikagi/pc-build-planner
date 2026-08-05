@@ -25,6 +25,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `ShellNavigator`、feature-neutralな`FeatureActivationIntent`、activation配送順序と失敗分離。
 - side panel host、ナビゲーション、共通loading/error/maintenance React viewとroot adapter。
 - `ApplicationCompositionRoot`とroot公開APIの合成。
+- project-context所有の共通selectorを置くshell slot、singleton presentation lifecycle、project依存featureへの能力別port注入。
 - 世代付きmaintenance状態のread-only projectionとUI mutation gate。
 - `corrupt-data | unsupported-version`を通常startup failureと分離する`recovery-required` projectionと、復元専用`recovery` operation gate。
 - 共有runtime入口、HTML host、shell統合test kit。
@@ -41,6 +42,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - 一過性featureの起動世代、固定tab、寿命監視、gesture ingressおよびstore。これらは`transient-feature-surface`が所有する。
 - Repository、Chrome Storage adapter、canonical maintenance sourceを生成するfoundation runtime factoryの実装。foundationは公開runtime contributionとして提供し、shellはそのhandleとtyped snapshot failureだけを利用する。
 - 表示言語の意味・保存・解決、言語control、settings画面layout、backup区画、メッセージカタログの内容と言語別値（`settings-screen`、`ui-messages`、`ui-language`、`backup-restore`所有）。shellヘッダへ言語controlを配置しない。
+- project catalog、現在projectの選択authority・fallback・preference、project CRUD、切替guard、共通selectorのDOMと文言。これらは`project-context`と各feature ownerが所有する。
 
 ### 許可する依存
 - local data foundationの公開型、canonical `Result<T, E>`、query契約、および完了済み`local-data-foundation` task 5.5が公開するread-only `MaintenanceSnapshotSource`。
@@ -56,6 +58,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `transient-feature-surface`が確定した`PersistentApplicationFeatureRegistration`／`TransientApplicationFeatureRegistration`判別共用体、`isPersistent`型述語、`TransientNotice`、typed activation連携。shellは表示区分を解釈してhostへ投影するが、起動世代やChrome gestureを再実装しない。
 - `settings-screen`が提供するpersistent settings contribution。shellはcompositionとnavigation到達だけを所有し、settings内部の言語・backup能力を解釈しない。
 - 下流featureが公開する`recovery` operation分類。shellは復元protocolを解釈せず、recovery-required時の可否だけを判定する。
+- `project-context`の`ProjectContextReadPort`、`ProjectContextCommandPort`、composition専用presentation contribution。shellはsnapshotの意味を再解釈せず、selector slotとlifecycleを合成する。
 
 ### 再検証トリガー
 - registration、mount context、availability、activation、public API registryの型変更。
@@ -67,6 +70,8 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - shell presentation handle、feature slot生成時点、persistent navigation判定、初期選択・fallback、`transientNotice`、production contribution一覧の変更。
 - `ui-messages`の`MessageKey`/`MessageDescriptor`/`useMessages()`公開契約、`ui-language`の`LanguageProvider`公開契約、またはsettings回復案内の配置状態の変更。
 - worker-safe `feature-contribution-catalog.ts`とUI専用`side-panel-contributions.ts`の分離、または`TransientGestureRegistrationPort`のworker composition接続を変更する場合は`source-price-refresh`を再検証する。
+- `ProjectContextSnapshot`、read/command port、presentation contribution、project依存能力注入、またはselector slotの配置を変更する場合は`project-context`と全project依存featureを再検証する。
+- `OperationKind`、recovery-required projection、settings/backup recovery到達契約を変更する場合は`backup-restore`と`settings-screen`を再検証する。
 
 ## アーキテクチャ
 
@@ -88,6 +93,9 @@ graph TB
     Root --> Registry[Feature registry]
     Root --> Maintenance[Maintenance projection]
     Root --> Presentation[Shell presentation]
+    Presentation --> ProjectSlot[Project selector slot]
+    ProjectContext[Project context] --> ProjectSlot
+    ProjectContext --> Root
     Presentation --> FeatureSlot[Feature mount slot]
     Root --> Host[Side panel host]
     Navigator[Shell navigator] --> Host
@@ -134,6 +142,7 @@ src/
 │   ├── error-boundary.tsx              # component描画失敗のfeature単位隔離
 │   ├── composition-root.ts            # foundation、feature、hostの一回限り合成
 │   ├── shell-presentation.tsx          # shell root、navigation command、feature専用slotの接続
+│   ├── project-context-shell-adapter.ts # project-context presentation lifecycleと依存feature可用性のshell接続
 │   ├── application-composition.ts      # canonical foundationと公開registrationのproduction合成
 │   ├── production-worker-composition.ts # foundation message registrationとcatalog workerのcontext別合成
 │   ├── feature-contribution-catalog.ts # contribution契約とworker安全なcatalog（DOM/React非依存）
@@ -151,6 +160,8 @@ tests/
 ```
 
 既存の`react-shell-root.tsx`、`shell-view.tsx`、`shell-view.css`、`feature-registry.ts`、`side-panel-host.ts`、`shell-presentation.tsx`、`application-composition.ts`を常設／一過性混在とsettings回復表示へ改訂する。`feature-contribution-catalog.ts`はworker registrationだけを含められるworker-safe graphを維持し、`side-panel-contributions.ts`だけがsettingsを含むUI contributionを参照する。`src/domain/`と`src/persistence/`の実装は変更対象外である。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
+
+`project-context-shell-adapter.ts`はproject-contextのpresentation contributionをshellの専用slotへ一度だけmountし、停止時に解除する。snapshotの`ready | empty | unavailable`を業務判断へ変換せず、`unavailable`時はproject依存featureのavailabilityだけを理由付きで閉じる。settingsとbackup recoveryはproject非依存として起動を継続する。
 
 #### Feature contribution composition
 
@@ -214,12 +225,17 @@ sequenceDiagram
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 区分とnavigationの整合が型で閉じた常設／一過性feature登録 | FeatureRegistry | ApplicationFeatureRegistration discriminated union, isPersistent |
 | 3.1, 3.2, 3.3, 3.4 | compositionと公開API | CompositionRoot, PublicApiRegistry | start, composePublicApi |
 | 3.5, 3.6, 3.7 | feature contribution合成、worker bundle分離、catalog由来の公開API型 | ProductionWorkerComposition, PublicApiRegistry | FeatureCompositionContext, feature-contribution-catalog.ts, composeApplicationApi |
+| 3.8, 3.9 | project能力の絞り込み注入とdegraded startup | ApplicationComposition, ProjectContextShellAdapter | ProjectContextReadPort, ProjectContextCommandPort, availability projection |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7 | 共通状態、notice、settings回復案内 | ShellView, ReactShellRoot, ShellErrorBoundary, SidePanelHost | ShellViewState, TransientNotice |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | maintenance抑止とmutation可否変化の購読 | MaintenanceProjection, MutationGate | MaintenanceSnapshotSource, OperationPolicy.subscribe |
+| 5.8, 5.9, 5.10 | read・通常mutation・回復操作の閉じた分類 | MutationGate, ApplicationComposition | OperationKind, recovery registration |
 | 6.1, 6.2, 6.3, 6.4 | runtimeと検証 | RuntimeAdapters, ContractTestKit | Chrome adapter, integration flow |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8 | 常設／一過性feature間activation | ActivationRouter, SidePanelHost | FeatureActivationIntent, ShellNavigator, FeatureActivationAdapter, TransientSurfaceLifecyclePort |
 | 8.1, 8.2 | persistent settingsの選択・到達 | FeatureRegistry, SidePanelHost, ShellView | PersistentApplicationFeatureRegistration, ShellNavigator |
 | 8.3, 8.4 | header撤去とsettings非再mount | ShellView, ReactShellRoot | LanguageProvider, persistent navigation |
+| 8.5 | recovery-required時のsettings到達維持 | SidePanelHost, MutationGate | recovery-required flow, OperationPolicy |
+| 9.1, 9.2, 9.3, 9.4, 9.5 | 共通現在project表示と選択委譲 | ProjectContextShellAdapter, ShellPresentation, ApplicationComposition | ProjectContextReadPort, ProjectContextCommandPort, selector slot |
+| 10.1, 10.2, 10.3, 10.4, 10.5 | 回復必須表示、再評価、判断権限分離 | MaintenanceProjection, MutationGate, SidePanelHost | recovery-required state flow, OperationPolicy |
 
 ## Components and Interfaces
 
@@ -240,6 +256,7 @@ sequenceDiagram
 | ApplicationComposition | Composition | canonical foundationと公開registrationをproduction runtimeへ一度だけ接続 | 2.1, 3.1–3.4, 5.6, 6.1 | Foundation/feature public P0 | Service |
 | ProductionWorkerComposition | Runtime composition | worker contextでfoundation command handlerとcatalog worker contributionを一度だけ接続 | 3.1, 3.3, 3.4, 6.1–6.4 | Foundation public P0, catalog P0, Chrome message target P0 | Service |
 | ActivationRouter | UI orchestration | feature-neutral intentを常設／一過性registrationへ検証付きで一度配送 | 7.1–7.8 | FeatureRegistry P0, SidePanelHost P0 | Service |
+| ProjectContextShellAdapter | UI composition | project-context所有selectorを共通slotへ合成し、project依存featureの可用性へ投影 | 3.8–3.9, 9.1–9.5 | project-context read/command/presentation P0, ShellPresentation P0 | Service, State |
 
 ### Core contracts
 
@@ -406,6 +423,7 @@ interface MutationGate extends OperationPolicy {}
 - featureはmount時に`FeatureMountContext.operationPolicy`を購読し、unmountで解除する。shellはfeature側の表示更新方法を解釈しない。
 - `FoundationMaintenanceSnapshot`はfoundationのcanonical `MaintenanceSnapshot`をalias importした型であり、`MaintenanceSnapshotSource`とともにshell内で再定義しない。sourceは`generation`、root `revision`、`active`だけを通知する。
 - shellはsourceの初期snapshotが`corrupt-data | unsupported-version`の場合だけrecovery-requiredとしてhostを起動し、settingsを初期選択またはfallbackでmountする。購読は継続し、復元後の正常snapshotで通常projectionへ復帰する。それ以外の取得失敗はstartup failureへ変換する。active/recovery表示文言はshell所有の固定安全文字列から生成し、foundationへmessage責務を追加しない。
+- operation registrationは閉じた`OperationKind`だけを受理する。`recovery-required`では`read`と明示的`recovery`だけを許可し、`mutation`および未知分類を拒否する。回復操作として登録されていない呼出しを例外化せず、失敗・取消後も正常snapshotを受信するまで抑止を維持する（5.8–5.10、8.5、10.1–10.5）。
 
 ### SidePanelHost and Presentation
 
@@ -429,6 +447,58 @@ interface SidePanelHost {
   stop(): Promise<void>;
 }
 ```
+
+`ShellPresentation`はnavigationと主表示領域とは別にproject selector専用slotを一つ提供する。`ProjectContextShellAdapter`だけがそのslotを使用し、project-contextのpresentation contributionへ`ProjectContextReadPort`と`ProjectContextCommandPort`を渡す。shellはproject名、catalog順、選択fallback、確認結果を解釈しない。snapshot変化はselectorとproject依存featureへ同一generationの状態として通知し、`unavailable`では現在projectを推測せずproject依存featureだけを利用不能にする。settingsとbackup recoveryは継続する（3.8、3.9、9.1–9.5）。
+
+#### ProjectContextShellAdapter
+
+| Field | Detail |
+|---|---|
+| Intent | project-context所有presentationをshell共通slotへ一度だけ合成し、project依存featureへ可用性を投影する |
+| Requirements | 3.8, 3.9, 9.1, 9.2, 9.3, 9.4, 9.5 |
+
+**Responsibilities & Constraints**
+- shellが所有する専用containerへproject-context presentation contributionをmountし、そのhandleを停止まで単独所有する。
+- `ProjectContextReadPort`の同一snapshotをselectorとproject依存availability projectionへ配送し、選択要求は`ProjectContextCommandPort`へそのまま委譲する。
+- `ready`だけをproject依存能力の利用可能条件とし、`empty | unavailable`からproject IDを推測しない。
+- project-contextのcatalog、preference、fallback、guard、CRUD、未保存編集判断を所有しない。
+
+**Dependencies**
+- Inbound: ApplicationComposition — singleton lifecycleと専用slotの供給 P0
+- Outbound: ProjectContextPresentationContribution — selector mount/unmount P0
+- Outbound: ProjectContextReadPort / ProjectContextCommandPort — snapshot購読と選択委譲 P0
+- Outbound: FeatureRegistry availability seam — project依存featureだけの可用性更新 P1
+
+**Contracts**: Service [x] / State [x]
+
+```typescript
+interface ProjectContextShellHandle {
+  stop(): void | Promise<void>;
+}
+
+type ProjectDependencyAvailability =
+  | { readonly status: "available"; readonly projectId: ProjectId; readonly generation: number }
+  | { readonly status: "unavailable"; readonly reason: "empty" | "context-unavailable"; readonly generation: number };
+
+interface ProjectContextShellAdapter {
+  mount(input: {
+    readonly container: HTMLElement;
+    readonly read: ProjectContextReadPort;
+    readonly commands: ProjectContextCommandPort;
+    readonly presentation: ProjectContextPresentationContribution;
+    readonly publishAvailability: (value: ProjectDependencyAvailability) => void;
+  }): Result<ProjectContextShellHandle, { readonly kind: "project-context-mount-failed" }>;
+}
+```
+
+- Preconditions: containerはshell presentationが生成したproject selector専用slotであり、feature主表示slotとは異なる。
+- Postconditions: mount成功後、presentationとread購読は一組だけ存在し、停止時に両方を冪等に解除する。
+- Invariants: snapshot generationを後退させず、project-context障害をshell全体、settings、backup recoveryのstartup failureへ昇格させない。
+
+**Implementation Notes**
+- Integration: production compositionだけがproject-contextのruntime/presentation公開入口をimportする。
+- Validation: ready/empty/unavailable、generation順序、選択委譲、停止時cleanupをcontract fixtureで固定する。
+- Risks: 下流実装前の契約driftはproject-context public consumer型検査と統合gateで検出する。
 
 ShellViewと各feature viewは外部由来文字列を通常のJSX childとして描画し、`dangerouslySetInnerHTML`、`innerHTML`、inline event handlerを使用しない。ReactShellRootはside panel host containerへ`createRoot`し、停止時に`root.unmount()`を一度だけ呼ぶ。`FeatureMountContext`と`ApplicationFeatureRegistration.mount/unmount`の公開契約は変更せず、各feature registrationのUI adapterが受け取ったcontainerへReact rootを作成・破棄する。選択中featureが不可になった場合はunmountし、利用可能なpersistent featureだけから次を決定する。transient featureをfallbackへ選ばない。該当がなければ理由付きempty stateを表示する。
 
@@ -553,6 +623,8 @@ interface ProductionWorkerComposition {
 - ReactShellRootとfeature adapterが再mount、切替、停止時にReact rootと購読を確実にcleanupすること（1.2–1.5, 6.4）。
 - ShellViewが`labelKey`と`message`記述子を`useMessages()`経由で現在の表示言語の文字列へ解決して描画すること（1.6）。
 - ShellViewがheader言語controlを描画せず、loading／startup errorで二言語settings案内、ready／maintenance／feature failureでpersistent navigationを維持すること（4.6–4.7, 8.1–8.3）。
+- MutationGateが`read | mutation | recovery`以外を受理せず、recovery-requiredではread/recoveryのみを許可し、失敗・取消で通常mutationを再許可しないこと（5.8–5.10, 8.5, 10.1–10.5）。
+- ProjectContextShellAdapterがproject snapshotを解釈せずselector contributionへ渡し、unavailable時にproject依存featureだけを閉じること（3.8–3.9, 9.1–9.5）。
 
 ### Integration Tests
 - compositionが一回だけ実行され、root APIがfeature単位で合成される（3.1–3.4）。
@@ -566,6 +638,7 @@ interface ProductionWorkerComposition {
 - side panelのUI contributionとservice workerのworker-safe catalogを分離し、worker bundleへsettings、feature UI、DOM、React依存を含めないことを確認する（2.1, 3.1, 3.4, 3.6, 6.3）。
 - 既存typed activationが一過性featureをnavigationなしで起動でき、一過性から常設へのhandoff成功時は引き渡し先だけを保持し、失敗時は既存rollbackを維持することを確認する（7.1–7.8）。
 - 実service worker入口がno-arg foundation factoryをworker contextで初期化し、foundation command handlerとcatalog workerを順序どおり登録すること、sender classification、途中rollback、停止の逆順cleanupをproduction-shaped testで確認する（3.1, 3.3, 3.4, 6.1, 6.3, 6.4）。
+- project-contextのready/empty/unavailable変化が共通selectorとproject依存featureへ同じsnapshotとして届き、選択操作がcommand portへ委譲され、unavailableでもsettingsとbackup recoveryが継続すること（3.8–3.9, 9.1–9.5）。
 
 ### E2E / Runtime
 - Chrome 116+相当のMV3 fixtureでside panel bootstrapとnavigationを検証する（6.1）。
