@@ -10,6 +10,7 @@
   - Foundation commit成功とproject-context refresh成功は別commit pointであり、refresh失敗時は置換を再実行せずrefreshだけを再試行する。
   - 交換形式のshape検証はruntime-schema-validationのconfigured Zod Miniと共有primitiveを採用し、参照整合性と交換形式の意味はbackup ownerに残す。
   - preflight後の先行mutationはopaque assessment ticketをstale化し、commit線形化後の後続mutationはFoundationのpersistent maintenance/recovery controlで拒否する。
+  - 回復必須状態ではread操作とrestore commitを別分類にし、容量超過は同一入力の再試行を提供しない。16 MiB入力上限は交換形式の構造差から導出する機械的上界gateで保証する。
 
 ## Research Log
 
@@ -139,6 +140,18 @@
 
 ## Risks & Mitigations
 
+### 2026-08-05 design validation remediation: operation gate・容量拒否・交換上界
+
+- **Context**: `kiro-validate-design backup-restore`で、現行UIの単一mutation gateではdegraded recovery中のfile選択が閉じること、quota失敗時に存在しないticketのretryを要求していること、16 MiB上限を単一fixtureだけでは保証できないことが判明した。
+- **Sources Consulted**: `backup-restore` requirements/design、現行`operation-kind.ts`・`react-root.tsx`・`view.tsx`、Foundation容量計算、application-shellのcanonical `OperationKind`契約。
+- **Findings**:
+  - 現行React rootは一つの`mutationAllowed`をViewへ渡し、export、file選択、restore確定を同時に無効化するため、`recovery-required`で回復入力へ到達できない。
+  - assessmentで容量超過した場合は`RestoreTicket`が生成されず、復元後root自体が10 MiBを超える入力は空き容量確保でも成功しない。
+  - 交換Envelopeの上限は保存rootの直列化上限だけでなく、固定overheadとentityごとのproperty-name差分を含めて評価する必要がある。
+- **Selected Approach**: React rootはcanonical `read`と`recovery`を別々に購読し、export・file選択・preflightとrestore commitの可否を分離する。容量超過は選択状態を保持した`unsupported`とし、同一入力retryを公開せず別file選択だけを許可する。16 MiBは全entity variantの保存側／交換側差分と最小直列化長から決定的に導出し、未分類fieldや上界超過で検証を失敗させる。
+- **Trade-offs**: 容量超過からの同一入力retryは提供しない。capacity policyは交換Mapper変更時に差分表を更新する必要があるが、正常exportの自己復元可能性をfixture依存なしで維持できる。
+- **Follow-up**: recovery-requiredでread操作が有効かつcommitだけがrecovery gateに従うDOM/contract test、容量超過時のticket再送0回、全entity variantを網羅する上界gateを固定する。
+
 ### 2026-08-04 design validation remediation: retry・finalization再開・容量不変条件
 
 - **Context**: `kiro-validate-design backup-restore`で、stale assessmentの同ticket再送、section unmount後のfinalization ticket喪失、10 MiB付近でのexport artifact自己復元不能が指摘された。
@@ -147,8 +160,8 @@
   - `stale-assessment`は評価時rootとの不一致を確定するため、同じticketの再送では成功しない。candidateを再assessmentして新ticketとpreviewを発行し、置換確認もやり直す必要がある。
   - post-commit controlは永続する一方、finalization ticketをUI stateだけに置くとunmountで再開能力を失う。Foundationがcandidate digestと期待commit revisionをcontrolへroot write前から保持し、現在rootとの一致でpost-commitを判定して用途限定ticketを再構築する必要がある。
   - 保存rootの10 MiB上限と交換Envelopeの安全な読取上限を同値にすると、Envelope overheadにより正常exportがrestore preflightで拒否され得る。
-- **Selected Approach**: stale時は`reassess-restore`へ分離し、`precommit-cleanup-pending`だけが同ticket再送を使用する。Foundationへ`findPendingFinalization`を追加し、mount時にfinalize-only stateを再水和する。ファイル入力上限は保存上限と分離した`RestoreFileCapacityPolicy`が16 MiBとして所有し、現行Mapperのworst-case artifactを受理できることを機械検査で固定する。
-- **Trade-offs**: state初期化にpending finalization照会が一つ増え、容量policyにworst-case fixtureの保守が必要になる。一方でroot再置換能力やraw control情報は公開しない。
+- **Selected Approach**: stale時は`reassess-restore`へ分離し、`precommit-cleanup-pending`だけが同ticket再送を使用する。Foundationへ`findPendingFinalization`を追加し、mount時にfinalize-only stateを再水和する。ファイル入力上限は保存上限と分離した`RestoreFileCapacityPolicy`が16 MiBとして所有し、現行Mapperの全entity variantについて保存側／交換側の直列化差分から上界を導出する機械検査で固定する。
+- **Trade-offs**: state初期化にpending finalization照会が一つ増え、容量policyにentity variantごとの差分表の保守が必要になる。一方でroot再置換能力やraw control情報は公開しない。
 - **Follow-up**: stale ticket再送0回、新ticket発行、unmount/remount後のfinalize-only、保存上限rootのexport→file preflightをcontract/integration/E2Eで固定する。
 
 ### 2026-08-04 design review remediation

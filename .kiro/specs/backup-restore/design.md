@@ -135,7 +135,8 @@ src/features/backup-restore/context-lifecycle.ts   # replacement guardとpost-co
 src/features/backup-restore/file-gateway.ts        # File読取とBlobダウンロード
 src/features/backup-restore/state.ts               # 選択、検証、確認、commit retry、finalize-only、refresh-only状態
 src/features/backup-restore/view.tsx                # 管理UI、警告、preview、確認のReact component
-src/features/backup-restore/react-root.tsx          # FeatureMountContextとReact rootの接続・cleanup
+src/features/backup-restore/operation-kind.ts       # shell canonical read/recovery分類のowner-local参照
+src/features/backup-restore/react-root.tsx          # read/recovery可否の購読、FeatureMountContextとReact rootの接続・cleanup
 src/features/backup-restore/styles.css             # 管理セクションと状態表現
 src/ui-messages/catalog/ja/backup.ts               # 既存backup keyに回復・finalization・refresh・再試行案内を追加
 src/ui-messages/catalog/en/backup.ts               # 日本語と同一key・placeholderの英語メッセージを追加
@@ -155,7 +156,7 @@ tests/ui-messages/catalog-parity.test.ts            # backup日英key・placehol
 e2e/backup-restore.spec.ts                         # settings経由のexport→改変→復元→再起動
 ```
 
-新規作成は`capacity-policy.ts`、`context-lifecycle.ts`、`capacity-policy.test.ts`、`recovery.integration.test.ts`、`project-context-lifecycle.test.ts`の5ファイルである。既存の`contracts.ts`、`service.ts`、`state.ts`、`view.tsx`、`section-mount.ts`、`public.ts`、日英の`backup.ts`メッセージカタログと対応testを変更する。`exchange.ts`、`file-gateway.ts`、`react-root.tsx`、`styles.css`は契約追従が必要な場合だけ局所変更し、交換形式やFile APIの責務を広げない。削除対象はない。
+新規作成は`capacity-policy.ts`、`context-lifecycle.ts`、`capacity-policy.test.ts`、`recovery.integration.test.ts`、`project-context-lifecycle.test.ts`の5ファイルである。既存の`contracts.ts`、`service.ts`、`state.ts`、`view.tsx`、`operation-kind.ts`、`react-root.tsx`、`section-mount.ts`、`public.ts`、日英の`backup.ts`メッセージカタログと対応testを変更する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、`react-root.tsx`は両operationの可否を別々に購読してViewへ渡す。`exchange.ts`と`file-gateway.ts`は契約追従が必要な場合だけ局所変更し、交換形式やFile APIの責務を広げない。`styles.css`の責務は変更せず、削除対象はない。
 
 `project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) runtime schema同等性gate、(2) Foundationのassessment ticket付き`BackupRestoreDataPort`とproject-context public ports、(3) application-shell ownerによる`OperationKind`・`recovery-required`のcontract/gate、(4) 本specのfeature実装、(5) application-shell ownerによるproduction wiringとする。手順3は型・gate契約だけを先行し、手順5のcompositionは本specの完成後に行うため、roadmap上の循環依存を作らない。
 
@@ -415,9 +416,9 @@ JSONファイルを一つだけ受け、サイズを読取前に確認する。�
 
 #### BackupRestoreState and View
 
-stateは`idle`、`exporting`、`validating`、`awaiting-replacement-confirmation`、`awaiting-draft-confirmation`、`restoring`、`restored-finalization-required`、`refreshing-context`、`succeeded`、`restored-context-unavailable`、`failed`の判別共用体とする。取消、guard拒否、commit前失敗ではrestore ticketと有効previewを保持する。`precommit-cleanup-pending`ではroot未変更を表示し、同じticketと新しいguard permitによる`retry-restore`だけを許可する。`stale-assessment`では同ticket commitを無効化し、candidateの`reassess-restore`だけを許可する。commit後cleanup失敗ではsummaryとfinalization ticketだけを保持し、復元の再実行操作を公開しない。section mount時は通常idle表示の前にpending finalizationを照会し、存在すればsummary省略可能な`restored-finalization-required`を再水和する。`restored-finalization-required`はfinalize-only、`restored-context-unavailable`はrefresh-onlyへretry actionを固定する。ファイル再選択とsection unmountで未commit ticketを破棄するが、Foundation所有のpending finalization能力は破棄しない。
+stateは`idle`、`exporting`、`validating`、`awaiting-replacement-confirmation`、`awaiting-draft-confirmation`、`restoring`、`restored-finalization-required`、`refreshing-context`、`succeeded`、`restored-context-unavailable`、`failed`の判別共用体とする。取消、guard拒否、commit前失敗ではrestore ticketと有効previewを保持する。`precommit-cleanup-pending`ではroot未変更を表示し、同じticketと新しいguard permitによる`retry-restore`だけを許可する。`stale-assessment`では同ticket commitを無効化し、candidateの`reassess-restore`だけを許可する。容量超過では選択fileと表示可能な検証結果を保持するが、ticketを再送可能な状態として扱わず、同一入力の復元再実行を禁止して別file選択だけを許可する。commit後cleanup失敗ではsummaryとfinalization ticketだけを保持し、復元の再実行操作を公開しない。section mount時は通常idle表示の前にpending finalizationを照会し、存在すればsummary省略可能な`restored-finalization-required`を再水和する。`restored-finalization-required`はfinalize-only、`restored-context-unavailable`はrefresh-onlyへretry actionを固定する。ファイル再選択とsection unmountで未commit ticketを破棄するが、Foundation所有のpending finalization能力は破棄しない。
 
-失敗状態は表示codeだけでなく`retryPolicy`を保持する。`retryable`は同じartifact生成または未commit ticketによる再試行、`action-required`は別file選択・未保存編集の保存/破棄・容量確保など利用者操作後の再試行、`unsupported`は同一入力の再実行を許可しない。commit後はこの一般policyへ戻さず、finalize-onlyまたはrefresh-onlyの専用actionを維持する。
+失敗状態は表示codeだけでなく`retryPolicy`を保持する。`retryable`は同じartifact生成または未commit ticketによる再試行、`action-required`は別file選択または未保存編集の保存/破棄後の再試行、`unsupported`は同一入力の再実行を許可しない。容量超過は空き容量確保によるretryへ分類せず`unsupported`へ固定する。commit後はこの一般policyへ戻さず、finalize-onlyまたはrefresh-onlyの専用actionを維持する。
 
 viewはバックアップと復元をReact componentの別領域として表示し、消失リスク、自動保存・同期なし、置換確認、件数summary、分類済みエラーと再試行方針を`ui-messages` public resolverの`MessageKey`へ写像する。日本語・英語で同一keyとplaceholderを保ち、`useMessages()`で解決した固定安全文言を通常のJSX childとして描画する。内部validation path、商品値、完全URL、fingerprintは表示しない。settingsの`h3`区画見出し配下へ埋め込まれるexport／restore見出しは`h4`とし、owner内部で見出し階層を維持する。
 
@@ -483,7 +484,7 @@ type RetryPolicy =
   | { readonly kind: "retryable"; readonly action: "retry-export" | "retry-restore" | "reassess-restore" }
   | {
       readonly kind: "action-required";
-      readonly action: "select-another-file" | "resolve-draft" | "free-storage";
+      readonly action: "select-another-file" | "resolve-draft";
     }
   | { readonly kind: "unsupported" };
 
@@ -494,7 +495,9 @@ interface RestoreFileCapacityPolicy {
 }
 ```
 
-交換エンティティはFoundationの値をJSON互換の読み取り専用フィールドへ写像するが、保存ルートの`schemaVersion`を含めない。配列内IDは一意、候補の`projectId`は存在するProject、構成の`projectId`と各`partId`は同じProject内を参照し、数量は正整数とする。互換性結果、生HTML、画像バイナリ、実行可能値は契約外である。`RestoreFileCapacityPolicy.maxInputBytes`は16 MiB（`16 * 1024 * 1024` bytes）とし、10 MiBの保存上限とは分離する。現行交換Mapperが任意の有効な上限内`LocalDataRoot`から生成するEnvelopeはこの範囲内であることを境界fixtureと生成物検査で固定し、BackupServiceはdownload前にも同policyを検査するため、成功したartifactは同版のfile preflightで拒否されない。将来の交換形式がこのboundを満たさない場合はformat追加時のrevalidation triggerとし、暗黙に上限を拡大しない。
+交換エンティティはFoundationの値をJSON互換の読み取り専用フィールドへ写像するが、保存ルートの`schemaVersion`を含めない。配列内IDは一意、候補の`projectId`は存在するProject、構成の`projectId`と各`partId`は同じProject内を参照し、数量は正整数とする。互換性結果、生HTML、画像バイナリ、実行可能値は契約外である。`RestoreFileCapacityPolicy.maxInputBytes`は16 MiB（`16 * 1024 * 1024` bytes）とし、10 MiBの保存上限とは分離する。
+
+16 MiBは単一のworst-case fixtureから推測しない。`capacity-policy.ts`は、Foundationが容量判定に使う`JSON.stringify({ localDataRoot: root })`の10 MiB上限、Envelope固定overhead、Mapperが各scalarを一回だけ写像する規則、各entity variantの保存側と交換側のproperty-name・delimiter差分、UUID・日時・enum・正整数の最小直列化長から、保存上限内で取り得る交換Envelopeの上界を決定的に導出する。`capacity-policy.test.ts`は全entity variantの差分表を列挙し、導出上界が16 MiB以下であること、Mapperのfield追加・重複写像・名称変更時に未分類fieldとして失敗することを検査する。この上界gateが成立しない変更ではbuildを失敗させ、入力上限または交換形式版の明示変更を要求する。BackupServiceも実artifactをdownload前に同policyで検査するため、成功したartifactは同版のfile preflightで拒否されない。将来の交換形式では上界を版ごとに再導出し、暗黙に上限を拡大しない。
 
 ## Error Handling
 
@@ -513,9 +516,9 @@ commit前のerror codeと許可actionは次の単一対応表で固定する。s
 | 一時的なread・storage・lock失敗 | `retryable` | `retry-export` または保持中ticketの`retry-restore` |
 | stale assessment | `retryable` | 保持中candidateを再assessmentする`reassess-restore`。新ticket・preview・置換確認・guard permitを取得し、古いticketを再送しない |
 | root write前のcontrol cleanup未完了 | `retryable` | 新しいguard permitと保持中ticketで`retry-restore`。Foundationはcleanupを先に再開し、cleanup中のroot writeは0件 |
-| quota超過 | `action-required` | 容量確保後に保持中ticketを再試行 |
+| 復元後rootまたは書込時の容量超過 | `unsupported` | 同一入力の復元再実行を無効化し、選択状態を保持したまま別file選択だけを許可 |
 | guard拒否・未保存draft | `action-required` | 保存または破棄後に新しいpermitで再試行 |
-| file読取・JSON・構造・参照・容量問題 | `action-required` | `select-another-file`。現在の永続rootと選択は不変 |
+| file読取・JSON・構造・参照・入力ファイルサイズ問題 | `action-required` | `select-another-file`。現在の永続rootと選択は不変 |
 | 将来の交換版・移行経路のない旧版・serialization契約違反 | `unsupported` | 同一入力の再実行を無効化し、対応版または別fileを案内 |
 | export自己復元容量不変条件違反 | `unsupported` | artifactを生成せず、製品更新が必要な内部契約違反として案内 |
 
@@ -528,8 +531,8 @@ root write後の`committed-finalization-required`とcontext refresh失敗は上�
 - **Unit**: Envelope全フィールド、未知・旧・将来版、非JSON値、禁止内容、ID重複、孤立候補、別プロジェクト構成参照、Mapper往復同値性を検証する。
 - **Foundation port integration**: 正常/異常rootでassessment→commit point→finalizationを検証する。preflight後に先行mutationが確定した場合はassessment ticketをstale拒否して先行変更を保持し、古いticketの再送を拒否したまま新assessmentだけを許可する。commit線形化後の後続mutationはmaintenance/recovery controlで拒否する。候補不正、容量超過、stale cursor、write前失敗では元rootが不変である。control取得後のwrite前cleanup失敗は`precommit-cleanup-pending`となり、同じassessment ticketでcleanupを再開する間のroot writeが0件、別ticketが拒否、worker再生成後もowner/generationが一致し、cleanup後だけ再assessmentしてcommit可能であることを確認する。write後cleanup失敗では`committed-finalization-required`だけを返し、section unmount・新stateでのremount後にpending ticketを再発見し、finalize retry中のroot writeが0件であることを確認する（3.1–5.7）。
 - **Guard/context integration**: guard拒否・取消・staleでticket/selection/rootを保持し、begin前commitを禁止する。committed outcomeではfinalization状態にかかわらずcomplete succeededを一度だけ呼び、finalization完了後だけrefreshする。finalize/refresh retryがFoundation commitを再呼出ししないことを検証する（4.7, 4.8, 6.9–6.11）。
-- **Service integration**: 空・全データexport、決定的ファイル名、保存容量上限のrootから生成したartifactがfile preflightを通る自己復元可能性、normal/recovery preflight分岐、stale時の新ticket発行、preview件数、ticket保持、両commit成功と全失敗点の不変性を検証する。
-- **State/React UI**: 二段階確認、処理中抑止、取消時ticket保持、異常root回復案内、restore summaryを保持したfinalization/context unavailable、finalize-only/refresh-only retry、settings配下の`h4`、再表示時の未選択状態、cleanup再試行を検証する。
+- **Service integration**: 空・全データexport、決定的ファイル名、保存容量上限のrootから生成したartifactがfile preflightを通る自己復元可能性、normal/recovery preflight分岐、stale時の新ticket発行、preview件数、ticket保持、容量超過時の同一ticket再送0回、両commit成功と全失敗点の不変性を検証する。
+- **State/React UI**: 二段階確認、処理中抑止、取消時ticket保持、容量超過時の選択保持・同一入力再実行禁止・別file選択、異常root回復案内、restore summaryを保持したfinalization/context unavailable、finalize-only/refresh-only retry、settings配下の`h4`、再表示時の未選択状態、cleanup再試行を検証する。operation policyは`read`と`recovery`を別々に購読し、`recovery-required`でexport・file選択・preflightが利用可能、通常restore commitが`recovery`として許可され、active maintenanceではcommitが拒否されることをcontract/DOM testで固定する。
 - **E2E**: settingsから通常export/restoreを完了し、別シナリオで架空のcorrupt/future rootからdegraded shellを起動して正常backupを復元する。finalization/refresh失敗後は置換せず対応retryだけを行い、候補管理を再開する（5.6, 5.7, 6.8–6.11）。
 - **Regression**: 復元後にCandidateQueryとCurrentBuildQueryが同じ所属・候補ID・数量を返し、通常CRUDを継続できることを検証する。
 
@@ -539,4 +542,4 @@ root write後の`committed-finalization-required`とcontext refresh失敗は上�
 
 ## Performance & Capacity
 
-入力ファイルは16 MiB（`16 * 1024 * 1024` bytes）を1 byteでも超えた時点で本文読取前に拒否する。この安全上限は保存容量の10 MiBと分離し、現行交換形式が有効な上限内rootから生成する最大Envelope UTF-8サイズ以上であることをworst-case fixtureと機械検査で固定する。変換後rootはFoundation容量契約で独立に10 MiB上限を判定し、commit時にも再判定する。BackupServiceはartifact生成後に同policyを適用し、成功artifactの自己復元可能性を保証する。MVPでは圧縮・streamingを導入せず、同一区画の重複操作はstate、全featureの競合mutationはassessment ticketとFoundationのpersistent maintenance/recovery controlで抑止する。
+入力ファイルは16 MiB（`16 * 1024 * 1024` bytes）を1 byteでも超えた時点で本文読取前に拒否する。この安全上限は保存容量の10 MiBと分離し、現行交換形式が有効な上限内rootから生成する最大Envelope UTF-8サイズ以上であることを、全entity variantの保存側／交換側直列化差分から導出する上界gateで固定する。変換後rootはFoundation容量契約で独立に10 MiB上限を判定し、commit時にも再判定する。BackupServiceはartifact生成後に同policyを適用し、成功artifactの自己復元可能性を保証する。容量超過は同一入力の再実行を許可しない。MVPでは圧縮・streamingを導入せず、同一区画の重複操作はstate、全featureの競合mutationはassessment ticketとFoundationのpersistent maintenance/recovery controlで抑止する。
