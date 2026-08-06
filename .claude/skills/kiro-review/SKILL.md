@@ -132,6 +132,17 @@ Use:
 - `Suggestion` for non-blocking improvements
 - `FYI` for informational notes
 
+### Phase Policy
+
+If `.kiro/steering/delivery-policy.md` exists, it decides where the line between `Important` and `Suggestion` falls for the current phase. Read it before classifying findings.
+
+- A finding matching one of its blocking conditions stays `Critical` or `Important`.
+- A finding matching one of its non-blocking conditions drops to `Suggestion`, even when the fix looks small and obvious. Do not raise it back to `Important` on the grounds that it would otherwise be forgotten — record it instead.
+- Its non-blocking list never overrides an approved acceptance criterion, a mechanical check above, or an explicit requirement stated in another steering file. Where they conflict, the stricter source wins.
+- If a finding matches neither list clearly, classify it as `Important` and say so in `FINDINGS`.
+
+Emit every `Suggestion` under `DEFERRED` in the output block so the controller can record it. An unrecorded `Suggestion` is a lost finding, and the pressure to avoid losing findings is what drives this severity model back toward blocking on everything.
+
 ## Stop / Escalate
 
 Escalate instead of papering over the issue when:
@@ -166,6 +177,8 @@ Escalate instead of papering over the issue when:
   - RED phase: VERIFIED | MISSING | N/A
 - FINDINGS:
   1. <specific finding with exact files/spec refs>
+- DEFERRED: NONE | <one line per Suggestion>
+  1. <finding> | <origin: spec / task id> | <why it does not block, per delivery-policy.md>
 - REMEDIATION: <mandatory if REJECTED>
 - SUMMARY: <one sentence>
 ```
