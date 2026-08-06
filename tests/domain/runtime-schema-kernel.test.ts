@@ -12,6 +12,7 @@ import {
   projectIssues,
   revision,
   type SchemaIssueView,
+  type SchemaNode,
   safeBoolean,
   safeString,
   selectPrimaryIssue,
@@ -22,7 +23,7 @@ import {
 } from "../../src/domain/runtime-schema/public.js";
 
 /** Reduces a parse failure to the deterministic `[code, tag, path]` triple. */
-const failureOf = (schema: z.core.$ZodType, input: unknown, base = "$") => {
+const failureOf = (schema: SchemaNode, input: unknown, base = "$") => {
   const parsed = z.safeParse(schema, input);
   if (parsed.success) return undefined;
   const issue = selectPrimaryIssue(projectIssues(parsed.error.issues));
@@ -33,7 +34,7 @@ const failureOf = (schema: z.core.$ZodType, input: unknown, base = "$") => {
   };
 };
 
-const accepts = (schema: z.core.$ZodType, input: unknown) =>
+const accepts = (schema: SchemaNode, input: unknown) =>
   z.safeParse(schema, input).success;
 
 test("uuid accepts the same identifiers as the foundation predicate", () => {

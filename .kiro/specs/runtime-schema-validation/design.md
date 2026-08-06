@@ -106,7 +106,7 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| Runtime validation | Zod Mini 4.4.3 | 宣言的 shape schema と型推論 | `zod/mini` を exact pin、canonical module 以外の package import を禁止 |
+| Runtime validation | Zod Mini 4.4.3 | 宣言的 shape schema と型推論 | `zod/mini` を exact pin、canonical module 以外の package import を禁止。canonical module は named import/export に限定し namespace 再 export を禁止する |
 | Language | TypeScript 7.0.2 strict | schema output と公開型の assignability | `any` と無検証 cast を禁止 |
 | Build | esbuild 0.28.1, Chrome 116 target | production probe と拡張 bundle | application build と同一 target/format/define |
 | Gate runtime | Node 26.5.0 | isolated production bundle trap と size report | `Function` の apply/construct を Proxy で捕捉 |
@@ -218,15 +218,21 @@ probe は本番と同じ ESM、browser platform、Chrome 116 target、production
 
 **Responsibilities & Constraints**
 
-- `zod/mini` を import し、module 評価中に `z.config({ jitless: true })` を実行してから configured namespace を export する。
+- `zod/mini` から必要な helper を **named import** し、module 評価中に `config({ jitless: true })` を実行してから再 export する。
+- vendor namespace 全体を再 export しない。namespace 再 export は package の全 export を参照するため tree shaking が無効になり、production entry あたり実測 +512KB になる。named 表面では +35KB であり、Zod Mini を選定した根拠そのものがこの差である。
+- 公開する helper 集合は明示列挙とし、追加はレビュー対象の変更として扱う。
 - package import をこの module だけに限定し、schema consumer は `runtime-schema/public.ts` を利用する。
-- locale、error message、Zod error class を public contract にしない。
+- locale、error message、Zod error class を public contract にしない。vendor 型は `SchemaNode` として名前を付け、owner が vendor 型名を書かないようにする。
 
 **Contracts**: API [x]
 
 ```typescript
 // Conceptual source-only contract
-export { z }; // configured namespace from zod/mini
+import { config, custom, safeParse, strictObject /* ... */ } from "zod/mini";
+config({ jitless: true });
+
+export type SchemaNode = core.$ZodType;
+export const z = { custom, safeParse, strictObject /* ... */ };
 ```
 
 #### SharedSchemaPrimitives
@@ -438,7 +444,7 @@ function validateRuntimeSchemaFeasibility(): Promise<RuntimeSchemaGateReport>;
 
 ## Performance & Scalability
 
-- 同一 run 内の stub build と通常 build の entry bytes を記録し、Zod Mini tree-shaking の実効値を production metafile/outputs で測定する。
+- 同一 run 内の stub build と通常 build の entry bytes を記録し、Zod Mini tree-shaking の実効値を production metafile/outputs で測定する。canonical module の export 形式は tree shaking の可否を直接決めるため、size report はこの契約の回帰検知器でもある。
 - 再帰 JSON safety と aggregate reference scan は入力サイズに対して線形を維持する。schema と semantic pass の重複 traversal は parity を壊さない範囲で owner ごとに統合する。
 - bundle size の hard threshold は本仕様で推測せず、実測値と release artifact をレビュー可能にする。
 

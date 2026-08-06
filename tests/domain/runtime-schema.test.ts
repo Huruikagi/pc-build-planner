@@ -4,9 +4,9 @@ import { test } from "node:test";
 
 import { z } from "../../src/domain/runtime-schema/zod-mini.js";
 
-const minimalSchema = z.object({
+const minimalSchema = z.strictObject({
   id: z.string(),
-  quantity: z.number(),
+  quantity: z.custom<number>((value) => typeof value === "number"),
 });
 
 test("configured Zod Mini decodes a valid value into a typed value", () => {
@@ -48,4 +48,8 @@ test("zod is imported only through the canonical entry", async () => {
     "utf8",
   );
   assert.match(source, /from "zod\/mini"/);
+  // A namespace re-export would reference every vendor export and defeat tree
+  // shaking, which is the whole reason this project depends on Zod Mini.
+  assert.doesNotMatch(source, /import \* as \w+ from "zod/);
+  assert.doesNotMatch(source, /export \* from "zod/);
 });

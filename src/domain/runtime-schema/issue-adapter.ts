@@ -14,7 +14,7 @@ import {
   STRUCTURAL_MESSAGE_PREFIX,
   TAG_MESSAGE_PREFIX,
 } from "./primitives.js";
-import { z } from "./zod-mini.js";
+import { type SchemaNode, z } from "./zod-mini.js";
 
 /** Minimal internal projection of a single vendor issue. */
 export interface SchemaIssueView {
@@ -118,7 +118,7 @@ export const selectPrimaryIssue = (
  * Runs a schema and returns either the typed output or the owner error for the
  * single primary issue. The vendor error never escapes this call.
  */
-export const decodeWithProfile = <S extends z.core.$ZodType, E>(
+export const decodeWithProfile = <S extends SchemaNode, E>(
   schema: S,
   input: unknown,
   profile: IssueMappingProfile<E>,

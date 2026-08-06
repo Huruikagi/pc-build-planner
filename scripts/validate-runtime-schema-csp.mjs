@@ -16,7 +16,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -55,7 +55,10 @@ const productionBuildOptions = {
  */
 export const CONFIGURED_PROBE_SOURCE = `import { z } from "./src/domain/runtime-schema/zod-mini.js";
 
-const probeSchema = z.object({ id: z.string(), quantity: z.number() });
+const probeSchema = z.strictObject({
+  id: z.string(),
+  quantity: z.custom((value) => typeof value === "number"),
+});
 
 const accepted = z.safeParse(probeSchema, { id: "probe", quantity: 1 });
 const rejected = z.safeParse(probeSchema, { id: 1, quantity: "one" });
@@ -183,7 +186,12 @@ export const PRODUCTION_ENTRIES = /** @type {const} */ ([
   },
 ]);
 
-const canonicalZodModule = /runtime-schema[\\/]zod-mini\.js$/;
+// esbuild matches an `onResolve` filter against the import specifier, not the
+// resolved file, and the kernel reaches the canonical module as `./zod-mini.js`.
+// Filtering on the specifier and then resolving it is what makes the stub apply
+// to every importer instead of only to a full path.
+const canonicalZodModule = /(?:^|[\\/])zod-mini\.js$/;
+const canonicalZodPath = resolve("src/domain/runtime-schema/zod-mini.ts");
 const zodStubNamespace = "runtime-schema-zod-stub";
 
 /**
@@ -198,10 +206,14 @@ const zodStubPlugin = {
   name: "runtime-schema-zod-stub",
   /** @param {import("esbuild").PluginBuild} pluginBuild */
   setup(pluginBuild) {
-    pluginBuild.onResolve({ filter: canonicalZodModule }, () => ({
-      path: "zod-mini-stub",
-      namespace: zodStubNamespace,
-    }));
+    pluginBuild.onResolve({ filter: canonicalZodModule }, (args) => {
+      const from =
+        args.importer === "" ? args.resolveDir : dirname(args.importer);
+      const resolved = resolve(from, args.path).replace(/\.js$/, ".ts");
+      return resolved === canonicalZodPath
+        ? { path: "zod-mini-stub", namespace: zodStubNamespace }
+        : undefined;
+    });
     pluginBuild.onLoad({ filter: /.*/, namespace: zodStubNamespace }, () => ({
       contents: "export const z = {};\n",
       loader: /** @type {const} */ ("js"),

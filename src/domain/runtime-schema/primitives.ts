@@ -8,7 +8,7 @@
  * layer carries that tag as an opaque string.
  */
 import type { Result } from "../result.js";
-import { z } from "./zod-mini.js";
+import { type SchemaNode, type SchemaOutputOf, z } from "./zod-mini.js";
 
 /** Owner-declared failure tag attached to a schema node. */
 export type SchemaFailureTag = string;
@@ -39,8 +39,8 @@ type ExactOptional<T> = T extends SchemaScalar | undefined
       : T;
 
 /** Decoded value type of a shared schema, as owners see it. */
-export type SchemaOutput<S extends z.core.$ZodType> = ExactOptional<
-  z.output<S>
+export type SchemaOutput<S extends SchemaNode> = ExactOptional<
+  SchemaOutputOf<S>
 >;
 
 /** Contract every owner boundary exposes once its schema is in place. */
@@ -64,9 +64,6 @@ export const STRUCTURAL_ISSUES = {
   unexpectedKey: "unexpected_key",
   undefinedValue: "undefined_value",
 } as const;
-
-/** Any configured vendor schema node. */
-type SchemaNode = z.core.$ZodType;
 
 const tagRegistry = new WeakMap<object, SchemaFailureTag>();
 

@@ -39,4 +39,5 @@ export {
   utcTimestamp,
   uuid,
 } from "./primitives.js";
+export type { SchemaNode, SchemaOutputOf } from "./zod-mini.js";
 export { z } from "./zod-mini.js";
