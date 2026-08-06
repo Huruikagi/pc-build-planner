@@ -111,12 +111,13 @@ If multi-agent capability is available, for each task (one at a time):
 **d) Handle reviewer verdict**:
 - Parse reviewer verdict only from the exact `## Review Verdict` block and `- VERDICT:` field.
 - If `VERDICT` is missing, ambiguous, or replaced with prose, re-dispatch the reviewer once requesting the exact structured verdict only. Do NOT mark the task complete, commit, or continue to the next task without a parseable `APPROVED | REJECTED` value.
-- **APPROVED** → before marking the task `[x]` or making any success claim, apply `kiro-verify-completion` using fresh evidence from the current code state; then mark task `[x]` in tasks.md and perform selective git commit
+- **APPROVED** → before marking the task `[x]` or making any success claim, apply `kiro-verify-completion` using fresh evidence from the current code state; then record deferred findings (below), mark task `[x]` in tasks.md, and perform selective git commit
+- **Record deferred findings**: if the review block carries `DEFERRED` entries other than `NONE`, append one row per entry to the backlog file named by `.kiro/steering/delivery-policy.md` before committing. Skip when there are no entries or no such steering file exists. Never drop entries silently — an unrecorded `Suggestion` pushes the reviewer back toward blocking on everything.
 - **REJECTED (round 1-2)** → re-dispatch implementer with review feedback
 - **REJECTED (round 3)** → dispatch debug subagent (see section below)
 
 **e) Commit** (parent-only, selective staging):
-- Stage only the files actually changed for this task, plus tasks.md
+- Stage only the files actually changed for this task, plus tasks.md and the deferred-findings backlog when it was appended to
 - **NEVER** use `git add -A` or `git add .`
 - Use `git add <file1> <file2> ...` with explicit file paths
 - Commit message format: `feat(<feature-name>): <task description>`
