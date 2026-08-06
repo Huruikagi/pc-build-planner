@@ -52,16 +52,29 @@ const LOCK_NAME = "pc-build-planner:local-data-root-write";
 const tokenize = (source) => {
   const scanner = createScanner(true, undefined, source);
   const tokens = [];
+  let position = 0;
   for (
     let kind = scanner.scan();
     kind !== SyntaxKind.EndOfFile;
     kind = scanner.scan()
-  )
+  ) {
+    const end = scanner.getTokenEnd();
+    // A flat token stream has no parser to re-scan an ambiguous character, so
+    // one (a `#` outside a class body, for instance) scans as a zero-width
+    // token forever. Step over it instead: dropping one character keeps the
+    // rest of the file reachable for every rule, where stopping would not.
+    if (end <= position) {
+      position += 1;
+      scanner.resetTokenState(position);
+      continue;
+    }
+    position = end;
     tokens.push({
       kind,
       text: scanner.getTokenText(),
       value: scanner.getTokenValue(),
     });
+  }
   return tokens;
 };
 

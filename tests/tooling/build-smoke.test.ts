@@ -139,9 +139,26 @@ test("production worker artifactはmenu registrationだけを取り込みUIと�
     /src\/features\/product-capture\/manufacturer-domain-map\.ts/,
     "worker metadataのために商品解析catalogを取り込まない",
   );
-  assert.doesNotMatch(
-    worker,
-    /https?:\/\/(?!\*\/)/,
+  // Fail-closed allowlist: every absolute URL the worker bundle may contain is
+  // enumerated, so a newly pinned site URL — first-party or vendored — fails
+  // here instead of shipping.
+  const allowedWorkerUrls = new Set([
+    // Context menu patterns address every page, never one site.
+    "http://*/*",
+    "https://*/*",
+    // Runtime schema vendor: JSON Schema dialect identifiers and its own
+    // URL-parser probes. Neither addresses a real site.
+    "http://json-schema.org/draft-04/schema#",
+    "http://json-schema.org/draft-07/schema#",
+    "https://json-schema.org/draft/2020-12/schema",
+    "http://[${address}]",
+    "http://[${payload.value}]",
+  ]);
+  const workerUrls = new Set(worker.match(/https?:\/\/[^"'`\s)\\]*/g) ?? []);
+
+  assert.deepEqual(
+    [...workerUrls].filter((url) => !allowedWorkerUrls.has(url)),
+    [],
     "documentUrlPatternsのワイルドカード以外の完全URLをworkerに固定しない",
   );
 });

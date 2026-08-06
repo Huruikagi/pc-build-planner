@@ -5,8 +5,13 @@ import test from "node:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    // Only project sources are type-stripped. A package resolves its own
+    // `.js` specifiers against the files it actually ships.
+    const typeStripped =
+      specifier.endsWith(".js") &&
+      !(context.parentURL ?? "").includes("/node_modules/");
     return nextResolve(
-      specifier.endsWith(".js") ? `${specifier.slice(0, -3)}.ts` : specifier,
+      typeStripped ? `${specifier.slice(0, -3)}.ts` : specifier,
       context,
     );
   },

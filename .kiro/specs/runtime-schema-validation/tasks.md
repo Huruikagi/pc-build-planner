@@ -60,9 +60,9 @@
   - _Boundary: Shared Validation Public Boundary_
   - _Depends: 2.1, 2.2, 2.3_
 
-- [ ] 3. Local data foundation を owner-local schema へ移行する
+- [x] 3. Local data foundation を owner-local schema へ移行する
 
-- [ ] 3.1 Candidate の draft・content・value schema と公開 validator を移行する
+- [x] 3.1 Candidate の draft・content・value schema と公開 validator を移行する
   - candidate の category、product、sources、primary source、snapshot、normalized attributes、ID、timestamp の strict shape を宣言する。
   - 既存の draft/content/value validator signature と candidate source URL path helper を公開契約として維持する。
   - valid/invalid fixture の value、error code、path が移行前期待値と一致し、不要な candidate 内部 guard/cast が削除された状態を完了とする。
@@ -70,28 +70,28 @@
   - _Boundary: FoundationSchemaSet_
   - _Depends: 2.4_
 
-- [ ] 3.2 Root 内の project・build・dedupe・maintenance shape を移行する
+- [x] 3.2 Root 内の project・build・dedupe・maintenance shape を移行する
   - project、current build/item、request dedupe、maintenance active/inactive の strict schema fragments を owner 内へ定義する。
   - 現行 schema version、revision、required/optional field、positive quantity の受理集合を維持する。
   - nested shape fixture が既存 code/path で成功または失敗し、schema 導入による version/shape 変更がないことを完了条件とする。
   - _Requirements: 4.1, 4.4, 8.2_
   - _Boundary: FoundationSchemaSet_
 
-- [ ] 3.3 Root aggregate の duplicate と reference semantics を接続する
+- [x] 3.3 Root aggregate の duplicate と reference semantics を接続する
   - schema 成功後に project、candidate、build、source、request dedupe の uniqueness と ownership/reference を既存順序で検査する。
   - JSON safety と semantic issue を既存 `ValidationErrorCode` と最初の canonical path へ写像する。
   - invalid root が write authority へ渡らず直前の有効 root が保持される integration test を完了条件とする。
   - _Requirements: 2.4, 2.5, 4.1, 4.4, 4.5, 8.2_
   - _Boundary: FoundationSchemaSet_
 
-- [ ] 3.4 Query と mutation command の strict schema を移行する
+- [x] 3.4 Query と mutation command の strict schema を移行する
   - command kind ごとの必須・許容 field、request ID、expected revision、proposed root を discriminated shape として検証する。
   - query の余剰 field、未知 kind、mutation の欠落 field を既存 error code/path で拒否する。
   - 有効 command の公開型と handler behavior が不変で、不正 command が handler mutation へ到達しないことを完了条件とする。
   - _Requirements: 4.2, 4.5, 8.2, 8.3_
   - _Boundary: FoundationSchemaSet_
 
-- [ ] 3.5 Replacement schema と atomic failure contract を移行する
+- [x] 3.5 Replacement schema と atomic failure contract を移行する
   - replacement candidate に root と同じ shape、version、JSON safety、reference semantics を base path を保って適用する。
   - assessment と atomic replacement の fencing・commit 手順を変更せず、validation failure を commit 前に返す。
   - malformed replacement、reference failure、write failure の各 test で既存 root が不変となり、foundation wave の全 parity test が通る状態を完了とする。
@@ -253,3 +253,11 @@
 - `z.output` の optional key は `T | undefined` になり `exactOptionalPropertyTypes` の公開型へ代入できない。`SchemaOutput<S>` が exact-optional へ正規化する（assignability fixture: `tests/domain/runtime-schema-assignability.ts`）。
 - `inspectJsonSafety` は旧 `inspectPayload` より厳しい: 非 JSON 値を base path ではなく違反した nested path で `not-json` として返し、nested の非 plain prototype/enumerable symbol も `unsafe-object` として拒否する。owner wave は kind→既存 code の写像でこの差を吸収すること。
 - boundary gate に `canonical-runtime-schema-import-only`（`zod*` の直接 import 禁止）を追加し、`validate:boundaries` の scan root へ `src/domain` を追加した。domain の許可 entry は `public` と `runtime-schema/public` の 2 つ。
+- foundation の JSON safety は `inspectJsonSafety` に統一し、5 種の kind をすべて `forbidden-payload` へ写像する。旧 `inspectPayload` より厳しく、非 JSON 値（`undefined` / `NaN` / 関数）と nested の非 plain prototype を型 error ではなく `forbidden-payload` で拒否する。既存 fixture の code/path はすべて一致した。
+- shape は schema fragment、順序と cross-item 規則は owner の semantic pass、という分割で既存の error code/path 順を保つ。root 全体を一つの schema にすると `selectPrimaryIssue` の「浅い issue 優先」が aggregate の走査順（projects→candidates→builds→dedupe→maintenance）を壊す。
+- 公開 validator は decode 結果ではなく入力そのものを返す（`assert.strictEqual(result.value, input)` が既存契約）。Zod の `strictObject` は新しい object を返すため、最終 return の cast だけは必要。内部の `as string` cast は decode 済み branded 値で置換して削除した。
+- `z.optional(z.unknown())` は `plainObject` の gate が required 判定に使う `def.type === "optional"` を満たすので、条件付き field（sources / primarySourceId / maintenance の owner fields）は `z.unknown()` で受けて semantic pass に回せる。
+- canonical Zod entry は **named import/export 限定**。`import * as z` の namespace 再 export は tree shaking を無効化し production entry あたり +512KB（named なら +35KB）。bundle size gate がこの回帰の検知器になる。
+- size gate の stub plugin は esbuild の `onResolve` filter が **specifier** に当たることに注意。`./zod-mini.js` を解決してから canonical path と比較しないと stub が適用されず、delta が常に 0 になる。
+- `scripts/validate-boundaries.mjs` の flat token scanner は class 外の `#`（Zod の template literal に実在）で zero-width token を無限生成する。位置が進まない token を 1 文字読み飛ばして継続する。
+- 一部 persistence test の `registerHooks` は `.js`→`.ts` を無条件で書き換えるため、node_modules 由来の specifier まで壊す。importer が node_modules ならそのままにする。
