@@ -223,9 +223,9 @@
   - _Boundary: State Snapshot Integration_
   - _Depends: 7.1, 7.2, 7.3_
 
-- [ ] 8. Production gate と完全検証を統合する
+- [x] 8. Production gate と完全検証を統合する
 
-- [ ] 8.1 Schema gate、report、notice を既存 build/package pipeline へ接続する
+- [x] 8.1 Schema gate、report、notice を既存 build/package pipeline へ接続する
   - feasibility、direct/deep import、artifact、bundle size、notice の各検査を既存 build、final gate、artifact、package command から必ず実行する。
   - schema-bearing production artifact と license notice を必須成果物にし、欠落または dynamic Function 検出時は archive を生成しない。
   - 正常 build/package が report と notice を含んで成功し、各 negative fixture が対応 command を非 zero にする状態を完了とする。
@@ -233,7 +233,7 @@
   - _Boundary: Runtime Schema Production Integration_
   - _Depends: 1.3, 2.4, 3.5, 4.2, 5.2, 6.7, 7.4_
 
-- [ ] 8.2 Focused parity と完全 validation を通す
+- [x] 8.2 Focused parity と完全 validation を通す
   - owner wave ごとの valid/invalid、error/path、reference、no-mutation test を先に実行し、失敗 boundary を特定する。
   - typecheck、public consumer typecheck、lint、unit/contract/integration、production build、boundary、fixture、artifact、Playwright E2E の完全フローを実行する。
   - fixture と検証出力に実サイト由来 HTML、画像、URL、商品値、payload dump がなく、`pnpm validate` が成功する状態を完了とする。

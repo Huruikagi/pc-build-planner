@@ -6,6 +6,17 @@ import test from "node:test";
 
 import { packageExtension } from "../../scripts/package.mjs";
 
+const runtimeSchemaGateReport = {
+  dynamicFunctionCalls: 0,
+  bundles: [
+    { entry: "side-panel", baselineBytes: 1, currentBytes: 1, deltaBytes: 0 },
+  ],
+  licenseNoticePresent: true,
+};
+
+const runtimeSchemaNotice =
+  "zod 4.4.3\nMIT License\nPermission is hereby granted";
+
 const validManifest = {
   manifest_version: 3,
   name: "__MSG_extensionName__",
@@ -38,6 +49,14 @@ async function writeValidBuildOutput(outputDirectory: string) {
   await writeFile(
     join(outputDirectory, "manifest.json"),
     JSON.stringify(validManifest),
+  );
+  await writeFile(
+    join(outputDirectory, "runtime-schema-gate-report.json"),
+    JSON.stringify(runtimeSchemaGateReport),
+  );
+  await writeFile(
+    join(outputDirectory, "THIRD_PARTY_NOTICES.txt"),
+    runtimeSchemaNotice,
   );
   for (const locale of ["en", "ja"]) {
     await mkdir(join(outputDirectory, "_locales", locale), {
@@ -228,6 +247,27 @@ test("展開結果の最上位にmanifestが来る構造にする", async () => 
 
   const entries = await listZipEntries(result.zipPath);
   assert.ok(entries.includes("manifest.json"), entries.join(","));
+});
+
+test("配布用archiveはruntime schema gate reportとlicense noticeを含む", async () => {
+  const root = await workspace();
+  const outputDirectory = join(root, "dist");
+  await writeValidBuildOutput(outputDirectory);
+
+  const result = await packageExtension({
+    outputDirectory,
+    releaseDirectory: join(root, "release"),
+    rootDirectory: root,
+  });
+
+  const entries = await listZipEntries(result.zipPath);
+  for (const name of [
+    "runtime-schema-gate-report.json",
+    "THIRD_PARTY_NOTICES.txt",
+  ]) {
+    assert.ok(result.includedFiles.includes(name));
+    assert.ok(entries.includes(name));
+  }
 });
 
 test("zipファイル名はバージョンから導出された名前になる", async () => {

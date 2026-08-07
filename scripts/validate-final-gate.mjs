@@ -6,12 +6,14 @@ import { buildUnpackedExtension } from "./build.mjs";
 import { validateArtifactDirectory } from "./validate-artifacts.mjs";
 import { validateBoundaryRoots } from "./validate-boundaries.mjs";
 import { findFixtureAssetViolations } from "./validate-fixture-assets.mjs";
+import { LICENSE_NOTICE_FILE_NAME } from "./validate-runtime-schema-csp.mjs";
 
 const executableBundleExtensions = new Set([".js", ".mjs", ".cjs"]);
 
 /** @param {string} path */
 const isArtifactFixturePath = (path) =>
-  !executableBundleExtensions.has(extname(path).toLowerCase());
+  !executableBundleExtensions.has(extname(path).toLowerCase()) &&
+  !path.endsWith(LICENSE_NOTICE_FILE_NAME);
 
 /** @param {{ path: string, rule: string }} violation */
 const isArtifactFixtureViolation = ({ path, rule }) => {

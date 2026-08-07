@@ -3,10 +3,15 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import { validateArtifactDirectory } from "./validate-artifacts.mjs";
+import {
+  LICENSE_NOTICE_FILE_NAME,
+  validateRuntimeSchemaFeasibility,
+} from "./validate-runtime-schema-csp.mjs";
 import { validateWorkerModuleGraph } from "./validate-worker-module-graph.mjs";
 
 export async function buildUnpackedExtension(outputDirectory = "dist") {
   await rm(outputDirectory, { recursive: true, force: true });
+  const runtimeSchemaGateReport = await validateRuntimeSchemaFeasibility();
   const browserBuild = await build({
     bundle: true,
     entryPoints: {
@@ -46,7 +51,16 @@ export async function buildUnpackedExtension(outputDirectory = "dist") {
   });
   await copyFile("manifest.json", `${outputDirectory}/manifest.json`);
   await copyFile("side-panel.html", `${outputDirectory}/side-panel.html`);
+  await copyFile(
+    LICENSE_NOTICE_FILE_NAME,
+    `${outputDirectory}/${LICENSE_NOTICE_FILE_NAME}`,
+  );
   await cp("_locales", `${outputDirectory}/_locales`, { recursive: true });
+  await writeFile(
+    `${outputDirectory}/runtime-schema-gate-report.json`,
+    `${JSON.stringify(runtimeSchemaGateReport)}\n`,
+    "utf8",
+  );
   await writeFile(`${outputDirectory}/.build-ready`, "unpacked\n", "utf8");
   await validateArtifactDirectory(outputDirectory);
 }

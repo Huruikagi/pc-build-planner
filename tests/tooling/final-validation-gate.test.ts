@@ -11,6 +11,17 @@ import {
   findFixtureRegistryViolations,
 } from "../../scripts/validate-fixture-assets.mjs";
 
+const runtimeSchemaGateReport = {
+  dynamicFunctionCalls: 0,
+  bundles: [
+    { entry: "side-panel", baselineBytes: 1, currentBytes: 1, deltaBytes: 0 },
+  ],
+  licenseNoticePresent: true,
+};
+
+const runtimeSchemaNotice =
+  "zod 4.4.3\nMIT License\nPermission is hereby granted";
+
 const validManifest = {
   manifest_version: 3,
   name: "Synthetic extension",
@@ -70,6 +81,14 @@ const builder =
     await writeFile(
       join(output, "foundation.js"),
       "const initializeProductionFoundationRuntimeContribution=()=>{}; export { initializeProductionFoundationRuntimeContribution };",
+    );
+    await writeFile(
+      join(output, "runtime-schema-gate-report.json"),
+      JSON.stringify(runtimeSchemaGateReport),
+    );
+    await writeFile(
+      join(output, "THIRD_PARTY_NOTICES.txt"),
+      runtimeSchemaNotice,
     );
     for (const [name, content] of Object.entries(extra))
       await writeFile(join(output, name), content);

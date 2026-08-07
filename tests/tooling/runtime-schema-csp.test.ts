@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-
+import { buildUnpackedExtension } from "../../scripts/build.mjs";
 import {
   assertGateReport,
   CONFIGURED_PROBE_SOURCE,
@@ -203,4 +203,24 @@ test("baseline stubはcanonical Zod moduleを副作用のないstubへ差し替�
     currentBytes - baselineBytes > 1000,
     "delta bytesがvendor取り込み分を反映していない",
   );
+});
+
+test("production buildはschema gate reportとlicense noticeを成果物へ含める", async () => {
+  const outputDirectory = await mkdtemp(
+    join(tmpdir(), "runtime-schema-build-"),
+  );
+  try {
+    await buildUnpackedExtension(outputDirectory);
+
+    const report = JSON.parse(
+      await readFile(
+        join(outputDirectory, "runtime-schema-gate-report.json"),
+        "utf8",
+      ),
+    );
+    assert.doesNotThrow(() => assertGateReport(report));
+    await validateLicenseNoticeAsset(outputDirectory);
+  } finally {
+    await rm(outputDirectory, { recursive: true, force: true });
+  }
 });

@@ -36,6 +36,25 @@ const validManifest = {
   },
 };
 
+const runtimeSchemaGateReport = {
+  dynamicFunctionCalls: 0,
+  bundles: [
+    { entry: "side-panel", baselineBytes: 1, currentBytes: 1, deltaBytes: 0 },
+  ],
+  licenseNoticePresent: true,
+};
+
+async function writeRuntimeSchemaArtifacts(directory: string) {
+  await writeFile(
+    join(directory, "runtime-schema-gate-report.json"),
+    JSON.stringify(runtimeSchemaGateReport),
+  );
+  await writeFile(
+    join(directory, "THIRD_PARTY_NOTICES.txt"),
+    "zod 4.4.3\nMIT License\nPermission is hereby granted",
+  );
+}
+
 test("manifestはChrome 116以降向けの最小MV3契約である", async () => {
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
 
@@ -153,6 +172,7 @@ test("remote code、動的評価、inline JavaScriptを生成物から拒否す�
         extensionDescription: { message: "A synthetic fixture extension." },
       }),
     );
+    await writeRuntimeSchemaArtifacts(directory);
 
     for (const fixture of [
       {
@@ -340,6 +360,7 @@ test("既定ロケールの資産が正しく揃っていれば違反ゼロで�
         }),
       );
     }
+    await writeRuntimeSchemaArtifacts(directory);
 
     await assert.doesNotReject(validateArtifactDirectory(directory));
   } finally {
@@ -376,6 +397,7 @@ test("default localeが全manifest keyを持てばnondefault localeの欠落をf
       join(directory, "_locales", "ja", "messages.json"),
       JSON.stringify({ extensionName: { message: "PC構成プランナー" } }),
     );
+    await writeRuntimeSchemaArtifacts(directory);
 
     // Chrome resolves the missing Japanese description through default en.
     // This validator proves the prerequisite: default has both referenced keys

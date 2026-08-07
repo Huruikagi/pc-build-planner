@@ -1,6 +1,11 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 
+import {
+  assertGateReport,
+  validateLicenseNoticeAsset,
+} from "./validate-runtime-schema-csp.mjs";
+
 const requiredCsp = "script-src 'self'; object-src 'self'";
 const JavaScriptExtensions = new Set([".js", ".mjs", ".cjs"]);
 const HtmlExtensions = new Set([".html", ".htm"]);
@@ -398,6 +403,15 @@ export async function validateArtifactDirectory(directory) {
   );
   validateManifest(manifest);
   await validateLocaleAssets(directory, manifest);
+  await validateLicenseNoticeAsset(directory);
+  assertGateReport(
+    JSON.parse(
+      await readFile(
+        join(directory, "runtime-schema-gate-report.json"),
+        "utf8",
+      ),
+    ),
+  );
 
   const files = await artifactFiles(directory);
   const sidePanelPath = join(directory, "side-panel.html");
