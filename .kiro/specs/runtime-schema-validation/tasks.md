@@ -98,9 +98,9 @@
   - _Requirements: 4.3, 4.4, 4.5, 8.1, 8.2, 8.4_
   - _Boundary: FoundationSchemaSet_
 
-- [ ] 4. Backup 交換境界を owner-local schema へ移行する
+- [x] 4. Backup 交換境界を owner-local schema へ移行する
 
-- [ ] 4.1 Backup envelope と item shape schema を実装する
+- [x] 4.1 Backup envelope と item shape schema を実装する
   - product、format version、created timestamp、data collections、project、build/item を feature-owned strict schema として宣言する。
   - candidate item は foundation の公開 candidate validator を利用し、foundation 内部 schema を deep import しない。
   - 現行 valid envelope が同じ型付き値へ decode され、unknown/missing/invalid primitive が同じ path で拒否されることを完了条件とする。
@@ -108,7 +108,7 @@
   - _Boundary: BackupExchangeSchemaSet_
   - _Depends: 3.5_
 
-- [ ] 4.2 Backup の JSON、reference、version、mapping parity を完成する
+- [x] 4.2 Backup の JSON、reference、version、mapping parity を完成する
   - non-JSON と forbidden content を `not-json` / `invalid-structure` へ、shape 成功後の duplicate/ownership を `invalid-reference` へ既存順で写像する。
   - unknown/future/missing migration path を変換せず `unsupported-version` にし、root mapping と format/schema version の独立性を維持する。
   - export/restore fixture の value、error/path、atomic failure が全て parity し、置換済み重複 guard/cast が owner 内から除かれた状態を完了とする。

@@ -14,11 +14,10 @@ import type {
 import {
   err,
   isJsonValue,
-  isUtcTimestamp,
-  isUuid,
   ok,
   validateCandidatePartValue,
 } from "../../domain/public.js";
+import { decodeBackupEnvelopeShape } from "./backup-schema.js";
 import type {
   BackupCandidatePart,
   BackupCurrentBuild,
@@ -34,7 +33,14 @@ import {
 } from "./contracts.js";
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  (Object.getPrototypeOf(value) === Object.prototype ||
+    Object.getPrototypeOf(value) === null) &&
+  !Object.getOwnPropertySymbols(value).some((symbol) =>
+    Object.prototype.propertyIsEnumerable.call(value, symbol),
+  );
 
 const FORBIDDEN_KEY_PATTERN =
   /(?:^|[-_])(html|image|images|image-data|imageData|binary|blob)(?:$|[-_])/i;
@@ -82,37 +88,6 @@ const referenceFail = (path: string): Result<never, ExchangeValidationError> =>
   err({ code: "invalid-reference", path });
 
 /** 必須・許容keyだけを own property から読み、余剰・欠落を一律invalid-structureとして拒否する。 */
-const object = (
-  value: unknown,
-  path: string,
-  required: readonly string[],
-  optional: readonly string[] = [],
-): Result<Record<string, unknown>, ExchangeValidationError> => {
-  if (!isPlainRecord(value)) return structureFail(path);
-  for (const key of required)
-    if (!(key in value)) return structureFail(`${path}.${key}`);
-  const allowed = new Set([...required, ...optional]);
-  for (const key of Object.keys(value))
-    if (!allowed.has(key)) return structureFail(`${path}.${key}`);
-  return ok(value);
-};
-
-const validateProject = (
-  value: unknown,
-  path: string,
-): Result<BackupProject, ExchangeValidationError> => {
-  const project = object(value, path, ["id", "name", "createdAt", "updatedAt"]);
-  if (!project.ok) return project;
-  if (!isUuid(project.value.id)) return structureFail(`${path}.id`);
-  if (typeof project.value.name !== "string")
-    return structureFail(`${path}.name`);
-  if (!isUtcTimestamp(project.value.createdAt))
-    return structureFail(`${path}.createdAt`);
-  if (!isUtcTimestamp(project.value.updatedAt))
-    return structureFail(`${path}.updatedAt`);
-  return ok(value as BackupProject);
-};
-
 const validatePart = (
   value: unknown,
   path: string,
@@ -126,91 +101,25 @@ const validatePart = (
   return ok(validated.value as BackupCandidatePart);
 };
 
-const validateBuildItem = (
-  value: unknown,
-  path: string,
-): Result<
-  { readonly candidatePartId: string; readonly quantity: number },
-  ExchangeValidationError
-> => {
-  const item = object(value, path, ["candidatePartId", "quantity"]);
-  if (!item.ok) return item;
-  if (!isUuid(item.value.candidatePartId))
-    return structureFail(`${path}.candidatePartId`);
-  if (
-    !Number.isSafeInteger(item.value.quantity) ||
-    (item.value.quantity as number) <= 0
-  )
-    return structureFail(`${path}.quantity`);
-  return ok(
-    item.value as unknown as {
-      readonly candidatePartId: string;
-      readonly quantity: number;
-    },
-  );
-};
-
-const validateBuild = (
-  value: unknown,
-  path: string,
-): Result<BackupCurrentBuild, ExchangeValidationError> => {
-  const build = object(value, path, ["id", "projectId", "items", "updatedAt"]);
-  if (!build.ok) return build;
-  if (!isUuid(build.value.id)) return structureFail(`${path}.id`);
-  if (!isUuid(build.value.projectId)) return structureFail(`${path}.projectId`);
-  if (!isUtcTimestamp(build.value.updatedAt))
-    return structureFail(`${path}.updatedAt`);
-  if (!Array.isArray(build.value.items)) return structureFail(`${path}.items`);
-  for (const [index, item] of build.value.items.entries()) {
-    const itemResult = validateBuildItem(item, `${path}.items[${index}]`);
-    if (!itemResult.ok) return itemResult;
-  }
-  return ok(value as BackupCurrentBuild);
-};
-
 const validateEnvelopeStructure = (
   input: unknown,
 ): Result<CurrentBackupEnvelope, ExchangeValidationError> => {
-  const envelope = object(input, "$", [
-    "product",
-    "formatVersion",
-    "createdAt",
-    "data",
-  ]);
+  const envelope = decodeBackupEnvelopeShape(input);
   if (!envelope.ok) return envelope;
-  if (envelope.value.product !== BACKUP_PRODUCT_ID)
-    return structureFail("$.product");
-  if (envelope.value.formatVersion !== CURRENT_BACKUP_FORMAT_VERSION)
-    return structureFail("$.formatVersion");
-  if (!isUtcTimestamp(envelope.value.createdAt))
-    return structureFail("$.createdAt");
-
-  const data = object(envelope.value.data, "$.data", [
-    "projects",
-    "parts",
-    "currentBuilds",
-  ]);
-  if (!data.ok) return data;
-  if (!Array.isArray(data.value.projects))
-    return structureFail("$.data.projects");
-  if (!Array.isArray(data.value.parts)) return structureFail("$.data.parts");
-  if (!Array.isArray(data.value.currentBuilds))
-    return structureFail("$.data.currentBuilds");
+  const data = envelope.value.data;
 
   const projectIds = new Set<string>();
   const projects: BackupProject[] = [];
-  for (const [index, item] of data.value.projects.entries()) {
+  for (const [index, project] of data.projects.entries()) {
     const path = `$.data.projects[${index}]`;
-    const project = validateProject(item, path);
-    if (!project.ok) return project;
-    if (projectIds.has(project.value.id)) return referenceFail(`${path}.id`);
-    projectIds.add(project.value.id);
-    projects.push(project.value);
+    if (projectIds.has(project.id)) return referenceFail(`${path}.id`);
+    projectIds.add(project.id);
+    projects.push(project);
   }
 
   const candidateOwners = new Map<string, string>();
   const parts: BackupCandidatePart[] = [];
-  for (const [index, item] of data.value.parts.entries()) {
+  for (const [index, item] of data.parts.entries()) {
     const path = `$.data.parts[${index}]`;
     const part = validatePart(item, path);
     if (!part.ok) return part;
@@ -223,21 +132,17 @@ const validateEnvelopeStructure = (
 
   const buildIds = new Set<string>();
   const currentBuilds: BackupCurrentBuild[] = [];
-  for (const [index, item] of data.value.currentBuilds.entries()) {
+  for (const [index, build] of data.currentBuilds.entries()) {
     const path = `$.data.currentBuilds[${index}]`;
-    const build = validateBuild(item, path);
-    if (!build.ok) return build;
-    if (!projectIds.has(build.value.projectId))
+    if (!projectIds.has(build.projectId))
       return referenceFail(`${path}.projectId`);
-    if (buildIds.has(build.value.id)) return referenceFail(`${path}.id`);
-    buildIds.add(build.value.id);
-    for (const [itemIndex, buildItem] of build.value.items.entries()) {
-      if (
-        candidateOwners.get(buildItem.candidatePartId) !== build.value.projectId
-      )
+    if (buildIds.has(build.id)) return referenceFail(`${path}.id`);
+    buildIds.add(build.id);
+    for (const [itemIndex, buildItem] of build.items.entries()) {
+      if (candidateOwners.get(buildItem.candidatePartId) !== build.projectId)
         return referenceFail(`${path}.items[${itemIndex}].candidatePartId`);
     }
-    currentBuilds.push(build.value);
+    currentBuilds.push(build);
   }
 
   return ok({

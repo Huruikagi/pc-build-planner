@@ -133,6 +133,39 @@ test("トップレベルが非objectの場合はnot-jsonとして拒否される
   if (!result.ok) assert.equal(result.error.code, "not-json");
 });
 
+test("plain object ではない envelope は canonical path で拒否される", () => {
+  const envelope = Object.assign(
+    Object.create({ inherited: "架空継承値" }) as Record<string, unknown>,
+    buildEmptyBackupEnvelope(),
+  );
+
+  const result = exchangeValidator.validate(envelope);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { code: "not-json", path: "$" },
+  });
+});
+
+test("列挙可能な symbol key を持つ nested item は拒否される", () => {
+  const envelope = structuredClone(buildCurrentBackupEnvelope()) as unknown as {
+    data: { projects: Array<Record<PropertyKey, unknown>> };
+  };
+  const project = envelope.data.projects[0];
+  assert.ok(project);
+  Object.defineProperty(project, Symbol("unsafe"), {
+    enumerable: true,
+    value: "架空値",
+  });
+
+  const result = exchangeValidator.validate(envelope);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { code: "invalid-structure", path: "$.data.projects[0]" },
+  });
+});
+
 for (const corrupt of buildCorruptBackupEnvelopes()) {
   test(`不正envelope（${corrupt.name}）は値を含まずcodeとpathで拒否される`, () => {
     const result = exchangeValidator.validate(corrupt.envelope);
