@@ -6,6 +6,13 @@ import {
   type ProjectId,
   type Result,
 } from "../../domain/public.js";
+import {
+  decodeWithProfile,
+  inspectJsonSafety,
+  plainObject,
+  tagged,
+  z,
+} from "../../domain/runtime-schema/public.js";
 import type { BuildState } from "./state.js";
 
 export interface BuildStateSnapshot {
@@ -25,38 +32,27 @@ export interface BuildStateSnapshotCodec {
   restore(input: unknown): Result<BuildStateSnapshot, BuildSnapshotError>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value) &&
-  (Object.getPrototypeOf(value) === Object.prototype ||
-    Object.getPrototypeOf(value) === null) &&
-  Object.getOwnPropertySymbols(value).every(
-    (symbol) => !Object.prototype.propertyIsEnumerable.call(value, symbol),
-  );
-
-const hasOnlyKeys = (
-  value: Record<string, unknown>,
-  keys: readonly string[],
-): boolean =>
-  Object.keys(value).every((key) => keys.includes(key)) &&
-  keys.every((key) => key in value);
-
 const isPartCategory = (value: unknown): value is PartCategory =>
   typeof value === "string" && PART_CATEGORIES.includes(value as PartCategory);
 
-const isSafeString = (value: unknown): value is string =>
-  typeof value === "string" &&
-  !/^data:/i.test(value) &&
-  !/<(?:!doctype\s+html|!--|\/?[a-z][^>]*>)/i.test(value);
-
-const isQuantityDrafts = (
-  value: unknown,
-): value is Readonly<Record<string, string>> =>
-  isRecord(value) &&
-  Object.entries(value).every(
-    ([key, draft]) => isUuid(key) && isSafeString(draft),
-  );
+const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "invalid-shape");
+const quantityDraftsSchema = z.record(
+  invalid(z.custom<string>(isUuid)),
+  invalid(z.string()),
+);
+const snapshotSchema = plainObject({
+  version: invalid(z.literal(1)),
+  selectedProjectId: invalid(
+    z.custom<ProjectId | null>((value) => value === null || isUuid(value)),
+  ),
+  selectedCategory: invalid(
+    z.custom<PartCategory | null>(
+      (value) => value === null || isPartCategory(value),
+    ),
+  ),
+  quantityDrafts: invalid(quantityDraftsSchema),
+});
 
 const hasProjectReference = (state: BuildState, projectId: string): boolean =>
   state.value.projects.some((project) => project.id === projectId);
@@ -89,33 +85,20 @@ export const createBuildStateSnapshotCodec = (
   },
 
   restore(input) {
-    if (!isRecord(input))
-      return { ok: false, error: { kind: "invalid-shape" } };
-    if (input.version !== 1) {
-      return { ok: false, error: { kind: "unsupported-version" } };
-    }
     if (
-      !hasOnlyKeys(input, [
-        "version",
-        "selectedProjectId",
-        "selectedCategory",
-        "quantityDrafts",
-      ]) ||
-      (input.selectedProjectId !== null &&
-        typeof input.selectedProjectId !== "string") ||
-      (input.selectedCategory !== null &&
-        !isPartCategory(input.selectedCategory)) ||
-      !isQuantityDrafts(input.quantityDrafts)
-    ) {
+      typeof input === "object" &&
+      input !== null &&
+      "version" in input &&
+      input.version !== 1
+    )
+      return { ok: false, error: { kind: "unsupported-version" } };
+    if (!inspectJsonSafety(input).ok)
       return { ok: false, error: { kind: "invalid-shape" } };
-    }
-
-    const snapshot: BuildStateSnapshot = {
-      version: 1,
-      selectedProjectId: input.selectedProjectId as ProjectId | null,
-      selectedCategory: input.selectedCategory as PartCategory | null,
-      quantityDrafts: input.quantityDrafts,
-    };
+    const decoded = decodeWithProfile(snapshotSchema, input, {
+      toError: (): BuildSnapshotError => ({ kind: "invalid-shape" }),
+    });
+    if (!decoded.ok) return decoded;
+    const snapshot: BuildStateSnapshot = decoded.value;
     return hasValidReferences(state, snapshot)
       ? { ok: true, value: snapshot }
       : { ok: false, error: { kind: "invalid-reference" } };

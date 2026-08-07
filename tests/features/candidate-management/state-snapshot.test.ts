@@ -27,6 +27,8 @@ const otherProjectId =
 const requestId = "20000000-0000-4000-8000-000000000001" as Uuid as RequestId;
 const sourceId =
   "40000000-0000-4000-8000-000000000001" as Uuid as CandidateSourceId;
+const secondSourceId =
+  "40000000-0000-4000-8000-000000000002" as Uuid as CandidateSourceId;
 
 const draft = {
   projectId,
@@ -146,6 +148,82 @@ test("snapshot restore失敗の表示状態もcaptureとrestoreをround-tripで�
   });
 });
 
+test("複数sourceと非先頭primaryを持つversion 3 editor snapshotを完全にround-tripし、不正source tableを拒否する", async () => {
+  const state = await createState();
+  const firstSource = draft.sources?.[0];
+  assert.ok(firstSource);
+  const multiSourceDraft: CandidateDraft = {
+    ...draft,
+    sources: [
+      firstSource,
+      {
+        id: secondSourceId,
+        pageUrl: "https://manufacturer.invalid/product/cpu-2",
+        siteName: "架空メーカー",
+        capturedAt: "2026-07-23T00:00:00.000Z" as never,
+        price: {
+          original: "JPY 25000",
+          confirmed: { amount: 25000, currency: "JPY" },
+        },
+        kind: "manufacturer",
+      },
+    ],
+    primarySourceId: secondSourceId,
+  };
+  state.beginEdit(candidateId, multiSourceDraft);
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
+  const snapshot = codec.capture(state);
+
+  assert.deepEqual(codec.restore(snapshot), {
+    ok: true,
+    value: { ...snapshot, duplicateDecision: { status: "idle" } },
+  });
+  const before = state.value;
+  const sources = multiSourceDraft.sources;
+  const secondSource = sources?.[1];
+  assert.ok(sources);
+  assert.ok(secondSource);
+  const invalidSources = [
+    [firstSource, { ...secondSource, id: sourceId }],
+    sources,
+    [firstSource, { ...secondSource, pageUrl: "javascript:alert(1)" }],
+    [
+      firstSource,
+      {
+        ...secondSource,
+        price: {
+          original: "bad",
+          confirmed: { amount: "not-a-number", currency: "JPY" },
+        },
+      },
+    ],
+    [firstSource, { ...secondSource, kind: "marketplace" }],
+  ] as const;
+  for (const [index, sources] of invalidSources.entries()) {
+    const invalidDraft: Record<string, unknown> = {
+      ...multiSourceDraft,
+      sources,
+      ...(index === 1
+        ? {
+            primarySourceId:
+              "40000000-0000-4000-8000-000000000099" as Uuid as CandidateSourceId,
+          }
+        : {}),
+    };
+    assert.deepEqual(
+      codec.restore({
+        ...snapshot,
+        editor: { mode: "edit", projectId, candidateId, draft: invalidDraft },
+      }),
+      { ok: false, error: { kind: "invalid-draft" } },
+    );
+    assert.deepEqual(state.value, before);
+  }
+});
+
 test("未知version、存在しない参照、無効draftを識別可能なrestore errorとして拒否し、stateを変更しない", async () => {
   const state = await createState();
   const codec = createManagementStateSnapshotCodec(
@@ -162,6 +240,13 @@ test("未知version、存在しない参照、無効draftを識別可能なresto
     codec.restore({
       ...codec.capture(state),
       duplicateDecision: { version: 99, state: { status: "idle" } },
+    }),
+    { ok: false, error: { kind: "invalid-shape" } },
+  );
+  assert.deepEqual(
+    codec.restore({
+      ...codec.capture(state),
+      selectedProjectId: "data:text/html,<script>alert(1)</script>",
     }),
     { ok: false, error: { kind: "invalid-shape" } },
   );

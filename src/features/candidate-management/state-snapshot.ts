@@ -1,10 +1,21 @@
 import {
-  isJsonValue,
   PART_CATEGORIES,
   type PartCategory,
   type ProjectId,
   type Result,
 } from "../../domain/public.js";
+import {
+  decodeWithProfile,
+  httpUrl,
+  inspectJsonSafety,
+  optionalField,
+  plainObject,
+  safeString,
+  tagged,
+  utcTimestamp,
+  uuid,
+  z,
+} from "../../domain/runtime-schema/public.js";
 import type { CandidateDraft } from "./contracts.js";
 import type {
   DuplicateDecisionState,
@@ -56,35 +67,36 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     (symbol) => !Object.prototype.propertyIsEnumerable.call(value, symbol),
   );
 
-const hasOnlyKeys = (
-  value: Record<string, unknown>,
-  keys: readonly string[],
-): boolean =>
-  Object.keys(value).every((key) => keys.includes(key)) &&
-  keys.every((key) => key in value);
-
 const isPartCategory = (value: unknown): value is PartCategory =>
   typeof value === "string" && PART_CATEGORIES.includes(value as PartCategory);
 
-const isSafeString = (value: unknown): value is string =>
-  typeof value === "string" &&
-  !/^data:/i.test(value) &&
-  !/<(?:!doctype\s+html|!--|\/?[a-z][^>]*>)/i.test(value);
+const schemaAccepts = (
+  schema: Parameters<typeof z.safeParse>[0],
+  value: unknown,
+) => z.safeParse(schema, value).success;
 
-const isUtcTimestamp = (value: unknown): value is string => {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
-  ) {
-    return false;
-  }
-  const milliseconds = Date.parse(value);
-  return (
-    Number.isFinite(milliseconds) &&
-    new Date(milliseconds).toISOString().replace(".000Z", "Z") ===
-      value.replace(".000Z", "Z")
-  );
-};
+const nullableStringSchema = z.custom<string | null>(
+  (value) => value === null || typeof value === "string",
+);
+const finiteNumberSchema = z.custom<number>(
+  (value) => typeof value === "number" && Number.isFinite(value),
+);
+const sourcedStringSchema = plainObject({
+  original: nullableStringSchema,
+  confirmed: optionalField(safeString()),
+});
+const sourcedStringsSchema = plainObject({
+  original: nullableStringSchema,
+  confirmed: optionalField(z.array(safeString())),
+});
+const moneySchema = plainObject({
+  amount: finiteNumberSchema,
+  currency: safeString(),
+});
+const sourcedMoneySchema = plainObject({
+  original: nullableStringSchema,
+  confirmed: optionalField(moneySchema),
+});
 
 export const isSourcedValueSnapshot = (
   value: unknown,
@@ -92,44 +104,22 @@ export const isSourcedValueSnapshot = (
 ): value is {
   readonly original: string | null;
   readonly confirmed?: unknown;
-} => {
-  if (
-    !isRecord(value) ||
-    !Object.keys(value).every(
-      (key) => key === "original" || key === "confirmed",
-    ) ||
-    !("original" in value) ||
-    (value.original !== null && !isSafeString(value.original))
-  ) {
-    return false;
-  }
-  if (!("confirmed" in value)) return true;
-  if (confirmed === "string") return isSafeString(value.confirmed);
-  if (confirmed === "strings")
-    return (
-      Array.isArray(value.confirmed) && value.confirmed.every(isSafeString)
-    );
-  return (
-    isRecord(value.confirmed) &&
-    hasOnlyKeys(value.confirmed, ["amount", "currency"]) &&
-    typeof value.confirmed.amount === "number" &&
-    Number.isFinite(value.confirmed.amount) &&
-    isSafeString(value.confirmed.currency)
+} =>
+  schemaAccepts(
+    confirmed === "string"
+      ? sourcedStringSchema
+      : confirmed === "strings"
+        ? sourcedStringsSchema
+        : sourcedMoneySchema,
+    value,
   );
-};
 
-const isProduct = (value: unknown): boolean => {
-  if (!isRecord(value)) return false;
-  const fields = ["name", "manufacturer", "modelNumber", "notes"];
-  if (!Object.keys(value).every((key) => fields.includes(key))) return false;
-  return (
-    (!("name" in value) || isSourcedValueSnapshot(value.name)) &&
-    (!("manufacturer" in value) ||
-      isSourcedValueSnapshot(value.manufacturer)) &&
-    (!("modelNumber" in value) || isSourcedValueSnapshot(value.modelNumber)) &&
-    (!("notes" in value) || isSourcedValueSnapshot(value.notes))
-  );
-};
+const productSchema = plainObject({
+  name: optionalField(sourcedStringSchema),
+  manufacturer: optionalField(sourcedStringSchema),
+  modelNumber: optionalField(sourcedStringSchema),
+  notes: optionalField(sourcedStringSchema),
+});
 
 const isUuid = (value: unknown): value is string =>
   typeof value === "string" &&
@@ -137,29 +127,21 @@ const isUuid = (value: unknown): value is string =>
     value,
   );
 
-const isHttpUrl = (value: unknown): value is string => {
-  if (!isSafeString(value)) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
+const candidateSourceSchema = plainObject({
+  id: uuid(),
+  pageUrl: optionalField(httpUrl()),
+  siteName: optionalField(safeString()),
+  capturedAt: optionalField(utcTimestamp()),
+  price: optionalField(sourcedMoneySchema),
+  kind: optionalField(
+    z.custom<"retail" | "manufacturer">(
+      (value) => value === "retail" || value === "manufacturer",
+    ),
+  ),
+});
 
 export const isCandidateSourceSnapshot = (value: unknown): boolean =>
-  isRecord(value) &&
-  Object.keys(value).every((key) =>
-    ["id", "pageUrl", "siteName", "capturedAt", "price", "kind"].includes(key),
-  ) &&
-  isUuid(value.id) &&
-  (!("pageUrl" in value) || isHttpUrl(value.pageUrl)) &&
-  (!("siteName" in value) || isSafeString(value.siteName)) &&
-  (!("capturedAt" in value) || isUtcTimestamp(value.capturedAt)) &&
-  (!("price" in value) || isSourcedValueSnapshot(value.price, "money")) &&
-  (!("kind" in value) ||
-    value.kind === "retail" ||
-    value.kind === "manufacturer");
+  schemaAccepts(candidateSourceSchema, value);
 
 const isSourceState = (value: Record<string, unknown>): boolean => {
   if (
@@ -174,9 +156,12 @@ const isSourceState = (value: Record<string, unknown>): boolean => {
     : isUuid(value.primarySourceId) && ids.includes(value.primarySourceId);
 };
 
-const isSourceSnapshot = (value: unknown): boolean =>
-  isRecord(value) &&
-  Object.values(value).every((item) => item === null || isSafeString(item));
+const sourceSnapshotSchema = z.record(
+  safeString(),
+  z.custom<string | null>(
+    (value) => value === null || typeof value === "string",
+  ),
+);
 
 const attributeKinds: Readonly<
   Record<PartCategory, Readonly<Record<string, "string" | "strings">>>
@@ -215,76 +200,109 @@ const isAttributes = (value: unknown, category: PartCategory): boolean => {
 };
 
 /** Shared fail-closed validator for feature-local UI snapshots. */
+const candidateDraftShapeSchema = plainObject({
+  projectId: uuid<ProjectId>(),
+  category: z.custom<PartCategory>(isPartCategory),
+  product: productSchema,
+  normalizedAttributes: z.unknown(),
+  sources: z.array(candidateSourceSchema),
+  primarySourceId: optionalField(uuid()),
+  sourceSnapshot: optionalField(sourceSnapshotSchema),
+});
+
 export const isCandidateDraftSnapshot = (
   value: unknown,
 ): value is CandidateDraft => {
-  if (!isRecord(value) || !isPartCategory(value.category)) return false;
-  const name = isRecord(value.product) ? value.product.name : undefined;
+  if (!inspectJsonSafety(value).ok) return false;
+  const parsed = z.safeParse(candidateDraftShapeSchema, value);
+  if (!parsed.success) return false;
+  const candidate = parsed.data;
+  const name = candidate.product.name;
   return (
-    isJsonValue(value) &&
-    Object.keys(value).every((key) =>
-      [
-        "projectId",
-        "category",
-        "product",
-        "normalizedAttributes",
-        "sources",
-        "primarySourceId",
-        "sourceSnapshot",
-      ].includes(key),
-    ) &&
-    typeof value.projectId === "string" &&
-    isProduct(value.product) &&
     isSourcedValueSnapshot(name) &&
     ((typeof name.original === "string" && name.original.trim().length > 0) ||
       (typeof name.confirmed === "string" &&
         name.confirmed.trim().length > 0)) &&
-    isAttributes(value.normalizedAttributes, value.category) &&
-    isSourceState(value) &&
-    (!("sourceSnapshot" in value) || isSourceSnapshot(value.sourceSnapshot))
+    isAttributes(candidate.normalizedAttributes, candidate.category) &&
+    isSourceState(candidate)
   );
 };
 
+const displayErrorSchema = plainObject({
+  code: z.custom<ManagementDisplayError["code"]>((value) =>
+    [
+      "validation",
+      "not-found",
+      "conflict",
+      "maintenance",
+      "storage",
+      "quota",
+      "unsupported-data",
+      "snapshot-restore-failed",
+    ].includes(value as string),
+  ),
+});
 const isDisplayError = (value: unknown): value is ManagementDisplayError =>
-  isRecord(value) &&
-  typeof value.code === "string" &&
-  [
-    "validation",
-    "not-found",
-    "conflict",
-    "maintenance",
-    "storage",
-    "quota",
-    "unsupported-data",
-    "snapshot-restore-failed",
-  ].includes(value.code) &&
-  hasOnlyKeys(value, ["code"]);
+  schemaAccepts(displayErrorSchema, value);
 
-const isEditorEnvelope = (value: unknown): boolean => {
-  if (
-    !isRecord(value) ||
-    !isRecord(value.draft) ||
-    typeof value.projectId !== "string"
-  ) {
-    return false;
-  }
-  if (value.mode === "create")
-    return hasOnlyKeys(value, ["mode", "projectId", "draft"]);
-  return (
-    value.mode === "edit" &&
-    typeof value.candidateId === "string" &&
-    hasOnlyKeys(value, ["mode", "projectId", "candidateId", "draft"])
-  );
-};
+const createEditorSchema = plainObject({
+  mode: z.literal("create"),
+  projectId: uuid<ProjectId>(),
+  draft: z.unknown(),
+});
+const editEditorSchema = plainObject({
+  mode: z.literal("edit"),
+  projectId: uuid<ProjectId>(),
+  candidateId: uuid(),
+  draft: z.unknown(),
+});
+const isEditorEnvelope = (value: unknown): boolean =>
+  schemaAccepts(createEditorSchema, value) ||
+  schemaAccepts(editEditorSchema, value);
 
+const projectDeletionSchema = plainObject({
+  kind: z.literal("project"),
+  projectId: uuid<ProjectId>(),
+});
+const candidateDeletionSchema = plainObject({
+  kind: z.literal("candidate"),
+  candidateId: uuid(),
+});
 const isDeletion = (value: unknown): value is DeletionConfirmation =>
-  isRecord(value) &&
-  ((value.kind === "project" &&
-    typeof value.projectId === "string" &&
-    hasOnlyKeys(value, ["kind", "projectId"])) ||
-    (value.kind === "candidate" &&
-      typeof value.candidateId === "string" &&
-      hasOnlyKeys(value, ["kind", "candidateId"])));
+  schemaAccepts(projectDeletionSchema, value) ||
+  schemaAccepts(candidateDeletionSchema, value);
+
+const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "invalid-shape");
+const managementSnapshotSchema = plainObject({
+  version: invalid(z.literal(3)),
+  selectedProjectId: invalid(
+    z.custom<ProjectId | null>(
+      (value) => value === null || (typeof value === "string" && isUuid(value)),
+    ),
+  ),
+  selectedCategory: invalid(
+    z.custom<PartCategory | null>(
+      (value) => value === null || isPartCategory(value),
+    ),
+  ),
+  editor: invalid(
+    z.custom<CandidateEditor | null>(
+      (value) => value === null || isEditorEnvelope(value),
+    ),
+  ),
+  deletion: invalid(
+    z.custom<DeletionConfirmation | null>(
+      (value) => value === null || isDeletion(value),
+    ),
+  ),
+  displayError: invalid(
+    z.custom<ManagementDisplayError | null>(
+      (value) => value === null || isDisplayError(value),
+    ),
+  ),
+  duplicateDecision: z.unknown(),
+});
 
 const hasReference = (state: ManagementState, projectId: string): boolean =>
   state.value.projects.some((project) => project.id === projectId);
@@ -362,55 +380,39 @@ export const createManagementStateSnapshotCodec = (
   },
 
   restore(input) {
-    if (!isRecord(input))
-      return { ok: false, error: { kind: "invalid-shape" } };
-    if (input.version !== 3) {
+    if (
+      typeof input === "object" &&
+      input !== null &&
+      "version" in input &&
+      input.version !== 3
+    ) {
       return { ok: false, error: { kind: "unsupported-version" } };
     }
-    const editor = input.editor;
-    if (
-      !hasOnlyKeys(input, [
-        "version",
-        "selectedProjectId",
-        "selectedCategory",
-        "editor",
-        "deletion",
-        "displayError",
-        "duplicateDecision",
-      ]) ||
-      (input.selectedProjectId !== null &&
-        typeof input.selectedProjectId !== "string") ||
-      (input.selectedCategory !== null &&
-        !isPartCategory(input.selectedCategory)) ||
-      (editor !== null && !isEditorEnvelope(editor)) ||
-      (input.deletion !== null && !isDeletion(input.deletion)) ||
-      (input.displayError !== null && !isDisplayError(input.displayError)) ||
-      !("duplicateDecision" in input)
-    ) {
+    if (!inspectJsonSafety(input).ok)
       return { ok: false, error: { kind: "invalid-shape" } };
-    }
-    if (
-      editor !== null &&
-      isRecord(editor) &&
-      !isCandidateDraftSnapshot(editor.draft)
-    ) {
+    const decoded = decodeWithProfile(managementSnapshotSchema, input, {
+      toError: (): ManagementSnapshotError => ({ kind: "invalid-shape" }),
+    });
+    if (!decoded.ok) return decoded;
+    const editor = decoded.value.editor;
+    if (editor !== null && !isCandidateDraftSnapshot(editor.draft)) {
       return { ok: false, error: { kind: "invalid-draft" } };
     }
 
     const restoredDuplicate =
-      input.duplicateDecision === null
+      decoded.value.duplicateDecision === null
         ? ({ ok: true, value: { status: "idle" } } as const)
-        : duplicateCodec.restore(input.duplicateDecision);
+        : duplicateCodec.restore(decoded.value.duplicateDecision);
     if (!restoredDuplicate.ok)
       return { ok: false, error: { kind: "invalid-shape" } };
 
     const snapshot: RestoredManagementStateSnapshot = {
       version: 3,
-      selectedProjectId: input.selectedProjectId as ProjectId | null,
-      selectedCategory: input.selectedCategory as PartCategory | null,
-      editor: input.editor as CandidateEditor | null,
-      deletion: input.deletion as DeletionConfirmation | null,
-      displayError: input.displayError as ManagementDisplayError | null,
+      selectedProjectId: decoded.value.selectedProjectId,
+      selectedCategory: decoded.value.selectedCategory,
+      editor: decoded.value.editor,
+      deletion: decoded.value.deletion,
+      displayError: decoded.value.displayError,
       duplicateDecision: restoredDuplicate.value,
     };
     return hasValidReferences(state, snapshot)

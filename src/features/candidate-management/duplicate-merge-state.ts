@@ -3,6 +3,17 @@ import {
   PART_CATEGORIES,
   type Result,
 } from "../../domain/public.js";
+import {
+  decodeWithProfile,
+  inspectJsonSafety,
+  optionalField,
+  plainObject,
+  safeBoolean,
+  tagged,
+  utcTimestamp,
+  uuid,
+  z,
+} from "../../domain/runtime-schema/public.js";
 import type { CandidateDraft, MutationContext } from "./contracts.js";
 import type { DuplicateCandidateMatch } from "./duplicate-matcher.js";
 import type {
@@ -211,106 +222,72 @@ export interface DuplicateMergeStateSnapshotCodec {
   ): Result<DuplicateDecisionState, DuplicateMergeSnapshotError>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value) &&
-  (Object.getPrototypeOf(value) === Object.prototype ||
-    Object.getPrototypeOf(value) === null);
-const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
-  Object.keys(value).every((key) => keys.includes(key)) &&
-  keys.every((key) => key in value);
-const isUuid = (value: unknown): value is string =>
-  typeof value === "string" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
-const isUtcTimestamp = (value: unknown): value is string => {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
-  )
-    return false;
-  const milliseconds = Date.parse(value);
-  return (
-    Number.isFinite(milliseconds) &&
-    new Date(milliseconds).toISOString().replace(".000Z", "Z") ===
-      value.replace(".000Z", "Z")
-  );
+const schemaAccepts = (
+  schema: Parameters<typeof z.safeParse>[0],
+  value: unknown,
+) => z.safeParse(schema, value).success;
+const categorySchema = z.custom<(typeof PART_CATEGORIES)[number]>((value) =>
+  PART_CATEGORIES.includes(value as never),
+);
+const sourcedStringSchema = z.custom((value) => isSourcedValueSnapshot(value));
+const sourcedMoneySchema = z.custom((value) =>
+  isSourcedValueSnapshot(value, "money"),
+);
+const summarySchema = plainObject({
+  id: uuid<CandidatePartId>(),
+  projectId: uuid(),
+  category: categorySchema,
+  name: optionalField(sourcedStringSchema),
+  primarySource: optionalField(z.custom(isCandidateSourceSnapshot)),
+  price: optionalField(sourcedMoneySchema),
+  manufacturer: optionalField(sourcedStringSchema),
+  modelNumber: optionalField(sourcedStringSchema),
+  hasMissingDetails: safeBoolean(),
+  updatedAt: utcTimestamp(),
+});
+const evidenceSchema = plainObject({
+  kind: z.custom<"model-number" | "manufacturer-name">(
+    (value) => value === "model-number" || value === "manufacturer-name",
+  ),
+});
+const matchShapeSchema = plainObject({
+  candidateId: uuid<CandidatePartId>(),
+  confidence: z.custom<"high" | "supporting">(
+    (value) => value === "high" || value === "supporting",
+  ),
+  evidence: evidenceSchema,
+  summary: summarySchema,
+});
+const isMatch = (value: unknown): value is DuplicateCandidateMatch => {
+  const parsed = z.safeParse(matchShapeSchema, value);
+  return parsed.success && parsed.data.summary.id === parsed.data.candidateId;
 };
-const isSummary = (value: unknown): boolean => {
-  if (
-    !isRecord(value) ||
-    !Object.keys(value).every((key) =>
-      [
-        "id",
-        "projectId",
-        "category",
-        "name",
-        "primarySource",
-        "price",
-        "manufacturer",
-        "modelNumber",
-        "hasMissingDetails",
-        "updatedAt",
-      ].includes(key),
-    ) ||
-    !["id", "projectId", "category", "hasMissingDetails", "updatedAt"].every(
-      (key) => key in value,
-    )
-  )
-    return false;
-  return (
-    isUuid(value.id) &&
-    isUuid(value.projectId) &&
-    typeof value.category === "string" &&
-    PART_CATEGORIES.includes(value.category as never) &&
-    (!("name" in value) || isSourcedValueSnapshot(value.name)) &&
-    (!("manufacturer" in value) ||
-      isSourcedValueSnapshot(value.manufacturer)) &&
-    (!("modelNumber" in value) || isSourcedValueSnapshot(value.modelNumber)) &&
-    (!("primarySource" in value) ||
-      isCandidateSourceSnapshot(value.primarySource)) &&
-    (!("price" in value) || isSourcedValueSnapshot(value.price, "money")) &&
-    typeof value.hasMissingDetails === "boolean" &&
-    isUtcTimestamp(value.updatedAt)
-  );
-};
-const isMatch = (value: unknown): value is DuplicateCandidateMatch =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["candidateId", "confidence", "evidence", "summary"]) &&
-  isUuid(value.candidateId) &&
-  (value.confidence === "high" || value.confidence === "supporting") &&
-  isRecord(value.evidence) &&
-  hasOnlyKeys(value.evidence, ["kind"]) &&
-  (value.evidence.kind === "model-number" ||
-    value.evidence.kind === "manufacturer-name") &&
-  isSummary(value.summary) &&
-  (value.summary as { id: unknown }).id === value.candidateId;
-const isStringRecord = (value: unknown): boolean =>
-  isRecord(value) &&
-  Object.values(value).every((item) => typeof item === "string");
-const isManagementError = (value: unknown): boolean => {
-  if (!isRecord(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "validation")
-    return (
-      hasOnlyKeys(value, ["kind", "fields"]) && isStringRecord(value.fields)
-    );
-  if (value.kind === "not-found")
-    return (
-      hasOnlyKeys(value, ["kind", "entity"]) &&
-      ["project", "candidate", "source"].includes(value.entity as string)
-    );
-  return (
+const matchSchema = z.custom<DuplicateCandidateMatch>(isMatch);
+const validationErrorSchema = plainObject({
+  kind: z.literal("validation"),
+  fields: z.record(z.string(), z.string()),
+});
+const notFoundErrorSchema = plainObject({
+  kind: z.literal("not-found"),
+  entity: z.custom<"project" | "candidate" | "source">((value) =>
+    ["project", "candidate", "source"].includes(value as string),
+  ),
+});
+const simpleManagementErrorSchema = plainObject({
+  kind: z.custom((value) =>
     [
       "conflict",
       "maintenance",
       "storage",
       "quota",
       "unsupported-data",
-    ].includes(value.kind) && hasOnlyKeys(value, ["kind"])
-  );
-};
+    ].includes(value as string),
+  ),
+});
+const isManagementError = (value: unknown): boolean =>
+  schemaAccepts(validationErrorSchema, value) ||
+  schemaAccepts(notFoundErrorSchema, value) ||
+  schemaAccepts(simpleManagementErrorSchema, value);
 const refreshSimpleKinds = [
   "invalid-url",
   "no-match",
@@ -327,100 +304,111 @@ const refreshSimpleKinds = [
   "injection-failed",
   "invalid-payload",
 ] as const;
+const simpleRefreshErrorSchema = plainObject({
+  kind: z.custom<(typeof refreshSimpleKinds)[number]>((value) =>
+    refreshSimpleKinds.includes(value as never),
+  ),
+});
 const isRefreshError = (value: unknown): boolean =>
-  isRecord(value) &&
-  (refreshSimpleKinds.includes(
-    value.kind as (typeof refreshSimpleKinds)[number],
-  )
-    ? hasOnlyKeys(value, ["kind"])
-    : isManagementError(value));
-const isError = (value: unknown): value is DuplicateMergeError => {
-  if (!isRecord(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "stale-decision") return hasOnlyKeys(value, ["kind"]);
-  if (value.kind === "management")
-    return (
-      hasOnlyKeys(value, ["kind", "cause"]) && isManagementError(value.cause)
-    );
-  if (
-    value.kind !== "source-route" ||
-    !hasOnlyKeys(value, ["kind", "cause"]) ||
-    !isRecord(value.cause)
-  )
-    return false;
-  return (
-    (value.cause.kind === "source-add" &&
-      hasOnlyKeys(value.cause, ["kind", "cause"]) &&
-      isManagementError(value.cause.cause)) ||
-    (value.cause.kind === "source-refresh" &&
-      hasOnlyKeys(value.cause, ["kind", "cause"]) &&
-      isRefreshError(value.cause.cause))
-  );
-};
-const isMatches = (
-  value: unknown,
-): value is readonly DuplicateCandidateMatch[] =>
-  Array.isArray(value) && value.every(isMatch);
+  schemaAccepts(simpleRefreshErrorSchema, value) || isManagementError(value);
+const staleErrorSchema = plainObject({ kind: z.literal("stale-decision") });
+const managementCauseSchema = plainObject({
+  kind: z.literal("management"),
+  cause: z.custom(isManagementError),
+});
+const sourceAddCauseSchema = plainObject({
+  kind: z.literal("source-add"),
+  cause: z.custom(isManagementError),
+});
+const sourceRefreshCauseSchema = plainObject({
+  kind: z.literal("source-refresh"),
+  cause: z.custom(isRefreshError),
+});
+const sourceRouteErrorSchema = plainObject({
+  kind: z.literal("source-route"),
+  cause: z.custom(
+    (value) =>
+      schemaAccepts(sourceAddCauseSchema, value) ||
+      schemaAccepts(sourceRefreshCauseSchema, value),
+  ),
+});
+const isError = (value: unknown): value is DuplicateMergeError =>
+  schemaAccepts(staleErrorSchema, value) ||
+  schemaAccepts(managementCauseSchema, value) ||
+  schemaAccepts(sourceRouteErrorSchema, value);
 const matchesDraftProject = (
   matches: readonly DuplicateCandidateMatch[],
   draft: CandidateDraft,
 ): boolean =>
   matches.every((match) => match.summary.projectId === draft.projectId);
 
+const pendingStateSchema = plainObject({
+  status: z.custom<"evaluating" | "committing">(
+    (value) => value === "evaluating" || value === "committing",
+  ),
+  draft: z.custom<CandidateDraft>(isCandidateDraftSnapshot),
+});
+const decidingStateSchema = plainObject({
+  status: z.literal("deciding"),
+  draft: z.custom<CandidateDraft>(isCandidateDraftSnapshot),
+  matches: z.array(matchSchema),
+  selectedCandidateId: optionalField(uuid<CandidatePartId>()),
+});
+const failedStateSchema = plainObject({
+  status: z.literal("failed"),
+  draft: z.custom<CandidateDraft>(isCandidateDraftSnapshot),
+  matches: z.array(matchSchema),
+  error: z.custom<DuplicateMergeError>(isError),
+});
+
 const restoredState = (input: unknown): DuplicateDecisionState | undefined => {
-  if (!isRecord(input) || typeof input.status !== "string") return undefined;
-  if (
-    (input.status === "evaluating" || input.status === "committing") &&
-    hasOnlyKeys(input, ["status", "draft"]) &&
-    isCandidateDraftSnapshot(input.draft)
-  )
+  const pending = z.safeParse(pendingStateSchema, input);
+  if (pending.success)
     return {
       status: "failed",
-      draft: input.draft,
+      draft: pending.data.draft,
       matches: [],
       error: { kind: "stale-decision" },
     };
+  const deciding = z.safeParse(decidingStateSchema, input);
   if (
-    input.status === "deciding" &&
-    isCandidateDraftSnapshot(input.draft) &&
-    isMatches(input.matches) &&
-    matchesDraftProject(input.matches, input.draft) &&
-    Object.keys(input).every((key) =>
-      ["status", "draft", "matches", "selectedCandidateId"].includes(key),
-    ) &&
-    ["status", "draft", "matches"].every((key) => key in input) &&
-    (input.selectedCandidateId === undefined ||
-      (isUuid(input.selectedCandidateId) &&
-        input.matches.some(
-          (match) => match.candidateId === input.selectedCandidateId,
-        )))
-  ) {
+    deciding.success &&
+    matchesDraftProject(deciding.data.matches, deciding.data.draft) &&
+    (deciding.data.selectedCandidateId === undefined ||
+      deciding.data.matches.some(
+        (match) => match.candidateId === deciding.data.selectedCandidateId,
+      ))
+  )
     return {
       status: "deciding",
-      draft: input.draft,
-      matches: input.matches,
-      ...(input.selectedCandidateId === undefined
+      draft: deciding.data.draft,
+      matches: deciding.data.matches,
+      ...(deciding.data.selectedCandidateId === undefined
         ? {}
-        : {
-            selectedCandidateId: input.selectedCandidateId as CandidatePartId,
-          }),
+        : { selectedCandidateId: deciding.data.selectedCandidateId }),
     };
-  }
+  const failed = z.safeParse(failedStateSchema, input);
   if (
-    input.status === "failed" &&
-    isCandidateDraftSnapshot(input.draft) &&
-    isMatches(input.matches) &&
-    matchesDraftProject(input.matches, input.draft) &&
-    isError(input.error) &&
-    hasOnlyKeys(input, ["status", "draft", "matches", "error"])
+    failed.success &&
+    matchesDraftProject(failed.data.matches, failed.data.draft)
   )
     return {
       status: "failed",
-      draft: input.draft,
-      matches: input.matches,
-      error: input.error,
+      draft: failed.data.draft,
+      matches: failed.data.matches,
+      error: failed.data.error,
     };
   return undefined;
 };
+
+const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "invalid-shape");
+const duplicateSnapshotSchema = plainObject({
+  version: invalid(z.literal(1)),
+  state: invalid(
+    z.custom<unknown>((value) => restoredState(value) !== undefined),
+  ),
+});
 
 export const createDuplicateMergeStateSnapshotCodec =
   (): DuplicateMergeStateSnapshotCodec => ({
@@ -435,13 +423,22 @@ export const createDuplicateMergeStateSnapshotCodec =
     restore(
       input: unknown,
     ): Result<DuplicateDecisionState, DuplicateMergeSnapshotError> {
-      if (!isRecord(input))
-        return { ok: false, error: { kind: "invalid-shape" } };
-      if (input.version !== 1)
+      if (
+        typeof input === "object" &&
+        input !== null &&
+        "version" in input &&
+        input.version !== 1
+      )
         return { ok: false, error: { kind: "unsupported-version" } };
-      if (!hasOnlyKeys(input, ["version", "state"]))
+      if (!inspectJsonSafety(input).ok)
         return { ok: false, error: { kind: "invalid-shape" } };
-      const state = restoredState(input.state);
+      const decoded = decodeWithProfile(duplicateSnapshotSchema, input, {
+        toError: (): DuplicateMergeSnapshotError => ({
+          kind: "invalid-shape",
+        }),
+      });
+      if (!decoded.ok) return decoded;
+      const state = restoredState(decoded.value.state);
       return state === undefined
         ? { ok: false, error: { kind: "invalid-shape" } }
         : { ok: true, value: state };

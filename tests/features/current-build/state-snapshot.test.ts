@@ -199,6 +199,15 @@ test("不正カテゴリ、不正な数量draft値、安全でない文字列を
   assert.deepEqual(
     codec.restore({
       version: 1,
+      selectedProjectId: "data:text/html,<script>alert(1)</script>",
+      selectedCategory: null,
+      quantityDrafts: {},
+    }),
+    { ok: false, error: { kind: "invalid-shape" } },
+  );
+  assert.deepEqual(
+    codec.restore({
+      version: 1,
       selectedProjectId: projectId,
       selectedCategory: "not-a-category",
       quantityDrafts: {},

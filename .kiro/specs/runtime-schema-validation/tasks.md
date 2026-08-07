@@ -189,9 +189,9 @@
   - _Boundary: Runtime Activation Integration_
   - _Depends: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 7. Feature state snapshot を owner-local schema へ移行する
+- [x] 7. Feature state snapshot を owner-local schema へ移行する
 
-- [ ] 7.1 (P) Current build version 1 snapshot を移行する
+- [x] 7.1 (P) Current build version 1 snapshot を移行する
   - version、`selectedProjectId`、selected category、quantity drafts の strict shape と safe string/key 規則を定義する。
   - shape 成功後に project/candidate ownership を current state へ照合し、legacy project ID を selection authority にしない。
   - invalid version/shape/reference で state が不変となり、有効 snapshot が同じ値へ復元される test を完了条件とする。
@@ -199,7 +199,7 @@
   - _Boundary: StateSnapshotSchemaSet Current Build_
   - _Depends: 6.7_
 
-- [ ] 7.2 (P) Candidate management version 3 snapshot を移行する
+- [x] 7.2 (P) Candidate management version 3 snapshot を移行する
   - `project-candidate-management` の version 3 base contract と、`candidate-source-bookmarks` が同じ snapshot shape へ追加した source collection、primary reference、price、kind、URL safety を owner-local schema と helper に分割する。
   - `selectedProjectId` と draft/source/project の reference validation、失敗時の state 不変性を維持する。
   - candidate-source-bookmarks の複数 source editor fixture を含む version 3 snapshot が同じ restored value/error になり、旧・未知 version を永続状態へ触れず拒否し、不要な手書き shape guard/cast が削減された状態を完了とする。
@@ -207,7 +207,7 @@
   - _Boundary: StateSnapshotSchemaSet Candidate Management_
   - _Depends: 6.7_
 
-- [ ] 7.3 Duplicate merge の version 1 snapshot と stale recovery を移行する
+- [x] 7.3 Duplicate merge の version 1 snapshot と stale recovery を移行する
   - candidate-management v3 の source-aware 公開 helper を利用し、duplicate merge owner の version 1 contract で match、summary、evidence、error、decision state を strict schema として維持する。
   - evaluating/committing snapshot は既存どおり `stale-decision` failure へ復元し、自動 commit を再開しない。
   - selected match/reference の invalid fixture を拒否し、有効 deciding/failed state が同じ結果へ復元されることを完了条件とする。
@@ -215,7 +215,7 @@
   - _Boundary: StateSnapshotSchemaSet Duplicate Merge_
   - _Depends: 7.2_
 
-- [ ] 7.4 Snapshot wave の no-mutation parity を完成する
+- [x] 7.4 Snapshot wave の no-mutation parity を完成する
   - current-build v1、candidate-management v3 と candidate-source-bookmarks 拡張済み shape、duplicate-merge v1 の version/shape/reference error table を一つの wave gate として実行する。
   - restore failure では current state が変更されず、成功値だけが一度適用されることを contract test で確認する。
   - owner ごとの snapshot version/field と `selectedProjectId` が不変で、全 snapshot focused tests が通る状態を完了とする。
@@ -242,6 +242,8 @@
   - _Depends: 8.1_
 
 ## Implementation Notes
+
+- snapshot schema は strict object/collection fragment で shape を decode し、source primary・ownership・selected match・stale decision のみ owner semantic pass に残す。
 
 - esbuild は TypeScript の未使用 import を除去するため、build 失敗 fixture は import した binding を実際に使う必要がある。
 - Zod の production bundle には `const F = Function; new F("")` という jitless 判定 probe が実在する。alias 代入を静的に拒否すると configured probe が誤検出になるため、alias 検出は runtime の `Function` Proxy trap が担当する（`jitless` 有効時の実行回数は実測 0）。
