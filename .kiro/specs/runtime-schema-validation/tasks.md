@@ -115,9 +115,9 @@
   - _Requirements: 5.2, 5.3, 5.4, 5.5, 8.2, 8.3, 8.4_
   - _Boundary: BackupExchangeSchemaSet_
 
-- [ ] 5. Product capture 境界を owner-local schema へ移行する
+- [x] 5. Product capture 境界を owner-local schema へ移行する
 
-- [ ] 5.1 Capture result と field schema を宣言する
+- [x] 5.1 Capture result と field schema を宣言する
   - normalized field、money、core/spec field、source、document order、missing field、rejected field/reason の strict schema を定義する。
   - request、tab、page URL、captured timestamp の既存受理集合を維持し、schema 導入だけで field を暗黙に狭めない。
   - schema output と既存 `CaptureResult` が assignable で、valid/invalid field table が parity することを完了条件とする。
@@ -125,7 +125,7 @@
   - _Boundary: CaptureSchemaSet_
   - _Depends: 4.2_
 
-- [ ] 5.2 Capture draft mapper を schema decode へ接続する
+- [x] 5.2 Capture draft mapper を schema decode へ接続する
   - capture result を一度だけ decode し、成功後に unresolved draft と editor prefill を生成する。
   - invalid payload では partial draft、source、diagnostic を生成せず、安定した `invalid-payload` だけを返す。
   - draft mapping とログ非漏洩の回帰 test が通り、手書き key guard と無検証 cast が削除された状態を完了とする。

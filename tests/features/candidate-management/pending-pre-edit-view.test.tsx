@@ -289,7 +289,7 @@ test("dynamic spec rejectionをmapperからunknown activation経由で既存proj
     capturedAt: timestamp,
     draft: { fields: [], missingCoreFields: [] },
     rejectedFields: [
-      { field: "spec: leading:nested\u0000", reason: "unresolvable" },
+      { field: "spec:leading", reason: "unresolvable" },
       { field: "spec:another-label", reason: "unresolvable" },
     ],
   });

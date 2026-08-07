@@ -1,20 +1,17 @@
 import {
   type CandidateSourceId,
   createUuid,
-  err,
-  isUtcTimestamp,
-  isUuid,
   ok,
   type Result,
 } from "../../domain/public.js";
 import type { CandidateManagementPublicApi } from "../candidate-management/public.js";
+import { decodeCaptureResult } from "./capture-schema.js";
 import { inferCategoryHint } from "./category-hint.js";
 import type {
   CaptureError,
   CaptureResult,
   NormalizedField,
 } from "./contracts.js";
-import { CAPTURE_CORE_FIELDS } from "./contracts.js";
 
 type CandidateEditorIntentFactory =
   CandidateManagementPublicApi["createCandidateEditorIntent"];
@@ -34,11 +31,11 @@ export const createCaptureDraftMapper = (
 ): UnresolvedCaptureDraftMapper => ({
   toUnresolvedDraft(value) {
     const result = decodeCaptureResult(value);
-    return result === undefined
-      ? err({ kind: "invalid-payload" })
+    return !result.ok
+      ? result
       : ok(
           unresolvedDraftFromResult(
-            result,
+            result.value,
             dependencies.createSourceId ??
               (() => createUuid() as CandidateSourceId),
           ),
@@ -46,8 +43,8 @@ export const createCaptureDraftMapper = (
   },
   toEditorPrefill(value) {
     const result = decodeCaptureResult(value);
-    if (result === undefined) return err({ kind: "invalid-payload" });
-    const category = result.draft.fields.find(
+    if (!result.ok) return result;
+    const category = result.value.draft.fields.find(
       (field) => field.field === "category",
     );
     const categoryHint = inferCategoryHint(
@@ -57,16 +54,16 @@ export const createCaptureDraftMapper = (
     );
     return ok({
       draft: unresolvedDraftFromResult(
-        result,
+        result.value,
         dependencies.createSourceId ??
           (() => createUuid() as CandidateSourceId),
       ),
       ...(categoryHint === undefined ? {} : { categoryHint }),
-      ...(result.rejectedFields.length === 0
+      ...(result.value.rejectedFields.length === 0
         ? {}
         : {
             captureDiagnostics: projectCaptureDiagnostics(
-              result.rejectedFields,
+              result.value.rejectedFields,
             ),
           }),
     });
@@ -75,101 +72,6 @@ export const createCaptureDraftMapper = (
     return { ...unresolvedDraftFromFields([]), sources: [] };
   },
 });
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value) &&
-  Object.getPrototypeOf(value) === Object.prototype;
-
-const hasOnlyKeys = (
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-): boolean => Object.keys(value).every((key) => allowed.includes(key));
-
-const coreFields = new Set<string>(CAPTURE_CORE_FIELDS);
-const extractionSources = new Set([
-  "json-ld",
-  "meta",
-  "heading",
-  "breadcrumb",
-  "table",
-  "definition-list",
-  "domain-map",
-]);
-const rejectionReasons = new Set([
-  "empty",
-  "too-long",
-  "control-characters",
-  "invalid-format",
-  "unresolvable",
-]);
-
-const isNormalizedField = (value: unknown): value is NormalizedField =>
-  isRecord(value) &&
-  hasOnlyKeys(value, [
-    "field",
-    "normalizedValue",
-    "rawValue",
-    "source",
-    "sourceLabel",
-    "documentOrder",
-  ]) &&
-  typeof value.field === "string" &&
-  (coreFields.has(value.field) || value.field.startsWith("spec:")) &&
-  (typeof value.normalizedValue === "string" ||
-    (isRecord(value.normalizedValue) &&
-      hasOnlyKeys(value.normalizedValue, ["amount", "currency"]) &&
-      typeof value.normalizedValue.amount === "number" &&
-      Number.isFinite(value.normalizedValue.amount) &&
-      typeof value.normalizedValue.currency === "string")) &&
-  typeof value.rawValue === "string" &&
-  typeof value.source === "string" &&
-  extractionSources.has(value.source) &&
-  typeof value.sourceLabel === "string" &&
-  typeof value.documentOrder === "number" &&
-  Number.isSafeInteger(value.documentOrder) &&
-  value.documentOrder >= 0;
-
-const isRejectedField = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["field", "reason"]) &&
-  typeof value.field === "string" &&
-  (coreFields.has(value.field) || value.field.startsWith("spec:")) &&
-  typeof value.reason === "string" &&
-  rejectionReasons.has(value.reason);
-
-const decodeCaptureResult = (value: unknown): CaptureResult | undefined => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, [
-      "requestId",
-      "tabId",
-      "pageUrl",
-      "capturedAt",
-      "draft",
-      "rejectedFields",
-    ]) ||
-    !isUuid(value.requestId) ||
-    typeof value.tabId !== "number" ||
-    !Number.isSafeInteger(value.tabId) ||
-    value.tabId < 0 ||
-    typeof value.pageUrl !== "string" ||
-    !isUtcTimestamp(value.capturedAt) ||
-    !isRecord(value.draft) ||
-    !hasOnlyKeys(value.draft, ["fields", "missingCoreFields"]) ||
-    !Array.isArray(value.draft.fields) ||
-    !value.draft.fields.every(isNormalizedField) ||
-    !Array.isArray(value.draft.missingCoreFields) ||
-    !value.draft.missingCoreFields.every(
-      (field) => typeof field === "string" && coreFields.has(field),
-    ) ||
-    !Array.isArray(value.rejectedFields) ||
-    !value.rejectedFields.every(isRejectedField)
-  )
-    return undefined;
-  return value as unknown as CaptureResult;
-};
 
 const unresolvedDraftFromFields = (
   fields: readonly NormalizedField[],

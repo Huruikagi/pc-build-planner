@@ -141,7 +141,7 @@ test("棄却値を露出せずfieldとstable reasonだけをeditor prefillへ渡
     rejectedFields: [
       { field: "name", reason: "too-long" },
       { field: "price", reason: "invalid-format" },
-      { field: "spec: socket:nested\u0000", reason: "unresolvable" },
+      { field: "spec:socket", reason: "unresolvable" },
       { field: "spec:another-page-label", reason: "unresolvable" },
     ],
   } as const;
@@ -214,11 +214,41 @@ test("構造不正と余分な値を拒否する", () => {
   for (const invalid of [
     captureResult([
       {
+        field: "spec:",
+        normalizedValue: "value",
+        rawValue: "value",
+        source: "table",
+        sourceLabel: "specification",
+        documentOrder: 0,
+      },
+    ]),
+    captureResult([
+      {
+        field: "name",
+        normalizedValue: "value",
+        rawValue: "value",
+        source: "heading",
+        sourceLabel: "",
+        documentOrder: 0,
+      },
+    ]),
+    captureResult([
+      {
         field: "name",
         normalizedValue: "架空CPU",
         rawValue: "架空CPU",
         source: "not-a-source",
         sourceLabel: "h1",
+        documentOrder: 0,
+      },
+    ]),
+    captureResult([
+      {
+        field: "price",
+        normalizedValue: { amount: Number.NaN, currency: "JPY" },
+        rawValue: "NaN JPY",
+        source: "meta",
+        sourceLabel: "price",
         documentOrder: 0,
       },
     ]),
@@ -273,4 +303,45 @@ test("構造不正と余分な値を拒否する", () => {
     ).ok,
     true,
   );
+});
+
+test("capture resultの各strict shapeを検証し、不正時は生成処理を開始しない", () => {
+  let sourceIdCalls = 0;
+  const mapper = createCaptureDraftMapper({
+    createSourceId: () => {
+      sourceIdCalls += 1;
+      return sourceId;
+    },
+  });
+  const invalidValues = [
+    { ...captureResult(), tabId: -1 },
+    {
+      ...captureResult(),
+      draft: { fields: [], missingCoreFields: ["unknown"] },
+    },
+    {
+      ...captureResult(),
+      rejectedFields: [{ field: "spec:", reason: "unresolvable" }],
+    },
+    {
+      ...captureResult(),
+      rejectedFields: [{ field: "name", reason: "unknown-reason" }],
+    },
+    {
+      ...captureResult(),
+      draft: { fields: [], missingCoreFields: [], extra: true },
+    },
+  ];
+
+  for (const invalid of invalidValues) {
+    assert.deepEqual(mapper.toUnresolvedDraft(invalid), {
+      ok: false,
+      error: { kind: "invalid-payload" },
+    });
+    assert.deepEqual(mapper.toEditorPrefill(invalid), {
+      ok: false,
+      error: { kind: "invalid-payload" },
+    });
+  }
+  assert.equal(sourceIdCalls, 0);
 });
