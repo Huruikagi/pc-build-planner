@@ -1,4 +1,7 @@
-import type { WorkerMessageTarget } from "../persistence/public.js";
+import {
+  foundationCommandDecoder,
+  type WorkerMessageTarget,
+} from "../persistence/public.js";
 
 export interface RuntimeMessageEvent {
   addListener(listener: RuntimeMessageListener): void;
@@ -17,26 +20,14 @@ export interface FoundationMessageRuntime {
   readonly onMessage: RuntimeMessageEvent;
 }
 
-const FOUNDATION_COMMAND_KINDS = new Set([
-  "query-root",
-  "mutate-root",
-  "assess-replacement",
-  "replace-root",
-  "run-maintenance",
-]);
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isFoundationMessage = (message: unknown): boolean => {
+const decodeFoundationMessage = (message: unknown) => {
   try {
-    return (
-      isRecord(message) &&
-      typeof message.kind === "string" &&
-      FOUNDATION_COMMAND_KINDS.has(message.kind)
-    );
+    return foundationCommandDecoder.decode(message);
   } catch {
-    return false;
+    return undefined;
   }
 };
 
@@ -95,11 +86,12 @@ export const createChromeFoundationMessageTarget = (
       sender,
       sendResponse,
     ) => {
-      if (!isFoundationMessage(message)) return undefined;
+      const decoded = decodeFoundationMessage(message);
+      if (decoded === undefined || !decoded.ok) return undefined;
 
       let completion: ReturnType<typeof handler>;
       try {
-        completion = handler(message, classifyCaller(runtime, sender));
+        completion = handler(decoded.value, classifyCaller(runtime, sender));
       } catch {
         sendResponse(handlerFailure);
         return true;

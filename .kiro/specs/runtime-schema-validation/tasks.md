@@ -134,10 +134,10 @@
 
 - [ ] 6. Runtime message と activation 境界を段階移行する
 
-- [ ] 6.1 (P) Foundation runtime message shape を移行する
+- [x] 6.1 (P) Foundation runtime message shape を移行する
   - foundation command kind の strict message filter を schema decode へ置換し、未関係 message は従来どおり無視する。
   - sender ID、tab、extension URL による caller classification を shape schema から独立した authorization として維持する。
-  - invalid message/sender が handler へ到達せず、有効 message と handler failure response が既存どおりになることを完了条件とする。
+  - invalid message は handler へ到達せず、未信頼 sender は安全側の `web-page` に分類して authorization 成功前に業務処理へ到達させず、有効 message と handler failure response が既存どおりになることを完了条件とする。
   - _Requirements: 6.3, 6.5, 6.6, 8.2_
   - _Boundary: RuntimeActivationSchemaSet Foundation Messages_
   - _Depends: 5.2_

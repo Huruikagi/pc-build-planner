@@ -69,6 +69,30 @@ describe("Chrome foundation message target", () => {
     ]);
   });
 
+  it("rejects recognized foundation kinds whose strict command shape is invalid", async () => {
+    const fixture = createRuntime();
+    let calls = 0;
+    createChromeFoundationMessageTarget(fixture.runtime).addHandler(
+      async () => {
+        calls += 1;
+        return { ok: false, error: { code: "invalid-message" } };
+      },
+    );
+    const listener = fixture.listeners[0];
+    assert.ok(listener);
+
+    assert.equal(
+      listener(
+        { kind: "query-root", unexpected: true },
+        { id: "external" },
+        () => undefined,
+      ),
+      undefined,
+    );
+    await flush();
+    assert.equal(calls, 0);
+  });
+
   it("classifies content scripts and fails closed for external or malformed senders", async () => {
     const fixture = createRuntime();
     const callers: unknown[] = [];
@@ -81,14 +105,14 @@ describe("Chrome foundation message target", () => {
     assert.ok(listener);
     const send = () => undefined;
 
-    listener({ kind: "mutate-root" }, { id: "extension-id", tab: {} }, send);
+    listener({ kind: "query-root" }, { id: "extension-id", tab: {} }, send);
     listener(
-      { kind: "assess-replacement" },
+      { kind: "query-root" },
       { id: "external", url: "https://example.test/" },
       send,
     );
     listener(
-      { kind: "replace-root" },
+      { kind: "query-root" },
       {
         get id() {
           throw new Error("untrusted getter");
@@ -97,7 +121,7 @@ describe("Chrome foundation message target", () => {
       send,
     );
     listener(
-      { kind: "run-maintenance" },
+      { kind: "query-root" },
       {
         id: "extension-id",
         url: "chrome-extension://extension-id.evil/panel.html",
