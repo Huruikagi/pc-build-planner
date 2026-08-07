@@ -1,5 +1,14 @@
 import type { ActivationId } from "../application-shell/transient-surface-ports.js";
 import { err, ok, type Result } from "../domain/public.js";
+import {
+  decodeWithProfile,
+  plainObject,
+  positiveInteger,
+  revision,
+  safeString,
+  tagged,
+  z,
+} from "../domain/runtime-schema/public.js";
 import type {
   FoundationMessageRuntime,
   RuntimeMessageListener,
@@ -57,6 +66,75 @@ export interface WatchReadyScheduler {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "invalid-message");
+const nonEmptyString = <T extends string>() =>
+  z.custom<T>((value) => typeof value === "string" && value.length > 0);
+const decode = <S extends Parameters<typeof decodeWithProfile>[0]>(
+  schema: S,
+  value: unknown,
+) =>
+  decodeWithProfile(schema, value, {
+    toError: () => ({ kind: "invalid-message" as const }),
+  });
+
+const watchReadyRequestSchema = plainObject({
+  version: invalid(z.literal(1)),
+  kind: invalid(z.literal("transient-watch-ready")),
+  activationId: invalid(nonEmptyString<ActivationId>()),
+});
+const stageAdvanceRequestSchema = plainObject({
+  version: invalid(z.literal(1)),
+  kind: invalid(z.literal("transient-stage-advance")),
+  activationId: invalid(nonEmptyString<ActivationId>()),
+  stage: invalid(z.literal("activated")),
+});
+const recordBase = {
+  activationId: invalid(safeString<ActivationId>()),
+  surfaceId: invalid(safeString<TransientActivationRecord["surfaceId"]>()),
+  tabId: invalid(positiveInteger<TransientActivationRecord["tabId"]>()),
+  seq: invalid(revision<TransientActivationRecord["seq"]>()),
+};
+const authorizedDecisionSchema = plainObject({
+  kind: invalid(z.literal("authorized")),
+  record: invalid(
+    plainObject({ ...recordBase, stage: invalid(z.literal("received")) }),
+  ),
+});
+const invalidatedDecisionSchema = plainObject({
+  kind: invalid(z.literal("invalidated")),
+  record: invalid(
+    plainObject({ ...recordBase, stage: invalid(z.literal("invalidated")) }),
+  ),
+});
+const successResponse = (
+  decision: typeof authorizedDecisionSchema | typeof invalidatedDecisionSchema,
+) =>
+  plainObject({
+    version: invalid(z.literal(1)),
+    ok: invalid(z.literal(true)),
+    decision: invalid(decision),
+  });
+const errorCodeSchema = invalid(
+  z.custom<TransientWatchReadyErrorCode>((value) =>
+    [
+      "invalid-message",
+      "store-unavailable",
+      "capacity-exceeded",
+      "not-started",
+    ].includes(String(value)),
+  ),
+);
+const errorResponseSchema = plainObject({
+  version: invalid(z.literal(1)),
+  ok: invalid(z.literal(false)),
+  code: errorCodeSchema,
+});
+const stageSuccessResponseSchema = plainObject({
+  version: invalid(z.literal(1)),
+  ok: invalid(z.literal(true)),
+});
+
 const isTrustedSidePanelSender = (
   runtime: FoundationMessageRuntime,
   sender: unknown,
@@ -74,28 +152,10 @@ const isTrustedSidePanelSender = (
 
 const parseRequest = (
   value: unknown,
-): TransientWatchReadyRequest | undefined =>
-  isRecord(value) &&
-  value.version === 1 &&
-  value.kind === "transient-watch-ready" &&
-  typeof value.activationId === "string" &&
-  value.activationId.length > 0
-    ? (value as unknown as TransientWatchReadyRequest)
-    : undefined;
-
-const isRecordShape = (value: unknown): value is TransientActivationRecord =>
-  isRecord(value) &&
-  typeof value.activationId === "string" &&
-  typeof value.surfaceId === "string" &&
-  typeof value.tabId === "number" &&
-  Number.isSafeInteger(value.tabId) &&
-  value.tabId > 0 &&
-  typeof value.seq === "number" &&
-  Number.isSafeInteger(value.seq) &&
-  value.seq >= 0 &&
-  ["pending", "received", "activated", "invalidated"].includes(
-    String(value.stage),
-  );
+): TransientWatchReadyRequest | undefined => {
+  const result = decode(watchReadyRequestSchema, value);
+  return result.ok ? result.value : undefined;
+};
 
 const parseResponse = (
   value: unknown,
@@ -104,24 +164,18 @@ const parseResponse = (
     return undefined;
   if (value.ok) {
     if (!isRecord(value.decision)) return undefined;
-    const kind = value.decision.kind;
-    if (
-      (kind !== "authorized" && kind !== "invalidated") ||
-      !isRecordShape(value.decision.record) ||
-      (kind === "authorized" && value.decision.record.stage !== "received") ||
-      (kind === "invalidated" && value.decision.record.stage !== "invalidated")
-    )
-      return undefined;
-    return value as unknown as TransientWatchReadyResponse;
+    const schema =
+      value.decision.kind === "authorized"
+        ? successResponse(authorizedDecisionSchema)
+        : value.decision.kind === "invalidated"
+          ? successResponse(invalidatedDecisionSchema)
+          : undefined;
+    if (schema === undefined) return undefined;
+    const result = decode(schema, value);
+    return result.ok ? result.value : undefined;
   }
-  return [
-    "invalid-message",
-    "store-unavailable",
-    "capacity-exceeded",
-    "not-started",
-  ].includes(String(value.code))
-    ? (value as unknown as TransientWatchReadyResponse)
-    : undefined;
+  const result = decode(errorResponseSchema, value);
+  return result.ok ? result.value : undefined;
 };
 
 const publicCode = (
@@ -138,17 +192,8 @@ export const registerTransientWatchReadyListener = (
 ): (() => void) => {
   const listener: RuntimeMessageListener = (message, sender, sendResponse) => {
     const request = parseRequest(message);
-    const stageRequest =
-      isRecord(message) &&
-      message.version === 1 &&
-      message.kind === "transient-stage-advance" &&
-      typeof message.activationId === "string" &&
-      message.stage === "activated"
-        ? (message as unknown as {
-            readonly activationId: ActivationId;
-            readonly stage: "activated";
-          })
-        : undefined;
+    const stageDecoded = decode(stageAdvanceRequestSchema, message);
+    const stageRequest = stageDecoded.ok ? stageDecoded.value : undefined;
     const trustedPanel = isTrustedSidePanelSender(runtime, sender);
     if (
       (request === undefined && stageRequest === undefined) ||
@@ -201,6 +246,13 @@ export interface PanelMessageRuntime {
   sendMessage(message: unknown): Promise<unknown>;
 }
 
+export interface TransientStageAdvancePort {
+  advance(
+    activationId: ActivationId,
+    stage: "activated",
+  ): Promise<Result<void, ActivationTransportError | ActivationStoreError>>;
+}
+
 export const createTransientActivationPanelPort = (
   runtime: PanelMessageRuntime,
 ): TransientActivationPort => ({
@@ -223,7 +275,7 @@ export const createTransientActivationPanelPort = (
 
 export const createTransientStagePanelPort = (
   runtime: PanelMessageRuntime,
-) => ({
+): TransientStageAdvancePort => ({
   async advance(activationId: ActivationId, stage: "activated") {
     try {
       const response = await runtime.sendMessage({
@@ -232,11 +284,12 @@ export const createTransientStagePanelPort = (
         activationId,
         stage,
       });
-      return isRecord(response) &&
-        response.version === 1 &&
-        response.ok === true
-        ? ok(undefined)
-        : err({ kind: "storage-unavailable" as const });
+      const success = decode(stageSuccessResponseSchema, response);
+      if (success.ok) return ok(undefined);
+      const failure = decode(errorResponseSchema, response);
+      return failure.ok
+        ? err({ kind: failure.value.code })
+        : err({ kind: "invalid-message" as const });
     } catch {
       return err({ kind: "storage-unavailable" as const });
     }

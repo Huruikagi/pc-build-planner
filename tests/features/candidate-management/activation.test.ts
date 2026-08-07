@@ -304,6 +304,7 @@ test("新しい pre-edit activation は保持中 pending を editor 受理後に
 test("mutation が禁止された状態の activation は編集画面を開かず失敗を返す", async () => {
   const state = createState();
   await state.load();
+  await state.selectProject(projectId);
   // Maintenance closes the editor, so activation must not report success.
   state.attachOperationPolicy({
     isAllowed: (operation) => operation !== "mutation",
@@ -322,6 +323,7 @@ test("mutation が禁止された状態の activation は編集画面を開か�
 
   assert.equal(prepared.ok, true);
   if (!prepared.ok) return;
+  const before = structuredClone(state.value);
   assert.deepEqual(await prepared.value.activate(), {
     ok: false,
     error: {
@@ -330,7 +332,7 @@ test("mutation が禁止された状態の activation は編集画面を開か�
       reason: "operation-blocked",
     },
   });
-  assert.equal(state.value.editor, null);
+  assert.deepEqual(state.value, before);
   state.releaseOperationPolicy();
 });
 

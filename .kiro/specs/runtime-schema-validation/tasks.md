@@ -132,7 +132,7 @@
   - _Requirements: 6.1, 6.2, 6.6, 8.2, 8.3, 8.4_
   - _Boundary: CaptureSchemaSet_
 
-- [ ] 6. Runtime message と activation 境界を段階移行する
+- [x] 6. Runtime message と activation 境界を段階移行する
 
 - [x] 6.1 (P) Foundation runtime message shape を移行する
   - foundation command kind の strict message filter を schema decode へ置換し、未関係 message は従来どおり無視する。
@@ -142,7 +142,7 @@
   - _Boundary: RuntimeActivationSchemaSet Foundation Messages_
   - _Depends: 5.2_
 
-- [ ] 6.2 (P) Transient activation store envelope を移行する
+- [x] 6.2 (P) Transient activation store envelope を移行する
   - version 1 envelope、record、tombstone、sequence、tab ID、stage の strict schema を定義する。
   - unsupported version と corrupt envelope の既存区分、tombstone dominance、capacity、stage transition semantics を維持する。
   - invalid persisted value が subscriber へ通知されず、valid record の read/write/checkpoint fixture が parity することを完了条件とする。
@@ -150,14 +150,14 @@
   - _Boundary: RuntimeActivationSchemaSet Transient Store_
   - _Depends: 5.2_
 
-- [ ] 6.3 Transient request/response transport を移行する
+- [x] 6.3 Transient request/response transport を移行する
   - watch-ready、stage-advance、authorization decision、public error response の versioned strict schema を定義する。
   - panel sender authorization と scheduler error の public code mapping を維持し、不正 response を `invalid-message` として閉じる。
   - worker listener と panel port の contract tests で invalid payload が record として返らず、有効 round trip が従来どおり完了することを完了条件とする。
   - _Requirements: 6.3, 6.5, 6.6, 8.2_
   - _Boundary: RuntimeActivationSchemaSet Transient Transport_
 
-- [ ] 6.4 (P) Product capture activation payload を移行する
+- [x] 6.4 (P) Product capture activation payload を移行する
   - capture target、activation ID、positive tab ID の owner-local strict schema を定義する。
   - invalid intent は既存 `invalid_activation` に写像し、capture session を開始しない。
   - valid/invalid activation fixture が同じ typed value/error になり、payload cast が不要になることを完了条件とする。
@@ -165,7 +165,7 @@
   - _Boundary: RuntimeActivationSchemaSet Product Capture Activation_
   - _Depends: 5.2_
 
-- [ ] 6.5 Candidate editor prefill と activation payload を移行する
+- [x] 6.5 Candidate editor prefill と activation payload を移行する
   - editor target、unresolved draft、category hint、capture diagnostic の owner-local schema を既存 pre-edit validation と統合する。
   - invalid payload、unavailable project、mutation-disabled state の既存 diagnostic/error と state 不変性を維持する。
   - invalid activation が editor/pending state を変更せず、有効 prefill が従来の editor state を開く contract test を完了条件とする。
@@ -173,7 +173,7 @@
   - _Boundary: RuntimeActivationSchemaSet Candidate Activation_
   - _Depends: 5.2_
 
-- [ ] 6.6 (P) Application shell の activation adapter result を移行する
+- [x] 6.6 (P) Application shell の activation adapter result を移行する
   - success/error の discriminated `Result` shape と既存 activation error union を内部 schema で検証する。
   - registry lookup、availability、single-delivery、exception isolation の既存 router semantics を変更しない。
   - malformed adapter result が `invalid_activation` / `activation_failed` へ閉じ、有効 adapter result が一度だけ配信されることを完了条件とする。
@@ -181,7 +181,7 @@
   - _Boundary: RuntimeActivationSchemaSet Shell Adapter Result_
   - _Depends: 5.2_
 
-- [ ] 6.7 Runtime/activation wave の統合 parity を固定する
+- [x] 6.7 Runtime/activation wave の統合 parity を固定する
   - message shape、sender authorization、store、transport、feature activation、router の cross-boundary contract を synthetic fixture で通す。
   - invalid request/response/record/intent が listener notification、feature state mutation、payload log を発生させないことを検証する。
   - runtime/activation wave の全 focused tests が通り、次の snapshot wave を開始できる状態を完了とする。

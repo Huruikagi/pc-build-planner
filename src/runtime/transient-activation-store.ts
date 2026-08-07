@@ -4,6 +4,16 @@ import type {
   TargetTabId,
 } from "../application-shell/transient-surface-ports.js";
 import { err, ok, type Result } from "../domain/public.js";
+import {
+  decodeWithProfile,
+  optionalField,
+  plainObject,
+  positiveInteger,
+  revision,
+  safeString,
+  tagged,
+  z,
+} from "../domain/runtime-schema/public.js";
 
 export type ActivationStage =
   | "pending"
@@ -91,10 +101,6 @@ const emptyEnvelope = (): TransientActivationEnvelope => ({
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-const isSequence = (value: unknown): value is ActivationSequence =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-const isTabId = (value: unknown): value is TargetTabId =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 const stages = new Set<ActivationStage>([
   "pending",
   "received",
@@ -102,17 +108,35 @@ const stages = new Set<ActivationStage>([
   "invalidated",
 ]);
 
-const parseRecord = (value: unknown): TransientActivationRecord | undefined => {
-  if (
-    !isObject(value) ||
-    typeof value.activationId !== "string" ||
-    typeof value.surfaceId !== "string" ||
-    !isTabId(value.tabId) ||
-    !isSequence(value.seq) ||
-    !stages.has(value.stage as ActivationStage)
-  )
-    return undefined;
-  return value as unknown as TransientActivationRecord;
+const corrupt = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "corrupt-envelope");
+
+const activationStageSchema = corrupt(
+  z.custom<ActivationStage>(
+    (value) =>
+      typeof value === "string" && stages.has(value as ActivationStage),
+  ),
+);
+const activationRecordSchema = plainObject({
+  activationId: corrupt(safeString<ActivationId>()),
+  surfaceId: corrupt(safeString<FeatureId>()),
+  tabId: corrupt(positiveInteger<TargetTabId>()),
+  seq: corrupt(revision<ActivationSequence>()),
+  stage: activationStageSchema,
+});
+const tombstoneSchema = plainObject({
+  tabId: corrupt(positiveInteger<TargetTabId>()),
+  seq: corrupt(revision<ActivationSequence>()),
+});
+const activationEnvelopeSchema = plainObject({
+  version: corrupt(z.literal(1)),
+  lastSequence: corrupt(revision<ActivationSequence>()),
+  record: optionalField(corrupt(activationRecordSchema)),
+  tombstones: corrupt(z.array(tombstoneSchema)),
+});
+
+const corruptEnvelopeProfile = {
+  toError: (): ActivationStoreError => ({ kind: "corrupt-envelope" }),
 };
 
 const parseEnvelope = (
@@ -121,28 +145,11 @@ const parseEnvelope = (
   if (value === undefined) return ok(emptyEnvelope());
   if (!isObject(value)) return err({ kind: "corrupt-envelope" });
   if (value.version !== 1) return err({ kind: "unsupported-version" });
-  if (!isSequence(value.lastSequence) || !Array.isArray(value.tombstones))
-    return err({ kind: "corrupt-envelope" });
-  const tombstones: TransientInvalidationTombstone[] = [];
-  for (const candidate of value.tombstones) {
-    if (
-      !isObject(candidate) ||
-      !isTabId(candidate.tabId) ||
-      !isSequence(candidate.seq)
-    )
-      return err({ kind: "corrupt-envelope" });
-    tombstones.push(candidate as unknown as TransientInvalidationTombstone);
-  }
-  const record =
-    value.record === undefined ? undefined : parseRecord(value.record);
-  if (value.record !== undefined && record === undefined)
-    return err({ kind: "corrupt-envelope" });
-  return ok({
-    version: 1,
-    lastSequence: value.lastSequence,
-    ...(record === undefined ? {} : { record }),
-    tombstones,
-  });
+  return decodeWithProfile(
+    activationEnvelopeSchema,
+    value,
+    corruptEnvelopeProfile,
+  );
 };
 
 class Store implements TransientActivationStore {

@@ -62,6 +62,14 @@ export const createCandidateActivation = (
   },
 
   async activate(prefill) {
+    if (state.value.mutationsDisabled) {
+      reportDiagnostic("editor-mutation-disabled");
+      return err<FeatureActivationError>({
+        kind: "activation_failed",
+        detail: "candidate editor could not be opened",
+        reason: "operation-blocked",
+      });
+    }
     const requestedProjectId = prefill.projectId;
     const projectId =
       requestedProjectId ??

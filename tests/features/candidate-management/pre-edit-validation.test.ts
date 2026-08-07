@@ -29,6 +29,8 @@ test("pre-edit検証は仮entityを作らずproject非依存の構造だけを�
   assert.doesNotMatch(source, /validateCandidatePartValue/);
   assert.doesNotMatch(source, /00000000-0000-4000-8000-00000000000[12]/);
   assert.doesNotMatch(source, /createdAt|updatedAt/);
+  assert.match(source, /domain\/runtime-schema\/public\.js/);
+  assert.doesNotMatch(source, /const hasOnlyKeys|const isRecord/);
 });
 
 test("pre-editはproject未解決かつ空名の構造的に正しいdraftを受理する", () => {

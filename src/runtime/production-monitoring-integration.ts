@@ -5,10 +5,7 @@ import type {
   PanelActivationAdapterError,
   PanelActivationOutcome,
 } from "./panel-activation-adapter.js";
-import type {
-  ActivationStoreError,
-  TransientActivationScheduler,
-} from "./transient-activation-store.js";
+import type { TransientStageAdvancePort } from "./transient-activation-transport.js";
 
 export type MonitoringActivationAdapter = PanelActivationAdapter;
 
@@ -25,7 +22,7 @@ export interface ProductionMonitoringIntegration {
 export const createProductionMonitoringIntegration = (options: {
   readonly adapter: MonitoringActivationAdapter;
   readonly controller: Pick<TransientSurfaceController, "request" | "dismiss">;
-  readonly stages: Pick<TransientActivationScheduler, "advance">;
+  readonly stages: TransientStageAdvancePort;
   readonly reportError?: (error: ProductionMonitoringError) => void;
   readonly onActivationAccepted?: () => void;
   readonly onActivationExpired?: (
@@ -72,8 +69,10 @@ export const createProductionMonitoringIntegration = (options: {
     }
     if (ended.has(record.activationId)) return;
     options.onActivationAccepted?.();
-    const advanced: Result<void, ActivationStoreError> =
-      await options.stages.advance(record.activationId, "activated");
+    const advanced = await options.stages.advance(
+      record.activationId,
+      "activated",
+    );
     if (!active || epoch !== lifecycleEpoch) return;
     if (!advanced.ok) {
       report({ kind: "stage-advance-failed" });

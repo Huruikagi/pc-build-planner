@@ -162,6 +162,63 @@ test("adapter境界のthrowと不正なResultを安定したtyped failureへ正�
   });
 });
 
+test("adapter Result は strict shape と既存error unionを満たさない値を閉じる", async () => {
+  const registry = createFeatureRegistry();
+  const malformedValidation: ApplicationFeatureRegistration<object, object> = {
+    ...feature(id("malformed-validation")),
+    activation: {
+      validate: () => ({ ok: true, value: {}, extra: true }) as never,
+      async activate() {
+        return ok(undefined);
+      },
+    },
+  };
+  const malformedActivation: ApplicationFeatureRegistration<object, object> = {
+    ...feature(id("malformed-activation")),
+    activation: {
+      validate: () => ok({}),
+      async activate() {
+        return {
+          ok: false,
+          error: {
+            kind: "activation_failed",
+            detail: "rejected",
+            reason: "unknown-reason",
+          },
+        } as never;
+      },
+    },
+  };
+  assert.equal(registry.register(malformedValidation).ok, true);
+  assert.equal(registry.register(malformedActivation).ok, true);
+  const router = createActivationRouter({ registry });
+
+  assert.deepEqual(router.prepare(intent(malformedValidation.id)), {
+    ok: false,
+    error: {
+      kind: "invalid_activation",
+      detail: "activation validation returned an invalid result",
+    },
+  });
+  const prepared = router.prepare(intent(malformedActivation.id));
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) return;
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: false,
+    error: {
+      kind: "activation_failed",
+      detail: "activation returned an invalid result",
+    },
+  });
+  assert.deepEqual(await prepared.value.activate(), {
+    ok: false,
+    error: {
+      kind: "activation_failed",
+      detail: "activation was already delivered",
+    },
+  });
+});
+
 function withoutActivation<TActivation>(
   registration: ApplicationFeatureRegistration<object, TActivation>,
 ): ApplicationFeatureRegistration {

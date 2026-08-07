@@ -68,15 +68,33 @@ test("正常activationを検証し、activateごとに新しい実行contextを�
 });
 
 test("不正activationをfail closedで拒否し、未起動mountも拒否する", async () => {
+  const capture = state();
   const registration = createProductCaptureFeatureRegistration({
-    state: state(),
+    state: capture,
   });
   const activation = registration.activation;
   assert.ok(activation);
-  assert.equal(
-    activation.validate(intent({ activationId: "", tabId: 0 })).ok,
-    false,
+  const invalidActivation = {
+    ok: false,
+    error: {
+      kind: "invalid_activation",
+      detail: "invalid product capture activation",
+    },
+  } as const;
+  for (const invalidIntent of [
+    { ...intent({ activationId: "a", tabId: 7 }), target: "other" },
+    intent({ activationId: "", tabId: 7 }),
+    intent({ activationId: "a", tabId: 0 }),
+    intent({ activationId: "a", tabId: 1.5 }),
+  ]) {
+    assert.deepEqual(activation.validate(invalidIntent), invalidActivation);
+    assert.equal(capture.value, null);
+  }
+  assert.deepEqual(
+    activation.validate(intent({ activationId: "a", tabId: 7, extra: true })),
+    invalidActivation,
   );
+  assert.equal(capture.value, null);
   await assert.rejects(
     registration.mount({
       container: document.createElement("div"),

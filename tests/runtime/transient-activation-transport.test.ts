@@ -135,6 +135,18 @@ test("worker transport rejects untrusted senders and malformed requests", async 
   );
   assert.deepEqual(
     await invoke(
+      {
+        version: 1,
+        kind: "transient-watch-ready",
+        activationId: id,
+        extra: true,
+      },
+      { id: runtime.id, url: runtime.getURL("side-panel.html") },
+    ),
+    { version: 1, ok: false, code: "invalid-message" },
+  );
+  assert.deepEqual(
+    await invoke(
       { version: 1, kind: "transient-watch-ready", activationId: id },
       { id: runtime.id, url: runtime.getURL("options.html") },
     ),
@@ -216,5 +228,28 @@ test("panel transport validates unknown responses and preserves invalidated", as
   assert.deepEqual(await rejected.authorizeAfterWatchReady(id), {
     ok: false,
     error: { kind: "store-unavailable" },
+  });
+});
+
+test("panel transport は余剰keyを含むresponseをinvalid-messageへ閉じる", async () => {
+  const watch = createTransientActivationPanelPort({
+    sendMessage: async () => ({
+      version: 1,
+      ok: true,
+      decision,
+      extra: true,
+    }),
+  });
+  assert.deepEqual(await watch.authorizeAfterWatchReady(id), {
+    ok: false,
+    error: { kind: "invalid-message" },
+  });
+
+  const stage = createTransientStagePanelPort({
+    sendMessage: async () => ({ version: 1, ok: true, extra: true }),
+  });
+  assert.deepEqual(await stage.advance(id, "activated"), {
+    ok: false,
+    error: { kind: "invalid-message" },
   });
 });

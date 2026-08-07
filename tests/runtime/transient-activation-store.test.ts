@@ -79,6 +79,49 @@ test("破損envelopeと不正stage遷移をtyped errorにする", async () => {
   });
 });
 
+test("store envelope は全階層で strict shape を要求し、破損値を購読者へ通知しない", async () => {
+  const invalidValues: unknown[] = [
+    { version: 1, lastSequence: 0, tombstones: [], extra: true },
+    {
+      version: 1,
+      lastSequence: 1,
+      tombstones: [{ tabId: 1, seq: 1, extra: true }],
+    },
+    {
+      version: 1,
+      lastSequence: 1,
+      tombstones: [],
+      record: {
+        activationId: "a",
+        surfaceId: "capture",
+        tabId: 1,
+        seq: 1,
+        stage: "pending",
+        extra: true,
+      },
+    },
+    Object.assign(Object.create({ inherited: true }), {
+      version: 1,
+      lastSequence: 0,
+      tombstones: [],
+    }),
+  ];
+
+  for (const value of invalidValues) {
+    const session = new MemorySession();
+    session.value = value;
+    const store = createTransientActivationStore(session);
+    const notifications: unknown[] = [];
+    store.subscribe((record) => notifications.push(record));
+
+    assert.deepEqual(await store.readEnvelope(), {
+      ok: false,
+      error: { kind: "corrupt-envelope" },
+    });
+    assert.deepEqual(notifications, []);
+  }
+});
+
 test("schedulerは保留writeを追い越さず再生成後もsequenceを増加する", async () => {
   const session = new MemorySession();
   const scheduler = createTransientActivationScheduler(

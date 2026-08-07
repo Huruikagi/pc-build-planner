@@ -1,13 +1,22 @@
 import {
   err,
-  isUuid,
   ok,
   PART_CATEGORIES,
   type PartCategory,
   type Result,
   validateCandidatePartDraft,
 } from "../../domain/public.js";
+import {
+  decodeWithProfile,
+  optionalField,
+  plainObject,
+  tagged,
+  uuid,
+  z,
+} from "../../domain/runtime-schema/public.js";
 import type {
+  CaptureDiagnosticField,
+  CaptureDiagnosticReason,
   UnresolvedCandidateDraft,
   UnresolvedCandidateEditorPrefill,
 } from "./contracts.js";
@@ -21,18 +30,6 @@ export type CandidateEditorPrefillError =
   | PreEditDraftError
   | { readonly kind: "invalid-project-id" }
   | { readonly kind: "invalid-category-hint" };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value) &&
-  (Object.getPrototypeOf(value) === Object.prototype ||
-    Object.getPrototypeOf(value) === null);
-
-const hasOnlyKeys = (
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-): boolean => Object.keys(value).every((key) => allowed.includes(key));
 
 const isPartCategory = (value: unknown): value is PartCategory =>
   typeof value === "string" &&
@@ -56,12 +53,38 @@ const captureCoreFields = new Set([
 ]);
 const isCaptureDiagnosticField = (value: unknown): boolean =>
   typeof value === "string" && captureCoreFields.has(value);
-const isCaptureDiagnostic = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["field", "reason"]) &&
-  isCaptureDiagnosticField(value.field) &&
-  typeof value.reason === "string" &&
-  diagnosticReasons.has(value.reason);
+
+const invalid = <S extends Parameters<typeof tagged>[0]>(
+  schema: S,
+  tag: CandidateEditorPrefillError["kind"],
+): S => tagged(schema, tag);
+const captureDiagnosticSchema = plainObject({
+  field: invalid(
+    z.custom<CaptureDiagnosticField>(isCaptureDiagnosticField),
+    "invalid-draft-shape",
+  ),
+  reason: invalid(
+    z.custom<CaptureDiagnosticReason>(
+      (value) => typeof value === "string" && diagnosticReasons.has(value),
+    ),
+    "invalid-draft-shape",
+  ),
+});
+const candidateEditorPrefillSchema = plainObject({
+  draft: invalid(z.unknown(), "invalid-draft-shape"),
+  projectId: optionalField(
+    invalid(
+      uuid<NonNullable<UnresolvedCandidateEditorPrefill["projectId"]>>(),
+      "invalid-project-id",
+    ),
+  ),
+  categoryHint: optionalField(
+    invalid(z.custom<PartCategory>(isPartCategory), "invalid-category-hint"),
+  ),
+  captureDiagnostics: optionalField(
+    invalid(z.array(captureDiagnosticSchema), "invalid-draft-shape"),
+  ),
+});
 
 export const validatePreEditDraft = (
   draft: unknown,
@@ -81,51 +104,38 @@ export const validatePreEditDraft = (
 export const validateCandidateEditorPrefill = (
   value: unknown,
 ): Result<UnresolvedCandidateEditorPrefill, CandidateEditorPrefillError> => {
+  const decoded = decodeWithProfile(candidateEditorPrefillSchema, value, {
+    toError: (issue): CandidateEditorPrefillError => ({
+      kind:
+        issue.tag === "invalid-project-id" ||
+        issue.tag === "invalid-category-hint"
+          ? issue.tag
+          : "invalid-draft-shape",
+    }),
+  });
+  if (!decoded.ok) return decoded;
   if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, [
-      "draft",
-      "projectId",
-      "categoryHint",
-      "captureDiagnostics",
-    ]) ||
-    !("draft" in value)
+    decoded.value.captureDiagnostics !== undefined &&
+    new Set(
+      decoded.value.captureDiagnostics.map(
+        (diagnostic) => `${diagnostic.field}:${diagnostic.reason}`,
+      ),
+    ).size !== decoded.value.captureDiagnostics.length
   )
     return err({ kind: "invalid-draft-shape" });
-  if (value.projectId !== undefined && !isUuid(value.projectId))
-    return err({ kind: "invalid-project-id" });
-  if (value.categoryHint !== undefined && !isPartCategory(value.categoryHint))
-    return err({ kind: "invalid-category-hint" });
-  if (
-    value.captureDiagnostics !== undefined &&
-    (!Array.isArray(value.captureDiagnostics) ||
-      !value.captureDiagnostics.every(isCaptureDiagnostic) ||
-      new Set(
-        value.captureDiagnostics.map((diagnostic) =>
-          isRecord(diagnostic)
-            ? `${String(diagnostic.field)}:${String(diagnostic.reason)}`
-            : "invalid",
-        ),
-      ).size !== value.captureDiagnostics.length)
-  )
-    return err({ kind: "invalid-draft-shape" });
-  const draft = validatePreEditDraft(value.draft);
+  const draft = validatePreEditDraft(decoded.value.draft);
   if (!draft.ok) return draft;
-  const projectId = value.projectId as
-    | UnresolvedCandidateEditorPrefill["projectId"]
-    | undefined;
-  const categoryHint = value.categoryHint as PartCategory | undefined;
   const validated: UnresolvedCandidateEditorPrefill = {
     draft: draft.value,
-    ...(projectId === undefined ? {} : { projectId }),
-    ...(categoryHint === undefined ? {} : { categoryHint }),
-    ...(value.captureDiagnostics === undefined
+    ...(decoded.value.projectId === undefined
       ? {}
-      : {
-          captureDiagnostics: value.captureDiagnostics as NonNullable<
-            UnresolvedCandidateEditorPrefill["captureDiagnostics"]
-          >,
-        }),
+      : { projectId: decoded.value.projectId }),
+    ...(decoded.value.categoryHint === undefined
+      ? {}
+      : { categoryHint: decoded.value.categoryHint }),
+    ...(decoded.value.captureDiagnostics === undefined
+      ? {}
+      : { captureDiagnostics: decoded.value.captureDiagnostics }),
   };
   return ok(validated);
 };

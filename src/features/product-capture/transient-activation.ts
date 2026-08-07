@@ -5,34 +5,40 @@ import type {
   TargetTabId,
 } from "../../application-shell/public.js";
 import { err, ok, type Result } from "../../domain/public.js";
+import {
+  decodeWithProfile,
+  plainObject,
+  positiveInteger,
+  tagged,
+  z,
+} from "../../domain/runtime-schema/public.js";
 
 export interface CaptureTransientActivation {
   readonly activationId: ActivationId;
   readonly tabId: TargetTabId;
 }
 
+const invalidActivation = {
+  kind: "invalid_activation",
+  detail: "invalid product capture activation",
+} as const;
+const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
+  tagged(schema, "invalid_activation");
+const captureActivationSchema = plainObject({
+  activationId: invalid(
+    z.custom<ActivationId>(
+      (value) => typeof value === "string" && value.length > 0,
+    ),
+  ),
+  tabId: invalid(positiveInteger<TargetTabId>()),
+});
+
 export const validateCaptureActivation = (
   intent: FeatureActivationIntent,
 ): Result<CaptureTransientActivation, FeatureActivationError> => {
-  const payload = intent.payload;
-  if (
-    intent.target !== "capture" ||
-    typeof payload !== "object" ||
-    payload === null ||
-    !("activationId" in payload) ||
-    !("tabId" in payload) ||
-    typeof payload.activationId !== "string" ||
-    payload.activationId.length === 0 ||
-    typeof payload.tabId !== "number" ||
-    !Number.isSafeInteger(payload.tabId) ||
-    payload.tabId <= 0
-  )
-    return err({
-      kind: "invalid_activation",
-      detail: "invalid product capture activation",
-    });
-  return ok({
-    activationId: payload.activationId as ActivationId,
-    tabId: payload.tabId as TargetTabId,
+  if (intent.target !== "capture") return err(invalidActivation);
+  const decoded = decodeWithProfile(captureActivationSchema, intent.payload, {
+    toError: () => invalidActivation,
   });
+  return decoded.ok ? ok(decoded.value) : decoded;
 };
