@@ -26,4 +26,5 @@
 
 | ID | 由来 | 指摘 | 非ブロック理由 | 対象 | 状態 | 関連 |
 |---|---|---|---|---|---|---|
-| _(未記録)_ | | | | | | |
+| DEF-001 | project-context / 1.1 | `createProjectContextSnapshot` が `catalog` 入力を信頼しており、不変条件1（ready の selected ID は catalog に一度だけ存在）の一意性検査は上流の `projectEntries` のみ。duplicate を含む手組み catalog を渡すと `ready` が構築できる | 型の厳密化（動作は正しく、境界は守られている） | v1.0 | 未着手 | |
+| DEF-002 | project-context / 1.1 | 要件1.6「全 consumer が同一 snapshot」は現状 2 つの独立構築 snapshot の構造的等価で証明しており、instance 共有は `ProjectContextService`（task 2.3）まで示せない | 稀な入力ではなく boundary 外の検証範囲。task 1.1 の完了条件（consumer 独自 fallback 不要）は充足 | v1.0 | 未着手 | |

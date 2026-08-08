@@ -4,7 +4,7 @@
 
 - [ ] 1. project context の基礎契約と信頼境界を確立する
 
-- [ ] 1.1 検証済み snapshot と ordered catalog projection を実装する
+- [x] 1.1 検証済み snapshot と ordered catalog projection を実装する
   - ready、empty、unavailable の判別可能な snapshot、generation、最小 project item、catalog source の契約を定義する。
   - source 順を維持した全-or-nothing projection とし、duplicate ID、不正 entry、source failure を部分 catalog にせず拒否する。
   - ready の選択一意性、empty の null 選択、unavailable の selection 非公開を unit test で固定する。
