@@ -151,3 +151,31 @@ test("3.2: confirmation は keyboard で cancel でき、選択を維持する",
   assert.equal(container.querySelector("[role='dialog']"), null);
   assert.equal(api.read.getSnapshot().selectedProjectId, A);
 });
+
+test("4.2: confirmation はlabel、live status、confirm操作で利用者の選択を確定する", async () => {
+  const api = await createReadyApi();
+  api.guards.register({
+    id: "requires-confirmation",
+    async evaluate() {
+      return ok({ kind: "confirmation-required" });
+    },
+  });
+  const user = userEvent.setup();
+  const { container } = renderWithLanguage(
+    <ProjectSelector read={api.read} commands={api.commands} />,
+  );
+  const select = container.querySelector<HTMLSelectElement>(
+    "[data-project-context='select']",
+  );
+  assert.ok(select);
+  assert.match(select.getAttribute("aria-label") ?? "", /現在のプロジェクト/);
+  await user.selectOptions(select, B);
+  const dialog = container.querySelector<HTMLElement>("[role='dialog']");
+  assert.ok(dialog);
+  const confirm = dialog.querySelector<HTMLButtonElement>("button");
+  assert.ok(confirm);
+  await user.click(confirm);
+  assert.equal(api.read.getSnapshot().selectedProjectId, B);
+  assert.equal(container.querySelector("[role='dialog']"), null);
+  assert.ok(container.querySelector("[role='status'][aria-live='polite']"));
+});

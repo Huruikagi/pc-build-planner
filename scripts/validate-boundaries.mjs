@@ -242,6 +242,22 @@ const isForbiddenUiLanguageConsumerImport = (sourcePath, specifier) => {
   return entry === undefined || !allowedEntry.test(entry);
 };
 
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenProjectContextConsumerImport = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (/(?:^|\/)src\/project-context\//.test(normalizedSource)) return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  const entry = normalizedSpecifier.match(
+    /(?:^|\/)project-context\/([^/]+?)(?:\.js|\.ts)?$/,
+  )?.[1];
+  if (entry === undefined) return false;
+  if (/(?:^|\/)src\/application-shell\//.test(normalizedSource))
+    return !/^(?:public|presentation-contribution|runtime)$/.test(entry);
+  if (/(?:^|\/)src\/runtime\//.test(normalizedSource))
+    return entry !== "runtime";
+  return entry !== "public";
+};
+
 // ProjectContextBoundaryGate (8.1, 8.4): preference adapter は storage API を
 // injection で受け取るため、key scope は expression chain ではなく file scope で
 // 検査する。`get` / `set` / `remove` の key argument が静的な文字列 literal として
@@ -1038,6 +1054,21 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("ui-language-consumer-public-entry-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenProjectContextConsumerImport(
+              normalizedPath,
+              token.value,
+            ) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("project-context-consumer-public-entry-only");
           const pathValue = memberPath(tokens, index, aliases);
           if (
             !isWebLocksAdapter &&

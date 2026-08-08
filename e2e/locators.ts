@@ -9,6 +9,7 @@ export * from "./models/candidate-management.js";
 export * from "./models/current-build.js";
 export * from "./models/locator-primitives.js";
 export * from "./models/product-capture.js";
+export * from "./models/project-context.js";
 export * from "./models/settings.js";
 export * from "./models/source-price-refresh.js";
 export * from "./support/expected-text.js";

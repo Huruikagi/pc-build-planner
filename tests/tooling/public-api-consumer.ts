@@ -74,6 +74,17 @@ export const consumeProjectContextCapabilities = (
   replacement: context.replacementGuard,
 });
 
+export const rejectProjectContextInternals = (
+  context: ProjectContextPublicApi,
+) => {
+  // @ts-expect-error public facade never exposes the concrete service.
+  void context.service;
+  // @ts-expect-error read capability never grants selection commands.
+  void context.read.select;
+  // @ts-expect-error replacement owner cannot reach the selection port.
+  void context.replacementGuard.commands;
+};
+
 export interface MockFoundationConsumer {
   readonly data: FoundationDataPort;
   inspect(): Promise<Result<LocalDataRoot, { readonly code: string }>>;

@@ -1394,6 +1394,49 @@ test("project-context storage adapterはsource・area・専用keyの三条件を
   assert.deepEqual(allBoundaryViolations(sources), []);
 });
 
+test("project-context consumer は owner ごとの公開入口以外を import できない", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "src/features/mock/context-leak.ts",
+      source:
+        'import { createProjectContextService } from "../../project-context/service.js";',
+    },
+    {
+      path: "src/application-shell/context-leak.ts",
+      source:
+        'import { ProjectSelector } from "../project-context/selector.js";',
+    },
+    {
+      path: "src/runtime/context-leak.ts",
+      source:
+        'import { createProjectContextPublicApi } from "../project-context/public.js";',
+    },
+    {
+      path: "src/features/mock/context-public.ts",
+      source:
+        'import type { ProjectContextReadPort } from "../../project-context/public.js";',
+    },
+    {
+      path: "src/application-shell/context-composition.ts",
+      source:
+        'import { createProjectContextPresentationContribution } from "../project-context/presentation-contribution.js";',
+    },
+    {
+      path: "src/runtime/context-runtime.ts",
+      source:
+        'import { createProjectContextRuntime } from "../project-context/runtime.js";',
+    },
+  ]);
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/features/mock/context-leak.ts: project-context-consumer-public-entry-only",
+      "src/application-shell/context-leak.ts: project-context-consumer-public-entry-only",
+      "src/runtime/context-leak.ts: project-context-consumer-public-entry-only",
+    ],
+  );
+});
+
 test("project-contextはboundaryとUI textの必須scan rootでありroot欠落はfail closedになる", async () => {
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   assert.match(

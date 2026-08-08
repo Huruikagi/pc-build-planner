@@ -107,7 +107,7 @@
 
 - [ ] 4. 契約・境界・downstream readiness を検証する
 
-- [ ] 4.1 (P) context lifecycle と guard の横断 contract test を完成する
+- [x] 4.1 (P) context lifecycle と guard の横断 contract test を完成する
   - side panel 再オープンを表す再初期化、作成、削除、全置換、catalog failure、preference failure、回復を架空 catalog で検証する。
   - consumer を複数購読しても同じ generation と selection を受け取り、stale operation で後退しないことを確認する。
   - guard confirmation、cancel、forced selection、notifier failure と catalog invalidation を一つの transaction harness で検証する。
@@ -117,7 +117,7 @@
   - _Boundary: ProjectContext Contract Integration_
   - _Depends: 2.5_
 
-- [ ] 4.2 (P) selector の DOM・accessibility contract test を完成する
+- [x] 4.2 (P) selector の DOM・accessibility contract test を完成する
   - ready/empty/unavailable/pending/confirmation/error の利用者表示を testing-library と user-event で操作する。
   - keyboard、focus、label、live status、disabled state、retry、confirm/cancel、言語切替を利用者視点で検証する。
   - 未信頼な project 名が text のままで、画像・script・HTML node を生成しないことを確認する。
@@ -126,7 +126,7 @@
   - _Boundary: ProjectSelector Validation_
   - _Depends: 3.3_
 
-- [ ] 4.3 public import と legacy authority の negative gate を完成する
+- [x] 4.3 public import と legacy authority の negative gate を完成する
   - 通常 consumer、composition owner、runtime owner、replacement owner の許可入口を区別し、内部 deep import と schema instance 公開を拒否する。
   - public consumer typecheck で read-only consumer が command、preference、service instance へ到達できないことを固定する。
   - legacy snapshot ID を context 初期化・fallback の入力へ渡す経路と、context unavailable が settings/backup 起動を阻止する契約を negative fixture で拒否する。
@@ -136,7 +136,7 @@
   - _Boundary: ProjectContextBoundaryGate_
   - _Depends: 1.3, 2.5, 3.3_
 
-- [ ] 4.4 (P) downstream adapter と横断 E2E の契約 kit を提供する
+- [x] 4.4 (P) downstream adapter と横断 E2E の契約 kit を提供する
   - read port の ready/empty/unavailable、generation、forced change を owner-local adapter が検証できる reusable contract kit にする。
   - selector の stable role、label、status、confirmation を downstream Playwright model から利用できる locator contract として固定する。
   - synthetic replacement owner が prepare、confirm、begin、complete、refresh を順序付け、失敗・取消・stale を再評価できる reusable contract kit を提供する。
@@ -146,7 +146,7 @@
   - _Boundary: ProjectContext Downstream Contract Kit_
   - _Depends: 2.5, 3.3_
 
-- [ ] 4.5 core service と selector の browser 横断 E2E を実装する
+- [x] 4.5 core service と selector の browser 横断 E2E を実装する
   - 架空 catalog、共有 preference、guard、selector を test-only browser harness で composition し、production manifest と bundle へ含めない。
   - project 選択、確認・取消、再初期化後の preference 復元、選択削除後の fallback、empty、unavailable retry を Playwright で操作する。
   - catalog 全体置換を prepare、confirm、begin、complete succeeded、refresh の順で操作し、failed、cancel、stale では通知せず、success 後の refresh failure は置換を再実行せず retry できることを確認する。
