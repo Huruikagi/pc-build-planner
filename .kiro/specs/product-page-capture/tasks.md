@@ -188,9 +188,9 @@
   - _Requirements: 2.7, 2.8, 2.9, 2.10, 7.3_
   - _Boundary: ProductCapturePublicAPI, ManufacturerDomainLookup_
 
-- [ ] 10. 固定tab runtimeの失効と未応答を有限に閉じる
+- [x] 10. 固定tab runtimeの失効と未応答を有限に閉じる
 
-- [ ] 10.1 (P) 注入と結果読取りに有限timeoutを適用する
+- [x] 10.1 (P) 注入と結果読取りに有限timeoutを適用する
   - content処理の注入と結果読取りをそれぞれ有限時間で終了させ、未応答を安定したinjection failureへ写像する。
   - timeout後の遅延結果を現行・後発activationへ適用せず、永続状態や商品値をログへ残さない。
   - 両段階の未応答が決定的なruntime testで失敗表示と同世代再試行へ到達することを完了条件とする。
@@ -198,7 +198,7 @@
   - _Requirements: 6.2, 6.3, 6.4, 6.5, 7.2_
   - _Boundary: CaptureRuntimePort, CaptureTimeoutPolicy_
 
-- [ ] 10.2 権限・tab失効を一過性surfaceの終了理由へ配線する
+- [x] 10.2 権限・tab失効を一過性surfaceの終了理由へ配線する
   - runtimeが直接検出した`permission-lost`と`tab-changed`だけを`capture-invalidated`へ写像し、restricted pageは対象外案内として面に維持する。
   - 通常handoffの`conclude`と失効時の終了経路を混同せず、永続状態を変更しない。
   - permission loss、tab change、restricted pageの各経路がcoordinator・state testで異なる結果として観測できることを完了条件とする。
@@ -206,7 +206,7 @@
   - _Requirements: 1.4, 1.5, 4.2, 4.5, 6.1, 6.2, 7.2_
   - _Boundary: CaptureCoordinator, CaptureState_
 
-- [ ] 10.3 lifecycle終了の失敗と世代隔離を固定する
+- [x] 10.3 lifecycle終了の失敗と世代隔離を固定する
   - 終了失敗・例外を成功扱いせず現行世代の安全な失敗へ閉じ、遅延結果を後発activationへ適用しない。
   - shell側の常設面復帰と新しい明示操作案内をtyped lifecycle seamだけから要求し、capture側でhost表示を再実装しない。
   - surface終了、終了失敗、例外、新世代置換、遅延結果隔離がlifecycle integration testで観測できることを完了条件とする。
@@ -257,4 +257,6 @@
 - `MetadataPropertyRule.target`には設計例の`CaptureField | "source-site-name"`に加えて`price-currency`がある。`product:price:currency`を価格の修飾子としてallowlist内に閉じるための区分で、独立した商品項目ではない。
 - metadata候補の`sourceLabel`はCSS selector文字列ではなくproperty名（例: `product:brand`）。familyは`source`側が持つ。
 - `siteName`は`sources[0].siteName`（表示名）と`sourceSnapshot`の`siteName` / `siteName:source` / `siteName:sourceLabel`（元表記・provenance）へ写像する。`CaptureField`空間外なのでsnapshot keyは他fieldと衝突しない。
+- 未応答timeoutは`createCaptureTimeoutPolicy`が1回のChrome呼び出しごとに独立した予算を持ち、timer源を`timeoutScheduler`で差し替えられる。実時間に依存しない決定的runtime testはこの差し替えで書く。
+- 10.2・10.3の失効配線と世代隔離は5.1〜5.4の実装で既に満たされていたため、本タスクの追加はlifecycle seamを通した検証（`tests/features/product-capture/lifecycle-integration.test.ts`）だけ。
 - candidate-managementはproduct-captureより先にcompositionされるため、classifierへは`productCapture.registration.publicApi.manufacturerDomains`を後から差す遅延lookupを渡す。公開APIの組立ては`createProductCaptureContribution`側の一箇所だけに保つ（既存の`duplicateRefreshPort`と同じ形）。

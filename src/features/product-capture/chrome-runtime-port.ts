@@ -8,6 +8,73 @@ import type {
 const DEFAULT_CONTENT_SCRIPT_FILE = "content-script.js";
 const DEFAULT_INJECTION_TIMEOUT_MS = 10_000;
 
+/** Stable code for an unresponsive page-side call; never carries page-derived detail. */
+const CAPTURE_TIMEOUT_CODE = "capture-injection-timeout";
+
+/**
+ * One-shot cancelable timer. Injectable so the unresponsive-page paths can be
+ * driven deterministically in tests instead of racing real wall-clock delays.
+ */
+export interface CaptureTimeoutScheduler {
+  schedule(onTimeout: () => void, delayMs: number): () => void;
+}
+
+const systemTimeoutScheduler: CaptureTimeoutScheduler = {
+  schedule(onTimeout, delayMs) {
+    const timer = setTimeout(onTimeout, delayMs);
+    return () => clearTimeout(timer);
+  },
+};
+
+export interface CaptureTimeoutPolicy {
+  runWithin<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+/**
+ * Bounds one page-side Chrome call. Each call gets its own budget, so the
+ * injection and the result read are separately finite. A value that arrives
+ * after the budget elapsed is discarded instead of applied, keeping a late page
+ * response out of the current and any later activation.
+ */
+export const createCaptureTimeoutPolicy = (
+  timeoutMs: number = DEFAULT_INJECTION_TIMEOUT_MS,
+  scheduler: CaptureTimeoutScheduler = systemTimeoutScheduler,
+): CaptureTimeoutPolicy => {
+  const budgetMs =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : DEFAULT_INJECTION_TIMEOUT_MS;
+  return {
+    async runWithin<T>(operation: () => Promise<T>): Promise<T> {
+      let settled = false;
+      let cancel: (() => void) | undefined;
+      try {
+        return await new Promise<T>((resolve, reject) => {
+          cancel = scheduler.schedule(() => {
+            if (settled) return;
+            settled = true;
+            reject(new Error(CAPTURE_TIMEOUT_CODE));
+          }, budgetMs);
+          operation().then(
+            (value) => {
+              if (settled) return;
+              settled = true;
+              resolve(value);
+            },
+            (error: unknown) => {
+              if (settled) return;
+              settled = true;
+              reject(error);
+            },
+          );
+        });
+      } finally {
+        cancel?.();
+      }
+    },
+  };
+};
+
 export interface ChromeTabsApi {
   get(tabId: number): Promise<{ readonly id?: number; readonly url?: string }>;
   create?(details: { readonly url: string }): Promise<unknown>;
@@ -32,6 +99,8 @@ export interface ChromeCaptureRuntimeDependencies {
   readonly contentScriptFile?: string;
   /** Maximum time allowed for one Chrome script injection operation. */
   readonly injectionTimeoutMs?: number;
+  /** Timer source behind that budget; overridden only by deterministic tests. */
+  readonly timeoutScheduler?: CaptureTimeoutScheduler;
 }
 
 /**
@@ -91,28 +160,14 @@ export const createChromeCaptureRuntimePort = (
 ): CaptureRuntimePort => {
   const contentScriptFile =
     dependencies.contentScriptFile ?? DEFAULT_CONTENT_SCRIPT_FILE;
-  const configuredTimeoutMs =
-    dependencies.injectionTimeoutMs ?? DEFAULT_INJECTION_TIMEOUT_MS;
-  const injectionTimeoutMs =
-    Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
-      ? configuredTimeoutMs
-      : DEFAULT_INJECTION_TIMEOUT_MS;
-  const executeScript = async (injection: ChromeScriptingInjection) => {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        dependencies.scripting.executeScript(injection),
-        new Promise<never>((_resolve, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error("capture-injection-timeout")),
-            injectionTimeoutMs,
-          );
-        }),
-      ]);
-    } finally {
-      if (timeout !== undefined) clearTimeout(timeout);
-    }
-  };
+  const timeoutPolicy = createCaptureTimeoutPolicy(
+    dependencies.injectionTimeoutMs ?? DEFAULT_INJECTION_TIMEOUT_MS,
+    dependencies.timeoutScheduler ?? systemTimeoutScheduler,
+  );
+  const executeScript = (injection: ChromeScriptingInjection) =>
+    timeoutPolicy.runWithin(() =>
+      dependencies.scripting.executeScript(injection),
+    );
 
   return {
     async getTab(tabId: TargetTabId) {
