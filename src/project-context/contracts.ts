@@ -60,3 +60,33 @@ export type ProjectContextSnapshot =
       readonly selectedProjectId: null;
       readonly reason: ProjectContextUnavailableReason;
     };
+
+/**
+ * 専用 key から読み出した preference の解釈結果（要件 2.1、2.2、2.3、8.2）。
+ * - `missing`: 保存値が存在しない。初回起動、または catalog が空になった後。
+ * - `invalid`: strict schema に適合しない。未知 version もここへ閉じ、推測 migration を行わない。
+ * - `valid`: version 1 として検証済みの選択。catalog との照合はまだ行っていない。
+ */
+export type ProjectPreferenceRead =
+  | { readonly kind: "missing" }
+  | { readonly kind: "invalid" }
+  | { readonly kind: "valid"; readonly selectedProjectId: ProjectId };
+
+/**
+ * preference storage の失敗。保存値、project ID、vendor 例外を含めない（要件 2.6、3.6）。
+ * - `storage-unavailable`: 読み取り自体が拒否された。
+ * - `storage-write-failed`: 書き込みまたは消去が拒否された。
+ */
+export type ProjectPreferenceError =
+  | { readonly kind: "storage-unavailable" }
+  | { readonly kind: "storage-write-failed" };
+
+/**
+ * 専用 key 一件だけを read/write/clear する保存 port（要件 8.1、8.3）。
+ * Chrome adapter と in-memory adapter は同じこの契約を満たす。
+ */
+export interface ProjectPreferencePort {
+  read(): Promise<Result<ProjectPreferenceRead, ProjectPreferenceError>>;
+  write(projectId: ProjectId): Promise<Result<void, ProjectPreferenceError>>;
+  clear(): Promise<Result<void, ProjectPreferenceError>>;
+}

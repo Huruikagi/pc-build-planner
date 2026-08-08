@@ -12,7 +12,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.4, 4.2_
   - _Boundary: ProjectCatalogProjection_
 
-- [ ] 1.2 専用 project preference の検証と保存を実装する
+- [x] 1.2 専用 project preference の検証と保存を実装する
   - 上流の設定済み runtime schema 入口を使い、version 1 と project ID だけを持つ strict preference を unknown から検証する。
   - missing、valid、invalid、read failure を区別し、write と clear を安定した error union へ閉じる。
   - Chrome local の専用 key adapter と決定的な in-memory adapter を同じ port で提供し、canonical root と backup へ値を混在させない。
@@ -164,3 +164,10 @@
   - _Requirements: 3.5, 5.9, 5.10, 5.11, 5.12, 5.13, 6.5, 6.6, 6.7, 7.6, 7.8, 8.2, 8.4, 8.5, 8.6, 8.7, 8.8_
   - _Boundary: ProjectContext Final Validation_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
+
+## Implementation Notes
+
+- 1.1: `contracts.ts` は型契約のみ、`catalog.ts` が projection と純粋 snapshot 構築（`createProjectContextSnapshot` / `unavailableProjectContextSnapshot` / `resolveProjectCatalogSelection`）を持つ。generation 採番と transaction 直列化は task 2.3 の service が所有する。service はこれらを再実装せず利用すること。
+- 1.1: `unavailable` snapshot は `catalog` property 自体を持たない（`"catalog" in snapshot` が false）。この shape を壊さないこと。
+- 1.2: `chrome.storage.local` の参照と存在確認は `preference-store.ts` に閉じ、`runtime.ts` は adapter 選択だけの composition seam とした（design.md の記述矛盾は DEF-003 で先送り）。task 1.3 の AST gate は file-scope で検査すること（DEF-004）。
+- 1.2: preference の decode は `src/domain/runtime-schema/public.ts` 経由のみ。`src/project-context/` 内での直接 Zod import は tasks.md 実装前提により禁止。
