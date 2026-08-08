@@ -21,7 +21,7 @@
   - _Boundary: ProjectPreferenceStore_
   - _Depends: 1.1_
 
-- [ ] 1.3 preference storage の key-scoped boundary gate を追加する
+- [x] 1.3 preference storage の key-scoped boundary gate を追加する
   - project-context の保存 adapter について許可 source、local area、専用 key の三条件を同時に検査する。
   - 別 source、session/sync area、別 key、dynamic key、storage alias、専用 key と別 keyの混在を negative fixture で拒否する。
   - project-context が boundary と UI text の必須 scan root に含まれ、root 欠落時に fail closed となることを検証する。
@@ -171,3 +171,4 @@
 - 1.1: `unavailable` snapshot は `catalog` property 自体を持たない（`"catalog" in snapshot` が false）。この shape を壊さないこと。
 - 1.2: `chrome.storage.local` の参照と存在確認は `preference-store.ts` に閉じ、`runtime.ts` は adapter 選択だけの composition seam とした（design.md の記述矛盾は DEF-003 で先送り）。task 1.3 の AST gate は file-scope で検査すること（DEF-004）。
 - 1.2: preference の decode は `src/domain/runtime-schema/public.ts` 経由のみ。`src/project-context/` 内での直接 Zod import は tasks.md 実装前提により禁止。
+- 1.3: preference key gate は `preference-store.ts` の file scope で `get/set/remove` の直接呼び出しだけを許可し、method alias・dynamic key・area 全体操作を fail closed に拒否する。consumer import 制限は task 4.3 が所有する。

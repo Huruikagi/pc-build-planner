@@ -20,6 +20,8 @@ import {
   isNamedImports,
   isNonNullExpression,
   isNoSubstitutionTemplateLiteral,
+  isObjectBindingPattern,
+  isObjectLiteralExpression,
   isParenthesizedExpression,
   isPropertyAccessExpression,
   isPropertyAssignment,
@@ -238,6 +240,179 @@ const isForbiddenUiLanguageConsumerImport = (sourcePath, specifier) => {
     /(?:^|\/)ui-language\/([^/]+?)(?:\.js|\.ts)?$/,
   )?.[1];
   return entry === undefined || !allowedEntry.test(entry);
+};
+
+// ProjectContextBoundaryGate (8.1, 8.4): preference adapter は storage API を
+// injection で受け取るため、key scope は expression chain ではなく file scope で
+// 検査する。`get` / `set` / `remove` の key argument が静的な文字列 literal として
+// 専用 key へ解決できる場合だけ通し、dynamic key、const 間接、template literal、
+// computed property、spread、別 key、別 key との混在をすべて拒否する。
+// adapter 自身の doc comment が宣言するとおり alias も間接も持ち込まないため、
+// `get` / `set` / `remove` を別名へ束縛する記述自体も違反として扱う（alias を
+// 解決するのではなく禁止する）。統合規則として、storage method 名へ解決する
+// member access は「CallExpression の直接 callee であるとき」だけ許し、それ以外の
+// 位置（`.call` / `.apply` の receiver、代入右辺、object literal の property 値、
+// return 値、call 引数、closure）に現れた時点で違反とする。これにより key 検査を
+// 受けない method 参照が file の外へ逃げる経路をまとめて閉じる。
+// `clear` / `getKeys` / `getBytesInUse` は area 全体
+// を対象にし単一 key へ絞れないため、引数によらず無条件に拒否する（要件 8.1）。
+const PROJECT_CONTEXT_PREFERENCE_KEY = "projectContextPreference";
+const PROJECT_CONTEXT_STORAGE_ADAPTER =
+  /(?:^|\/)src\/project-context\/preference-store\.ts$/;
+const STORAGE_KEY_METHODS = new Set(["get", "set", "remove"]);
+const STORAGE_AREA_METHODS = new Set(["clear", "getKeys", "getBytesInUse"]);
+const METHOD_INDIRECTION_NAMES = new Set(["bind", "call", "apply"]);
+
+/** @param {string | undefined} name */
+const isStorageMethodName = (name) =>
+  name !== undefined &&
+  (STORAGE_KEY_METHODS.has(name) || STORAGE_AREA_METHODS.has(name));
+
+/** @param {import("typescript/unstable/ast").Node} node @returns {string | undefined} */
+const storageMemberName = (node) => {
+  const expression = unwrapExpression(node);
+  if (isPropertyAccessExpression(expression)) return expression.name.text;
+  if (isElementAccessExpression(expression))
+    return staticString(expression.argumentExpression, new Map());
+  return undefined;
+};
+
+/**
+ * 呼び出さずに storage method を取り出す参照か。`storage.get`、`storage["get"]`、
+ * `storage.get.bind(storage)` のいずれも key 検査を迂回させる alias 元になる。
+ * @param {import("typescript/unstable/ast").Node} node
+ * @returns {boolean}
+ */
+const referencesStorageMethod = (node) => {
+  const expression = unwrapExpression(node);
+  if (isCallExpression(expression)) {
+    const callee = unwrapExpression(expression.expression);
+    if (
+      !isPropertyAccessExpression(callee) &&
+      !isElementAccessExpression(callee)
+    )
+      return false;
+    const indirection = storageMemberName(callee);
+    return (
+      indirection !== undefined &&
+      METHOD_INDIRECTION_NAMES.has(indirection) &&
+      referencesStorageMethod(callee.expression)
+    );
+  }
+  return isStorageMethodName(storageMemberName(expression));
+};
+
+/** @param {import("typescript/unstable/ast").ObjectBindingPattern} pattern */
+const bindsStorageMethod = (pattern) =>
+  pattern.elements.some((element) => {
+    const bindingName = element.name;
+    const bound =
+      element.propertyName === undefined
+        ? bindingName !== undefined && isIdentifier(bindingName)
+          ? bindingName.text
+          : undefined
+        : propertyNameText(element.propertyName);
+    return isStorageMethodName(bound);
+  });
+
+/** @param {import("typescript/unstable/ast").Node} node */
+const dedicatedPreferenceKeyLiteral = (node) => {
+  const expression = unwrapExpression(node);
+  return (
+    isStringLiteral(expression) &&
+    expression.text === PROJECT_CONTEXT_PREFERENCE_KEY
+  );
+};
+
+/** @param {import("typescript/unstable/ast").ObjectLiteralExpression} payload */
+const writesOnlyDedicatedPreferenceKey = (payload) =>
+  payload.properties.length > 0 &&
+  payload.properties.every((property) => {
+    if (
+      isPropertyAssignment(property) ||
+      isShorthandPropertyAssignment(property)
+    )
+      return (
+        (isIdentifier(property.name) || isStringLiteral(property.name)) &&
+        property.name.text === PROJECT_CONTEXT_PREFERENCE_KEY
+      );
+    return false;
+  });
+
+/**
+ * 呼び出し式の直接 callee 位置にある member access か。`storage.get("...")` は真、
+ * `storage.get.call(...)` の `storage.get` や `then(storage.get)` は偽になる。
+ * @param {import("typescript/unstable/ast").Node} node
+ * @param {import("typescript/unstable/ast").Node | undefined} parent
+ */
+const isDirectCallee = (node, parent) =>
+  parent !== undefined &&
+  isCallExpression(parent) &&
+  unwrapExpression(parent.expression) === node;
+
+/**
+ * 単一 node が key scope を破っているか。true の時点で file 全体を違反とする。
+ * @param {import("typescript/unstable/ast").Node} node
+ * @param {import("typescript/unstable/ast").Node | undefined} parent
+ */
+const breaksProjectContextPreferenceKeyScope = (node, parent) => {
+  // alias 束縛（分割代入・変数代入・bind）は identifier 呼び出しへ化けて
+  // key 検査を素通りするため、束縛そのものを違反とする。
+  if (isObjectBindingPattern(node)) return bindsStorageMethod(node);
+  if (isVariableDeclaration(node))
+    return (
+      node.initializer !== undefined &&
+      referencesStorageMethod(node.initializer)
+    );
+  // 統合規則: storage method へ解決する member access は直接 callee 位置以外を禁じる。
+  if (isPropertyAccessExpression(node) || isElementAccessExpression(node))
+    return (
+      isStorageMethodName(storageMemberName(node)) &&
+      !isDirectCallee(node, parent)
+    );
+  if (!isCallExpression(node)) return false;
+  const callee = unwrapExpression(node.expression);
+  /** @type {string | undefined} */
+  let method;
+  if (isPropertyAccessExpression(callee)) method = callee.name.text;
+  else if (isElementAccessExpression(callee)) {
+    // 動的に解決される method 名は key 検査自体を迂回させるため受け付けない。
+    method = staticString(callee.argumentExpression, new Map());
+    if (method === undefined) return true;
+  }
+  if (method === undefined) return false;
+  // area 全体 method は key へ絞れないため引数を見るまでもなく拒否する。
+  if (STORAGE_AREA_METHODS.has(method)) return true;
+  if (!STORAGE_KEY_METHODS.has(method)) return false;
+  const argument = node.arguments[0];
+  if (argument === undefined) return true;
+  if (method === "set") {
+    const payload = unwrapExpression(argument);
+    return (
+      !isObjectLiteralExpression(payload) ||
+      !writesOnlyDedicatedPreferenceKey(payload)
+    );
+  }
+  return !dedicatedPreferenceKeyLiteral(argument);
+};
+
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
+const violatesProjectContextPreferenceKey = (sourceFile) => {
+  // 直接 callee 判定に親 node が要るため、walkAst ではなく親付きで走査する。
+  /**
+   * @param {import("typescript/unstable/ast").Node} node
+   * @param {import("typescript/unstable/ast").Node | undefined} parent
+   * @returns {boolean}
+   */
+  const visit = (node, parent) => {
+    if (breaksProjectContextPreferenceKeyScope(node, parent)) return true;
+    let violation = false;
+    node.forEachChild((child) => {
+      violation = violation || visit(child, node);
+    });
+    return violation;
+  };
+  return visit(sourceFile, undefined);
 };
 
 /** @param {string} value */
@@ -937,6 +1112,12 @@ export const findBoundaryViolations = (sources) => {
         )
           rules.add("candidate-source-bookmarks-no-legacy-capture-port");
         if (
+          PROJECT_CONTEXT_STORAGE_ADAPTER.test(normalizedPath) &&
+          ast !== undefined &&
+          violatesProjectContextPreferenceKey(ast)
+        )
+          rules.add("project-context-preference-key-only");
+        if (
           isCandidateSourceCatalog &&
           ast !== undefined &&
           hasCandidateCatalogUrlOwnership(ast)
@@ -1020,8 +1201,10 @@ export const findBoundaryViolations = (sources) => {
   );
 };
 
-// StorageAccessGuard (3.2, 3.4): `chrome.storage.local` reachability is confined
-// to the local-data foundation adapter and display-language preference port.
+// StorageAccessGuard (3.2, 3.4, and project-context 8.1/8.4):
+// `chrome.storage.local` reachability is confined to the local-data foundation
+// adapter, the display-language preference port, and the project-context
+// preference adapter (whose dedicated key is additionally gated above).
 // The transient surface separately owns one `chrome.storage.session` adapter.
 // No other source file may reach either storage area. Bundled `dist/` output
 // merges those adapters into the three listed entry bundles.
@@ -1032,6 +1215,10 @@ const STORAGE_ACCESS_SOURCE_POLICIES = [
   },
   {
     pattern: /(?:^|\/)ui-language\/preference-store\.ts$/,
+    area: "local",
+  },
+  {
+    pattern: /(?:^|\/)project-context\/preference-store\.ts$/,
     area: "local",
   },
   {

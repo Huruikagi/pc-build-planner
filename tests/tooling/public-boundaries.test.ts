@@ -11,6 +11,13 @@ import {
   findStorageAccessViolations,
   validateBoundaryRoots,
 } from "../../scripts/validate-boundaries.mjs";
+import { validateUiTextRoots } from "../../scripts/validate-ui-text.mjs";
+
+/** boundary ruleとStorageAccessGuardを同じ入力へ同時に適用する（三条件の同時検査）。 */
+const allBoundaryViolations = (sources) => [
+  ...findBoundaryViolations(sources),
+  ...findStorageAccessViolations(sources),
+];
 
 test("domain と persistence の公開入口は許可された契約だけを公開する", async () => {
   const domainPublic = await readFile("src/domain/public.ts", "utf8");
@@ -1142,4 +1149,270 @@ test("validateBoundaryRootsはStorageAccessGuardの違反も返す", async () =>
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("project-context storage adapterはsource・area・専用keyの三条件を同時に満たす場合だけ通す", async () => {
+  const adapterPath = "src/project-context/preference-store.ts";
+  const forbidden = [
+    // 別 source path: 許可 adapter 以外は project-context 内でも storage へ到達しない。
+    {
+      path: "src/project-context/runtime.ts",
+      source:
+        'export const read = () => chrome.storage.local.get("projectContextPreference");',
+      rule: "no-direct-storage-access",
+    },
+    // session / sync area: 許可 area は local だけ。
+    {
+      path: adapterPath,
+      source:
+        'export const read = () => chrome.storage.session.get("projectContextPreference");',
+      rule: "no-direct-storage-access",
+    },
+    {
+      path: adapterPath,
+      source:
+        'export const read = () => chrome.storage.sync.get("projectContextPreference");',
+      rule: "no-direct-storage-access",
+    },
+    // storage alias: area を伴わない `chrome.storage` の別名束縛。
+    {
+      path: adapterPath,
+      source:
+        'const area = chrome.storage;\nexport const read = () => area.local.get("projectContextPreference");',
+      rule: "no-direct-storage-access",
+    },
+    // dynamic key。
+    {
+      path: adapterPath,
+      source: "export const read = (storage, key) => storage.get(key);",
+      rule: "project-context-preference-key-only",
+    },
+    // const 経由の間接 key（静的に literal へ解決させない）。
+    {
+      path: adapterPath,
+      source:
+        'const KEY = "projectContextPreference";\nexport const read = (storage) => storage.get(KEY);',
+      rule: "project-context-preference-key-only",
+    },
+    // template literal key。
+    {
+      path: adapterPath,
+      source:
+        "export const read = (storage, suffix) => storage.get(`projectContext${" +
+        "suffix}`);",
+      rule: "project-context-preference-key-only",
+    },
+    // 別 key。
+    {
+      path: adapterPath,
+      source:
+        'export const read = (storage) => storage.get("projectContextDraft");',
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source:
+        'export const clear = (storage) => storage.remove("uiLanguagePreference");',
+      rule: "project-context-preference-key-only",
+    },
+    // 専用 key と別 key の混在。
+    {
+      path: adapterPath,
+      source:
+        "export const write = (storage, document, draft) => storage.set({ projectContextPreference: document, projectContextDraft: draft });",
+      rule: "project-context-preference-key-only",
+    },
+    // computed property による set payload key。
+    {
+      path: adapterPath,
+      source:
+        "export const write = (storage, key, document) => storage.set({ [key]: document });",
+      rule: "project-context-preference-key-only",
+    },
+    // spread による未知 key 混入。
+    {
+      path: adapterPath,
+      source:
+        "export const write = (storage, rest, document) => storage.set({ projectContextPreference: document, ...rest });",
+      rule: "project-context-preference-key-only",
+    },
+    // method 名自体の動的解決。
+    {
+      path: adapterPath,
+      source:
+        'export const read = (storage, method) => storage[method]("projectContextPreference");',
+      rule: "project-context-preference-key-only",
+    },
+    // method alias: 分割代入で get / set / remove を束縛して key 検査を迂回する。
+    {
+      path: adapterPath,
+      source:
+        'const { get, set, remove } = storage;\nexport const read = () => get("someOtherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    // method alias: 変数束縛。
+    {
+      path: adapterPath,
+      source:
+        'const g = storage.get;\nexport const read = () => g("someOtherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    // method alias: bind 経由。
+    {
+      path: adapterPath,
+      source:
+        'const g = storage.get.bind(storage);\nexport const read = () => g("someOtherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    // method alias: chrome.storage.local から直接分割代入。
+    {
+      path: adapterPath,
+      source:
+        'const { get } = chrome.storage.local;\nexport const read = () => get("otherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    // area 全体を対象にする method は key へ絞れないため無条件に拒否する。
+    {
+      path: adapterPath,
+      source: "export const wipe = (storage) => storage.clear();",
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source: "export const wipe = () => chrome.storage.local.clear();",
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source: "export const list = (storage) => storage.getKeys();",
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source: "export const size = (storage) => storage.getBytesInUse();",
+      rule: "project-context-preference-key-only",
+    },
+    // 複合: alias 化した port factory 全体が別 key だけを操作する。
+    {
+      path: adapterPath,
+      source: [
+        "export const createPort = (storage) => {",
+        "  const { get, set, remove } = storage;",
+        "  return {",
+        '    async read() { return get("someUnrelatedKey"); },',
+        "    async write(value) { await set({ someUnrelatedKey: value }); },",
+        '    async clear() { await remove("anotherKey"); },',
+        "  };",
+        "};",
+      ].join("\n"),
+      rule: "project-context-preference-key-only",
+    },
+    // 呼び出し位置での `.call` / `.apply`: method 参照が receiver 側へ回るため
+    // callee 名は `call` / `apply` になり、key 検査を素通りさせる。
+    {
+      path: adapterPath,
+      source:
+        'export const read = (storage) => storage.get.call(storage, "otherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source:
+        'export const read = (storage) => storage.get.apply(storage, ["otherKey"]);',
+      rule: "project-context-preference-key-only",
+    },
+    // area 全体 method の `.call` 経由呼び出し（canonical domain root ごと消える）。
+    {
+      path: adapterPath,
+      source:
+        "export const wipe = () => chrome.storage.local.clear.call(chrome.storage.local);",
+      rule: "project-context-preference-key-only",
+    },
+    // method alias: 宣言ではなく代入式で束縛する。
+    {
+      path: adapterPath,
+      source:
+        'let g;\ng = storage.get;\nexport const read = () => g("otherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source:
+        'holder.g = storage.get;\nexport const read = () => holder.g("otherKey");',
+      rule: "project-context-preference-key-only",
+    },
+    // port factory が raw method をそのまま再公開する（呼び出し側へ key 自由を渡す）。
+    {
+      path: adapterPath,
+      source:
+        "export const createPort = (storage) => ({ read: storage.get, write: storage.set, clear: storage.remove });",
+      rule: "project-context-preference-key-only",
+    },
+    // callback 引数として method 参照を渡す。
+    {
+      path: adapterPath,
+      source:
+        "export const read = (storage, k) => Promise.resolve(k).then(storage.get);",
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source: "export const read = (storage, k) => [k].map(storage.get);",
+      rule: "project-context-preference-key-only",
+    },
+    // return 値 / closure として method 参照を持ち出す。
+    {
+      path: adapterPath,
+      source: "export function pick(s) {\n  return s.get;\n}",
+      rule: "project-context-preference-key-only",
+    },
+    {
+      path: adapterPath,
+      source: "export const g = (storage) => () => storage.get;",
+      rule: "project-context-preference-key-only",
+    },
+  ];
+
+  for (const { path, source, rule } of forbidden)
+    assert.deepEqual(
+      allBoundaryViolations([{ path, source }]).map(
+        (violation) => `${violation.path}: ${violation.rule}`,
+      ),
+      [`${path}: ${rule}`],
+      source,
+    );
+
+  // 正常 adapter（実 file）は gate を通る。
+  const sources = await Promise.all(
+    ["contracts.ts", "catalog.ts", "preference-store.ts", "runtime.ts"].map(
+      async (name) => ({
+        path: `src/project-context/${name}`,
+        source: await readFile(`src/project-context/${name}`, "utf8"),
+      }),
+    ),
+  );
+  assert.deepEqual(allBoundaryViolations(sources), []);
+});
+
+test("project-contextはboundaryとUI textの必須scan rootでありroot欠落はfail closedになる", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  assert.match(
+    packageJson.scripts["validate:boundaries"],
+    /src\/project-context/,
+  );
+  assert.match(packageJson.scripts["validate:ui-text"], /src\/project-context/);
+  assert.match(packageJson.scripts["validate:ci"], /validate:boundaries/);
+  assert.match(packageJson.scripts["validate:ci"], /validate:ui-text/);
+
+  await assert.rejects(
+    validateBoundaryRoots(["src/project-context/__missing__"]),
+    /boundary scan root does not exist/,
+  );
+  await assert.rejects(
+    validateUiTextRoots(["src/project-context/__missing__"]),
+    /ui-text scan root does not exist/,
+  );
+
+  assert.deepEqual(await validateBoundaryRoots(["src/project-context"]), []);
+  assert.deepEqual(await validateUiTextRoots(["src/project-context"]), []);
 });
