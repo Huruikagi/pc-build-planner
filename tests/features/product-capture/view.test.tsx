@@ -121,6 +121,92 @@ test("handoff失敗はDevToolsなしでも安全な固定理由を識別でき�
   );
 });
 
+test("全表示状態でsite name確認・project選択・保存操作を持たない", async () => {
+  const forbidden = [
+    "[data-capture-site-name]",
+    "[data-capture-project-select]",
+    "[data-capture-submit]",
+    "[data-capture-save]",
+    "[data-region='review']",
+    "form",
+    "input",
+    "select",
+    "textarea",
+  ];
+  const assertNoLegacySurface = (container: HTMLElement, label: string) => {
+    for (const selector of forbidden)
+      assert.equal(
+        container.querySelector(selector),
+        null,
+        `${label}: ${selector} must not exist`,
+      );
+  };
+
+  // idle → 実行 → 実行失敗 を同じ面で辿る。
+  const state = setup();
+  const view = render(
+    <LanguageProvider>
+      <CaptureView state={state} />
+    </LanguageProvider>,
+  );
+  assertNoLegacySurface(view.container, "idle");
+  const start = view.container.querySelector("[data-capture-start]");
+  assert.ok(start);
+  await userEvent.setup().click(start);
+  assertNoLegacySurface(view.container, "failed");
+  cleanup();
+
+  // handoff失敗による再試行表示は、その状態を確定させてから描画して確認する。
+  const retryState = setup();
+  retryState.retainHandoffFailure(
+    { kind: "transition-failed", reason: "operation-blocked" },
+    {
+      featureId: "candidate-management" as never,
+      target: "open-candidate-editor",
+      payload: {},
+    } satisfies FeatureActivationIntent,
+  );
+  const retryView = render(
+    <LanguageProvider>
+      <CaptureView state={retryState} />
+    </LanguageProvider>,
+  );
+  assert.ok(retryView.container.querySelector("[data-capture-retry]"));
+  assertNoLegacySurface(retryView.container, "handoff-retry");
+});
+
+test("保持したページ由来値を描画せずHTML注入もしない", () => {
+  const state = setup();
+  const injected = '<img src=x onerror="alert(1)">SYN 架空ショップ';
+  state.retainHandoffFailure(
+    { kind: "transition-failed", reason: "operation-blocked" },
+    {
+      featureId: "candidate-management" as never,
+      target: "open-candidate-editor",
+      payload: {
+        draft: {
+          product: { name: { original: injected, confirmed: injected } },
+          sources: [{ pageUrl: injected, siteName: injected }],
+          sourceSnapshot: { siteName: injected },
+        },
+      },
+    } satisfies FeatureActivationIntent,
+  );
+  const view = render(
+    <LanguageProvider>
+      <CaptureView state={state} />
+    </LanguageProvider>,
+  );
+
+  // 一過性面はページ由来値を提示しないため、text・属性・入力値のどこにも現れない。
+  assert.equal(view.container.textContent?.includes("SYN 架空ショップ"), false);
+  assert.equal(view.container.innerHTML.includes("SYN 架空ショップ"), false);
+  assert.equal(view.container.querySelector("img"), null);
+  assert.equal(view.container.querySelector("script"), null);
+  assert.equal(view.container.querySelector("iframe"), null);
+  assert.doesNotMatch(view.container.innerHTML, /onerror/i);
+});
+
 test("制限pageでは案内を維持し実行操作を隠す", async () => {
   for (const error of [{ kind: "restricted-page" }] as const) {
     const view = render(

@@ -8,6 +8,9 @@ import {
 } from "./models/application-shell.js";
 import {
   candidateEditor,
+  candidateSourceField,
+  candidateSourceRows,
+  candidateSources,
   projectRequired,
 } from "./models/candidate-management.js";
 import { formField, submitButton } from "./models/locator-primitives.js";
@@ -200,10 +203,13 @@ test("production buildのhandoff後に元tabが失効してもdraftを保持し�
     await route.fulfill({
       body: `<!doctype html>
         <title>SYN production capture target</title>
+        <meta property="og:site_name" content="SYN E2E 架空ショップ">
+        <meta property="og:description" content="SYN E2E 未列挙 description">
         <script type="application/ld+json">
           {"@context":"https://schema.org","@type":"Product","name":"SYN E2E Graphics Card","brand":{"@type":"Brand","name":"SYN Vendor"}}
         </script>`,
-      contentType: "text/html",
+      // 非ASCIIのページ由来文字列を素通しで検証するため、charsetを明示する。
+      contentType: "text/html; charset=utf-8",
       status: 200,
     });
   });
@@ -247,6 +253,13 @@ test("production buildのhandoff後に元tabが失効してもdraftを保持し�
   await expect(formField(editor, "candidate-name")).toHaveValue(
     "SYN E2E Graphics Card",
   );
+  // og:site_name は任意の source 表示名として編集開始状態へ届く。
+  const sourceRow = candidateSourceRows(candidateSources(editor)).first();
+  await expect(candidateSourceField(sourceRow, 0, "site-name")).toHaveValue(
+    "SYN E2E 架空ショップ",
+  );
+  // 未列挙 property は編集面のどこにも現れない。
+  await expect(editor).not.toContainText("未列挙");
 
   await target.close();
 

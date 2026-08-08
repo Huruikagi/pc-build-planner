@@ -70,6 +70,21 @@ test("公開APIと公開lookupはconsumerから差し替えられない", () => 
   assert.equal(Object.isFrozen(api.pagePriceExtraction), true);
 });
 
+test("公開APIはread-onlyな2能力だけを観測させる", () => {
+  const api = createProductCapturePublicApi({
+    manufacturerDomains: lookup,
+    pagePriceExtraction: priceExtraction,
+  });
+
+  assert.deepEqual(Object.keys(api).sort(), [
+    "manufacturerDomains",
+    "pagePriceExtraction",
+  ]);
+  // 各能力も単一のread-only操作だけを持ち、抽出・権限・保存の手段を伴わない。
+  assert.deepEqual(Object.keys(api.manufacturerDomains), ["findManufacturer"]);
+  assert.deepEqual(Object.keys(api.pagePriceExtraction), ["extractPrice"]);
+});
+
 test("公開入口だけからpage-derived URL・取得時点・根拠付き価格を観測できる", async () => {
   const api = createProductCapturePublicApi({
     manufacturerDomains: lookup,

@@ -214,9 +214,9 @@
   - _Requirements: 1.4, 4.2, 4.5, 6.1, 6.4, 7.2_
   - _Boundary: TransientSurfaceLifecycleIntegration_
 
-- [ ] 11. metadata・handoff・公開consumerの非回帰を閉じる
+- [x] 11. metadata・handoff・公開consumerの非回帰を閉じる
 
-- [ ] 11.1 metadata allowlistからcandidate editorまでの受け入れflowを検証する
+- [x] 11.1 metadata allowlistからcandidate editorまでの受け入れflowを検証する
   - 3 familyの対応property、任意site name、domain補完、欠損・不正site nameをproduction-like compositionで通す。
   - site nameが表示用任意値として一度だけpre-editへ届き、capture側の保存mutationやidentity判定が発生しないことを確認する。
   - synthetic fixtureだけで全対応mapping、未列挙拒否、空名manual handoff、handoff retryが一つのintegration suiteで観測できることを完了条件とする。
@@ -224,7 +224,7 @@
   - _Requirements: 4.1, 4.2, 4.4, 4.5, 4.6, 5.1, 5.4, 5.5, 5.6, 7.1, 7.2, 7.4, 7.5, 7.6, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
   - _Boundary: ProductCaptureCandidateIntegration_
 
-- [ ] 11.2 (P) 公開consumerと価格観測のcontract driftを検証する
+- [x] 11.2 (P) 公開consumerと価格観測のcontract driftを検証する
   - manufacturer lookup consumerとprice refresh consumerが公開入口だけを利用し、deep importなしでstrict型検査を通す。
   - metadata source union移行後も価格欠損、6種failure、page-derived URL、元表記、同一pipeline順位を維持する。
   - boundary validationとconsumer contract suiteが公開APIの2つのread-only能力だけを観測できることを完了条件とする。
@@ -232,7 +232,7 @@
   - _Requirements: 1.1, 1.4, 2.2, 2.3, 3.2, 3.5, 6.1, 6.2, 6.5, 7.2, 7.4, 7.5_
   - _Boundary: CrossSpecConsumerContracts, PublicBoundaryValidation_
 
-- [ ] 11.3 production UIとsecurity artifact gateを検証する
+- [x] 11.3 production UIとsecurity artifact gateを検証する
   - 一過性面が実行、実行中、失敗、handoff再試行だけを表示し、site name確認、project選択、保存操作を持たないことをDOMで確認する。
   - ページ由来文字列が安全なtextとして描画され、unsafe HTML、remote code、恒久的host permissionが追加されていないことを検証する。
   - DOM、permission、CSP、fixture、artifact gateがsynthetic資産だけで通ることを完了条件とする。
@@ -240,7 +240,7 @@
   - _Requirements: 1.2, 1.3, 2.5, 3.3, 4.7, 6.5, 7.1, 7.4, 8.3, 8.4_
   - _Boundary: ProductCaptureDOM, SecurityValidation, ArtifactValidation_
 
-- [ ] 11.4 Chrome production E2Eと最終共通検証を完了する
+- [x] 11.4 Chrome production E2Eと最終共通検証を完了する
   - icon起動からsite name付きcandidate editor到達、tab失効によるsurface終了、新gestureによる新世代起動をChrome 116相当のproduction buildで検証する。
   - source-price-refreshとcandidate-source-bookmarks相当consumerが公開契約だけを使い、旧save・navigation境界へ回帰していないことを確認する。
   - typecheck、lint、unit、contract、DOM、boundary、fixture、artifact、build、E2Eの共通検証flowが通ることを完了条件とする。
@@ -260,3 +260,6 @@
 - 未応答timeoutは`createCaptureTimeoutPolicy`が1回のChrome呼び出しごとに独立した予算を持ち、timer源を`timeoutScheduler`で差し替えられる。実時間に依存しない決定的runtime testはこの差し替えで書く。
 - 10.2・10.3の失効配線と世代隔離は5.1〜5.4の実装で既に満たされていたため、本タスクの追加はlifecycle seamを通した検証（`tests/features/product-capture/lifecycle-integration.test.ts`）だけ。
 - candidate-managementはproduct-captureより先にcompositionされるため、classifierへは`productCapture.registration.publicApi.manufacturerDomains`を後から差す遅延lookupを渡す。公開APIの組立ては`createProductCaptureContribution`側の一箇所だけに保つ（既存の`duplicateRefreshPort`と同じ形）。
+- metadata allowlistはproperty名だけをkeyにするため、同じ名前は`property`/`name`のどちらのattribute slotにあっても同じruleへ一致する。slotは承認済み`MetadataPropertyRule`契約の一部ではない（`collectMetadata`のcommentはこの点で実装と食い違う。DEF-009）。
+- Playwrightの`route.fulfill`で非ASCIIのページ由来文字列を検証する場合、`contentType`に`charset=utf-8`を明示する。省略するとbrowser側の推測decodeで値が化け、抽出の非回帰testが誤検知する。
+- 共通検証flowのartifact gateは`validate:final-build`であり、単体の`validate:artifacts` scriptはlicense notice除外が未反映で失敗する（DEF-010）。gate結果は`validate:final-build`で判断する。

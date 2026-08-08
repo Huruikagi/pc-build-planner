@@ -480,6 +480,168 @@ test("site nameが不正でも他の商品項目のhandoffを継続する", asyn
   assert.equal(flow.saveMutations(), 0);
 });
 
+/** 全familyの許可済み組。document順はrankerの同順位判定にも効くので固定する。 */
+const ALLOWLISTED_METADATA = `
+  <meta property="og:title" content="SYN OG 商品名">
+  <meta property="og:url" content="https://shop.synthetic-maker.example.invalid/item?from=og">
+  <meta property="og:site_name" content="SYN 架空ショップ">
+  <meta name="twitter:title" content="SYN Twitter 商品名">
+  <meta property="product:brand" content="SYN metadata メーカー">
+  <meta property="product:retailer_item_id" content="SYN-MODEL-77">
+  <meta property="product:price:amount" content="45600">
+  <meta property="product:price:currency" content="JPY">
+`;
+
+/** namespace一致・prefix・suffix・別slotのいずれでも採用されてはならない組。 */
+const UNLISTED_METADATA = `
+  <meta property="og:description" content="SYN 未列挙 og description">
+  <meta property="og:image" content="https://shop.synthetic-maker.example.invalid/syn.png">
+  <meta property="og:title:alt" content="SYN 未列挙 og title suffix">
+  <meta name="twitter:description" content="SYN 未列挙 twitter description">
+  <meta name="twitter:image" content="https://shop.synthetic-maker.example.invalid/card.png">
+  <meta property="product:category" content="SYN 未列挙 product category">
+  <meta property="product:brand:name" content="SYN 未列挙 brand suffix">
+  <meta name="description" content="SYN 未列挙 generic description">
+`;
+
+test("3 metadata familyの対応組だけがproduction-like compositionでpre-editへ届く", async () => {
+  const extracted = extractFrom(
+    `${ALLOWLISTED_METADATA}${UNLISTED_METADATA}<h1>SYN 見出し商品名</h1>`,
+  );
+
+  // 採用前の抽出結果でも、metadata由来候補は許可済みの組だけに閉じている。
+  assert.deepEqual(
+    extracted.candidates
+      .filter((candidate) =>
+        (["open-graph", "twitter-card", "product-meta"] as const).some(
+          (source) => source === candidate.source,
+        ),
+      )
+      .map(({ field, source, sourceLabel, rawValue }) => ({
+        field,
+        source,
+        sourceLabel,
+        rawValue,
+      }))
+      .sort((left, right) => left.sourceLabel.localeCompare(right.sourceLabel)),
+    [
+      {
+        field: "url",
+        source: "open-graph",
+        sourceLabel: "og:url",
+        rawValue: "https://shop.synthetic-maker.example.invalid/item?from=og",
+      },
+      {
+        field: "name",
+        source: "open-graph",
+        sourceLabel: "og:title",
+        rawValue: "SYN OG 商品名",
+      },
+      {
+        field: "price",
+        source: "product-meta",
+        sourceLabel: "product:price:amount",
+        rawValue: "45600 JPY",
+      },
+      {
+        field: "manufacturer",
+        source: "product-meta",
+        sourceLabel: "product:brand",
+        rawValue: "SYN metadata メーカー",
+      },
+      {
+        field: "modelNumber",
+        source: "product-meta",
+        sourceLabel: "product:retailer_item_id",
+        rawValue: "SYN-MODEL-77",
+      },
+      {
+        field: "name",
+        source: "twitter-card",
+        sourceLabel: "twitter:title",
+        rawValue: "SYN Twitter 商品名",
+      },
+    ].sort((left, right) => left.sourceLabel.localeCompare(right.sourceLabel)),
+  );
+  assert.equal(extracted.siteName?.sourceLabel, "og:site_name");
+
+  // allowlistはproperty名だけをkeyにするため、同じ名前は`property`/`name`の
+  // どちらのslotにあっても同じruleへ一致する。slotはrule契約の一部ではない。
+  assert.deepEqual(
+    candidatesFrom('<meta name="og:title" content="SYN slot名 商品名">')
+      .filter((candidate) => candidate.source !== "domain-map")
+      .map(({ field, source, sourceLabel }) => ({
+        field,
+        source,
+        sourceLabel,
+      })),
+    [{ field: "name", source: "open-graph", sourceLabel: "og:title" }],
+  );
+
+  const flow = createFlow(
+    extracted.candidates,
+    pageUrl,
+    undefined,
+    undefined,
+    extracted.siteName,
+  );
+
+  await runCapture(flow);
+
+  assert.equal(flow.received.length, 1);
+  const payload = flow.received[0]?.payload as {
+    readonly draft: {
+      readonly product: {
+        readonly name: { readonly confirmed: string };
+        readonly manufacturer?: { readonly confirmed: string };
+        readonly modelNumber?: { readonly confirmed: string };
+      };
+      readonly sources: readonly {
+        readonly siteName?: string;
+        readonly price?: {
+          readonly confirmed?: { readonly amount: number };
+        };
+      }[];
+      readonly sourceSnapshot?: Record<string, string>;
+    };
+  };
+  const snapshot = payload.draft.sourceSnapshot ?? {};
+
+  // open-graph: 商品名はheadingより上位のページメタ情報として採用される。
+  assert.equal(payload.draft.product.name.confirmed, "SYN OG 商品名");
+  assert.equal(snapshot["name:source"], "open-graph");
+  assert.equal(snapshot["name:sourceLabel"], "og:title");
+  // open-graph: URLは商品項目として採用され、site nameとは別channelで届く。
+  assert.equal(snapshot["url:source"], "open-graph");
+  assert.equal(snapshot["url:sourceLabel"], "og:url");
+  // open-graph: site nameは任意の表示名だけに載る。
+  assert.equal(payload.draft.sources[0]?.siteName, "SYN 架空ショップ");
+  assert.equal(snapshot["siteName:source"], "open-graph");
+  assert.equal(snapshot["siteName:sourceLabel"], "og:site_name");
+  // product: ページ明示manufacturerがあるのでdomain-map補完は起きない。
+  assert.equal(
+    payload.draft.product.manufacturer?.confirmed,
+    "SYN metadata メーカー",
+  );
+  assert.equal(snapshot["manufacturer:source"], "product-meta");
+  assert.equal(snapshot["manufacturer:sourceLabel"], "product:brand");
+  assert.equal(payload.draft.product.modelNumber?.confirmed, "SYN-MODEL-77");
+  assert.equal(snapshot["modelNumber:source"], "product-meta");
+  assert.equal(snapshot["modelNumber:sourceLabel"], "product:retailer_item_id");
+  assert.equal(payload.draft.sources[0]?.price?.confirmed?.amount, 45600);
+  assert.equal(snapshot["price:source"], "product-meta");
+  assert.equal(snapshot["price:sourceLabel"], "product:price:amount");
+  // twitter-card: 同順位のfamilyなので文書順で負け、採用値には現れない。
+  assert.equal(
+    Object.values(snapshot).some((value) => value.includes("SYN Twitter")),
+    false,
+  );
+
+  // 未列挙propertyはhandoff payloadのどこにも現れない。
+  assert.equal(JSON.stringify(payload).includes("未列挙"), false);
+  assert.equal(flow.saveMutations(), 0);
+});
+
 test("handoff失敗は同じintentだけを再試行する", async () => {
   const flow = createFlow(candidatesFrom("<h1>SYN retry</h1>"));
   await runCapture(flow);

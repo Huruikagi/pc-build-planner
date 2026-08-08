@@ -353,6 +353,45 @@ test("cross-spec consumerはcaptureのprice portだけを公開入口から利�
   );
 });
 
+test("captureの2つの公開consumerは同じstrict型検査と境界scanに載る", async () => {
+  const consumerProject = JSON.parse(
+    await readFile("tsconfig.public-consumer.json", "utf8"),
+  );
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+
+  // manufacturer lookup consumer と price refresh consumer の両方が
+  // deep import なしの strict 型検査へ入っていること。
+  for (const consumer of [
+    "tests/tooling/public-api-consumer.ts",
+    "tests/tooling/source-price-refresh-public-consumer.ts",
+  ]) {
+    assert.ok(
+      consumerProject.include.includes(consumer),
+      `${consumer} must be strictly typechecked`,
+    );
+    assert.ok(
+      packageJson.scripts["validate:boundaries"].includes(consumer),
+      `${consumer} must be boundary-scanned`,
+    );
+  }
+
+  // 実consumer sourceは公開入口だけを使い、境界ruleへ抵触しない。
+  const sources = await Promise.all(
+    [
+      "tests/tooling/public-api-consumer.ts",
+      "tests/tooling/source-price-refresh-public-consumer.ts",
+    ].map(async (path) => ({ path, source: await readFile(path, "utf8") })),
+  );
+  assert.deepEqual(allBoundaryViolations(sources), []);
+  for (const { path, source } of sources) {
+    assert.doesNotMatch(
+      source,
+      /from "[^"]*product-capture\/(?!public\.js)/,
+      `${path} must reach product-capture through public.ts only`,
+    );
+  }
+});
+
 test("settingsは許可された公開依存だけを利用する", () => {
   const allowed = findBoundaryViolations([
     {
