@@ -32,7 +32,7 @@
 
 - [ ] 2. guard 付き context transaction を構築する
 
-- [ ] 2.1 (P) project change guard の登録・確認基盤を実装する
+- [x] 2.1 (P) project change guard の登録・確認基盤を実装する
   - stable ID による登録、duplicate 拒否、解除、登録順評価、registry revision を実装する。
   - project 選択と catalog 全体置換を判別する intent について allow と confirmation-required だけを集約し、draft 内容や保存・破棄方法、置換候補を受け取らない。
   - confirmation を intent、base generation、registry revision に結び付け、cancel と stale 判定を提供する。
@@ -41,7 +41,7 @@
   - _Boundary: ProjectChangeGuardCoordinator_
   - _Depends: 1.1_
 
-- [ ] 2.2 catalog 全体置換の permit lifecycle を実装する
+- [x] 2.2 catalog 全体置換の permit lifecycle を実装する
   - prepare と必要な confirm から、snapshot generation と guard registry revision に結び付いた一時 permit を発行し、それ自体では snapshot、preference、generation を変更しない。
   - begin 時に取消、generation、registry revision、別 transaction による stale を再検証し、無効な permit は置換開始を拒否して再評価可能な結果を返す。
   - complete は outcome にかかわらず permit を先に terminal closed とし、succeeded のときだけ forced replacement を一回通知して、failed または cancel では通知しない。
@@ -50,7 +50,7 @@
   - _Boundary: ProjectChangeGuardCoordinator Replacement_
   - _Depends: 2.1_
 
-- [ ] 2.3 (P) 初期化と catalog refresh の context state machine を実装する
+- [x] 2.3 (P) 初期化と catalog refresh の context state machine を実装する
   - 初期化時に catalog と preference を読み、valid preference、先頭 fallback、empty、unavailable の優先規則で一つの snapshot を確定する。
   - invalid / missing preference を repair し、repair 成功前に ready を公開しない。
   - refresh では有効な現在選択を維持し、削除・置換時は先頭 fallback または empty へ移行し、失敗時は unavailable へ閉じる。
@@ -168,6 +168,8 @@
 ## Implementation Notes
 
 - 1.1: `contracts.ts` は型契約のみ、`catalog.ts` が projection と純粋 snapshot 構築（`createProjectContextSnapshot` / `unavailableProjectContextSnapshot` / `resolveProjectCatalogSelection`）を持つ。generation 採番と transaction 直列化は task 2.3 の service が所有する。service はこれらを再実装せず利用すること。
+- 2.1–2.2: `ProjectChangeGuardCoordinator` は opaque な confirmation / permit と registry revision を保持する。selection の永続化・snapshot commit は task 2.4 の service transaction が所有する。
+- 2.3: `ProjectContextService` は lifecycle の catalog/preference I/O と snapshot publish だけを所有する。guard 付き selection と replacement の service 統合は task 2.4 以降で行う。
 - 1.1: `unavailable` snapshot は `catalog` property 自体を持たない（`"catalog" in snapshot` が false）。この shape を壊さないこと。
 - 1.2: `chrome.storage.local` の参照と存在確認は `preference-store.ts` に閉じ、`runtime.ts` は adapter 選択だけの composition seam とした（design.md の記述矛盾は DEF-003 で先送り）。task 1.3 の AST gate は file-scope で検査すること（DEF-004）。
 - 1.2: preference の decode は `src/domain/runtime-schema/public.ts` 経由のみ。`src/project-context/` 内での直接 Zod import は tasks.md 実装前提により禁止。

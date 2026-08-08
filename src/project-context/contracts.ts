@@ -90,3 +90,32 @@ export interface ProjectPreferencePort {
   write(projectId: ProjectId): Promise<Result<void, ProjectPreferenceError>>;
   clear(): Promise<Result<void, ProjectPreferenceError>>;
 }
+
+/** project 切替と catalog 全体置換だけを表す guard の意図。draft や置換データは含めない。 */
+export type ProjectContextChangeIntent =
+  | {
+      readonly kind: "select-project";
+      readonly from: ProjectId;
+      readonly to: ProjectId;
+      readonly cause: "user" | "catalog-invalidated";
+    }
+  | {
+      readonly kind: "replace-catalog";
+      readonly from: ProjectId | null;
+      readonly cause: "backup-restore";
+    };
+
+export type ProjectContextChangeGuardDecision =
+  | { readonly kind: "allow" }
+  | { readonly kind: "confirmation-required" };
+
+/** feature-owned draft を解釈せず、変更の可否だけを返す owner-local guard。 */
+export interface ProjectContextChangeGuard {
+  readonly id: string;
+  evaluate(
+    intent: ProjectContextChangeIntent,
+  ): Promise<
+    Result<ProjectContextChangeGuardDecision, { readonly kind: "guard-failed" }>
+  >;
+  notifyForced?(intent: ProjectContextChangeIntent): void | Promise<void>;
+}
