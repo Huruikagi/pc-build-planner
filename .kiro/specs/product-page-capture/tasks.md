@@ -170,9 +170,9 @@
   - _Requirements: 2.2, 2.3, 2.7, 2.8, 2.10, 3.4, 7.1, 7.3, 7.5, 8.5, 8.6_
   - _Boundary: ExtractionPipelineIntegration_
 
-- [ ] 9. 抽出結果を公開境界と候補編集へ統合する
+- [x] 9. 抽出結果を公開境界と候補編集へ統合する
 
-- [ ] 9.1 site nameをproject未解決pre-editへ安全に引き渡す
+- [x] 9.1 site nameをproject未解決pre-editへ安全に引き渡す
   - 有効なsite nameを任意source表示名と元表記・provenance付きで候補編集開始情報へ写像する。
   - 欠損・不正時もURLと他の商品項目を維持し、site nameをURL同一性、source ID、source kind、ページ種別へ利用しない。
   - 有効・欠損・不正site nameのhandoffと、空名・project未解決の既存経路がcandidate公開test doubleで観測できることを完了条件とする。
@@ -180,7 +180,7 @@
   - _Requirements: 3.5, 4.1, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 8.3, 8.4, 8.7, 8.8_
   - _Boundary: CaptureDraftMapper, CandidatePreEditIntegration_
 
-- [ ] 9.2 (P) manufacturer domain照合をread-only公開契約として提供する
+- [x] 9.2 (P) manufacturer domain照合をread-only公開契約として提供する
   - map内部やentryを公開せず、照合結果だけをproduct-capture公開APIから利用できるようにする。
   - candidate source classifier相当consumerが公開入口だけで型検査を通り、lookupがDOM抽出、権限判断、利用許可を有効化しないことをcontract testで固定する。
   - source-price-refreshの価格portと並存する組立済み公開APIがproduction-like compositionで一度だけ提供されることを完了条件とする。
@@ -256,3 +256,5 @@
 - 取得元サイト名は`ExtractionCandidate[]`ではなく`siteName`という別channelでpage payload・`CaptureResult`を流れる。`CaptureField`空間へ入れないため`missingCoreFields`にも`rejectedFields`にも現れず、正規化失敗は黙って欠損になる。
 - `MetadataPropertyRule.target`には設計例の`CaptureField | "source-site-name"`に加えて`price-currency`がある。`product:price:currency`を価格の修飾子としてallowlist内に閉じるための区分で、独立した商品項目ではない。
 - metadata候補の`sourceLabel`はCSS selector文字列ではなくproperty名（例: `product:brand`）。familyは`source`側が持つ。
+- `siteName`は`sources[0].siteName`（表示名）と`sourceSnapshot`の`siteName` / `siteName:source` / `siteName:sourceLabel`（元表記・provenance）へ写像する。`CaptureField`空間外なのでsnapshot keyは他fieldと衝突しない。
+- candidate-managementはproduct-captureより先にcompositionされるため、classifierへは`productCapture.registration.publicApi.manufacturerDomains`を後から差す遅延lookupを渡す。公開APIの組立ては`createProductCaptureContribution`側の一箇所だけに保つ（既存の`duplicateRefreshPort`と同じ形）。

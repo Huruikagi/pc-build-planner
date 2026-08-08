@@ -25,8 +25,8 @@ import {
   type ProductCaptureContribution,
 } from "../features/product-capture/feature-contribution.js";
 import {
-  createProductCapturePublicApi,
   createProductIdentityNormalizer,
+  type ManufacturerDomainLookup,
 } from "../features/product-capture/public.js";
 import {
   createSettingsContribution,
@@ -95,7 +95,19 @@ export const createSidePanelFeatureContributions = (
   chromeApis?: SidePanelChromeApis,
   factories: SidePanelCandidateFactories = {},
 ): SidePanelFeatureContributions => {
-  const productCapturePublic = createProductCapturePublicApi();
+  /**
+   * candidate-management is composed before product-capture, so the classifier
+   * receives a deferred view of the one assembled public API rather than a
+   * second instance. Classification only runs after composition returns.
+   */
+  let composedManufacturerDomains: ManufacturerDomainLookup | undefined;
+  const deferredManufacturerDomains: ManufacturerDomainLookup = {
+    findManufacturer: (pageUrl) =>
+      composedManufacturerDomains?.findManufacturer(pageUrl) ?? {
+        ok: false,
+        error: { kind: "invalid-page-url" },
+      },
+  };
   let composedSourcePriceRefresh: SourcePriceRefreshPort | undefined;
   const duplicateRefreshPort: SourcePriceRefreshPort = {
     async matchSource(input) {
@@ -117,9 +129,7 @@ export const createSidePanelFeatureContributions = (
   };
   const candidateManagement = createCandidateManagementContribution(context, {
     sourceData: createCandidateSourceDataPort(context.data),
-    classifier: createSourceKindClassifier(
-      productCapturePublic.manufacturerDomains,
-    ),
+    classifier: createSourceKindClassifier(deferredManufacturerDomains),
     sourcePage: (factories.createSourcePagePort ?? createChromeSourcePagePort)(
       chromeApis?.tabs.create === undefined
         ? undefined
@@ -140,6 +150,8 @@ export const createSidePanelFeatureContributions = (
     createCandidateEditorIntent:
       candidateManagement.registration.publicApi.createCandidateEditorIntent,
   });
+  composedManufacturerDomains =
+    productCapture.registration.publicApi.manufacturerDomains;
   const compatibility = createCompatibilityContribution(context, {
     currentBuildQuery: currentBuild.registration.publicApi.query,
     candidateQuery: candidateManagement.registration.publicApi.query,

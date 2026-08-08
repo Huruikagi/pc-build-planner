@@ -165,6 +165,23 @@ export const consumeManufacturerDomainLookup = (
 ): ReturnType<ManufacturerDomainLookup["findManufacturer"]> =>
   capture.manufacturerDomains.findManufacturer(pageUrl);
 
+/**
+ * The lookup is a read-only match seam: it exposes neither the map entries nor
+ * any extraction, permission, or site-usage capability.
+ */
+export const rejectManufacturerDomainInternals = (
+  lookup: ManufacturerDomainLookup,
+) => {
+  // @ts-expect-error the public lookup never exposes the map entries.
+  void lookup.entries;
+  // @ts-expect-error the public lookup never exposes the domain map itself.
+  void lookup.domainMap;
+  // @ts-expect-error the public lookup does not enable DOM extraction.
+  void lookup.extract;
+  // @ts-expect-error the public lookup does not decide host permissions.
+  void lookup.requestPermission;
+};
+
 /** Source-price-refresh consumes the assembled price port without a deep import. */
 export const consumePagePriceExtraction = async (
   capture: ProductCapturePublicApi,

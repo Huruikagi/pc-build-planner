@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { act } from "react";
 import type {
@@ -242,6 +243,89 @@ test("side panel contributionは合成contextから実featureを組み立てる"
       .map(({ registration }) => registration.id),
     ["candidate-management", "currentBuild", "compatibility", "settings"],
     "価格更新は常設navigationへ追加しない",
+  );
+});
+
+test("組立済みproduct-capture公開APIをproduction-like compositionで一度だけ提供する", async () => {
+  const context = {
+    data: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    fullDataPort: {
+      async query() {
+        return { ok: true, value: 0 } as never;
+      },
+      async mutate() {
+        return { ok: true, value: {} } as never;
+      },
+      async assessReplacement() {
+        return { ok: true, value: {} } as never;
+      },
+      async replaceRoot() {
+        return { ok: true, value: {} } as never;
+      },
+      async runMaintenance() {
+        return { ok: true, value: {} } as never;
+      },
+    },
+    navigator: {
+      async activate() {
+        return { ok: true, value: undefined };
+      },
+    },
+  };
+  const split = splitSidePanelContext(context);
+  const contributions = createSidePanelFeatureContributions(
+    split.featureContext,
+    split.dependencies,
+  );
+  const productCapture = contributions[2];
+
+  assert.deepEqual(Object.keys(productCapture.registration.publicApi).sort(), [
+    "manufacturerDomains",
+    "pagePriceExtraction",
+  ]);
+  assert.deepEqual(
+    Object.keys(productCapture.registration.publicApi.manufacturerDomains),
+    ["findManufacturer"],
+    "lookupはmap内部やentryを公開しない",
+  );
+  assert.equal(Object.isFrozen(productCapture.registration.publicApi), true);
+
+  // chromeApis を渡していない = tab/scripting 権限も DOM も無い composition。
+  // 照合がそこで成立することが、lookup が取得能力を有効化しない根拠になる。
+  const lookup = productCapture.registration.publicApi.manufacturerDomains;
+  assert.deepEqual(lookup.findManufacturer("https://www.asus.com/parts/cpu"), {
+    ok: true,
+    value: { manufacturer: "ASUS", sourceLabel: "asus.com" },
+  });
+  assert.deepEqual(
+    lookup.findManufacturer("https://unknown-shop.example.invalid/parts/cpu"),
+    { ok: true, value: undefined },
+  );
+  assert.equal(
+    (
+      await productCapture.registration.publicApi.pagePriceExtraction.extractPrice(
+        1 as never,
+      )
+    ).ok,
+    false,
+    "価格portはlookupと同じ組立済みAPIへ並存する",
+  );
+
+  const composition = await readFile(
+    "src/application-shell/side-panel-contributions.ts",
+    "utf8",
+  );
+  assert.equal(
+    composition.includes("createProductCapturePublicApi"),
+    false,
+    "shell compositionは二つ目の公開APIを組み立てない",
   );
 });
 

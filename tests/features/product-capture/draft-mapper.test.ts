@@ -346,6 +346,74 @@ test("capture resultの各strict shapeを検証し、不正時は生成処理を
   assert.equal(sourceIdCalls, 0);
 });
 
+test("有効なsite nameを任意source表示名として元表記・provenance付きで写像する", () => {
+  const mapper = createCaptureDraftMapper({ createSourceId: () => sourceId });
+  const mapped = mapper.toEditorPrefill({
+    ...captureResult([
+      {
+        field: "name",
+        normalizedValue: "架空CPU",
+        rawValue: "架空CPU",
+        source: "heading",
+        sourceLabel: "h1",
+        documentOrder: 0,
+      },
+    ]),
+    siteName: {
+      value: "架空ショップ",
+      rawValue: "  架空ショップ  ",
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+    },
+  });
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  const source = mapped.value.draft.sources?.[0];
+  assert.ok(source);
+  assert.equal(source.siteName, "架空ショップ");
+  assert.equal(source.pageUrl, "https://shop.example.invalid/product");
+  assert.equal(source.id, sourceId);
+  assert.equal("kind" in source, false);
+  assert.deepEqual(mapped.value.draft.sourceSnapshot, {
+    name: "架空CPU",
+    "name:source": "heading",
+    "name:sourceLabel": "h1",
+    siteName: "  架空ショップ  ",
+    "siteName:source": "open-graph",
+    "siteName:sourceLabel": "og:site_name",
+  });
+  assert.equal(mapped.value.draft.category, "uncategorized");
+  assert.equal(
+    "siteName" in mapped.value.draft.product,
+    false,
+    "site nameは商品項目へ混入しない",
+  );
+});
+
+test("site nameが欠損してもURLと他の商品項目を維持する", () => {
+  const mapper = createCaptureDraftMapper({ createSourceId: () => sourceId });
+  const mapped = mapper.toUnresolvedDraft(
+    captureResult([
+      {
+        field: "name",
+        normalizedValue: "架空CPU",
+        rawValue: "架空CPU",
+        source: "heading",
+        sourceLabel: "h1",
+        documentOrder: 0,
+      },
+    ]),
+  );
+  assert.equal(mapped.ok, true);
+  if (!mapped.ok) return;
+  const source = mapped.value.sources?.[0];
+  assert.ok(source);
+  assert.equal("siteName" in source, false);
+  assert.equal(source.pageUrl, "https://shop.example.invalid/product");
+  assert.equal(mapped.value.product.name.confirmed, "架空CPU");
+  assert.equal("siteName" in (mapped.value.sourceSnapshot ?? {}), false);
+});
+
 test("CaptureResult境界は任意site nameを受理し、不正なprovenanceを拒否する", () => {
   const mapper = createCaptureDraftMapper({ createSourceId: () => sourceId });
 

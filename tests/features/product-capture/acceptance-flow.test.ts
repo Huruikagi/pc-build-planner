@@ -44,18 +44,22 @@ const syntheticMap = () => {
   return result.value;
 };
 
-const candidatesFrom = (body: string, url = pageUrl) => {
+const extractFrom = (body: string, url = pageUrl) => {
   document.body.innerHTML = body;
   return createGenericExtractor({
     manufacturerDomainMap: syntheticMap(),
-  }).extract(document, url).candidates;
+  }).extract(document, url);
 };
+
+const candidatesFrom = (body: string, url = pageUrl) =>
+  extractFrom(body, url).candidates;
 
 const createFlow = (
   candidates: ReturnType<typeof candidatesFrom>,
   targetUrl = pageUrl,
   runtime?: Parameters<typeof createProductCaptureContribution>[1]["runtime"],
   acceptIntent?: (intent: FeatureActivationIntent) => Promise<void>,
+  siteName?: ReturnType<typeof extractFrom>["siteName"],
 ) => {
   const received: FeatureActivationIntent[] = [];
   let concludeAttempts = 0;
@@ -81,6 +85,7 @@ const createFlow = (
             tabId: target.tabId,
             pageUrl: target.url,
             candidates,
+            ...(siteName === undefined ? {} : { siteName }),
           });
         },
       },
@@ -399,6 +404,80 @@ test("候補ゼロは空名manual handoffを行いprojectと保存を解決し�
   assert.equal(payload.draft.projectId, undefined);
   assert.equal(flow.saveMutations(), 0);
   await act(async () => mounted.unmount());
+});
+
+test("有効なsite nameは任意source表示名として一度だけpre-editへ届く", async () => {
+  const extracted = extractFrom(
+    `<meta property="og:site_name" content="  SYN 架空ショップ  ">
+     <h1>SYN 架空CPU</h1>`,
+  );
+  assert.ok(extracted.siteName);
+  const flow = createFlow(
+    extracted.candidates,
+    pageUrl,
+    undefined,
+    undefined,
+    extracted.siteName,
+  );
+
+  await runCapture(flow);
+
+  assert.equal(flow.received.length, 1);
+  const payload = flow.received[0]?.payload as {
+    readonly draft: {
+      readonly product: Record<string, unknown>;
+      readonly sources: readonly {
+        readonly id: string;
+        readonly pageUrl?: string;
+        readonly siteName?: string;
+        readonly kind?: string;
+      }[];
+      readonly sourceSnapshot?: Record<string, string>;
+    };
+  };
+  const source = payload.draft.sources[0];
+  assert.ok(source);
+  assert.equal(source.siteName, "SYN 架空ショップ");
+  assert.equal(source.pageUrl, pageUrl);
+  assert.equal(source.kind, undefined);
+  assert.notEqual(source.id, "SYN 架空ショップ");
+  assert.equal(payload.draft.sourceSnapshot?.siteName, "  SYN 架空ショップ  ");
+  assert.equal(payload.draft.sourceSnapshot?.["siteName:source"], "open-graph");
+  assert.equal("siteName" in payload.draft.product, false);
+  assert.equal(flow.saveMutations(), 0);
+});
+
+test("site nameが不正でも他の商品項目のhandoffを継続する", async () => {
+  const extracted = extractFrom(
+    `<meta property="og:site_name" content="   ">
+     <h1>SYN 架空CPU</h1>`,
+  );
+  const flow = createFlow(
+    extracted.candidates,
+    pageUrl,
+    undefined,
+    undefined,
+    extracted.siteName,
+  );
+
+  await runCapture(flow);
+
+  assert.equal(flow.received.length, 1);
+  const payload = flow.received[0]?.payload as {
+    readonly draft: {
+      readonly product: { readonly name: { readonly confirmed: string } };
+      readonly sources: readonly {
+        readonly pageUrl?: string;
+        readonly siteName?: string;
+      }[];
+      readonly sourceSnapshot?: Record<string, string>;
+    };
+  };
+  assert.equal(payload.draft.product.name.confirmed, "SYN 架空CPU");
+  assert.equal(payload.draft.sources[0]?.pageUrl, pageUrl);
+  assert.equal(payload.draft.sources[0]?.siteName, undefined);
+  assert.equal(payload.draft.sourceSnapshot?.siteName, undefined);
+  assert.equal(flow.saveMutations(), 0);
 });
 
 test("handoff失敗は同じintentだけを再試行する", async () => {

@@ -134,16 +134,27 @@ const unresolvedDraftFromResult = (
               },
             }
           : {}),
+        // Display-only: never an input to the source id, the page URL, or the kind.
+        ...(result.siteName === undefined
+          ? {}
+          : { siteName: result.siteName.value }),
       },
     ],
     primarySourceId: sourceId,
-    sourceSnapshot: Object.fromEntries(
-      result.draft.fields.flatMap((field) => [
+    sourceSnapshot: Object.fromEntries([
+      ...result.draft.fields.flatMap((field) => [
         [field.field, field.rawValue],
         [`${field.field}:source`, field.source],
         [`${field.field}:sourceLabel`, field.sourceLabel],
       ]),
-    ),
+      ...(result.siteName === undefined
+        ? []
+        : [
+            ["siteName", result.siteName.rawValue],
+            ["siteName:source", result.siteName.source],
+            ["siteName:sourceLabel", result.siteName.sourceLabel],
+          ]),
+    ]),
   };
 };
 
