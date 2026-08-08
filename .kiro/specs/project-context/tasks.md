@@ -164,6 +164,7 @@
   - _Requirements: 3.5, 5.9, 5.10, 5.11, 5.12, 5.13, 6.5, 6.6, 6.7, 7.6, 7.8, 8.2, 8.4, 8.5, 8.6, 8.7, 8.8_
   - _Boundary: ProjectContext Final Validation_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
+  - _Blocked: downstream `source-price-refresh` Playwright E2E が clean worktree の独立した完全 validation で非決定的に失敗する。project-context の境界外のため、source-price-refresh owner が安定化してから再検証すること。_
 
 ## Implementation Notes
 
