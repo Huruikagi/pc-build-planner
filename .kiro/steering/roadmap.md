@@ -61,3 +61,4 @@ Milestone [v0.4.0](https://github.com/Huruikagi/pc-build-planner/milestone/4) �
 
 | Feature | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|
+| runtime-schema-validation | GO | 2026-08-08T13:33:56+09:00 | `1273a7e65d88` | `pnpm validate` exit 0（unit/contract/integration 1486/1486 pass、E2E 26 passed / 1 skipped は env gate の native smoke）。smoke boot PASS（`unpacked-extension.spec.ts` が Chrome 116+ で error-free な MV3 unpacked extension として認識）。gate report は dynamicFunctionCalls 0 / licenseNoticePresent true。要件 43/43 対応、境界監査・依存方向・File Structure Plan いずれも違反なし。 |
