@@ -199,3 +199,67 @@ test("ページ側の注入処理が応答しない場合は有限時間で失�
     assert.equal(calls, unresponsiveCall);
   }
 });
+
+test("ページ側の任意site nameを未検証のまま境界へ引き渡す", async () => {
+  const port = createChromeCaptureRuntimePort({
+    tabs: {
+      async get(id) {
+        return { id, url: "https://example.invalid/p" };
+      },
+    },
+    scripting: {
+      async executeScript(details: { files?: readonly string[] }) {
+        return details.files
+          ? [{}]
+          : [
+              {
+                result: {
+                  pageUrl: "https://example.invalid/p",
+                  candidates: [],
+                  siteName: {
+                    rawValue: "架空ショップ",
+                    source: "open-graph",
+                    sourceLabel: "og:site_name",
+                    documentOrder: 0,
+                  },
+                },
+              },
+            ];
+      },
+    },
+  });
+
+  const injected = await port.inject(
+    { tabId: TAB, url: "https://example.invalid/p" },
+    REQUEST,
+  );
+
+  assert.equal(injected.ok, true);
+  if (!injected.ok) return;
+  assert.deepEqual((injected.value as { siteName?: unknown }).siteName, {
+    rawValue: "架空ショップ",
+    source: "open-graph",
+    sourceLabel: "og:site_name",
+    documentOrder: 0,
+  });
+});
+
+test("site nameが無いページ結果はsiteNameキーを持たない", async () => {
+  const port = createChromeCaptureRuntimePort({
+    tabs: {
+      async get(id) {
+        return { id, url: "https://example.invalid/p" };
+      },
+    },
+    scripting,
+  });
+
+  const injected = await port.inject(
+    { tabId: TAB, url: "https://example.invalid/p" },
+    REQUEST,
+  );
+
+  assert.equal(injected.ok, true);
+  if (!injected.ok) return;
+  assert.equal("siteName" in (injected.value as object), false);
+});

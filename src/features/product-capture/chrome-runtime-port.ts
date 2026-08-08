@@ -55,19 +55,26 @@ const readExtractionResult = (): unknown =>
 interface PageExtractionResult {
   readonly pageUrl: string;
   readonly candidates: readonly unknown[];
+  /** Forwarded untouched; the coordinator's decoder is what validates it. */
+  readonly siteName?: unknown;
 }
 
 const decodePageExtractionResult = (
   value: unknown,
 ): PageExtractionResult | undefined => {
   if (typeof value !== "object" || value === null) return undefined;
-  const { pageUrl, candidates } = value as {
+  const { pageUrl, candidates, siteName } = value as {
     readonly pageUrl?: unknown;
     readonly candidates?: unknown;
+    readonly siteName?: unknown;
   };
   if (typeof pageUrl !== "string" || !Array.isArray(candidates))
     return undefined;
-  return { pageUrl, candidates };
+  return {
+    pageUrl,
+    candidates,
+    ...(siteName === undefined ? {} : { siteName }),
+  };
 };
 
 const PERMISSION_FAILURE_PATTERN =
@@ -146,6 +153,9 @@ export const createChromeCaptureRuntimePort = (
           tabId: target.tabId,
           pageUrl: extraction.pageUrl,
           candidates: extraction.candidates,
+          ...(extraction.siteName === undefined
+            ? {}
+            : { siteName: extraction.siteName }),
         });
       } catch (error) {
         return err(classifyInjectionFailure(error));

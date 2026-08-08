@@ -129,7 +129,7 @@
   - _Requirements: 1.1, 1.4, 1.5, 4.1, 4.2, 4.3, 4.7, 5.5, 5.6, 6.1, 6.2, 6.4, 7.1, 7.2, 7.3, 7.4_
   - _Boundary: ProductCaptureE2E, CrossSpecConsumerContracts, FinalValidation_
 
-- [ ] 8. metadataの明示的な採用境界と取得元表示名を確立する
+- [x] 8. metadataの明示的な採用境界と取得元表示名を確立する
 
 - [x] 8.1 metadata propertyと取得先のclosed mappingを確定する
   - OpenGraph、Twitter Card、product拡張を別familyとして扱い、明示propertyだけを商品項目または任意site nameへ一意に対応付ける。
@@ -162,7 +162,7 @@
   - _Requirements: 3.1, 3.3, 3.4, 8.2, 8.4, 8.7_
   - _Boundary: CaptureNormalizer_
 
-- [ ] 8.5 metadata familyの順位とsource unionを既存pipelineへ統合する
+- [x] 8.5 metadata familyの順位とsource unionを既存pipelineへ統合する
   - 3 familyを同じページメタ情報優先度へ置き、同順位では文書順で決定する。
   - collector、normalizer、ranker、価格観測を同じclosed source unionへ追従させ、domain-mapの最下位順位を維持する。
   - 同一synthetic候補集合から通常取り込みと価格観測が同じ価格provenanceを選び、domain-mapが価格順位へ影響しないことを完了条件とする。
@@ -253,3 +253,6 @@
 - collector横断の文書順は全DOM再走査ではなく、上限200件の収集済み候補nodeだけを`compareDocumentPosition`で比較し、`documentOrder`として未信頼payload境界からrankerまで保持する。
 - runtimeが直接検出した`permission-lost | tab-changed`は、shell所有の`capture-invalidated` dismissへ渡し、常設面復帰と新しい明示操作noticeをshellへ委ねる。dismiss失敗・例外・遅延結果はcapture世代内へ閉じる。
 - content script注入と抽出結果読取りは別々のChrome呼び出しであり、どちらの未応答も同じ有限timeoutと`injection-failed`経路へ閉じる。
+- 取得元サイト名は`ExtractionCandidate[]`ではなく`siteName`という別channelでpage payload・`CaptureResult`を流れる。`CaptureField`空間へ入れないため`missingCoreFields`にも`rejectedFields`にも現れず、正規化失敗は黙って欠損になる。
+- `MetadataPropertyRule.target`には設計例の`CaptureField | "source-site-name"`に加えて`price-currency`がある。`product:price:currency`を価格の修飾子としてallowlist内に閉じるための区分で、独立した商品項目ではない。
+- metadata候補の`sourceLabel`はCSS selector文字列ではなくproperty名（例: `product:brand`）。familyは`source`側が持つ。

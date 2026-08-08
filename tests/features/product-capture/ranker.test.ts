@@ -244,3 +244,64 @@ test("domain-mapはcollector順に関係なくmanufacturerの最下位候補に�
     assert.equal(draft.fields[0]?.source, "definition-list");
   }
 });
+
+test("3 metadata familyは同じページメタ情報priorityを共有し文書順で決まる", () => {
+  const families = ["open-graph", "twitter-card", "product-meta"] as const;
+
+  for (const [earlier, later] of [
+    ["open-graph", "twitter-card"],
+    ["twitter-card", "product-meta"],
+    ["product-meta", "open-graph"],
+  ] as const) {
+    const draft = ranker.select([
+      field({ source: later, normalizedValue: "後方", documentOrder: 5 }),
+      field({ source: earlier, normalizedValue: "前方", documentOrder: 1 }),
+    ]);
+    assert.equal(
+      draft.fields[0]?.normalizedValue,
+      "前方",
+      `${earlier} と ${later} の同順位判定が文書順になっていない`,
+    );
+  }
+
+  for (const family of families) {
+    const draft = ranker.select([
+      field({ source: family, normalizedValue: "meta版", documentOrder: 9 }),
+      field({
+        source: "json-ld",
+        normalizedValue: "json-ld版",
+        documentOrder: 9,
+      }),
+      field({
+        source: "heading",
+        normalizedValue: "heading版",
+        documentOrder: 0,
+      }),
+    ]);
+    assert.equal(draft.fields[0]?.normalizedValue, "json-ld版");
+  }
+});
+
+test("domain-mapはmetadata family移行後も全sourceの後に置かれる", () => {
+  for (const family of [
+    "open-graph",
+    "twitter-card",
+    "product-meta",
+  ] as const) {
+    const draft = ranker.select([
+      field({
+        field: "manufacturer",
+        source: "domain-map",
+        normalizedValue: "domain版",
+        documentOrder: 0,
+      }),
+      field({
+        field: "manufacturer",
+        source: family,
+        normalizedValue: "ページ版",
+        documentOrder: 99,
+      }),
+    ]);
+    assert.equal(draft.fields[0]?.normalizedValue, "ページ版");
+  }
+});

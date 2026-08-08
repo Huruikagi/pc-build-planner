@@ -245,3 +245,74 @@ test("price portも未知fieldと不正sourceLabelをinvalid-payloadにする", 
     });
   }
 });
+
+test("site nameとmetadata family移行後も価格provenanceは通常取り込みと一致する", async () => {
+  const captureRuntime = runtime({
+    async inject(target, requestId) {
+      return ok({
+        requestId,
+        tabId: target.tabId,
+        pageUrl: target.url,
+        candidates: [
+          {
+            field: "price",
+            rawValue: "$299.00",
+            source: "twitter-card",
+            sourceLabel: "twitter:title",
+            documentOrder: 1,
+          },
+          {
+            field: "price",
+            rawValue: "249.99 USD",
+            source: "json-ld",
+            sourceLabel: "offers.price",
+            documentOrder: 2,
+          },
+          {
+            field: "manufacturer",
+            rawValue: "Fictional Parts",
+            source: "domain-map",
+            sourceLabel: "parts.example.invalid",
+            documentOrder: Number.MAX_SAFE_INTEGER,
+          },
+        ],
+        siteName: {
+          rawValue: "架空ショップ",
+          source: "open-graph",
+          sourceLabel: "og:site_name",
+          documentOrder: 0,
+        },
+      });
+    },
+  });
+  const normalizer = createCaptureNormalizer();
+  const ranker = createCandidateRanker();
+  const captured = await createCaptureCoordinator({
+    runtime: captureRuntime,
+    normalizer,
+    ranker,
+    createRequestId: () => "request-price" as never,
+    now: () => capturedAt,
+  }).captureTab(tabId);
+  const observed = await createPagePriceExtractionAdapter({
+    runtime: captureRuntime,
+    normalizer,
+    ranker,
+    createRequestId: () => "request-price" as never,
+    now: () => capturedAt,
+  }).extractPrice(tabId);
+
+  assert.equal(captured.ok, true);
+  assert.equal(observed.ok, true);
+  if (!captured.ok || !observed.ok) return;
+  const capturedPrice = captured.value.draft.fields.find(
+    (entry) => entry.field === "price",
+  );
+  assert.equal(capturedPrice?.rawValue, observed.value.price?.original);
+  assert.deepEqual(
+    capturedPrice?.normalizedValue,
+    observed.value.price?.confirmed,
+  );
+  assert.equal(capturedPrice?.source, "json-ld");
+  assert.equal("siteName" in observed.value, false);
+});

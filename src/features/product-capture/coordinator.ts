@@ -192,6 +192,17 @@ export const createCaptureCoordinator = (
 
       const draft = dependencies.ranker.select(fields);
 
+      /**
+       * The site name is optional decoration, so a rejected one is dropped
+       * silently rather than joining `rejectedFields`: that list describes
+       * product items, and a display name that failed to normalize must not
+       * read as a missing or rejected product value.
+       */
+      const siteName =
+        payload.siteName === undefined
+          ? undefined
+          : dependencies.normalizer.normalizeSiteName(payload.siteName);
+
       return ok({
         requestId,
         tabId: tab.tabId,
@@ -199,6 +210,7 @@ export const createCaptureCoordinator = (
         capturedAt: now(),
         draft,
         rejectedFields,
+        ...(siteName?.ok === true ? { siteName: siteName.value } : {}),
       });
     },
   };

@@ -8,6 +8,7 @@ import {
   createCaptureCoordinator,
   decodeCapturePagePayload,
 } from "../../../src/features/product-capture/coordinator.js";
+import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createCaptureNormalizer } from "../../../src/features/product-capture/normalizer.js";
 import { createCandidateRanker } from "../../../src/features/product-capture/ranker.js";
 
@@ -444,4 +445,121 @@ test("未列挙sourceのpayloadはinvalid-payloadとして観測できる", asyn
   }).captureTab(TAB);
 
   assert.deepEqual(result, { ok: false, error: { kind: "invalid-payload" } });
+});
+
+test("有効なsite nameを正規化して抽出結果へ載せる", async () => {
+  const result = await make({
+    async getTab() {
+      return ok(target);
+    },
+    async inject() {
+      return ok({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field: "name",
+            rawValue: "架空GPU",
+            source: "open-graph",
+            sourceLabel: "og:title",
+            documentOrder: 0,
+          },
+        ],
+        siteName: {
+          rawValue: "  架空ショップ  ",
+          source: "open-graph",
+          sourceLabel: "og:site_name",
+          documentOrder: 1,
+        },
+      });
+    },
+  }).captureTab(TAB);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.siteName, {
+    value: "架空ショップ",
+    rawValue: "  架空ショップ  ",
+    source: "open-graph",
+    sourceLabel: "og:site_name",
+  });
+});
+
+test("正規化できないsite nameは商品項目と棄却一覧へ影響しない", async () => {
+  const result = await make({
+    async getTab() {
+      return ok(target);
+    },
+    async inject() {
+      return ok({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field: "name",
+            rawValue: "架空GPU",
+            source: "open-graph",
+            sourceLabel: "og:title",
+            documentOrder: 0,
+          },
+        ],
+        siteName: {
+          rawValue: "   ",
+          source: "open-graph",
+          sourceLabel: "og:site_name",
+          documentOrder: 1,
+        },
+      });
+    },
+  }).captureTab(TAB);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.siteName, undefined);
+  assert.deepEqual(result.value.rejectedFields, []);
+  assert.equal(result.value.draft.fields.length, 1);
+  assert.equal(result.value.draft.missingCoreFields.includes("name"), false);
+});
+
+test("extractorのページ出力はそのままpayload境界を通り抽出結果へ到達する", async () => {
+  const page = new DOMParser().parseFromString(
+    `<!doctype html><html><head>
+      <meta property="og:site_name" content="架空ショップ">
+      <meta property="og:title" content="架空GPU G1">
+      <meta property="product:brand" content="架空メーカー">
+      <meta property="og:description" content="採用してはならない説明">
+    </head><body></body></html>`,
+    "text/html",
+  );
+  const extraction = createGenericExtractor().extract(page, URL);
+
+  const result = await make({
+    async getTab() {
+      return ok(target);
+    },
+    async inject() {
+      return ok({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: extraction.candidates,
+        ...(extraction.siteName === undefined
+          ? {}
+          : { siteName: extraction.siteName }),
+      });
+    },
+  }).captureTab(TAB);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.siteName?.value, "架空ショップ");
+  assert.deepEqual(
+    result.value.draft.fields.map((entry) => [entry.field, entry.source]),
+    [
+      ["name", "open-graph"],
+      ["manufacturer", "product-meta"],
+    ],
+  );
 });
