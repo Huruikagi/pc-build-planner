@@ -13,6 +13,7 @@ import { common } from "./common.js";
 import { compatibility } from "./compatibility.js";
 import { nav } from "./nav.js";
 import { persistenceError } from "./persistence-error.js";
+import { projectContext } from "./project-context.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";
 import { sourcePriceRefresh } from "./source-price-refresh.js";
@@ -31,6 +32,7 @@ export const MESSAGES = {
   capture,
   backup,
   sourcePriceRefresh,
+  projectContext,
 } as const satisfies MessageNamespace;
 
 export type MessageKey = MessageKeyOf<typeof MESSAGES>;

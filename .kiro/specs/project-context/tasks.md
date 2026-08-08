@@ -79,7 +79,7 @@
 
 - [ ] 3. 共通 selector presentation を提供する
 
-- [ ] 3.1 (P) project selector の日英 message と状態表現を追加する
+- [x] 3.1 (P) project selector の日英 message と状態表現を追加する
   - ready、empty、unavailable、retry、pending、confirmation、error に必要な message を日本語・英語へ同じ key と placeholder で追加する。
   - project-context namespace を既存 catalog parity と UI text gate に接続する。
   - message resolver の両言語 test で raw key、未翻訳文字列、placeholder drift がない状態を完了とする。
@@ -87,7 +87,7 @@
   - _Boundary: ProjectSelector Messages_
   - _Depends: 1.1_
 
-- [ ] 3.2 共通 project selector component を実装する
+- [x] 3.2 共通 project selector component を実装する
   - read port を購読し、ready の native select、empty の disabled state、unavailable の retry、pending status を描画する。
   - confirmation-required を一つの keyboard 操作可能な確認 UI として表示し、confirm/cancel の結果を command port へ渡す。
   - accessible label、live status、focus、Escape cancel、重複操作抑止を実装し、project 名を text child としてのみ描画する。
@@ -96,7 +96,7 @@
   - _Boundary: ProjectSelector_
   - _Depends: 2.5, 3.1_
 
-- [ ] 3.3 composition 専用 presentation contribution を実装する
+- [x] 3.3 composition 専用 presentation contribution を実装する
   - shell が渡す exact container に LanguageProvider と selector の一つの React root を mount する。
   - 二重 mount、mount failure、idempotent unmount を扱い、subscription、pending UI、root、container を確実に cleanup する。
   - 通常 public API に React root や runtime adapter を混在させず、slot の作成と singleton composition は downstream shell に残す。

@@ -132,6 +132,33 @@ test("価格更新のmenu・状態・全failure・回復案内をtyped resolver�
   }
 });
 
+test("project context selector の状態・操作・failure message を両言語で解決する", () => {
+  const keys = [
+    "projectContext.selector.label",
+    "projectContext.selector.empty",
+    "projectContext.selector.unavailable",
+    "projectContext.selector.retry",
+    "projectContext.selector.pending",
+    "projectContext.selector.confirmationTitle",
+    "projectContext.selector.confirm",
+    "projectContext.selector.cancel",
+    "projectContext.selector.errors.contextUnavailable",
+    "projectContext.selector.errors.projectNotFound",
+    "projectContext.selector.errors.guardFailed",
+    "projectContext.selector.errors.confirmationStale",
+    "projectContext.selector.errors.preferenceWriteFailed",
+  ] satisfies readonly MessageKey[];
+
+  for (const language of ["ja", "en"] as const) {
+    const resolve = resolverFor(language);
+    for (const key of keys) {
+      const value = resolve(key);
+      assert.notEqual(value, "", `${language}:${key}`);
+      assert.notEqual(value, key, `${language}:${key}`);
+    }
+  }
+});
+
 test("ja/enの全キーでプレースホルダ名の集合が一致する(4.2)", () => {
   for (const key of Object.keys(ja)) {
     const jaPlaceholders = [
@@ -249,6 +276,7 @@ test("v0.3 gateはexact keyと旧backup navigation撤去を固定する", () => 
     "capture",
     "backup",
     "sourcePriceRefresh",
+    "projectContext",
   ]);
   assert.deepEqual(Object.keys(EN_MESSAGES), Object.keys(MESSAGES));
   assert.deepEqual(V03_SETTINGS_KEYS, [
