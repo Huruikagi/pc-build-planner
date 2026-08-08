@@ -1,19 +1,34 @@
 import type { Brand, Offer, Product, PropertyValue } from "schema-dts";
 import {
-  type CaptureCoreField,
   type CaptureField,
   type ExtractionCandidate,
   type ExtractionSource,
   isCaptureField,
   MAX_CAPTURE_LABEL_LENGTH,
+  SITE_NAME_SOURCE_LABEL,
+  type SiteNameCandidate,
 } from "./contracts.js";
 import {
   type ManufacturerDomainMap,
   manufacturerDomainMap,
 } from "./manufacturer-domain-map.js";
+import {
+  findMetadataPropertyRule,
+  type MetadataNamespace,
+} from "./metadata-property-map.js";
+
+/**
+ * One page's extraction output. The optional source site name travels beside
+ * the product candidates rather than inside them, so it can never be counted
+ * as a product item or reported as a missing core field.
+ */
+export interface PageExtraction {
+  readonly candidates: readonly ExtractionCandidate[];
+  readonly siteName?: SiteNameCandidate;
+}
 
 export interface GenericExtractor {
-  extract(document: Document, pageUrl: string): readonly ExtractionCandidate[];
+  extract(document: Document, pageUrl: string): PageExtraction;
 }
 
 export interface GenericExtractorDependencies {
@@ -59,6 +74,7 @@ interface CandidateSink {
   readonly items: ExtractionCandidate[];
   readonly pageUrl: string;
   readonly nodes: Array<Node | undefined>;
+  siteName?: { readonly rawValue: string; readonly node: Node };
 }
 
 const isFull = (sink: CandidateSink): boolean =>
@@ -120,9 +136,13 @@ const push = (
   sink.nodes.push(node);
 };
 
-const assignDocumentOrder = (sink: CandidateSink): void => {
+const assignDocumentOrder = (sink: CandidateSink): Map<Node, number> => {
   const nodes = [
-    ...new Set(sink.nodes.filter((node): node is Node => node !== undefined)),
+    ...new Set(
+      [...sink.nodes, sink.siteName?.node].filter(
+        (node): node is Node => node !== undefined,
+      ),
+    ),
   ];
   nodes.sort((left, right) => {
     const position = left.compareDocumentPosition(right);
@@ -141,6 +161,7 @@ const assignDocumentOrder = (sink: CandidateSink): void => {
             Number.MAX_SAFE_INTEGER - 1),
     };
   });
+  return order;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -284,39 +305,84 @@ const collectProductNode = (
   }
 };
 
-const META_FIELD_SELECTORS: ReadonlyArray<
-  readonly [selector: string, field: CaptureCoreField, source: ExtractionSource]
-> = [
-  ['meta[property="og:title"]', "name", "open-graph"],
-  ['meta[name="twitter:title"]', "name", "twitter-card"],
-  ['meta[property="product:brand"]', "manufacturer", "product-meta"],
-  ['meta[property="og:url"]', "url", "open-graph"],
-  ['meta[property="product:retailer_item_id"]', "modelNumber", "product-meta"],
-];
+const MAX_META_ELEMENTS = 200;
 
-const collectMeta = (document: Document, sink: CandidateSink): void => {
-  for (const [selector, field, source] of META_FIELD_SELECTORS) {
-    if (isFull(sink)) return;
-    const node = document.querySelector(selector);
-    const content = node?.getAttribute("content");
-    if (content && node) push(sink, field, content, source, selector, node);
+const METADATA_SOURCE: Readonly<Record<MetadataNamespace, ExtractionSource>> = {
+  "open-graph": "open-graph",
+  "twitter-card": "twitter-card",
+  product: "product-meta",
+};
+
+interface PriceAmount {
+  readonly rawValue: string;
+  readonly source: ExtractionSource;
+  readonly sourceLabel: string;
+  readonly node: Element;
+}
+
+/**
+ * Walks the page's `<meta>` elements and adopts only combinations the
+ * allowlist names. The scan is driven by the rule table rather than by
+ * per-property selectors, so widening what is collected requires editing the
+ * reviewed allowlist and nothing else.
+ */
+const collectMetadata = (document: Document, sink: CandidateSink): void => {
+  const elements = Array.from(document.querySelectorAll("meta")).slice(
+    0,
+    MAX_META_ELEMENTS,
+  );
+  const priceAmounts: PriceAmount[] = [];
+  let priceCurrency: string | undefined;
+
+  for (const element of elements) {
+    if (isFull(sink)) break;
+    /**
+     * OpenGraph and the product extensions use `property`; Twitter Card uses
+     * `name`. Only the attribute actually present is consulted, and never both
+     * in turn, so a listed name cannot be reached through the other slot after
+     * the first one failed to match.
+     */
+    const property =
+      element.getAttribute("property") ?? element.getAttribute("name");
+    if (property === null) continue;
+    const rule = findMetadataPropertyRule(property);
+    if (rule === undefined) continue;
+    const content = element.getAttribute("content");
+    if (content === null || content.trim().length === 0) continue;
+
+    const source = METADATA_SOURCE[rule.namespace];
+    if (rule.target === "price-currency") {
+      priceCurrency ??= content.trim();
+      continue;
+    }
+    if (rule.target === "source-site-name") {
+      sink.siteName ??= { rawValue: content, node: element };
+      continue;
+    }
+    if (rule.target === "price") {
+      priceAmounts.push({
+        rawValue: content.trim(),
+        source,
+        sourceLabel: rule.property,
+        node: element,
+      });
+      continue;
+    }
+    push(sink, rule.target, content, source, rule.property, element);
   }
 
-  const priceNode = document.querySelector(
-    'meta[property="product:price:amount"]',
-  );
-  const priceAmount = priceNode?.getAttribute("content");
-  const priceCurrency = document
-    .querySelector('meta[property="product:price:currency"]')
-    ?.getAttribute("content");
-  if (priceAmount) {
+  /** Currency is a qualifier, so amounts are held back until it is known. */
+  for (const amount of priceAmounts) {
+    if (isFull(sink)) return;
     push(
       sink,
       "price",
-      priceCurrency ? `${priceAmount} ${priceCurrency}` : priceAmount,
-      "product-meta",
-      'meta[property="product:price:amount"]',
-      priceNode ?? undefined,
+      priceCurrency === undefined
+        ? amount.rawValue
+        : `${amount.rawValue} ${priceCurrency}`,
+      amount.source,
+      amount.sourceLabel,
+      amount.node,
     );
   }
 };
@@ -396,7 +462,7 @@ const COLLECTORS: ReadonlyArray<
   (document: Document, sink: CandidateSink) => void
 > = [
   collectJsonLd,
-  collectMeta,
+  collectMetadata,
   collectHeading,
   collectBreadcrumb,
   collectDefinitionLists,
@@ -431,7 +497,20 @@ export const createGenericExtractor = (
         );
       }
     }
-    assignDocumentOrder(sink);
-    return Object.freeze(sink.items.slice(0, MAX_CANDIDATES));
+    const order = assignDocumentOrder(sink);
+    const siteName: SiteNameCandidate | undefined =
+      sink.siteName === undefined
+        ? undefined
+        : {
+            rawValue: sink.siteName.rawValue,
+            source: "open-graph",
+            sourceLabel: SITE_NAME_SOURCE_LABEL,
+            documentOrder:
+              order.get(sink.siteName.node) ?? Number.MAX_SAFE_INTEGER - 1,
+          };
+    return Object.freeze({
+      candidates: Object.freeze(sink.items.slice(0, MAX_CANDIDATES)),
+      ...(siteName === undefined ? {} : { siteName }),
+    });
   },
 });

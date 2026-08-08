@@ -16,8 +16,13 @@ import { createGenericExtractor } from "./extractor.js";
   globalThis as typeof globalThis & { __pcbpExtract?: () => unknown }
 ).__pcbpExtract = () => {
   const pageUrl = location.href;
+  const { candidates, siteName } = createGenericExtractor().extract(
+    document,
+    pageUrl,
+  );
   return {
     pageUrl,
-    candidates: createGenericExtractor().extract(document, pageUrl),
+    candidates,
+    ...(siteName === undefined ? {} : { siteName }),
   };
 };

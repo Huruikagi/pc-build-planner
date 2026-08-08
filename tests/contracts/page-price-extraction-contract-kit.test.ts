@@ -71,7 +71,7 @@ const candidatesFrom = (body: string): readonly unknown[] => {
   document.body.innerHTML = body;
   return createGenericExtractor({
     manufacturerDomainMap: syntheticDomainMap(),
-  }).extract(document, pageUrl);
+  }).extract(document, pageUrl).candidates;
 };
 
 interface ContributionHarness {

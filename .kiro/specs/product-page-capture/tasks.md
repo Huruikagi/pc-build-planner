@@ -146,7 +146,7 @@
   - _Requirements: 2.3, 2.10, 3.4, 7.5, 7.6, 8.2, 8.5, 8.6_
   - _Boundary: ProductCaptureContracts, CapturePayloadValidation_
 
-- [ ] 8.3 allowlist対象metadataだけをページ候補として収集する
+- [x] 8.3 allowlist対象metadataだけをページ候補として収集する
   - propertyを正規化して完全一致した規則だけを収集し、family別provenance、元表記、文書順を未信頼payload境界まで保持する。
   - `og:site_name`を商品fieldと分離した任意候補として収集し、hostnameやtitleによる代替推測を行わない。
   - 対応property以外が抽出結果へ現れず、有効site nameの有無にかかわらず他の商品候補が維持されるunit・contract testを完了条件とする。

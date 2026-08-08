@@ -48,7 +48,7 @@ const candidatesFrom = (body: string, url = pageUrl) => {
   document.body.innerHTML = body;
   return createGenericExtractor({
     manufacturerDomainMap: syntheticMap(),
-  }).extract(document, url);
+  }).extract(document, url).candidates;
 };
 
 const createFlow = (

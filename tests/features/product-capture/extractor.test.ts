@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Product, WithContext } from "schema-dts";
+import type { ExtractionCandidate } from "../../../src/features/product-capture/contracts.js";
 import { createGenericExtractor } from "../../../src/features/product-capture/extractor.js";
 import { createManufacturerDomainMap } from "../../../src/features/product-capture/manufacturer-domain-map.js";
 import { createCaptureNormalizer } from "../../../src/features/product-capture/normalizer.js";
@@ -26,10 +27,13 @@ const extractorWithDomainMap = createGenericExtractor({
   manufacturerDomainMap: domainMapResult.value,
 });
 
-const byField = (
-  candidates: ReturnType<typeof extractor.extract>,
-  field: string,
-) => candidates.filter((candidate) => candidate.field === field);
+const extract = (document: Document, pageUrl: string) =>
+  extractor.extract(document, pageUrl).candidates;
+const extractWithDomainMap = (document: Document, pageUrl: string) =>
+  extractorWithDomainMap.extract(document, pageUrl).candidates;
+
+const byField = (candidates: readonly ExtractionCandidate[], field: string) =>
+  candidates.filter((candidate) => candidate.field === field);
 
 test("documentOrder付与のために全DOM要素を列挙しない", () => {
   const document = parse(
@@ -40,10 +44,7 @@ test("documentOrder付与のために全DOM要素を列挙しない", () => {
     if (selector === "*") throw new Error("unbounded full DOM scan");
     return querySelectorAll(selector);
   }) as typeof document.querySelectorAll;
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/bounded",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/bounded");
   assert.equal(byField(candidates, "name")[0]?.rawValue, "bounded");
 });
 
@@ -69,10 +70,7 @@ test("JSON-LD Productから共通商品項目と主要スペックを収集す�
     <script type="application/ld+json">${JSON.stringify(productJsonLd)}</script>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/1",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/1");
 
   const name = byField(candidates, "name");
   assert.equal(name.length, 1);
@@ -117,10 +115,7 @@ test("JSON-LDの@graphを有界な深さまで辿ってProductノードを見つ
     })}</script>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/2",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/2");
 
   assert.equal(byField(candidates, "name")[0]?.rawValue, "架空GPU Z");
   assert.equal(byField(candidates, "price")[0]?.rawValue, "98000");
@@ -135,10 +130,7 @@ test("meta情報から商品名・URL・価格・メーカーを収集する", (
     <meta property="product:price:currency" content="JPY">
   </head><body></body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/3",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/3");
 
   assert.equal(byField(candidates, "name")[0]?.rawValue, "架空メモリ 32GB");
   assert.equal(
@@ -151,8 +143,8 @@ test("meta情報から商品名・URL・価格・メーカーを収集する", (
     candidates.map((candidate) => [candidate.field, candidate.source]),
     [
       ["name", "open-graph"],
-      ["manufacturer", "product-meta"],
       ["url", "open-graph"],
+      ["manufacturer", "product-meta"],
       ["price", "product-meta"],
     ],
   );
@@ -170,10 +162,7 @@ test("見出しとパンくずから商品名とカテゴリを収集する", ()
     </nav>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/4",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/4");
 
   const name = byField(candidates, "name");
   assert.equal(name.length, 1);
@@ -197,10 +186,7 @@ test("表と定義リストから主要スペック候補を収集する", () =>
     </dl>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/5",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/5");
 
   const socket = byField(candidates, "spec:ソケット");
   assert.equal(socket.length, 1);
@@ -222,7 +208,7 @@ test("表由来のspec fieldとsourceLabelを同じ上限へ正規化する", ()
     <table><tr><th>${longLabel}</th><td>value</td></tr></table>
   </body></html>`);
 
-  const candidates = extractor.extract(
+  const candidates = extract(
     document,
     "https://shop.example.invalid/item/bounded-label",
   );
@@ -243,7 +229,7 @@ test("tableとdefinition-listの同順位候補はcollector順でなく実DOM順
     <dl><dt>ソケット</dt><dd>earlier-definition</dd></dl>
     <table><tr><th>ソケット</th><td>later-table</td></tr></table>
   </body></html>`);
-  const candidates = extractor.extract(
+  const candidates = extract(
     document,
     "https://shop.example.invalid/item/dom-order",
   );
@@ -270,10 +256,7 @@ test("崩れたJSON-LDや未知の構造があっても他ソースの抽出は�
     <h1>架空SSD 1TB 見出し</h1>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/6",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/6");
 
   assert.equal(
     byField(candidates, "name").some((c) => c.rawValue === "架空SSD 1TB"),
@@ -294,10 +277,7 @@ test("DOMノード、生HTML、画像を候補として返さない", () => {
     <table><tr><th>羽根枚数</th><td>3<img src="inline.png"></td></tr></table>
   </body></html>`);
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/7",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/7");
 
   for (const candidate of candidates) {
     assert.equal(typeof candidate.rawValue, "string");
@@ -330,10 +310,7 @@ test("大量ノードや深い入れ子でも有界な走査で部分結果を�
   </body></html>`);
 
   const started = Date.now();
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/8",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/8");
   const elapsedMs = Date.now() - started;
 
   assert.ok(
@@ -352,10 +329,7 @@ test("抽出候補は既定の上限件数を超えない", () => {
     `<!doctype html><html><body><dl>${manyTerms}</dl></body></html>`,
   );
 
-  const candidates = extractor.extract(
-    document,
-    "https://shop.example.invalid/item/9",
-  );
+  const candidates = extract(document, "https://shop.example.invalid/item/9");
 
   assert.ok(candidates.length <= 200);
 });
@@ -365,7 +339,7 @@ test("manufacturer欠損時だけdomain map候補を最下位sourceとして追�
     "<!doctype html><html><head><meta property='og:title' content='架空GPU'></head></html>",
   );
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://store.maker.example/products/gpu",
   );
@@ -386,7 +360,7 @@ test("ページ由来manufacturerがある場合はdomain map候補を生成し�
     "<!doctype html><html><head><meta property='product:brand' content='ページ明示メーカー'></head></html>",
   );
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://maker.example/products/gpu",
   );
@@ -396,7 +370,7 @@ test("ページ由来manufacturerがある場合はdomain map候補を生成し�
       field: "manufacturer",
       rawValue: "ページ明示メーカー",
       source: "product-meta",
-      sourceLabel: 'meta[property="product:brand"]',
+      sourceLabel: "product:brand",
       documentOrder: 0,
     },
   ]);
@@ -407,7 +381,7 @@ test("定義リストの共通メーカー項目を優先してdomain候補を�
     "<!doctype html><html><body><dl><dt>メーカー</dt><dd>ページ明示メーカー</dd></dl></body></html>",
   );
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://maker.example/products/gpu",
   );
@@ -432,7 +406,7 @@ test("表の共通manufacturer項目を優先してdomain候補を生成しな�
     "<!doctype html><html><body><table><tr><th>Manufacturer</th><td>Page Maker</td></tr></table></body></html>",
   );
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://maker.example/products/gpu",
   );
@@ -457,7 +431,7 @@ test("未知domainではmanufacturerを推測しない", () => {
     "<!doctype html><html><body><h1>架空GPU</h1></body></html>",
   );
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://retailer.example/products/gpu",
   );
@@ -476,11 +450,165 @@ test("候補上限へ達してもdomain mapのmanufacturer枠を確保する", (
   }).join("");
   const document = parse(`<!doctype html><html><body>${lists}</body></html>`);
 
-  const candidates = extractorWithDomainMap.extract(
+  const candidates = extractWithDomainMap(
     document,
     "https://maker.example/products/gpu",
   );
 
   assert.ok(candidates.length <= 200);
   assert.equal(byField(candidates, "manufacturer")[0]?.source, "domain-map");
+});
+
+test("allowlistへ列挙されたmetadata property以外を候補にしない", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta property="og:title" content="架空SSD 1TB">
+    <meta property="og:description" content="採用してはならない説明">
+    <meta property="og:image" content="https://shop.example.invalid/img.png">
+    <meta property="og:type" content="product">
+    <meta name="twitter:description" content="採用してはならない説明">
+    <meta name="twitter:image" content="https://shop.example.invalid/t.png">
+    <meta property="product:category" content="採用してはならないカテゴリ">
+    <meta property="og:title:alt" content="採用してはならない別名">
+    <meta property="xog:title" content="採用してはならない偽装名">
+    <meta name="description" content="採用してはならない概要">
+    <meta name="keywords" content="採用してはならない語">
+  </head><body></body></html>`);
+
+  const candidates = extract(document, "https://shop.example.invalid/item/10");
+
+  assert.deepEqual(candidates, [
+    {
+      field: "name",
+      rawValue: "架空SSD 1TB",
+      source: "open-graph",
+      sourceLabel: "og:title",
+      documentOrder: 0,
+    },
+  ]);
+});
+
+test("3 metadata familyを区別したprovenanceで収集する", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta name="twitter:title" content="架空ケース T1">
+    <meta property="product:brand" content="架空ケースメーカー">
+    <meta property="product:retailer_item_id" content="CASE-T1">
+    <meta property="og:url" content="https://shop.example.invalid/case-t1">
+  </head><body></body></html>`);
+
+  const candidates = extract(document, "https://shop.example.invalid/item/11");
+
+  assert.deepEqual(
+    candidates.map(({ field, source, sourceLabel }) => ({
+      field,
+      source,
+      sourceLabel,
+    })),
+    [
+      { field: "name", source: "twitter-card", sourceLabel: "twitter:title" },
+      {
+        field: "manufacturer",
+        source: "product-meta",
+        sourceLabel: "product:brand",
+      },
+      {
+        field: "modelNumber",
+        source: "product-meta",
+        sourceLabel: "product:retailer_item_id",
+      },
+      { field: "url", source: "open-graph", sourceLabel: "og:url" },
+    ],
+  );
+});
+
+test("og:site_nameを商品fieldと分離した任意候補として収集する", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta property="og:site_name" content="  架空ショップ  ">
+    <meta property="og:title" content="架空電源 750W">
+  </head><body></body></html>`);
+
+  const extraction = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/12",
+  );
+
+  assert.deepEqual(extraction.siteName, {
+    rawValue: "  架空ショップ  ",
+    source: "open-graph",
+    sourceLabel: "og:site_name",
+    documentOrder: 0,
+  });
+  assert.deepEqual(
+    extraction.candidates.map((candidate) => candidate.field),
+    ["name"],
+  );
+});
+
+test("og:site_nameが無い場合はhostnameやtitleからサイト名を推測しない", () => {
+  const document = parse(`<!doctype html><html><head>
+    <title>架空ショップ | 通販</title>
+    <meta property="og:title" content="架空クーラー C1">
+  </head><body></body></html>`);
+
+  const extraction = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/13",
+  );
+
+  assert.equal(extraction.siteName, undefined);
+  assert.equal(extraction.candidates.length, 1);
+});
+
+test("site nameだけを持つページでも商品候補の収集は独立して続く", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta property="og:site_name" content="架空ショップ">
+  </head><body><h1>架空ファン F1</h1></body></html>`);
+
+  const extraction = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/14",
+  );
+
+  assert.equal(extraction.siteName?.rawValue, "架空ショップ");
+  assert.deepEqual(
+    extraction.candidates.map((candidate) => [
+      candidate.field,
+      candidate.source,
+    ]),
+    [["name", "heading"]],
+  );
+});
+
+test("property属性が無いmetadataもname属性の対応規則だけで収集する", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta name="og:site_name" content="架空ショップ">
+    <meta name="twitter:title" content="架空HDD 4TB">
+    <meta name="twitter:card" content="summary">
+  </head><body></body></html>`);
+
+  const extraction = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/15",
+  );
+
+  assert.equal(extraction.siteName?.rawValue, "架空ショップ");
+  assert.deepEqual(
+    extraction.candidates.map((candidate) => candidate.sourceLabel),
+    ["twitter:title"],
+  );
+});
+
+test("空・空白だけのmetadata contentは候補にしない", () => {
+  const document = parse(`<!doctype html><html><head>
+    <meta property="og:title" content="">
+    <meta property="og:site_name" content="   ">
+    <meta property="product:brand">
+  </head><body></body></html>`);
+
+  const extraction = extractor.extract(
+    document,
+    "https://shop.example.invalid/item/16",
+  );
+
+  assert.deepEqual(extraction.candidates, []);
+  assert.equal(extraction.siteName, undefined);
 });
