@@ -41,6 +41,7 @@ import type {
   RootMutationCommand,
 } from "../../src/persistence/public.js";
 import {
+  CURRENT_SCHEMA_VERSION,
   createDataWorkerRegistration,
   createMaintenanceSnapshotSource,
   initializeProductionFoundationRuntimeContribution,
@@ -301,6 +302,9 @@ export const publicTransient: TransientApplicationFeatureRegistration = {
     }),
   },
 };
+
+// 公開consumerは現行保存schema版を公開入口の正規値としてだけ参照できる（4.6, 4.7）。
+export const consumeCurrentSchemaVersion = (): number => CURRENT_SCHEMA_VERSION;
 
 export const consumeTransientShellPorts = (
   feature: ApplicationFeatureRegistration,

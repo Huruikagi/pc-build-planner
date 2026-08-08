@@ -333,7 +333,7 @@
   - _Boundary: FoundationRuntimeContribution, FoundationDataPort_
 
 - [ ] 7. 現行schema契約と異常root回復の基礎を追加する
-- [ ] 7.1 現行schema versionの正規契約を一元化する
+- [x] 7.1 現行schema versionの正規契約を一元化する
   - 既存のruntime schema基盤を利用し、初期root、migration、通常置換、回復候補評価が同じ公開正規値を参照する
   - 保存schemaの数値を別moduleやconsumerで重複定義せず、schemaの値と保存構造自体は変更しない
   - 公開consumerが唯一の正規値を参照でき、各保存経路と交換形式向け写像で一致することを検証できる状態を完了条件とする
@@ -453,5 +453,7 @@
 
 - `chrome.storage.local` のread/writeだけではcross-worker CASを構成できず、module-level queueはMV3 worker再生成で失われる。
 - `StoragePort.runExclusive`は採用せず、固定名Web Lockを協調writerの線形化点、永続rootのgeneration・owner・lease・revisionをworker再生成後の認可根拠とする。
+
+- 7.1: 保存schema versionの正規値は`src/persistence/schema.ts`が所有し、`persistence/public.ts`経由でconsumerへ公開する。`src/domain/`側の型literal（`model.ts`の`schemaVersion: 1`、`foundation-schema.ts`の`z.literal(1)`）はdomain→persistenceの依存反転になるため、この一元化の対象外とする。
 
 - 6.13: `FoundationRuntimeContribution`へ`fullDataPort`を追加する過程で、`tests/persistence/runtime-contribution.test.ts`の`platform()` fixtureが`storageLocal.set()`を no-op のまま実装しており、write-then-read（acquire→assessReplacement→replaceRoot）を検証する新testで初めて顕在化した。fixtureの`get`/`set`を実際に永続化するmutable変数へ修正した。既存の`FoundationScopedDataPort`とconsumer（backup-restore以外の全feature）は無変更。

@@ -25,6 +25,8 @@ export type {
   FoundationRuntimePlatform,
 } from "./runtime-contribution.js";
 export { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "./runtime-contribution.js";
+/** 現行保存schema版の唯一の正規値。consumerは同じ数値を再定義しない。 */
+export { CURRENT_SCHEMA_VERSION } from "./schema.js";
 export type {
   CallerClassification,
   DataWorkerRegistration,

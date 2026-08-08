@@ -17,6 +17,7 @@ import {
   ok,
   validateCandidatePartValue,
 } from "../../domain/public.js";
+import { CURRENT_SCHEMA_VERSION } from "../../persistence/public.js";
 import { decodeBackupEnvelopeShape } from "./backup-schema.js";
 import type {
   BackupCandidatePart,
@@ -249,9 +250,6 @@ export const exchangeMigration: ExchangeMigration = {
   toCurrent: migrateBackupEnvelopeToCurrent,
 };
 
-/** 保存rootのschemaVersion。交換形式版（CURRENT_BACKUP_FORMAT_VERSION）とは独立して管理する。 */
-const CURRENT_PERSISTED_SCHEMA_VERSION = 1;
-
 const projectToBackup = (project: Project): BackupProject => ({
   id: project.id,
   name: project.name,
@@ -354,7 +352,7 @@ export const mapBackupEnvelopeToRoot = (
   envelope: CurrentBackupEnvelope,
 ): Result<LocalDataRoot, ExchangeMappingError> =>
   ok({
-    schemaVersion: CURRENT_PERSISTED_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     revision: 0 as Revision,
     projects: envelope.data.projects.map(projectFromBackup),
     candidateParts: envelope.data.parts.map(partFromBackup),

@@ -6,8 +6,8 @@ import type {
   MigrationError,
   MigrationRegistry,
 } from "./migration-registry.js";
+import { CURRENT_SCHEMA_VERSION } from "./schema.js";
 
-const CURRENT_SCHEMA_VERSION = 1;
 const DEFAULT_WARNING_RATIO = 0.8;
 const STORAGE_KEY = "localDataRoot";
 
