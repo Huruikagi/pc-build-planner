@@ -3,6 +3,9 @@ import type { LocalDataRoot, MaintenanceGeneration } from "../domain/model.js";
 
 export const CURRENT_SCHEMA_VERSION = 1 as const;
 export const LOCAL_DATA_STORAGE_KEY = "localDataRoot" as const;
+/** 正常rootとは独立した、異常root回復の最小永続control key。 */
+export const RECOVERY_CONTROL_STORAGE_KEY =
+  "foundationRecoveryControl" as const;
 export const INITIAL_REVISION = 0 as Revision;
 export const INITIAL_MAINTENANCE_GENERATION = 0 as MaintenanceGeneration;
 export const REQUEST_DEDUPE_LIMIT = 100 as const;

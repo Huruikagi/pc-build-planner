@@ -1,14 +1,16 @@
 import type { LocalDataRoot } from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 import type { StorageError, StoragePort } from "./repository.js";
-
-const STORAGE_KEY = "localDataRoot";
+import {
+  LOCAL_DATA_STORAGE_KEY,
+  RECOVERY_CONTROL_STORAGE_KEY,
+} from "./schema.js";
 
 export interface ChromeStorageLocalApi {
   readonly QUOTA_BYTES: number;
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
-  getBytesInUse(key: string): Promise<number>;
+  getBytesInUse(key: string | readonly string[]): Promise<number>;
   setAccessLevel(options: {
     readonly accessLevel: "TRUSTED_CONTEXTS";
   }): Promise<void>;
@@ -32,8 +34,8 @@ class ChromeStorageAdapter implements StoragePort {
 
   async readRoot() {
     try {
-      const stored = await this.#storage.get(STORAGE_KEY);
-      return ok(stored[STORAGE_KEY]);
+      const stored = await this.#storage.get(LOCAL_DATA_STORAGE_KEY);
+      return ok(stored[LOCAL_DATA_STORAGE_KEY]);
     } catch {
       return err(unavailable());
     }
@@ -41,7 +43,7 @@ class ChromeStorageAdapter implements StoragePort {
 
   async writeRoot(root: LocalDataRoot) {
     try {
-      await this.#storage.set({ [STORAGE_KEY]: root });
+      await this.#storage.set({ [LOCAL_DATA_STORAGE_KEY]: root });
       return ok(undefined);
     } catch (cause) {
       return err(isQuotaError(cause) ? quotaExceeded() : unavailable());
@@ -50,7 +52,12 @@ class ChromeStorageAdapter implements StoragePort {
 
   async bytesInUse() {
     try {
-      return ok(await this.#storage.getBytesInUse(STORAGE_KEY));
+      return ok(
+        await this.#storage.getBytesInUse([
+          LOCAL_DATA_STORAGE_KEY,
+          RECOVERY_CONTROL_STORAGE_KEY,
+        ]),
+      );
     } catch {
       return err(unavailable());
     }
@@ -66,6 +73,24 @@ class ChromeStorageAdapter implements StoragePort {
       return ok(undefined);
     } catch {
       return err(accessDenied());
+    }
+  }
+
+  async readRecoveryControl() {
+    try {
+      const stored = await this.#storage.get(RECOVERY_CONTROL_STORAGE_KEY);
+      return ok(stored[RECOVERY_CONTROL_STORAGE_KEY]);
+    } catch {
+      return err(unavailable());
+    }
+  }
+
+  async writeRecoveryControl(control: unknown) {
+    try {
+      await this.#storage.set({ [RECOVERY_CONTROL_STORAGE_KEY]: control });
+      return ok(undefined);
+    } catch (cause) {
+      return err(isQuotaError(cause) ? quotaExceeded() : unavailable());
     }
   }
 }

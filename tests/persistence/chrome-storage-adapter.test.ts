@@ -71,6 +71,31 @@ test("localDataRootだけをread/writeしruntime quotaとbytesを返す", async 
   );
 });
 
+test("raw rootとは別keyで回復controlを保持し、容量計測に両keyを含める", async () => {
+  const stub = createChromeStub();
+  const adapter = createChromeStorageAdapter(stub.chromeStorageLocal);
+  const control = {
+    generation: 1,
+    active: true,
+    ownerId: "synthetic-owner",
+    leaseExpiresAt: "2026-08-09T00:00:00.000Z",
+  };
+  assert.deepEqual(await adapter.readRecoveryControl(), {
+    ok: true,
+    value: undefined,
+  });
+  assert.deepEqual(await adapter.writeRecoveryControl(control), {
+    ok: true,
+    value: undefined,
+  });
+  assert.deepEqual(await adapter.readRecoveryControl(), {
+    ok: true,
+    value: control,
+  });
+  assert.equal((await adapter.bytesInUse()).ok, true);
+  assert.deepEqual(stub.entries.get("foundationRecoveryControl"), control);
+});
+
 test("アクセスをTRUSTED_CONTEXTSへ制限する", async () => {
   const stub = createChromeStub();
   const adapter = createChromeStorageAdapter(stub.chromeStorageLocal);

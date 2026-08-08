@@ -340,14 +340,14 @@
   - _Requirements: 4.6, 4.7_
   - _Boundary: SchemaContract_
 
-- [ ] 7.2 保存rootの固定形状をcanonical検証へ統合する
+- [x] 7.2 保存rootの固定形状をcanonical検証へ統合する
   - 業務rootの固定keyだけを受理し、表示言語などroot外の利用者設定を予期しないfieldとして拒否する
   - root外の回復controlをdomain rootと交換形式へ含めず、既存の有効な保存root形状を維持する
   - root外設定または回復controlが混入した入力をfield位置付きで拒否し、正規rootだけが保存経路へ進めることを完了条件とする
   - _Requirements: 2.8, 3.2, 4.7_
   - _Boundary: SchemaValidator_
 
-- [ ] 7.3 (P) 異常rootと回復制御を扱う保存adapter契約を追加する
+- [x] 7.3 (P) 異常rootと回復制御を扱う保存adapter契約を追加する
   - 正常decodeを前提にせずraw rootを読み、root外の最小回復controlを独立keyで読み書きできる保存契約を提供する
   - 容量計測はrootと回復controlの両keyを含み、Storage例外を機械判別可能な失敗へ変換する
   - raw rootや回復owner・leaseを公開portへ露出せず、正常・破損・未対応rootとcontrol欠損を架空adapterで再現できる状態を完了条件とする
@@ -355,7 +355,7 @@
   - _Requirements: 5.1, 5.3, 6.1, 7.9, 7.10, 7.12_
   - _Boundary: ChromeStorageAdapter_
 
-- [ ] 7.4 (P) root外の回復generation・owner・lease方針を実装する
+- [x] 7.4 (P) root外の回復generation・owner・lease方針を実装する
   - control欠損をinactive generation 0として扱い、取得・更新・終了・中止を純粋な状態遷移として判定する
   - stale generation、owner、leaseを拒否し、通常writerがactive回復中を識別できる認可結果を返す
   - worker memoryを共有しない再生成後も永続controlだけから同じactive判定と次generationを得られることを完了条件とする
@@ -363,7 +363,7 @@
   - _Requirements: 1.3, 7.12, 7.13_
   - _Boundary: RecoveryControlPolicy_
 
-- [ ] 7.5 異常root分類と回復候補評価を統合する
+- [x] 7.5 異常root分類と回復候補評価を統合する
   - raw rootを正常値として公開せず、canonical fingerprint付きの破損または未対応versionへ分類する
   - 既存の置換評価を回復境界へ接続し、候補をmigration、全体検証、容量判定してcurrent anomalyと候補拒否理由を別fieldで返す
   - 同じraw rootと候補ではcursorが安定し、raw値・候補digest・schema・必要bytes・control generationの変化を検出でき、評価中に保存値が変わらないことを完了条件とする

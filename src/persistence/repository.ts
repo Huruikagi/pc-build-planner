@@ -15,6 +15,9 @@ export type StorageError = Extract<
 export interface StoragePort {
   readRoot(): Promise<Result<unknown | undefined, StorageError>>;
   writeRoot(root: LocalDataRoot): Promise<Result<void, StorageError>>;
+  /** 正常decode不能なrootでも読める、root外の回復control。 */
+  readRecoveryControl(): Promise<Result<unknown | undefined, StorageError>>;
+  writeRecoveryControl(control: unknown): Promise<Result<void, StorageError>>;
   bytesInUse(): Promise<Result<number, StorageError>>;
   quotaBytes(): number;
   restrictToTrustedContexts(): Promise<Result<void, StorageError>>;

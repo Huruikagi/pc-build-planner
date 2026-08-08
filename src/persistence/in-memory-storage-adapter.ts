@@ -1,12 +1,20 @@
 import type { LocalDataRoot } from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 import type { StorageError, StoragePort } from "./repository.js";
+import {
+  LOCAL_DATA_STORAGE_KEY,
+  RECOVERY_CONTROL_STORAGE_KEY,
+} from "./schema.js";
 
 const DEFAULT_QUOTA_BYTES = 10 * 1024 * 1024;
 // schema.tsの公開契約と同じ物理key。adapterはこの一件以外を操作しない。
-const STORAGE_KEY = "localDataRoot";
-
-export type InMemoryStorageOperation = "read" | "write" | "bytes" | "access";
+export type InMemoryStorageOperation =
+  | "read"
+  | "write"
+  | "bytes"
+  | "access"
+  | "read-control"
+  | "write-control";
 
 export interface InMemoryStorageState {
   readonly entries: Map<string, unknown>;
@@ -57,22 +65,42 @@ class InMemoryStorageAdapter implements StoragePort {
 
   async readRoot() {
     if (this.#state.consumeFailure("read")) return err(storageUnavailable());
-    const stored = this.#state.entries.get(STORAGE_KEY);
+    const stored = this.#state.entries.get(LOCAL_DATA_STORAGE_KEY);
     return ok(stored === undefined ? undefined : cloneJson(stored));
   }
 
   async writeRoot(root: LocalDataRoot) {
     if (this.#state.consumeFailure("write")) return err(storageUnavailable());
-    this.#state.entries.set(STORAGE_KEY, cloneJson(root));
+    this.#state.entries.set(LOCAL_DATA_STORAGE_KEY, cloneJson(root));
     return ok(undefined);
   }
 
   async bytesInUse() {
     if (this.#state.consumeFailure("bytes")) return err(storageUnavailable());
-    const root = this.#state.entries.get(STORAGE_KEY);
-    if (root === undefined) return ok(0);
-    const serialized = JSON.stringify({ [STORAGE_KEY]: root });
+    const root = this.#state.entries.get(LOCAL_DATA_STORAGE_KEY);
+    const control = this.#state.entries.get(RECOVERY_CONTROL_STORAGE_KEY);
+    if (root === undefined && control === undefined) return ok(0);
+    const serialized = JSON.stringify({
+      ...(root === undefined ? {} : { [LOCAL_DATA_STORAGE_KEY]: root }),
+      ...(control === undefined
+        ? {}
+        : { [RECOVERY_CONTROL_STORAGE_KEY]: control }),
+    });
     return ok(new TextEncoder().encode(serialized).byteLength);
+  }
+
+  async readRecoveryControl() {
+    if (this.#state.consumeFailure("read-control"))
+      return err(storageUnavailable());
+    const stored = this.#state.entries.get(RECOVERY_CONTROL_STORAGE_KEY);
+    return ok(stored === undefined ? undefined : cloneJson(stored));
+  }
+
+  async writeRecoveryControl(control: unknown) {
+    if (this.#state.consumeFailure("write-control"))
+      return err(storageUnavailable());
+    this.#state.entries.set(RECOVERY_CONTROL_STORAGE_KEY, cloneJson(control));
+    return ok(undefined);
   }
 
   quotaBytes() {

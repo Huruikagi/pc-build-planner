@@ -425,6 +425,26 @@ test("生HTML、画像/data URL、余剰payloadと破損commandをfail closedす
   );
 });
 
+test("root外の設定と回復controlを固定形状違反としてfield位置付きで拒否する", () => {
+  for (const [key, value] of [
+    ["displayLanguage", "ja"],
+    ["recoveryControl", { active: true }],
+  ]) {
+    const input = root();
+    input[key] = value;
+    assertError(
+      schemaValidator.validateRoot(input),
+      "unexpected-field",
+      `$.${key}`,
+    );
+    assertError(
+      schemaValidator.validateReplacement(input),
+      "unexpected-field",
+      `$.${key}`,
+    );
+  }
+});
+
 test("command decoderはfieldとkindをexact path/codeでfail closedする", () => {
   const valid = {
     kind: "mutate-root",
