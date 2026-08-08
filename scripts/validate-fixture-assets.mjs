@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, join, relative, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SyntaxKind } from "typescript/unstable/ast";
 import {
@@ -21,6 +21,7 @@ import {
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
 import { withTypeScriptAsts } from "./typescript-ast.mjs";
+import { LICENSE_NOTICE_FILE_NAME } from "./validate-runtime-schema-csp.mjs";
 
 const imageExtensions = new Set([
   ".avif",
@@ -33,6 +34,16 @@ const imageExtensions = new Set([
   ".svg",
   ".webp",
 ]);
+const executableBundleExtensions = new Set([".js", ".mjs", ".cjs"]);
+
+/** @param {string} path */
+export const isArtifactFixturePath = (path) =>
+  !executableBundleExtensions.has(extname(path).toLowerCase()) &&
+  basename(path) !== LICENSE_NOTICE_FILE_NAME;
+
+/** @param {{ path: string, rule: string }} violation */
+export const isArtifactFixtureViolation = ({ path, rule }) =>
+  !(extname(path).toLowerCase() === ".html" && rule === "raw-html");
 const rawHtml = /<(?:!doctype\s+html|!--|\/?[a-z][^>]*>)/i;
 const dataUrl = /\bdata:[^\s"']+/i;
 const webUrl = /https?:\/\/[^\s"'`)]+/gi;
@@ -575,12 +586,10 @@ if (
     await findFixtureAssetViolations(
       directory,
       [],
-      (path) => !excludeExecutables || !/\.[cm]?js$/i.test(path),
+      excludeExecutables ? isArtifactFixturePath : undefined,
     )
-  ).filter(
-    ({ path, rule }) =>
-      !excludeExecutables ||
-      !(extname(path).toLowerCase() === ".html" && rule === "raw-html"),
+  ).filter((violation) =>
+    excludeExecutables ? isArtifactFixtureViolation(violation) : true,
   );
   const registryPath = cliArguments
     .slice(1)

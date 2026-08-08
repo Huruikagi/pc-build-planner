@@ -131,6 +131,49 @@ test("artifact fixture検査は除外対象の実行bundleを解析前に省く"
   assert.deepEqual(violations, [{ path: image, rule: "image-file" }]);
 });
 
+test("artifact fixture CLIはlicense noticeをfixtureとして検査しない", async () => {
+  const paths = await workspace();
+  await writeFile(
+    join(paths.fixtures, "THIRD_PARTY_NOTICES.txt"),
+    "Package homepage: https://example.com/package",
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      "--exclude-executables",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+});
+
+test("artifact fixture CLIはlicense noticeの近似名を除外しない", async () => {
+  const paths = await workspace();
+  const nearMatch = join(paths.fixtures, "backup-THIRD_PARTY_NOTICES.txt");
+  await writeFile(nearMatch, "Package homepage: https://example.com/package");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "scripts/validate-fixture-assets.mjs",
+      paths.fixtures,
+      "--exclude-executables",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /non-synthetic-url/);
+});
+
 test("validate:fixtures CLIはregistryの非架空source値を拒否する", async () => {
   const paths = await workspace();
   const registry = join(paths.fixtures, "source-registry.ts");
