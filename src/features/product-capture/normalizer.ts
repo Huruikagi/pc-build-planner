@@ -5,21 +5,37 @@ import type {
   CaptureFieldRejectionReason,
   ExtractionCandidate,
   NormalizedField,
+  SiteNameCandidate,
+  SourcedSiteName,
 } from "./contracts.js";
 import {
   isCaptureField,
   isCaptureSourceLabel,
   MAX_CAPTURE_LABEL_LENGTH,
+  SITE_NAME_SOURCE_LABEL,
 } from "./contracts.js";
 import {
   YEN_SUFFIX_PATTERN,
   YEN_SYMBOL_CURRENCY,
 } from "./locale/ja-price-tokens.js";
 
+/**
+ * Why an optional site name was not adopted. It is deliberately not a
+ * `CaptureFieldRejection`: a rejected site name is not a rejected product
+ * item, and must not appear in the capture result's rejected-field list.
+ */
+export type SiteNameRejectionReason = Extract<
+  CaptureFieldRejectionReason,
+  "empty" | "too-long" | "control-characters"
+>;
+
 export interface CaptureNormalizer {
   normalize(
     candidate: ExtractionCandidate,
   ): Result<NormalizedField, CaptureFieldRejection>;
+  normalizeSiteName(
+    candidate: SiteNameCandidate,
+  ): Result<SourcedSiteName, SiteNameRejectionReason>;
 }
 
 const MAX_TEXT_LENGTH = 200;
@@ -166,5 +182,26 @@ export const createCaptureNormalizer = (): CaptureNormalizer => ({
     if (candidate.field === "url") return normalizeUrl(candidate);
     if (candidate.field === "price") return normalizePriceField(candidate);
     return normalizeTextField(candidate);
+  },
+
+  /**
+   * Applies the same untrusted-text rules the product fields get, but closes
+   * every failure to the site name alone: an unusable display name is a normal
+   * partial result, never a reason to fail the surrounding extraction.
+   */
+  normalizeSiteName(candidate) {
+    if (candidate.rawValue.length > MAX_TEXT_LENGTH) return err("too-long");
+
+    const { text, hadControlCharacters } =
+      normalizeWhitespaceAndControlCharacters(candidate.rawValue);
+    if (text.length === 0)
+      return err(hadControlCharacters ? "control-characters" : "empty");
+
+    return ok({
+      value: text,
+      rawValue: candidate.rawValue,
+      source: "open-graph",
+      sourceLabel: SITE_NAME_SOURCE_LABEL,
+    });
   },
 });

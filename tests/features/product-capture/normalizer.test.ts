@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExtractionCandidate } from "../../../src/features/product-capture/contracts.js";
+import type {
+  ExtractionCandidate,
+  SiteNameCandidate,
+} from "../../../src/features/product-capture/contracts.js";
 import { createCaptureNormalizer } from "../../../src/features/product-capture/normalizer.js";
 
 const normalizer = createCaptureNormalizer();
@@ -242,6 +245,74 @@ test("採用結果は元表記と取得根拠を保持する", () => {
       rawValue: " 架空メーカー ",
       source: "json-ld",
       sourceLabel: "JSON-LD brand",
+    },
+  );
+});
+
+const siteNameCandidate = (rawValue: string): SiteNameCandidate => ({
+  rawValue,
+  source: "open-graph",
+  sourceLabel: "og:site_name",
+  documentOrder: 0,
+});
+
+test("有効なsite nameを正規化しOpenGraph provenanceと元表記を保つ", () => {
+  const rawValue = "  架空ショップ\u0009本店  ";
+
+  assert.deepEqual(normalizer.normalizeSiteName(siteNameCandidate(rawValue)), {
+    ok: true,
+    value: {
+      value: "架空ショップ 本店",
+      rawValue,
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+    },
+  });
+});
+
+test("site nameの空・空白だけ・制御文字だけ・過長を棄却理由つきで閉じる", () => {
+  assert.deepEqual(normalizer.normalizeSiteName(siteNameCandidate("")), {
+    ok: false,
+    error: "empty",
+  });
+  assert.deepEqual(normalizer.normalizeSiteName(siteNameCandidate("   ")), {
+    ok: false,
+    error: "empty",
+  });
+  assert.deepEqual(normalizer.normalizeSiteName(siteNameCandidate("\u0001")), {
+    ok: false,
+    error: "control-characters",
+  });
+  assert.deepEqual(
+    normalizer.normalizeSiteName(siteNameCandidate("あ".repeat(201))),
+    { ok: false, error: "too-long" },
+  );
+});
+
+test("site nameの実行可能マークアップは文字情報として保持する", () => {
+  const result = normalizer.normalizeSiteName(
+    siteNameCandidate("<img src=x onerror=alert(1)>架空ショップ"),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.value, "<img src=x onerror=alert(1)>架空ショップ");
+});
+
+test("site nameの棄却は商品項目の正規化から独立している", () => {
+  assert.equal(normalizer.normalizeSiteName(siteNameCandidate("")).ok, false);
+  assert.deepEqual(
+    normalizer.normalize(candidate({ rawValue: "  架空GPU  " })),
+    {
+      ok: true,
+      value: {
+        field: "name",
+        normalizedValue: "架空GPU",
+        rawValue: "  架空GPU  ",
+        source: "json-ld",
+        sourceLabel: "JSON-LD name",
+        documentOrder: 0,
+      },
     },
   );
 });
