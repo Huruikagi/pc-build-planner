@@ -45,6 +45,10 @@ import {
   createMaintenanceSnapshotSource,
   initializeProductionFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
+import type {
+  ProjectContextPublicApi,
+  ProjectContextReadPort,
+} from "../../src/project-context/public.js";
 import {
   LanguageProvider,
   LanguageSelectControl,
@@ -54,6 +58,20 @@ import type { MessageKey } from "../../src/ui-messages/public.js";
 export const consumeUiLanguagePublicEntry = () => ({
   LanguageProvider,
   LanguageSelectControl,
+});
+
+/** Project-context consumer は read capability だけを受け取って現在 snapshot を読む。 */
+export const readProjectContext = (
+  context: ProjectContextReadPort,
+): ReturnType<ProjectContextReadPort["getSnapshot"]> => context.getSnapshot();
+
+export const consumeProjectContextCapabilities = (
+  context: ProjectContextPublicApi,
+) => ({
+  snapshot: context.read.getSnapshot(),
+  commands: context.commands,
+  guards: context.guards,
+  replacement: context.replacementGuard,
 });
 
 export interface MockFoundationConsumer {

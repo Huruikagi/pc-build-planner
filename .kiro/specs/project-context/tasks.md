@@ -59,7 +59,7 @@
   - _Boundary: ProjectContextService Lifecycle_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.4 選択・確認 transaction と競合抑止を完成する
+- [x] 2.4 選択・確認 transaction と競合抑止を完成する
   - select、confirm、cancel、refresh を一つの queue へ直列化し、unknown target と同値再選択を state 不変で処理する。
   - guard 評価後に必要なら confirmation を返し、有効な confirm だけが preference write と snapshot commit へ進む。
   - preference write 成功後にだけ selection と generation を更新し、stale completion、write failure、guard failure で以前の snapshot を保持する。
@@ -68,7 +68,7 @@
   - _Boundary: ProjectContextService Selection_
   - _Depends: 2.1, 2.3_
 
-- [ ] 2.5 能力別 public facade と subscription isolation を実装する
+- [x] 2.5 能力別 public facade と subscription isolation を実装する
   - snapshot 取得・購読、選択・確認・取消・refresh、guard 登録、catalog 全体置換の prepare・確認・取消・完了通知を read / command / guard / replacement port へ分離する。
   - frozen facade から service、catalog source、preference adapter、guard collection、runtime schema を公開しない。
   - unsubscribe 後の非通知、listener 例外隔離、canonical Result、通常 consumer の public 入口を contract test で固定する。
