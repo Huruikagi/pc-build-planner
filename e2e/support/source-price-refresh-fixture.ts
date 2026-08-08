@@ -183,6 +183,29 @@ export async function readSourcePriceRefreshRoot(context: BrowserContext) {
   >;
 }
 
+export async function readTransientActivationEnvelope(
+  context: BrowserContext,
+): Promise<
+  | {
+      readonly record?: {
+        readonly activationId?: string;
+        readonly surfaceId?: string;
+        readonly tabId?: number;
+        readonly stage?: string;
+      };
+      readonly tombstones?: readonly {
+        readonly tabId?: number;
+        readonly seq?: number;
+      }[];
+    }
+  | undefined
+> {
+  return (await extensionWorker(context)).evaluate(async (key) => {
+    const stored = await chrome.storage.session.get(key);
+    return stored[key];
+  }, SOURCE_PRICE_REFRESH_ACTIVATION_KEY);
+}
+
 export async function putSourcePriceRefreshActivation(
   context: BrowserContext,
   tabId: number,
@@ -254,6 +277,37 @@ export async function grantActiveTabWithExtensionAction(
     (entry) => entry.type === "tab" && entry.url === page.url(),
   );
   if (target === undefined) throw new Error("SYN target is unavailable");
+  const existingTargets = new Set(targetInfos.map((entry) => entry.targetId));
   await page.bringToFront();
   await cdp.send("Extensions.triggerAction", { id, targetId: target.targetId });
+  const sidePanelUrl = `chrome-extension://${id}/side-panel.html`;
+  const deadline = Date.now() + 5_000;
+  let openedSidePanels: readonly { readonly targetId: string }[] = [];
+  while (openedSidePanels.length === 0) {
+    const after = await cdp.send("Target.getTargets", {
+      filter: [{ type: "tab", exclude: false }],
+    });
+    openedSidePanels = after.targetInfos.filter(
+      (entry) =>
+        !existingTargets.has(entry.targetId) && entry.url === sidePanelUrl,
+    );
+    if (openedSidePanels.length > 0) break;
+    if (Date.now() >= deadline)
+      throw new Error("production side panel target did not open");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  for (const opened of openedSidePanels) {
+    await cdp.send("Target.closeTarget", { targetId: opened.targetId });
+  }
+  const closedIds = new Set(openedSidePanels.map((entry) => entry.targetId));
+  while (true) {
+    const remaining = await cdp.send("Target.getTargets", {
+      filter: [{ type: "tab", exclude: false }],
+    });
+    if (!remaining.targetInfos.some((entry) => closedIds.has(entry.targetId)))
+      break;
+    if (Date.now() >= deadline)
+      throw new Error("production side panel target did not close");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }

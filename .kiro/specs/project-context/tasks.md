@@ -2,7 +2,7 @@
 
 > **実装前提**: 上流 `runtime-schema-validation` の configured runtime schema 公開入口と production gate が実装・検証済みであること。未完了の場合は本 spec 内で代替 schema や direct Zod import を追加せず、Task 1.2 を開始しない。
 
-- [ ] 1. project context の基礎契約と信頼境界を確立する
+- [x] 1. project context の基礎契約と信頼境界を確立する
 
 - [x] 1.1 検証済み snapshot と ordered catalog projection を実装する
   - ready、empty、unavailable の判別可能な snapshot、generation、最小 project item、catalog source の契約を定義する。
@@ -30,7 +30,7 @@
   - _Boundary: ProjectContextBoundaryGate_
   - _Depends: 1.2_
 
-- [ ] 2. guard 付き context transaction を構築する
+- [x] 2. guard 付き context transaction を構築する
 
 - [x] 2.1 (P) project change guard の登録・確認基盤を実装する
   - stable ID による登録、duplicate 拒否、解除、登録順評価、registry revision を実装する。
@@ -77,7 +77,7 @@
   - _Boundary: ProjectContextPublicApi_
   - _Depends: 2.2, 2.4_
 
-- [ ] 3. 共通 selector presentation を提供する
+- [x] 3. 共通 selector presentation を提供する
 
 - [x] 3.1 (P) project selector の日英 message と状態表現を追加する
   - ready、empty、unavailable、retry、pending、confirmation、error に必要な message を日本語・英語へ同じ key と placeholder で追加する。
@@ -105,7 +105,7 @@
   - _Boundary: ProjectContextPresentationContribution_
   - _Depends: 3.2_
 
-- [ ] 4. 契約・境界・downstream readiness を検証する
+- [x] 4. 契約・境界・downstream readiness を検証する
 
 - [x] 4.1 (P) context lifecycle と guard の横断 contract test を完成する
   - side panel 再オープンを表す再初期化、作成、削除、全置換、catalog failure、preference failure、回復を架空 catalog で検証する。
@@ -156,7 +156,7 @@
   - _Boundary: ProjectContext Core Browser E2E_
   - _Depends: 4.1, 4.2, 4.4_
 
-- [ ] 5. focused test と完全 validation で implementation readiness を確定する
+- [x] 5. focused test と完全 validation で implementation readiness を確定する
   - catalog、preference、selection / replacement guard、service、能力別 public facade、selector、presentation、boundary gate の focused test を先に実行し、失敗 boundary を特定する。
   - typecheck、public consumer typecheck、lint、unit/contract/DOM test、boundary、fixture、UI text、production build の既存 validation flow を通す。
   - downstream E2E の revalidation trigger と未所有 integration を contract kit から確認し、本 spec 内へ shell/feature 実装が混入していないことを差分検査する。
@@ -164,7 +164,6 @@
   - _Requirements: 3.5, 5.9, 5.10, 5.11, 5.12, 5.13, 6.5, 6.6, 6.7, 7.6, 7.8, 8.2, 8.4, 8.5, 8.6, 8.7, 8.8_
   - _Boundary: ProjectContext Final Validation_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
-  - _Blocked: downstream `source-price-refresh` Playwright E2E が clean worktree の独立した完全 validation で非決定的に失敗する。project-context の境界外のため、source-price-refresh owner が安定化してから再検証すること。_
 
 ## Implementation Notes
 
@@ -175,3 +174,4 @@
 - 1.2: `chrome.storage.local` の参照と存在確認は `preference-store.ts` に閉じ、`runtime.ts` は adapter 選択だけの composition seam とした（design.md の記述矛盾は DEF-003 で先送り）。task 1.3 の AST gate は file-scope で検査すること（DEF-004）。
 - 1.2: preference の decode は `src/domain/runtime-schema/public.ts` 経由のみ。`src/project-context/` 内での直接 Zod import は tasks.md 実装前提により禁止。
 - 1.3: preference key gate は `preference-store.ts` の file scope で `get/set/remove` の直接呼び出しだけを許可し、method alias・dynamic key・area 全体操作を fail closed に拒否する。consumer import 制限は task 4.3 が所有する。
+- 5: downstream `source-price-refresh` E2E の非決定的失敗は、`Extensions.triggerAction` が production `sidePanel.open()` で生成する panel とテストが手動で開く panel が同じ activation を二重監視し、片方の重複 stage advance が失敗する fixture 競合だった。action 前後の CDP target 差分から追加 panel だけを閉じ、durable `activated` を確認してから後段 activation を投入することで解消した。source-price-refresh 120-case 高負荷反復と完全 validation で再発しないことを確認する。

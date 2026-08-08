@@ -6,7 +6,6 @@ import {
   featureRoot,
   navItem,
 } from "./models/application-shell.js";
-import { extensionAction } from "./models/product-capture.js";
 import {
   sourcePriceRefresh,
   sourcePriceRefreshFailureCause,
@@ -21,6 +20,7 @@ import {
   grantActiveTabWithExtensionAction,
   putSourcePriceRefreshActivation,
   readSourcePriceRefreshRoot,
+  readTransientActivationEnvelope,
   seedSourcePriceRefreshRoot,
   sourcePriceRefreshUrls,
   syntheticPricePage,
@@ -55,8 +55,17 @@ async function activateRefresh(
   // This action gesture grants production activeTab access. It is deliberately
   // not evidence of selecting the browser-native price-refresh menu item.
   await grantActiveTabWithExtensionAction(context, target, id);
-  await expect(extensionAction(panel)).toBeVisible();
   const tabId = await tabIdFor(context, target);
+  await expect
+    .poll(async () => {
+      const record = (await readTransientActivationEnvelope(context))?.record;
+      return {
+        stage: record?.stage,
+        surfaceId: record?.surfaceId,
+        tabId: record?.tabId,
+      };
+    })
+    .toEqual({ stage: "activated", surfaceId: "product-capture", tabId });
   await putSourcePriceRefreshActivation(context, tabId, activationId);
   await expect(sourcePriceRefresh(panel)).toBeVisible();
   return { panel, target };
