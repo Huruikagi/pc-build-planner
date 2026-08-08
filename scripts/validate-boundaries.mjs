@@ -15,6 +15,7 @@ import {
   isIdentifier,
   isImportDeclaration,
   isImportTypeNode,
+  isInterfaceDeclaration,
   isLiteralTypeNode,
   isNamedExports,
   isNamedImports,
@@ -25,9 +26,11 @@ import {
   isParenthesizedExpression,
   isPropertyAccessExpression,
   isPropertyAssignment,
+  isPropertySignatureDeclaration,
   isSatisfiesExpression,
   isShorthandPropertyAssignment,
   isStringLiteral,
+  isTypeAliasDeclaration,
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
 import { withTypeScriptAsts } from "./typescript-ast.mjs";
@@ -551,6 +554,97 @@ const violatesSourceCatalogConsumerImports = (sourceFile) => {
         specifier === undefined ||
         violatesConsumerModuleAccess(specifier, names, false);
     }
+  });
+  return violation;
+};
+
+// ProjectContextBoundaryGate (8.6): legacy feature snapshot の `selectedProjectId`
+// が context authority へ逆流する経路を静的に閉じる。逆流は二つの形でしか起きない。
+// (1) project-context が Allowed Dependencies の外（features / application-shell /
+// runtime / persistence など）を import して feature snapshot 型へ到達する。
+// (2) 初期化・fallback の入力契約（Dependencies / Source / Port / Options / Input）
+// 自身が選択 hint を受け取る。どちらも fail closed で拒否する。
+const PROJECT_CONTEXT_SOURCE = /(?:^|\/)src\/project-context\//;
+const PROJECT_CONTEXT_ALLOWED_MODULES = new Set([
+  "react",
+  "react-dom",
+  "react-dom/client",
+  "react/jsx-runtime",
+  "../domain/public.js",
+  "../domain/runtime-schema/public.js",
+  "../ui-language/public.js",
+  "../ui-messages/public.js",
+]);
+const LEGACY_SELECTION_FIELD = "selectedProjectId";
+const PROJECT_CONTEXT_INPUT_SHAPE =
+  /(?:Dependencies|Source|Port|Options|Input)$/;
+
+/** @param {string} specifier */
+const isForbiddenProjectContextDependency = (specifier) => {
+  const normalized = specifier.replaceAll("\\", "/");
+  // owner-local module だけは相対 sibling import を許す。
+  if (/^\.\/[^/]+$/.test(normalized)) return false;
+  return !PROJECT_CONTEXT_ALLOWED_MODULES.has(normalized);
+};
+
+/**
+ * @param {import("typescript/unstable/ast").InterfaceDeclaration
+ *   | import("typescript/unstable/ast").TypeAliasDeclaration} declaration
+ */
+const declaresLegacySelectionInput = (declaration) => {
+  const name = declaration.name;
+  if (!isIdentifier(name) || !PROJECT_CONTEXT_INPUT_SHAPE.test(name.text))
+    return false;
+  let found = false;
+  walkAst(declaration, (node) => {
+    if (found) return;
+    if (
+      isPropertySignatureDeclaration(node) &&
+      isIdentifier(node.name) &&
+      node.name.text === LEGACY_SELECTION_FIELD
+    )
+      found = true;
+  });
+  return found;
+};
+
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
+const violatesProjectContextLegacySelectionAuthority = (sourceFile) => {
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (violation) return;
+    if (
+      isImportDeclaration(node) ||
+      (isExportDeclaration(node) && node.moduleSpecifier !== undefined)
+    ) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectContextDependency(specifier);
+      return;
+    }
+    if (
+      isCallExpression(node) &&
+      node.expression.kind === AstSyntaxKind.ImportKeyword
+    ) {
+      const specifier = staticModuleText(node.arguments[0]);
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectContextDependency(specifier);
+      return;
+    }
+    if (isImportTypeNode(node)) {
+      const argument = node.argument;
+      const specifier = isLiteralTypeNode(argument)
+        ? staticModuleText(argument.literal)
+        : undefined;
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectContextDependency(specifier);
+      return;
+    }
+    if (isInterfaceDeclaration(node) || isTypeAliasDeclaration(node))
+      violation = declaresLegacySelectionInput(node);
   });
   return violation;
 };
@@ -1148,6 +1242,12 @@ export const findBoundaryViolations = (sources) => {
           violatesProjectContextPreferenceKey(ast)
         )
           rules.add("project-context-preference-key-only");
+        if (
+          PROJECT_CONTEXT_SOURCE.test(normalizedPath) &&
+          ast !== undefined &&
+          violatesProjectContextLegacySelectionAuthority(ast)
+        )
+          rules.add("project-context-no-legacy-selection-authority");
         if (
           isCandidateSourceCatalog &&
           ast !== undefined &&

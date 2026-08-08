@@ -36,6 +36,44 @@ export const collectProjectContextSnapshotViolations = (
   return violations;
 };
 
+export interface UnavailableRecoverySubject {
+  readonly context: Pick<ProjectContextPublicApi, "read" | "commands">;
+  /** shell が settings 画面を起動できたか。context を理由に拒否してはならない。 */
+  openSettings(): boolean | Promise<boolean>;
+  /** shell が backup recovery を起動できたか。同上。 */
+  openBackupRecovery(): boolean | Promise<boolean>;
+}
+
+/**
+ * Requirement 8.7. Context が unavailable でも settings と backup recovery の
+ * 起動が妨げられないことを、公開 read / command capability だけで検証する。
+ * shell の具体実装は取り込まず、downstream owner が自分の起動経路を注入する。
+ */
+export const collectUnavailableRecoveryContractViolations = async (
+  subject: UnavailableRecoverySubject,
+): Promise<readonly string[]> => {
+  const snapshot = subject.context.read.getSnapshot();
+  if (snapshot.status !== "unavailable")
+    return [
+      "recovery.precondition: subject must be observed while context is unavailable",
+    ];
+  const violations: string[] = [];
+  if (!(await subject.openSettings()))
+    violations.push(
+      "recovery.settings: unavailable context blocked the settings entry point",
+    );
+  if (!(await subject.openBackupRecovery()))
+    violations.push(
+      "recovery.backup: unavailable context blocked the backup recovery entry point",
+    );
+  // 復旧経路は片道であってはならない。retry は公開 command から到達できる。
+  if (typeof subject.context.commands.refresh !== "function")
+    violations.push(
+      "recovery.retry: unavailable context does not expose a public retry",
+    );
+  return violations;
+};
+
 export interface ReplacementContractSubject {
   readonly replacementGuard: ProjectContextReplacementGuardPort;
   commitReplacement(): Promise<"succeeded" | "failed" | "cancelled">;

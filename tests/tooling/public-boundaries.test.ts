@@ -1437,6 +1437,110 @@ test("project-context consumer は owner ごとの公開入口以外を import �
   );
 });
 
+test("要件8.6: legacy snapshotのselectedProjectIdはcontext authorityへ逆流できない", async () => {
+  const rule = "project-context-no-legacy-selection-authority";
+  // 既存 rule（public-import-only 等）と重なる fixture があるため、逆流 rule が
+  // 必ず立つことを検査する。同じ source から常に同じ安定 rule 名が出ることを固定する。
+  const rejects = (name: string, source: string) =>
+    assert.ok(
+      findBoundaryViolations([
+        { path: `src/project-context/${name}`, source },
+      ]).some(
+        (violation) =>
+          violation.path === `src/project-context/${name}` &&
+          violation.rule === rule,
+      ),
+      source,
+    );
+
+  // (1) legacy snapshot 型へ到達する import 経路。
+  rejects(
+    "legacy-bridge.ts",
+    'import type { CandidateManagementSnapshot } from "../features/candidate-management/public.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'import { currentBuildSnapshot } from "../features/current-build/public.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'import type { ShellSnapshot } from "../application-shell/public.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'import { readSnapshot } from "../runtime/side-panel.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'import type { LocalDataRoot } from "../persistence/public.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'export type { CandidateManagementSnapshot } from "../features/candidate-management/public.js";',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'const load = async () => import("../features/candidate-management/public.js");',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    'type Legacy = import("../features/current-build/public.js").CurrentBuildSnapshot;',
+  );
+  rejects(
+    "legacy-bridge.ts",
+    "const dynamic = async (name: string) => import(`../features/${name}/public.js`);",
+  );
+
+  // (2) 初期化・fallback の入力契約が選択 hint を受け取る経路。
+  rejects(
+    "legacy-input.ts",
+    "export interface ProjectContextServiceDependencies { readonly selectedProjectId: string | null; }",
+  );
+  rejects(
+    "legacy-input.ts",
+    "export interface LegacyCatalogSource { readonly selectedProjectId: string; }",
+  );
+  rejects(
+    "legacy-input.ts",
+    "export interface LegacyFallbackPort { readonly legacy: { readonly selectedProjectId: string } }",
+  );
+  rejects(
+    "legacy-input.ts",
+    "export type ProjectContextInitializationInput = { readonly selectedProjectId: string | null };",
+  );
+
+  // 正常な owner-local module と Allowed Dependencies だけを使う実 file は通る。
+  const sources = await Promise.all(
+    [
+      "contracts.ts",
+      "catalog.ts",
+      "preference-store.ts",
+      "guard-coordinator.ts",
+      "service.ts",
+      "public.ts",
+      "runtime.ts",
+      "selector.tsx",
+      "presentation-contribution.tsx",
+    ].map(async (name) => ({
+      path: `src/project-context/${name}`,
+      source: await readFile(`src/project-context/${name}`, "utf8"),
+    })),
+  );
+  assert.deepEqual(findBoundaryViolations(sources), []);
+
+  // snapshot 側の `selectedProjectId` は context 自身の出力契約なので通る。
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/project-context/snapshot-shape.ts",
+        source:
+          "export type ProjectContextSnapshot = { readonly selectedProjectId: string | null };",
+      },
+    ]),
+    [],
+  );
+});
+
 test("project-contextはboundaryとUI textの必須scan rootでありroot欠落はfail closedになる", async () => {
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   assert.match(

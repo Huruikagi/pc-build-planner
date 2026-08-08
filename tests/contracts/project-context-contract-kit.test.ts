@@ -13,6 +13,7 @@ import { createProjectContextService } from "../../src/project-context/service.j
 import {
   collectProjectContextSnapshotViolations,
   collectReplacementContractViolations,
+  collectUnavailableRecoveryContractViolations,
 } from "./project-context-contract-kit.js";
 
 const A = "11111111-1111-4111-8111-111111111111" as ProjectId;
@@ -104,4 +105,71 @@ test("project-context contract kitはreplacement成功後だけ独立refreshを�
     [],
   );
   assert.equal(refreshes, 1);
+});
+
+test("要件8.7: contract kitはunavailable時もsettings・backup recoveryの起動を要求する", async () => {
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection({
+      async list() {
+        return { ok: false, error: { kind: "source-unavailable" as const } };
+      },
+    }),
+    preference: createInMemoryProjectPreferencePort(),
+  });
+  await service.initialize();
+  const api = createProjectContextPublicApi({ service });
+  assert.equal(api.read.getSnapshot().status, "unavailable");
+
+  // context に依存しない shell 起動経路は違反を出さない。
+  assert.deepEqual(
+    await collectUnavailableRecoveryContractViolations({
+      context: api,
+      openSettings: () => true,
+      openBackupRecovery: async () => true,
+    }),
+    [],
+  );
+
+  // context ready を前提にした shell は復旧経路を塞ぐため検出される。
+  const gatedOnReady = () => api.read.getSnapshot().status === "ready";
+  assert.deepEqual(
+    await collectUnavailableRecoveryContractViolations({
+      context: api,
+      openSettings: gatedOnReady,
+      openBackupRecovery: gatedOnReady,
+    }),
+    [
+      "recovery.settings: unavailable context blocked the settings entry point",
+      "recovery.backup: unavailable context blocked the backup recovery entry point",
+    ],
+  );
+});
+
+test("要件8.7: unavailableでない状態で観測した契約はprecondition違反として拒否する", async () => {
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection({
+      async list() {
+        return ok([
+          {
+            id: A,
+            name: "架空プロジェクト",
+            updatedAt: "2026-01-01T00:00:00Z" as UtcTimestamp,
+          },
+        ]);
+      },
+    }),
+    preference: createInMemoryProjectPreferencePort(),
+  });
+  await service.initialize();
+  const api = createProjectContextPublicApi({ service });
+  assert.deepEqual(
+    await collectUnavailableRecoveryContractViolations({
+      context: api,
+      openSettings: () => true,
+      openBackupRecovery: () => true,
+    }),
+    [
+      "recovery.precondition: subject must be observed while context is unavailable",
+    ],
+  );
 });

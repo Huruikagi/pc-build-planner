@@ -124,20 +124,19 @@ src/project-context/
 ├── contracts.ts                    # snapshot、error、catalog、change intent、guard、capability port
 ├── catalog.ts                      # owner source から最小 catalog projection と不変条件
 ├── preference-store.ts             # version 1 schema、専用 key、Chrome/in-memory port
-├── switch-guards.ts                # change guard registry、評価、確認 request、forced 通知
+├── guard-coordinator.ts            # change guard registry、評価、確認 request、replacement permit、forced 通知
 ├── service.ts                      # initialize/select/confirm/cancel/refresh/replacement guard transaction
 ├── public.ts                       # read/command/guard/replacement port と factory の通常公開入口
 ├── selector.tsx                    # selector、確認、retry、ARIA live state
-├── selector.css                    # project selector 固有 style
-├── react-root.tsx                  # LanguageProvider と React root cleanup
-├── presentation-contribution.ts    # shell composition 専用 mount contract
+├── presentation-contribution.tsx   # LanguageProvider と React root を含む shell composition 専用 mount contract
 └── runtime.ts                      # production preference adapter の composition seam
 tests/project-context/
 ├── catalog.test.ts
 ├── preference-store.test.ts
-├── switch-guards.test.ts
+├── guard-coordinator.test.ts
 ├── service.test.ts
 ├── public.test.ts
+├── contract.integration.test.ts
 ├── selector.test.tsx
 └── presentation-contribution.test.tsx
 tests/contracts/
@@ -567,6 +566,7 @@ interface ProjectContextPresentationContribution {
 - normal consumer の project-context import は `public.ts`、shell composition は `presentation-contribution.ts` と `runtime.ts` だけを許可する。
 - direct `chrome.storage.local` は `preference-store.ts` のみ許可し、`get/set/remove` の key argument が静的に `projectContextPreference` へ解決できる場合だけ通す。
 - dynamic key、storage area alias、別 key、session/sync access、別 source path、内部 deep import の negative fixture を拒否する。
+- 要件 8.6 として legacy 選択 authority の逆流を拒否する。`src/project-context/` からの import は Allowed Dependencies（owner-local sibling、`domain/public`、`domain/runtime-schema/public`、`ui-language/public`、`ui-messages/public`、React）だけを許し、features / application-shell / runtime / persistence への static・dynamic・import type 経路を閉じる。加えて初期化・fallback の入力契約（`*Dependencies` / `*Source` / `*Port` / `*Options` / `*Input`）が `selectedProjectId` を member に持つことを拒否する。context 自身の出力である snapshot の同名 field は対象外とする。
 - source scan root に `src/project-context` を必須化し、存在しない root を fail closed にする。
 
 **Contracts**: Batch [x]
@@ -659,6 +659,7 @@ error と log には project name、project ID、storage value、draft、excepti
 - public consumer typecheck で capability separation と canonical `Result` を固定する。
 - `pnpm validate:boundaries`、`validate:ui-text`、`validate:final-build`、`pnpm test` を通す。
 - 本 spec は test-only browser harness で core service、preference、guard、selector を composition し、選択、確認・取消、再初期化による preference 復元、empty/unavailable recovery を Playwright で検証する。harness は production bundle や manifest へ含めない。
+- 要件 8.7 は contract kit の `collectUnavailableRecoveryContractViolations` で固定する。unavailable snapshot を観測しながら downstream owner が注入した settings / backup recovery 起動経路が拒否されないことと、公開 command から retry へ到達できることだけを検査し、shell 具体実装は取り込まない。
 - downstream Playwright test が利用する contract kit と selector locator contract も提供する。production shell への slot 配置、feature adapter 追従、実 extension 再オープン、settings/backup recovery の Playwright シナリオ実装は各 downstream owner が行い、Revalidation Triggers により統合時に本 contract suite も実行する。
 - fixture は架空 ID・project 名のみを使い、実サイト由来 URL、商品値、HTML、画像を含めない。
 
