@@ -16,7 +16,11 @@ import type {
   ExtractionSource,
   RawCapturePayload,
 } from "./contracts.js";
-import { isCaptureField, isCaptureSourceLabel } from "./contracts.js";
+import {
+  isCaptureField,
+  isCaptureSourceLabel,
+  isSiteNameCandidate,
+} from "./contracts.js";
 import type { CaptureNormalizer } from "./normalizer.js";
 import type { CandidateRanker } from "./ranker.js";
 
@@ -66,7 +70,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const EXTRACTION_SOURCES: ReadonlySet<ExtractionSource> = new Set([
   "json-ld",
-  "meta",
+  "open-graph",
+  "twitter-card",
+  "product-meta",
   "heading",
   "breadcrumb",
   "table",
@@ -90,18 +96,25 @@ export const decodeCapturePagePayload = (
   value: RawCapturePayload,
 ): CapturePagePayload | undefined => {
   if (!isRecord(value)) return undefined;
-  const { requestId, tabId, pageUrl, candidates } = value;
+  const { requestId, tabId, pageUrl, candidates, siteName } = value;
   if (
     typeof requestId !== "string" ||
     requestId.length === 0 ||
     typeof tabId !== "number" ||
     typeof pageUrl !== "string" ||
     !Array.isArray(candidates) ||
-    !candidates.every(isExtractionCandidate)
+    !candidates.every(isExtractionCandidate) ||
+    (siteName !== undefined && !isSiteNameCandidate(siteName))
   ) {
     return undefined;
   }
-  return { requestId, tabId, pageUrl, candidates };
+  return {
+    requestId,
+    tabId,
+    pageUrl,
+    candidates,
+    ...(siteName === undefined ? {} : { siteName }),
+  };
 };
 
 export const isRestrictedCaptureUrl = (url: string): boolean => {

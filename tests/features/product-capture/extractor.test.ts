@@ -147,7 +147,15 @@ test("meta情報から商品名・URL・価格・メーカーを収集する", (
   );
   assert.equal(byField(candidates, "manufacturer")[0]?.rawValue, "架空パーツ");
   assert.equal(byField(candidates, "price")[0]?.rawValue, "15800 JPY");
-  for (const candidate of candidates) assert.equal(candidate.source, "meta");
+  assert.deepEqual(
+    candidates.map((candidate) => [candidate.field, candidate.source]),
+    [
+      ["name", "open-graph"],
+      ["manufacturer", "product-meta"],
+      ["url", "open-graph"],
+      ["price", "product-meta"],
+    ],
+  );
 });
 
 test("見出しとパンくずから商品名とカテゴリを収集する", () => {
@@ -387,7 +395,7 @@ test("ページ由来manufacturerがある場合はdomain map候補を生成し�
     {
       field: "manufacturer",
       rawValue: "ページ明示メーカー",
-      source: "meta",
+      source: "product-meta",
       sourceLabel: 'meta[property="product:brand"]',
       documentOrder: 0,
     },

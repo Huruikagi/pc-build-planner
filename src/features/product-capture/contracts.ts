@@ -22,10 +22,16 @@ export interface ProductCaptureTransientConsumerContract {
   readonly lifecycle: TransientSurfaceLifecyclePort;
 }
 
-/** Where a candidate value was read from on the page, in fixed priority order. */
+/**
+ * Where a candidate value was read from on the page, in fixed priority order.
+ * The three metadata families are separate members rather than one generic
+ * `meta`, so a value's provenance names the allowlist family it came from.
+ */
 export type ExtractionSource =
   | "json-ld"
-  | "meta"
+  | "open-graph"
+  | "twitter-card"
+  | "product-meta"
   | "heading"
   | "breadcrumb"
   | "table"
@@ -85,6 +91,57 @@ export interface ExtractionCandidate {
   readonly documentOrder: number;
 }
 
+/** The only metadata property allowed to supply the optional source site name. */
+export const SITE_NAME_SOURCE_LABEL = "og:site_name";
+
+/**
+ * The optional source display name read from the page, before validation.
+ * It travels beside `ExtractionCandidate[]` rather than inside it: a site name
+ * is not a product item, so it must never reach the required-field set or the
+ * missing-core-field list.
+ */
+export interface SiteNameCandidate {
+  readonly rawValue: string;
+  readonly source: "open-graph";
+  readonly sourceLabel: typeof SITE_NAME_SOURCE_LABEL;
+  readonly documentOrder: number;
+}
+
+/** A site name that passed normalization; still an optional display value only. */
+export interface SourcedSiteName {
+  readonly value: string;
+  readonly rawValue: string;
+  readonly source: "open-graph";
+  readonly sourceLabel: typeof SITE_NAME_SOURCE_LABEL;
+}
+
+const isDocumentOrder = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * The site name channel is closed to exactly one provenance: `og:site_name`
+ * read as OpenGraph. Accepting any other source/label pair here would let a
+ * page launder an unlisted property into the display name.
+ */
+export const isSiteNameCandidate = (
+  value: unknown,
+): value is SiteNameCandidate => {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
+  const { rawValue, source, sourceLabel, documentOrder } = value as {
+    readonly rawValue?: unknown;
+    readonly source?: unknown;
+    readonly sourceLabel?: unknown;
+    readonly documentOrder?: unknown;
+  };
+  return (
+    typeof rawValue === "string" &&
+    source === "open-graph" &&
+    sourceLabel === SITE_NAME_SOURCE_LABEL &&
+    isDocumentOrder(documentOrder)
+  );
+};
+
 /**
  * The untrusted message returned by the injected page function. It must be
  * re-validated at the runtime boundary before any field is treated as
@@ -103,6 +160,7 @@ export interface CapturePagePayload {
   readonly tabId: number;
   readonly pageUrl: string;
   readonly candidates: readonly ExtractionCandidate[];
+  readonly siteName?: SiteNameCandidate;
 }
 
 export type CaptureFieldRejectionReason =
@@ -150,6 +208,8 @@ export interface CaptureResult {
   readonly capturedAt: UtcTimestamp;
   readonly draft: CaptureDraftFields;
   readonly rejectedFields: readonly CaptureFieldRejection[];
+  /** Optional display name only; absent whenever the page supplied none that validates. */
+  readonly siteName?: SourcedSiteName;
 }
 
 export type CaptureFailure =

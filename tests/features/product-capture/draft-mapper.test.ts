@@ -35,7 +35,7 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         field: "manufacturer",
         normalizedValue: "架空メーカー",
         rawValue: "架空メーカー",
-        source: "meta",
+        source: "open-graph",
         sourceLabel: "og:brand",
         documentOrder: 1,
       },
@@ -43,7 +43,7 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
         field: "price",
         normalizedValue: { amount: 32100, currency: "JPY" },
         rawValue: "JPY 32,100",
-        source: "meta",
+        source: "open-graph",
         sourceLabel: "product:price",
         documentOrder: 2,
       },
@@ -78,10 +78,10 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
       "name:source": "heading",
       "name:sourceLabel": "h1",
       manufacturer: "架空メーカー",
-      "manufacturer:source": "meta",
+      "manufacturer:source": "open-graph",
       "manufacturer:sourceLabel": "og:brand",
       price: "JPY 32,100",
-      "price:source": "meta",
+      "price:source": "open-graph",
       "price:sourceLabel": "product:price",
     },
   });
@@ -94,10 +94,10 @@ test("抽出結果をproject未解決draftへ必要最小限で写像する", ()
     "name:source": "heading",
     "name:sourceLabel": "h1",
     manufacturer: "架空メーカー",
-    "manufacturer:source": "meta",
+    "manufacturer:source": "open-graph",
     "manufacturer:sourceLabel": "og:brand",
     price: "JPY 32,100",
-    "price:source": "meta",
+    "price:source": "open-graph",
     "price:sourceLabel": "product:price",
   });
 });
@@ -247,7 +247,7 @@ test("構造不正と余分な値を拒否する", () => {
         field: "price",
         normalizedValue: { amount: Number.NaN, currency: "JPY" },
         rawValue: "NaN JPY",
-        source: "meta",
+        source: "open-graph",
         sourceLabel: "price",
         documentOrder: 0,
       },
@@ -267,7 +267,7 @@ test("構造不正と余分な値を拒否する", () => {
           html: "<secret>",
         },
         rawValue: "100 JPY",
-        source: "meta",
+        source: "open-graph",
         sourceLabel: "price",
         documentOrder: 0,
       },
@@ -277,7 +277,7 @@ test("構造不正と余分な値を拒否する", () => {
         field: "currency",
         normalizedValue: "JPY",
         rawValue: "JPY",
-        source: "meta",
+        source: "open-graph",
         sourceLabel: "currency",
         documentOrder: 1,
       },
@@ -295,7 +295,7 @@ test("構造不正と余分な値を拒否する", () => {
           field: "url",
           normalizedValue: "https://example.invalid/canonical",
           rawValue: "https://example.invalid/canonical",
-          source: "meta",
+          source: "open-graph",
           sourceLabel: "og:url",
           documentOrder: 0,
         },
@@ -344,4 +344,57 @@ test("capture resultの各strict shapeを検証し、不正時は生成処理を
     });
   }
   assert.equal(sourceIdCalls, 0);
+});
+
+test("CaptureResult境界は任意site nameを受理し、不正なprovenanceを拒否する", () => {
+  const mapper = createCaptureDraftMapper({ createSourceId: () => sourceId });
+
+  assert.equal(
+    mapper.toUnresolvedDraft({
+      ...captureResult(),
+      siteName: {
+        value: "架空ショップ",
+        rawValue: "  架空ショップ  ",
+        source: "open-graph",
+        sourceLabel: "og:site_name",
+      },
+    }).ok,
+    true,
+  );
+
+  assert.equal(mapper.toUnresolvedDraft(captureResult()).ok, true);
+
+  for (const siteName of [
+    {
+      value: "架空ショップ",
+      rawValue: "架空ショップ",
+      source: "twitter-card",
+      sourceLabel: "og:site_name",
+    },
+    {
+      value: "架空ショップ",
+      rawValue: "架空ショップ",
+      source: "open-graph",
+      sourceLabel: "og:title",
+    },
+    {
+      value: "架空ショップ",
+      rawValue: "架空ショップ",
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+      html: "<img src=x>",
+    },
+    {
+      value: "架空ショップ",
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+    },
+    "架空ショップ",
+  ]) {
+    assert.deepEqual(
+      mapper.toUnresolvedDraft({ ...captureResult(), siteName }),
+      { ok: false, error: { kind: "invalid-payload" } },
+      `不正なsite name provenanceを受理した: ${JSON.stringify(siteName)}`,
+    );
+  }
 });

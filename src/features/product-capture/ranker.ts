@@ -10,10 +10,16 @@ export interface CandidateRanker {
   select(candidates: readonly NormalizedField[]): CaptureDraftFields;
 }
 
-/** Fixed selection order: json-ld > meta > heading/breadcrumb (tied) > table/definition-list (tied). */
+/**
+ * Fixed selection order: json-ld > page metadata > heading/breadcrumb (tied) >
+ * table/definition-list (tied) > domain-map. The three metadata families share
+ * one rank, so among them the document order decides.
+ */
 const SOURCE_PRIORITY: Readonly<Record<ExtractionSource, number>> = {
   "json-ld": 0,
-  meta: 1,
+  "open-graph": 1,
+  "twitter-card": 1,
+  "product-meta": 1,
   heading: 2,
   breadcrumb: 2,
   table: 3,

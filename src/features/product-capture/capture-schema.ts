@@ -1,6 +1,7 @@
 import type { RequestId, Result, UtcTimestamp } from "../../domain/public.js";
 import {
   decodeWithProfile,
+  optionalField,
   plainObject,
   revision,
   type SchemaOutput,
@@ -23,6 +24,7 @@ import {
   CAPTURE_CORE_FIELDS,
   isCaptureField,
   isCaptureSourceLabel,
+  SITE_NAME_SOURCE_LABEL,
 } from "./contracts.js";
 
 const invalid = <T>(schema: T): T =>
@@ -34,7 +36,9 @@ const strictOptions = {
 
 const extractionSources: ReadonlySet<string> = new Set<ExtractionSource>([
   "json-ld",
-  "meta",
+  "open-graph",
+  "twitter-card",
+  "product-meta",
   "heading",
   "breadcrumb",
   "table",
@@ -102,6 +106,25 @@ export const normalizedCaptureFieldSchema = plainObject(
   strictOptions,
 );
 
+/**
+ * The optional source display name. Its provenance is pinned to the single
+ * allowlisted property so a decoded result cannot claim a site name came from
+ * anywhere but `og:site_name`.
+ */
+export const sourcedSiteNameSchema = plainObject(
+  {
+    value: invalid(safeString()),
+    rawValue: invalid(safeString()),
+    source: invalid(z.custom<"open-graph">((value) => value === "open-graph")),
+    sourceLabel: invalid(
+      z.custom<typeof SITE_NAME_SOURCE_LABEL>(
+        (value) => value === SITE_NAME_SOURCE_LABEL,
+      ),
+    ),
+  },
+  strictOptions,
+);
+
 export const rejectedCaptureFieldSchema = plainObject(
   {
     field: captureFieldSchema,
@@ -124,6 +147,7 @@ export const captureResultSchema = plainObject(
       strictOptions,
     ),
     rejectedFields: invalid(z.array(rejectedCaptureFieldSchema)),
+    siteName: optionalField(sourcedSiteNameSchema),
   },
   strictOptions,
 );

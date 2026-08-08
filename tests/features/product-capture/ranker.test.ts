@@ -30,7 +30,11 @@ test("同一priorityのcollector間は入力配列順でなくdocumentOrderを�
 test("同一項目は構造化データ、meta、見出し・パンくず、表・定義リストの順で選ぶ", () => {
   const draft = ranker.select([
     field({ normalizedValue: "table版", rawValue: "table版", source: "table" }),
-    field({ normalizedValue: "meta版", rawValue: "meta版", source: "meta" }),
+    field({
+      normalizedValue: "meta版",
+      rawValue: "meta版",
+      source: "open-graph",
+    }),
     field({
       normalizedValue: "json-ld版",
       rawValue: "json-ld版",
@@ -91,14 +95,30 @@ test("表と定義リストは同順位として扱う", () => {
 
 test("同順位は文書順(配列の並び)で決定する", () => {
   const first = ranker.select([
-    field({ normalizedValue: "1件目", rawValue: "1件目", source: "meta" }),
-    field({ normalizedValue: "2件目", rawValue: "2件目", source: "meta" }),
+    field({
+      normalizedValue: "1件目",
+      rawValue: "1件目",
+      source: "open-graph",
+    }),
+    field({
+      normalizedValue: "2件目",
+      rawValue: "2件目",
+      source: "open-graph",
+    }),
   ]);
   assert.equal(first.fields[0]?.normalizedValue, "1件目");
 
   const reversed = ranker.select([
-    field({ normalizedValue: "2件目", rawValue: "2件目", source: "meta" }),
-    field({ normalizedValue: "1件目", rawValue: "1件目", source: "meta" }),
+    field({
+      normalizedValue: "2件目",
+      rawValue: "2件目",
+      source: "open-graph",
+    }),
+    field({
+      normalizedValue: "1件目",
+      rawValue: "1件目",
+      source: "open-graph",
+    }),
   ]);
   assert.equal(reversed.fields[0]?.normalizedValue, "2件目");
 });
@@ -106,7 +126,7 @@ test("同順位は文書順(配列の並び)で決定する", () => {
 test("候補がない既知項目は欠損項目として識別できる", () => {
   const draft = ranker.select([
     field({ field: "name" }),
-    field({ field: "manufacturer", source: "meta" }),
+    field({ field: "manufacturer", source: "open-graph" }),
   ]);
 
   assert.deepEqual(
@@ -157,7 +177,7 @@ test("異なる項目は互いに影響せず独立して選ばれる", () => {
       field: "manufacturer",
       normalizedValue: "架空メーカー",
       rawValue: "架空メーカー",
-      source: "meta",
+      source: "open-graph",
     }),
   ]);
 
@@ -170,12 +190,16 @@ test("異なる項目は互いに影響せず独立して選ばれる", () => {
 test("複数候補を含む架空ページで採用値と根拠は常に同じになる", () => {
   const candidates = [
     field({ normalizedValue: "table版", rawValue: "table版", source: "table" }),
-    field({ normalizedValue: "meta版", rawValue: "meta版", source: "meta" }),
+    field({
+      normalizedValue: "meta版",
+      rawValue: "meta版",
+      source: "open-graph",
+    }),
     field({
       field: "manufacturer",
       normalizedValue: "架空メーカー",
       rawValue: "架空メーカー",
-      source: "meta",
+      source: "open-graph",
     }),
   ];
 

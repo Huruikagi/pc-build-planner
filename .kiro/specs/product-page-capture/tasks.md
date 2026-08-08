@@ -138,7 +138,7 @@
   - _Requirements: 7.5, 7.6, 8.1, 8.5, 8.6_
   - _Boundary: MetadataPropertyMap_
 
-- [ ] 8.2 metadata familyのsource契約とpayload検証を移行する
+- [x] 8.2 metadata familyのsource契約とpayload検証を移行する
   - 旧generic meta provenanceをOpenGraph、Twitter Card、product拡張へ分割し、site name専用の任意契約を商品fieldから分離する。
   - runtime payloadのclosed source unionを移行し、未列挙sourceとfieldの不正な組み合わせを境界で拒否する。
   - 3 family、任意site name、manufacturer専用domain-mapの有効payloadが通り、不正な組み合わせが`invalid-payload`として観測できるcontract testを完了条件とする。

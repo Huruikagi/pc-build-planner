@@ -285,21 +285,21 @@ const collectProductNode = (
 };
 
 const META_FIELD_SELECTORS: ReadonlyArray<
-  readonly [selector: string, field: CaptureCoreField]
+  readonly [selector: string, field: CaptureCoreField, source: ExtractionSource]
 > = [
-  ['meta[property="og:title"]', "name"],
-  ['meta[name="twitter:title"]', "name"],
-  ['meta[property="product:brand"]', "manufacturer"],
-  ['meta[property="og:url"]', "url"],
-  ['meta[property="product:retailer_item_id"]', "modelNumber"],
+  ['meta[property="og:title"]', "name", "open-graph"],
+  ['meta[name="twitter:title"]', "name", "twitter-card"],
+  ['meta[property="product:brand"]', "manufacturer", "product-meta"],
+  ['meta[property="og:url"]', "url", "open-graph"],
+  ['meta[property="product:retailer_item_id"]', "modelNumber", "product-meta"],
 ];
 
 const collectMeta = (document: Document, sink: CandidateSink): void => {
-  for (const [selector, field] of META_FIELD_SELECTORS) {
+  for (const [selector, field, source] of META_FIELD_SELECTORS) {
     if (isFull(sink)) return;
     const node = document.querySelector(selector);
     const content = node?.getAttribute("content");
-    if (content && node) push(sink, field, content, "meta", selector, node);
+    if (content && node) push(sink, field, content, source, selector, node);
   }
 
   const priceNode = document.querySelector(
@@ -314,7 +314,7 @@ const collectMeta = (document: Document, sink: CandidateSink): void => {
       sink,
       "price",
       priceCurrency ? `${priceAmount} ${priceCurrency}` : priceAmount,
-      "meta",
+      "product-meta",
       'meta[property="product:price:amount"]',
       priceNode ?? undefined,
     );

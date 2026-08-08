@@ -73,7 +73,7 @@ test("解決可能なhttp/https URLだけを採用値にする", () => {
     candidate({
       field: "url",
       rawValue: "https://shop.example.invalid/products/x100",
-      source: "meta",
+      source: "open-graph",
       sourceLabel: "og:url",
     }),
   );

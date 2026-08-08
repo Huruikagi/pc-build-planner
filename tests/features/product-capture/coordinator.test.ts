@@ -267,3 +267,181 @@ test("request・tab・payload形状の不一致をhandoff前にfail closedにす
       assert.ok(["tab-changed", "invalid-payload"].includes(result.error.kind));
   }
 });
+
+test("3 metadata familyのsourceはruntime境界を通過する", () => {
+  for (const source of ["open-graph", "twitter-card", "product-meta"]) {
+    assert.deepEqual(
+      decodeCapturePagePayload({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field: "name",
+            rawValue: "架空GPU",
+            source,
+            sourceLabel: "og:title",
+            documentOrder: 0,
+          },
+        ],
+      })?.candidates[0]?.source,
+      source,
+    );
+  }
+});
+
+test("移行前の総称meta sourceはinvalid-payloadとして拒否される", () => {
+  assert.equal(
+    decodeCapturePagePayload({
+      requestId: REQUEST,
+      tabId: TAB,
+      pageUrl: URL,
+      candidates: [
+        {
+          field: "name",
+          rawValue: "架空GPU",
+          source: "meta",
+          sourceLabel: "og:title",
+          documentOrder: 0,
+        },
+      ],
+    }),
+    undefined,
+  );
+});
+
+test("任意site nameはOpenGraph provenanceと元表記を保って境界を通過する", () => {
+  const decoded = decodeCapturePagePayload({
+    requestId: REQUEST,
+    tabId: TAB,
+    pageUrl: URL,
+    candidates: [],
+    siteName: {
+      rawValue: "  架空ショップ  ",
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+      documentOrder: 3,
+    },
+  });
+
+  assert.deepEqual(decoded?.siteName, {
+    rawValue: "  架空ショップ  ",
+    source: "open-graph",
+    sourceLabel: "og:site_name",
+    documentOrder: 3,
+  });
+});
+
+test("site nameの欠損は商品候補の受理を妨げない", () => {
+  const decoded = decodeCapturePagePayload({
+    requestId: REQUEST,
+    tabId: TAB,
+    pageUrl: URL,
+    candidates: [
+      {
+        field: "name",
+        rawValue: "架空GPU",
+        source: "open-graph",
+        sourceLabel: "og:title",
+        documentOrder: 0,
+      },
+    ],
+  });
+
+  assert.equal(decoded?.candidates.length, 1);
+  assert.equal(decoded?.siteName, undefined);
+});
+
+test("site name channelはOpenGraph以外のsourceとlabelの組み合わせを拒否する", () => {
+  const invalidSiteNames: readonly unknown[] = [
+    {
+      rawValue: "架空ショップ",
+      source: "twitter-card",
+      sourceLabel: "og:site_name",
+      documentOrder: 0,
+    },
+    {
+      rawValue: "架空ショップ",
+      source: "open-graph",
+      sourceLabel: "og:title",
+      documentOrder: 0,
+    },
+    {
+      rawValue: "架空ショップ",
+      source: "domain-map",
+      sourceLabel: "og:site_name",
+      documentOrder: 0,
+    },
+    { rawValue: 42, source: "open-graph", sourceLabel: "og:site_name" },
+    { source: "open-graph", sourceLabel: "og:site_name", documentOrder: 0 },
+    {
+      rawValue: "架空ショップ",
+      source: "open-graph",
+      sourceLabel: "og:site_name",
+      documentOrder: -1,
+    },
+    "架空ショップ",
+    null,
+  ];
+
+  for (const siteName of invalidSiteNames) {
+    assert.equal(
+      decodeCapturePagePayload({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [],
+        siteName,
+      }),
+      undefined,
+    );
+  }
+});
+
+test("domain-mapはmanufacturer以外のfieldとの組み合わせを拒否する", () => {
+  for (const field of ["name", "price", "url"]) {
+    assert.equal(
+      decodeCapturePagePayload({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field,
+            rawValue: "架空メーカー",
+            source: "domain-map",
+            sourceLabel: "maker.example",
+            documentOrder: 0,
+          },
+        ],
+      }),
+      undefined,
+    );
+  }
+});
+
+test("未列挙sourceのpayloadはinvalid-payloadとして観測できる", async () => {
+  const result = await make({
+    async getTab() {
+      return ok(target);
+    },
+    async inject() {
+      return ok({
+        requestId: REQUEST,
+        tabId: TAB,
+        pageUrl: URL,
+        candidates: [
+          {
+            field: "name",
+            rawValue: "架空GPU",
+            source: "meta",
+            sourceLabel: "og:title",
+            documentOrder: 0,
+          },
+        ],
+      });
+    },
+  }).captureTab(TAB);
+
+  assert.deepEqual(result, { ok: false, error: { kind: "invalid-payload" } });
+});
