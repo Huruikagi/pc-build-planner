@@ -5,3 +5,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # React refuses to boot when `react` and `react-dom` differ at all, so a
+      # split update lands a build that crashes on load. Keeping the runtime
+      # pair (and its type packages) in one pull request makes the versions
+      # move together.
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
