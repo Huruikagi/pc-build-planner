@@ -131,7 +131,7 @@
 
 - [ ] 8. metadataの明示的な採用境界と取得元表示名を確立する
 
-- [ ] 8.1 metadata propertyと取得先のclosed mappingを確定する
+- [x] 8.1 metadata propertyと取得先のclosed mappingを確定する
   - OpenGraph、Twitter Card、product拡張を別familyとして扱い、明示propertyだけを商品項目または任意site nameへ一意に対応付ける。
   - namespace prefixやsuffix、未知propertyの推測採用を拒否し、site nameを必須商品fieldや欠損集合へ混入させない。
   - 全対応組と代表的な未列挙propertyがsynthetic contract testで観測できることを完了条件とする。
