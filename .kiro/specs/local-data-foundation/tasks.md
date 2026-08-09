@@ -415,7 +415,7 @@
   - _Boundary: RuntimeContributionFactory, FoundationScopedDataPort, BackupRestoreDataPort_
 
 - [ ] 9. 架空データによる回復回帰と最終gateを完成する
-- [ ] 9.1 異常root・回復control・候補評価の決定的回帰を追加する
+- [x] 9.1 異常root・回復control・候補評価の決定的回帰を追加する
   - 架空の破損rootと将来version rootだけで分類、fingerprint、候補不正・未対応・容量超過、二重診断を検証する
   - control遷移、stale generation・owner・lease、worker再生成、raw非露出と評価時非変更を検証する
   - unit・contract suiteが実サイト由来assetなしで全拒否理由を安定して再現できることを完了条件とする
@@ -423,7 +423,7 @@
   - _Requirements: 7.9, 7.10, 7.11, 7.12, 7.13, 8.1, 8.2, 8.3_
   - _Boundary: Recovery Validation_
 
-- [ ] 9.2 回復transactionと公開runtime境界の統合回帰を追加する
+- [x] 9.2 回復transactionと公開runtime境界の統合回帰を追加する
   - 各stale cursor、並行writer、worker再生成、root write失敗、中断後active controlを公開port経由で検証する
   - control取得後かつroot write前のcleanup失敗から同じassessment ticketで再開し、cleanup中のroot write 0件、別ticket拒否、cleanup後の再assessmentを検証する
   - root write後のcleanup失敗を新しいconsumerがopaque ticketとして再発見し、finalize-only retryが追加root write 0件で完了することとticketからwrite capabilityへ到達できないことを検証する
@@ -433,7 +433,7 @@
   - _Requirements: 1.3, 3.3, 3.5, 3.8, 6.1, 6.3, 7.12, 7.13, 7.14, 7.15, 7.17, 8.1, 8.2_
   - _Boundary: Recovery Transaction and Runtime Contract Validation_
 
-- [ ] 9.3 schema正規値・回復境界・生成物の最終gateを統合する
+- [x] 9.3 schema正規値・回復境界・生成物の最終gateを統合する
   - schema正規値の重複、root外設定の混入、raw root・回復control・旧完全portの公開、Storage・lock迂回をsourceとartifactで拒否する
   - fixture資産、MV3権限、CSP、remote code、動的評価、inline JavaScriptの既存検査を維持する
   - typecheck、Biome、全test、build、boundary・fixture・artifact scanが共通検証commandで連続成功することを完了条件とする

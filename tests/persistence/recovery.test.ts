@@ -24,8 +24,8 @@ import {
   createWriteAuthority,
 } from "../../src/persistence/write-authority.js";
 
-const coordinatorFor = (raw: unknown) => {
-  const state = createInMemoryStorageState({ quotaBytes: 100_000 });
+const coordinatorFor = (raw: unknown, quotaBytes = 100_000) => {
+  const state = createInMemoryStorageState({ quotaBytes });
   state.entries.set("localDataRoot", raw);
   const storage = createInMemoryStorageAdapter(state);
   const migrations = createMigrationRegistry(1, [], schemaValidator);
@@ -73,6 +73,32 @@ test("未対応schemaはversionだけを安全に分類し、候補不正はcurr
   assert.equal(result.error.current.version, 99);
   assert.notEqual(result.error.candidate.code, "unsupported-version");
 });
+
+for (const rejection of [
+  {
+    name: "候補の未対応schema",
+    candidate: { ...validCandidate, schemaVersion: 99 },
+    coordinator: () => coordinatorFor({ schemaVersion: 1, revision: "broken" }),
+    expected: "unsupported-version",
+  },
+  {
+    name: "候補の容量超過",
+    candidate: validCandidate,
+    coordinator: () =>
+      coordinatorFor({ schemaVersion: 1, revision: "broken" }, 1),
+    expected: "quota-exceeded",
+  },
+] as const) {
+  test(`${rejection.name}はcurrent anomalyと分離して拒否しraw rootを変更しない`, async () => {
+    const coordinator = rejection.coordinator();
+    const result = await coordinator.assessRecovery(rejection.candidate);
+    assert.equal(result.ok, false);
+    if (result.ok || result.error.code !== "recovery-candidate-rejected")
+      return;
+    assert.equal(result.error.current.code, "corrupt-data");
+    assert.equal(result.error.candidate.code, rejection.expected);
+  });
+}
 
 test("評価済み回復候補はcontrol fenceとraw fingerprintを再照合して一回だけrootを置換する", async () => {
   const state = createInMemoryStorageState({ quotaBytes: 100_000 });

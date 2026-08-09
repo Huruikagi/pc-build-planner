@@ -5,13 +5,20 @@ import type { FoundationError } from "../../src/domain/result.js";
 import { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "../../src/persistence/runtime-contribution.js";
 import { createInitialRoot } from "../../src/persistence/schema.js";
 
-const platform = (options: { restrictFails?: boolean } = {}) => {
+const platform = (
+  options: {
+    readonly restrictFails?: boolean;
+    readonly root?: unknown;
+    readonly failRootWrite?: boolean;
+  } = {},
+) => {
   let restrictions = 0;
   let handlers = 0;
   let removedListeners = 0;
   let removedHandlers = 0;
-  let storedRoot: unknown = createInitialRoot();
+  let storedRoot: unknown = options.root ?? createInitialRoot();
   let storedRecoveryControl: unknown;
+  let rootWrites = 0;
   return {
     counters: {
       get restrictions() {
@@ -26,6 +33,12 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
       get removedHandlers() {
         return removedHandlers;
       },
+      get rootWrites() {
+        return rootWrites;
+      },
+      get storedRoot() {
+        return structuredClone(storedRoot);
+      },
     },
     value: {
       storageLocal: {
@@ -39,7 +52,12 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
           };
         },
         async set(items: Record<string, unknown>) {
-          if ("localDataRoot" in items) storedRoot = items.localDataRoot;
+          if ("localDataRoot" in items) {
+            rootWrites += 1;
+            if (options.failRootWrite)
+              throw new Error("synthetic root failure");
+            storedRoot = items.localDataRoot;
+          }
           if ("foundationRecoveryControl" in items)
             storedRecoveryControl = items.foundationRecoveryControl;
         },
@@ -164,6 +182,36 @@ test("backup専用portでの置換は絞り込みportのqueryへ同じrevision�
   assert.equal(after.ok, true);
   if (before.ok && after.ok) assert.equal(after.value, before.value + 1);
 
+  await initialized.value.dispose();
+});
+
+test("production graphは異常rootをbackup専用portでだけ回復し、write失敗時は旧rootを保持する", async () => {
+  const corruptRoot = { schemaVersion: 1, revision: "broken" };
+  const failed = platform({ root: corruptRoot, failRootWrite: true });
+  const initialized = await initializeFoundationRuntimeContribution(
+    failed.value,
+  );
+  assert.equal(initialized.ok, true);
+  if (!initialized.ok) return;
+
+  const assessed = await initialized.value.backupRestoreDataPort.assessRecovery(
+    createInitialRoot(),
+  );
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  const committed = await initialized.value.backupRestoreDataPort.commit({
+    candidate: createInitialRoot(),
+    assessment: assessed.value.ticket,
+    expectedMode: "recovery",
+  });
+  assert.deepEqual(committed, {
+    ok: false,
+    error: { code: "storage-unavailable" },
+  });
+  assert.equal(failed.counters.rootWrites, 1);
+  assert.deepEqual(failed.counters.storedRoot, corruptRoot);
+  assert.equal("assessRecovery" in initialized.value.dataPort, false);
+  assert.equal("query" in initialized.value.backupRestoreDataPort, false);
   await initialized.value.dispose();
 });
 
