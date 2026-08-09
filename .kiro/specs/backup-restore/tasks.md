@@ -1,14 +1,14 @@
 # Implementation Plan
 
 - [ ] 1. 上流公開契約とruntime prerequisiteを固定する
-- [ ] 1.1 configured runtime schemaの同等性gateを追加する
+- [x] 1.1 configured runtime schemaの同等性gateを追加する
   - canonical configured Zod Mini入口、strict plain object、JSON safety、owner error/path変換だけを利用できる状態を確認する
   - 交換形式の既存valid/invalid結果、error code、canonical pathが移行前後で一致し、Zod issueや入力値が公開されないことをcontract testで固定する
   - featureからのZod直接import、他feature schemaのdeep import、unknown-key strippingを公開境界gateが拒否すれば完了とする
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 6.5_
   - _Boundary: ExchangeValidator runtime prerequisite_
 
-- [ ] 1.2 (P) Foundationのbackup専用公開契約をconsumer側で固定する
+- [x] 1.2 (P) Foundationのbackup専用公開契約をconsumer側で固定する
   - 上流ownerが提供するassessment結果からmode、必要bytes、current anomaly、opaque ticketだけを利用し、revision、fingerprint、digest、fence、通常CRUDへ到達しないconsumer fixtureを追加する
   - commit commandがcandidate、expected mode、assessment ticketを必須とし、commit point付き結果とfinalize-only ticketを判別できる契約を固定する
   - control取得後かつroot write前のcleanup失敗が同じassessment ticketだけで冪等再開でき、別ticketでは再開できないことを検証する
@@ -16,14 +16,14 @@
   - _Requirements: 3.4, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7_
   - _Boundary: BackupRestoreDataPort consumer contract_
 
-- [ ] 1.3 (P) project-contextの置換guardとrefresh契約をconsumer側で固定する
+- [x] 1.3 (P) project-contextの置換guardとrefresh契約をconsumer側で固定する
   - 上流ownerが提供するreplacement preparation、confirmation、permit begin/completeと、ready/empty/unavailableを返すrefreshだけを利用するconsumer fixtureを追加する
   - guard registry、draft内容、preference、selection fallbackへのdeep importが公開境界gateで拒否されることを確認する
   - context unavailableでもprepareでき、stale confirmation/permitを型付き結果として扱える契約testが成功すれば完了とする
   - _Requirements: 4.7, 4.8, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: ProjectContext public port consumer contract_
 
-- [ ] 1.4 (P) application-shellのrecovery prerequisiteをconsumer側で固定する
+- [x] 1.4 (P) application-shellのrecovery prerequisiteをconsumer側で固定する
   - 上流ownerが提供するcanonical operation分類、recovery-required projection、operation policy購読契約をcompile/runtime fixtureで検証する
   - corrupt-dataとunsupported-versionだけがsettingsをmount可能なdegraded stateとなり、通常mutationはfail closed、readとrecoveryだけが許可されることを確認する
   - 正常snapshot通知で通常projectionへ復帰し、本specからshell compositionを変更せずにconsumer contract gateが成功すれば完了とする

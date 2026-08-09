@@ -606,6 +606,18 @@ test("backup-restoreの公開面はsettings埋め込みsectionだけに限定す
   );
 });
 
+test("backup-restore prerequisite consumer は公開API consumer型検査へ登録される", async () => {
+  const config = JSON.parse(
+    await readFile("tsconfig.public-consumer.json", "utf8"),
+  ) as { include?: unknown };
+
+  assert.ok(Array.isArray(config.include));
+  assert.ok(
+    config.include.includes("tests/tooling/backup-restore-prerequisites.ts"),
+    "backup-restore prerequisite consumer must be typechecked as an external consumer",
+  );
+});
+
 test("source catalog公開consumerは公開facetだけを利用する", () => {
   const forbiddenSources = [
     {
