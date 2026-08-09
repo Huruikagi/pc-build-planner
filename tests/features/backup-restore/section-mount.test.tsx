@@ -96,9 +96,8 @@ test("回復操作だけが許可される状態ではexportを無効にしてre
   const exportButton = container.querySelector<HTMLButtonElement>(
     'button[data-action="export"]',
   );
-  const restoreInput = container.querySelector<HTMLInputElement>(
-    'input[type="file"]',
-  );
+  const restoreInput =
+    container.querySelector<HTMLInputElement>('input[type="file"]');
   assert.ok(exportButton);
   assert.ok(restoreInput);
   assert.equal(exportButton.disabled, true);

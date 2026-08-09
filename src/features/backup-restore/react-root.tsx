@@ -25,13 +25,13 @@ const PolicyAwareBackupRestoreView = ({
   const allowedMask = useSyncExternalStore(
     (listener) => operationPolicy?.subscribe(listener) ?? (() => {}),
     () =>
-      (operationPolicy?.isAllowed(backupExportOperation) ?? true ? 2 : 0) +
-      (operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true
+      ((operationPolicy?.isAllowed(backupExportOperation) ?? true) ? 2 : 0) +
+      ((operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true)
         ? 1
         : 0),
     () =>
-      (operationPolicy?.isAllowed(backupExportOperation) ?? true ? 2 : 0) +
-      (operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true
+      ((operationPolicy?.isAllowed(backupExportOperation) ?? true) ? 2 : 0) +
+      ((operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true)
         ? 1
         : 0),
   );

@@ -271,10 +271,7 @@ test("破損した初期rootは回復必須としてsettingsを維持し、正�
   });
   assert.equal(integration.operationPolicy.isAllowed("mutation"), false);
   assert.equal(integration.operationPolicy.isAllowed("recovery"), true);
-  assert.equal(
-    (await integration.select(featureId("projects"))).ok,
-    false,
-  );
+  assert.equal((await integration.select(featureId("projects"))).ok, false);
 
   for (const listener of listeners) listener(snapshot(1, 1, false));
   assert.deepEqual(states.at(-1), {

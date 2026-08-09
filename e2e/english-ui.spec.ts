@@ -28,8 +28,8 @@ const en = expectedTextFor("en");
 
 /**
  * One representative, unconditionally-rendered piece of visible text per
- * feature screen, so this check doesn't depend on any pre-existing project
- * or candidate data.
+ * currently available feature screen. Compatibility is deliberately excluded:
+ * without a selected project it remains navigable but unavailable.
  */
 const FEATURE_CHECKS = [
   {
@@ -37,11 +37,10 @@ const FEATURE_CHECKS = [
     key: "candidate.createProjectAction",
   },
   { featureId: "currentBuild", key: "category.storage" },
-  { featureId: "compatibility", key: "compatibility.idle" },
   { featureId: "settings", key: "backup.noticeUninstall" },
 ] as const;
 
-test("英語へ切り替えると4つの常設機能画面すべてで英語カタログの解決値が表示される", async ({
+test("英語へ切り替えると利用可能な常設機能画面で英語カタログの解決値が表示される", async ({
   context,
 }) => {
   const id = await extensionId(context);

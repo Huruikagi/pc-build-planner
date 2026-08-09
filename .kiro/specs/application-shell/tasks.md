@@ -373,7 +373,7 @@
   - _Boundary: ApplicationComposition, FeatureCompositionContext, RootPublicApi_
 
 - [ ] 11. Project contextと回復flowの横断回帰を完成する
-- [ ] 11.1 Contract・DOM・runtime flowを統合検証する
+- [x] 11.1 Contract・DOM・runtime flowを統合検証する
   - current projectのready、empty、unavailableとrecovery-required、maintenance、settings fallbackを同じproduction-shaped scenarioで検証する
   - selector操作、依存feature availability、回復操作分類、正常snapshot後の再評価、全resource cleanupの順序を決定的に観測する
   - 外部由来文字列を安全なtextとして表示し、feature障害時もproject非依存の操作を維持する
@@ -382,7 +382,7 @@
   - _Requirements: 3.8, 3.9, 4.4, 5.8, 5.9, 5.10, 6.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5_
   - _Boundary: ContractTestKit, ShellIntegration_
 
-- [ ] 11.2 公開consumer・worker・artifact境界を検証する
+- [x] 11.2 公開consumer・worker・artifact境界を検証する
   - project-contextの能力別portと回復操作分類が公開入口だけから到達でき、内部実装へのdeep importを拒否する
   - worker bundleへproject selector、DOM、React、feature UI依存を混入させず、side panel専用graphとの分離を維持する
   - remote code、動的評価、inline JavaScript、危険なHTML描画APIを生成物へ含めない
@@ -391,7 +391,7 @@
   - _Requirements: 3.6, 3.8, 3.9, 4.4, 6.3, 6.4, 9.5, 10.5_
   - _Boundary: PublicConsumerContracts, ApplicationShellArtifactValidation_
 
-- [ ] 11.3 Chrome side panelで共通project表示と回復到達を検証する
+- [x] 11.3 Chrome side panelで共通project表示と回復到達を検証する
   - Chrome 116以降相当のproduction buildで共通selector、project切替、project依存featureの状態更新を表示文言に依存せず確認する
   - 回復必須状態からsettingsのbackup回復面へ到達でき、失敗または取消後も通常mutationが抑止されることを確認する
   - project-context利用不能時もsettingsとbackup回復面が利用でき、別projectが暗黙選択されないことを確認する
@@ -401,6 +401,8 @@
   - _Boundary: ApplicationShellE2E, ApplicationShellArtifactValidation_
 
 ## Implementation Notes
+
+- 2026-08-09 application-shell 11.1–11.3: production-shaped contract/DOM/runtime suite、公開consumer・worker/artifact gate、Chrome side-panel E2Eを再実行した。project未選択時はcompatibilityを利用不能として正しく扱うため、英語UI E2Eは利用可能な常設featureだけの画面内容を検証し、常設navigation全件の存在は別途維持した。`pnpm test` 1,659 pass、`pnpm test:e2e` 27 pass / 1 native-menu skip。
 
 - 2026-08-09 application-shell 10.1–10.3: project selector専用slotとsingleton adapterをproduction compositionへ接続し、同一snapshotを能力別read portと依存feature availabilityへ配送した。selector mount失敗とproject-context初期化失敗はshell全体へ昇格せず、依存featureだけをfail closedにする。生成物のdummy maintenance検出はbundle全体を跨ぐ誤一致を防ぐため局所範囲へ制限した。
 
