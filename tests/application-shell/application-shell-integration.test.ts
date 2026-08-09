@@ -224,6 +224,67 @@ test("初期snapshot失敗はfeatureをmountせずstartup failureへ変換する
   });
 });
 
+test("破損した初期rootは回復必須としてsettingsを維持し、正常snapshotで再起動せず復帰する", async () => {
+  const registry = createFeatureRegistry();
+  const mounted: string[] = [];
+  for (const [order, id] of ["projects", "settings"].entries()) {
+    assert.equal(
+      registry.register({
+        id: featureId(id),
+        presentation: "persistent",
+        navigation: { labelKey: labelKey(id), order },
+        publicApi: {},
+        getAvailability: () => ({ status: "available" }),
+        subscribeAvailability: () => () => {},
+        async mount() {
+          mounted.push(id);
+          return { async unmount() {} };
+        },
+      }).ok,
+      true,
+    );
+  }
+  const listeners = new Set<(value: MaintenanceSnapshot) => void>();
+  const states: ShellViewState[] = [];
+  const integration = createApplicationShellIntegration({
+    registry,
+    container: document.createElement("div"),
+    maintenanceSource: {
+      async getSnapshot() {
+        return { ok: false, error: { code: "corrupt-data" } };
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+    onStateChange: (state) => states.push(state),
+    reportError() {},
+  });
+
+  assert.equal((await integration.start()).ok, true);
+  assert.deepEqual(mounted, ["settings"]);
+  assert.deepEqual(states.at(-1), {
+    kind: "recovery-required",
+    selected: featureId("settings"),
+    message: { key: "shell.recoveryRequired" },
+  });
+  assert.equal(integration.operationPolicy.isAllowed("mutation"), false);
+  assert.equal(integration.operationPolicy.isAllowed("recovery"), true);
+  assert.equal(
+    (await integration.select(featureId("projects"))).ok,
+    false,
+  );
+
+  for (const listener of listeners) listener(snapshot(1, 1, false));
+  assert.deepEqual(states.at(-1), {
+    kind: "ready",
+    selected: featureId("settings"),
+  });
+  assert.equal(integration.operationPolicy.isAllowed("mutation"), true);
+  await integration.stop();
+});
+
 test("stopはsourceとhostをbest-effortかつ冪等にcleanupする", async () => {
   const { fixture, integration } = setup(snapshot(1, 1, false));
   await integration.start();

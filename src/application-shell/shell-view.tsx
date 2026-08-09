@@ -96,6 +96,7 @@ function selectedFeature(state: ShellViewState): FeatureId | null {
   switch (state.kind) {
     case "ready":
     case "maintenance":
+    case "recovery-required":
       return state.selected;
     case "loading":
     case "error":
@@ -107,6 +108,7 @@ function canNavigate(state: ShellViewState): boolean {
   return (
     state.kind === "ready" ||
     state.kind === "maintenance" ||
+    state.kind === "recovery-required" ||
     (state.kind === "error" && state.message.key !== "shell.startupFailed")
   );
 }
@@ -168,7 +170,19 @@ export function ShellView({
             <p>{messages.resolveDescriptor(state.message)}</p>
           </aside>
         ) : null}
-        {(state.kind === "ready" || state.kind === "maintenance") &&
+        {state.kind === "recovery-required" ? (
+          <aside
+            aria-live="polite"
+            className="shell-status shell-status--maintenance"
+            data-region="recovery-required"
+          >
+            <h2>{messages("shell.maintenanceHeading")}</h2>
+            <p>{messages.resolveDescriptor(state.message)}</p>
+          </aside>
+        ) : null}
+        {(state.kind === "ready" ||
+          state.kind === "maintenance" ||
+          state.kind === "recovery-required") &&
         state.selected === null ? (
           <section className="shell-status shell-status--empty">
             <h2>{messages("shell.emptyHeading")}</h2>

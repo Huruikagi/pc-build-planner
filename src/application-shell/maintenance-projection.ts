@@ -7,12 +7,14 @@ import type {
 } from "./contracts.js";
 
 export const MAINTENANCE_ACTIVE_MESSAGE = message("shell.maintenanceActive");
+export const RECOVERY_REQUIRED_MESSAGE = message("shell.recoveryRequired");
 
 const INVALID_CURSOR_MESSAGE =
   "maintenance cursor must contain non-negative finite integers";
 
 export function createMaintenanceProjection(): MaintenanceProjection {
   let current = inactiveState({ generation: 0, revision: 0 });
+  let currentCursor: MaintenanceCursor = { generation: 0, revision: 0 };
   // 起動直後の初期cursorは「未受信」を表す暫定値であり、Foundationの実cursorと
   // 比較可能な観測値ではない。最初の受理だけは比較せず必ず適用しないと、
   // 空ストレージ起動時の実snapshot（generation 0 / revision 0）が
@@ -27,16 +29,25 @@ export function createMaintenanceProjection(): MaintenanceProjection {
         generation: next.generation,
         revision: next.revision,
       };
-      if (seeded && compareCursor(nextCursor, current.cursor) <= 0) {
+      if (seeded && compareCursor(nextCursor, currentCursor) <= 0) {
         return "stale_ignored";
       }
       seeded = true;
+      currentCursor = frozenCursor(nextCursor);
 
       current = next.active
         ? activeState(nextCursor)
         : inactiveState(nextCursor);
       notify(listeners, current);
       return "applied";
+    },
+
+    requireRecovery(reason) {
+      // Recovery has no trustworthy maintenance cursor. A later valid snapshot
+      // seeds the normal projection without comparing against an invented value.
+      seeded = false;
+      current = recoveryRequiredState(reason);
+      notify(listeners, current);
     },
 
     getSnapshot() {
@@ -86,6 +97,16 @@ function activeState(cursor: MaintenanceCursor): ShellMaintenanceState {
     status: "active",
     cursor: frozenCursor(cursor),
     message: MAINTENANCE_ACTIVE_MESSAGE,
+  });
+}
+
+function recoveryRequiredState(
+  reason: "corrupt-data" | "unsupported-version",
+): ShellMaintenanceState {
+  return Object.freeze({
+    status: "recovery-required" as const,
+    reason,
+    message: RECOVERY_REQUIRED_MESSAGE,
   });
 }
 

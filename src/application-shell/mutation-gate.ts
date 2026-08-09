@@ -7,18 +7,24 @@ import type {
 export function createMutationGate(
   maintenance: MaintenancePresentationPort,
 ): MutationGate {
-  const isAllowed = (kind: OperationKind): boolean =>
-    kind === "read" || maintenance.getSnapshot().status !== "active";
+  const isAllowed = (kind: OperationKind): boolean => {
+    const state = maintenance.getSnapshot();
+    if (kind === "read") return true;
+    if (kind === "mutation") return state.status === "inactive";
+    return kind === "recovery" && state.status !== "active";
+  };
 
   const listeners = new Set<() => void>();
   let unsubscribeMaintenance: (() => void) | undefined;
-  let lastMutationAllowed = isAllowed("mutation");
+  const allowedMask = (): number =>
+    (isAllowed("mutation") ? 2 : 0) + (isAllowed("recovery") ? 1 : 0);
+  let lastAllowedMask = allowedMask();
 
   /** Only an actual change of the allowed set reaches subscribers. */
   const onMaintenanceChange = (): void => {
-    const next = isAllowed("mutation");
-    if (next === lastMutationAllowed) return;
-    lastMutationAllowed = next;
+    const next = allowedMask();
+    if (next === lastAllowedMask) return;
+    lastAllowedMask = next;
     for (const listener of [...listeners]) {
       try {
         listener();
@@ -33,7 +39,7 @@ export function createMutationGate(
 
     subscribe(listener: () => void): () => void {
       if (listeners.size === 0) {
-        lastMutationAllowed = isAllowed("mutation");
+        lastAllowedMask = allowedMask();
         unsubscribeMaintenance = maintenance.subscribe(onMaintenanceChange);
       }
       listeners.add(listener);

@@ -4,7 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 
 import type { OperationPolicy } from "../../application-shell/public.js";
 import { LanguageProvider } from "../../ui-language/public.js";
-import { backupRestoreMutationOperation } from "./operation-kind.js";
+import {
+  backupExportOperation,
+  backupRestoreRecoveryOperation,
+} from "./operation-kind.js";
 import type { BackupRestoreState } from "./state.js";
 import { BackupRestoreView } from "./view.js";
 
@@ -19,12 +22,26 @@ const PolicyAwareBackupRestoreView = ({
   readonly state: BackupRestoreState;
   readonly operationPolicy?: OperationPolicy;
 }) => {
-  const mutationAllowed = useSyncExternalStore(
+  const allowedMask = useSyncExternalStore(
     (listener) => operationPolicy?.subscribe(listener) ?? (() => {}),
-    () => operationPolicy?.isAllowed(backupRestoreMutationOperation) ?? true,
-    () => operationPolicy?.isAllowed(backupRestoreMutationOperation) ?? true,
+    () =>
+      (operationPolicy?.isAllowed(backupExportOperation) ?? true ? 2 : 0) +
+      (operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true
+        ? 1
+        : 0),
+    () =>
+      (operationPolicy?.isAllowed(backupExportOperation) ?? true ? 2 : 0) +
+      (operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true
+        ? 1
+        : 0),
   );
-  return createElement(BackupRestoreView, { state, mutationAllowed });
+  const exportAllowed = (allowedMask & 2) !== 0;
+  const restoreAllowed = (allowedMask & 1) !== 0;
+  return createElement(BackupRestoreView, {
+    state,
+    exportAllowed,
+    restoreAllowed,
+  });
 };
 
 /** Connects feature-owned state to a React root and owns only that root's cleanup. */

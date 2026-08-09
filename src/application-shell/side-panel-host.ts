@@ -20,6 +20,10 @@ export interface SidePanelHostOptions {
   readonly registry: FeatureRegistry;
   readonly container: HTMLElement;
   readonly operationPolicy: OperationPolicy;
+  /** Evaluated at start so composition can select the safe recovery surface. */
+  readonly getInitialFeatureId?: () => FeatureId | undefined;
+  /** Composition may temporarily limit the safe persistent surfaces. */
+  readonly canSelect?: (feature: ApplicationFeatureRegistration) => boolean;
   readonly onStateChange: (state: ShellViewState) => void;
   readonly reportError: (message: string) => void;
 }
@@ -67,6 +71,7 @@ export function createSidePanelHost(
         (feature) =>
           isPersistent(feature) &&
           feature.id !== excluded &&
+          (options.canSelect?.(feature) ?? true) &&
           feature.getAvailability().status === "available",
       );
 
@@ -128,6 +133,15 @@ export function createSidePanelHost(
       return err({
         kind: "unavailable",
         message: message("shell.featureNotRegistered", { featureId: id }),
+      });
+    }
+    if (!(options.canSelect?.(feature) ?? true)) {
+      return err({
+        kind: "unavailable",
+        message: message("shell.featureUnavailable", {
+          featureId: id,
+          reason: "recovery-required",
+        }),
       });
     }
     const availability = feature.getAvailability();
@@ -592,7 +606,15 @@ export function createSidePanelHost(
           reportDiagnostic("availability-reconciliation-failed");
         });
       });
-      const initial = firstAvailable();
+      const preferredId = options.getInitialFeatureId?.();
+      const preferred =
+        preferredId === undefined ? undefined : find(preferredId);
+      const initial =
+        preferred !== undefined &&
+        isPersistent(preferred) &&
+        preferred.getAvailability().status === "available"
+          ? preferred
+          : firstAvailable();
       if (initial === undefined) {
         publish({ kind: "ready", selected: null });
         return ok(undefined);

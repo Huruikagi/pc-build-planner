@@ -1,4 +1,5 @@
 import type { OperationKind } from "../../application-shell/public.js";
 
-export const backupRestoreMutationOperation =
-  "mutation" satisfies OperationKind;
+export const backupExportOperation = "mutation" satisfies OperationKind;
+export const backupRestoreRecoveryOperation =
+  "recovery" satisfies OperationKind;

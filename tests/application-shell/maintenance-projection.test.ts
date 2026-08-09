@@ -50,6 +50,22 @@ test("初期snapshotがactiveならcursorが初期値と同一でも維持状態
   assert.equal(projection.getSnapshot().status, "active");
 });
 
+test("回復必須状態はcursorを作らず、最初の正常snapshotでだけ解除する", () => {
+  const projection = createMaintenanceProjection();
+
+  projection.requireRecovery("corrupt-data");
+  assert.deepEqual(projection.getSnapshot(), {
+    status: "recovery-required",
+    reason: "corrupt-data",
+    message: { key: "shell.recoveryRequired" },
+  });
+  assert.equal(projection.accept(snapshot(0, 0, false)), "applied");
+  assert.deepEqual(projection.getSnapshot(), {
+    status: "inactive",
+    cursor: { generation: 0, revision: 0 },
+  });
+});
+
 test("古い世代、古いrevision、同一cursorの重複を無視して後退しない", () => {
   const projection = createMaintenanceProjection();
   projection.accept(snapshot(2, 8, false));
@@ -68,7 +84,9 @@ test("世代前進はrevisionが小さくても適用する", () => {
   projection.accept(snapshot(4, 20, false));
 
   assert.equal(projection.accept(snapshot(5, 1, true)), "applied");
-  assert.deepEqual(projection.getSnapshot().cursor, {
+  const current = projection.getSnapshot();
+  assert.equal(current.status, "active");
+  assert.deepEqual(current.cursor, {
     generation: 5,
     revision: 1,
   });
@@ -102,7 +120,9 @@ test("購読者例外を隔離し解除を冪等にする", () => {
     throw new Error("external callback detail");
   });
   const unsubscribe = projection.subscribe((state) =>
-    received.push(`${state.status}:${state.cursor.generation}`),
+    received.push(
+      `${state.status}:${state.status === "recovery-required" ? "none" : state.cursor.generation}`,
+    ),
   );
 
   projection.accept(snapshot(1, 1, true));

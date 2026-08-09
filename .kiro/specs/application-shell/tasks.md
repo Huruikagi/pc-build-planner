@@ -307,8 +307,8 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4_
   - _Boundary: ContractTestKit, RuntimeAdapters, ShellIntegration_
 
-- [ ] 9. 回復必須状態と操作分類をshellへ統合する
-- [ ] 9.1 閲覧・通常mutation・回復操作の閉じた分類を実装する
+- [x] 9. 回復必須状態と操作分類をshellへ統合する
+- [x] 9.1 閲覧・通常mutation・回復操作の閉じた分類を実装する
   - 操作登録で受理する分類を閲覧、通常mutation、回復操作に限定し、未知分類を安全に拒否する
   - 通常時、maintenance中、回復必須状態ごとの許可集合を一貫して判定し、domain側の最終的なwrite拒否を代替しない
   - 回復操作の失敗または取消では通常mutationを再許可せず、上流から正常状態を受信するまで抑止を維持する
@@ -316,7 +316,7 @@
   - _Requirements: 5.8, 5.9, 5.10, 10.4, 10.5_
   - _Boundary: MutationGate, CoreContracts_
 
-- [ ] 9.2 回復必須snapshot projectionと正常復帰を実装する
+- [x] 9.2 回復必須snapshot projectionと正常復帰を実装する
   - 保存rootの破損または未対応versionだけを通常の起動失敗と区別し、回復必須状態として安全な共通表示へ投影する
   - 上流の正常snapshotを受信したときだけ最新の操作可否を再評価し、cursorを捏造せず通常projectionへ復帰する
   - stale通知で回復必須状態や復帰後の通常状態を後退させず、購読停止時にresourceを冪等に解放する
@@ -326,7 +326,7 @@
   - _Requirements: 3.3, 5.8, 5.9, 5.10, 10.1, 10.3, 10.4, 10.5_
   - _Boundary: MaintenanceProjection_
 
-- [ ] 9.3 回復必須表示とsettings到達をhost lifecycleへ統合する
+- [x] 9.3 回復必須表示とsettings到達をhost lifecycleへ統合する
   - 回復必須状態ではsettingsを初期選択またはfallbackとして表示し、backup回復操作面への到達とread-only navigationを維持する
   - 正常projectionへの復帰時に最新のfeature availabilityを再評価し、shellを再起動せず通常表示へ戻す
   - 回復操作の失敗または取消では回復必須表示と通常mutation抑止を維持し、他の起動失敗と異なる安全な案内を提示する
@@ -335,7 +335,7 @@
   - _Requirements: 5.9, 5.10, 8.5, 10.1, 10.2, 10.3, 10.4, 10.5_
   - _Boundary: SidePanelHost, ShellView_
 
-- [ ] 9.4 Settingsとbackupの回復登録をproduction compositionへ接続する
+- [x] 9.4 Settingsとbackupの回復登録をproduction compositionへ接続する
   - settingsとbackupが公開する回復操作だけを明示的な回復分類で登録し、通常mutationとの分類境界を維持する
   - 起動、途中失敗、停止で回復登録と購読を逆依存順かつbest-effort、冪等に解放する
   - recovery-requiredでもsettingsとbackup回復面を利用可能に保ち、他の通常mutation featureを利用不能として合成する

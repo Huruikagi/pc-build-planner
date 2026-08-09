@@ -83,6 +83,18 @@ export function createApplicationShellIntegration(
   const projectedState = (): ShellViewState => {
     const maintenance = projection.getSnapshot();
     if (
+      maintenance.status === "recovery-required" &&
+      (hostState.kind === "ready" ||
+        hostState.kind === "maintenance" ||
+        hostState.kind === "recovery-required")
+    ) {
+      return {
+        kind: "recovery-required",
+        selected: hostState.selected,
+        message: maintenance.message,
+      };
+    }
+    if (
       maintenance.status === "active" &&
       (hostState.kind === "ready" || hostState.kind === "maintenance")
     ) {
@@ -95,6 +107,9 @@ export function createApplicationShellIntegration(
     if (hostState.kind === "maintenance") {
       return { kind: "ready", selected: hostState.selected };
     }
+    if (hostState.kind === "recovery-required") {
+      return { kind: "ready", selected: hostState.selected };
+    }
     return hostState;
   };
 
@@ -102,6 +117,13 @@ export function createApplicationShellIntegration(
     registry: options.registry,
     container: options.container,
     operationPolicy,
+    getInitialFeatureId: () =>
+      projection.getSnapshot().status === "recovery-required"
+        ? ("settings" as FeatureId)
+        : undefined,
+    canSelect: (feature) =>
+      projection.getSnapshot().status !== "recovery-required" ||
+      feature.id === ("settings" as FeatureId),
     onStateChange(state) {
       hostState = state;
       present(projectedState());
@@ -183,14 +205,22 @@ export function createApplicationShellIntegration(
     }
     if (!isCurrent(epoch)) return startupFailure();
     if (!initial.ok) {
-      present({
-        kind: "error",
-        message: STARTUP_FAILURE_MESSAGE,
-        recoverable: true,
-      });
-      return startupFailure();
+      if (
+        initial.error.code === "corrupt-data" ||
+        initial.error.code === "unsupported-version"
+      ) {
+        projection.requireRecovery(initial.error.code);
+      } else {
+        present({
+          kind: "error",
+          message: STARTUP_FAILURE_MESSAGE,
+          recoverable: true,
+        });
+        return startupFailure();
+      }
+    } else {
+      acceptNotification(initial.value);
     }
-    acceptNotification(initial.value);
     if (!isCurrent(epoch)) return startupFailure();
     try {
       const unsubscribe = options.maintenanceSource.subscribe((snapshot) => {

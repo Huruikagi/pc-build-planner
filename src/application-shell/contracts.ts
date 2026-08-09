@@ -8,7 +8,7 @@ import type { TransientActivationRequest } from "./transient-surface-ports.js";
 
 export type FeatureId = string & { readonly __brand: "FeatureId" };
 
-export type OperationKind = "read" | "mutation";
+export type OperationKind = "read" | "mutation" | "recovery";
 
 export type Availability =
   | { readonly status: "available" }
@@ -201,6 +201,11 @@ export type ShellMaintenanceState =
       readonly status: "active";
       readonly cursor: MaintenanceCursor;
       readonly message: MessageDescriptor;
+    }
+  | {
+      readonly status: "recovery-required";
+      readonly reason: "corrupt-data" | "unsupported-version";
+      readonly message: MessageDescriptor;
     };
 
 export interface MaintenancePresentationPort {
@@ -210,6 +215,7 @@ export interface MaintenancePresentationPort {
 
 export interface MaintenanceProjection extends MaintenancePresentationPort {
   accept(next: FoundationMaintenanceSnapshot): "applied" | "stale_ignored";
+  requireRecovery(reason: "corrupt-data" | "unsupported-version"): void;
 }
 
 export interface MutationGate extends OperationPolicy {}
@@ -226,6 +232,11 @@ export type ShellViewState =
       readonly selected: FeatureId | null;
       readonly message: MessageDescriptor;
       readonly transientNotice?: TransientNotice;
+    }
+  | {
+      readonly kind: "recovery-required";
+      readonly selected: FeatureId | null;
+      readonly message: MessageDescriptor;
     }
   | {
       readonly kind: "error";

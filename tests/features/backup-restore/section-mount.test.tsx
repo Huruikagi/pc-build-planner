@@ -79,6 +79,33 @@ test("公開section mountはoperation policyを利用し、一度だけcleanup�
   assert.equal(listeners.size, 0);
 });
 
+test("回復操作だけが許可される状態ではexportを無効にしてrestore入力を維持する", async () => {
+  const section: BackupRestoreSectionMount = createBackupRestoreSectionMount({
+    data,
+    state: state(),
+  });
+  const container = document.createElement("div");
+  const handle = await section.mount({
+    container,
+    operationPolicy: {
+      isAllowed: (kind) => kind === "read" || kind === "recovery",
+      subscribe: () => () => {},
+    },
+    reportError: () => {},
+  });
+  const exportButton = container.querySelector<HTMLButtonElement>(
+    'button[data-action="export"]',
+  );
+  const restoreInput = container.querySelector<HTMLInputElement>(
+    'input[type="file"]',
+  );
+  assert.ok(exportButton);
+  assert.ok(restoreInput);
+  assert.equal(exportButton.disabled, true);
+  assert.equal(restoreInput.disabled, false);
+  await handle.unmount();
+});
+
 test("React root取得後のmount失敗は購読とDOM resourceを解放する", async () => {
   let policyUnsubscribed = 0;
   const idle = { phase: "idle" as const };

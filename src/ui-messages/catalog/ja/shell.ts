@@ -17,6 +17,8 @@ export const shell = {
   missingDependency: "必須の依存関係がありません",
   maintenanceActive: "メンテナンス中です。変更操作は利用できません。",
   maintenanceStartupFailed: "メンテナンス状態を取得できませんでした",
+  recoveryRequired:
+    "保存データの回復が必要です。設定からバックアップと復元を開いてください。通常の変更操作は利用できません。",
   transientActivationFailed:
     "一過性の表示を開始できませんでした。拡張アイコンをもう一度操作して、新しい権限で起動してください。",
   transientActivationExpired:

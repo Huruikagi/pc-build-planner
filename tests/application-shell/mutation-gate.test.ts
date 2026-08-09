@@ -46,6 +46,20 @@ test("active中はmutationだけを拒否してreadを維持する", () => {
   assert.equal(gate.isAllowed("mutation"), false);
 });
 
+test("回復必須状態ではreadと明示的なrecoveryだけを許可する", () => {
+  const maintenance = createMaintenancePort({
+    status: "recovery-required",
+    reason: "corrupt-data",
+    message: message("shell.recoveryRequired"),
+  });
+  const gate = createMutationGate(maintenance);
+
+  assert.equal(gate.isAllowed("read"), true);
+  assert.equal(gate.isAllowed("recovery"), true);
+  assert.equal(gate.isAllowed("mutation"), false);
+  assert.equal(gate.isAllowed("unknown" as never), false);
+});
+
 test("判定時の最新maintenance snapshotへ操作分類を写像する", () => {
   const maintenance = createMaintenancePort({ status: "inactive", cursor });
   const gate = createMutationGate(maintenance);
@@ -158,4 +172,28 @@ test("購読者の例外は他の購読者とgateの進行を妨げない", () =
 
   assert.deepEqual(seen, ["second"]);
   assert.equal(gate.isAllowed("mutation"), false);
+});
+
+test("activeとrecovery-required間のrecovery可否変更も購読者へ通知する", () => {
+  const maintenance = createNotifyingPort({
+    status: "recovery-required",
+    reason: "corrupt-data",
+    message: message("shell.recoveryRequired"),
+  });
+  const gate = createMutationGate(maintenance.port);
+  const observed: boolean[] = [];
+  gate.subscribe(() => observed.push(gate.isAllowed("recovery")));
+
+  maintenance.emit({
+    status: "active",
+    cursor: { generation: 1, revision: 1 },
+    message: message("shell.maintenanceActive"),
+  });
+  maintenance.emit({
+    status: "recovery-required",
+    reason: "unsupported-version",
+    message: message("shell.recoveryRequired"),
+  });
+
+  assert.deepEqual(observed, [false, true]);
 });
