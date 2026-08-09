@@ -31,7 +31,7 @@
   - _Boundary: Application shell recovery consumer contract_
 
 - [ ] 2. 交換形式、容量ポリシー、ファイル入出力を実装する
-- [ ] 2.1 owner-local交換schemaをruntime schema基盤へ移行する
+- [x] 2.1 owner-local交換schemaをruntime schema基盤へ移行する
   - strict Envelope、全交換entity、日時・ID・カテゴリ・数量をconfigured schema primitiveで検証する
   - 禁止payload、未知key、非JSON値、ID重複、孤立参照、別project参照を値非露出のfeature errorへ写像する
   - 現行・空・将来・不正fixtureの検証結果とcanonical pathが決定的に一致すれば完了とする
@@ -39,7 +39,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 6.5_
   - _Boundary: ExchangeValidator_
 
-- [ ] 2.2 交換形式migrationを現行検証へ接続する
+- [x] 2.2 交換形式migrationを現行検証へ接続する
   - format versionの将来版を変換せず拒否し、移行経路のない旧版を非対応として扱う
   - 対応旧版を連続する純粋変換で現行shapeへ移し、各段階に同じstrict検証を適用する
   - 旧版・将来版・各移行段階のfixtureが期待する現行Envelopeまたは分類済みerrorを返せば完了とする
@@ -47,7 +47,7 @@
   - _Requirements: 2.4, 2.5, 5.3, 6.5_
   - _Boundary: ExchangeMigration_
 
-- [ ] 2.3 交換形式と保存rootのMapperを更新する
+- [x] 2.3 交換形式と保存rootのMapperを更新する
   - 全project、partの確認値・source・正規化属性、current build参照と数量を欠落なく双方向写像する
   - 保存schema version、revision、request dedupe、互換性派生値、生HTML、画像を交換形式へ含めず、入力の保存versionを信頼しない
   - 空データと全カテゴリの架空fixtureがFoundation検証後に往復同値となれば完了とする
