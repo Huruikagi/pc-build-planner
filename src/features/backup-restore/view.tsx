@@ -26,6 +26,7 @@ const errorMessageKeys = {
   "maintenance-active": "backup.errors.maintenance-active",
   storage: "backup.errors.storage",
   serialization: "backup.errors.serialization",
+  "backup-capacity-invariant": "backup.errors.serialization",
 } as const satisfies Record<DisplayError["code"], MessageKey>;
 
 const messageFor = (error: DisplayError, messages: MessageResolver): string => {

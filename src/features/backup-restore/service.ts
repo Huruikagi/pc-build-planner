@@ -8,6 +8,10 @@ import type {
   BackupRestoreDataPort,
   FoundationScopedDataPort,
 } from "../../persistence/public.js";
+import {
+  type RestoreFileCapacityPolicy,
+  restoreFileCapacityPolicy,
+} from "./capacity-policy.js";
 import type {
   BackupArtifact,
   BackupError,
@@ -16,11 +20,7 @@ import type {
   RestoreSummary,
   RestoreTicket,
 } from "./contracts.js";
-import {
-  BACKUP_PRODUCT_ID,
-  MAX_RESTORE_INPUT_BYTES,
-  mapFoundationError,
-} from "./contracts.js";
+import { BACKUP_PRODUCT_ID, mapFoundationError } from "./contracts.js";
 import { exchangeMapper, exchangeMigration } from "./exchange.js";
 
 export interface BackupService {
@@ -30,6 +30,7 @@ export interface BackupService {
 export interface BackupServiceDependencies {
   readonly data: FoundationScopedDataPort;
   readonly now?: () => UtcTimestamp;
+  readonly capacityPolicy?: RestoreFileCapacityPolicy;
 }
 
 /** query経路で観測しうるFoundationErrorだけを、値を含まないBackupErrorへ写像する。 */
@@ -65,6 +66,8 @@ export const createBackupService = (
   dependencies: BackupServiceDependencies,
 ): BackupService => {
   const now = dependencies.now ?? createUtcTimestamp;
+  const capacityPolicy =
+    dependencies.capacityPolicy ?? restoreFileCapacityPolicy;
 
   return {
     async create() {
@@ -82,12 +85,17 @@ export const createBackupService = (
         return err({ code: "serialization" });
       }
 
-      return ok({
+      const artifact = {
         filename: filenameFor(createdAt),
-        mimeType: "application/json",
+        mimeType: "application/json" as const,
         json,
         byteLength: new TextEncoder().encode(json).byteLength,
-      });
+      };
+      const capacity = capacityPolicy.assertExportRestorable(
+        artifact.byteLength,
+      );
+      if (!capacity.ok) return err({ code: "backup-capacity-invariant" });
+      return ok(artifact);
     },
   };
 };
@@ -114,7 +122,7 @@ export const createRestoreService = (
   dependencies: RestoreServiceDependencies,
 ): RestoreService => ({
   async preflight(input) {
-    if (input.byteLength > MAX_RESTORE_INPUT_BYTES)
+    if (!restoreFileCapacityPolicy.accepts(input.byteLength))
       return err({ code: "size-exceeded" });
 
     let parsed: unknown;

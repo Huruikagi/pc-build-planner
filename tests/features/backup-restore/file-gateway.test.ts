@@ -25,7 +25,7 @@ test("読取前にサイズ確認しtextと実UTF-8バイト数を返す", async
 test("サイズ超過ファイルは本文読取前にsize-exceededとして拒否される", async () => {
   let textCalled = false;
   const oversized = {
-    size: 10 * 1024 * 1024 + 1,
+    size: 16 * 1024 * 1024 + 1,
     text: async () => {
       textCalled = true;
       return "";

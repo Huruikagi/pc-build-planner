@@ -94,6 +94,28 @@ test("空データのrootでも復元可能なartifactを生成する", async ()
   assert.deepEqual(parsed.data, { projects: [], parts: [], currentBuilds: [] });
 });
 
+test("自己復元可能性gateが拒否したartifactは返さない", async () => {
+  const service = createBackupService({
+    data: dataReturning(EMPTY_ROOT),
+    now: () => NOW,
+    capacityPolicy: {
+      maxInputBytes: 16 * 1024 * 1024,
+      accepts: () => false,
+      assertExportRestorable: () => ({
+        ok: false,
+        error: { kind: "backup-capacity-invariant" },
+      }),
+    },
+  });
+
+  const result = await service.create();
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: { code: "backup-capacity-invariant" },
+  });
+});
+
 test("読取が破損データで失敗した場合はartifactを返さない", async () => {
   const service = createBackupService({
     data: dataFailingWith({ code: "corrupt-data" }),
@@ -237,7 +259,7 @@ test("読取前サイズ上限を超えるとJSON解析なしでsize-exceededを
 
   const result = await service.preflight({
     text: "irrelevant",
-    byteLength: 10 * 1024 * 1024 + 1,
+    byteLength: 16 * 1024 * 1024 + 1,
   });
 
   assert.equal(result.ok, false);

@@ -55,7 +55,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.6, 2.1, 2.2, 2.3, 3.1, 3.3_
   - _Boundary: ExchangeMapper_
 
-- [ ] 2.4 復元ファイル容量ポリシーと自己復元可能性gateを実装する
+- [x] 2.4 復元ファイル容量ポリシーと自己復元可能性gateを実装する
   - 復元入力の16 MiB上限と、変換後rootに対するFoundationの10 MiB保存上限を別の判定として固定する
   - 保存側と交換側の全entity variant、固定overhead、property名とdelimiter差分から、保存上限内rootの最大Envelope UTF-8サイズ上界を決定的に導出する
   - Mapperのfield追加、重複写像、名称変更が差分表で未分類ならbuild gateを失敗させ、入力上限や形式版の暗黙変更を防ぐ
@@ -64,7 +64,7 @@
   - _Requirements: 1.7, 3.4_
   - _Boundary: RestoreFileCapacityPolicy_
 
-- [ ] 2.5 File gatewayへ16 MiB境界と安全なI/Oを実装する
+- [x] 2.5 File gatewayへ16 MiB境界と安全なI/Oを実装する
   - UTF-8で16 MiBを1 byteでも超えるFileを本文読取前に拒否し、単一ファイルだけを受け付ける
   - Blob download後のobject URLと一時resourceを成功・失敗の両経路で確実に解放する
   - 境界値、複数選択、読取不能、download失敗、cleanup再試行をWeb API stubで決定的に検証できれば完了とする
@@ -72,7 +72,7 @@
   - _Requirements: 1.3, 3.1, 3.2, 3.4, 6.4, 6.5_
   - _Boundary: FileGateway_
 
-- [ ] 2.6 バックアップartifact生成を現行交換契約へ接続する
+- [x] 2.6 バックアップartifact生成を現行交換契約へ接続する
   - frozen read-only portから検証済み全rootを読み、作成日時、形式版、決定的JSON、UTF-8 byte lengthを持つartifactを生成する
   - 製品接頭辞と作成日を含むfilenameを生成し、空rootも復元可能なファイルとして出力する
   - artifactをdownload前に容量ポリシーへ通し、同版のfile preflightを通過できない出力は生成しない
