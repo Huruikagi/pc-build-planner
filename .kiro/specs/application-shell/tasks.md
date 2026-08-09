@@ -344,8 +344,8 @@
   - _Requirements: 3.1, 3.9, 5.8, 5.9, 5.10, 8.5, 10.2, 10.4, 10.5_
   - _Boundary: ApplicationComposition, SidePanelFeatureContributions_
 
-- [ ] 10. 共通の現在project表示をproduction shellへ統合する
-- [ ] 10.1 Project selector専用slotとsingleton lifecycleを実装する
+- [x] 10. 共通の現在project表示をproduction shellへ統合する
+- [x] 10.1 Project selector専用slotとsingleton lifecycleを実装する
   - navigationとfeature主表示領域から分離した共通project selector専用slotをshell presentationに提供する
   - project-context所有のpresentationを一度だけmountし、停止と起動rollbackで購読と表示handleを冪等に解放する
   - 選択操作をproject-contextのcommand能力へそのまま委譲し、project名、catalog順、fallback、guard判断をshellで解釈しない
@@ -354,7 +354,7 @@
   - _Requirements: 9.1, 9.2, 9.5_
   - _Boundary: ShellPresentation, ProjectContextShellAdapter_
 
-- [ ] 10.2 Project snapshotを依存featureのavailabilityへ投影する
+- [x] 10.2 Project snapshotを依存featureのavailabilityへ投影する
   - project-contextの同一snapshotを共通selectorとproject依存featureへ同じgenerationで通知する
   - readyだけをproject依存能力の利用可能条件とし、emptyまたはunavailableから別projectを推測せず理由付き利用不能状態へ投影する
   - snapshot generationを後退させず、project-context障害時もsettingsとbackup回復面、およびproject非依存featureの利用を維持する
@@ -363,7 +363,7 @@
   - _Requirements: 3.8, 3.9, 9.1, 9.3, 9.4, 9.5_
   - _Boundary: ProjectContextShellAdapter, FeatureRegistry_
 
-- [ ] 10.3 能力別project portをproduction featureへ注入する
+- [x] 10.3 能力別project portをproduction featureへ注入する
   - 各project依存featureへ必要なread、command、guard能力だけを合成contextとして渡し、project-context内部へdeep importしない
   - project-contextの初期化失敗をshell全体のstartup failureへ昇格させず、依存featureだけを利用不能として起動を継続する
   - production start、途中rollback、stopでproject-context handle、selector、feature contributionを逆依存順かつbest-effort、冪等に解放する
@@ -401,6 +401,8 @@
   - _Boundary: ApplicationShellE2E, ApplicationShellArtifactValidation_
 
 ## Implementation Notes
+
+- 2026-08-09 application-shell 10.1–10.3: project selector専用slotとsingleton adapterをproduction compositionへ接続し、同一snapshotを能力別read portと依存feature availabilityへ配送した。selector mount失敗とproject-context初期化失敗はshell全体へ昇格せず、依存featureだけをfail closedにする。生成物のdummy maintenance検出はbundle全体を跨ぐ誤一致を防ぐため局所範囲へ制限した。
 
 - 2026-08-02 validation remediation: worker-safe catalog型からUI registrationを除去してcatalog宣言順へ固定し、side-panelのtransient lifecycleを必須依存化した。未参照`react-runtime.js` entryとbaseline sourceを撤去し、React同梱gateを実`side-panel.js`へ集約した。candidate-management→source-price-refreshのlate-bound公開port seamもdesignへ明記した。
 - 2026-08-02 source-price-refresh trigger revalidation: `source-price-refresh` task 6.3のheaded native menu smoke（1 pass、exit 0）と関連4 specの再監査完了後、worker-safe catalog／`TransientGestureRegistrationPort` seamを再確認した。`pnpm validate`はNode 1429/1429、Playwright 26 pass（記録済みnative gate 1 skip）でexit 0、unpacked-extension smokeも同suiteで通過し、要件8/8、cross-task統合、設計・境界、blocked taskなしを再監査してGO。feature公開入口のsteeringは実装とboundary gateに合わせ、通常`public.ts`、worker専用`worker-public.ts`、application shell composition専用`feature-contribution.ts`へ明確化した。

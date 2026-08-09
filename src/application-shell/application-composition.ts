@@ -4,6 +4,8 @@ import {
   type FoundationScopedDataPort,
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
+import type { ProjectContextReadPort } from "../project-context/public.js";
+import { createProductionProjectContext } from "../project-context/runtime.js";
 import { message } from "../ui-messages/public.js";
 import {
   type ApplicationShellIntegration,
@@ -30,6 +32,10 @@ import { isPersistent } from "./contracts.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
 import { createLateBoundLifecycle } from "./late-bound-lifecycle.js";
+import {
+  createProjectContextShellAdapter,
+  type ProjectContextShellHandle,
+} from "./project-context-shell-adapter.js";
 import { createPublicApiRegistry } from "./public-api-registry.js";
 import type {
   ShellPresentationAdapter,
@@ -85,6 +91,7 @@ export interface ProductionApplicationCompositionOptions<
   readonly presentation: ShellPresentationAdapter;
   readonly workerContext: WorkerRegistrationContext;
   readonly reportError: (message: string) => void;
+  readonly createProjectContextAdapter?: typeof createProjectContextShellAdapter;
   readonly createTransientMonitoring?: (
     controller: Pick<
       TransientSurfaceController,
@@ -233,12 +240,43 @@ export function createProductionApplicationComposition<
   let cleanupRequired = false;
   const lateBoundLifecycle = createLateBoundLifecycle();
   let transientController: TransientSurfaceController | undefined;
+  let projectContextHandle: ProjectContextShellHandle | undefined;
   let transientMonitoring:
     | ReturnType<NonNullable<typeof options.createTransientMonitoring>>
     | undefined;
   let latestShellState: ShellViewState | undefined;
   let transientNotice: "activation-failed" | "activation-expired" | undefined;
   let retryStartup: () => void = () => undefined;
+  let projectSnapshot: ReturnType<ProjectContextReadPort["getSnapshot"]>;
+  const projectListeners = new Set<
+    Parameters<ProjectContextReadPort["subscribe"]>[0]
+  >();
+  const unavailableProjectSnapshot: ReturnType<
+    ProjectContextReadPort["getSnapshot"]
+  > = {
+    status: "unavailable",
+    generation: 0,
+    selectedProjectId: null,
+    reason: "not-initialized",
+  };
+  projectSnapshot = unavailableProjectSnapshot;
+  const projectRead: ProjectContextReadPort = {
+    getSnapshot: () => projectSnapshot,
+    subscribe(listener) {
+      projectListeners.add(listener);
+      return () => projectListeners.delete(listener);
+    },
+  };
+  const publishProjectSnapshot = (
+    snapshot: ReturnType<ProjectContextReadPort["getSnapshot"]>,
+  ): void => {
+    if (snapshot.generation < projectSnapshot.generation) return;
+    projectSnapshot = snapshot;
+    for (const listener of [...projectListeners]) listener(snapshot);
+  };
+  const bindProjectRead = (read: ProjectContextReadPort): void => {
+    projectSnapshot = read.getSnapshot();
+  };
 
   const diagnose = (message: string): void => {
     try {
@@ -307,6 +345,16 @@ export function createProductionApplicationComposition<
         failures.push(error);
       }
     }
+    if (projectContextHandle) {
+      const owned = projectContextHandle;
+      try {
+        await owned.stop();
+        if (projectContextHandle === owned) projectContextHandle = undefined;
+      } catch (error: unknown) {
+        failures.push(error);
+      }
+    }
+    projectSnapshot = unavailableProjectSnapshot;
     if (registry) {
       const owned = registry;
       try {
@@ -478,6 +526,7 @@ export function createProductionApplicationComposition<
       const compositionContext: FeatureCompositionContext = {
         data: validatedFoundation.dataPort,
         navigator: shellNavigator,
+        projectContext: projectRead,
       };
       let contributions: ApplicationRuntimeContributions<TFeatures>;
       try {
@@ -514,6 +563,63 @@ export function createProductionApplicationComposition<
         registry = undefined;
         await cleanup().catch(() => diagnose("presentation rollback failed"));
         return err({ kind: "startup_failed", message: STARTUP_ERROR });
+      }
+      const candidate = contributions.features.find(
+        (contribution) => contribution.key === "candidateManagement",
+      );
+      const candidateQuery = (
+        candidate?.registration.publicApi as
+          | {
+              readonly query?: {
+                readonly listProjects?: () => Promise<unknown>;
+              };
+            }
+          | undefined
+      )?.query;
+      if (
+        typeof candidateQuery?.listProjects === "function" &&
+        presentation.projectContainer
+      ) {
+        const listProjects = candidateQuery.listProjects;
+        const projectContext = createProductionProjectContext({
+          async list() {
+            const listed = await listProjects();
+            if (
+              typeof listed !== "object" ||
+              listed === null ||
+              !("ok" in listed) ||
+              listed.ok !== true ||
+              !("value" in listed)
+            )
+              return err({ kind: "source-unavailable" as const });
+            return ok(listed.value as never);
+          },
+        });
+        await projectContext.initialize();
+        bindProjectRead(projectContext.api.read);
+        const mountedProjectContext = (
+          options.createProjectContextAdapter ??
+          createProjectContextShellAdapter
+        )().mount({
+          container: presentation.projectContainer,
+          read: projectContext.api.read,
+          commands: projectContext.api.commands,
+          presentation: projectContext.presentation,
+          publishAvailability() {
+            publishProjectSnapshot(projectContext.api.read.getSnapshot());
+          },
+        });
+        if (mountedProjectContext.ok) {
+          projectContextHandle = mountedProjectContext.value;
+        } else {
+          publishProjectSnapshot({
+            status: "unavailable",
+            generation: projectSnapshot.generation + 1,
+            selectedProjectId: null,
+            reason: "not-initialized",
+          });
+          diagnose("project context presentation mount failed");
+        }
       }
 
       const publish = (state: ShellViewState): void => {

@@ -5,6 +5,8 @@ import { type ShellNavigationItem, ShellView } from "./shell-view.js";
 
 export interface ShellPresentationHandle {
   readonly featureContainer: HTMLElement;
+  /** project-context selector 専用のshell所有slot。 */
+  readonly projectContainer?: HTMLElement;
   publish(
     state: ShellViewState,
     navigation: readonly ShellNavigationItem[],
@@ -27,6 +29,7 @@ export function createShellPresentation(): ShellPresentationAdapter {
       let navigation: readonly ShellNavigationItem[] = [];
       const listeners = new Set<(next: ShellViewState) => void>();
       const featureSlotMarker = "application-shell-feature-slot";
+      const projectSlotMarker = "application-shell-common-slot";
       const root = createReactShellRoot({
         container: input.shellContainer,
         source: {
@@ -43,6 +46,7 @@ export function createShellPresentation(): ShellPresentationAdapter {
             onRetry={input.onRetry}
             state={next}
           >
+            <div data-shell-project-slot={projectSlotMarker} />
             <div data-shell-feature-slot={featureSlotMarker} />
           </ShellView>
         ),
@@ -54,9 +58,16 @@ export function createShellPresentation(): ShellPresentationAdapter {
           input.shellContainer.querySelector<HTMLElement>(
             `[data-shell-feature-slot="${featureSlotMarker}"]`,
           );
+        const projectContainer =
+          input.shellContainer.querySelector<HTMLElement>(
+            `[data-shell-project-slot="${projectSlotMarker}"]`,
+          );
         if (
           featureContainer === null ||
-          featureContainer === input.shellContainer
+          featureContainer === input.shellContainer ||
+          projectContainer === null ||
+          projectContainer === input.shellContainer ||
+          projectContainer === featureContainer
         ) {
           root.stop();
           return err({ kind: "presentation_failed" });
@@ -64,6 +75,7 @@ export function createShellPresentation(): ShellPresentationAdapter {
         let stopped = false;
         return ok({
           featureContainer,
+          projectContainer,
           publish(nextState, nextNavigation) {
             if (stopped) return;
             state = nextState;

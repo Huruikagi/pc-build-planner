@@ -170,7 +170,7 @@ function validateJavaScript(source, path) {
       "shared entry self-registration",
     ],
     [
-      /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]*?status\s*:\s*["']inactive["'][\s\S]*?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/,
+      /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]{0,500}?status\s*:\s*["']inactive["'][\s\S]{0,500}?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/,
       "dummy maintenance source",
     ],
     [

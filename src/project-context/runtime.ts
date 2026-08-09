@@ -4,11 +4,28 @@
  * この module から production adapter を組み立てる（design: File Structure Plan、
  * ProjectContextBoundaryGate）。
  */
-import type { ProjectPreferencePort } from "./contracts.js";
+
+import { createProjectCatalogProjection } from "./catalog.js";
+import type {
+  ProjectCatalogSource,
+  ProjectPreferencePort,
+} from "./contracts.js";
 import {
   createChromeProjectPreferencePortIfAvailable,
   createInMemoryProjectPreferencePort,
 } from "./preference-store.js";
+import {
+  createProjectContextPresentationContribution,
+  type ProjectContextPresentationContribution,
+} from "./presentation-contribution.js";
+import {
+  createProjectContextPublicApi,
+  type ProjectContextPublicApi,
+} from "./public.js";
+import {
+  createProjectContextService,
+  type ProjectContextService,
+} from "./service.js";
 
 export type {
   ProjectPreferenceError,
@@ -29,3 +46,28 @@ export const createProductionProjectPreferencePort =
   (): ProjectPreferencePort =>
     createChromeProjectPreferencePortIfAvailable() ??
     createInMemoryProjectPreferencePort();
+
+export interface ProductionProjectContext {
+  readonly api: ProjectContextPublicApi;
+  readonly presentation: ProjectContextPresentationContribution;
+  initialize(): ReturnType<ProjectContextService["initialize"]>;
+}
+
+/** shell composition専用のproduction project-context assembly。 */
+export const createProductionProjectContext = (
+  catalog: ProjectCatalogSource,
+): ProductionProjectContext => {
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection(catalog),
+    preference: createProductionProjectPreferencePort(),
+  });
+  const api = createProjectContextPublicApi({ service });
+  return Object.freeze({
+    api,
+    presentation: createProjectContextPresentationContribution({
+      read: api.read,
+      commands: api.commands,
+    }),
+    initialize: () => service.initialize(),
+  });
+};

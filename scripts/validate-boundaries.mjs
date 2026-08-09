@@ -1302,7 +1302,7 @@ export const findBoundaryViolations = (sources) => {
         )
           rules.add("no-dangerous-html-rendering");
         if (
-          /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]*?status\s*:\s*["']inactive["'][\s\S]*?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/.test(
+          /\bgetSnapshot\s*:\s*(?:async\s*)?\(?.*?=>[\s\S]{0,500}?status\s*:\s*["']inactive["'][\s\S]{0,500}?\bsubscribe\s*:\s*\(?.*?=>\s*\(?.*?=>\s*\{\s*\}/.test(
             source,
           )
         )

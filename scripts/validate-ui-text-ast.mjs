@@ -58,6 +58,7 @@ const CODE_VARIABLE_NAMES = new Set([
   "diagnosticCode",
   "featureId",
   "featureSlotMarker",
+  "projectSlotMarker",
   "fieldName",
   "id",
   "messageKey",

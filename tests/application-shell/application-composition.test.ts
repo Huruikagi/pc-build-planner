@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { userEvent } from "@testing-library/user-event";
 
 import {
   createProductionApplicationComposition,
@@ -18,11 +19,13 @@ import type {
   ActivationId,
   TransientSurfaceLifecyclePort,
 } from "../../src/application-shell/transient-surface-ports.js";
+import type { ProjectId, UtcTimestamp } from "../../src/domain/public.js";
 import type {
   BackupRestoreDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
+import type { ProjectContextReadPort } from "../../src/project-context/public.js";
 
 const noopTransientActivation = () => ({
   validate: (
@@ -84,7 +87,8 @@ function harness(options?: {
   const navigationSnapshots: (readonly ShellNavigationItem[])[] = [];
   const shellContainer = document.createElement("div");
   const featureContainer = document.createElement("div");
-  shellContainer.append(featureContainer);
+  const projectContainer = document.createElement("div");
+  shellContainer.append(projectContainer, featureContainer);
   const presentation: ShellPresentationAdapter = {
     mount() {
       events.push("presentation:mount");
@@ -92,6 +96,7 @@ function harness(options?: {
         ok: true,
         value: {
           featureContainer,
+          projectContainer,
           publish(state, navigation) {
             states.push(state);
             navigationSnapshots.push(navigation);
@@ -165,6 +170,7 @@ function harness(options?: {
     states,
     navigationSnapshots,
     shellContainer,
+    projectContainer,
     presentation,
     feature,
     worker,
@@ -994,4 +1000,186 @@ test("presentation getter例外をrejectせずtyped failureへ変換しfoundatio
     "presentation:stop",
     "foundation:stop",
   ]);
+});
+
+const PROJECT_A = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const PROJECT_B = "22222222-2222-4222-8222-222222222222" as ProjectId;
+const PROJECT_TIME = "2026-01-01T00:00:00Z" as UtcTimestamp;
+
+test("10.1-10.3: production shellはselector選択を一度配送し依存featureへ同じsnapshotを投影して逆順cleanupする", async () => {
+  const h = harness();
+  let projectRead: ProjectContextReadPort | undefined;
+  let dependent: ApplicationFeatureRegistration | undefined;
+  const candidate: ApplicationFeatureRegistration = {
+    ...h.feature,
+    id: id("candidate-management"),
+    publicApi: {
+      query: {
+        async listProjects() {
+          return {
+            ok: true as const,
+            value: [
+              { id: PROJECT_A, name: "架空A", updatedAt: PROJECT_TIME },
+              { id: PROJECT_B, name: "架空B", updatedAt: PROJECT_TIME },
+            ],
+          };
+        },
+      },
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions(context) {
+      assert.ok(context.projectContext);
+      projectRead = context.projectContext;
+      dependent = {
+        ...h.feature,
+        id: id("compatibility"),
+        navigation: { labelKey: "Compatibility" as MessageKey, order: 2 },
+        getAvailability: () =>
+          context.projectContext?.getSnapshot().status === "ready"
+            ? { status: "available" }
+            : { status: "unavailable", reason: "project-context" },
+        subscribeAvailability: (listener) =>
+          context.projectContext?.subscribe(() =>
+            listener(
+              context.projectContext?.getSnapshot().status === "ready"
+                ? { status: "available" }
+                : { status: "unavailable", reason: "project-context" },
+            ),
+          ) ?? (() => undefined),
+      };
+      return {
+        features: [
+          { key: "candidateManagement", registration: candidate },
+          { key: "compatibility", registration: dependent },
+        ] as const,
+        workerRegistrations: [],
+      };
+    },
+    presentation: h.presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, true);
+  assert.equal(projectRead?.getSnapshot().status, "ready");
+  assert.equal(dependent?.getAvailability().status, "available");
+  const before = projectRead?.getSnapshot().generation;
+  const select = h.projectContainer.querySelector<HTMLSelectElement>(
+    "[data-project-context='select']",
+  );
+  assert.ok(select);
+  await userEvent.setup().selectOptions(select, PROJECT_B);
+  assert.equal(projectRead?.getSnapshot().selectedProjectId, PROJECT_B);
+  assert.equal(projectRead?.getSnapshot().generation, (before ?? 0) + 1);
+
+  await root.stop();
+  assert.equal(h.projectContainer.childElementCount, 0);
+  assert.ok(
+    h.events.indexOf("feature:unmount") < h.events.indexOf("presentation:stop"),
+  );
+});
+
+test("10.2/10.3: project-context初期化失敗でも非依存featureとshellを起動し依存featureだけ利用不能にする", async () => {
+  const h = harness();
+  let dependent: ApplicationFeatureRegistration | undefined;
+  const candidate: ApplicationFeatureRegistration = {
+    ...h.feature,
+    id: id("candidate-management"),
+    publicApi: {
+      query: {
+        async listProjects() {
+          return { ok: false as const, error: { kind: "storage" } };
+        },
+      },
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions(context) {
+      assert.ok(context.projectContext);
+      dependent = {
+        ...h.feature,
+        id: id("compatibility"),
+        getAvailability: () =>
+          context.projectContext?.getSnapshot().status === "ready"
+            ? { status: "available" }
+            : { status: "unavailable", reason: "project-context" },
+        subscribeAvailability: (listener) =>
+          context.projectContext?.subscribe(() =>
+            listener({ status: "unavailable", reason: "project-context" }),
+          ) ?? (() => undefined),
+      };
+      return {
+        features: [
+          { key: "candidateManagement", registration: candidate },
+          { key: "compatibility", registration: dependent },
+        ] as const,
+        workerRegistrations: [],
+      };
+    },
+    presentation: h.presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, true);
+  assert.equal(dependent?.getAvailability().status, "unavailable");
+  assert.ok(h.events.includes("feature:mount"));
+  assert.equal(h.states.at(-1)?.kind, "ready");
+  await root.stop();
+});
+
+test("10.1-10.3: selector mount失敗はshellを継続して依存featureだけfail closedにする", async () => {
+  const h = harness();
+  let projectRead: ProjectContextReadPort | undefined;
+  const candidate: ApplicationFeatureRegistration = {
+    ...h.feature,
+    id: id("candidate-management"),
+    publicApi: {
+      query: {
+        async listProjects() {
+          return {
+            ok: true as const,
+            value: [{ id: PROJECT_A, name: "架空A", updatedAt: PROJECT_TIME }],
+          };
+        },
+      },
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions(context) {
+      projectRead = context.projectContext;
+      return {
+        features: [
+          { key: "candidateManagement", registration: candidate },
+        ] as const,
+        workerRegistrations: [],
+      };
+    },
+    presentation: h.presentation,
+    createProjectContextAdapter: () => ({
+      mount: () => ({
+        ok: false,
+        error: { kind: "project-context-mount-failed" },
+      }),
+    }),
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, true);
+  assert.deepEqual(projectRead?.getSnapshot(), {
+    status: "unavailable",
+    generation: 2,
+    selectedProjectId: null,
+    reason: "not-initialized",
+  });
+  assert.equal(h.states.at(-1)?.kind, "ready");
+  await root.stop();
 });

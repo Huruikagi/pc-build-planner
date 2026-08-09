@@ -1,6 +1,7 @@
 import { productCaptureWorkerContribution } from "../features/product-capture/worker-public.js";
 import { sourcePriceRefreshWorkerContribution } from "../features/source-price-refresh/worker-public.js";
 import type { FoundationScopedDataPort } from "../persistence/public.js";
+import type { ProjectContextReadPort } from "../project-context/public.js";
 import type {
   ApplicationFeatureRegistration,
   ApplicationWorkerRegistration,
@@ -37,6 +38,8 @@ export interface FeatureContribution<
 export interface FeatureCompositionContext {
   readonly data: FoundationScopedDataPort;
   readonly navigator: ShellNavigator;
+  /** project依存featureだけが参照するread-only selection capability。 */
+  readonly projectContext?: ProjectContextReadPort;
 }
 
 export type FeatureContributionFactory<

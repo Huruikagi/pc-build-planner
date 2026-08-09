@@ -155,11 +155,15 @@ export const createSidePanelFeatureContributions = (
   const compatibility = createCompatibilityContribution(context, {
     currentBuildQuery: currentBuild.registration.publicApi.query,
     candidateQuery: candidateManagement.registration.publicApi.query,
-    async getProjectId() {
-      const projects =
-        await candidateManagement.registration.publicApi.query.listProjects();
-      return projects.ok ? (projects.value[0]?.id ?? null) : null;
-    },
+    ...(context.projectContext === undefined
+      ? {
+          async getProjectId() {
+            const projects =
+              await candidateManagement.registration.publicApi.query.listProjects();
+            return projects.ok ? (projects.value[0]?.id ?? null) : null;
+          },
+        }
+      : {}),
   });
   const settings = createSettingsContribution({
     backupRestore: createBackupRestoreSectionMount({
