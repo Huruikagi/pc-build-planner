@@ -21,6 +21,18 @@ export const backup = {
   partCountLabel: "Parts",
   currentBuildCountLabel: "Current builds",
   confirmAction: "Confirm restore",
+  draftConfirmationTitle: "Unsaved Changes",
+  draftWarning:
+    "The current project has unsaved changes that the restore will discard.",
+  approveDraftAction: "Discard and restore",
+  retryRestoreAction: "Retry restore",
+  reassessRestoreAction: "Re-check the selected file",
+  finalizationRequired:
+    "The restore finished, but cleanup is incomplete. Run cleanup to finish.",
+  finalizeAction: "Run cleanup",
+  contextUnavailable:
+    "The restore finished, but the current project couldn't be re-checked.",
+  refreshContextAction: "Re-check the current project",
   restoring: "Restoring…",
   restoreCompleted: {
     selectors: ["projectCount", "partCount", "currentBuildCount"],
@@ -88,5 +100,9 @@ export const backup = {
       "Another maintenance operation is in progress. Try again shortly.",
     storage: "Storage is unavailable.",
     serialization: "Couldn't convert the data.",
+    "guard-failed":
+      "Save or discard the unsaved changes, then try the restore again.",
+    "context-unavailable":
+      "The current project is unavailable. Existing data hasn't changed.",
   },
 } as const;

@@ -23,6 +23,18 @@ export const backup = {
   partCountLabel: "パーツ数",
   currentBuildCountLabel: "現在構成数",
   confirmAction: "復元を確定",
+  draftConfirmationTitle: "未保存の編集の確認",
+  draftWarning:
+    "現在のプロジェクトに未保存の編集があります。復元するとこの編集は破棄されます。",
+  approveDraftAction: "破棄して復元",
+  retryRestoreAction: "復元を再試行",
+  reassessRestoreAction: "選択したファイルを再確認",
+  finalizationRequired:
+    "復元は完了しましたが、後処理が残っています。後処理を実行してください。",
+  finalizeAction: "後処理を実行",
+  contextUnavailable:
+    "復元は完了しましたが、現在のプロジェクトを再確認できませんでした。",
+  refreshContextAction: "現在のプロジェクトを再確認",
   restoring: "復元しています…",
   /** 「復元が完了しました（プロジェクト{n}件、候補{n}件、現在構成{n}件）。」の再設計。 */
   restoreCompleted:
@@ -50,5 +62,9 @@ export const backup = {
       "他の保守処理が進行中です。しばらくしてからお試しください。",
     storage: "保存領域を利用できません。",
     serialization: "データの変換に失敗しました。",
+    "guard-failed":
+      "未保存の編集を保存または破棄してから、もう一度復元してください。",
+    "context-unavailable":
+      "現在のプロジェクトを利用できません。既存データは変更していません。",
   },
 } as const;

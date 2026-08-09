@@ -39,6 +39,7 @@ import {
   resolverFor,
 } from "../../../src/ui-messages/public.js";
 import { idleTransientSurface } from "../../fixtures/transient-surface.js";
+import { unattachedContextDependencies } from "./state-context-harness.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000091" as Uuid as ProjectId;
@@ -279,6 +280,7 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
 test("settings公開mount下でmaintenance、分類済みerror、安全なfilename描画を保つ", async () => {
   const unsafe = '<img src=x onerror="alert(1)">';
   const state = createBackupRestoreState({
+    ...unattachedContextDependencies(),
     backupService: {
       async create() {
         return {

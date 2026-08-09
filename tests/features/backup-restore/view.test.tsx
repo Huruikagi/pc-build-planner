@@ -18,6 +18,7 @@ import type {
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import { BackupRestoreView } from "../../../src/features/backup-restore/view.js";
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
+import { unattachedContextDependencies } from "./state-context-harness.js";
 
 const FAKE_ARTIFACT: BackupArtifact = {
   filename: "<img src=x onerror=alert(1)>-backup.json",
@@ -50,6 +51,7 @@ const buildState = (options: {
   commit?: RestoreService["commit"];
 }) =>
   createBackupRestoreState({
+    ...unattachedContextDependencies(),
     backupService: { create: options.create ?? notExpected("create") },
     restoreService: {
       preflight: options.preflight ?? notExpected("preflight"),

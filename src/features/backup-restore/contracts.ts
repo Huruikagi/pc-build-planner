@@ -120,6 +120,38 @@ export type RestoreCommitOutcome =
       readonly finalization: BackupRestoreFinalizationTicket;
     };
 
+/** 置換guardとcontext refreshの失敗。project-contextの内部値を含めずcodeだけを公開する。 */
+export type RestoreContextErrorCode =
+  | "guard-failed"
+  | "confirmation-stale"
+  | "permit-stale"
+  | "context-unavailable"
+  | "refresh-failed";
+
+export interface RestoreContextError {
+  readonly code: RestoreContextErrorCode;
+}
+
+/** 復元後のcontext再検証結果。project ID・catalog内容は公開しない。 */
+export type RestoreContextStatus = "ready" | "empty" | "unavailable";
+
+/** root write後の終端結果。復元成功を取り消す遷移を持たない。 */
+export type RestoreCompletion =
+  | {
+      readonly kind: "restored";
+      readonly summary: RestoreSummary;
+      readonly context: "ready" | "empty";
+    }
+  | {
+      readonly kind: "restored-finalization-required";
+      readonly summary: RestoreSummary;
+      readonly finalization: BackupRestoreFinalizationTicket;
+    }
+  | {
+      readonly kind: "restored-context-unavailable";
+      readonly summary: RestoreSummary;
+    };
+
 /** JSON解析、必須構造、非対応版以外の値検証失敗。問題値を含めずcodeとpathだけを公開する。 */
 export type ExchangeStructureErrorCode =
   | "not-json"
@@ -179,6 +211,93 @@ export interface RestoreError {
   readonly code: RestoreErrorCode;
   readonly path?: string;
 }
+
+/** commit前失敗の再試行方針。stateとViewはこの単一policyだけを参照し個別判定を持たない。 */
+export type RetryPolicy =
+  | {
+      readonly kind: "retryable";
+      readonly action: "retry-export" | "retry-restore" | "reassess-restore";
+    }
+  | {
+      readonly kind: "action-required";
+      readonly action: "select-another-file" | "resolve-draft";
+    }
+  | { readonly kind: "unsupported" };
+
+const SELECT_ANOTHER_FILE: RetryPolicy = {
+  kind: "action-required",
+  action: "select-another-file",
+};
+const UNSUPPORTED: RetryPolicy = { kind: "unsupported" };
+
+/** export失敗の再試行方針。読取・保存の一時失敗だけを同一操作の再試行として扱う。 */
+export const backupRetryPolicy = (error: BackupError): RetryPolicy => {
+  switch (error.code) {
+    case "storage":
+      return { kind: "retryable", action: "retry-export" };
+    case "corrupt-current-data":
+    case "unsupported-current-data":
+    case "serialization":
+    case "backup-capacity-invariant":
+      return UNSUPPORTED;
+  }
+};
+
+/**
+ * commit前の復元失敗の再試行方針。
+ * ticketを保持していない失敗は同一入力を再送できないため別file選択へ倒す。
+ */
+export const restoreRetryPolicy = (
+  error: RestoreError | FileError,
+  options: { readonly hasTicket: boolean },
+): RetryPolicy => {
+  const withTicket = (
+    action: "retry-restore" | "reassess-restore",
+  ): RetryPolicy =>
+    options.hasTicket ? { kind: "retryable", action } : SELECT_ANOTHER_FILE;
+
+  switch (error.code) {
+    case "no-file-selected":
+    case "multiple-files-selected":
+    case "unreadable":
+    case "size-exceeded":
+    case "not-json":
+    case "invalid-structure":
+    case "invalid-reference":
+      return SELECT_ANOTHER_FILE;
+    /** 変換後rootの容量超過は空き容量確保で解消しないため同一入力の再実行を禁止する。 */
+    case "quota-exceeded":
+    case "unsupported-version":
+      return UNSUPPORTED;
+    case "stale-assessment":
+    case "stale-ticket":
+    case "corrupt-current-data":
+      return withTicket("reassess-restore");
+    case "precommit-cleanup-pending":
+    case "maintenance-active":
+    case "storage-unavailable":
+      return withTicket("retry-restore");
+  }
+};
+
+/** guard lifecycleの失敗方針。未保存draftだけを利用者操作要求とし、staleは再試行とする。 */
+export const restoreContextRetryPolicy = (
+  error: RestoreContextError,
+  options: { readonly hasTicket: boolean },
+): RetryPolicy => {
+  switch (error.code) {
+    case "guard-failed":
+      return { kind: "action-required", action: "resolve-draft" };
+    case "confirmation-stale":
+    case "permit-stale":
+      return options.hasTicket
+        ? { kind: "retryable", action: "retry-restore" }
+        : SELECT_ANOTHER_FILE;
+    case "context-unavailable":
+    case "refresh-failed":
+      return UNSUPPORTED;
+  }
+};
 
 /** Foundationの結果を、値を含まないfeature codeへ写像する。将来のcode追加はここでの網羅性検査で検出する。 */
 export const mapFoundationError = (error: FoundationError): RestoreError => {

@@ -118,7 +118,7 @@
   - _Boundary: BackupRestoreDataPort integration_
 
 - [ ] 4. project-context lifecycle、状態、表示を実装する
-- [ ] 4.1 replacement guard lifecycleをcommit前に順序付ける
+- [x] 4.1 replacement guard lifecycleをcommit前に順序付ける
   - prepare、confirmation、cancel、begin、completeをpermit lifecycleどおり呼び、begin成功前のFoundation commitを禁止する
   - guard拒否、取消、stale confirmation/permitではfailedまたはcancelledとしてpermitを閉じ、ticketと現在選択を保持する
   - commit前失敗と取消のcommand列が期待順に一致し、新しいpermitで再試行できる統合testが成功すれば完了とする
@@ -126,7 +126,7 @@
   - _Requirements: 4.2, 4.7, 4.8, 5.5_
   - _Boundary: RestoreContextLifecycle guard_
 
-- [ ] 4.2 post-commit completion、finalization、context refreshを順序付ける
+- [x] 4.2 post-commit completion、finalization、context refreshを順序付ける
   - committed outcomeだけをsucceededとして一回通知し、notification失敗でも復元成功を取り消さない
   - finalization完了後にだけcontextをrefreshし、ready、empty、unavailableを復元後状態へ写像する
   - finalizationまたはrefresh失敗ではFoundation commitやguard prepareを再実行せず、対応する単独retryだけが呼ばれれば完了とする
@@ -134,7 +134,7 @@
   - _Requirements: 4.4, 5.5, 6.9, 6.10, 6.11_
   - _Boundary: RestoreContextLifecycle post-commit_
 
-- [ ] 4.3 commit前のバックアップ・復元状態機械を実装する
+- [x] 4.3 commit前のバックアップ・復元状態機械を実装する
   - export、validation、置換確認、draft確認、restoring、failedの判別状態と許可actionを定義する
   - 取消、guard拒否、commit前失敗ではfile ticketとpreviewを保持し、section unmountまたはfile再選択で未commit ticketを破棄する
   - stale assessmentは再assessmentだけ、pre-commit cleanup未完了は同じticketと新permitのretryだけを許可する
@@ -229,3 +229,6 @@
 - application-shellのproduction compositionは下流owner taskで扱い、本specでは提供済みrecovery契約のconsumer gateとproduction-shaped integration contractだけを所有する。
 - 16 MiBは復元入力ファイルの安全上限、10 MiBは変換後rootのFoundation保存上限として別々に判定する。容量超過した同一入力の復元再実行を許可しない。
 - fixtureは架空データだけを使用し、商品値、完全URL、file本文、raw root、fingerprintを診断出力しない。
+- guard lifecycleは`context-lifecycle.ts`のowner-local adapterが所有し、permitのbegin成功かつ未closeだけをFoundation commitの前提とする。commit後のsucceeded通知は同adapterが一度だけに閉じ、notification失敗で復元成功を取り消さない。
+- project-context公開portがsectionへ合成されるまで、`createUnattachedProjectContextPorts`がprepare=permitted・refresh=context-unavailableとして振る舞う。task 5.1のproduction wiringで実portへ差し替える（DEF-011）。
+- commit前失敗の許可actionは`contracts.ts`の`backupRetryPolicy` / `restoreRetryPolicy` / `restoreContextRetryPolicy`だけが決め、stateとViewは判定を重複させない。

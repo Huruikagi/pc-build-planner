@@ -10,6 +10,7 @@ import {
 } from "../../../src/features/backup-restore/public.js";
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import type { FoundationDataPort } from "../../../src/persistence/public.js";
+import { unattachedContextDependencies } from "./state-context-harness.js";
 
 const notExpected = (label: string) => (): never => {
   throw new Error(`must not call ${label}`);
@@ -25,6 +26,7 @@ const data: FoundationDataPort = {
 
 const state = () =>
   createBackupRestoreState({
+    ...unattachedContextDependencies(),
     backupService: { create: notExpected("create") },
     restoreService: {
       preflight: notExpected("preflight"),
@@ -161,6 +163,7 @@ test("unmount後の再mountは一時ticketを破棄し購読を重複させな�
     },
   };
   const reusableState = createBackupRestoreState({
+    ...unattachedContextDependencies(),
     backupService: { create: notExpected("create") },
     restoreService: {
       preflight: async () => ({ ok: true, value: ticket }),
@@ -225,6 +228,7 @@ test("validating中のunmount後は旧mountの遅延結果を再mountへ反映�
     resolveRead = resolve;
   });
   const reusableState = createBackupRestoreState({
+    ...unattachedContextDependencies(),
     backupService: { create: notExpected("create") },
     restoreService: {
       preflight: async () => {

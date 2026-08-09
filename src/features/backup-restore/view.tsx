@@ -3,10 +3,9 @@ import { useSyncExternalStore } from "react";
 
 import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
-import type { BackupError, FileError, RestoreError } from "./contracts.js";
-import type { BackupRestoreState } from "./state.js";
+import type { BackupRestoreFailure, BackupRestoreState } from "./state.js";
 
-type DisplayError = BackupError | FileError | RestoreError;
+type DisplayError = BackupRestoreFailure;
 
 /** codeだけを鍵とし、値は一切含めないキー写像。全codeを網羅する。 */
 const errorMessageKeys = {
@@ -29,13 +28,23 @@ const errorMessageKeys = {
   storage: "backup.errors.storage",
   serialization: "backup.errors.serialization",
   "backup-capacity-invariant": "backup.errors.serialization",
+  "guard-failed": "backup.errors.guard-failed",
+  "confirmation-stale": "backup.errors.stale-ticket",
+  "permit-stale": "backup.errors.stale-ticket",
+  "context-unavailable": "backup.errors.context-unavailable",
+  "refresh-failed": "backup.errors.context-unavailable",
 } as const satisfies Record<DisplayError["code"], MessageKey>;
 
 const messageFor = (error: DisplayError, messages: MessageResolver): string => {
   return messages(errorMessageKeys[error.code]);
 };
 
-const BUSY_PHASES = new Set(["exporting", "validating", "restoring"]);
+const BUSY_PHASES = new Set([
+  "exporting",
+  "validating",
+  "restoring",
+  "refreshing-context",
+]);
 
 export function BackupRestoreView({
   state,
@@ -54,6 +63,13 @@ export function BackupRestoreView({
   );
   const value = state.value;
   const busy = BUSY_PHASES.has(value.phase);
+  /** root write済みの三状態は同じ件数summaryを一つのstatusとして示す。 */
+  const completedSummary =
+    (value.phase === "succeeded" && value.operation === "restore") ||
+    value.phase === "restored-finalization-required" ||
+    value.phase === "restored-context-unavailable"
+      ? value.summary
+      : undefined;
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -113,7 +129,7 @@ export function BackupRestoreView({
         {value.phase === "validating" && (
           <p role="status">{messages("backup.validating")}</p>
         )}
-        {value.phase === "awaiting-confirmation" && (
+        {value.phase === "awaiting-replacement-confirmation" && (
           <div
             aria-label={messages("backup.restoreConfirmationTitle")}
             data-region="restore-confirmation"
@@ -149,20 +165,94 @@ export function BackupRestoreView({
             </button>
           </div>
         )}
-        {value.phase === "restoring" && (
+        {value.phase === "awaiting-draft-confirmation" && (
+          <div
+            aria-label={messages("backup.draftConfirmationTitle")}
+            data-region="restore-draft-confirmation"
+            role="alertdialog"
+          >
+            <p>{messages("backup.draftWarning")}</p>
+            <button
+              data-action="approve-draft"
+              disabled={!restoreAllowed}
+              onClick={() => void state.approveDraft()}
+              type="button"
+            >
+              {messages("backup.approveDraftAction")}
+            </button>
+            <button
+              data-action="cancel-draft"
+              onClick={() => state.cancelDraft()}
+              type="button"
+            >
+              {messages("common.dismiss")}
+            </button>
+          </div>
+        )}
+        {(value.phase === "restoring" ||
+          value.phase === "refreshing-context") && (
           <p role="status">{messages("backup.restoring")}</p>
         )}
-        {value.phase === "succeeded" && value.operation === "restore" && (
+        {completedSummary !== undefined && (
           <p role="status">
             {messages("backup.restoreCompleted", {
-              projectCount: value.summary.projectCount,
-              partCount: value.summary.partCount,
-              currentBuildCount: value.summary.currentBuildCount,
+              projectCount: completedSummary.projectCount,
+              partCount: completedSummary.partCount,
+              currentBuildCount: completedSummary.currentBuildCount,
             })}
           </p>
         )}
+        {value.phase === "restored-finalization-required" && (
+          <div data-region="restore-finalization">
+            <p>{messages("backup.finalizationRequired")}</p>
+            <button
+              data-action="finalize"
+              disabled={!restoreAllowed}
+              onClick={() => void state.finalizeRestore()}
+              type="button"
+            >
+              {messages("backup.finalizeAction")}
+            </button>
+          </div>
+        )}
+        {value.phase === "restored-context-unavailable" && (
+          <div data-region="restore-context-refresh">
+            <p>{messages("backup.contextUnavailable")}</p>
+            <button
+              data-action="refresh-context"
+              onClick={() => void state.refreshContext()}
+              type="button"
+            >
+              {messages("backup.refreshContextAction")}
+            </button>
+          </div>
+        )}
         {value.phase === "failed" && value.operation === "restore" && (
-          <p role="alert">{messageFor(value.error, messages)}</p>
+          <>
+            <p role="alert">{messageFor(value.error, messages)}</p>
+            {value.retry.kind === "retryable" &&
+              value.retry.action === "retry-restore" && (
+                <button
+                  data-action="retry-restore"
+                  disabled={!restoreAllowed}
+                  onClick={() => void state.retryRestore()}
+                  type="button"
+                >
+                  {messages("backup.retryRestoreAction")}
+                </button>
+              )}
+            {value.retry.kind === "retryable" &&
+              value.retry.action === "reassess-restore" && (
+                <button
+                  data-action="reassess-restore"
+                  disabled={!restoreAllowed}
+                  onClick={() => void state.reassessRestore()}
+                  type="button"
+                >
+                  {messages("backup.reassessRestoreAction")}
+                </button>
+              )}
+          </>
         )}
       </section>
     </section>

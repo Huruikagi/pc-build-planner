@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
+import type {
+  RestoreContextLifecycle,
+  RestorePostCommitCoordinator,
+} from "../../../src/features/backup-restore/context-lifecycle.js";
 import type {
   BackupArtifact,
   BackupError,
@@ -16,6 +19,7 @@ import type {
   RestoreService,
 } from "../../../src/features/backup-restore/service.js";
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
+import type { BackupRestoreFinalizationTicket } from "../../../src/persistence/public.js";
 
 type Deferred<T> = {
   readonly promise: Promise<T>;
@@ -39,6 +43,8 @@ const FAKE_ARTIFACT: BackupArtifact = {
 
 const FAKE_TICKET: RestoreTicket = {
   candidate: { schemaVersion: 1 },
+  mode: "normal",
+  assessment: { id: "assessment-1" } as never,
   preview: {
     createdAt: "2026-07-24T00:00:00.000Z" as never,
     formatVersion: 1,
@@ -55,19 +61,25 @@ const FAKE_SUMMARY: RestoreSummary = {
   currentBuildCount: 1,
 };
 
+const FINALIZATION = "finalization-1" as BackupRestoreFinalizationTicket;
+
 const notExpected = (label: string) => (): never => {
   throw new Error(`must not call ${label}`);
 };
 
 const buildBackupService = (
   create: BackupService["create"],
-): BackupService => ({ create });
+): BackupService => ({
+  create,
+});
 
 const buildRestoreService = (options: {
   preflight?: RestoreService["preflight"];
+  reassess?: RestoreService["reassess"];
   commit?: RestoreService["commit"];
 }): RestoreService => ({
   preflight: options.preflight ?? notExpected("preflight"),
+  reassess: options.reassess ?? notExpected("reassess"),
   commit: options.commit ?? notExpected("commit"),
 });
 
@@ -79,33 +91,160 @@ const buildFileGateway = (options: {
   download: options.download ?? notExpected("download"),
 });
 
+interface LifecycleScript {
+  prepare?: RestoreContextLifecycle["prepare"];
+  confirm?: RestoreContextLifecycle["confirm"];
+  cancel?: RestoreContextLifecycle["cancel"];
+  begin?: RestoreContextLifecycle["begin"];
+  complete?: RestoreContextLifecycle["complete"];
+  isCommitAllowed?: RestoreContextLifecycle["isCommitAllowed"];
+}
+
+const buildLifecycle = (script: LifecycleScript, calls: string[]) => {
+  let started = false;
+  const lifecycle: RestoreContextLifecycle = {
+    async prepare() {
+      calls.push("prepare");
+      started = false;
+      return (
+        script.prepare?.() ?? {
+          ok: true,
+          value: { kind: "permitted", permit: { id: "permit-1" } },
+        }
+      );
+    },
+    async confirm(confirmationId) {
+      calls.push(`confirm:${confirmationId}`);
+      return (
+        script.confirm?.(confirmationId) ?? {
+          ok: true,
+          value: { id: "permit-1" },
+        }
+      );
+    },
+    cancel(confirmationId) {
+      calls.push(`cancel:${confirmationId}`);
+      return script.cancel?.(confirmationId) ?? { ok: true, value: undefined };
+    },
+    begin(permitId) {
+      calls.push(`begin:${permitId}`);
+      const result = script.begin?.(permitId) ?? {
+        ok: true,
+        value: undefined,
+      };
+      if (result.ok) started = true;
+      return result;
+    },
+    async complete(permitId, outcome) {
+      calls.push(`complete:${permitId}:${outcome}`);
+      started = false;
+      return (
+        script.complete?.(permitId, outcome) ?? { ok: true, value: undefined }
+      );
+    },
+    isCommitAllowed: (permitId) =>
+      script.isCommitAllowed?.(permitId) ?? started,
+    async refresh() {
+      calls.push("refresh");
+      return {
+        ok: true,
+        value: {
+          status: "empty",
+          generation: 1,
+          catalog: [],
+          selectedProjectId: null,
+        },
+      };
+    },
+  };
+  return lifecycle;
+};
+
+const buildPostCommit = (
+  calls: string[],
+  options: { finalize?: RestorePostCommitCoordinator["finalizeOnly"] } = {},
+): RestorePostCommitCoordinator => ({
+  async afterCommit({ permitId, outcome }) {
+    calls.push(`afterCommit:${permitId}:${outcome.kind}`);
+    if (outcome.kind === "committed-finalization-required")
+      return {
+        kind: "restored-finalization-required",
+        summary: outcome.summary,
+        finalization: outcome.finalization,
+      };
+    return { kind: "restored", summary: outcome.summary, context: "ready" };
+  },
+  finalizeOnly(ticket, summary) {
+    calls.push("finalizeOnly");
+    return (
+      options.finalize?.(ticket, summary) ??
+      Promise.resolve({
+        ok: true,
+        value: { kind: "restored", summary, context: "ready" },
+      })
+    );
+  },
+  async refreshOnly(summary) {
+    calls.push("refreshOnly");
+    return { kind: "restored", summary, context: "ready" };
+  },
+});
+
+const buildState = (options: {
+  backup?: BackupService["create"];
+  restore?: Parameters<typeof buildRestoreService>[0];
+  file?: Parameters<typeof buildFileGateway>[0];
+  lifecycle?: LifecycleScript;
+  finalize?: RestorePostCommitCoordinator["finalizeOnly"];
+}) => {
+  const calls: string[] = [];
+  const state = createBackupRestoreState({
+    backupService: buildBackupService(options.backup ?? notExpected("create")),
+    restoreService: buildRestoreService(options.restore ?? {}),
+    fileGateway: buildFileGateway(options.file ?? {}),
+    contextLifecycle: buildLifecycle(options.lifecycle ?? {}, calls),
+    postCommit: buildPostCommit(
+      calls,
+      options.finalize === undefined ? {} : { finalize: options.finalize },
+    ),
+  });
+  return { state, calls };
+};
+
 const FAKE_FILE = {} as File;
 const FAKE_RESTORE_INPUT: RestoreInput = { text: "{}", byteLength: 2 };
 
-test("初期状態はidleである", () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({}),
+const validated = async (options: Parameters<typeof buildState>[0] = {}) => {
+  const built = buildState({
+    ...options,
+    restore: {
+      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
+      ...options.restore,
+    },
+    file: {
+      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
+      ...options.file,
+    },
   });
+  await built.state.validateFile(FAKE_FILE);
+  return built;
+};
 
+test("初期状態はidleである", () => {
+  const { state } = buildState({});
   assert.deepEqual(state.value, { phase: "idle" });
 });
 
 test("exportBackupはexporting経由でsucceededへ遷移しdownloadを呼ぶ", async () => {
-  const downloadCalls: BackupArtifact[] = [];
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => ({
-      ok: true,
-      value: FAKE_ARTIFACT,
-    })),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({
+  const downloads: BackupArtifact[] = [];
+  const { state } = buildState({
+    backup: async () => ({ ok: true, value: FAKE_ARTIFACT }),
+    file: {
       download: (artifact) => {
-        downloadCalls.push(artifact);
+        downloads.push(artifact);
         return { ok: true, value: undefined };
       },
-    }),
+    },
   });
 
   await state.exportBackup();
@@ -115,15 +254,14 @@ test("exportBackupはexporting経由でsucceededへ遷移しdownloadを呼ぶ", 
     operation: "backup",
     filename: FAKE_ARTIFACT.filename,
   });
-  assert.deepEqual(downloadCalls, [FAKE_ARTIFACT]);
+  assert.deepEqual(downloads, [FAKE_ARTIFACT]);
 });
 
-test("exportBackupはartifact生成失敗時にfailedへ遷移しdownloadを呼ばない", async () => {
-  const error: BackupError = { code: "corrupt-current-data" };
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => ({ ok: false, error })),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({ download: notExpected("download") }),
+test("export失敗は再試行方針つきのfailedへ遷移する", async () => {
+  const error: BackupError = { code: "storage" };
+  const { state } = buildState({
+    backup: async () => ({ ok: false, error }),
+    file: { download: notExpected("download") },
   });
 
   await state.exportBackup();
@@ -132,41 +270,36 @@ test("exportBackupはartifact生成失敗時にfailedへ遷移しdownloadを呼�
     phase: "failed",
     operation: "backup",
     error,
+    retry: { kind: "retryable", action: "retry-export" },
   });
 });
 
-test("exportBackupはdownload失敗時にfailedへ遷移する", async () => {
-  const error: FileError = { code: "unreadable" };
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => ({
-      ok: true,
-      value: FAKE_ARTIFACT,
-    })),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({ download: () => ({ ok: false, error }) }),
+test("自己復元不変条件違反のexportはunsupportedとして再試行を許可しない", async () => {
+  const { state } = buildState({
+    backup: async () => ({
+      ok: false,
+      error: { code: "backup-capacity-invariant" },
+    }),
+    file: { download: notExpected("download") },
   });
 
   await state.exportBackup();
 
-  assert.deepEqual(state.value, {
-    phase: "failed",
-    operation: "backup",
-    error,
-  });
+  assert.deepEqual(
+    state.value.phase === "failed" ? state.value.retry : undefined,
+    { kind: "unsupported" },
+  );
 });
 
 test("処理中のexportBackup重複呼び出しは抑止される", async () => {
   const gate = deferred<{ ok: true; value: BackupArtifact }>();
   let createCalls = 0;
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => {
+  const { state } = buildState({
+    backup: async () => {
       createCalls += 1;
       return gate.promise;
-    }),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({
-      download: () => ({ ok: true, value: undefined }),
-    }),
+    },
+    file: { download: () => ({ ok: true, value: undefined }) },
   });
 
   const first = state.exportBackup();
@@ -179,33 +312,20 @@ test("処理中のexportBackup重複呼び出しは抑止される", async () =>
   assert.equal(state.value.phase, "succeeded");
 });
 
-test("validateFileはvalidating経由でawaiting-confirmationへ遷移しticketを保持する", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
-  });
-
-  await state.validateFile(FAKE_FILE);
+test("validateFileはawaiting-replacement-confirmationへ遷移しticketを保持する", async () => {
+  const { state } = await validated();
 
   assert.deepEqual(state.value, {
-    phase: "awaiting-confirmation",
+    phase: "awaiting-replacement-confirmation",
     ticket: FAKE_TICKET,
   });
 });
 
-test("validateFileは読取失敗時にfailedへ遷移しpreflightを呼ばない", async () => {
-  const error: FileError = { code: "size-exceeded" };
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: notExpected("preflight"),
-    }),
-    fileGateway: buildFileGateway({ read: async () => ({ ok: false, error }) }),
+test("読取失敗は別file選択だけを許可するfailedへ遷移しpreflightを呼ばない", async () => {
+  const error: FileError = { code: "unreadable" };
+  const { state } = buildState({
+    restore: { preflight: notExpected("preflight") },
+    file: { read: async () => ({ ok: false, error }) },
   });
 
   await state.validateFile(FAKE_FILE);
@@ -214,183 +334,365 @@ test("validateFileは読取失敗時にfailedへ遷移しpreflightを呼ばな�
     phase: "failed",
     operation: "restore",
     error,
+    retry: { kind: "action-required", action: "select-another-file" },
   });
 });
 
-test("validateFileはpreflight失敗時にfailedへ遷移する", async () => {
-  const error: RestoreError = { code: "invalid-structure", path: "$.data" };
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: false, error }),
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
-  });
-
-  await state.validateFile(FAKE_FILE);
-
-  assert.deepEqual(state.value, {
-    phase: "failed",
-    operation: "restore",
-    error,
-  });
-});
-
-test("awaiting-confirmation中の再選択は既存ticketを破棄し新しいticketへ差し替える", async () => {
-  const secondTicket: RestoreTicket = {
-    ...FAKE_TICKET,
-    preview: { ...FAKE_TICKET.preview, projectCount: 9 },
-  };
-  let call = 0;
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => {
-        call += 1;
-        return { ok: true, value: call === 1 ? FAKE_TICKET : secondTicket };
-      },
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
-  });
-
-  await state.validateFile(FAKE_FILE);
-  assert.equal(
-    state.value.phase === "awaiting-confirmation"
-      ? state.value.ticket.preview.projectCount
-      : undefined,
-    1,
-  );
-
-  await state.validateFile(FAKE_FILE);
-  assert.equal(
-    state.value.phase === "awaiting-confirmation"
-      ? state.value.ticket.preview.projectCount
-      : undefined,
-    9,
-  );
-});
-
-test("confirmRestoreはawaiting-confirmation以外からは呼べない", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({ commit: notExpected("commit") }),
-    fileGateway: buildFileGateway({}),
+test("容量超過はunsupportedとしてticketを保持したまま同一入力の再実行を禁止する", async () => {
+  const error: RestoreError = { code: "quota-exceeded" };
+  const { state, calls } = await validated({
+    restore: { commit: async () => ({ ok: false, error }) },
   });
 
   await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error,
+    retry: { kind: "unsupported" },
+    ticket: FAKE_TICKET,
+  });
+
+  const before = [...calls];
+  await state.retryRestore();
+  await state.reassessRestore();
+  assert.deepEqual(calls, before);
+});
+
+test("確認取消はticketを保持したままawaiting状態からidleへ戻す", async () => {
+  const { state } = await validated();
+
+  state.cancel();
 
   assert.deepEqual(state.value, { phase: "idle" });
 });
 
-test("confirmRestoreはrestoring経由でsucceededへ遷移しsummaryを保持する", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
-      commit: async () => ({ ok: true, value: FAKE_SUMMARY }),
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
+test("confirmRestoreはprepare→begin→commitの順で呼びbegin前にcommitしない", async () => {
+  const commitOrder: string[] = [];
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => {
+        commitOrder.push("commit");
+        return {
+          ok: true,
+          value: { kind: "committed", summary: FAKE_SUMMARY },
+        };
+      },
+    },
   });
 
-  await state.validateFile(FAKE_FILE);
   await state.confirmRestore();
 
+  assert.deepEqual(calls, [
+    "prepare",
+    "begin:permit-1",
+    "afterCommit:permit-1:committed",
+  ]);
+  assert.deepEqual(commitOrder, ["commit"]);
   assert.deepEqual(state.value, {
     phase: "succeeded",
     operation: "restore",
     summary: FAKE_SUMMARY,
+    context: "ready",
   });
 });
 
-test("confirmRestoreの失敗はfailedへ遷移する", async () => {
-  const error: RestoreError = { code: "stale-ticket" };
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
-      commit: async () => ({ ok: false, error }),
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
+test("draft確認が必要な場合はcommit前にawaiting-draft-confirmationで停止する", async () => {
+  const { state, calls } = await validated({
+    lifecycle: {
+      async prepare() {
+        return {
+          ok: true,
+          value: {
+            kind: "confirmation-required",
+            confirmation: { id: "confirm-1" },
+          },
+        };
+      },
+    },
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: { kind: "committed", summary: FAKE_SUMMARY },
+      }),
+    },
   });
 
-  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "awaiting-draft-confirmation",
+    ticket: FAKE_TICKET,
+    confirmationId: "confirm-1",
+  });
+  assert.deepEqual(calls, ["prepare"]);
+
+  await state.approveDraft();
+
+  assert.deepEqual(calls, [
+    "prepare",
+    "confirm:confirm-1",
+    "begin:permit-1",
+    "afterCommit:permit-1:committed",
+  ]);
+  assert.equal(state.value.phase, "succeeded");
+});
+
+test("draft確認の取消はguardを閉じticketを保持したまま置換確認へ戻る", async () => {
+  const { state, calls } = await validated({
+    lifecycle: {
+      async prepare() {
+        return {
+          ok: true,
+          value: {
+            kind: "confirmation-required",
+            confirmation: { id: "confirm-1" },
+          },
+        };
+      },
+    },
+    restore: { commit: notExpected("commit") },
+  });
+
+  await state.confirmRestore();
+  state.cancelDraft();
+
+  assert.deepEqual(state.value, {
+    phase: "awaiting-replacement-confirmation",
+    ticket: FAKE_TICKET,
+  });
+  assert.deepEqual(calls, ["prepare", "cancel:confirm-1"]);
+});
+
+test("guard拒否ではcommitせずresolve-draftをticket付きで要求する", async () => {
+  const { state, calls } = await validated({
+    lifecycle: {
+      async prepare() {
+        return { ok: false, error: { code: "guard-failed" } };
+      },
+    },
+    restore: { commit: notExpected("commit") },
+  });
+
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error: { code: "guard-failed" },
+    retry: { kind: "action-required", action: "resolve-draft" },
+    ticket: FAKE_TICKET,
+  });
+  assert.deepEqual(calls, ["prepare"]);
+});
+
+test("begin失敗ではcommitせずticketを保持して再試行できる", async () => {
+  const { state, calls } = await validated({
+    lifecycle: {
+      begin: () => ({ ok: false, error: { code: "permit-stale" } }),
+    },
+    restore: { commit: notExpected("commit") },
+  });
+
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error: { code: "permit-stale" },
+    retry: { kind: "retryable", action: "retry-restore" },
+    ticket: FAKE_TICKET,
+  });
+  assert.deepEqual(calls, ["prepare", "begin:permit-1"]);
+});
+
+test("commit前失敗ではfailedでpermitを閉じticketを保持する", async () => {
+  const error: RestoreError = { code: "storage-unavailable" };
+  const { state, calls } = await validated({
+    restore: { commit: async () => ({ ok: false, error }) },
+  });
+
   await state.confirmRestore();
 
   assert.deepEqual(state.value, {
     phase: "failed",
     operation: "restore",
     error,
+    retry: { kind: "retryable", action: "retry-restore" },
+    ticket: FAKE_TICKET,
+  });
+  assert.deepEqual(calls, [
+    "prepare",
+    "begin:permit-1",
+    "complete:permit-1:failed",
+  ]);
+});
+
+test("precommit-cleanup-pendingは同じticketと新しいpermitでのretryだけを許可する", async () => {
+  let commits = 0;
+  const { state, calls } = await validated({
+    restore: {
+      commit: async (ticket) => {
+        commits += 1;
+        assert.equal(ticket, FAKE_TICKET);
+        return commits === 1
+          ? { ok: false, error: { code: "precommit-cleanup-pending" } }
+          : { ok: true, value: { kind: "committed", summary: FAKE_SUMMARY } };
+      },
+      reassess: notExpected("reassess"),
+    },
+  });
+
+  await state.confirmRestore();
+  assert.deepEqual(
+    state.value.phase === "failed" ? state.value.retry : undefined,
+    { kind: "retryable", action: "retry-restore" },
+  );
+
+  calls.length = 0;
+  await state.retryRestore();
+
+  assert.deepEqual(calls, [
+    "prepare",
+    "begin:permit-1",
+    "afterCommit:permit-1:committed",
+  ]);
+  assert.equal(state.value.phase, "succeeded");
+  assert.equal(commits, 2);
+});
+
+test("stale-assessmentは再assessmentだけを許可しcommit再送を禁止する", async () => {
+  const nextTicket: RestoreTicket = {
+    ...FAKE_TICKET,
+    preview: { ...FAKE_TICKET.preview, projectCount: 7 },
+  };
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => ({ ok: false, error: { code: "stale-assessment" } }),
+      reassess: async () => ({ ok: true, value: nextTicket }),
+    },
+  });
+
+  await state.confirmRestore();
+  assert.deepEqual(
+    state.value.phase === "failed" ? state.value.retry : undefined,
+    { kind: "retryable", action: "reassess-restore" },
+  );
+
+  calls.length = 0;
+  await state.retryRestore();
+  assert.deepEqual(calls, []);
+
+  await state.reassessRestore();
+  assert.deepEqual(state.value, {
+    phase: "awaiting-replacement-confirmation",
+    ticket: nextTicket,
   });
 });
 
-test("cancelはawaiting-confirmationからidleへ戻しticketを破棄する", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
+test("committed-finalization-requiredはfinalize-only状態を保持する", async () => {
+  const { state } = await validated({
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: {
+          kind: "committed-finalization-required",
+          summary: FAKE_SUMMARY,
+          finalization: FINALIZATION,
+        },
+      }),
+    },
+  });
+
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "restored-finalization-required",
+    summary: FAKE_SUMMARY,
+    finalization: FINALIZATION,
+  });
+});
+
+test("commit後はfile再選択と復元確定を公開しない", async () => {
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: {
+          kind: "committed-finalization-required",
+          summary: FAKE_SUMMARY,
+          finalization: FINALIZATION,
+        },
+      }),
+    },
+  });
+
+  await state.confirmRestore();
+  calls.length = 0;
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+
+  assert.deepEqual(calls, []);
+  assert.equal(state.value.phase, "restored-finalization-required");
+});
+
+test("finalize-only retryはFoundation commitとguard lifecycleを再実行しない", async () => {
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: {
+          kind: "committed-finalization-required",
+          summary: FAKE_SUMMARY,
+          finalization: FINALIZATION,
+        },
+      }),
+    },
+  });
+
+  await state.confirmRestore();
+  calls.length = 0;
+  await state.finalizeRestore();
+
+  assert.deepEqual(calls, ["finalizeOnly"]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: FAKE_SUMMARY,
+    context: "ready",
+  });
+});
+
+test("file再選択は未commit ticketを破棄し新しい検証結果へ差し替える", async () => {
+  const second: RestoreTicket = {
+    ...FAKE_TICKET,
+    preview: { ...FAKE_TICKET.preview, projectCount: 9 },
+  };
+  let call = 0;
+  const { state } = buildState({
+    restore: {
+      preflight: async () => {
+        call += 1;
+        return { ok: true, value: call === 1 ? FAKE_TICKET : second };
+      },
+    },
+    file: { read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }) },
   });
 
   await state.validateFile(FAKE_FILE);
-  state.cancel();
+  await state.validateFile(FAKE_FILE);
 
-  assert.deepEqual(state.value, { phase: "idle" });
-});
-
-test("cancelはfailed・succeededからもidleへ戻る", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => ({
-      ok: false,
-      error: { code: "storage" },
-    })),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({}),
+  assert.deepEqual(state.value, {
+    phase: "awaiting-replacement-confirmation",
+    ticket: second,
   });
-
-  await state.exportBackup();
-  assert.equal(state.value.phase, "failed");
-  state.cancel();
-  assert.deepEqual(state.value, { phase: "idle" });
-});
-
-test("処理中はcancelを受け付けず表示を維持する", async () => {
-  const gate = deferred<{ ok: true; value: BackupArtifact }>();
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => gate.promise),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({
-      download: () => ({ ok: true, value: undefined }),
-    }),
-  });
-
-  const pending = state.exportBackup();
-  state.cancel();
-  assert.equal(state.value.phase, "exporting");
-  gate.resolve({ ok: true, value: FAKE_ARTIFACT });
-  await pending;
 });
 
 test("subscribeは状態変化時にlistenerを呼びunsubscribe後は呼ばない", async () => {
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => ({
-      ok: true,
-      value: FAKE_ARTIFACT,
-    })),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({
-      download: () => ({ ok: true, value: undefined }),
-    }),
+  const { state } = buildState({
+    backup: async () => ({ ok: true, value: FAKE_ARTIFACT }),
+    file: { download: () => ({ ok: true, value: undefined }) },
   });
   let notifications = 0;
   const unsubscribe = state.subscribe(() => {
@@ -406,43 +708,78 @@ test("subscribeは状態変化時にlistenerを呼びunsubscribe後は呼ばな�
   assert.equal(notifications, before);
 });
 
-test("resetForMountはexportingをidle化し旧backup完了を無視する", async () => {
+test("resetForMountは未commit ticketを破棄し旧mountの結果を無視する", async () => {
   const gate = deferred<{ ok: true; value: BackupArtifact }>();
   let downloads = 0;
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(async () => gate.promise),
-    restoreService: buildRestoreService({}),
-    fileGateway: buildFileGateway({
+  const { state } = buildState({
+    backup: async () => gate.promise,
+    file: {
       download: () => {
         downloads += 1;
         return { ok: true, value: undefined };
       },
-    }),
+    },
   });
+
   const stale = state.exportBackup();
   state.resetForMount();
   gate.resolve({ ok: true, value: FAKE_ARTIFACT });
   await stale;
+
   assert.deepEqual(state.value, { phase: "idle" });
   assert.equal(downloads, 0);
 });
 
-test("resetForMountはrestoringをidle化し旧commit完了を無視する", async () => {
-  const gate = deferred<{ ok: true; value: RestoreSummary }>();
-  const state = createBackupRestoreState({
-    backupService: buildBackupService(notExpected("create")),
-    restoreService: buildRestoreService({
-      preflight: async () => ({ ok: true, value: FAKE_TICKET }),
-      commit: async () => gate.promise,
-    }),
-    fileGateway: buildFileGateway({
-      read: async () => ({ ok: true, value: FAKE_RESTORE_INPUT }),
-    }),
+test("resetForMountはrestoring中の結果を反映しない", async () => {
+  const gate = deferred<{
+    ok: true;
+    value: { kind: "committed"; summary: RestoreSummary };
+  }>();
+  const { state } = await validated({
+    restore: { commit: async () => gate.promise },
   });
-  await state.validateFile(FAKE_FILE);
+
   const stale = state.confirmRestore();
   state.resetForMount();
-  gate.resolve({ ok: true, value: FAKE_SUMMARY });
+  gate.resolve({
+    ok: true,
+    value: { kind: "committed", summary: FAKE_SUMMARY },
+  });
   await stale;
+
   assert.deepEqual(state.value, { phase: "idle" });
+});
+
+test("download失敗のexportは別file選択ではなく再exportを許可する", async () => {
+  const { state } = buildState({
+    backup: async () => ({ ok: true, value: FAKE_ARTIFACT }),
+    file: { download: () => ({ ok: false, error: { code: "unreadable" } }) },
+  });
+
+  await state.exportBackup();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "backup",
+    error: { code: "unreadable" },
+    retry: { kind: "retryable", action: "retry-export" },
+  });
+});
+
+test("permitがbegin後に開いていなければcommitへ進まない", async () => {
+  const { state, calls } = await validated({
+    lifecycle: { isCommitAllowed: () => false },
+    restore: { commit: notExpected("commit") },
+  });
+
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error: { code: "permit-stale" },
+    retry: { kind: "retryable", action: "retry-restore" },
+    ticket: FAKE_TICKET,
+  });
+  assert.deepEqual(calls, ["prepare", "begin:permit-1"]);
 });
