@@ -1,5 +1,3 @@
-/** 復元commitのfence受け渡しにだけ必要な最小型。owner/lease操作capabilityそのものは公開しない。 */
-
 export type { MaintenanceFence } from "./maintenance.js";
 export type {
   MaintenanceSnapshot,
@@ -48,6 +46,14 @@ export {
   foundationCommandDecoder,
 } from "./worker-registration.js";
 export type {
+  BackupRestoreAssessment,
+  BackupRestoreAssessmentTicket,
+  BackupRestoreCommitCommand,
+  BackupRestoreCommitMode,
+  BackupRestoreCommitOutcome,
+  BackupRestoreCommitReceipt,
+  BackupRestoreDataPort,
+  BackupRestoreFinalizationTicket,
   FoundationDataPort,
   FoundationScopedDataPort,
   MutationReceipt,

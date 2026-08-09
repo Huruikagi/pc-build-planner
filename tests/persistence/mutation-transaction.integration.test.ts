@@ -88,6 +88,8 @@ const harness = async ({ quotaBytes = 10_000, failWrite = false } = {}) => {
   const writes = [];
   const storage = {
     readRoot: () => adapter.readRoot(),
+    readRecoveryControl: () => adapter.readRecoveryControl(),
+    writeRecoveryControl: (control) => adapter.writeRecoveryControl(control),
     bytesInUse: () => adapter.bytesInUse(),
     quotaBytes: () => adapter.quotaBytes(),
     restrictToTrustedContexts: () => adapter.restrictToTrustedContexts(),

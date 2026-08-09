@@ -16,10 +16,22 @@ import type {
   MigrationRegistry,
 } from "./migration-registry.js";
 import type {
+  RecoveryAssessment,
+  RecoveryAssessmentError,
+  RecoveryCoordinator,
+} from "./recovery.js";
+import {
+  type RecoveryControlError,
+  type RecoveryFence,
+  recoveryControlPolicy,
+  validateRecoveryControl,
+} from "./recovery-control.js";
+import type {
   ReplacementAssessment,
   ReplacementError,
   ReplacementEvaluator,
 } from "./replacement.js";
+import { canonicalJson } from "./replacement.js";
 import type { StoragePort } from "./repository.js";
 import type { RootWriteLock } from "./root-write-lock.js";
 import { REQUEST_DEDUPE_LIMIT } from "./schema.js";
@@ -119,12 +131,40 @@ export interface RootTransactionRunner {
   runMaintenance(
     command: MaintenanceCommand,
   ): Promise<Result<MaintenanceReceipt, FoundationError>>;
+  runRecoveryMaintenance(
+    command: RecoveryMaintenanceCommand,
+  ): Promise<Result<RecoveryMaintenanceReceipt, FoundationError>>;
   assessReplacement(
     candidate: unknown,
   ): Promise<Result<ReplacementAssessment, FoundationError>>;
+  assessRecovery(
+    candidate: unknown,
+  ): Promise<
+    Result<RecoveryAssessment, RecoveryAssessmentError | FoundationError>
+  >;
   replaceRoot(
     command: ReplacementCommand,
   ): Promise<Result<ReplacementReceipt, FoundationError>>;
+  replaceFromRecovery(
+    command: RecoveryReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>>;
+  replaceRootUnderRecoveryControl(
+    command: ControlledReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>>;
+  findPendingRecoveryFinalization(): Promise<
+    Result<RecoveryFinalizationCommand | null, FoundationError>
+  >;
+  finalizeRecovery(
+    command: RecoveryFinalizationCommand,
+  ): Promise<Result<{ readonly revision: Revision }, FoundationError>>;
+  cleanupPendingRecovery(
+    assessmentTicketId: string,
+  ): Promise<Result<RecoveryCleanupResume, FoundationError>>;
+}
+
+export interface RecoveryCleanupResume {
+  readonly assessmentIdentity: string;
+  readonly mode: "normal" | "recovery";
 }
 
 export interface ReplacementCommand {
@@ -159,6 +199,51 @@ export interface MaintenanceReceipt {
   readonly fence?: MaintenanceFence;
 }
 
+export type RecoveryMaintenanceCommand =
+  | {
+      readonly type: "acquire";
+      readonly ownerId: string;
+      readonly leaseMs: number;
+      readonly assessmentTicketId?: string;
+      readonly assessmentIdentity?: string;
+      readonly commitMode?: "normal" | "recovery";
+    }
+  | {
+      readonly type: "renew";
+      readonly fence: RecoveryFence;
+      readonly leaseMs: number;
+    }
+  | {
+      readonly type: "release" | "abort";
+      readonly fence: RecoveryFence;
+    };
+
+export interface RecoveryMaintenanceReceipt {
+  readonly fence?: RecoveryFence;
+}
+
+export interface RecoveryReplacementCommand {
+  readonly candidate: unknown;
+  readonly assessment: RecoveryAssessment;
+  readonly fence: RecoveryFence;
+  readonly finalizationTicketId?: string;
+}
+
+export interface ControlledReplacementCommand {
+  readonly candidate: unknown;
+  readonly assessment: ReplacementAssessment;
+  readonly fence: RecoveryFence;
+  readonly finalizationTicketId: string;
+}
+
+export interface RecoveryFinalizationCommand {
+  readonly fence: RecoveryFence;
+  readonly candidateDigest: string;
+  readonly revision: Revision;
+  readonly ticketId?: string;
+  readonly mode?: "normal" | "recovery";
+}
+
 export interface RootTransactionRunnerDependencies {
   readonly storage: StoragePort;
   readonly lock: RootWriteLock;
@@ -166,6 +251,7 @@ export interface RootTransactionRunnerDependencies {
   readonly validator: SchemaValidator;
   readonly maintenance: MaintenancePolicy;
   readonly replacement?: ReplacementEvaluator;
+  readonly recovery?: RecoveryCoordinator;
   readonly now: () => UtcTimestamp;
   readonly initialRoot: () => LocalDataRoot;
 }
@@ -197,6 +283,38 @@ const replacementFailure = (error: ReplacementError): FoundationError => {
     case "invalid-capacity-input":
       return { code: "validation" };
   }
+};
+
+const recoveryControlFailure = (
+  error: RecoveryControlError,
+): FoundationError => {
+  switch (error.code) {
+    case "recovery-active":
+    case "stale-recovery-state":
+      return { code: error.code };
+    case "invalid-recovery-control":
+      return { code: "corrupt-data" };
+  }
+};
+
+const leaseExpiresAt = (
+  now: UtcTimestamp,
+  leaseMs: number,
+): Result<string, FoundationError> => {
+  if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0)
+    return { ok: false, error: { code: "validation" } };
+  const milliseconds = Date.parse(now) + leaseMs;
+  if (!Number.isFinite(milliseconds))
+    return { ok: false, error: { code: "validation" } };
+  return { ok: true, value: new Date(milliseconds).toISOString() };
+};
+
+const digestRoot = async (root: LocalDataRoot): Promise<string> => {
+  const bytes = new TextEncoder().encode(canonicalJson(root as never));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 };
 
 const nextRevision = (revision: Revision): Revision | undefined => {
@@ -256,6 +374,21 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     return locked.value as Result<MaintenanceReceipt, FoundationError>;
   }
 
+  async runRecoveryMaintenance(
+    command: RecoveryMaintenanceCommand,
+  ): Promise<Result<RecoveryMaintenanceReceipt, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#runRecoveryMaintenanceLocked(command),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<RecoveryMaintenanceReceipt, FoundationError>;
+  }
+
   async replaceRoot(
     command: ReplacementCommand,
   ): Promise<Result<ReplacementReceipt, FoundationError>> {
@@ -284,6 +417,110 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     }
     if (!locked.ok) return locked;
     return locked.value as Result<ReplacementAssessment, FoundationError>;
+  }
+
+  async assessRecovery(
+    candidate: unknown,
+  ): Promise<
+    Result<RecoveryAssessment, RecoveryAssessmentError | FoundationError>
+  > {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () => {
+        const recovery = this.#deps.recovery;
+        return recovery === undefined
+          ? { ok: false, error: { code: "validation" } }
+          : recovery.assessRecovery(candidate);
+      });
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<
+      RecoveryAssessment,
+      RecoveryAssessmentError | FoundationError
+    >;
+  }
+
+  async replaceFromRecovery(
+    command: RecoveryReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#replaceFromRecoveryLocked(command),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<ReplacementReceipt, FoundationError>;
+  }
+
+  async replaceRootUnderRecoveryControl(
+    command: ControlledReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#replaceRootUnderRecoveryControlLocked(command),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<ReplacementReceipt, FoundationError>;
+  }
+
+  async findPendingRecoveryFinalization(): Promise<
+    Result<RecoveryFinalizationCommand | null, FoundationError>
+  > {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#findPendingRecoveryFinalizationLocked(),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<
+      RecoveryFinalizationCommand | null,
+      FoundationError
+    >;
+  }
+
+  async finalizeRecovery(
+    command: RecoveryFinalizationCommand,
+  ): Promise<Result<{ readonly revision: Revision }, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#finalizeRecoveryLocked(command),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<
+      { readonly revision: Revision },
+      FoundationError
+    >;
+  }
+
+  async cleanupPendingRecovery(
+    assessmentTicketId: string,
+  ): Promise<Result<RecoveryCleanupResume, FoundationError>> {
+    let locked: Awaited<ReturnType<RootWriteLock["runExclusive"]>>;
+    try {
+      locked = await this.#deps.lock.runExclusive(async () =>
+        this.#cleanupPendingRecoveryLocked(assessmentTicketId),
+      );
+    } catch {
+      return { ok: false, error: { code: "lock-unavailable" } };
+    }
+    if (!locked.ok) return locked;
+    return locked.value as Result<RecoveryCleanupResume, FoundationError>;
   }
 
   async #assessReplacementLocked(
@@ -318,6 +555,8 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
   ): Promise<Result<ReplacementReceipt, FoundationError>> {
     const current = await this.#readCurrentRoot();
     if (!current.ok) return current;
+    const recoveryAuthorized = await this.#authorizeNormalWrite();
+    if (!recoveryAuthorized.ok) return recoveryAuthorized;
     const snapshot = current.value;
     const bytes = await this.#deps.storage.bytesInUse();
     if (!bytes.ok) return bytes;
@@ -371,6 +610,286 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       : committed;
   }
 
+  async #replaceFromRecoveryLocked(
+    command: RecoveryReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    const recovery = this.#deps.recovery;
+    const replacement = this.#deps.replacement;
+    if (recovery === undefined || replacement === undefined)
+      return { ok: false, error: { code: "validation" } };
+    const storedControl = await this.#deps.storage.readRecoveryControl();
+    if (!storedControl.ok) return storedControl;
+    const control = validateRecoveryControl(storedControl.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    const authorized = recoveryControlPolicy.authorizeRecovery(
+      control.value,
+      command.fence,
+      this.#deps.now(),
+    );
+    if (!authorized.ok)
+      return { ok: false, error: recoveryControlFailure(authorized.error) };
+    if (
+      command.assessment.cursor.controlGeneration + 1 !==
+      command.fence.generation
+    )
+      return { ok: false, error: { code: "stale-assessment" } };
+
+    const verifiedAssessment = await recovery.verifyRecovery(
+      command.candidate,
+      command.assessment,
+    );
+    if (!verifiedAssessment.ok) return verifiedAssessment;
+    const bytes = await this.#deps.storage.bytesInUse();
+    if (!bytes.ok) return bytes;
+    let quotaBytes: number;
+    try {
+      quotaBytes = this.#deps.storage.quotaBytes();
+    } catch {
+      return { ok: false, error: { code: "storage-unavailable" } };
+    }
+    const candidate = await replacement.verifyReplacement(
+      command.candidate,
+      verifiedAssessment.value,
+      {
+        currentBytes: bytes.value,
+        quotaBytes,
+        revision: 0,
+        maintenance: { generation: 0 as never, active: false },
+      },
+    );
+    if (!candidate.ok)
+      return { ok: false, error: replacementFailure(candidate.error) };
+    const bound = recoveryControlPolicy.bindCommit(
+      control.value,
+      command.fence,
+      verifiedAssessment.value.candidateDigest,
+      candidate.value.revision,
+      this.#deps.now(),
+      command.finalizationTicketId,
+      "recovery",
+    );
+    if (!bound.ok)
+      return { ok: false, error: recoveryControlFailure(bound.error) };
+    const controlCommitted = await this.#deps.storage.writeRecoveryControl(
+      bound.value,
+    );
+    if (!controlCommitted.ok) return controlCommitted;
+    const committed = await this.#deps.storage.writeRoot(candidate.value);
+    return committed.ok
+      ? {
+          ok: true,
+          value: {
+            revision: candidate.value.revision,
+            beforeBytes: bytes.value,
+            afterBytes: verifiedAssessment.value.requiredBytes,
+          },
+        }
+      : committed;
+  }
+
+  async #findPendingRecoveryFinalizationLocked(): Promise<
+    Result<RecoveryFinalizationCommand | null, FoundationError>
+  > {
+    const stored = await this.#deps.storage.readRecoveryControl();
+    if (!stored.ok) return stored;
+    const control = validateRecoveryControl(stored.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    if (
+      !control.value.active ||
+      control.value.candidateDigest === undefined ||
+      control.value.expectedCommitRevision === undefined
+    )
+      return { ok: true, value: null };
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return { ok: true, value: null };
+    if (
+      current.value.revision !== control.value.expectedCommitRevision ||
+      (await digestRoot(current.value)) !== control.value.candidateDigest
+    )
+      return { ok: true, value: null };
+    return {
+      ok: true,
+      value: {
+        fence: {
+          generation: control.value.generation,
+          ownerId: control.value.ownerId as string,
+          leaseExpiresAt: control.value.leaseExpiresAt as string,
+        },
+        candidateDigest: control.value.candidateDigest,
+        revision: current.value.revision,
+        ...(control.value.finalizationTicketId === undefined
+          ? {}
+          : { ticketId: control.value.finalizationTicketId }),
+        mode: control.value.commitMode ?? "recovery",
+      },
+    };
+  }
+
+  async #finalizeRecoveryLocked(
+    command: RecoveryFinalizationCommand,
+  ): Promise<Result<{ readonly revision: Revision }, FoundationError>> {
+    const stored = await this.#deps.storage.readRecoveryControl();
+    if (!stored.ok) return stored;
+    const control = validateRecoveryControl(stored.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    const authorized = recoveryControlPolicy.authorizeRecovery(
+      control.value,
+      command.fence,
+    );
+    if (!authorized.ok)
+      return { ok: false, error: recoveryControlFailure(authorized.error) };
+    if (
+      (command.ticketId !== undefined &&
+        control.value.finalizationTicketId !== command.ticketId) ||
+      (command.mode !== undefined &&
+        (control.value.commitMode ?? "recovery") !== command.mode) ||
+      control.value.candidateDigest !== command.candidateDigest ||
+      control.value.expectedCommitRevision !== command.revision
+    )
+      return { ok: false, error: { code: "stale-assessment" } };
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return current;
+    if (
+      current.value.revision !== command.revision ||
+      (await digestRoot(current.value)) !== command.candidateDigest
+    )
+      return { ok: false, error: { code: "stale-assessment" } };
+    const released = recoveryControlPolicy.release(
+      control.value,
+      command.fence,
+    );
+    if (!released.ok)
+      return { ok: false, error: recoveryControlFailure(released.error) };
+    const committed = await this.#deps.storage.writeRecoveryControl(
+      released.value,
+    );
+    return committed.ok
+      ? { ok: true, value: { revision: command.revision } }
+      : committed;
+  }
+
+  async #replaceRootUnderRecoveryControlLocked(
+    command: ControlledReplacementCommand,
+  ): Promise<Result<ReplacementReceipt, FoundationError>> {
+    const replacement = this.#deps.replacement;
+    if (replacement === undefined)
+      return { ok: false, error: { code: "validation" } };
+    const current = await this.#readCurrentRoot();
+    if (!current.ok) return current;
+    const maintenanceAuthorized = this.#deps.maintenance.authorizeWrite(
+      current.value,
+      undefined,
+      this.#deps.now(),
+    );
+    if (!maintenanceAuthorized.ok) return maintenanceAuthorized;
+    const storedControl = await this.#deps.storage.readRecoveryControl();
+    if (!storedControl.ok) return storedControl;
+    const control = validateRecoveryControl(storedControl.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    const authorized = recoveryControlPolicy.authorizeRecovery(
+      control.value,
+      command.fence,
+      this.#deps.now(),
+    );
+    if (!authorized.ok)
+      return { ok: false, error: recoveryControlFailure(authorized.error) };
+    const bytes = await this.#deps.storage.bytesInUse();
+    if (!bytes.ok) return bytes;
+    let quotaBytes: number;
+    try {
+      quotaBytes = this.#deps.storage.quotaBytes();
+    } catch {
+      return { ok: false, error: { code: "storage-unavailable" } };
+    }
+    const candidate = await replacement.verifyReplacement(
+      command.candidate,
+      command.assessment,
+      {
+        currentBytes: bytes.value,
+        quotaBytes,
+        revision: current.value.revision,
+        maintenance: current.value.maintenance,
+      },
+    );
+    if (!candidate.ok)
+      return { ok: false, error: replacementFailure(candidate.error) };
+    const bound = recoveryControlPolicy.bindCommit(
+      control.value,
+      command.fence,
+      command.assessment.candidateDigest,
+      candidate.value.revision,
+      this.#deps.now(),
+      command.finalizationTicketId,
+      "normal",
+    );
+    if (!bound.ok)
+      return { ok: false, error: recoveryControlFailure(bound.error) };
+    const controlCommitted = await this.#deps.storage.writeRecoveryControl(
+      bound.value,
+    );
+    if (!controlCommitted.ok) return controlCommitted;
+    const committed = await this.#deps.storage.writeRoot(candidate.value);
+    return committed.ok
+      ? {
+          ok: true,
+          value: {
+            revision: candidate.value.revision,
+            beforeBytes: bytes.value,
+            afterBytes: command.assessment.requiredBytes,
+          },
+        }
+      : committed;
+  }
+
+  async #cleanupPendingRecoveryLocked(
+    assessmentTicketId: string,
+  ): Promise<Result<RecoveryCleanupResume, FoundationError>> {
+    const stored = await this.#deps.storage.readRecoveryControl();
+    if (!stored.ok) return stored;
+    const control = validateRecoveryControl(stored.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    if (
+      !control.value.active ||
+      control.value.assessmentTicketId !== assessmentTicketId ||
+      control.value.assessmentIdentity === undefined ||
+      control.value.commitMode === undefined
+    )
+      return { ok: false, error: { code: "stale-assessment" } };
+
+    if (
+      control.value.candidateDigest !== undefined &&
+      control.value.expectedCommitRevision !== undefined
+    ) {
+      const current = await this.#readCurrentRoot();
+      if (
+        current.ok &&
+        current.value.revision === control.value.expectedCommitRevision &&
+        (await digestRoot(current.value)) === control.value.candidateDigest
+      )
+        return { ok: false, error: { code: "stale-assessment" } };
+    }
+
+    const released = recoveryControlPolicy.release(control.value, {
+      generation: control.value.generation,
+      ownerId: control.value.ownerId as string,
+      leaseExpiresAt: control.value.leaseExpiresAt as string,
+    });
+    if (!released.ok)
+      return { ok: false, error: recoveryControlFailure(released.error) };
+    const committed = await this.#deps.storage.writeRecoveryControl(
+      released.value,
+    );
+    return committed.ok
+      ? {
+          ok: true,
+          value: {
+            assessmentIdentity: control.value.assessmentIdentity,
+            mode: control.value.commitMode,
+          },
+        }
+      : { ok: false, error: { code: "precommit-cleanup-pending" } };
+  }
+
   async #readCurrentRoot(): Promise<Result<LocalDataRoot, FoundationError>> {
     const stored = await this.#deps.storage.readRoot();
     if (!stored.ok) return stored;
@@ -382,11 +901,27 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       : { ok: false, error: migrationFailure(migrated.error) };
   }
 
+  /** Every normal root writer rechecks durable recovery fencing while locked. */
+  async #authorizeNormalWrite(): Promise<Result<void, FoundationError>> {
+    const stored = await this.#deps.storage.readRecoveryControl();
+    if (!stored.ok) return stored;
+    const control = validateRecoveryControl(stored.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+    const authorized = recoveryControlPolicy.authorizeNormalWrite(
+      control.value,
+    );
+    return authorized.ok
+      ? authorized
+      : { ok: false, error: { code: "maintenance-active" } };
+  }
+
   async #runMaintenanceLocked(
     command: MaintenanceCommand,
   ): Promise<Result<MaintenanceReceipt, FoundationError>> {
     const current = await this.#readCurrentRoot();
     if (!current.ok) return current;
+    const recoveryAuthorized = await this.#authorizeNormalWrite();
+    if (!recoveryAuthorized.ok) return recoveryAuthorized;
     const now = this.#deps.now();
     let transition: Result<MaintenanceTransition, FoundationError>;
     switch (command.type) {
@@ -437,11 +972,82 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     };
   }
 
+  async #runRecoveryMaintenanceLocked(
+    command: RecoveryMaintenanceCommand,
+  ): Promise<Result<RecoveryMaintenanceReceipt, FoundationError>> {
+    const stored = await this.#deps.storage.readRecoveryControl();
+    if (!stored.ok) return stored;
+    const control = validateRecoveryControl(stored.value);
+    if (!control.ok) return { ok: false, error: { code: "corrupt-data" } };
+
+    switch (command.type) {
+      case "acquire": {
+        const expiresAt = leaseExpiresAt(this.#deps.now(), command.leaseMs);
+        if (!expiresAt.ok) return expiresAt;
+        const acquired = recoveryControlPolicy.acquire(
+          control.value,
+          command.ownerId,
+          expiresAt.value,
+          command.assessmentTicketId,
+          command.assessmentIdentity,
+          command.commitMode,
+        );
+        if (!acquired.ok)
+          return { ok: false, error: recoveryControlFailure(acquired.error) };
+        const committed = await this.#deps.storage.writeRecoveryControl(
+          acquired.value.control,
+        );
+        return committed.ok
+          ? { ok: true, value: { fence: acquired.value.fence } }
+          : committed;
+      }
+      case "renew": {
+        const expiresAt = leaseExpiresAt(this.#deps.now(), command.leaseMs);
+        if (!expiresAt.ok) return expiresAt;
+        const renewed = recoveryControlPolicy.renew(
+          control.value,
+          command.fence,
+          expiresAt.value,
+          this.#deps.now(),
+        );
+        if (!renewed.ok)
+          return { ok: false, error: recoveryControlFailure(renewed.error) };
+        const committed = await this.#deps.storage.writeRecoveryControl(
+          renewed.value,
+        );
+        return committed.ok
+          ? {
+              ok: true,
+              value: {
+                fence: { ...command.fence, leaseExpiresAt: expiresAt.value },
+              },
+            }
+          : committed;
+      }
+      case "release":
+      case "abort": {
+        const transition = recoveryControlPolicy[command.type](
+          control.value,
+          command.fence,
+          this.#deps.now(),
+        );
+        if (!transition.ok)
+          return { ok: false, error: recoveryControlFailure(transition.error) };
+        const committed = await this.#deps.storage.writeRecoveryControl(
+          transition.value,
+        );
+        return committed.ok ? { ok: true, value: {} } : committed;
+      }
+    }
+  }
+
   async #runLocked<T>(
     operation: RootTransactionOperation<T>,
   ): Promise<Result<T, FoundationError>> {
     const current = await this.#readCurrentRoot();
     if (!current.ok) return current;
+    const recoveryAuthorized = await this.#authorizeNormalWrite();
+    if (!recoveryAuthorized.ok) return recoveryAuthorized;
     const snapshot = current.value;
 
     const bytes = await this.#deps.storage.bytesInUse();
@@ -500,6 +1106,8 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
   ): Promise<Result<RequestCommitReceipt<T>, FoundationError>> {
     const current = await this.#readCurrentRoot();
     if (!current.ok) return current;
+    const recoveryAuthorized = await this.#authorizeNormalWrite();
+    if (!recoveryAuthorized.ok) return recoveryAuthorized;
     const snapshot = current.value;
     let payloadDigest: string;
     try {

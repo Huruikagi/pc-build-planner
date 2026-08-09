@@ -13,6 +13,7 @@ import type {
 import { createMaintenanceSnapshotSource } from "./maintenance-snapshot-source.js";
 import { createMigrationRegistry } from "./migration-registry.js";
 import { createMutationPipeline } from "./mutation-pipeline.js";
+import { createRecoveryCoordinator } from "./recovery.js";
 import { referenceRepairPolicy } from "./reference-repair-policy.js";
 import { createReplacementCoordinator } from "./replacement.js";
 import { createLocalDataRepository } from "./repository.js";
@@ -29,9 +30,10 @@ import {
   type FoundationCommand,
 } from "./worker-registration.js";
 import {
+  type BackupRestoreDataPort,
+  createBackupRestoreDataPort,
   createScopedDataPort,
   createWriteAuthority,
-  type FoundationDataPort,
   type FoundationScopedDataPort,
 } from "./write-authority.js";
 
@@ -52,8 +54,8 @@ export interface FoundationRuntimeContribution {
   readonly workerRegistration: DataWorkerRegistration;
   /** 参照と原子的root mutationだけへ絞ったUI context向けport。 */
   readonly dataPort: FoundationScopedDataPort;
-  /** 置換・保守capabilityを含む完全port。信頼済み拡張UI context内の専用consumerだけへ供給する。 */
-  readonly fullDataPort: FoundationDataPort;
+  /** backup/restore compositionだけへ渡す用途限定port。 */
+  readonly backupRestoreDataPort: BackupRestoreDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -125,6 +127,7 @@ export const initializeFoundationRuntimeContributionFromPlatform = async (
   const repository = createLocalDataRepository(storage, migrations);
   const lock = createWebLocksAdapter(platform.locks);
   const replacement = createReplacementCoordinator(migrations, schemaValidator);
+  const recovery = createRecoveryCoordinator(storage, migrations, replacement);
   const runner = createRootTransactionRunner({
     storage,
     lock,
@@ -132,6 +135,7 @@ export const initializeFoundationRuntimeContributionFromPlatform = async (
     validator: schemaValidator,
     maintenance: maintenancePolicy,
     replacement,
+    recovery,
     now: platform.now,
     initialRoot: createInitialRoot,
   });
@@ -158,7 +162,7 @@ export const initializeFoundationRuntimeContributionFromPlatform = async (
       maintenanceSource,
       workerRegistration,
       dataPort: createScopedDataPort(authority),
-      fullDataPort: authority,
+      backupRestoreDataPort: createBackupRestoreDataPort(runner),
       dispose() {
         if (disposed) return;
         disposed = true;

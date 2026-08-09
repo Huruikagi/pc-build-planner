@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { UtcTimestamp, Uuid } from "../../src/domain/identifiers.js";
-import type { MaintenanceOwnerId } from "../../src/domain/model.js";
+import type { UtcTimestamp } from "../../src/domain/identifiers.js";
 import type { FoundationError } from "../../src/domain/result.js";
 import { initializeFoundationRuntimeContributionFromPlatform as initializeFoundationRuntimeContribution } from "../../src/persistence/runtime-contribution.js";
 import { createInitialRoot } from "../../src/persistence/schema.js";
@@ -12,6 +11,7 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
   let removedListeners = 0;
   let removedHandlers = 0;
   let storedRoot: unknown = createInitialRoot();
+  let storedRecoveryControl: unknown;
   return {
     counters: {
       get restrictions() {
@@ -31,10 +31,17 @@ const platform = (options: { restrictFails?: boolean } = {}) => {
       storageLocal: {
         QUOTA_BYTES: 10 * 1024 * 1024,
         async get() {
-          return { localDataRoot: storedRoot };
+          return {
+            localDataRoot: storedRoot,
+            ...(storedRecoveryControl === undefined
+              ? {}
+              : { foundationRecoveryControl: storedRecoveryControl }),
+          };
         },
         async set(items: Record<string, unknown>) {
           if ("localDataRoot" in items) storedRoot = items.localDataRoot;
+          if ("foundationRecoveryControl" in items)
+            storedRecoveryControl = items.foundationRecoveryControl;
         },
         async getBytesInUse() {
           return 100;
@@ -82,9 +89,9 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   assert.equal(initialized.ok, true);
   if (!initialized.ok) return;
   assert.deepEqual(Object.keys(initialized.value).sort(), [
+    "backupRestoreDataPort",
     "dataPort",
     "dispose",
-    "fullDataPort",
     "maintenanceSource",
     "workerRegistration",
   ]);
@@ -94,19 +101,18 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
     "query",
   ]);
   assert.equal(Object.isFrozen(initialized.value.dataPort), true);
-  // The full port is the same write authority, exposed for trusted first-party consumers only.
-  for (const method of [
-    "assessReplacement",
-    "mutate",
-    "query",
-    "replaceRoot",
-    "runMaintenance",
-  ] as const)
-    assert.equal(
-      typeof initialized.value.fullDataPort[method],
-      "function",
-      method,
-    );
+  assert.deepEqual(
+    Object.keys(initialized.value.backupRestoreDataPort).sort(),
+    [
+      "assessRecovery",
+      "assessReplacement",
+      "commit",
+      "finalize",
+      "findPendingFinalization",
+    ],
+  );
+  assert.equal("query" in initialized.value.backupRestoreDataPort, false);
+  assert.equal("mutate" in initialized.value.backupRestoreDataPort, false);
   assert.equal(fixture.counters.restrictions, 1);
   const registered = await initialized.value.workerRegistration.register(
     fixture.target,
@@ -128,7 +134,7 @@ test("正常platformからaccess制限済みの最小contributionを返す", asy
   assert.equal(fixture.counters.removedListeners, 1);
 });
 
-test("完全portでの置換は絞り込みportのqueryへ同じrevisionとして反映される", async () => {
+test("backup専用portでの置換は絞り込みportのqueryへ同じrevisionとして反映される", async () => {
   const fixture = platform();
   const initialized = await initializeFoundationRuntimeContribution(
     fixture.value,
@@ -141,39 +147,22 @@ test("完全portでの置換は絞り込みportのqueryへ同じrevisionとし�
   );
   assert.equal(before.ok, true);
 
-  const ownerId =
-    "10000000-0000-4000-8000-000000000001" as Uuid as MaintenanceOwnerId;
-  const acquired = await initialized.value.fullDataPort.runMaintenance({
-    type: "acquire",
-    ownerId,
-    leaseMs: 1000,
-  });
-  assert.equal(acquired.ok, true);
-  if (!acquired.ok || acquired.value.fence === undefined) return;
-  const fence = acquired.value.fence;
-
   const candidate = createInitialRoot();
   const assessed =
-    await initialized.value.fullDataPort.assessReplacement(candidate);
+    await initialized.value.backupRestoreDataPort.assessReplacement(candidate);
   assert.equal(assessed.ok, true);
   if (!assessed.ok) return;
 
-  const replaced = await initialized.value.fullDataPort.replaceRoot({
+  const replaced = await initialized.value.backupRestoreDataPort.commit({
     candidate,
-    assessment: assessed.value,
-    fence,
+    assessment: assessed.value.ticket,
+    expectedMode: "normal",
   });
-  assert.equal(replaced.ok, true);
-
-  await initialized.value.fullDataPort.runMaintenance({
-    type: "release",
-    fence,
-  });
+  assert.equal(replaced.ok, true, JSON.stringify(replaced));
 
   const after = await initialized.value.dataPort.query((root) => root.revision);
   assert.equal(after.ok, true);
-  // acquire (+1) then replaceRoot (+1); release does not persist a candidate change.
-  if (before.ok && after.ok) assert.equal(after.value, before.value + 2);
+  if (before.ok && after.ok) assert.equal(after.value, before.value + 1);
 
   await initialized.value.dispose();
 });

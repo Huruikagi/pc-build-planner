@@ -371,8 +371,8 @@
   - _Requirements: 4.2, 4.3, 4.7, 5.1, 5.3, 7.9, 7.10, 7.11, 7.13_
   - _Boundary: RecoveryCoordinator, ReplacementCoordinator_
 
-- [ ] 8. 回復fencing・原子的置換・用途別公開portを統合する
-- [ ] 8.1 すべてのwriterへactive回復controlのfencingを統合する
+- [x] 8. 回復fencing・原子的置換・用途別公開portを統合する
+- [x] 8.1 すべてのwriterへactive回復controlのfencingを統合する
   - 通常mutation、通常置換、root内保守操作、回復操作が同じ固定Web Lock内で最新controlを確認する
   - active回復中はownerを持たない通常writerを一貫して拒否し、worker再生成や並行要求でもrootを変更しない
   - 回復controlの読取失敗や不正値ではfail closedとなり、既存rootを保持する統合結果を完了条件とする
@@ -380,7 +380,7 @@
   - _Requirements: 1.3, 3.5, 3.8, 7.4, 7.5, 7.6, 7.12, 7.13_
   - _Boundary: RootTransactionRunner_
 
-- [ ] 8.2 回復保守操作をlock付きtransactionへ統合する
+- [x] 8.2 回復保守操作をlock付きtransactionへ統合する
   - 異常rootをdecodeせず、同じ固定Web Lock内で回復controlの取得・更新・終了・中止を直列化する
   - 同時取得は一件だけ成功させ、stale owner・generation・leaseと再生成前ownerの操作を拒否する
   - 正常終了または明示中止後だけ後続writerが再開し、中断時はactive controlが残ることを完了条件とする
@@ -389,7 +389,7 @@
   - _Requirements: 7.4, 7.5, 7.6, 7.7, 7.12, 7.13_
   - _Boundary: RootTransactionRunner, RecoveryControlPolicy_
 
-- [ ] 8.3 評価済み候補による回復root置換を完成する
+- [x] 8.3 評価済み候補による回復root置換を完成する
   - commit直前にraw fingerprint、candidate digest、target schema、required bytes、control generation・owner・leaseを再照合する
   - 一致した候補だけをroot keyへ一回writeし、各stale条件、容量不足、保存失敗では異常rootを変更しない
   - 成功後は検証済み通常queryとmutationが利用可能になるまでcontrolをactiveに保ち、確認後のreleaseで通常利用へ復帰できることを完了条件とする
@@ -397,7 +397,7 @@
   - _Requirements: 3.3, 3.5, 4.7, 5.3, 7.12, 7.13, 7.14_
   - _Boundary: RootTransactionRunner, RecoveryCoordinator_
 
-- [ ] 8.4 commit後finalizationを再開可能な用途限定処理として完成する
+- [x] 8.4 commit後finalizationを再開可能な用途限定処理として完成する
   - root write後のcontrol cleanup失敗を、commit済みrootを再書込せず再開できる識別可能なfinalization要求として返す
   - opaque ticketを永続状態から再発見し、別consumerまたはworker再生成後もowner・generation・commit結果を照合してfinalizeだけを冪等に再試行する
   - finalize再試行でroot writeが0件となり、完了後はticketが再発見されず通常操作が再開可能になることを完了条件とする
@@ -405,7 +405,7 @@
   - _Requirements: 7.14, 7.15, 7.17_
   - _Boundary: RecoveryCoordinator, RecoveryControlPolicy_
 
-- [ ] 8.5 通常UIとbackup-restoreの用途別公開portを統合する
+- [x] 8.5 通常UIとbackup-restoreの用途別公開portを統合する
   - 通常UI handleはqueryと原子的mutationだけを維持し、置換・保守・回復・Storage・lockへ到達不能にする
   - backup-restore専用handleへ正常rootの評価・保守・全体置換と、異常rootの候補評価・回復保守・評価済み全体置換・finalization再開だけを一つの用途限定契約として公開する
   - backup専用contractから通常CRUD、未検証root、保存adapter、排他制御、内部write authorityへ到達できず、opaque ticketからroot writeを開始できないようにする

@@ -6,7 +6,11 @@ import type {
   MigrationRegistry,
 } from "./migration-registry.js";
 import { validateRecoveryControl } from "./recovery-control.js";
-import type { ReplacementError, ReplacementEvaluator } from "./replacement.js";
+import type {
+  ReplacementAssessment,
+  ReplacementError,
+  ReplacementEvaluator,
+} from "./replacement.js";
 import { canonicalJson } from "./replacement.js";
 import type { StoragePort } from "./repository.js";
 import { CURRENT_SCHEMA_VERSION } from "./schema.js";
@@ -35,6 +39,7 @@ export interface RecoveryCursor {
 export interface RecoveryAssessment {
   readonly cursor: RecoveryCursor;
   readonly requiredBytes: number;
+  readonly replacement: ReplacementAssessment;
 }
 export type RecoveryAssessmentError = {
   readonly code: "recovery-candidate-rejected";
@@ -52,6 +57,10 @@ export interface RecoveryCoordinator {
   ): Promise<
     Result<RecoveryAssessment, RecoveryAssessmentError | FoundationError>
   >;
+  verifyRecovery(
+    candidate: unknown,
+    assessment: RecoveryAssessment,
+  ): Promise<Result<ReplacementAssessment, FoundationError>>;
 }
 
 type JsonValue =
@@ -148,6 +157,7 @@ export const createRecoveryCoordinator = (
       ok: true,
       value: {
         requiredBytes: assessed.value.requiredBytes,
+        replacement: assessed.value,
         cursor: {
           current,
           candidateDigest: assessed.value.candidateDigest,
@@ -157,5 +167,28 @@ export const createRecoveryCoordinator = (
         },
       },
     };
+  },
+  async verifyRecovery(candidate, assessment) {
+    const reassessed = await this.assessRecovery(candidate);
+    if (!reassessed.ok)
+      return {
+        ok: false,
+        error:
+          reassessed.error.code === "recovery-candidate-rejected"
+            ? { code: "stale-assessment" }
+            : reassessed.error,
+      };
+    const current = reassessed.value;
+    if (
+      current.cursor.current.fingerprint !==
+        assessment.cursor.current.fingerprint ||
+      current.cursor.current.code !== assessment.cursor.current.code ||
+      current.cursor.candidateDigest !== assessment.cursor.candidateDigest ||
+      current.cursor.targetSchemaVersion !==
+        assessment.cursor.targetSchemaVersion ||
+      current.cursor.requiredBytes !== assessment.cursor.requiredBytes
+    )
+      return { ok: false, error: { code: "stale-assessment" } };
+    return { ok: true, value: current.replacement };
   },
 });

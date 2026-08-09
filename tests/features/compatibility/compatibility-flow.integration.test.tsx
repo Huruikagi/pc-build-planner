@@ -150,7 +150,10 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
         },
       },
     },
-    { backupRestoreData: data, transientSurface: idleTransientSurface },
+    {
+      backupRestoreData: data as never,
+      transientSurface: idleTransientSurface,
+    },
   );
   const [, currentBuild, , compatibility] = contributions;
 
@@ -338,7 +341,10 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
         },
       },
     },
-    { backupRestoreData: data, transientSurface: idleTransientSurface },
+    {
+      backupRestoreData: data as never,
+      transientSurface: idleTransientSurface,
+    },
   );
   const [candidateManagement, currentBuild, , compatibility] = contributions;
   const candidateQuery = candidateManagement.registration.publicApi.query;

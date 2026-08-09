@@ -4,6 +4,7 @@ import test from "node:test";
 import type { FeatureCompositionContext } from "../../src/application-shell/public.js";
 import { composeApplicationApi } from "../../src/index.js";
 import type {
+  BackupRestoreDataPort,
   FoundationDataPort,
   FoundationScopedDataPort,
 } from "../../src/persistence/public.js";
@@ -27,6 +28,14 @@ const data = {
   },
 } satisfies FoundationDataPort;
 
+const backupRestoreData = {
+  assessReplacement: async () => ({ ok: true as const, value: {} as never }),
+  assessRecovery: async () => ({ ok: true as const, value: {} as never }),
+  commit: async () => ({ ok: true as const, value: {} as never }),
+  findPendingFinalization: async () => ({ ok: true as const, value: null }),
+  finalize: async () => ({ ok: true as const, value: {} as never }),
+} satisfies BackupRestoreDataPort;
+
 const context = (): FeatureCompositionContext => ({
   data: data satisfies FoundationScopedDataPort,
   navigator: {
@@ -38,7 +47,7 @@ const context = (): FeatureCompositionContext => ({
 
 test("root公開入口はcatalogから合成したreadonly own-property辞書を提供する", () => {
   const composed = composeApplicationApi(context(), {
-    backupRestoreData: data,
+    backupRestoreData,
     transientSurface: idleTransientSurface,
   });
 
@@ -63,7 +72,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
 
 test("実featureの公開契約がroot入口から到達できる", () => {
   const composed = composeApplicationApi(context(), {
-    backupRestoreData: data,
+    backupRestoreData,
     transientSurface: idleTransientSurface,
   });
 

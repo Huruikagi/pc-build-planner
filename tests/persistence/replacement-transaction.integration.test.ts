@@ -19,6 +19,7 @@ const createHarness = ({ quota = 10_000, failWrite = false } = {}) => {
   let runtimeFailWrite = false;
   let stored = createInitialRoot();
   let writes = 0;
+  let recoveryControl: unknown;
   const storage = {
     async readRoot() {
       return { ok: true, value: structuredClone(stored) };
@@ -34,6 +35,13 @@ const createHarness = ({ quota = 10_000, failWrite = false } = {}) => {
       if (runtimeFailWrite)
         return { ok: false, error: { code: "storage-unavailable" } };
       stored = structuredClone(root);
+      return { ok: true, value: undefined };
+    },
+    async readRecoveryControl() {
+      return { ok: true, value: structuredClone(recoveryControl) };
+    },
+    async writeRecoveryControl(control) {
+      recoveryControl = structuredClone(control);
       return { ok: true, value: undefined };
     },
     async restrictToTrustedContexts() {
@@ -63,6 +71,9 @@ const createHarness = ({ quota = 10_000, failWrite = false } = {}) => {
     },
     setQuota: (value) => {
       runtimeQuota = value;
+    },
+    setRecoveryControl: (value) => {
+      recoveryControl = structuredClone(value);
     },
   };
 };
@@ -111,6 +122,26 @@ test("評価済み候補だけを revision 一増分・一 write で置換する
       JSON.stringify({ localDataRoot: harness.getRoot() }),
     ).byteLength,
   );
+});
+
+test("active recovery control中は通常root置換をwrite前に拒否する", async () => {
+  const harness = createHarness();
+  const command = await acquireAndAssess(harness);
+  harness.setRecoveryControl({
+    generation: 1,
+    active: true,
+    ownerId: "recovery-owner",
+    leaseExpiresAt: "2026-07-19T00:01:00.000Z",
+  });
+  const before = harness.getRoot();
+  const writesBefore = harness.getWrites();
+
+  assert.deepEqual(await harness.runner.replaceRoot(command), {
+    ok: false,
+    error: { code: "maintenance-active" },
+  });
+  assert.equal(harness.getWrites(), writesBefore);
+  assert.deepEqual(harness.getRoot(), before);
 });
 
 test("token・候補・fence・revision 不一致では旧 root を保持する", async () => {

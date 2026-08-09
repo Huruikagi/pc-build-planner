@@ -20,7 +20,7 @@ import {
   type ShellPresentationAdapter,
 } from "../../src/application-shell/shell-presentation.js";
 import type {
-  FoundationDataPort,
+  BackupRestoreDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshot,
   MaintenanceSnapshotSource,
@@ -42,20 +42,20 @@ const stubDataPort: FoundationScopedDataPort = {
   },
 };
 
-const stubFullDataPort: FoundationDataPort = {
-  async query() {
-    return { ok: true, value: {} } as never;
-  },
-  async mutate() {
-    return { ok: true, value: {} } as never;
-  },
+const stubBackupRestoreDataPort: BackupRestoreDataPort = {
   async assessReplacement() {
     return { ok: true, value: {} } as never;
   },
-  async replaceRoot() {
+  async assessRecovery() {
     return { ok: true, value: {} } as never;
   },
-  async runMaintenance() {
+  async commit() {
+    return { ok: true, value: {} } as never;
+  },
+  async findPendingFinalization() {
+    return { ok: true, value: null };
+  },
+  async finalize() {
     return { ok: true, value: {} } as never;
   },
 };
@@ -638,7 +638,7 @@ test("production-shaped runtimeでUI、worker、maintenance、failure、cleanup�
         },
         workerRegistrations: [],
         dataPort: stubDataPort,
-        fullDataPort: stubFullDataPort,
+        backupRestoreDataPort: stubBackupRestoreDataPort,
         dispose() {
           foundationStops += 1;
           events.push("foundation:stop");
@@ -827,7 +827,7 @@ test("同じproduction presentation fixtureは空catalogを安全なempty state�
         maintenanceSource: maintenance.maintenanceSource,
         workerRegistrations: [],
         dataPort: stubDataPort,
-        fullDataPort: stubFullDataPort,
+        backupRestoreDataPort: stubBackupRestoreDataPort,
         dispose() {
           foundationStops += 1;
         },

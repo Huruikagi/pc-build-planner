@@ -54,6 +54,12 @@ const createSharedHarness = () => {
       stored = structuredClone(root);
       return { ok: true, value: undefined };
     },
+    async readRecoveryControl() {
+      return { ok: true, value: undefined };
+    },
+    async writeRecoveryControl() {
+      assert.fail("normal maintenance must not write recovery control");
+    },
     async restrictToTrustedContexts() {
       return { ok: true, value: undefined };
     },

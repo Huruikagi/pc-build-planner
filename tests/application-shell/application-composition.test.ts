@@ -19,7 +19,7 @@ import type {
   TransientSurfaceLifecyclePort,
 } from "../../src/application-shell/transient-surface-ports.js";
 import type {
-  FoundationDataPort,
+  BackupRestoreDataPort,
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
@@ -47,20 +47,20 @@ const stubDataPort: FoundationScopedDataPort = {
   },
 };
 
-const stubFullDataPort: FoundationDataPort = {
-  async query() {
-    return { ok: true, value: {} } as never;
-  },
-  async mutate() {
-    return { ok: true, value: {} } as never;
-  },
+const stubBackupRestoreDataPort: BackupRestoreDataPort = {
   async assessReplacement() {
     return { ok: true, value: {} } as never;
   },
-  async replaceRoot() {
+  async assessRecovery() {
     return { ok: true, value: {} } as never;
   },
-  async runMaintenance() {
+  async commit() {
+    return { ok: true, value: {} } as never;
+  },
+  async findPendingFinalization() {
+    return { ok: true, value: null };
+  },
+  async finalize() {
     return { ok: true, value: {} } as never;
   },
 };
@@ -153,7 +153,7 @@ function harness(options?: {
         maintenanceSource: source,
         workerRegistrations: [] as const,
         dataPort: stubDataPort,
-        fullDataPort: stubFullDataPort,
+        backupRestoreDataPort: stubBackupRestoreDataPort,
         dispose: () => {
           events.push("foundation:stop");
         },
@@ -907,7 +907,7 @@ test("cleanup失敗中は新規startを拒否し、stop再試行成功後だけr
           maintenanceSource: source,
           workerRegistrations: [] as const,
           dataPort: stubDataPort,
-          fullDataPort: stubFullDataPort,
+          backupRestoreDataPort: stubBackupRestoreDataPort,
           dispose() {
             disposeAttempts += 1;
             if (disposeAttempts === 1) throw new Error("fixture cleanup");

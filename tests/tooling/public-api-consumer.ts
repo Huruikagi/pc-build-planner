@@ -32,6 +32,9 @@ import {
   type FeatureCompositionContext,
 } from "../../src/index.js";
 import type {
+  BackupRestoreAssessmentTicket,
+  BackupRestoreDataPort,
+  BackupRestoreFinalizationTicket,
   DataWorkerRegistration,
   FoundationCommandDecoder,
   FoundationDataPort,
@@ -55,6 +58,32 @@ import {
   LanguageSelectControl,
 } from "../../src/ui-language/public.js";
 import type { MessageKey } from "../../src/ui-messages/public.js";
+
+export const backupRestoreCapabilityBoundary = (
+  port: BackupRestoreDataPort,
+): void => {
+  // @ts-expect-error backup/restore port must not expose ordinary reads
+  void port.query;
+  // @ts-expect-error backup/restore port must not expose ordinary mutations
+  void port.mutate;
+  // @ts-expect-error internal maintenance fences are not a public capability
+  void port.runMaintenance;
+  // @ts-expect-error internal recovery commands are not a public capability
+  void port.replaceFromRecovery;
+};
+
+export const opaqueBackupRestoreTickets = (
+  assessment: BackupRestoreAssessmentTicket,
+  finalization: BackupRestoreFinalizationTicket,
+): void => {
+  // @ts-expect-error finalization ticket cannot authorize a root commit
+  const invalidAssessment: BackupRestoreAssessmentTicket = finalization;
+  void invalidAssessment;
+  // @ts-expect-error opaque tickets expose no recovery fence
+  void assessment.fence;
+  // @ts-expect-error opaque tickets expose no root-write command
+  void finalization.writeRoot;
+};
 
 export const consumeUiLanguagePublicEntry = () => ({
   LanguageProvider,
@@ -132,14 +161,14 @@ export const composeProductionFoundationRuntime = (): Promise<
 /** Downstream consumers compose the root API from the shell-provided context. */
 export const composeShellRootApi = (
   context: FeatureCompositionContext,
-  backupRestoreData: FoundationDataPort,
+  backupRestoreData: BackupRestoreDataPort,
   transientSurface: TransientSurfaceLifecyclePort,
 ): Result<ApplicationApi, { readonly kind: string }> =>
   composeApplicationApi(context, { backupRestoreData, transientSurface });
 
 export const rejectMissingTransientSurface = (
   context: FeatureCompositionContext,
-  backupRestoreData: FoundationDataPort,
+  backupRestoreData: BackupRestoreDataPort,
 ) =>
   // @ts-expect-error side-panel composition requires the real transient lifecycle seam
   composeApplicationApi(context, { backupRestoreData });

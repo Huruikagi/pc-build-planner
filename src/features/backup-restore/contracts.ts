@@ -12,6 +12,7 @@ import type {
   SourceSnapshot,
   UtcTimestamp,
 } from "../../domain/public.js";
+import type { BackupRestoreAssessmentTicket } from "../../persistence/public.js";
 
 export const BACKUP_PRODUCT_ID = "pc-build-planner";
 export const CURRENT_BACKUP_FORMAT_VERSION = 1;
@@ -84,6 +85,7 @@ export interface RestoreInput {
 export interface RestoreTicket {
   readonly candidate: unknown;
   readonly preview: RestorePreview;
+  readonly assessment?: BackupRestoreAssessmentTicket;
 }
 
 export interface BackupArtifact {
@@ -175,11 +177,15 @@ export const mapFoundationError = (error: FoundationError): RestoreError => {
     case "request-conflict":
       return { code: "stale-ticket" };
     case "maintenance-active":
+    case "recovery-active":
       return { code: "maintenance-active" };
     case "stale-fence":
       return { code: "stale-ticket" };
     case "stale-assessment":
+    case "stale-recovery-state":
       return { code: "stale-ticket" };
+    case "precommit-cleanup-pending":
+      return { code: "maintenance-active" };
     case "quota-exceeded":
       return { code: "quota-exceeded" };
     case "access-denied":

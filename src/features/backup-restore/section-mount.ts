@@ -2,7 +2,10 @@ import type {
   FeatureMountContext,
   FeatureMountHandle,
 } from "../../application-shell/public.js";
-import type { FoundationDataPort } from "../../persistence/public.js";
+import type {
+  BackupRestoreDataPort,
+  FoundationScopedDataPort,
+} from "../../persistence/public.js";
 import { fileGateway } from "./file-gateway.js";
 import { mountBackupRestoreReactRoot } from "./react-root.js";
 import { createBackupService, createRestoreService } from "./service.js";
@@ -13,7 +16,8 @@ export interface BackupRestoreSectionMount {
 }
 
 export interface BackupRestoreSectionDependencies {
-  readonly data: FoundationDataPort;
+  readonly data: FoundationScopedDataPort;
+  readonly restoreData?: BackupRestoreDataPort;
   /** テスト・合成専用。productionではmountごとに新しいidle stateを生成する。 */
   readonly state?: BackupRestoreState;
 }
@@ -26,7 +30,9 @@ export const createBackupRestoreSectionMount = (
       dependencies.state ??
       createBackupRestoreState({
         backupService: createBackupService({ data: dependencies.data }),
-        restoreService: createRestoreService({ data: dependencies.data }),
+        restoreService: createRestoreService({
+          data: dependencies.restoreData as BackupRestoreDataPort,
+        }),
         fileGateway,
       });
     state.resetForMount();

@@ -28,14 +28,20 @@ import {
 import { maintenancePolicy } from "../../../src/persistence/maintenance.js";
 import { createMigrationRegistry } from "../../../src/persistence/migration-registry.js";
 import { createMutationPipeline } from "../../../src/persistence/mutation-pipeline.js";
-import type { FoundationDataPort } from "../../../src/persistence/public.js";
+import type {
+  BackupRestoreDataPort,
+  FoundationDataPort,
+} from "../../../src/persistence/public.js";
 import { referenceRepairPolicy } from "../../../src/persistence/reference-repair-policy.js";
 import { createReplacementCoordinator } from "../../../src/persistence/replacement.js";
 import { createLocalDataRepository } from "../../../src/persistence/repository.js";
 import { createRootTransactionRunner } from "../../../src/persistence/root-transaction-runner.js";
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
-import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import {
+  createBackupRestoreDataPort,
+  createWriteAuthority,
+} from "../../../src/persistence/write-authority.js";
 import { buildFoundationRoot } from "../../fixtures/foundation.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
@@ -49,6 +55,13 @@ const currentRevision = async (data: FoundationDataPort): Promise<Revision> => {
   const result = await data.query((root) => root.revision);
   if (!result.ok) throw new Error("revisionを取得できません");
   return result.value;
+};
+
+const backupPorts = new WeakMap<FoundationDataPort, BackupRestoreDataPort>();
+const backupPortFor = (data: FoundationDataPort): BackupRestoreDataPort => {
+  const port = backupPorts.get(data);
+  if (port === undefined) throw new Error("backup port fixture is missing");
+  return port;
 };
 
 /** authorityから独立した`storageState`を共有すれば、再起動後の再読取を素直に模擬できる。 */
@@ -67,11 +80,13 @@ const createFoundationPortOn = (
     now: () => timestamp,
     initialRoot: createInitialRoot,
   });
-  return createWriteAuthority({
+  const data = createWriteAuthority({
     repository: createLocalDataRepository(storage, migrations),
     runner,
     pipeline: createMutationPipeline(schemaValidator, referenceRepairPolicy),
   });
+  backupPorts.set(data, createBackupRestoreDataPort(runner));
+  return data;
 };
 
 test("全12カテゴリ候補と現在構成の往復、再起動後照会、通常CRUD、再バックアップが完了する", async () => {
@@ -202,7 +217,7 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
   );
   assert.equal(afterExportProject.ok, true);
 
-  const restoreService = createRestoreService({ data });
+  const restoreService = createRestoreService({ data: backupPortFor(data) });
   const preflight = await restoreService.preflight({
     text: artifact.value.json,
     byteLength: artifact.value.byteLength,
@@ -294,7 +309,7 @@ test("不正JSON・旧開発形式・将来版・孤立参照の各経路でpref
     { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
   );
 
-  const restoreService = createRestoreService({ data });
+  const restoreService = createRestoreService({ data: backupPortFor(data) });
   const beforeSnapshot = await data.query((root) => root);
   assert.equal(beforeSnapshot.ok, true);
 
@@ -433,7 +448,7 @@ test("容量境界を超える復元はwriteなしで拒否され既存データ
     },
   });
 
-  const restoreService = createRestoreService({ data });
+  const restoreService = createRestoreService({ data: backupPortFor(data) });
   const preflight = await restoreService.preflight({
     text: oversizedText,
     byteLength: new TextEncoder().encode(oversizedText).byteLength,

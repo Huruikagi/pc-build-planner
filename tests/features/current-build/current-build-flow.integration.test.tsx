@@ -119,7 +119,10 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
         },
       },
     },
-    { backupRestoreData: data, transientSurface: idleTransientSurface },
+    {
+      backupRestoreData: data as never,
+      transientSurface: idleTransientSurface,
+    },
   );
   const [, currentBuild] = contributions;
 

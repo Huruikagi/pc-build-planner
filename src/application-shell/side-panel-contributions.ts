@@ -37,7 +37,7 @@ import {
   type SourcePriceRefreshContribution,
 } from "../features/source-price-refresh/feature-contribution.js";
 import type { SourcePriceRefreshPort } from "../features/source-price-refresh/public.js";
-import type { FoundationDataPort } from "../persistence/public.js";
+import type { BackupRestoreDataPort } from "../persistence/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
 
@@ -66,7 +66,7 @@ export interface SidePanelCandidateFactories {
 
 export interface SidePanelContributionDependencies {
   /** Full replacement/maintenance capability is restricted to backup/restore composition. */
-  readonly backupRestoreData: FoundationDataPort;
+  readonly backupRestoreData: BackupRestoreDataPort;
   readonly transientSurface: TransientSurfaceLifecyclePort;
 }
 
@@ -163,7 +163,8 @@ export const createSidePanelFeatureContributions = (
   });
   const settings = createSettingsContribution({
     backupRestore: createBackupRestoreSectionMount({
-      data: dependencies.backupRestoreData,
+      data: context.data,
+      restoreData: dependencies.backupRestoreData,
     }),
   });
   const sourcePriceRefresh = createSourcePriceRefreshContribution({

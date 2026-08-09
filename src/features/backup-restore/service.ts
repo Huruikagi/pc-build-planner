@@ -1,17 +1,11 @@
 import type {
   FoundationError,
-  MaintenanceOwnerId,
   Result,
   UtcTimestamp,
 } from "../../domain/public.js";
-import {
-  createUtcTimestamp,
-  createUuid,
-  err,
-  ok,
-} from "../../domain/public.js";
+import { createUtcTimestamp, err, ok } from "../../domain/public.js";
 import type {
-  FoundationDataPort,
+  BackupRestoreDataPort,
   FoundationScopedDataPort,
 } from "../../persistence/public.js";
 import type {
@@ -51,8 +45,11 @@ const mapQueryFailureToBackupError = (error: FoundationError): BackupError => {
     case "revision-conflict":
     case "request-conflict":
     case "maintenance-active":
+    case "recovery-active":
     case "stale-fence":
     case "stale-assessment":
+    case "stale-recovery-state":
+    case "precommit-cleanup-pending":
     case "quota-exceeded":
     case "access-denied":
     case "lock-unavailable":
@@ -101,7 +98,7 @@ export interface RestoreService {
 }
 
 export interface RestoreServiceDependencies {
-  readonly data: FoundationDataPort;
+  readonly data: BackupRestoreDataPort;
 }
 
 /** ExchangeMigration・ExchangeMapperの失敗codeはRestoreErrorCodeの部分集合であり、そのまま写像できる。 */
@@ -112,9 +109,6 @@ const exchangeFailureToRestoreError = (error: {
   code: error.code as RestoreError["code"],
   path: error.path,
 });
-
-/** commit全体はacquire→replaceRoot→release|abortの短い同期区間で完結するため、短いleaseで十分。 */
-const MAINTENANCE_LEASE_MS = 30_000;
 
 export const createRestoreService = (
   dependencies: RestoreServiceDependencies,
@@ -145,6 +139,7 @@ export const createRestoreService = (
 
     return ok({
       candidate: candidate.value,
+      assessment: assessment.value.ticket,
       preview: {
         createdAt: envelope.createdAt,
         formatVersion: envelope.formatVersion,
@@ -157,44 +152,13 @@ export const createRestoreService = (
   },
 
   async commit(ticket) {
-    const ownerId = createUuid() as MaintenanceOwnerId;
-    const acquired = await dependencies.data.runMaintenance({
-      type: "acquire",
-      ownerId,
-      leaseMs: MAINTENANCE_LEASE_MS,
-    });
-    if (!acquired.ok) return err(mapFoundationError(acquired.error));
-    const fence = acquired.value.fence;
-    if (fence === undefined) return err({ code: "storage-unavailable" });
-
-    // acquire自体もrevisionを進めるため、preflight時のassessmentは必ず古い。
-    // replaceRootへ渡す前にacquire後の状態で再assessし、真の並行更新だけを
-    // stale-assessmentとして検出できるようにする。
-    const reassessed = await dependencies.data.assessReplacement(
-      ticket.candidate,
-    );
-    if (!reassessed.ok) {
-      await dependencies.data.runMaintenance({ type: "abort", fence });
-      return err(mapFoundationError(reassessed.error));
-    }
-
-    const replaced = await dependencies.data.replaceRoot({
+    if (ticket.assessment === undefined) return err({ code: "stale-ticket" });
+    const committed = await dependencies.data.commit({
       candidate: ticket.candidate,
-      assessment: reassessed.value,
-      fence,
+      assessment: ticket.assessment,
+      expectedMode: "normal",
     });
-
-    if (!replaced.ok) {
-      await dependencies.data.runMaintenance({ type: "abort", fence });
-      return err(mapFoundationError(replaced.error));
-    }
-
-    // replaceRoot自体もrevisionを進めるため、releaseにはその新しいrevisionを
-    // 反映したfenceを渡す（generation・ownerIdは同一の保守sessionのまま）。
-    await dependencies.data.runMaintenance({
-      type: "release",
-      fence: { ...fence, revision: replaced.value.revision },
-    });
+    if (!committed.ok) return err(mapFoundationError(committed.error));
     return ok({
       projectCount: ticket.preview.projectCount,
       partCount: ticket.preview.partCount,

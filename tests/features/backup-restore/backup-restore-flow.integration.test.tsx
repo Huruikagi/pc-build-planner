@@ -29,7 +29,10 @@ import { createLocalDataRepository } from "../../../src/persistence/repository.j
 import { createRootTransactionRunner } from "../../../src/persistence/root-transaction-runner.js";
 import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write-lock.js";
 import { createInitialRoot } from "../../../src/persistence/schema.js";
-import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
+import {
+  createBackupRestoreDataPort,
+  createWriteAuthority,
+} from "../../../src/persistence/write-authority.js";
 import { resetUiLanguageForTest } from "../../../src/ui-language/store.js";
 import {
   defaultMessageResolver,
@@ -60,11 +63,12 @@ const createFoundationPort = () => {
     now: () => timestamp,
     initialRoot: createInitialRoot,
   });
-  return createWriteAuthority({
+  const data = createWriteAuthority({
     repository: createLocalDataRepository(storage, migrations),
     runner,
     pipeline: createMutationPipeline(schemaValidator, referenceRepairPolicy),
   });
+  return { data, backupRestoreData: createBackupRestoreDataPort(runner) };
 };
 
 const policy = { isAllowed: () => true, subscribe: () => () => {} };
@@ -93,7 +97,7 @@ const fakeFileList = (file: File): FileList => {
 };
 
 test("実foundationを共有する settings 構成で言語変更を挟んでも backup state と復元後データを保持する", async () => {
-  const data = createFoundationPort();
+  const { data, backupRestoreData } = createFoundationPort();
 
   const seedService = createCandidateManagementService({
     data,
@@ -132,7 +136,7 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
         },
       },
     },
-    { backupRestoreData: data, transientSurface: idleTransientSurface },
+    { backupRestoreData, transientSurface: idleTransientSurface },
   );
   const [candidateManagement, , , , settings] = contributions;
 
@@ -318,7 +322,7 @@ test("settings公開mount下でmaintenance、分類済みerror、安全なfilena
   };
   const registration = createSettingsFeatureRegistration({
     backupRestore: createBackupRestoreSectionMount({
-      data: createFoundationPort(),
+      data: createFoundationPort().data,
       state,
     }),
   });

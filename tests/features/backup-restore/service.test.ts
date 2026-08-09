@@ -12,6 +12,8 @@ import {
   createRestoreService,
 } from "../../../src/features/backup-restore/service.js";
 import type {
+  BackupRestoreAssessmentTicket,
+  BackupRestoreDataPort,
   FoundationDataPort,
   FoundationScopedDataPort,
   ReplacementAssessment,
@@ -145,6 +147,8 @@ const FAKE_ASSESSMENT = {
     revision: 0,
   },
 } as unknown as ReplacementAssessment;
+const ASSESSMENT_TICKET =
+  "00000000-0000-4000-8000-000000000001" as BackupRestoreAssessmentTicket;
 
 const notExpected = (label: string) => (): never => {
   throw new Error(`RestoreService preflight must not call ${label}`);
@@ -154,17 +158,29 @@ const foundationDataAssessing = (
   assess: (
     candidate: unknown,
   ) => ReturnType<FoundationDataPort["assessReplacement"]>,
-): FoundationDataPort => ({
-  query: notExpected("query"),
-  mutate: notExpected("mutate"),
-  assessReplacement: assess,
-  replaceRoot: notExpected("replaceRoot"),
-  runMaintenance: notExpected("runMaintenance"),
+): BackupRestoreDataPort => ({
+  async assessReplacement(candidate) {
+    const result = await assess(candidate);
+    return result.ok
+      ? {
+          ok: true,
+          value: {
+            mode: "normal",
+            requiredBytes: result.value.requiredBytes,
+            ticket: ASSESSMENT_TICKET,
+          },
+        }
+      : result;
+  },
+  assessRecovery: notExpected("assessRecovery"),
+  commit: notExpected("commit"),
+  findPendingFinalization: notExpected("findPendingFinalization"),
+  finalize: notExpected("finalize"),
 });
 
 const dataAssessingWith = (
   result: Awaited<ReturnType<FoundationDataPort["assessReplacement"]>>,
-): FoundationDataPort => foundationDataAssessing(async () => result);
+): BackupRestoreDataPort => foundationDataAssessing(async () => result);
 
 const restoreInputFor = (envelope: unknown) => {
   const text = JSON.stringify(envelope);
@@ -184,7 +200,7 @@ test("有効な現行envelopeのpreflightはticketとpreviewを返す", async ()
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal("assessment" in result.value, false);
+  assert.equal(result.value.assessment, ASSESSMENT_TICKET);
   assert.deepEqual(result.value.preview, {
     createdAt: envelope.createdAt,
     formatVersion: envelope.formatVersion,
@@ -315,6 +331,7 @@ test("Foundationのassessがstale-assessmentを返した場合はstale-ticketへ
 
 const FAKE_TICKET = {
   candidate: { schemaVersion: 1 },
+  assessment: ASSESSMENT_TICKET,
   preview: {
     createdAt: NOW,
     formatVersion: 1,
@@ -347,29 +364,76 @@ const foundationDataForCommit = (options: {
   readonly releaseOrAbort?: Awaited<
     ReturnType<FoundationDataPort["runMaintenance"]>
   >;
-}): { readonly data: FoundationDataPort; readonly calls: RecordedCall[] } => {
+}): {
+  readonly data: BackupRestoreDataPort;
+  readonly calls: RecordedCall[];
+} => {
   const calls: RecordedCall[] = [];
-  const data: FoundationDataPort = {
-    query: notExpected("query"),
-    mutate: notExpected("mutate"),
-    assessReplacement: async (candidate) => {
-      calls.push({ method: "assessReplacement", args: candidate });
+  const data: BackupRestoreDataPort = {
+    assessReplacement: notExpected("assessReplacement"),
+    assessRecovery: notExpected("assessRecovery"),
+    async commit(command) {
+      const acquireCommand = {
+        type: "acquire",
+        ownerId: crypto.randomUUID(),
+        leaseMs: 30_000,
+      };
+      calls.push({ method: "runMaintenance", args: acquireCommand });
+      if (!options.acquire.ok) return options.acquire as never;
+      const fence = options.acquire.value.fence;
+      if (fence === undefined)
+        return { ok: false, error: { code: "storage-unavailable" } };
+      calls.push({ method: "assessReplacement", args: command.candidate });
       if (options.assessReplacement === undefined)
         throw new Error("assessReplacement must not be called before acquire");
-      return options.assessReplacement;
-    },
-    replaceRoot: async (command) => {
-      calls.push({ method: "replaceRoot", args: command });
+      if (!options.assessReplacement.ok) {
+        calls.push({
+          method: "runMaintenance",
+          args: { type: "abort", fence },
+        });
+        return options.assessReplacement as never;
+      }
+      const replacementCommand = {
+        candidate: command.candidate,
+        assessment: options.assessReplacement.value,
+        fence,
+      };
+      calls.push({ method: "replaceRoot", args: replacementCommand });
       if (options.replaceRoot === undefined)
         throw new Error("replaceRoot must not be called before re-assessment");
-      return options.replaceRoot;
+      if (!options.replaceRoot.ok) {
+        calls.push({
+          method: "runMaintenance",
+          args: { type: "abort", fence },
+        });
+        return options.replaceRoot as never;
+      }
+      calls.push({
+        method: "runMaintenance",
+        args: {
+          type: "release",
+          fence: { ...fence, revision: options.replaceRoot.value.revision },
+        },
+      });
+      return {
+        ok: true,
+        value: {
+          kind:
+            options.releaseOrAbort?.ok === false
+              ? "committed-finalization-required"
+              : "committed",
+          receipt: {
+            mode: "normal",
+            revision: options.replaceRoot.value.revision,
+          },
+          ...(options.releaseOrAbort?.ok === false
+            ? { finalization: "fixture-finalization" as never }
+            : {}),
+        },
+      } as never;
     },
-    runMaintenance: async (command) => {
-      calls.push({ method: "runMaintenance", args: command });
-      return command.type === "acquire"
-        ? options.acquire
-        : (options.releaseOrAbort ?? { ok: true, value: {} });
-    },
+    findPendingFinalization: notExpected("findPendingFinalization"),
+    finalize: notExpected("finalize"),
   };
   return { data, calls };
 };

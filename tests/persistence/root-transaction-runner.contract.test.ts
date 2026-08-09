@@ -24,6 +24,8 @@ import { maintenancePolicy } from "../../src/persistence/maintenance.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import { createMigrationRegistry } from "../../src/persistence/migration-registry.ts";
 // @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
+import { createInMemoryRootWriteLock } from "../../src/persistence/root-write-lock.ts";
+// @ts-expect-error Node 26のtype strippingでTypeScript sourceを直接検証する。
 import {
   createInitialRoot,
   REQUEST_DEDUPE_LIMIT,
@@ -43,10 +45,13 @@ const createHarness = (options = {}) => {
   const {
     lock,
     fail,
+    recoveryControl: initialRecoveryControl,
+    failRecoveryControl = false,
     migrationRegistry = migrations,
     initialRoot = createInitialRoot,
   } = options;
   let stored = structuredClone(root);
+  let recoveryControl = structuredClone(initialRecoveryControl);
   const events = [];
   let writes = 0;
   const storage = {
@@ -75,6 +80,22 @@ const createHarness = (options = {}) => {
       events.push("write:done");
       return { ok: true, value: undefined };
     },
+    async readRecoveryControl() {
+      events.push("read-control");
+      if (failRecoveryControl)
+        return { ok: false, error: { code: "storage-unavailable" } };
+      return {
+        ok: true,
+        value:
+          recoveryControl === undefined
+            ? undefined
+            : structuredClone(recoveryControl),
+      };
+    },
+    async writeRecoveryControl(control) {
+      recoveryControl = structuredClone(control);
+      return { ok: true, value: undefined };
+    },
     async restrictToTrustedContexts() {
       return { ok: true, value: undefined };
     },
@@ -87,19 +108,23 @@ const createHarness = (options = {}) => {
       return { ok: true, value };
     },
   };
-  const runner = createRootTransactionRunner({
-    storage,
-    lock: rootLock,
-    migrations: migrationRegistry,
-    validator: schemaValidator,
-    maintenance: maintenancePolicy,
-    now: () => now,
-    initialRoot,
-  });
+  const createRunner = () =>
+    createRootTransactionRunner({
+      storage,
+      lock: rootLock,
+      migrations: migrationRegistry,
+      validator: schemaValidator,
+      maintenance: maintenancePolicy,
+      now: () => now,
+      initialRoot,
+    });
+  const runner = createRunner();
   return {
     runner,
+    createRunner,
     events,
     getStored: () => structuredClone(stored),
+    getRecoveryControl: () => structuredClone(recoveryControl),
     getWrites: () => writes,
   };
 };
@@ -223,6 +248,7 @@ test("lock取得後の最新snapshotとcapacity値をoperationへ渡し、一回
   assert.deepEqual(harness.events, [
     "lock:start",
     "read",
+    "read-control",
     "bytes",
     "quota",
     "write:start",
@@ -255,6 +281,93 @@ test("expected revision競合とactive maintenanceをwrite前にtyped拒否す�
     error: { code: "maintenance-active" },
   });
   assert.equal(fenced.getWrites(), 0);
+});
+
+test("activeまたは読取不能なrecovery controlは同じlock内で全通常writerをfail closedにする", async () => {
+  const activeControl = {
+    generation: 1,
+    active: true,
+    ownerId: "recovery-owner",
+    leaseExpiresAt: "2026-07-19T00:01:00.000Z",
+  };
+  for (const options of [
+    { recoveryControl: activeControl, expected: "maintenance-active" },
+    { failRecoveryControl: true, expected: "storage-unavailable" },
+    {
+      recoveryControl: { generation: 1, active: true, ownerId: "broken" },
+      expected: "corrupt-data",
+    },
+  ]) {
+    const harness = createHarness(options);
+    const writerResults = await Promise.all([
+      harness.runner.run(successfulOperation(0)),
+      harness.runner.runRequest({
+        requestId: "99999999-9999-4999-8999-999999999999",
+        payload: { type: "normal" },
+        ...successfulOperation(0),
+      }),
+      harness.runner.runMaintenance({
+        type: "acquire",
+        ownerId: "11111111-1111-4111-8111-111111111111",
+        leaseMs: 60_000,
+      }),
+    ]);
+    for (const result of writerResults) {
+      assert.equal(result.ok, false);
+      assert.equal(result.error.code, options.expected);
+    }
+    assert.equal(harness.getWrites(), 0);
+    assert.equal(
+      harness.events.filter((event) => event === "read-control").length,
+      3,
+    );
+  }
+});
+
+test("回復保守は破損rootをdecodeせず固定lock内で所有権を直列化し、終了後だけ通常writerを再開する", async () => {
+  const harness = createHarness({
+    root: { schemaVersion: 1, revision: "broken" },
+    lock: createInMemoryRootWriteLock(),
+  });
+  const [first, second] = await Promise.all([
+    harness.runner.runRecoveryMaintenance({
+      type: "acquire",
+      ownerId: "recovery-owner-a",
+      leaseMs: 60_000,
+    }),
+    harness.createRunner().runRecoveryMaintenance({
+      type: "acquire",
+      ownerId: "recovery-owner-b",
+      leaseMs: 60_000,
+    }),
+  ]);
+
+  assert.equal([first, second].filter((result) => result.ok).length, 1);
+  const acquired = [first, second].find((result) => result.ok);
+  assert.ok(acquired?.ok);
+  if (!acquired?.ok) return;
+  assert.equal(harness.getRecoveryControl().active, true);
+  assert.equal(harness.getWrites(), 0);
+
+  const stale = await harness.createRunner().runRecoveryMaintenance({
+    type: "release",
+    fence: { ...acquired.value.fence, generation: 0 },
+  });
+  assert.deepEqual(stale, {
+    ok: false,
+    error: { code: "stale-recovery-state" },
+  });
+  assert.equal(harness.getRecoveryControl().active, true);
+
+  const released = await harness.createRunner().runRecoveryMaintenance({
+    type: "release",
+    fence: acquired.value.fence,
+  });
+  assert.deepEqual(released, { ok: true, value: {} });
+  assert.deepEqual(harness.getRecoveryControl(), {
+    generation: acquired.value.fence.generation,
+    active: false,
+  });
 });
 
 test("候補rootを最終検証し、operationがrevisionを変更しても二重増分を許さない", async () => {
@@ -389,6 +502,12 @@ test("同一request IDとcanonical payloadの再試行は保存済みreceiptを�
       },
       async writeRoot() {
         assert.fail("replay must not write");
+      },
+      async readRecoveryControl() {
+        return { ok: true, value: undefined };
+      },
+      async writeRecoveryControl() {
+        assert.fail("replay must not write recovery control");
       },
       async restrictToTrustedContexts() {
         return { ok: true, value: undefined };

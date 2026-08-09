@@ -39,12 +39,12 @@ const fixture = (
       query: async () => ({ ok: true, value: {} as never }),
       mutate: async () => ({ ok: true, value: {} as never }),
     },
-    fullDataPort: {
-      query: async () => ({ ok: true, value: {} as never }),
-      mutate: async () => ({ ok: true, value: {} as never }),
+    backupRestoreDataPort: {
       assessReplacement: async () => ({ ok: true, value: {} as never }),
-      replaceRoot: async () => ({ ok: true, value: {} as never }),
-      runMaintenance: async () => ({ ok: true, value: {} as never }),
+      assessRecovery: async () => ({ ok: true, value: {} as never }),
+      commit: async () => ({ ok: true, value: {} as never }),
+      findPendingFinalization: async () => ({ ok: true, value: null }),
+      finalize: async () => ({ ok: true, value: {} as never }),
     },
     workerRegistration: {
       async register() {
@@ -188,12 +188,12 @@ test("遅延registration中のstopはcatalogを開始せず完了resourceを解�
       query: async () => ({ ok: true, value: {} as never }),
       mutate: async () => ({ ok: true, value: {} as never }),
     },
-    fullDataPort: {
-      query: async () => ({ ok: true, value: {} as never }),
-      mutate: async () => ({ ok: true, value: {} as never }),
+    backupRestoreDataPort: {
       assessReplacement: async () => ({ ok: true, value: {} as never }),
-      replaceRoot: async () => ({ ok: true, value: {} as never }),
-      runMaintenance: async () => ({ ok: true, value: {} as never }),
+      assessRecovery: async () => ({ ok: true, value: {} as never }),
+      commit: async () => ({ ok: true, value: {} as never }),
+      findPendingFinalization: async () => ({ ok: true, value: null }),
+      finalize: async () => ({ ok: true, value: {} as never }),
     },
     workerRegistration: {
       async register() {

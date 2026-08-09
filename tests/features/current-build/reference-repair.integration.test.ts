@@ -116,6 +116,9 @@ const harness = async () => {
   const writes: LocalDataRoot[] = [];
   const storage = {
     readRoot: () => adapter.readRoot(),
+    readRecoveryControl: () => adapter.readRecoveryControl(),
+    writeRecoveryControl: (control: unknown) =>
+      adapter.writeRecoveryControl(control),
     bytesInUse: () => adapter.bytesInUse(),
     quotaBytes: () => adapter.quotaBytes(),
     restrictToTrustedContexts: () => adapter.restrictToTrustedContexts(),

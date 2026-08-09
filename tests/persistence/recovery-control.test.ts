@@ -43,6 +43,25 @@ test("回復controlはgeneration/owner/leaseを永続値だけでfenceし、終�
     }),
     { ok: false, error: { code: "stale-recovery-state" } },
   );
+  const staleOwnerFence = {
+    ...acquired.value.fence,
+    ownerId: "different-owner",
+  };
+  assert.deepEqual(
+    recoveryControlPolicy.authorizeRecovery(
+      acquired.value.control,
+      staleOwnerFence,
+    ),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
+  assert.deepEqual(
+    recoveryControlPolicy.release(acquired.value.control, staleOwnerFence),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
+  assert.deepEqual(
+    recoveryControlPolicy.abort(acquired.value.control, staleOwnerFence),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
 });
 
 test("不正または余剰fieldを含む回復controlはfail closedに拒否する", () => {
@@ -58,5 +77,49 @@ test("不正または余剰fieldを含む回復controlはfail closedに拒否す
   assert.equal(
     validateRecoveryControl({ generation: 0, active: false, leaked: true }).ok,
     false,
+  );
+});
+
+test("期限切れleaseはowner・generationが一致しても回復commit認可とrenewを拒否する", () => {
+  const acquired = recoveryControlPolicy.acquire(
+    initialRecoveryControl(),
+    "synthetic-owner",
+    "2026-08-09T00:01:00.000Z",
+  );
+  assert.equal(acquired.ok, true);
+  if (!acquired.ok) return;
+  const expiredAt = "2026-08-09T00:01:00.001Z";
+  assert.deepEqual(
+    recoveryControlPolicy.authorizeRecovery(
+      acquired.value.control,
+      acquired.value.fence,
+      expiredAt,
+    ),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
+  assert.deepEqual(
+    recoveryControlPolicy.renew(
+      acquired.value.control,
+      acquired.value.fence,
+      "2026-08-09T00:02:00.000Z",
+      expiredAt,
+    ),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
+  assert.deepEqual(
+    recoveryControlPolicy.release(
+      acquired.value.control,
+      acquired.value.fence,
+      expiredAt,
+    ),
+    { ok: false, error: { code: "stale-recovery-state" } },
+  );
+  assert.deepEqual(
+    recoveryControlPolicy.abort(
+      acquired.value.control,
+      acquired.value.fence,
+      expiredAt,
+    ),
+    { ok: false, error: { code: "stale-recovery-state" } },
   );
 });

@@ -13,6 +13,7 @@ const NOW = "2026-07-19T00:00:00.000Z" as UtcTimestamp;
 
 const createPlatformHarness = () => {
   let stored = createInitialRoot();
+  let recoveryControl: unknown;
   const listeners = new Set<
     (changes: Readonly<Record<string, unknown>>, areaName: string) => void
   >();
@@ -21,10 +22,17 @@ const createPlatformHarness = () => {
     storageLocal: {
       QUOTA_BYTES: 10 * 1024 * 1024,
       async get(key: string) {
-        return { [key]: structuredClone(stored) };
+        return {
+          [key]: structuredClone(
+            key === "localDataRoot" ? stored : recoveryControl,
+          ),
+        };
       },
       async set(items: Record<string, unknown>) {
-        stored = structuredClone(items.localDataRoot) as typeof stored;
+        if ("localDataRoot" in items)
+          stored = structuredClone(items.localDataRoot) as typeof stored;
+        if ("foundationRecoveryControl" in items)
+          recoveryControl = structuredClone(items.foundationRecoveryControl);
         for (const listener of listeners)
           listener({ localDataRoot: { newValue: stored } }, "local");
       },

@@ -686,7 +686,7 @@ test("side-panel-contributions経由の実registrationが安全な一過性DOM�
     conclude: async () => err({ kind: "not-started" as const }),
   };
   const contributions = createSidePanelFeatureContributions(context, {
-    backupRestoreData: data,
+    backupRestoreData: data as never,
     transientSurface,
   });
   const contribution = contributions[5];

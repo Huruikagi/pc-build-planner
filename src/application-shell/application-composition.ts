@@ -1,6 +1,6 @@
 import { err, ok, type Result } from "../domain/public.js";
 import {
-  type FoundationDataPort,
+  type BackupRestoreDataPort,
   type FoundationScopedDataPort,
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
@@ -53,8 +53,8 @@ export interface ProductionFoundationHandle {
   readonly workerRegistrations: readonly ApplicationWorkerRegistration[];
   /** Scoped query and atomic root mutation port handed to feature composition. */
   readonly dataPort: FoundationScopedDataPort;
-  /** 置換・保守capabilityを含む完全port。backup-restore専用の供給に使う。 */
-  readonly fullDataPort: FoundationDataPort;
+  /** backup/restore compositionだけへ供給する用途限定port。 */
+  readonly backupRestoreDataPort: BackupRestoreDataPort;
   dispose(): void | Promise<void>;
 }
 
@@ -76,7 +76,7 @@ export interface ProductionApplicationCompositionOptions<
   readonly createContributions: (
     context: FeatureCompositionContext,
     dependencies: {
-      readonly backupRestoreData: FoundationDataPort;
+      readonly backupRestoreData: BackupRestoreDataPort;
       readonly transientSurface: ReturnType<
         typeof createLateBoundLifecycle
       >["port"];
@@ -129,7 +129,7 @@ export function createProductionSidePanelComposition(
         maintenanceSource: initialized.value.maintenanceSource,
         workerRegistrations: [],
         dataPort: initialized.value.dataPort,
-        fullDataPort: initialized.value.fullDataPort,
+        backupRestoreDataPort: initialized.value.backupRestoreDataPort,
         dispose: () => initialized.value.dispose(),
       });
     },
@@ -189,17 +189,19 @@ function validateFoundationHandle(
       typeof (dataPort as Record<string, unknown>).mutate !== "function"
     )
       return undefined;
-    const fullDataPort = candidate.fullDataPort;
+    const backupRestoreDataPort = candidate.backupRestoreDataPort;
     if (
-      typeof fullDataPort !== "object" ||
-      fullDataPort === null ||
-      typeof (fullDataPort as Record<string, unknown>).query !== "function" ||
-      typeof (fullDataPort as Record<string, unknown>).mutate !== "function" ||
-      typeof (fullDataPort as Record<string, unknown>).assessReplacement !==
+      typeof backupRestoreDataPort !== "object" ||
+      backupRestoreDataPort === null ||
+      typeof (backupRestoreDataPort as Record<string, unknown>)
+        .assessReplacement !== "function" ||
+      typeof (backupRestoreDataPort as Record<string, unknown>)
+        .assessRecovery !== "function" ||
+      typeof (backupRestoreDataPort as Record<string, unknown>).commit !==
         "function" ||
-      typeof (fullDataPort as Record<string, unknown>).replaceRoot !==
-        "function" ||
-      typeof (fullDataPort as Record<string, unknown>).runMaintenance !==
+      typeof (backupRestoreDataPort as Record<string, unknown>)
+        .findPendingFinalization !== "function" ||
+      typeof (backupRestoreDataPort as Record<string, unknown>).finalize !==
         "function"
     )
       return undefined;
@@ -480,7 +482,7 @@ export function createProductionApplicationComposition<
       let contributions: ApplicationRuntimeContributions<TFeatures>;
       try {
         contributions = options.createContributions(compositionContext, {
-          backupRestoreData: validatedFoundation.fullDataPort,
+          backupRestoreData: validatedFoundation.backupRestoreDataPort,
           transientSurface: lateBoundLifecycle.port,
         });
       } catch {
