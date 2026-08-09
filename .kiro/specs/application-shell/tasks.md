@@ -372,7 +372,7 @@
   - _Requirements: 3.5, 3.8, 3.9, 9.3, 9.4, 9.5_
   - _Boundary: ApplicationComposition, FeatureCompositionContext, RootPublicApi_
 
-- [ ] 11. Project contextと回復flowの横断回帰を完成する
+- [x] 11. Project contextと回復flowの横断回帰を完成する
 - [x] 11.1 Contract・DOM・runtime flowを統合検証する
   - current projectのready、empty、unavailableとrecovery-required、maintenance、settings fallbackを同じproduction-shaped scenarioで検証する
   - selector操作、依存feature availability、回復操作分類、正常snapshot後の再評価、全resource cleanupの順序を決定的に観測する
