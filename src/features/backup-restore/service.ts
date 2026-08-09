@@ -6,6 +6,7 @@ import type {
 import { createUtcTimestamp, err, ok } from "../../domain/public.js";
 import type {
   BackupRestoreDataPort,
+  BackupRestoreFinalizationTicket,
   FoundationScopedDataPort,
 } from "../../persistence/public.js";
 import {
@@ -15,6 +16,7 @@ import {
 import type {
   BackupArtifact,
   BackupError,
+  RestoreCommitOutcome,
   RestoreError,
   RestoreInput,
   RestoreSummary,
@@ -102,7 +104,19 @@ export const createBackupService = (
 
 export interface RestoreService {
   preflight(input: RestoreInput): Promise<Result<RestoreTicket, RestoreError>>;
-  commit(ticket: RestoreTicket): Promise<Result<RestoreSummary, RestoreError>>;
+  reassess?(
+    ticket: RestoreTicket,
+  ): Promise<Result<RestoreTicket, RestoreError>>;
+  commit(
+    ticket: RestoreTicket,
+  ): Promise<Result<RestoreCommitOutcome | RestoreSummary, RestoreError>>;
+  finalize?(
+    ticket: BackupRestoreFinalizationTicket,
+    summary: RestoreSummary,
+  ): Promise<Result<RestoreSummary, RestoreError>>;
+  findPendingFinalization?(): Promise<
+    Result<BackupRestoreFinalizationTicket | null, RestoreError>
+  >;
 }
 
 export interface RestoreServiceDependencies {
@@ -118,59 +132,114 @@ const exchangeFailureToRestoreError = (error: {
   path: error.path,
 });
 
+const assessmentFailureToRestoreError = (error: {
+  readonly code: string;
+}): RestoreError =>
+  error.code === "recovery-candidate-rejected"
+    ? { code: "invalid-structure" }
+    : mapFoundationError(error as FoundationError);
+
 export const createRestoreService = (
   dependencies: RestoreServiceDependencies,
-): RestoreService => ({
-  async preflight(input) {
-    if (!restoreFileCapacityPolicy.accepts(input.byteLength))
-      return err({ code: "size-exceeded" });
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(input.text);
-    } catch {
-      return err({ code: "not-json", path: "$" });
-    }
-
-    const migrated = exchangeMigration.toCurrent(parsed);
-    if (!migrated.ok) return err(exchangeFailureToRestoreError(migrated.error));
-    const envelope = migrated.value;
-
-    const candidate = exchangeMapper.toRoot(envelope);
-    if (!candidate.ok)
-      return err(exchangeFailureToRestoreError(candidate.error));
-
-    const assessment = await dependencies.data.assessReplacement(
-      candidate.value,
-    );
-    if (!assessment.ok) return err(mapFoundationError(assessment.error));
-
+): RestoreService => {
+  const assess = async (
+    candidate: unknown,
+    preview: Omit<RestoreTicket["preview"], "estimatedBytes">,
+  ): Promise<Result<RestoreTicket, RestoreError>> => {
+    const normal = await dependencies.data.assessReplacement(candidate);
+    const assessment =
+      !normal.ok &&
+      (normal.error.code === "corrupt-data" ||
+        normal.error.code === "unsupported-version")
+        ? await dependencies.data.assessRecovery(candidate)
+        : normal;
+    if (!assessment.ok)
+      return err(assessmentFailureToRestoreError(assessment.error));
     return ok({
-      candidate: candidate.value,
+      candidate,
+      mode: assessment.value.mode,
       assessment: assessment.value.ticket,
-      preview: {
+      ...(assessment.value.currentAnomaly === undefined
+        ? {}
+        : { currentAnomaly: { code: assessment.value.currentAnomaly.code } }),
+      preview: { ...preview, estimatedBytes: assessment.value.requiredBytes },
+    });
+  };
+
+  return {
+    async preflight(input) {
+      if (!restoreFileCapacityPolicy.accepts(input.byteLength))
+        return err({ code: "size-exceeded" });
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input.text);
+      } catch {
+        return err({ code: "not-json", path: "$" });
+      }
+
+      const migrated = exchangeMigration.toCurrent(parsed);
+      if (!migrated.ok)
+        return err(exchangeFailureToRestoreError(migrated.error));
+      const envelope = migrated.value;
+
+      const candidate = exchangeMapper.toRoot(envelope);
+      if (!candidate.ok)
+        return err(exchangeFailureToRestoreError(candidate.error));
+
+      return assess(candidate.value, {
         createdAt: envelope.createdAt,
         formatVersion: envelope.formatVersion,
         projectCount: envelope.data.projects.length,
         partCount: envelope.data.parts.length,
         currentBuildCount: envelope.data.currentBuilds.length,
-        estimatedBytes: assessment.value.requiredBytes,
-      },
-    });
-  },
+      });
+    },
 
-  async commit(ticket) {
-    if (ticket.assessment === undefined) return err({ code: "stale-ticket" });
-    const committed = await dependencies.data.commit({
-      candidate: ticket.candidate,
-      assessment: ticket.assessment,
-      expectedMode: "normal",
-    });
-    if (!committed.ok) return err(mapFoundationError(committed.error));
-    return ok({
-      projectCount: ticket.preview.projectCount,
-      partCount: ticket.preview.partCount,
-      currentBuildCount: ticket.preview.currentBuildCount,
-    });
-  },
-});
+    async reassess(ticket) {
+      return assess(ticket.candidate, {
+        createdAt: ticket.preview.createdAt,
+        formatVersion: ticket.preview.formatVersion,
+        projectCount: ticket.preview.projectCount,
+        partCount: ticket.preview.partCount,
+        currentBuildCount: ticket.preview.currentBuildCount,
+      });
+    },
+
+    async commit(ticket) {
+      if (ticket.assessment === undefined || ticket.mode === undefined)
+        return err({ code: "stale-ticket" });
+      const committed = await dependencies.data.commit({
+        candidate: ticket.candidate,
+        assessment: ticket.assessment,
+        expectedMode: ticket.mode,
+      });
+      if (!committed.ok) return err(mapFoundationError(committed.error));
+      const summary = {
+        projectCount: ticket.preview.projectCount,
+        partCount: ticket.preview.partCount,
+        currentBuildCount: ticket.preview.currentBuildCount,
+      };
+      return ok(
+        committed.value.kind === "committed"
+          ? { kind: "committed", summary }
+          : {
+              kind: "committed-finalization-required",
+              summary,
+              finalization: committed.value.finalization,
+            },
+      );
+    },
+
+    async finalize(ticket, summary) {
+      const finalized = await dependencies.data.finalize(ticket);
+      if (!finalized.ok) return err(mapFoundationError(finalized.error));
+      return ok(summary);
+    },
+
+    async findPendingFinalization() {
+      const pending = await dependencies.data.findPendingFinalization();
+      return pending.ok ? pending : err(mapFoundationError(pending.error));
+    },
+  };
+};

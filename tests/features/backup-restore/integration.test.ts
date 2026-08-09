@@ -230,9 +230,12 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
   assert.equal(committed.ok, true);
   if (!committed.ok) return;
   assert.deepEqual(committed.value, {
-    projectCount: 1,
-    partCount: candidateIds.length,
-    currentBuildCount: 1,
+    kind: "committed",
+    summary: {
+      projectCount: 1,
+      partCount: candidateIds.length,
+      currentBuildCount: 1,
+    },
   });
 
   // "Restart": a fresh repository/runner pair reading the same persisted storage state.

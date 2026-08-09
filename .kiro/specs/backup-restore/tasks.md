@@ -82,7 +82,7 @@
   - _Boundary: BackupService_
 
 - [ ] 3. assessment ticket付き復元serviceを実装する
-- [ ] 3.1 normal/recovery preflightとpreviewを実装する
+- [x] 3.1 normal/recovery preflightとpreviewを実装する
   - file入力を交換検証・migration・mapping後にFoundation assessmentへ渡し、正常rootとcorrupt/unsupported rootだけを正しくmode分岐する
   - candidate拒否、容量超過、storage failureをcurrent anomalyと混同せず、opaque assessment ticketを成功時だけRestoreTicketへ保持する
   - 件数、作成日時、形式版、必要bytes、modeをpreviewへ写し、検証中はcommit不能であることを状態契約から確認できれば完了とする
@@ -90,7 +90,7 @@
   - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.3, 5.6, 5.7, 6.5_
   - _Boundary: RestoreService preflight_
 
-- [ ] 3.2 root write前のcommit protocolとcleanup再開を実装する
+- [x] 3.2 root write前のcommit protocolとcleanup再開を実装する
   - candidate、expected mode、assessment ticketをFoundation commitへ渡し、write前errorとcommitted outcomeを区別する
   - stale assessment、mode変化、capacity、storage、maintenance/recovery競合では既存rootを保持し、policyに応じてticket保持または再assessmentへ戻す
   - pre-commit cleanup未完了では元ticketを保持し、新しいguard permitから同じticketだけを再送してcleanupを先に再開する
@@ -99,7 +99,7 @@
   - _Requirements: 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
   - _Boundary: RestoreService pre-commit protocol_
 
-- [ ] 3.3 committed outcomeとfinalize-only lifecycleを実装する
+- [x] 3.3 committed outcomeとfinalize-only lifecycleを実装する
   - root write後cleanup失敗では成功summaryとopaque finalization ticketだけを返し、commit前errorへ戻さない
   - 永続controlからpost-commit ticketだけを再発見し、section再mount後もfinalize-only処理を再開できるようにする
   - finalizeはcleanupと通常query確認だけを行い、root write、assessment、置換確認を再実行しない
@@ -108,7 +108,7 @@
   - _Requirements: 4.4, 4.5, 5.1, 5.2, 5.4, 5.5_
   - _Boundary: RestoreService finalization lifecycle_
 
-- [ ] 3.4 Foundationとの競合・原子性統合を固定する
+- [x] 3.4 Foundationとの競合・原子性統合を固定する
   - preflight後に先行mutationが確定した場合、assessment ticketがstale拒否され先行変更が保持されることを検証する
   - commit線形化後の後続mutationがpersistent maintenance/recovery controlで拒否され、read-only queryは継続できることを検証する
   - write前の全失敗でroot不変、write後cleanup失敗で一回だけwrite、finalize retryでwrite 0件となる

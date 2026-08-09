@@ -23,6 +23,8 @@ const errorMessageKeys = {
   "corrupt-current-data": "backup.errors.corrupt-current-data",
   "unsupported-current-data": "backup.errors.unsupported-current-data",
   "stale-ticket": "backup.errors.stale-ticket",
+  "stale-assessment": "backup.errors.stale-ticket",
+  "precommit-cleanup-pending": "backup.errors.maintenance-active",
   "maintenance-active": "backup.errors.maintenance-active",
   storage: "backup.errors.storage",
   serialization: "backup.errors.serialization",

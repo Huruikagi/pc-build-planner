@@ -336,7 +336,7 @@ test("Foundationのassessが容量超過を返した場合はwriteなしで値�
   }
 });
 
-test("Foundationのassessがstale-assessmentを返した場合はstale-ticketへ写像される", async () => {
+test("Foundationのassessがstale-assessmentを返した場合は再assessment専用errorへ写像される", async () => {
   const envelope = buildCurrentBackupEnvelope();
   const service = createRestoreService({
     data: dataAssessingWith({
@@ -348,11 +348,12 @@ test("Foundationのassessがstale-assessmentを返した場合はstale-ticketへ
   const result = await service.preflight(restoreInputFor(envelope));
 
   assert.equal(result.ok, false);
-  if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
+  if (!result.ok) assert.deepEqual(result.error, { code: "stale-assessment" });
 });
 
 const FAKE_TICKET = {
   candidate: { schemaVersion: 1 },
+  mode: "normal" as const,
   assessment: ASSESSMENT_TICKET,
   preview: {
     createdAt: NOW,
@@ -476,9 +477,12 @@ test("commit成功時はacquire・再assess・replaceRoot・releaseの順で呼�
   assert.equal(result.ok, true);
   if (result.ok)
     assert.deepEqual(result.value, {
-      projectCount: 3,
-      partCount: 5,
-      currentBuildCount: 2,
+      kind: "committed",
+      summary: {
+        projectCount: 3,
+        partCount: 5,
+        currentBuildCount: 2,
+      },
     });
   assert.deepEqual(
     calls.map((call) => call.method),
@@ -576,7 +580,7 @@ test("replaceRootがstale-assessmentで失敗した場合はabortして既存デ
   const result = await service.commit(FAKE_TICKET as never);
 
   assert.equal(result.ok, false);
-  if (!result.ok) assert.deepEqual(result.error, { code: "stale-ticket" });
+  if (!result.ok) assert.deepEqual(result.error, { code: "stale-assessment" });
   const abortCall = calls[3]?.args as { type: string; fence: unknown };
   assert.equal(abortCall.type, "abort");
   assert.deepEqual(abortCall.fence, FAKE_FENCE);
@@ -632,4 +636,227 @@ test("復元セッションごとにUUID owner識別子でacquireする", async 
     acquireCall.ownerId,
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
   );
+});
+
+const backupRestorePort = (
+  overrides: Partial<BackupRestoreDataPort> = {},
+): BackupRestoreDataPort => ({
+  async assessReplacement() {
+    return {
+      ok: true,
+      value: { mode: "normal", requiredBytes: 222, ticket: ASSESSMENT_TICKET },
+    };
+  },
+  async assessRecovery() {
+    return {
+      ok: true,
+      value: {
+        mode: "recovery",
+        requiredBytes: 333,
+        currentAnomaly: { code: "corrupt-data" },
+        ticket: ASSESSMENT_TICKET,
+      },
+    };
+  },
+  async commit() {
+    return {
+      ok: true,
+      value: {
+        kind: "committed",
+        receipt: { mode: "normal", revision: 1 as never },
+      },
+    };
+  },
+  async findPendingFinalization() {
+    return { ok: true, value: null };
+  },
+  async finalize() {
+    return { ok: true, value: { mode: "normal", revision: 1 as never } };
+  },
+  ...overrides,
+});
+
+test("正常assessmentのpreflightはnormal mode、opaque ticket、previewだけを返す", async () => {
+  const service = createRestoreService({ data: backupRestorePort() });
+  const result = await service.preflight(
+    restoreInputFor(buildCurrentBackupEnvelope()),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.mode, "normal");
+  assert.equal(result.value.assessment, ASSESSMENT_TICKET);
+  assert.equal(result.value.currentAnomaly, undefined);
+  assert.equal(result.value.preview.estimatedBytes, 222);
+});
+
+test("current rootだけがcorrupt-dataならrecovery assessmentへ分岐する", async () => {
+  let recoveryCalls = 0;
+  const service = createRestoreService({
+    data: backupRestorePort({
+      async assessReplacement() {
+        return { ok: false, error: { code: "corrupt-data" } };
+      },
+      async assessRecovery(candidate) {
+        recoveryCalls += 1;
+        assert.notEqual(candidate, undefined);
+        return {
+          ok: true,
+          value: {
+            mode: "recovery",
+            requiredBytes: 333,
+            currentAnomaly: { code: "corrupt-data" },
+            ticket: ASSESSMENT_TICKET,
+          },
+        };
+      },
+    }),
+  });
+
+  const result = await service.preflight(
+    restoreInputFor(buildCurrentBackupEnvelope()),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(recoveryCalls, 1);
+  assert.equal(result.value.mode, "recovery");
+  assert.deepEqual(result.value.currentAnomaly, { code: "corrupt-data" });
+  assert.equal(result.value.preview.estimatedBytes, 333);
+});
+
+test("candidate拒否・容量・storage失敗はrecovery assessmentへ分岐しない", async () => {
+  for (const code of [
+    "validation",
+    "quota-exceeded",
+    "storage-unavailable",
+  ] as const) {
+    let recoveryCalls = 0;
+    const service = createRestoreService({
+      data: backupRestorePort({
+        async assessReplacement() {
+          return { ok: false, error: { code } } as never;
+        },
+        async assessRecovery() {
+          recoveryCalls += 1;
+          throw new Error("candidate failure must not assess recovery");
+        },
+      }),
+    });
+    const result = await service.preflight(
+      restoreInputFor(buildCurrentBackupEnvelope()),
+    );
+    assert.equal(result.ok, false, code);
+    assert.equal(recoveryCalls, 0, code);
+  }
+});
+
+test("commitはticketのcandidate・mode・assessmentだけをFoundationへ渡し、write後cleanup失敗をoutcomeとして保持する", async () => {
+  let command: unknown;
+  const finalization = "fixture-finalization" as never;
+  const service = createRestoreService({
+    data: backupRestorePort({
+      async commit(input) {
+        command = input;
+        return {
+          ok: true,
+          value: {
+            kind: "committed-finalization-required",
+            receipt: { mode: "recovery", revision: 7 as never },
+            finalization,
+          },
+        };
+      },
+    }),
+  });
+  const preflight = await service.preflight(
+    restoreInputFor(buildCurrentBackupEnvelope()),
+  );
+  assert.equal(preflight.ok, true);
+  if (!preflight.ok) return;
+  const ticket = { ...preflight.value, mode: "recovery" as const };
+  const result = await service.commit(ticket);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(command, {
+    candidate: ticket.candidate,
+    expectedMode: "recovery",
+    assessment: ASSESSMENT_TICKET,
+  });
+  assert.equal(
+    "kind" in result.value && result.value.kind,
+    "committed-finalization-required",
+  );
+  if (
+    "kind" in result.value &&
+    result.value.kind === "committed-finalization-required"
+  )
+    assert.equal(result.value.finalization, finalization);
+});
+
+test("precommit cleanup・stale assessmentはwrite前errorとして識別し、reassessは新しいticketを作る", async () => {
+  let assessmentNumber = 0;
+  const service = createRestoreService({
+    data: backupRestorePort({
+      async assessReplacement() {
+        assessmentNumber += 1;
+        return {
+          ok: true,
+          value: {
+            mode: "normal",
+            requiredBytes: 222,
+            ticket: `assessment-${assessmentNumber}` as never,
+          },
+        };
+      },
+      async commit() {
+        return { ok: false, error: { code: "precommit-cleanup-pending" } };
+      },
+    }),
+  });
+  const first = await service.preflight(
+    restoreInputFor(buildCurrentBackupEnvelope()),
+  );
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  const pending = await service.commit(first.value);
+  assert.deepEqual(pending, {
+    ok: false,
+    error: { code: "precommit-cleanup-pending" },
+  });
+  const reassessed = await service.reassess?.(first.value);
+  assert.equal(reassessed?.ok, true);
+  if (reassessed?.ok)
+    assert.notEqual(reassessed.value.assessment, first.value.assessment);
+});
+
+test("finalize-onlyとpending discoveryはroot再置換をせずopaque ticketだけを利用する", async () => {
+  const finalization = "fixture-finalization" as never;
+  let commitCalls = 0;
+  let finalized: unknown;
+  const service = createRestoreService({
+    data: backupRestorePort({
+      async commit() {
+        commitCalls += 1;
+        throw new Error("finalize must not commit");
+      },
+      async findPendingFinalization() {
+        return { ok: true, value: finalization };
+      },
+      async finalize(ticket) {
+        finalized = ticket;
+        return { ok: true, value: { mode: "normal", revision: 7 as never } };
+      },
+    }),
+  });
+  const pending = await service.findPendingFinalization?.();
+  assert.deepEqual(pending, { ok: true, value: finalization });
+  const summary = { projectCount: 1, partCount: 2, currentBuildCount: 1 };
+  assert.deepEqual(await service.finalize?.(finalization, summary), {
+    ok: true,
+    value: summary,
+  });
+  assert.equal(finalized, finalization);
+  assert.equal(commitCalls, 0);
 });

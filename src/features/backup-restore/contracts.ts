@@ -12,7 +12,11 @@ import type {
   SourceSnapshot,
   UtcTimestamp,
 } from "../../domain/public.js";
-import type { BackupRestoreAssessmentTicket } from "../../persistence/public.js";
+import type {
+  BackupRestoreAssessmentTicket,
+  BackupRestoreCommitMode,
+  BackupRestoreFinalizationTicket,
+} from "../../persistence/public.js";
 
 export const BACKUP_PRODUCT_ID = "pc-build-planner";
 export const CURRENT_BACKUP_FORMAT_VERSION = 1;
@@ -85,7 +89,12 @@ export interface RestoreInput {
 export interface RestoreTicket {
   readonly candidate: unknown;
   readonly preview: RestorePreview;
+  /** 旧state fixtureとの互換性のため任意。実サービスのpreflightは必ず両方を設定する。 */
+  readonly mode?: BackupRestoreCommitMode;
   readonly assessment?: BackupRestoreAssessmentTicket;
+  readonly currentAnomaly?:
+    | { readonly code: "corrupt-data" }
+    | { readonly code: "unsupported-version" };
 }
 
 export interface BackupArtifact {
@@ -101,6 +110,15 @@ export interface RestoreSummary {
   readonly partCount: number;
   readonly currentBuildCount: number;
 }
+
+/** root write後は通常errorへ戻さず、cleanup専用ticketを保持する。 */
+export type RestoreCommitOutcome =
+  | { readonly kind: "committed"; readonly summary: RestoreSummary }
+  | {
+      readonly kind: "committed-finalization-required";
+      readonly summary: RestoreSummary;
+      readonly finalization: BackupRestoreFinalizationTicket;
+    };
 
 /** JSON解析、必須構造、非対応版以外の値検証失敗。問題値を含めずcodeとpathだけを公開する。 */
 export type ExchangeStructureErrorCode =
@@ -152,6 +170,8 @@ export type RestoreErrorCode =
   | "storage-unavailable"
   | "corrupt-current-data"
   | "stale-ticket"
+  | "stale-assessment"
+  | "precommit-cleanup-pending"
   | "maintenance-active";
 
 /** ファイル、形式、参照、非対応版、容量、保存、stale確認の失敗を値を含まずcodeとpathで区別する。 */
@@ -184,9 +204,9 @@ export const mapFoundationError = (error: FoundationError): RestoreError => {
       return { code: "stale-ticket" };
     case "stale-assessment":
     case "stale-recovery-state":
-      return { code: "stale-ticket" };
+      return { code: "stale-assessment" };
     case "precommit-cleanup-pending":
-      return { code: "maintenance-active" };
+      return { code: "precommit-cleanup-pending" };
     case "quota-exceeded":
       return { code: "quota-exceeded" };
     case "access-denied":

@@ -153,10 +153,18 @@ export class BackupRestoreState {
       return;
     }
 
+    if ("kind" in result.value && result.value.kind !== "committed") {
+      this.#set({
+        phase: "failed",
+        operation: "restore",
+        error: { code: "maintenance-active" },
+      });
+      return;
+    }
     this.#set({
       phase: "succeeded",
       operation: "restore",
-      summary: result.value,
+      summary: "kind" in result.value ? result.value.summary : result.value,
     });
   }
 
