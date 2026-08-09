@@ -10,7 +10,7 @@
   - `@testing-library/react`（`render` / `cleanup`）
   - `@testing-library/user-event`（操作の発火）
 - TypeScriptはビルドせず `--import tsx` で直接実行する。事前トランスパイル済みの成果物をテスト対象にしない。
-- 実行は `package.json` の `test` script に集約し、`--import ./tests/setup-dom.ts` と `--test-isolation=none` を前提にする。
+- 実行は `package.json` の `test` script に集約し、`--import tsx --import ./tests/setup-dom.ts` を前提にする。
 - 実拡張の起動が必要な検証（unpacked拡張のロード、side panel、実ブラウザ経路）は `node:test` ではなく `e2e/` のPlaywrightへ置く。`node:test` 側でChrome実体を起動しない。
 
 ### 入れないもの（意図的な非採用）
@@ -49,6 +49,8 @@ afterEach(cleanup); // node:test の afterEach で後始末を一元化
 - id 指定など属性ベースで要素を取る場合は `data-*` を `querySelector` で引き、存在チェック（`assert.ok`）を通してから使う。`as HTMLButtonElement` の無検証キャストはしない。
 - テキスト検証は `container.textContent` への正規表現マッチを既定とする。
 - 未信頼文字列が安全な JSX child として描画され HTML 注入が起きないこと（`querySelector("img")` が `null` 等）を、外部文字列を扱う component では回帰対象にする。
+- production の registration factory を直接 mount するテストは、React の更新境界の外で状態が動かないよう `act` で包んだ factory 経由で組み立てる（参照: `tests/act-wrapped-registration.ts`）。
+- 表示文言はカタログ由来のため、DOM 検証で文言リテラルを期待値へ直書きする代わりに、カタログ解決を通した値か構造（`data-*`、role）で表明する。日英いずれの言語でも同じ挙動になることは E2E 側で固定する。
 
 ## 環境設定の注意
 

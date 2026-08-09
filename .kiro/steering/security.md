@@ -50,6 +50,7 @@ content scriptは常に未信頼側に落ちる。信頼済み文脈でしか許
 
 - storageのaccess levelは `TRUSTED_CONTEXTS` に設定し、content scriptへ保存APIを到達させない（`src/persistence/chrome-storage-adapter.ts`）。
 - すべての永続化mutationは単一write authorityへルーティングする。featureがChrome Storage adapterを直接呼ぶ経路を作らない。
+- `chrome.storage` へ到達してよいソースは公開境界gateのallowlistで固定する（foundation adapter、canonical root外のUI preference専用adapter、一時起動状態の session adapter）。allowlistの追加は、専用keyへのscope、対象storage areaの限定、到達不可を確認するnegative testを同じ変更に含めて初めて提案できる。
 - 復元は原子的置換として扱い、maintenance generationとowner fencingをcommit直前にも再検証する。worker再生成やstale lockで排他を破らない。
 - **書き込み失敗時は既存の有効データを保持する**。壊れた中間状態を書き残すより、操作を失敗させる。
 - 生HTMLと商品画像は永続保存しない。`chrome.storage.local` の既定10MB上限を前提に容量を監視する。
@@ -58,7 +59,7 @@ content scriptは常に未信頼側に落ちる。信頼済み文脈でしか許
 
 生成物に対して `scripts/validate-artifacts.mjs` が以下を機械検査する。該当パターンはビルドgateで失敗する。
 
-- `eval` / `new Function` / 実行時JSX変換
+- `eval` / `new Function` / 実行時JSX変換（alias経由の動的 `Function` 呼出しを含む）
 - リモートimport、`importScripts` によるリモート読み込み
 - `dangerouslySetInnerHTML` および `innerHTML` への代入
 - HTML中のインラインscript、`on*=` 属性、`javascript:` URL、非moduleスクリプト、ローカル以外のscript src
@@ -88,6 +89,8 @@ fixtureは架空の商品・HTML・データだけで構成する。実サイト
 
 - 実行コードはすべて拡張へ同梱する。CDN、リモートスクリプト、実行時ダウンロードに依存しない。
 - 依存追加時はMV3・CSP適合、バンドルサイズ、保守性への影響を明示する。CSPを弱める前提の依存は採用しない。
+- 動的コード生成を持ちうるライブラリは、生成前に無効化（例: 実行時schema vendorの `jitless`）できることを前提とし、その設定を単一のcanonical import入口で行う。設定順序が証明できない使い方をしない。
+- 配布物には同梱したruntime dependencyのライセンスnoticeを含め、その存在をbuild gateで検査する。
 - 生成物側にも公開境界検査（`validate-boundaries`）を適用し、bundleがfoundationの非公開能力（storage adapter、composition root、write authority等の生成関数）を露出しないことを検査する。
 
 ---

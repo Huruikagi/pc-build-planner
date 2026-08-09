@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-MVP（v0.1.0）の全specが実装済みであり、`src/` にlocal data foundation、application shell、runtime composition、5つの業務feature（候補管理、現在構成、商品取り込み、互換性判定、backup/restore）が揃っている。新規実装は、承認済みの製品文書とspecに加え、既存コードで確立した公開境界とテスト配置を基準とする。
+v0.3.0までをリリース済みであり、`src/` にlocal data foundation、application shell、runtime composition、共有コアモジュール、7つの業務feature（候補管理、現在構成、商品取り込み、互換性判定、backup/restore、設定、取得元価格更新）が揃っている。新規実装は、承認済みの製品文書とspecに加え、既存コードで確立した公開境界とテスト配置を基準とする。
 
 仕様は `.kiro/specs/<feature-name>/` にfeature単位で配置し、feature名にはkebab-caseを使用する。ステアリングはパターンを保持し、個別ファイルの完全な一覧やspecの実装詳細を重複させない。
 
@@ -10,7 +10,7 @@ MVP（v0.1.0）の全specが実装済みであり、`src/` にlocal data foundat
 
 feature-first / vertical sliceを採用する。業務機能の契約、サービス、query、state、view、style、feature固有adapterは `src/features/<feature>/` に閉じる。
 
-複数featureで共有する責務だけを、ドメイン、永続化、application shell、runtimeの明示的な境界へ置く。単に重複して見えるという理由で汎用 `shared` へ移動せず、canonical ownerを決めて公開契約経由で利用する。
+複数featureで共有する責務だけを、ドメイン、永続化、application shell、runtime、共有コアモジュールの明示的な境界へ置く。単に重複して見えるという理由で汎用 `shared` へ移動せず、canonical ownerを決めて公開契約経由で利用する。
 
 ## ディレクトリパターン
 
@@ -29,6 +29,14 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 **目的**: 共通ドメインモデル、canonical `Result<T, E>`、実行時検証、migration、Repository、単一write authority、原子的mutation、参照修復、atomic replacement、maintenance fencingを所有する。
 
 **原則**: featureは公開された契約とportを利用し、Chrome Storage adapterを直接呼ばない。
+
+### 共有コアモジュール
+
+**場所**: `src/<core>/`（例: `src/ui-messages/`、`src/ui-language/`、`src/project-context/`）
+
+**目的**: featureでもfoundationでもshellでもない、featureをまたぐ単一の横断責務を所有する。
+
+**原則**: featureと同じく `public.ts`（必要ならworker-safeな `worker-public.ts`）だけを公開入口とし、内部ファイルを外部からimportさせない。一つのコアは一つの責務に閉じ、依存できる相手を限定する（例: 表示言語コアはメッセージカタログとドメイン契約だけに依存する）。汎用ユーティリティ置き場として増やさず、新設は「どのfeatureにも属さない横断状態を、単一owner無しでは実装できない」ときに限る。
 
 ### Application shell
 
@@ -54,7 +62,7 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 
 **原則**: feature固有テストはfeatureごとにまとめ、共有基盤とcompositionのテストはそれぞれの責務別に配置する。fixtureには架空データだけを使用する。
 
-責務別サブディレクトリの意味は次のとおり。`tests/features/<feature>/` はfeature内部、`tests/domain/` `tests/persistence/` `tests/application-shell/` `tests/runtime/` は各所有境界、`tests/contracts/` はfeatureをまたぐ契約kit、`tests/tooling/` は公開境界・build成果物・最終gateの検証、`tests/fixtures/` は共有ファクトリ、`tests/performance/` は容量・性能回帰に対応する。
+責務別サブディレクトリの意味は次のとおり。`tests/features/<feature>/` はfeature内部、`tests/domain/` `tests/persistence/` `tests/application-shell/` `tests/runtime/` および共有コアと同名のディレクトリ（`tests/ui-messages/` など）は各所有境界、`tests/contracts/` はfeatureをまたぐ契約kit、`tests/tooling/` は公開境界・build成果物・最終gateの検証、`tests/fixtures/` は共有ファクトリ、`tests/performance/` は容量・性能回帰に対応する。
 
 ### E2Eとbuild/検証script
 
@@ -70,7 +78,8 @@ feature-first / vertical sliceを採用する。業務機能の契約、サー�
 - 各featureは自身の内部実装、`public.ts`、登録モジュール、必要なworker registration port/runtime adapterを所有する。
 - cross-feature遷移はshell所有の `ShellNavigator` / `FeatureActivationIntent` などのtyped activation contractを使用する。
 - feature間の通常利用は明示された上流featureの`public.ts`に限定する。`worker-public.ts`はworker-safeな登録・契約だけ、`feature-contribution.ts`はapplication shellのcomposition rootによる登録factory合成だけに限定し、その他のdeep import、DOMを介した暗黙連携、共有runtimeの直接操作を禁止する。
-- 共通ドメイン型、結果型、保存primitiveをfeatureごとに再定義しない。local data foundationをcanonical ownerとする。
+- 共通ドメイン型、結果型、保存primitive、実行時schema primitiveをfeatureごとに再定義しない。local data foundationをcanonical ownerとする。
+- UI文言、表示言語、現在選択プロジェクトは共有コアモジュールをcanonical ownerとし、featureは購読・adapter・自身のsnapshot反映だけを所有する。旧来の feature-local な選択authorityを復活させない。
 - 永続化mutationは単一write authorityへ集約し、成功後イベントによる別writeで参照整合性を修復しない。
 - composition rootだけが具体featureの登録と公開契約を知り、feature内部はshellの具体実装へ依存しない。
 
@@ -102,6 +111,7 @@ import { createCandidateManagementContribution } from "../features/candidate-man
 ```
 
 - feature外の通常consumerはfeature-owned `public.ts`だけをimportする。例外は、worker compositionが利用するworker-safeな`worker-public.ts`と、application shellのcomposition rootが利用する登録factory専用`feature-contribution.ts`に限定する。
+- 共有コアモジュールにも同じ公開入口規約を適用する。コアの利用者は `src/<core>/public.ts`（worker文脈では `worker-public.ts`）だけをimportし、コア自身が依存してよい相手も公開境界gateで固定する。
 - root barrelはapplication shellだけが合成し、featureはroot barrelへ自己登録しない。
 - 同一feature内では相対importを使用し、featureをまたぐ依存は公開入口によって見える形にする。
 - path aliasは導入しない。TypeScriptは `NodeNext` module resolutionで運用し、相対importには実行時のESM解決に合わせて `.js` 拡張子を明示する（`.tsx` を指す場合も `.js`）。
