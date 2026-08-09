@@ -151,8 +151,8 @@ test("production worker artifactはmenu registrationだけを取り込みUIと�
     "http://json-schema.org/draft-04/schema#",
     "http://json-schema.org/draft-07/schema#",
     "https://json-schema.org/draft/2020-12/schema",
-    "http://[${address}]",
-    "http://[${payload.value}]",
+    `http://[\${address}]`,
+    `http://[\${payload.value}]`,
   ]);
   const workerUrls = new Set(worker.match(/https?:\/\/[^"'`\s)\\]*/g) ?? []);
 

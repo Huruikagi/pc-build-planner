@@ -1539,7 +1539,7 @@ test("要件8.6: legacy snapshotのselectedProjectIdはcontext authorityへ逆�
   );
   rejects(
     "legacy-bridge.ts",
-    "const dynamic = async (name: string) => import(`../features/${name}/public.js`);",
+    `const dynamic = async (name: string) => import(\`../features/\${name}/public.js\`);`,
   );
 
   // (2) 初期化・fallback の入力契約が選択 hint を受け取る経路。
