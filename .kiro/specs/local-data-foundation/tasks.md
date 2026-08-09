@@ -332,7 +332,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 3.1, 3.8, 3.10, 6.1, 6.4, 8.2_
   - _Boundary: FoundationRuntimeContribution, FoundationDataPort_
 
-- [ ] 7. 現行schema契約と異常root回復の基礎を追加する
+- [x] 7. 現行schema契約と異常root回復の基礎を追加する
 - [x] 7.1 現行schema versionの正規契約を一元化する
   - 既存のruntime schema基盤を利用し、初期root、migration、通常置換、回復候補評価が同じ公開正規値を参照する
   - 保存schemaの数値を別moduleやconsumerで重複定義せず、schemaの値と保存構造自体は変更しない
@@ -414,7 +414,7 @@
   - _Requirements: 3.10, 6.1, 6.3, 7.1, 7.2, 7.3, 7.10, 7.12, 7.14, 7.15, 7.16, 7.17_
   - _Boundary: RuntimeContributionFactory, FoundationScopedDataPort, BackupRestoreDataPort_
 
-- [ ] 9. 架空データによる回復回帰と最終gateを完成する
+- [x] 9. 架空データによる回復回帰と最終gateを完成する
 - [x] 9.1 異常root・回復control・候補評価の決定的回帰を追加する
   - 架空の破損rootと将来version rootだけで分類、fingerprint、候補不正・未対応・容量超過、二重診断を検証する
   - control遷移、stale generation・owner・lease、worker再生成、raw非露出と評価時非変更を検証する
