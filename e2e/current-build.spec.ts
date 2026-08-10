@@ -19,6 +19,7 @@ import {
   region,
   submitButton,
 } from "./models/locator-primitives.js";
+import { projectContextOptions } from "./models/project-context.js";
 
 /**
  * Resolves the unpacked extension id from the loaded service worker so the side
@@ -68,12 +69,9 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   const candidateManagementRoot = featureRoot(page, "candidate-management");
   await formField(page, "project-name").fill("E2E 現在構成プロジェクト");
   await submitButton(region(candidateManagementRoot, "project-form")).click();
-  await expect(
-    page.getByRole("button", {
-      name: "E2E 現在構成プロジェクト",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(projectContextOptions(page)).toHaveText([
+    "E2E 現在構成プロジェクト",
+  ]);
 
   await createCandidateButton(candidateManagementRoot).click();
   await formField(page, "candidate-name").fill("E2E 現在構成CPU");

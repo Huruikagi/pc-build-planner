@@ -291,6 +291,7 @@
   - project mutation成功時のrefresh一回、mutation失敗時のrefreshなし、mutation成功・refresh失敗後のrefresh-only回復を検証する。
   - project CRUD前確認の取消ではmutationもrefreshも発行されず、確定時だけ順序どおり実行されることを確認する。
   - 全分岐で候補が検証済みの現在project以外へ表示・保存されないことを完了条件とする。
+  - production UIから直接発生させられない`empty`/`unavailable`とforced切替は、このcontract integrationでdraft保持、暗黙保存禁止、回復案内まで検証する。
   - _Depends: 9.1, 9.2, 9.3, 10.1, 10.2, 10.3, 12.1_
   - _Requirements: 1.5, 1.6, 1.7, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
   - _Boundary: CandidateManagement Context Integration_
@@ -299,13 +300,14 @@
   - readyへのpre-edit binding、empty/unavailableのpending、refresh後の継続、snapshot一致時の復元を検証する。
   - snapshot不一致・不存在・不正時の安全退避と、pendingが同一document sessionだけで保持され再生成後は復元されないことを確認する。
   - public activationとshell rollback経路を通したtestが全分岐で入力・永続データを意図どおり保持することを完了条件とする。
+  - production UIに失敗targetを追加せず、一致する現在projectでのactivation rollback復元はshell contract integrationを正本とする。
   - _Depends: 11.1, 11.2, 11.3, 12.1_
   - _Requirements: 6.1, 6.2, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.8, 7.9, 7.10, 9.1, 9.2, 9.3, 9.4, 9.5_
   - _Boundary: CandidateActivation, ManagementStateSnapshotCodec, CandidateFeatureRegistration_
-- [ ] 12.4 production E2Eで共通project選択との一貫性を確認する
+- [x] 12.4 production E2Eで共通project選択との一貫性を確認する
   - application shellが合成する共通selectorでprojectを切り替え、候補管理が同じ選択の候補だけへ更新されることを実artifactで確認する。
-  - dirty draftの取消・確定、project作成後のrefreshとpre-edit継続、一致する現在projectでのrollback復元を利用者操作から検証する。
-  - empty/unavailableと強制切替時に別projectへ暗黙保存せず、回復案内が表示されることを確認する。
+  - dirty draftの取消・確定と、project作成後のrefreshおよびpre-edit継続を利用者操作から検証する。
+  - `empty`からprojectを作成して`ready`へ遷移でき、候補管理が独自fallbackやselectorを表示しないことを確認する。
   - boot時のconsole/runtime errorがなく、既存の候補CRUD、source、build向け公開契約が回帰しない状態を完了条件とする。
   - _Depends: 12.2, 12.3; project-context 3.3, 4.4_
   - _Requirements: 1.1, 1.5, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 6.1, 6.6, 7.1, 7.2, 7.3, 8.2, 8.3, 8.4, 8.5, 9.3, 9.4_
@@ -316,3 +318,4 @@
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。
 - 2026-07-31にChromeの拡張機能アクションから、抽出draftのproject-required表示、project作成後の同一draft編集継続、候補保存・一覧反映までを手動確認した。
 - Production compositionでは内部queryと公開`CandidateQuery`を別々明示配線し、snapshot codecは自身がcaptureする全表示エラーのround-tripを回帰テストで保証する。
+- Task 12.4のproduction E2Eは利用者が到達可能な共通selector、dirty確認、pre-edit継続、公開契約回帰を所有し、`empty`/`unavailable`、forced切替、activation rollbackの障害分岐は12.2・12.3のcontract integrationを正本とする。

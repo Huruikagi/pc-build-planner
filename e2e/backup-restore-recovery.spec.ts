@@ -7,6 +7,7 @@ import {
   navItem,
 } from "./models/application-shell.js";
 import { action, region } from "./models/locator-primitives.js";
+import { projectContextOptions } from "./models/project-context.js";
 import {
   backupRestoreSection,
   restoreFileInput,
@@ -171,12 +172,9 @@ for (const degraded of DEGRADED_ROOTS) {
     await expect(region(page, "recovery-required")).toHaveCount(0);
     await navItem(page, "candidate-management").click();
     const management = featureRoot(page, "candidate-management");
-    await expect(
-      management.getByRole("button", {
-        name: RESTORED_PROJECT_NAME,
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(projectContextOptions(page)).toHaveText([
+      RESTORED_PROJECT_NAME,
+    ]);
     await expect(
       region(management, "candidate-list")
         .getByRole("listitem")

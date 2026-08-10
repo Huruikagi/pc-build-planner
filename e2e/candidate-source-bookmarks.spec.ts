@@ -22,6 +22,10 @@ import {
   region,
   submitButton,
 } from "./models/locator-primitives.js";
+import {
+  projectContextOptions,
+  selectedProjectContextOption,
+} from "./models/project-context.js";
 
 const primaryUrl =
   "https://manufacturer.synthetic-maker.example.invalid/products/e2e-cpu";
@@ -86,11 +90,9 @@ test("multiple sources persist and revisit in new tabs without losing panel work
   const management = featureRoot(panel, "candidate-management");
   await formField(panel, "project-name").fill("E2E ソース再訪プロジェクト");
   await submitButton(region(management, "project-form")).click();
-  const selectedProject = region(management, "projects").getByRole("button", {
-    name: "E2E ソース再訪プロジェクト",
-    exact: true,
-  });
-  await expect(selectedProject).toHaveAttribute("aria-current", "page");
+  await expect(projectContextOptions(panel)).toHaveText([
+    "E2E ソース再訪プロジェクト",
+  ]);
 
   await createCandidateButton(management).click();
   await formField(panel, "candidate-name").fill("E2E 複数ソースCPU");
@@ -133,7 +135,9 @@ test("multiple sources persist and revisit in new tabs without losing panel work
     "started",
   );
   await navItem(panel, "candidate-management").click();
-  await expect(selectedProject).toHaveAttribute("aria-current", "page");
+  await expect(projectContextOptions(panel)).toHaveText([
+    "E2E ソース再訪プロジェクト",
+  ]);
   candidateRow = region(management, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 複数ソースCPU" });
@@ -164,7 +168,9 @@ test("multiple sources persist and revisit in new tabs without losing panel work
   );
   await expect(originalTab).toHaveURL(originalUrl);
   await expect(panel).toHaveURL(`chrome-extension://${id}/side-panel.html`);
-  await expect(selectedProject).toHaveAttribute("aria-current", "page");
+  await expect(selectedProjectContextOption(panel)).toHaveText(
+    "E2E ソース再訪プロジェクト",
+  );
   await expect(formField(panel, "candidate-name")).toHaveValue(
     "E2E 未保存の作業状態",
   );
@@ -178,7 +184,9 @@ test("multiple sources persist and revisit in new tabs without losing panel work
   await expect(primaryTab).not.toBe(detailTab);
   await expect(originalTab).toHaveURL(originalUrl);
   await expect(panel).toHaveURL(`chrome-extension://${id}/side-panel.html`);
-  await expect(selectedProject).toHaveAttribute("aria-current", "page");
+  await expect(selectedProjectContextOption(panel)).toHaveText(
+    "E2E ソース再訪プロジェクト",
+  );
   await expect(formField(panel, "candidate-name")).toHaveValue(
     "E2E 未保存の作業状態",
   );
@@ -190,7 +198,9 @@ test("multiple sources persist and revisit in new tabs without losing panel work
     "started",
   );
   await navItem(panel, "candidate-management").click();
-  await expect(selectedProject).toHaveAttribute("aria-current", "page");
+  await expect(selectedProjectContextOption(panel)).toHaveText(
+    "E2E ソース再訪プロジェクト",
+  );
   await expect(
     region(management, "candidate-list")
       .getByRole("listitem")

@@ -40,6 +40,9 @@ export const chooseExistingProject = async (
 export const createCandidateButton = (feature: Locator): Locator =>
   feature.locator("[data-create-candidate]");
 
+export const candidateRow = (candidateList: Locator, name: string): Locator =>
+  candidateList.getByRole("listitem").filter({ hasText: name });
+
 /** Locates a normalized-attribute control by its stable attribute key. */
 export const attributeField = (scope: Locator | Page, key: string): Locator =>
   scope.locator(`[name="attribute-${key}"]`);

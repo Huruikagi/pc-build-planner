@@ -19,6 +19,7 @@ import {
   region,
   submitButton,
 } from "./models/locator-primitives.js";
+import { projectContextOptions } from "./models/project-context.js";
 import {
   backupRestoreSection,
   languageSelect,
@@ -78,12 +79,9 @@ test("英語表示のまま復元しても表示言語が変わらず復元完�
   await navItem(page, "candidate-management").click();
   await formField(page, "project-name").fill("E2E Language Invariance Project");
   await submitButton(region(candidateManagementRoot, "project-form")).click();
-  await expect(
-    page.getByRole("button", {
-      name: "E2E Language Invariance Project",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(projectContextOptions(page)).toHaveText([
+    "E2E Language Invariance Project",
+  ]);
 
   await createCandidateButton(candidateManagementRoot).click();
   await formField(page, "candidate-name").fill("E2E Kept CPU");
@@ -186,12 +184,9 @@ test("英語表示のままの候補作成・編集・削除は日本語表示�
   const candidateManagementRoot = featureRoot(page, "candidate-management");
   await formField(page, "project-name").fill("E2E CRUD Invariance Project");
   await submitButton(region(candidateManagementRoot, "project-form")).click();
-  await expect(
-    page.getByRole("button", {
-      name: "E2E CRUD Invariance Project",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(projectContextOptions(page)).toHaveText([
+    "E2E CRUD Invariance Project",
+  ]);
 
   // Create.
   await createCandidateButton(candidateManagementRoot).click();
