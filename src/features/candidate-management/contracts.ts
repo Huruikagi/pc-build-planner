@@ -69,6 +69,9 @@ export type CurrentProjectResolution =
 export interface CurrentProjectPort {
   getCurrentProject(): CurrentProjectResolution;
   subscribe(listener: () => void): () => void;
+  refresh?(): Promise<
+    Result<CurrentProjectResolution, { readonly kind: "context-unavailable" }>
+  >;
 }
 
 export type CaptureDiagnosticReason =

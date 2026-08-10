@@ -200,7 +200,7 @@
 > **実装前提**: Task 9以降は`project-context` Task 2.4の能力別public facadeが利用可能になってから開始する。Task 12.4は、application shell側のproject-context singleton、共通selector slot、public port注入を扱う更新taskが生成・完了してから開始し、候補管理側へ代替compositionを追加しない。
 
 - [ ] 9. project-contextへの追従基盤を追加する
-- [ ] 9.1 現在プロジェクトの購読と解決を候補管理へ導入する
+- [x] 9.1 現在プロジェクトの購読と解決を候補管理へ導入する
   - 検証済みcontext snapshotを購読し、`ready`の選択IDだけを候補一覧、候補作成、pre-edit bindingの作業対象として扱う。
   - `empty`または`unavailable`では別projectやpayload内IDへfallbackせず、選択、作成または回復が必要な状態へ遷移する。
   - 候補管理画面には現在projectを決める独自selectorを追加せず、共通selectorの選択へ一方向に追従する。
@@ -208,7 +208,7 @@
   - _Depends: project-context 2.4_
   - _Requirements: 2.1, 2.6, 3.1, 3.6, 3.7, 7.1, 7.2, 7.3, 7.5_
   - _Boundary: ProjectContextAdapter_
-- [ ] 9.2 project CRUDとcontext再検証を一つの成功フローへ統合する
+- [x] 9.2 project CRUDとcontext再検証を一つの成功フローへ統合する
   - projectの作成、改名、削除が成功した場合だけcontext refreshを一度実行し、最新catalogに対する現在projectの再検証後に表示を確定する。
   - project mutation失敗時はrefreshを呼ばず、既存表示と入力を保持して同じ操作を再試行できる状態にする。
   - project CRUDが未保存draftの作業対象へ影響する場合は永続mutation前に破棄確認を完了し、取消時はservice mutationとrefreshのどちらも呼ばない。
@@ -216,7 +216,7 @@
   - _Depends: 9.1_
   - _Requirements: 1.5, 1.6, 1.8_
   - _Boundary: CandidateManagementService, ProjectContextAdapter, ManagementState_
-- [ ] 9.3 refresh失敗からの再検証専用回復を実装する
+- [x] 9.3 refresh失敗からの再検証専用回復を実装する
   - project mutation成功後のrefresh失敗を`context-refresh-failed`として区別し、保存済みmutationを再送せずrefreshだけを再試行する。
   - pending pre-editはproject作成成功だけでは解決せず、続くrefreshが`ready`を返した時点で選択IDへbindingする。
   - project作成またはrefreshが失敗した場合はpendingと入力を保持し、重複project作成を起こさず回復できるようにする。

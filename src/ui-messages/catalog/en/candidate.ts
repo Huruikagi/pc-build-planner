@@ -134,6 +134,9 @@ export const candidate = {
     "forbidden-payload": "This contains content that can't be saved",
   },
   errors: {
+    projectRequired: "Choose or recover the current project, then try again.",
+    contextRefreshFailed:
+      "The project was saved, but the current project could not be verified. Recover it, then try again.",
     unsupportedData:
       "Saved data is corrupted or in an unsupported format. Existing data hasn't changed.",
     storage: "Storage is unavailable. Reopen the extension and try again.",

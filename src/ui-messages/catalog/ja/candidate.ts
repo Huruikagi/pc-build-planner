@@ -143,6 +143,10 @@ export const candidate = {
     "forbidden-payload": "保存できない内容が含まれています",
   },
   errors: {
+    projectRequired:
+      "現在のプロジェクトを選択または回復してから、もう一度お試しください。",
+    contextRefreshFailed:
+      "プロジェクトは保存されましたが、現在のプロジェクトを確認できませんでした。回復してから再試行してください。",
     unsupportedData:
       "保存データが破損しているか、対応していない形式です。既存データは変更していません。",
     storage:

@@ -37,7 +37,11 @@ import type {
 } from "./source-page-port.js";
 
 export type ManagementDisplayError = {
-  readonly code: ManagementError["kind"] | "snapshot-restore-failed";
+  readonly code:
+    | ManagementError["kind"]
+    | "snapshot-restore-failed"
+    | "project-required"
+    | "context-refresh-failed";
 };
 
 /** Draft-relative field key to failure reason, used to mark the offending input. */
@@ -342,13 +346,19 @@ export class ManagementState {
       return;
     }
 
+    const current = this.resolveCurrentProject();
     const selectedProjectId =
-      this.#value.selectedProjectId !== null &&
-      projects.value.some(
-        (project) => project.id === this.#value.selectedProjectId,
-      )
-        ? this.#value.selectedProjectId
-        : (projects.value[0]?.id ?? null);
+      this.dependencies.currentProject === undefined
+        ? this.#value.selectedProjectId !== null &&
+          projects.value.some(
+            (project) => project.id === this.#value.selectedProjectId,
+          )
+          ? this.#value.selectedProjectId
+          : (projects.value[0]?.id ?? null)
+        : current.status === "resolved" &&
+            projects.value.some((project) => project.id === current.projectId)
+          ? current.projectId
+          : null;
     const candidates = await Promise.all(
       projects.value.map(async (project) =>
         this.dependencies.query.listCandidates({ projectId: project.id }),
@@ -371,7 +381,11 @@ export class ManagementState {
       ),
       selectedProjectId,
       isLoading: false,
-      displayError: null,
+      displayError:
+        this.dependencies.currentProject !== undefined &&
+        selectedProjectId === null
+          ? { code: "project-required" }
+          : null,
       fieldErrors: emptyFieldErrors,
       mutationsDisabled: this.#mutationsDisabled(),
     });
@@ -418,11 +432,12 @@ export class ManagementState {
       return;
     }
     if (!result.ok) return this.#mutationFailure(result.error);
-    if (this.#value.pendingPreEdit !== null) {
-      /**
-       * The created project ID is applied exactly as the service returned it:
-       * no re-listing, no name matching, and no later re-resolution.
-       */
+    // Legacy callers without the context refresh capability retain the
+    // pre-existing direct binding behavior. Production uses the adapter path.
+    if (
+      this.dependencies.currentProject?.refresh === undefined &&
+      this.#value.pendingPreEdit !== null
+    ) {
       this.#set({
         projects: [
           ...this.#value.projects,
@@ -437,8 +452,8 @@ export class ManagementState {
       this.resumePendingPreEdit(result.value.id);
       return;
     }
-    this.#set({ isSaving: false, pendingPreEdit: null });
-    await this.load();
+    this.#set({ isSaving: false });
+    await this.#refreshAfterProjectMutation();
   }
 
   /**
@@ -468,12 +483,12 @@ export class ManagementState {
     try {
       this.#unsubscribeCurrentProject =
         this.dependencies.currentProject?.subscribe(() => {
-          this.#resumePendingOnCurrentProject();
+          this.#syncCurrentProject();
         });
     } catch {
       this.#unsubscribeCurrentProject = undefined;
     }
-    this.#resumePendingOnCurrentProject();
+    this.#syncCurrentProject();
   }
 
   /** Detaches from the current-context subscription exactly once per mount. */
@@ -487,11 +502,28 @@ export class ManagementState {
     }
   }
 
-  #resumePendingOnCurrentProject(): void {
-    if (this.#value.pendingPreEdit === null) return;
+  #syncCurrentProject(): void {
     const resolution = this.resolveCurrentProject();
-    if (resolution.status !== "resolved") return;
-    this.resumePendingPreEdit(resolution.projectId);
+    if (resolution.status !== "resolved") {
+      this.#set({
+        selectedProjectId: null,
+        candidates: [],
+        displayError: { code: "project-required" },
+        mutationsDisabled: this.#mutationsDisabled(),
+      });
+      return;
+    }
+    this.#set({
+      selectedProjectId: resolution.projectId,
+      candidates: this.#filterCandidates(
+        resolution.projectId,
+        this.#value.selectedCategory,
+      ),
+      displayError: null,
+      mutationsDisabled: this.#mutationsDisabled(),
+    });
+    if (this.#value.pendingPreEdit !== null)
+      this.resumePendingPreEdit(resolution.projectId);
   }
 
   /**
@@ -550,7 +582,7 @@ export class ManagementState {
     );
     if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ isSaving: false });
-    await this.load();
+    await this.#refreshAfterProjectMutation();
   }
 
   public beginCreate(
@@ -785,7 +817,8 @@ export class ManagementState {
           );
     if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ deletion: null, isSaving: false });
-    await this.load();
+    if (deletion.kind === "project") await this.#refreshAfterProjectMutation();
+    else await this.load();
   }
 
   public hasCandidateReference(
@@ -808,6 +841,33 @@ export class ManagementState {
         candidate.projectId === projectId &&
         (category === null || candidate.category === category),
     );
+  }
+
+  /** A persisted project mutation is never replayed when context refresh fails. */
+  async #refreshAfterProjectMutation(): Promise<void> {
+    const refresh = this.dependencies.currentProject?.refresh;
+    if (refresh !== undefined) {
+      const result = await refresh();
+      if (!result.ok) {
+        this.#set({ displayError: { code: "context-refresh-failed" } });
+        return;
+      }
+    }
+    await this.load();
+    if (this.dependencies.currentProject !== undefined)
+      this.#syncCurrentProject();
+  }
+
+  /** Retries only context revalidation after the project mutation already committed. */
+  public async retryContextRefresh(): Promise<void> {
+    if (
+      this.#value.isSaving ||
+      this.#value.displayError?.code !== "context-refresh-failed"
+    )
+      return;
+    this.#set({ isSaving: true });
+    await this.#refreshAfterProjectMutation();
+    this.#set({ isSaving: false });
   }
 
   /** Keeps the draft and the previously loaded list untouched on failure. */

@@ -486,6 +486,6 @@ test("current context が利用不能なら存在する project へ fallback せ
     value: undefined,
   });
   assert.equal(state.value.editor, null);
-  assert.equal(state.value.selectedProjectId, projectId);
+  assert.equal(state.value.selectedProjectId, null);
   assert.deepEqual(state.value.pendingPreEdit, { draft: unresolvedNamedDraft });
 });

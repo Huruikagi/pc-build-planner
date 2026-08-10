@@ -112,6 +112,8 @@ const errorMessageKeys = {
   "not-found": "candidate.errors.notFound",
   validation: "persistenceError.validation",
   "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
+  "project-required": "candidate.errors.projectRequired",
+  "context-refresh-failed": "candidate.errors.contextRefreshFailed",
 } as const satisfies Record<ManagementDisplayError["code"], MessageKey>;
 
 const errorMessage = (
@@ -1120,28 +1122,6 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
                   );
                 })}
               </ul>
-            </section>
-          )}
-          {value.projects.length === 0 ? null : (
-            <section
-              aria-label={messages("candidate.projectRequiredSelectTitle")}
-              data-region="pending-project-choice"
-            >
-              <h3>{messages("candidate.projectRequiredSelectTitle")}</h3>
-              {value.projects.map((project) => (
-                <button
-                  data-select-pending-project={project.id}
-                  disabled={value.isSaving || value.mutationsDisabled}
-                  key={project.id}
-                  onClick={() => {
-                    state.resumePendingPreEdit(project.id);
-                    rerender();
-                  }}
-                  type="button"
-                >
-                  {project.name}
-                </button>
-              ))}
             </section>
           )}
           <form onSubmit={(event) => void saveProject(event)}>

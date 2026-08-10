@@ -404,7 +404,7 @@ const renderRecoverablePending = async (language: SupportedLanguage) => {
 };
 
 for (const language of ["ja", "en"] as const) {
-  test(`${language}: project が存在する pending は context の理由と選択操作を提示する`, async () => {
+  test(`${language}: project が存在する pending は context の理由を提示し独自selectorを表示しない`, async () => {
     const messages = resolverFor(language);
     const view = await renderRecoverablePending(language);
 
@@ -413,26 +413,20 @@ for (const language of ["ja", "en"] as const) {
       new RegExp(messages("candidate.projectRequiredContextReason")),
     );
     assert.equal(
-      view.container
-        .querySelector("[data-region='pending-project-choice']")
-        ?.textContent?.includes("架空の既存プロジェクト"),
-      true,
+      view.container.querySelector("[data-region='pending-project-choice']"),
+      null,
     );
-    // Creating a project stays available alongside the explicit choice.
+    // Creating a project remains an available recovery action.
     assert.ok(view.container.querySelector("[data-create-pending-project]"));
     assert.ok(view.container.querySelector("[data-cancel-pending-pre-edit]"));
     view.stop();
   });
 
-  test(`${language}: 明示選択は再抽出せず同じ pre-edit の editor へ切り替える`, async () => {
+  test(`${language}: 共通contextの選択は再抽出せず同じ pre-edit の editor へ切り替える`, async () => {
     const messages = resolverFor(language);
     const view = await renderRecoverablePending(language);
 
-    await view.user.click(
-      view.container.querySelector(
-        `[data-select-pending-project='${otherProjectId}']`,
-      ) as HTMLElement,
-    );
+    await view.recover(otherProjectId);
 
     assert.equal(
       view.container.querySelector("[data-region='project-required']"),
