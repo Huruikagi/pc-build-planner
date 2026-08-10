@@ -4,7 +4,12 @@ import {
   type FoundationScopedDataPort,
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
-import type { ProjectContextReadPort } from "../project-context/public.js";
+import type {
+  ProjectContextCommandPort,
+  ProjectContextPublicApi,
+  ProjectContextReadPort,
+  ProjectContextReplacementGuardPort,
+} from "../project-context/public.js";
 import { createProductionProjectContext } from "../project-context/runtime.js";
 import { message } from "../ui-messages/public.js";
 import {
@@ -83,6 +88,8 @@ export interface ProductionApplicationCompositionOptions<
     context: FeatureCompositionContext,
     dependencies: {
       readonly backupRestoreData: BackupRestoreDataPort;
+      readonly projectReplacementGuard: ProjectContextReplacementGuardPort;
+      readonly projectRefresh: Pick<ProjectContextCommandPort, "refresh">;
       readonly transientSurface: ReturnType<
         typeof createLateBoundLifecycle
       >["port"];
@@ -278,6 +285,59 @@ export function createProductionApplicationComposition<
     projectSnapshot = read.getSnapshot();
   };
 
+  /**
+   * Feature contributions are composed before project-context exists, and the
+   * project surface can stay unmounted entirely. Backup/restore therefore
+   * receives late-bound replacement and refresh capabilities: once bound they
+   * delegate to the real ports, and while unbound they report that there is no
+   * draft owner to protect and no selection to re-validate. That keeps the
+   * settings section mountable, and recovery restores runnable, even when the
+   * current project is unavailable.
+   */
+  let boundReplacementGuard: ProjectContextReplacementGuardPort | undefined;
+  let boundProjectCommands: ProjectContextCommandPort | undefined;
+  let detachedPermitSerial = 0;
+  const projectReplacementGuard: ProjectContextReplacementGuardPort = {
+    prepare: () =>
+      boundReplacementGuard?.prepare() ??
+      Promise.resolve(
+        ok({
+          kind: "permitted" as const,
+          permit: {
+            id: `detached-replacement-${++detachedPermitSerial}`,
+            baseGeneration: 0,
+            registryRevision: 0,
+          },
+        }),
+      ),
+    confirm: (confirmationId) =>
+      boundReplacementGuard?.confirm(confirmationId) ??
+      Promise.resolve(err({ kind: "confirmation-stale" as const })),
+    cancel: (confirmationId) =>
+      boundReplacementGuard?.cancel(confirmationId) ??
+      err({ kind: "confirmation-stale" as const }),
+    begin: (permitId) =>
+      boundReplacementGuard?.begin(permitId) ?? ok(undefined),
+    complete: (permitId, outcome) =>
+      boundReplacementGuard?.complete(permitId, outcome) ??
+      Promise.resolve(ok(undefined)),
+  };
+  const projectRefresh: Pick<ProjectContextCommandPort, "refresh"> = {
+    refresh: () =>
+      boundProjectCommands?.refresh() ??
+      Promise.resolve(err({ kind: "context-unavailable" as const })),
+  };
+  const bindProjectCommands = (
+    api: Pick<ProjectContextPublicApi, "commands" | "replacementGuard">,
+  ): void => {
+    boundProjectCommands = api.commands;
+    boundReplacementGuard = api.replacementGuard;
+  };
+  const unbindProjectCommands = (): void => {
+    boundProjectCommands = undefined;
+    boundReplacementGuard = undefined;
+  };
+
   const diagnose = (message: string): void => {
     try {
       options.reportError(`application-composition: ${message}`);
@@ -355,6 +415,7 @@ export function createProductionApplicationComposition<
       }
     }
     projectSnapshot = unavailableProjectSnapshot;
+    unbindProjectCommands();
     if (registry) {
       const owned = registry;
       try {
@@ -532,6 +593,8 @@ export function createProductionApplicationComposition<
       try {
         contributions = options.createContributions(compositionContext, {
           backupRestoreData: validatedFoundation.backupRestoreDataPort,
+          projectReplacementGuard,
+          projectRefresh,
           transientSurface: lateBoundLifecycle.port,
         });
       } catch {
@@ -597,6 +660,7 @@ export function createProductionApplicationComposition<
         });
         await projectContext.initialize();
         bindProjectRead(projectContext.api.read);
+        bindProjectCommands(projectContext.api);
         const mountedProjectContext = (
           options.createProjectContextAdapter ??
           createProjectContextShellAdapter

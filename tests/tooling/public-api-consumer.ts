@@ -50,8 +50,10 @@ import {
   initializeProductionFoundationRuntimeContribution,
 } from "../../src/persistence/public.js";
 import type {
+  ProjectContextCommandPort,
   ProjectContextPublicApi,
   ProjectContextReadPort,
+  ProjectContextReplacementGuardPort,
 } from "../../src/project-context/public.js";
 import {
   LanguageProvider,
@@ -162,16 +164,29 @@ export const composeProductionFoundationRuntime = (): Promise<
 export const composeShellRootApi = (
   context: FeatureCompositionContext,
   backupRestoreData: BackupRestoreDataPort,
+  projectReplacementGuard: ProjectContextReplacementGuardPort,
+  projectRefresh: Pick<ProjectContextCommandPort, "refresh">,
   transientSurface: TransientSurfaceLifecyclePort,
 ): Result<ApplicationApi, { readonly kind: string }> =>
-  composeApplicationApi(context, { backupRestoreData, transientSurface });
+  composeApplicationApi(context, {
+    backupRestoreData,
+    projectReplacementGuard,
+    projectRefresh,
+    transientSurface,
+  });
 
 export const rejectMissingTransientSurface = (
   context: FeatureCompositionContext,
   backupRestoreData: BackupRestoreDataPort,
+  projectReplacementGuard: ProjectContextReplacementGuardPort,
+  projectRefresh: Pick<ProjectContextCommandPort, "refresh">,
 ) =>
   // @ts-expect-error side-panel composition requires the real transient lifecycle seam
-  composeApplicationApi(context, { backupRestoreData });
+  composeApplicationApi(context, {
+    backupRestoreData,
+    projectReplacementGuard,
+    projectRefresh,
+  });
 
 /** Downstream consumers may reference canonical candidatePartId and quantity only. */
 export const listAdoptedCandidateQuantities = async (

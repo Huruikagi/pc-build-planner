@@ -1,3 +1,4 @@
+export type { BackupSnapshotReadPort } from "./contracts.js";
 export type {
   BackupRestoreSectionDependencies,
   BackupRestoreSectionMount,

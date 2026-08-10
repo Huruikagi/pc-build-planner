@@ -1,4 +1,7 @@
-import { createBackupRestoreSectionMount } from "../features/backup-restore/public.js";
+import {
+  type BackupSnapshotReadPort,
+  createBackupRestoreSectionMount,
+} from "../features/backup-restore/public.js";
 import {
   type CandidateManagementContribution,
   createCandidateManagementContribution,
@@ -38,6 +41,10 @@ import {
 } from "../features/source-price-refresh/feature-contribution.js";
 import type { SourcePriceRefreshPort } from "../features/source-price-refresh/public.js";
 import type { BackupRestoreDataPort } from "../persistence/public.js";
+import type {
+  ProjectContextCommandPort,
+  ProjectContextReplacementGuardPort,
+} from "../project-context/public.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import type { TransientSurfaceLifecyclePort } from "./transient-surface-ports.js";
 
@@ -67,6 +74,10 @@ export interface SidePanelCandidateFactories {
 export interface SidePanelContributionDependencies {
   /** Full replacement/maintenance capability is restricted to backup/restore composition. */
   readonly backupRestoreData: BackupRestoreDataPort;
+  /** Replacement guard lifecycle, handed only to backup/restore composition. */
+  readonly projectReplacementGuard: ProjectContextReplacementGuardPort;
+  /** Post-restore re-validation only; project selection stays with project-context. */
+  readonly projectRefresh: Pick<ProjectContextCommandPort, "refresh">;
   readonly transientSurface: TransientSurfaceLifecyclePort;
 }
 
@@ -165,10 +176,19 @@ export const createSidePanelFeatureContributions = (
         }
       : {}),
   });
+  /**
+   * Settings receives the assembled section only. The read view is frozen to
+   * `query` here so no ordinary mutation capability crosses the boundary.
+   */
+  const backupSnapshotRead: BackupSnapshotReadPort = Object.freeze({
+    query: (query) => context.data.query(query),
+  });
   const settings = createSettingsContribution({
     backupRestore: createBackupRestoreSectionMount({
-      data: context.data,
-      restoreData: dependencies.backupRestoreData,
+      read: backupSnapshotRead,
+      restore: dependencies.backupRestoreData,
+      replacementGuard: dependencies.projectReplacementGuard,
+      projectContext: dependencies.projectRefresh,
     }),
   });
   const sourcePriceRefresh = createSourcePriceRefreshContribution({

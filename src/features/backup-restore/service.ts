@@ -7,7 +7,6 @@ import { createUtcTimestamp, err, ok } from "../../domain/public.js";
 import type {
   BackupRestoreDataPort,
   BackupRestoreFinalizationTicket,
-  FoundationScopedDataPort,
 } from "../../persistence/public.js";
 import {
   type RestoreFileCapacityPolicy,
@@ -16,6 +15,7 @@ import {
 import type {
   BackupArtifact,
   BackupError,
+  BackupSnapshotReadPort,
   RestoreCommitOutcome,
   RestoreError,
   RestoreInput,
@@ -30,7 +30,7 @@ export interface BackupService {
 }
 
 export interface BackupServiceDependencies {
-  readonly data: FoundationScopedDataPort;
+  readonly data: BackupSnapshotReadPort;
   readonly now?: () => UtcTimestamp;
   readonly capacityPolicy?: RestoreFileCapacityPolicy;
 }
@@ -123,7 +123,7 @@ export interface RestoreService {
 export interface RestoreServiceDependencies {
   readonly data: BackupRestoreDataPort;
   /** finalize後の件数再構築だけに使う読取専用snapshot。通常CRUDは受け取らない。 */
-  readonly snapshot?: Pick<FoundationScopedDataPort, "query">;
+  readonly snapshot?: BackupSnapshotReadPort;
 }
 
 /** ExchangeMigration・ExchangeMapperの失敗codeはRestoreErrorCodeの部分集合であり、そのまま写像できる。 */

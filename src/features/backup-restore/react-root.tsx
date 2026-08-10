@@ -5,8 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import type { OperationPolicy } from "../../application-shell/public.js";
 import { LanguageProvider } from "../../ui-language/public.js";
 import {
-  backupExportOperation,
-  backupRestoreRecoveryOperation,
+  backupReadOperation,
+  backupRestoreCommitOperation,
 } from "./operation-kind.js";
 import type { BackupRestoreState } from "./state.js";
 import { BackupRestoreView } from "./view.js";
@@ -14,6 +14,14 @@ import { BackupRestoreView } from "./view.js";
 export interface BackupRestoreReactRoot {
   unmount(): void;
 }
+
+/**
+ * readとrecoveryは別々のcapabilityであり、片方だけが変化しても同じ購読で観測する。
+ * `useSyncExternalStore`は同一参照を要求するため、二値をbit maskへ畳んで比較する。
+ */
+const allowedMaskOf = (operationPolicy?: OperationPolicy): number =>
+  ((operationPolicy?.isAllowed(backupReadOperation) ?? true) ? 2 : 0) +
+  ((operationPolicy?.isAllowed(backupRestoreCommitOperation) ?? true) ? 1 : 0);
 
 const PolicyAwareBackupRestoreView = ({
   state,
@@ -24,23 +32,13 @@ const PolicyAwareBackupRestoreView = ({
 }) => {
   const allowedMask = useSyncExternalStore(
     (listener) => operationPolicy?.subscribe(listener) ?? (() => {}),
-    () =>
-      ((operationPolicy?.isAllowed(backupExportOperation) ?? true) ? 2 : 0) +
-      ((operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true)
-        ? 1
-        : 0),
-    () =>
-      ((operationPolicy?.isAllowed(backupExportOperation) ?? true) ? 2 : 0) +
-      ((operationPolicy?.isAllowed(backupRestoreRecoveryOperation) ?? true)
-        ? 1
-        : 0),
+    () => allowedMaskOf(operationPolicy),
+    () => allowedMaskOf(operationPolicy),
   );
-  const exportAllowed = (allowedMask & 2) !== 0;
-  const restoreAllowed = (allowedMask & 1) !== 0;
   return createElement(BackupRestoreView, {
     state,
-    exportAllowed,
-    restoreAllowed,
+    readAllowed: (allowedMask & 2) !== 0,
+    commitAllowed: (allowedMask & 1) !== 0,
   });
 };
 

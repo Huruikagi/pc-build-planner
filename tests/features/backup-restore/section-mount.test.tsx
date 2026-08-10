@@ -3,26 +3,41 @@ import test from "node:test";
 
 import { act } from "react";
 
-import type { FeatureMountHandle } from "../../../src/application-shell/public.js";
-import {
-  type BackupRestoreSectionMount,
-  createBackupRestoreSectionMount,
+import type {
+  FeatureMountHandle,
+  OperationKind,
+} from "../../../src/application-shell/public.js";
+import type {
+  BackupRestoreSectionDependencies,
+  BackupRestoreSectionMount,
 } from "../../../src/features/backup-restore/public.js";
+import { createBackupRestoreSectionMount } from "../../../src/features/backup-restore/public.js";
 import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
-import type { FoundationDataPort } from "../../../src/persistence/public.js";
-import { unattachedContextDependencies } from "./state-context-harness.js";
+import {
+  unattachedContextDependencies,
+  unusedSectionCapabilities,
+} from "./state-context-harness.js";
 
 const notExpected = (label: string) => (): never => {
   throw new Error(`must not call ${label}`);
 };
 
-const data: FoundationDataPort = {
-  query: notExpected("query"),
-  mutate: notExpected("mutate"),
-  assessReplacement: notExpected("assessReplacement"),
-  replaceRoot: notExpected("replaceRoot"),
-  runMaintenance: notExpected("runMaintenance"),
+/** factoryが受け取るのは四つのcapabilityだけで、通常CRUDやshell内部は渡らない。 */
+const rejectNonCapabilityDependencies = (
+  dependencies: BackupRestoreSectionDependencies,
+): void => {
+  // @ts-expect-error ordinary root mutations never reach the section.
+  void dependencies.read.mutate;
+  // @ts-expect-error the section never receives a raw foundation data port.
+  void dependencies.data;
+  // @ts-expect-error project selection stays with project-context.
+  void dependencies.projectContext.select;
+  // @ts-expect-error the guard registry is not a section capability.
+  void dependencies.replacementGuard.registry;
+  // @ts-expect-error the section never receives Chrome storage.
+  void dependencies.storage;
 };
+void rejectNonCapabilityDependencies;
 
 const state = () =>
   createBackupRestoreState({
@@ -38,11 +53,25 @@ const state = () =>
     },
   });
 
+const allowingPolicy = (allowed: (kind: OperationKind) => boolean) => {
+  const listeners = new Set<() => void>();
+  return {
+    listeners,
+    policy: {
+      isAllowed: allowed,
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  };
+};
+
 test("公開section mountはoperation policyを利用し、一度だけcleanupする", async () => {
   let allowed = false;
-  const listeners = new Set<() => void>();
+  const { listeners, policy } = allowingPolicy(() => allowed);
   const section: BackupRestoreSectionMount = createBackupRestoreSectionMount({
-    data,
+    ...unusedSectionCapabilities(),
     state: state(),
   });
   const container = document.createElement("div");
@@ -51,13 +80,7 @@ test("公開section mountはoperation policyを利用し、一度だけcleanup�
   await act(async () => {
     handle = await section.mount({
       container,
-      operationPolicy: {
-        isAllowed: () => allowed,
-        subscribe(listener) {
-          listeners.add(listener);
-          return () => listeners.delete(listener);
-        },
-      },
+      operationPolicy: policy,
       reportError: () => {},
     });
   });
@@ -81,20 +104,25 @@ test("公開section mountはoperation policyを利用し、一度だけcleanup�
   assert.equal(listeners.size, 0);
 });
 
-test("回復操作だけが許可される状態ではexportを無効にしてrestore入力を維持する", async () => {
-  const section: BackupRestoreSectionMount = createBackupRestoreSectionMount({
-    data,
+test("recovery-required相当のpolicyではread操作を保ち、commitだけをrecoveryとして判定する", async () => {
+  const observed: OperationKind[] = [];
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
     state: state(),
   });
   const container = document.createElement("div");
   const handle = await section.mount({
     container,
     operationPolicy: {
-      isAllowed: (kind) => kind === "read" || kind === "recovery",
+      isAllowed: (kind) => {
+        observed.push(kind);
+        return kind === "read" || kind === "recovery";
+      },
       subscribe: () => () => {},
     },
     reportError: () => {},
   });
+
   const exportButton = container.querySelector<HTMLButtonElement>(
     'button[data-action="export"]',
   );
@@ -102,9 +130,94 @@ test("回復操作だけが許可される状態ではexportを無効にしてre
     container.querySelector<HTMLInputElement>('input[type="file"]');
   assert.ok(exportButton);
   assert.ok(restoreInput);
-  assert.equal(exportButton.disabled, true);
+  /** export・file選択はreadであり、recovery-required中も利用できる。 */
+  assert.equal(exportButton.disabled, false);
+  assert.equal(restoreInput.disabled, false);
+  /** 購読するcapabilityはreadとrecoveryだけで、通常mutationは判定に使わない。 */
+  assert.deepEqual([...new Set(observed)].sort(), ["read", "recovery"]);
+  await handle.unmount();
+});
+
+test("通常maintenance中はcommitを拒否し、export・file選択だけを許可する", async () => {
+  /** shellのmutation gateと同じ判定: active maintenanceではrecoveryも拒否される。 */
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
+    state: state(),
+  });
+  const container = document.createElement("div");
+  const handle = await section.mount({
+    container,
+    operationPolicy: {
+      isAllowed: (kind) => kind === "read",
+      subscribe: () => () => {},
+    },
+    reportError: () => {},
+  });
+
+  const exportButton = container.querySelector<HTMLButtonElement>(
+    'button[data-action="export"]',
+  );
+  const restoreInput =
+    container.querySelector<HTMLInputElement>('input[type="file"]');
+  assert.ok(exportButton);
+  assert.ok(restoreInput);
+  assert.equal(exportButton.disabled, false);
   assert.equal(restoreInput.disabled, false);
   await handle.unmount();
+});
+
+test("commit可否は置換確認とfinalizeのactionだけを支配する", async () => {
+  const ticket = {
+    candidate: {},
+    preview: {
+      createdAt: "2026-07-24T00:00:00.000Z" as never,
+      formatVersion: 1,
+      projectCount: 1,
+      partCount: 1,
+      currentBuildCount: 0,
+      estimatedBytes: 100,
+    },
+  };
+  const confirming = createBackupRestoreState({
+    ...unattachedContextDependencies(),
+    backupService: { create: notExpected("create") },
+    restoreService: {
+      preflight: async () => ({ ok: true, value: ticket }),
+      commit: notExpected("commit"),
+    },
+    fileGateway: {
+      read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+      download: notExpected("download"),
+    },
+  });
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
+    state: confirming,
+  });
+  const container = document.createElement("div");
+  let handle: FeatureMountHandle | undefined;
+  await act(async () => {
+    handle = await section.mount({
+      container,
+      operationPolicy: {
+        isAllowed: (kind) => kind === "read",
+        subscribe: () => () => {},
+      },
+      reportError: () => {},
+    });
+    await confirming.validateFile({} as File);
+  });
+
+  const confirm = container.querySelector<HTMLButtonElement>(
+    'button[data-action="confirm"]',
+  );
+  const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+  assert.ok(confirm);
+  assert.ok(input);
+  /** commitはrecoveryとして拒否されるが、read側のfile再選択は生きている。 */
+  assert.equal(confirm.disabled, true);
+  assert.equal(input.disabled, false);
+  await act(async () => handle?.unmount());
 });
 
 test("mountはpending finalizationを再水和してから最初の描画を行う", async () => {
@@ -123,7 +236,7 @@ test("mountはpending finalizationを再水和してから最初の描画を行�
     },
   });
   const section = createBackupRestoreSectionMount({
-    data,
+    ...unusedSectionCapabilities(),
     state: rehydrated,
   });
   const container = document.createElement("div");
@@ -148,6 +261,67 @@ test("mountはpending finalizationを再水和してから最初の描画を行�
   await act(async () => handle?.unmount());
 });
 
+test("root読取が利用不能でもmountは成功し、復元入力を提供する", async () => {
+  /** 保存rootがcorruptでもsection自体は表示でき、回復preflightへ進める。 */
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
+    read: {
+      async query() {
+        return { ok: false, error: { code: "corrupt-data" } };
+      },
+    },
+    restore: {
+      ...unusedSectionCapabilities().restore,
+      async findPendingFinalization() {
+        return { ok: false, error: { code: "storage-unavailable" } };
+      },
+    },
+  });
+  const container = document.createElement("div");
+
+  let handle: FeatureMountHandle | undefined;
+  await act(async () => {
+    handle = await section.mount({
+      container,
+      operationPolicy: {
+        isAllowed: (kind) => kind === "read" || kind === "recovery",
+        subscribe: () => () => {},
+      },
+      reportError: () => {},
+    });
+  });
+
+  const restoreInput =
+    container.querySelector<HTMLInputElement>('input[type="file"]');
+  assert.ok(restoreInput);
+  assert.equal(restoreInput.disabled, false);
+  await act(async () => handle?.unmount());
+});
+
+test("context refreshが利用不能でもmountを拒否しない", async () => {
+  /** detached portsのrefreshは`context-unavailable`を返すが、mountには影響しない。 */
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
+    restore: {
+      ...unusedSectionCapabilities().restore,
+      async findPendingFinalization() {
+        return { ok: true, value: null };
+      },
+    },
+  });
+  const container = document.createElement("div");
+  let handle: FeatureMountHandle | undefined;
+  await act(async () => {
+    handle = await section.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+  assert.ok(container.querySelector('[data-region="restore"]'));
+  await act(async () => handle?.unmount());
+});
+
 test("React root取得後のmount失敗は購読とDOM resourceを解放する", async () => {
   let policyUnsubscribed = 0;
   const idle = { phase: "idle" as const };
@@ -162,7 +336,7 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
     async rehydratePendingFinalization() {},
   } as unknown as ReturnType<typeof state>;
   const section = createBackupRestoreSectionMount({
-    data,
+    ...unusedSectionCapabilities(),
     state: failingState,
   });
   const container = document.createElement("div");
@@ -192,6 +366,45 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
   assert.equal(policyUnsubscribed, 1);
 });
 
+test("cleanupが失敗したunmountは再試行でき、成功後は冪等になる", async () => {
+  const mounted = state();
+  const section = createBackupRestoreSectionMount({
+    ...unusedSectionCapabilities(),
+    state: mounted,
+  });
+  const container = document.createElement("div");
+  let handle: FeatureMountHandle | undefined;
+  await act(async () => {
+    handle = await section.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+  assert.ok(handle);
+
+  /** 一度目のcleanupだけを失敗させ、ownershipが解放されないことを確認する。 */
+  const originalReplaceChildren = container.replaceChildren.bind(container);
+  let failures = 0;
+  container.replaceChildren = ((...nodes: readonly Node[]) => {
+    if (failures === 0) {
+      failures += 1;
+      throw new Error("cleanup failed once");
+    }
+    return originalReplaceChildren(...nodes);
+  }) as typeof container.replaceChildren;
+
+  await assert.rejects(async () => {
+    await act(async () => handle?.unmount());
+  });
+  container.replaceChildren = originalReplaceChildren;
+
+  await act(async () => handle?.unmount());
+  assert.equal(container.textContent, "");
+  await act(async () => handle?.unmount());
+  assert.equal(container.textContent, "");
+});
+
 test("unmount後の再mountは一時ticketを破棄し購読を重複させない", async () => {
   const ticket = {
     candidate: {},
@@ -216,21 +429,15 @@ test("unmount後の再mountは一時ticketを破棄し購読を重複させな�
       download: notExpected("download"),
     },
   });
-  const listeners = new Set<() => void>();
+  const { listeners, policy } = allowingPolicy(() => true);
   const section = createBackupRestoreSectionMount({
-    data,
+    ...unusedSectionCapabilities(),
     state: reusableState,
   });
   const container = document.createElement("div");
   const context = {
     container,
-    operationPolicy: {
-      isAllowed: () => true,
-      subscribe(listener: () => void) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-    },
+    operationPolicy: policy,
     reportError: () => {},
   };
 
@@ -284,7 +491,7 @@ test("validating中のunmount後は旧mountの遅延結果を再mountへ反映�
     },
   });
   const section = createBackupRestoreSectionMount({
-    data,
+    ...unusedSectionCapabilities(),
     state: reusableState,
   });
   const container = document.createElement("div");

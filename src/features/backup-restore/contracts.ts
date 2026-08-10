@@ -16,7 +16,15 @@ import type {
   BackupRestoreAssessmentTicket,
   BackupRestoreCommitMode,
   BackupRestoreFinalizationTicket,
+  FoundationScopedDataPort,
 } from "../../persistence/public.js";
+
+/**
+ * export参照とfinalize後の件数再構築だけに使う読取専用view。
+ * compositionがFoundationのscoped portから`query`だけを狭めて供給し、
+ * 通常mutation、raw root、Storage、lock、authority factoryは渡らない。
+ */
+export type BackupSnapshotReadPort = Pick<FoundationScopedDataPort, "query">;
 
 export const BACKUP_PRODUCT_ID = "pc-build-planner";
 export const CURRENT_BACKUP_FORMAT_VERSION = 1;

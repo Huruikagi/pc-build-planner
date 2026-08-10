@@ -55,6 +55,7 @@ import {
   resolverFor,
   SOURCE_LANGUAGE,
 } from "../../../src/ui-messages/public.js";
+import { detachedProjectContextDependencies } from "../../fixtures/project-context-ports.js";
 
 const messages: MessageResolver = resolverFor(SOURCE_LANGUAGE);
 
@@ -687,6 +688,7 @@ test("side-panel-contributions経由の実registrationが安全な一過性DOM�
   };
   const contributions = createSidePanelFeatureContributions(context, {
     backupRestoreData: data as never,
+    ...detachedProjectContextDependencies(),
     transientSurface,
   });
   const contribution = contributions[5];

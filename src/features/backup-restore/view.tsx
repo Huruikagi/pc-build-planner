@@ -98,14 +98,20 @@ const POST_COMMIT_PHASES = new Set([
   "restored-context-unavailable",
 ]);
 
+/**
+ * `readAllowed`はexport・file選択・preflight（再assessmentを含む）、
+ * `commitAllowed`はroot writeを伴う復元commitとcommit後cleanupだけを支配する。
+ * 二つのcapabilityを一つのflagへ畳まないことで、recovery-required中でも
+ * 読取操作を維持したままcommitだけを別に判定できる。
+ */
 export function BackupRestoreView({
   state,
-  exportAllowed = true,
-  restoreAllowed = true,
+  readAllowed = true,
+  commitAllowed = true,
 }: {
   readonly state: BackupRestoreState;
-  readonly exportAllowed?: boolean;
-  readonly restoreAllowed?: boolean;
+  readonly readAllowed?: boolean;
+  readonly commitAllowed?: boolean;
 }) {
   const messages = useMessages();
   useSyncExternalStore(
@@ -149,7 +155,7 @@ export function BackupRestoreView({
         <h4>{messages("backup.exportHeading")}</h4>
         <button
           data-action="export"
-          disabled={busy || !exportAllowed}
+          disabled={busy || !readAllowed}
           onClick={() => void state.exportBackup()}
           type="button"
         >
@@ -181,7 +187,7 @@ export function BackupRestoreView({
         <h4>{messages("backup.restoreHeading")}</h4>
         <input
           accept="application/json"
-          disabled={busy || postCommit || !restoreAllowed}
+          disabled={busy || postCommit || !readAllowed}
           onChange={handleFileChange}
           type="file"
         />
@@ -214,7 +220,7 @@ export function BackupRestoreView({
             </dl>
             <button
               data-action="confirm"
-              disabled={!restoreAllowed}
+              disabled={!commitAllowed}
               onClick={() => void state.confirmRestore()}
               type="button"
             >
@@ -238,7 +244,7 @@ export function BackupRestoreView({
             <p>{messages("backup.draftWarning")}</p>
             <button
               data-action="approve-draft"
-              disabled={!restoreAllowed}
+              disabled={!commitAllowed}
               onClick={() => void state.approveDraft()}
               type="button"
             >
@@ -271,7 +277,7 @@ export function BackupRestoreView({
             <p>{messages("backup.finalizationRequired")}</p>
             <button
               data-action="finalize"
-              disabled={!restoreAllowed}
+              disabled={!commitAllowed}
               onClick={() => void state.finalizeRestore()}
               type="button"
             >
@@ -303,7 +309,7 @@ export function BackupRestoreView({
                 value.retry.action === "resolve-draft")) && (
               <button
                 data-action="retry-restore"
-                disabled={!restoreAllowed}
+                disabled={!commitAllowed}
                 onClick={() => void state.retryRestore()}
                 type="button"
               >
@@ -314,7 +320,7 @@ export function BackupRestoreView({
               value.retry.action === "reassess-restore" && (
                 <button
                   data-action="reassess-restore"
-                  disabled={!restoreAllowed}
+                  disabled={!readAllowed}
                   onClick={() => void state.reassessRestore()}
                   type="button"
                 >

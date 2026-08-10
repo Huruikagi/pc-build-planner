@@ -151,48 +151,6 @@ export const createRestoreContextLifecycle = (
   };
 };
 
-/**
- * project-contextがこのsectionへ合成されていない場合の入口。
- * 保護すべきdraft所有者が存在しないためprepareはpermitを発行し、
- * 再検証対象のcontextも存在しないためrefreshは`context-unavailable`を返す。
- */
-export const createUnattachedProjectContextPorts =
-  (): RestoreContextLifecycleDependencies => {
-    let serial = 0;
-    return {
-      replacementGuard: {
-        async prepare() {
-          serial += 1;
-          return ok({
-            kind: "permitted",
-            permit: {
-              id: `unattached-${serial}`,
-              baseGeneration: 0,
-              registryRevision: 0,
-            },
-          });
-        },
-        async confirm() {
-          return err({ kind: "confirmation-stale" });
-        },
-        cancel() {
-          return err({ kind: "confirmation-stale" });
-        },
-        begin() {
-          return ok(undefined);
-        },
-        async complete() {
-          return ok(undefined);
-        },
-      },
-      projectContext: {
-        async refresh() {
-          return err({ kind: "context-unavailable" });
-        },
-      },
-    };
-  };
-
 /** commit後の通知・finalization・refreshの順序だけを所有する。root writeは再実行しない。 */
 export interface RestorePostCommitCoordinator {
   afterCommit(input: {

@@ -8,6 +8,7 @@ import type {
   FoundationDataPort,
   FoundationScopedDataPort,
 } from "../../src/persistence/public.js";
+import { detachedProjectContextDependencies } from "../fixtures/project-context-ports.js";
 import { idleTransientSurface } from "../fixtures/transient-surface.js";
 
 const data = {
@@ -48,6 +49,7 @@ const context = (): FeatureCompositionContext => ({
 test("root公開入口はcatalogから合成したreadonly own-property辞書を提供する", () => {
   const composed = composeApplicationApi(context(), {
     backupRestoreData,
+    ...detachedProjectContextDependencies(),
     transientSurface: idleTransientSurface,
   });
 
@@ -73,6 +75,7 @@ test("root公開入口はcatalogから合成したreadonly own-property辞書を
 test("実featureの公開契約がroot入口から到達できる", () => {
   const composed = composeApplicationApi(context(), {
     backupRestoreData,
+    ...detachedProjectContextDependencies(),
     transientSurface: idleTransientSurface,
   });
 

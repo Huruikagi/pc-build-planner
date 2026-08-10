@@ -169,7 +169,7 @@
   - _Boundary: BackupRestoreView, ui-messages catalog_
 
 - [ ] 5. section公開境界とdegraded recoveryを統合する
-- [ ] 5.1 capability分離したsection mountとaction policyを実装する
+- [x] 5.1 capability分離したsection mountとaction policyを実装する
   - read-only snapshot、backup restore capability、replacement guard、refresh capabilityだけをfactoryへ注入し、settingsにはsection mountだけを渡す
   - export、file選択、preflightはread、commitはrecoveryとしてpolicy変更を別々に購読し、normal maintenance中はcommitを拒否する
   - contextまたはroot unavailableでもmountとrecovery preflightを利用できる状態を保つ
@@ -230,7 +230,9 @@
 - 16 MiBは復元入力ファイルの安全上限、10 MiBは変換後rootのFoundation保存上限として別々に判定する。容量超過した同一入力の復元再実行を許可しない。
 - fixtureは架空データだけを使用し、商品値、完全URL、file本文、raw root、fingerprintを診断出力しない。
 - guard lifecycleは`context-lifecycle.ts`のowner-local adapterが所有し、permitのbegin成功かつ未closeだけをFoundation commitの前提とする。commit後のsucceeded通知は同adapterが一度だけに閉じ、notification失敗で復元成功を取り消さない。
-- project-context公開portがsectionへ合成されるまで、`createUnattachedProjectContextPorts`がprepare=permitted・refresh=context-unavailableとして振る舞う。task 5.1のproduction wiringで実portへ差し替える（DEF-011）。
+- project-context公開portはtask 5.1でproduction wiringへ差し替え済み（DEF-011解消）。application-compositionがlate-boundなreplacement guard / refreshを合成し、未bind時だけprepare=permitted・refresh=context-unavailableとして振る舞う。feature側の暫定入口`createUnattachedProjectContextPorts`は削除した。
+- section factoryは`read`（`BackupSnapshotReadPort`）、`restore`（`BackupRestoreDataPort`）、`replacementGuard`、`projectContext.refresh`の四capabilityだけを受け取る。`FoundationScopedDataPort`をfeatureへ渡さない。design.mdは`side-panel-contributions.ts`/`application-composition.ts`のwiringをdownstream ownerへ委譲しているが、DEF-011の解消に必要なためtask 5.1で実施した。
+- operation policyは`read`（区画表示・export・file選択・preflight・再assessment）と`recovery`（commitとcommit後cleanup）を別々に購読する。exportは以前`mutation`だったが、root writeを伴わないため`read`へ移した。
 - commit前失敗の許可actionは`contracts.ts`の`backupRetryPolicy` / `restoreRetryPolicy` / `restoreContextRetryPolicy`だけが決め、stateとViewは判定を重複させない。
 - commit後の`restored-finalization-required`はsummaryを持たない場合がある。section再mountで`findPendingFinalization`から再水和した状態がそれであり、`finalize`成功後に`BackupSnapshotReadPort`の件数照会でsummaryを再構築する（root writeは0件）。
 - Viewの再試行方針表示と許可actionは`contracts.ts`のretry policyだけから引く。未保存draft（`action-required` / `resolve-draft`）は解消後に同じticketで`retry-restore`できる唯一のaction-requiredであり、stateの`#retryableFailure`がこの一件だけを例外的に許可する。
