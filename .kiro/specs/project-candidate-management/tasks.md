@@ -277,7 +277,7 @@
   - _Requirements: 3.1, 3.6, 6.1, 7.2, 7.3, 7.9, 7.10, 8.1, 9.4_
   - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, ManagementState_
 
-- [ ] 12. UIと横断回帰で現在projectの一貫性を検証する
+- [x] 12. UIと横断回帰で現在projectの一貫性を検証する
 - [x] 12.1 project未解決・refresh失敗・強制切替の回復表示を完成する
   - `project-required`、`context-refresh-failed`、`project-changed-with-draft`を利用者が区別できる文言と操作へ写像する。
   - 通常のdirty切替では破棄確認と取消・確定操作を表示し、候補管理内に共通selectorを重複表示しない。
