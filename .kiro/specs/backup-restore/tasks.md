@@ -178,7 +178,7 @@
   - _Requirements: 1.1, 1.5, 3.1, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.4, 5.5, 5.6, 6.1, 6.4, 6.6, 6.7, 6.8_
   - _Boundary: BackupRestoreSectionMount_
 
-- [ ] 5.2 degraded shellからの回復flowをproduction-shaped契約で固定する
+- [x] 5.2 degraded shellからの回復flowをproduction-shaped契約で固定する
   - corrupt/unsupported初期snapshotだけがrecovery-requiredでsettingsをmountし、read/recoveryを許可して通常mutationを拒否することを検証する
   - recovery commitとfinalization完了後の最初の正常snapshotで通常projectionへ復帰し、context refresh後に管理featureを再開できることを検証する
   - backup内部からshell compositionやstorageへdeep importせず、上流contract gateと完成済みsection mountだけでflowが成立する
@@ -233,6 +233,7 @@
 - project-context公開portはtask 5.1でproduction wiringへ差し替え済み（DEF-011解消）。application-compositionがlate-boundなreplacement guard / refreshを合成し、未bind時だけprepare=permitted・refresh=context-unavailableとして振る舞う。feature側の暫定入口`createUnattachedProjectContextPorts`は削除した。
 - section factoryは`read`（`BackupSnapshotReadPort`）、`restore`（`BackupRestoreDataPort`）、`replacementGuard`、`projectContext.refresh`の四capabilityだけを受け取る。`FoundationScopedDataPort`をfeatureへ渡さない。design.mdは`side-panel-contributions.ts`/`application-composition.ts`のwiringをdownstream ownerへ委譲しているが、DEF-011の解消に必要なためtask 5.1で実施した。
 - operation policyは`read`（区画表示・export・file選択・preflight・再assessment）と`recovery`（commitとcommit後cleanup）を別々に購読する。exportは以前`mutation`だったが、root writeを伴わないため`read`へ移した。
+- `recovery.integration.test.ts`は`createSidePanelFeatureContributions` + `createFeatureRegistry` + `createApplicationShellIntegration`だけでshellを組み立て、正常・回復の両経路で同じsection公開境界を通す。degraded startupはmaintenance sourceの初期`corrupt-data` / `unsupported-version`から作り、shell compositionをtestから改変しない。
 - commit前失敗の許可actionは`contracts.ts`の`backupRetryPolicy` / `restoreRetryPolicy` / `restoreContextRetryPolicy`だけが決め、stateとViewは判定を重複させない。
 - commit後の`restored-finalization-required`はsummaryを持たない場合がある。section再mountで`findPendingFinalization`から再水和した状態がそれであり、`finalize`成功後に`BackupSnapshotReadPort`の件数照会でsummaryを再構築する（root writeは0件）。
 - Viewの再試行方針表示と許可actionは`contracts.ts`のretry policyだけから引く。未保存draft（`action-required` / `resolve-draft`）は解消後に同じticketで`retry-restore`できる唯一のaction-requiredであり、stateの`#retryableFailure`がこの一件だけを例外的に許可する。

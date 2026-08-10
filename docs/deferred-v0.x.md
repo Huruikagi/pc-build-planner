@@ -42,3 +42,4 @@
 | DEF-014 | backup-restore / 4.6 | `backup.errors.guard-failed` と `backup.retryGuidance.resolve-draft` がほぼ同じ案内文を重複表示する | UI 文言の細部。誤操作を招く表示ではなく、error code と retry policy は別軸の情報 | v1.0 | 未着手 | |
 | DEF-015 | backup-restore / 4.4 | `POST_COMMIT_PHASES` が `state.ts` と `view.tsx` に別々に定義されている | 命名・構造の好みに属するリファクタリング。判定源は state の phase 一つで、retry policy の重複判定ではない | v1.0 | 未着手 | |
 | DEF-016 | backup-restore / 5.1 | `refresh-context` action は operation policy で判定していない（root write を伴わない project-context 再検証のため） | 承認済み受け入れ基準は commit を `recovery`、export・file選択・preflight を `read` として判定することだけを要求しており、refresh は Foundation capability ではない | v1.0 | 未着手 | |
+| DEF-017 | backup-restore / 5.2 | production-shaped 回復 integration は clean な `committed` outcome までを固定し、degraded 経路の finalize-only / refresh-only retry は含めない | 5.2 の受け入れ基準は finalization 完了後の通常 projection 復帰であり、単独 retry は task 3.3 / 4.4 が所有し E2E 6.3 で再確認する | v0.x / task 6.3 | 未着手 | 6.3 |
