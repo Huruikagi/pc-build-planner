@@ -199,7 +199,7 @@
 
 > **実装前提**: Task 9以降は`project-context` Task 2.4の能力別public facadeが利用可能になってから開始する。Task 12.4は、application shell側のproject-context singleton、共通selector slot、public port注入を扱う更新taskが生成・完了してから開始し、候補管理側へ代替compositionを追加しない。
 
-- [ ] 9. project-contextへの追従基盤を追加する
+- [x] 9. project-contextへの追従基盤を追加する
 - [x] 9.1 現在プロジェクトの購読と解決を候補管理へ導入する
   - 検証済みcontext snapshotを購読し、`ready`の選択IDだけを候補一覧、候補作成、pre-edit bindingの作業対象として扱う。
   - `empty`または`unavailable`では別projectやpayload内IDへfallbackせず、選択、作成または回復が必要な状態へ遷移する。
@@ -251,7 +251,7 @@
   - _Requirements: 8.5_
   - _Boundary: ProjectContextAdapter, ManagementState_
 
-- [ ] 11. activation・snapshot・registrationを現在projectへ統合する
+- [x] 11. activation・snapshot・registrationを現在projectへ統合する
 - [x] 11.1 pre-edit activationの保存先を現在projectだけから解決する
   - activation受理時にcontext snapshotを読み、`ready`の選択IDだけをunresolved draftへ付与してeditorを開く。
   - payload内project IDはshape検査だけに使い、保存先、fallback、context変更には使用しない。
