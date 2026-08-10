@@ -237,7 +237,7 @@
   - _Boundary: QualityGates, SpecTraceability_
 
 - [ ] 7. current context authorityとrollback境界を追補する
-- [ ] 7.1 candidate activationを検証済みcurrent contextへ統一する
+- [x] 7.1 candidate activationを検証済みcurrent contextへ統一する
   - 編集開始payloadを境界で再検証し、保存先はproject-contextが返す検証済みcurrent projectだけから解決する。
   - payload、画面snapshot、legacy handoffに含まれるstaleまたは無効なproject情報を保存先へ使わず、current contextも変更しない。
   - current contextが未選択または利用不能な場合は失敗や先頭projectへのfallbackにせず、project未解決pre-editとして受理する。
@@ -245,7 +245,7 @@
   - _Requirements: 1.3, 1.6, 4.1, 4.2, 4.5, 4.7, 4.8_
   - _Boundary: Candidate Pre-edit Boundary, Candidate Activation_
 
-- [ ] 7.2 pending pre-editを明示操作とcontext回復から再開する
+- [x] 7.2 pending pre-editを明示操作とcontext回復から再開する
   - projectの明示選択、作成成功、またはcurrent contextの回復を受けて、保持中の同じpre-editを再抽出せずeditor stateへ移す。
   - binding済みprojectをその後のfallbackや再解決で置換せず、作成時はserviceが返したproject IDをそのまま維持する。
   - pending stateは受理成功、明示取消、新しいpre-edit activation、panel session終了という設計済み条件だけで破棄する。
@@ -254,7 +254,7 @@
   - _Requirements: 1.4, 1.6, 1.8, 4.2, 4.6, 4.7, 4.8_
   - _Boundary: Pending Pre-edit State_
 
-- [ ] 7.3 candidate側のproject回復UIをcurrent context契約へ合わせる
+- [x] 7.3 candidate側のproject回復UIをcurrent context契約へ合わせる
   - pending pre-editを保持したまま、projectの選択、作成、取消、context回復の利用可能な操作と理由を候補管理画面へ提示する。
   - 作成またはcontext回復の失敗は安全な文言で同じ画面に表示し、draftを失わず再試行できるようにする。
   - 回復成功後は同じpre-editのeditorへ切り替わり、capture面へ戻らず再抽出も要求しない。
@@ -304,4 +304,6 @@
 - 2026-07-31 `ui-message-catalog` validation remediationで、handoff失敗時の保持結果、新しい起動による置換、同activationでのhandoff再試行を3つのcanonical message keyへ接続した。viewは既存`failure.kind`だけで分岐し、state machineとretained intent再試行契約は変更せず、DOM／state／integration、完全`pnpm validate`、production E2Eを再検証した。
 - production workerのfeature catalogはDOM/React境界を保つため空なので、toolbar gestureはcanonical `productCaptureFeatureId`をcomposition rootから明示注入する。
 - cross-feature handoff前にshellがrollback snapshotを要求するため、product-captureのmount handleはページ内容を含めず`activationId`・固定`tabId`・内部世代だけをcapture/restoreする。shellはsource leaseをtarget mount前に解放し、handoff失敗時は保存した内部世代で進行中結果を受理できるsourceを復元する。復元不能時はcontrollerもinactiveへ倒し、非表示のcaptureをactiveとして残さない。
+- 2026-08-10 task 7.1〜7.3で候補側の保存先authorityをproject-contextの検証済みcurrent projectだけへ統一した。`UnresolvedCandidateEditorPrefill`から`projectId`を外し、legacy payloadのproject情報はschemaで受理しつつ検証済みprefillから落とす。current context未選択・利用不能はerrorではなくpending受理とし、明示選択・作成成功・context回復の三経路が同じ`resumePendingPreEdit`で同一pre-editをeditorへ移す。
+- 2026-08-10 project-contextのcatalogはcandidate-managementのproject作成では再読込されないため、同一panel session内はcurrent contextが`empty`のまま残りcaptureがpending pre-editへ落ちる（DEF-020）。production compositionでcurrent contextを新鮮に保つ配線はtask 7.6で行う。
 - 2026-07-30、同一production buildをChromeへ再読み込みし、AMD Ryzen 7 9700Xの商品ページで実toolbar iconから「取り込みを開始」を実行してcandidate詳細編集画面への到達をmanual smoke確認した。

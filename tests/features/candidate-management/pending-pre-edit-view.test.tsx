@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import type {
@@ -280,6 +280,10 @@ test("dynamic spec rejectionをmapperからunknown activation経由で既存proj
       value: project("unused"),
     })),
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () => ({ status: "resolved", projectId }),
+      subscribe: () => () => {},
+    },
   });
   await state.load();
   const mapped = createCaptureDraftMapper().toEditorPrefill({
@@ -331,3 +335,159 @@ test("dynamic spec rejectionをmapperからunknown activation経由で既存proj
     /leading|nested|another-label/,
   );
 });
+
+const otherProjectId =
+  "10000000-0000-4000-8000-000000000026" as Uuid as ProjectId;
+
+const projectListQuery: CandidateManagementQuery = {
+  ...unusedQuery,
+  async listProjects() {
+    return {
+      ok: true,
+      value: [
+        { id: projectId, name: "架空の既存プロジェクト", updatedAt: timestamp },
+        {
+          id: otherProjectId,
+          name: "架空の別プロジェクト",
+          updatedAt: timestamp,
+        },
+      ],
+    };
+  },
+  async listCandidates() {
+    return { ok: true, value: [] };
+  },
+};
+
+/** Projects exist, but the current context is unresolved until it recovers. */
+const renderRecoverablePending = async (language: SupportedLanguage) => {
+  const listeners = new Set<() => void>();
+  let current: ProjectId | null = null;
+  const state = createManagementState({
+    query: projectListQuery,
+    service: serviceWithCreate(async () => {
+      throw new Error("回復経路で project を作成してはならない");
+    }),
+    createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () =>
+        current === null
+          ? { status: "unresolved" as const }
+          : { status: "resolved" as const, projectId: current },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  });
+  await state.load();
+  state.attachCurrentProject();
+  state.holdPendingPreEdit(pendingPrefill);
+  const user = userEvent.setup();
+  const view = render(
+    <MessageProvider resolver={resolverFor(language)}>
+      <ManagementView state={state} />
+    </MessageProvider>,
+  );
+  return {
+    ...view,
+    state,
+    user,
+    async recover(projectId: ProjectId) {
+      await act(async () => {
+        current = projectId;
+        for (const listener of listeners) listener();
+      });
+    },
+    stop: () => state.releaseCurrentProject(),
+  };
+};
+
+for (const language of ["ja", "en"] as const) {
+  test(`${language}: project が存在する pending は context の理由と選択操作を提示する`, async () => {
+    const messages = resolverFor(language);
+    const view = await renderRecoverablePending(language);
+
+    assert.match(
+      view.container.textContent ?? "",
+      new RegExp(messages("candidate.projectRequiredContextReason")),
+    );
+    assert.equal(
+      view.container
+        .querySelector("[data-region='pending-project-choice']")
+        ?.textContent?.includes("架空の既存プロジェクト"),
+      true,
+    );
+    // Creating a project stays available alongside the explicit choice.
+    assert.ok(view.container.querySelector("[data-create-pending-project]"));
+    assert.ok(view.container.querySelector("[data-cancel-pending-pre-edit]"));
+    view.stop();
+  });
+
+  test(`${language}: 明示選択は再抽出せず同じ pre-edit の editor へ切り替える`, async () => {
+    const messages = resolverFor(language);
+    const view = await renderRecoverablePending(language);
+
+    await view.user.click(
+      view.container.querySelector(
+        `[data-select-pending-project='${otherProjectId}']`,
+      ) as HTMLElement,
+    );
+
+    assert.equal(
+      view.container.querySelector("[data-region='project-required']"),
+      null,
+    );
+    assert.equal(
+      view.container
+        .querySelector("form[data-region='candidate-form']")
+        ?.getAttribute("aria-label"),
+      messages("candidate.editorFormTitle"),
+    );
+    assert.equal(
+      view.container.querySelector<HTMLInputElement>(
+        "input[name='candidate-name']",
+      )?.value,
+      unsafeExtractedName,
+    );
+    assert.equal(view.state.value.editor?.projectId, otherProjectId);
+    view.stop();
+  });
+
+  test(`${language}: current context の回復後は capture へ戻らず同じ pre-edit の editor を表示する`, async () => {
+    const view = await renderRecoverablePending(language);
+
+    await view.recover(projectId);
+
+    assert.equal(
+      view.container.querySelector("[data-region='project-required']"),
+      null,
+    );
+    assert.equal(
+      view.container.querySelector<HTMLInputElement>(
+        "input[name='candidate-name']",
+      )?.value,
+      unsafeExtractedName,
+    );
+    assert.equal(view.state.value.editor?.projectId, projectId);
+    assert.equal(view.state.value.pendingPreEdit, null);
+    view.stop();
+  });
+
+  test(`${language}: project が0件の pending は作成理由だけを示し選択操作を出さない`, () => {
+    const messages = resolverFor(language);
+    const view = renderPending(language, async () => ({
+      ok: true,
+      value: project("unused"),
+    }));
+
+    assert.match(
+      view.container.textContent ?? "",
+      new RegExp(messages("candidate.projectRequiredReason")),
+    );
+    assert.equal(
+      view.container.querySelector("[data-region='pending-project-choice']"),
+      null,
+    );
+  });
+}

@@ -11,7 +11,6 @@ import {
   optionalField,
   plainObject,
   tagged,
-  uuid,
   z,
 } from "../../domain/runtime-schema/public.js";
 import type {
@@ -28,7 +27,6 @@ export type PreEditDraftError =
 
 export type CandidateEditorPrefillError =
   | PreEditDraftError
-  | { readonly kind: "invalid-project-id" }
   | { readonly kind: "invalid-category-hint" };
 
 const isPartCategory = (value: unknown): value is PartCategory =>
@@ -72,12 +70,12 @@ const captureDiagnosticSchema = plainObject({
 });
 const candidateEditorPrefillSchema = plainObject({
   draft: invalid(z.unknown(), "invalid-draft-shape"),
-  projectId: optionalField(
-    invalid(
-      uuid<NonNullable<UnresolvedCandidateEditorPrefill["projectId"]>>(),
-      "invalid-project-id",
-    ),
-  ),
+  /**
+   * A legacy or untrusted handoff may still carry project information. It is
+   * accepted so the pre-edit is not lost, but it is never decoded into the
+   * validated prefill: the save target comes only from the current context.
+   */
+  projectId: optionalField(z.unknown()),
   categoryHint: optionalField(
     invalid(z.custom<PartCategory>(isPartCategory), "invalid-category-hint"),
   ),
@@ -107,7 +105,6 @@ export const validateCandidateEditorPrefill = (
   const decoded = decodeWithProfile(candidateEditorPrefillSchema, value, {
     toError: (issue): CandidateEditorPrefillError => ({
       kind:
-        issue.tag === "invalid-project-id" ||
         issue.tag === "invalid-category-hint"
           ? issue.tag
           : "invalid-draft-shape",
@@ -127,9 +124,6 @@ export const validateCandidateEditorPrefill = (
   if (!draft.ok) return draft;
   const validated: UnresolvedCandidateEditorPrefill = {
     draft: draft.value,
-    ...(decoded.value.projectId === undefined
-      ? {}
-      : { projectId: decoded.value.projectId }),
     ...(decoded.value.categoryHint === undefined
       ? {}
       : { categoryHint: decoded.value.categoryHint }),

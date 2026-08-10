@@ -113,6 +113,8 @@ const mountManagementView =
     state.attachOperationPolicy(operationPolicy);
     /** A mount starts from persisted data; only a snapshot may restore a screen. */
     state.resetTransientState();
+    /** Context recovery is observed for the mounted panel session only. */
+    state.attachCurrentProject();
     const root = mountManagementReactRoot(container, state);
     let unmounted = false;
 
@@ -135,6 +137,7 @@ const mountManagementView =
         if (unmounted) return;
         unmounted = true;
         state.releaseOperationPolicy();
+        state.releaseCurrentProject();
         root.unmount();
       },
     };

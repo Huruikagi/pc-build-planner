@@ -23,6 +23,20 @@ export const candidateModelNumberField = (editor: Locator): Locator =>
 export const projectRequired = (page: Page): Locator =>
   region(persistentFeature(page, "candidate-management"), "project-required");
 
+/**
+ * Resolves a held pre-edit by choosing an existing project. The recovery
+ * surface appears whenever the current project context is unselected or
+ * unavailable, which never re-captures the page.
+ */
+export const chooseExistingProject = async (
+  page: Page,
+  name: string,
+): Promise<void> => {
+  await region(projectRequired(page), "pending-project-choice")
+    .getByRole("button", { name, exact: true })
+    .click();
+};
+
 export const createCandidateButton = (feature: Locator): Locator =>
   feature.locator("[data-create-candidate]");
 

@@ -3,10 +3,12 @@ import type {
   FeatureContribution,
 } from "../../application-shell/public.js";
 import { createUuid, type RequestId } from "../../domain/public.js";
+import type { ProjectContextReadPort } from "../../project-context/public.js";
 import type { ProductIdentityNormalizer } from "../product-capture/public.js";
 import type { SourcePriceRefreshPort } from "../source-price-refresh/public.js";
 import type {
   CandidateSourceMutationPort,
+  CurrentProjectPort,
   MutationContext,
 } from "./contracts.js";
 import { createDuplicateCandidateMatcher } from "./duplicate-matcher.js";
@@ -49,6 +51,25 @@ export interface CandidateManagementContributionDependencies {
   readonly identityNormalizer?: ProductIdentityNormalizer;
   readonly sourcePriceRefresh?: SourcePriceRefreshPort;
 }
+
+/**
+ * Projects the shell-provided context onto the feature's save-target port.
+ * Only a `ready` context yields a project; `empty` and `unavailable` stay
+ * unresolved so no catalog entry is promoted into a save target.
+ */
+const createCurrentProjectPort = (
+  read: ProjectContextReadPort | undefined,
+): CurrentProjectPort => ({
+  getCurrentProject() {
+    const snapshot = read?.getSnapshot();
+    return snapshot?.status === "ready"
+      ? { status: "resolved", projectId: snapshot.selectedProjectId }
+      : { status: "unresolved" };
+  },
+  subscribe(listener) {
+    return read?.subscribe(() => listener()) ?? (() => {});
+  },
+});
 
 /**
  * Assembles the feature from the shell-provided composition context only.
@@ -151,6 +172,7 @@ export const createCandidateManagementContribution = (
     query: service,
     service,
     createMutationContext,
+    currentProject: createCurrentProjectPort(context.projectContext),
     ...(dependencies.sourcePage === undefined
       ? {}
       : { sourcePage: dependencies.sourcePage }),

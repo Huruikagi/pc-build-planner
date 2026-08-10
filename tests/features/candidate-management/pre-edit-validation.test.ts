@@ -107,15 +107,24 @@ test("pre-editは欠落、不正型、未知category、category不一致を閉�
   );
 });
 
-test("outer prefillはprojectIdとcategoryHintを個別のerrorへ写像する", () => {
-  assert.deepEqual(
-    validateCandidateEditorPrefill({ draft: unresolvedDraft, projectId: "x" }),
-    { ok: false, error: { kind: "invalid-project-id" } },
-  );
-  assert.deepEqual(
-    validateCandidateEditorPrefill({ draft: unresolvedDraft, projectId: "" }),
-    { ok: false, error: { kind: "invalid-project-id" } },
-  );
+test("legacy handoffのstaleまたは無効なprojectIdは拒否せず検証済みprefillから落とす", () => {
+  for (const projectId of [
+    "x",
+    "",
+    "10000000-0000-4000-8000-000000000099",
+    null,
+    42,
+  ]) {
+    const result = validateCandidateEditorPrefill({
+      draft: unresolvedDraft,
+      projectId,
+    });
+    assert.deepEqual(result, { ok: true, value: { draft: unresolvedDraft } });
+    assert.equal("projectId" in (result.ok ? result.value : {}), false);
+  }
+});
+
+test("outer prefillのcategoryHintは個別のerrorへ写像する", () => {
   assert.deepEqual(
     validateCandidateEditorPrefill({
       draft: unresolvedDraft,

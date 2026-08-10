@@ -8,11 +8,14 @@ import {
   type PartCategory,
   type ProjectId,
 } from "../../domain/public.js";
+import { resolvePreEditDraft } from "./category-draft.js";
 import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
   CandidateSummary,
+  CurrentProjectPort,
+  CurrentProjectResolution,
   ManagementError,
   MutationContext,
   ProjectSummary,
@@ -112,6 +115,8 @@ export interface ManagementStateDependencies {
     | Promise<MutationContext>;
   /** Shell-owned gate; mutations stay unavailable while the shell forbids them. */
   readonly operationPolicy?: OperationPolicy;
+  /** Sole save-target authority; absence means the current project is unresolved. */
+  readonly currentProject?: CurrentProjectPort;
   readonly sourcePage?: SourcePagePort;
   readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }
@@ -216,6 +221,7 @@ export class ManagementState {
 
   #mountedPolicy: OperationPolicy | null = null;
   #unsubscribePolicy: (() => void) | undefined;
+  #unsubscribeCurrentProject: (() => void) | undefined;
 
   get #policy(): OperationPolicy {
     return (
@@ -412,12 +418,11 @@ export class ManagementState {
       return;
     }
     if (!result.ok) return this.#mutationFailure(result.error);
-    const pendingToResolve = this.#value.pendingPreEdit;
-    if (pendingToResolve !== null) {
-      const resolvedDraft = {
-        ...pendingToResolve.draft,
-        projectId: result.value.id,
-      } as CandidateDraft;
+    if (this.#value.pendingPreEdit !== null) {
+      /**
+       * The created project ID is applied exactly as the service returned it:
+       * no re-listing, no name matching, and no later re-resolution.
+       */
       this.#set({
         projects: [
           ...this.#value.projects,
@@ -427,23 +432,94 @@ export class ManagementState {
             updatedAt: result.value.updatedAt,
           },
         ],
-        candidates: [],
-        selectedProjectId: result.value.id,
-        editor: {
-          mode: "create",
-          projectId: result.value.id,
-          draft: resolvedDraft,
-          ...(pendingToResolve.captureDiagnostics === undefined
-            ? {}
-            : { captureDiagnostics: pendingToResolve.captureDiagnostics }),
-        },
-        pendingPreEdit: null,
         isSaving: false,
       });
+      this.resumePendingPreEdit(result.value.id);
       return;
     }
     this.#set({ isSaving: false, pendingPreEdit: null });
     await this.load();
+  }
+
+  /**
+   * The only save-target authority. A missing port, a throwing port, or an
+   * unselected/unavailable context all resolve to `unresolved`: the catalog
+   * head and any payload-supplied project stay unusable as a fallback.
+   */
+  public resolveCurrentProject(): CurrentProjectResolution {
+    try {
+      return (
+        this.dependencies.currentProject?.getCurrentProject() ?? {
+          status: "unresolved",
+        }
+      );
+    } catch {
+      return { status: "unresolved" };
+    }
+  }
+
+  /**
+   * Observes current-context recovery for the mounted panel session. A held
+   * pre-edit resumes into the editor as soon as a current project exists, so
+   * the user never re-captures the page.
+   */
+  public attachCurrentProject(): void {
+    this.releaseCurrentProject();
+    try {
+      this.#unsubscribeCurrentProject =
+        this.dependencies.currentProject?.subscribe(() => {
+          this.#resumePendingOnCurrentProject();
+        });
+    } catch {
+      this.#unsubscribeCurrentProject = undefined;
+    }
+    this.#resumePendingOnCurrentProject();
+  }
+
+  /** Detaches from the current-context subscription exactly once per mount. */
+  public releaseCurrentProject(): void {
+    const owned = this.#unsubscribeCurrentProject;
+    this.#unsubscribeCurrentProject = undefined;
+    try {
+      owned?.();
+    } catch {
+      // Detaching from the context subscription is best-effort at unmount.
+    }
+  }
+
+  #resumePendingOnCurrentProject(): void {
+    if (this.#value.pendingPreEdit === null) return;
+    const resolution = this.resolveCurrentProject();
+    if (resolution.status !== "resolved") return;
+    this.resumePendingPreEdit(resolution.projectId);
+  }
+
+  /**
+   * Moves the held pre-edit into the editor for one already-decided project,
+   * whether that came from an explicit choice, a creation result, or context
+   * recovery. An open editor is never re-bound to a different project.
+   */
+  public resumePendingPreEdit(projectId: ProjectId): void {
+    const pending = this.#value.pendingPreEdit;
+    if (pending === null || this.#mutationsDisabled()) return;
+    this.#set({
+      selectedProjectId: projectId,
+      candidates: this.#filterCandidates(
+        projectId,
+        this.#value.selectedCategory,
+      ),
+      editor: {
+        mode: "create",
+        projectId,
+        draft: resolvePreEditDraft(pending, projectId),
+        ...(pending.captureDiagnostics === undefined
+          ? {}
+          : { captureDiagnostics: pending.captureDiagnostics }),
+      },
+      pendingPreEdit: null,
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+    });
   }
 
   /** Accepts a validated project-unresolved draft into panel-session state. */

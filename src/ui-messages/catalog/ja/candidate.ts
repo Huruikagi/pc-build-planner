@@ -13,9 +13,13 @@ export const candidate = {
   newProjectNameLabel: "新しいプロジェクト名",
   projectNameLabel: "プロジェクト名",
   createProjectAction: "プロジェクトを作成",
-  projectRequiredTitle: "続行するにはプロジェクトを作成してください",
+  projectRequiredTitle: "続行するにはプロジェクトを選んでください",
   projectRequiredReason:
     "抽出したパーツを編集して保存するには、所属するプロジェクトが必要です。",
+  projectRequiredContextReason:
+    "現在のプロジェクトが未選択か、いま利用できません。プロジェクトを選ぶか作成すると、抽出した内容のまま編集を再開できます。",
+  projectRequiredSelectTitle: "既存のプロジェクトから選ぶ",
+  projectRequiredCreateTitle: "新しいプロジェクトを作る",
   projectRequiredExtractedSummary: "抽出済みのパーツ",
   captureDiagnosticsTitle: "取り込めなかった項目",
   captureDiagnostic: "{field}: {reason}",

@@ -554,3 +554,77 @@ test("mount中のactivation拒否だけをfeature診断へ安定コードで通�
   });
   assert.deepEqual(diagnostics, ["activation-editor-mutation-disabled"]);
 });
+
+test("mount した panel session だけが current context 回復で pending pre-edit を再開する", async () => {
+  const projectId = "10000000-0000-4000-8000-000000000051" as Uuid as ProjectId;
+  const query = {
+    async listProjects() {
+      return { ok: true as const, value: [] };
+    },
+    async listCandidates() {
+      return { ok: true as const, value: [] };
+    },
+    async listBuildEligible() {
+      return { ok: true as const, value: [] };
+    },
+    async getCandidateDraft() {
+      return {
+        ok: false as const,
+        error: { kind: "not-found" as const, entity: "candidate" as const },
+      };
+    },
+  } satisfies CandidateQuery;
+  const listeners = new Set<() => void>();
+  let current: ProjectId | null = null;
+  const state = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000051" as never,
+      expectedRevision: 0 as Revision,
+    }),
+    currentProject: {
+      getCurrentProject: () =>
+        current === null
+          ? { status: "unresolved" as const }
+          : { status: "resolved" as const, projectId: current },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  });
+  const pending = {
+    draft: {
+      category: "uncategorized",
+      product: { name: { original: "架空の回復待ち候補" } },
+      normalizedAttributes: { category: "uncategorized" },
+    },
+  } satisfies UnresolvedCandidateEditorPrefill;
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query,
+    state,
+  });
+
+  const handle = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+  });
+  state.holdPendingPreEdit(pending);
+  await act(async () => {
+    current = projectId;
+    for (const listener of listeners) listener();
+  });
+  assert.equal(state.value.pendingPreEdit, null);
+  assert.equal(state.value.editor?.projectId, projectId);
+
+  await handle.unmount();
+  assert.equal(listeners.size, 0);
+  // After the session ends, a context change must not reopen an unmounted editor.
+  state.holdPendingPreEdit(pending);
+  current = null;
+  for (const listener of listeners) listener();
+  assert.deepEqual(state.value.pendingPreEdit, pending);
+});

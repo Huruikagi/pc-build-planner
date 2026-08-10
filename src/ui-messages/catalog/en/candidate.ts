@@ -9,9 +9,13 @@ export const candidate = {
   newProjectNameLabel: "New project name",
   projectNameLabel: "Project name",
   createProjectAction: "Create project",
-  projectRequiredTitle: "Create a project to continue",
+  projectRequiredTitle: "Choose a project to continue",
   projectRequiredReason:
     "A project is needed before this extracted part can be edited and saved.",
+  projectRequiredContextReason:
+    "No project is selected right now, or the current one is unavailable. Choose or create a project to resume editing the extracted part as it is.",
+  projectRequiredSelectTitle: "Choose an existing project",
+  projectRequiredCreateTitle: "Create a new project",
   projectRequiredExtractedSummary: "Extracted part",
   captureDiagnosticsTitle: "Fields that could not be imported",
   captureDiagnostic: "{field}: {reason}",

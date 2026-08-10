@@ -48,10 +48,27 @@ export type UnresolvedCandidateDraft = {
 
 export interface UnresolvedCandidateEditorPrefill {
   readonly draft: UnresolvedCandidateDraft;
-  readonly projectId?: ProjectId;
   readonly categoryHint?: PartCategory;
   /** Closed diagnostics from an untrusted capture; never persisted with the draft. */
   readonly captureDiagnostics?: readonly CaptureDiagnostic[];
+}
+
+/**
+ * Save-target authority for a pre-edit. `unresolved` covers both "no current
+ * selection" and "context unavailable": neither is an error, and neither may
+ * be replaced by a catalog head or a payload-supplied project.
+ */
+export type CurrentProjectResolution =
+  | { readonly status: "resolved"; readonly projectId: ProjectId }
+  | { readonly status: "unresolved" };
+
+/**
+ * Read-only view of the validated current project. Candidate management never
+ * writes the current context, so recovery is observed rather than requested.
+ */
+export interface CurrentProjectPort {
+  getCurrentProject(): CurrentProjectResolution;
+  subscribe(listener: () => void): () => void;
 }
 
 export type CaptureDiagnosticReason =

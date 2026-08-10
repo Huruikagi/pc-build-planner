@@ -13,6 +13,7 @@ import {
   candidateSourcePriceField,
   candidateSourceRows,
   candidateSources,
+  chooseExistingProject,
   createCandidateButton,
   editCandidateButton,
 } from "./models/candidate-management.js";
@@ -119,6 +120,7 @@ test("capture merge, same-URL refresh, no-match create and explicit save-new rem
   );
   await triggerCapture(context, id, first);
   await captureStartButton(extensionAction(panel)).click();
+  await chooseExistingProject(panel, "SYN duplicate merge project");
   await expect(candidateEditor(panel)).toBeVisible();
   await submitButton(candidateEditor(panel)).click();
   const decision = region(management, "duplicate-merge-decision");
@@ -142,6 +144,7 @@ test("capture merge, same-URL refresh, no-match create and explicit save-new rem
   );
   await triggerCapture(context, id, same);
   await captureStartButton(extensionAction(panel)).click();
+  await chooseExistingProject(panel, "SYN duplicate merge project");
   await submitButton(candidateEditor(panel)).click();
   await region(management, "duplicate-merge-decision")
     .getByRole("radio")
@@ -176,6 +179,7 @@ test("capture merge, same-URL refresh, no-match create and explicit save-new rem
   );
   await triggerCapture(context, id, unique);
   await captureStartButton(extensionAction(panel)).click();
+  await chooseExistingProject(panel, "SYN duplicate merge project");
   await submitButton(candidateEditor(panel)).click();
   await expect(
     region(management, "candidate-list").getByRole("listitem"),
@@ -200,6 +204,7 @@ test("capture merge, same-URL refresh, no-match create and explicit save-new rem
   );
   await triggerCapture(context, id, explicit);
   await captureStartButton(extensionAction(panel)).click();
+  await chooseExistingProject(panel, "SYN duplicate merge project");
   await submitButton(candidateEditor(panel)).click();
   const explicitDecision = region(management, "duplicate-merge-decision");
   await expect(explicitDecision).toBeVisible();

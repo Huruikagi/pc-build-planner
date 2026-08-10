@@ -9,6 +9,7 @@ import { createCandidateActivation } from "../../../src/features/candidate-manag
 import type {
   CandidateManagementService,
   CandidateQuery,
+  CurrentProjectPort,
   ProjectSummary,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createCandidateFeatureRegistration } from "../../../src/features/candidate-management/registration.js";
@@ -45,8 +46,37 @@ const projects = [
   },
 ] as const;
 
-const createState = (availableProjects: readonly ProjectSummary[] = projects) =>
+/** Stands in for project-context: the only save-target authority. */
+const currentContext = (initial: ProjectId | null) => {
+  const listeners = new Set<() => void>();
+  let current = initial;
+  return {
+    port: {
+      getCurrentProject: () =>
+        current === null
+          ? ({ status: "unresolved" } as const)
+          : ({ status: "resolved", projectId: current } as const),
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } satisfies CurrentProjectPort,
+    recover(next: ProjectId | null) {
+      current = next;
+      for (const listener of listeners) listener();
+    },
+    get selected() {
+      return current;
+    },
+  };
+};
+
+const createState = (
+  availableProjects: readonly ProjectSummary[] = projects,
+  currentProject: CurrentProjectPort = currentContext(projectId).port,
+) =>
   createManagementState({
+    currentProject,
     query: {
       async listProjects() {
         return {
@@ -81,7 +111,7 @@ const createRegistration = (state: ReturnType<typeof createState>) =>
   });
 
 test("activation は正常 prefill を一度だけ詳細編集へ適用し、不正な受信内容では既存画面を保持する", async () => {
-  const state = createState();
+  const state = createState(projects, currentContext(prefillProjectId).port);
   const prefill = { ...unresolvedNamedDraft, projectId: prefillProjectId };
   await state.load();
   const registry = createFeatureRegistry();
@@ -122,10 +152,9 @@ test("activation は正常 prefill を一度だけ詳細編集へ適用し、不
   assert.equal((await prepared.value.activate()).ok, false);
 });
 
-test("未解決 prefill は unknown 境界で再検証し、選択中 project を解決して空名 editor を開く", async () => {
-  const state = createState();
+test("未解決 prefill は unknown 境界で再検証し、検証済み current project へ bind して空名 editor を開く", async () => {
+  const state = createState(projects, currentContext(prefillProjectId).port);
   await state.load();
-  await state.selectProject(prefillProjectId);
   const registry = createFeatureRegistry();
   assert.equal(registry.register(createRegistration(state)).ok, true);
   const router = createActivationRouter({ registry });
@@ -148,16 +177,18 @@ test("未解決 prefill は unknown 境界で再検証し、選択中 project �
   });
 });
 
-test("未解決 prefill の明示 projectId は選択中 project より優先して解決する", async () => {
-  const state = createState();
+test("payload の projectId と画面 snapshot は保存先に使わず current project へ bind する", async () => {
+  const context = currentContext(projectId);
+  const state = createState(projects, context.port);
   await state.load();
+  // A stale screen selection must not survive as the save target either.
   await state.selectProject(prefillProjectId);
   const registry = createFeatureRegistry();
   assert.equal(registry.register(createRegistration(state)).ok, true);
   const prepared = createActivationRouter({ registry }).prepare({
     featureId,
     target: "open-candidate-editor",
-    payload: { projectId, draft: unresolvedDraft },
+    payload: { projectId: prefillProjectId, draft: unresolvedDraft },
   });
 
   assert.equal(prepared.ok, true);
@@ -169,6 +200,8 @@ test("未解決 prefill の明示 projectId は選択中 project より優先し
   assert.equal(state.value.selectedProjectId, projectId);
   assert.equal(state.value.editor?.projectId, projectId);
   assert.equal(state.value.editor?.draft.projectId, projectId);
+  // The stale input never rewrites the current context itself.
+  assert.equal(context.selected, projectId);
 });
 
 test("不正な未解決 prefill は invalid_activation へ写像し state を変更しない", async () => {
@@ -235,7 +268,7 @@ test("unknown activation の非object入力を副作用前に拒否する", asyn
 });
 
 test("project が0件でも未解決 prefill を pending に受理して capture 終了後まで保持する", async () => {
-  const state = createState([]);
+  const state = createState([], currentContext(null).port);
   await state.load();
   const registry = createFeatureRegistry();
   assert.equal(registry.register(createRegistration(state)).ok, true);
@@ -433,8 +466,8 @@ test("不正な categoryHint を含む prefill は拒否され画面を保持す
   assert.equal(state.value.editor, null);
 });
 
-test("存在しない project を指定した activation は draft を変更しない", async () => {
-  const state = createState();
+test("current context が利用不能なら存在する project へ fallback せず pending として受理する", async () => {
+  const state = createState(projects, currentContext(null).port);
   await state.load();
   const registry = createFeatureRegistry();
   assert.equal(registry.register(createRegistration(state)).ok, true);
@@ -449,12 +482,10 @@ test("存在しない project を指定した activation は draft を変更し�
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.deepEqual(await result.value.activate(), {
-    ok: false,
-    error: {
-      kind: "activation_failed",
-      detail: "project does not exist",
-      reason: "target-data-unavailable",
-    },
+    ok: true,
+    value: undefined,
   });
   assert.equal(state.value.editor, null);
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.deepEqual(state.value.pendingPreEdit, { draft: unresolvedNamedDraft });
 });

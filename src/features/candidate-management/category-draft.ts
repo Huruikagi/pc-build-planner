@@ -1,5 +1,8 @@
-import type { PartCategory } from "../../domain/public.js";
-import type { CandidateDraft } from "./contracts.js";
+import type { PartCategory, ProjectId } from "../../domain/public.js";
+import type {
+  CandidateDraft,
+  UnresolvedCandidateEditorPrefill,
+} from "./contracts.js";
 
 /**
  * Builds the empty, category-coherent `normalizedAttributes` for a category.
@@ -35,6 +38,24 @@ export const attributesFor = (
     default:
       return { category };
   }
+};
+
+/**
+ * Binds a project-unresolved pre-edit to one already validated project. The
+ * caller supplies the project; this never chooses one. The category hint is
+ * applied only when the draft carries no confirmed category, so an existing
+ * formal category always wins over a hint. The seeded draft is unsaved editor
+ * state, ratified by the user on save.
+ */
+export const resolvePreEditDraft = (
+  prefill: UnresolvedCandidateEditorPrefill,
+  projectId: ProjectId,
+): CandidateDraft => {
+  const resolved = { ...prefill.draft, projectId } as CandidateDraft;
+  return prefill.categoryHint !== undefined &&
+    resolved.category === "uncategorized"
+    ? withCategory(resolved, prefill.categoryHint)
+    : resolved;
 };
 
 /** Re-homes a draft onto a new category, resetting attributes to that category's empty shape. */
