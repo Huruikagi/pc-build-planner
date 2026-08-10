@@ -128,7 +128,8 @@ graph LR
 src/features/backup-restore/contracts.ts           # Envelope、preview、commit outcome、pre-commit cleanup、finalization、error契約
 src/features/backup-restore/public.ts              # BackupRestoreSectionMount、factory、最小dependency inputの唯一の公開入口
 src/features/backup-restore/section-mount.ts       # section依存組立、mount handle、冪等cleanup
-src/features/backup-restore/exchange.ts            # configured schema primitiveを使うowner-local交換形式検証、形式移行、LocalDataRoot変換
+src/features/backup-restore/backup-schema.ts       # configured schema primitiveで組むowner-local Envelope schema定義
+src/features/backup-restore/exchange.ts            # backup-schemaを使う交換形式検証、形式移行、LocalDataRoot変換
 src/features/backup-restore/capacity-policy.ts     # 16 MiB入力上限とexport自己復元可能性の単一policy
 src/features/backup-restore/service.ts             # バックアップ生成と復元preflight・commit・pre-commit cleanup再開・finalize
 src/features/backup-restore/context-lifecycle.ts   # replacement guardとpost-commit refreshの順序調整
@@ -156,11 +157,11 @@ tests/ui-messages/catalog-parity.test.ts            # backup日英key・placehol
 e2e/backup-restore.spec.ts                         # settings経由のexport→改変→復元→再起動
 ```
 
-新規作成は`capacity-policy.ts`、`context-lifecycle.ts`、`capacity-policy.test.ts`、`recovery.integration.test.ts`、`project-context-lifecycle.test.ts`の5ファイルである。既存の`contracts.ts`、`service.ts`、`state.ts`、`view.tsx`、`operation-kind.ts`、`react-root.tsx`、`section-mount.ts`、`public.ts`、日英の`backup.ts`メッセージカタログと対応testを変更する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、`react-root.tsx`は両operationの可否を別々に購読してViewへ渡す。`exchange.ts`と`file-gateway.ts`は契約追従が必要な場合だけ局所変更し、交換形式やFile APIの責務を広げない。`styles.css`の責務は変更せず、削除対象はない。
+新規作成は`backup-schema.ts`、`capacity-policy.ts`、`context-lifecycle.ts`、`capacity-policy.test.ts`、`recovery.integration.test.ts`、`project-context-lifecycle.test.ts`の6ファイルである。`backup-schema.ts`はconfigured runtime-schema公開入口だけを使うEnvelope schema定義をExchangeValidator境界の内側で分離し、`exchange.ts`は検証・移行・写像の順序調整に専念する。既存の`contracts.ts`、`service.ts`、`state.ts`、`view.tsx`、`operation-kind.ts`、`react-root.tsx`、`section-mount.ts`、`public.ts`、日英の`backup.ts`メッセージカタログと対応testを変更する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、`react-root.tsx`は両operationの可否を別々に購読してViewへ渡す。`exchange.ts`と`file-gateway.ts`は契約追従が必要な場合だけ局所変更し、交換形式やFile APIの責務を広げない。`styles.css`の責務は変更せず、削除対象はない。
 
-`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) runtime schema同等性gate、(2) Foundationのassessment ticket付き`BackupRestoreDataPort`とproject-context public ports、(3) application-shell ownerによる`OperationKind`・`recovery-required`のcontract/gate、(4) 本specのfeature実装、(5) application-shell ownerによるproduction wiringとする。手順3は型・gate契約だけを先行し、手順5のcompositionは本specの完成後に行うため、roadmap上の循環依存を作らない。
+`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) runtime schema同等性gate、(2) Foundationのassessment ticket付き`BackupRestoreDataPort`とproject-context public ports、(3) application-shell ownerによる`OperationKind`・`recovery-required`のcontract/gate、(4) 本specのfeature実装、(5) production wiringとする。手順3は型・gate契約だけを先行し、手順5のcompositionは本specの完成後に行うため、roadmap上の循環依存を作らない。
 
-`src/application-shell/side-panel-contributions.ts`と`application-composition.ts`のproduction wiring変更はapplication-shell ownerのdownstream taskとし、本specのfeature file ownershipへ含めない。settings内部へは完成済みsection mountだけを注入し、read/data/context capabilityを渡さない。
+`src/application-shell/side-panel-contributions.ts`と`application-composition.ts`のproduction wiringは当初application-shell ownerのdownstream taskとして切り出す前提だったが、project-context公開portが暫定入口のまま残る欠陥（DEF-011）を解消するため、手順5を本specのtask 5.1で実施した。application-compositionがlate-boundなreplacement guard / refreshを合成し、`side-panel-contributions.ts`が`FoundationScopedDataPort.query`だけをfrozen `BackupSnapshotReadPort`へ狭めてsection factoryへ渡す。この例外はwiring行だけに限定し、feature内部の境界は変えない。settings内部へは完成済みsection mountだけを注入し、read/data/context capabilityを渡さない。
 
 ## System Flows
 
