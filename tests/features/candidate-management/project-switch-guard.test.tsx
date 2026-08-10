@@ -125,6 +125,11 @@ test("10.2: dirty候補は共通確認の取消で保持され、確定時だけ
       <ManagementView state={state} />
     </>,
   );
+  assert.equal(
+    container.querySelector(".candidate-management [data-project-id]"),
+    null,
+    "候補管理は共通selectorと重複するproject選択操作を描画しない",
+  );
   const select = container.querySelector<HTMLSelectElement>(
     "[data-project-context='select']",
   );

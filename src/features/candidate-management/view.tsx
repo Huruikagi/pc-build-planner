@@ -1192,16 +1192,22 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       >
         {value.projects.map((project) => (
           <span key={project.id}>
-            <button
-              aria-current={
-                project.id === value.selectedProjectId ? "page" : undefined
-              }
-              data-project-id={project.id}
-              onClick={() => void selectProject(project.id)}
-              type="button"
-            >
-              {project.name}
-            </button>
+            {state.hasCurrentProjectAuthority() ? (
+              project.id === value.selectedProjectId ? (
+                <span data-current-project>{project.name}</span>
+              ) : null
+            ) : (
+              <button
+                aria-current={
+                  project.id === value.selectedProjectId ? "page" : undefined
+                }
+                data-project-id={project.id}
+                onClick={() => void selectProject(project.id)}
+                type="button"
+              >
+                {project.name}
+              </button>
+            )}
             <button
               data-rename-project-id={project.id}
               disabled={value.isSaving || value.mutationsDisabled}

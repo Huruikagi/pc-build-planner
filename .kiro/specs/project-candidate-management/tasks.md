@@ -278,7 +278,7 @@
   - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, ManagementState_
 
 - [ ] 12. UIと横断回帰で現在projectの一貫性を検証する
-- [ ] 12.1 project未解決・refresh失敗・強制切替の回復表示を完成する
+- [x] 12.1 project未解決・refresh失敗・強制切替の回復表示を完成する
   - `project-required`、`context-refresh-failed`、`project-changed-with-draft`を利用者が区別できる文言と操作へ写像する。
   - 通常のdirty切替では破棄確認と取消・確定操作を表示し、候補管理内に共通selectorを重複表示しない。
   - project未解決または強制切替回復待ちではmutation操作を開始不能にし、serviceを呼ばず読取と案内を維持する。
@@ -286,7 +286,7 @@
   - _Depends: 9.3, 10.2, 10.3, 11.1, 11.2_
   - _Requirements: 1.7, 2.6, 3.6, 3.7, 7.2, 7.3, 7.4, 8.2, 8.3, 8.4, 8.5, 9.4_
   - _Boundary: ManagementState, ManagementView_
-- [ ] 12.2 context切替とproject CRUDの横断契約を検証する
+- [x] 12.2 context切替とproject CRUDの横断契約を検証する
   - ready、empty、unavailableの追従、clean切替、dirty確認、取消、確定、stale確認、forced切替を同じ架空context harnessで検証する。
   - project mutation成功時のrefresh一回、mutation失敗時のrefreshなし、mutation成功・refresh失敗後のrefresh-only回復を検証する。
   - project CRUD前確認の取消ではmutationもrefreshも発行されず、確定時だけ順序どおり実行されることを確認する。
@@ -294,7 +294,7 @@
   - _Depends: 9.1, 9.2, 9.3, 10.1, 10.2, 10.3, 12.1_
   - _Requirements: 1.5, 1.6, 1.7, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
   - _Boundary: CandidateManagement Context Integration_
-- [ ] 12.3 activationとsnapshotの非権威性を統合検証する
+- [x] 12.3 activationとsnapshotの非権威性を統合検証する
   - payload内project IDとsnapshot内project IDがcontextを変更せず、検証済みの現在projectだけが保存先となることを確認する。
   - readyへのpre-edit binding、empty/unavailableのpending、refresh後の継続、snapshot一致時の復元を検証する。
   - snapshot不一致・不存在・不正時の安全退避と、pendingが同一document sessionだけで保持され再生成後は復元されないことを確認する。
