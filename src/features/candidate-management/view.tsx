@@ -114,6 +114,7 @@ const errorMessageKeys = {
   "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
   "project-required": "candidate.errors.projectRequired",
   "context-refresh-failed": "candidate.errors.contextRefreshFailed",
+  "project-changed-with-draft": "candidate.errors.projectChangedWithDraft",
 } as const satisfies Record<ManagementDisplayError["code"], MessageKey>;
 
 const errorMessage = (

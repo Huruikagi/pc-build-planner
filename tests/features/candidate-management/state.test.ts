@@ -21,6 +21,8 @@ import { createManagementState } from "../../../src/features/candidate-managemen
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const candidateId =
   "30000000-0000-4000-8000-000000000001" as Uuid as CandidatePartId;
+const otherProjectId =
+  "10000000-0000-4000-8000-000000000002" as Uuid as ProjectId;
 const requestId = "20000000-0000-4000-8000-000000000001" as Uuid as RequestId;
 
 const draft = {
@@ -141,6 +143,50 @@ test("pending pre-edit は reset と load では失われず明示取消だけ�
 
   state.cancelPendingPreEdit();
   assert.equal(state.value.pendingPreEdit, null);
+});
+
+test("確認済みの通常切替だけがdirty draftを破棄して新projectへ表示を切り替える", async () => {
+  const state = createManagementState({
+    query: createQuery(),
+    service: createService(),
+    createMutationContext: () => context,
+  });
+  await state.load();
+  state.beginCreate(draft);
+  assert.equal(state.hasDirtyProjectDraft(), true);
+
+  state.discardDraftForConfirmedSwitch(projectId, otherProjectId);
+
+  assert.equal(state.value.editor, null);
+  assert.equal(state.value.pendingPreEdit, null);
+  assert.equal(state.value.selectedProjectId, otherProjectId);
+  assert.equal(state.hasDirtyProjectDraft(), false);
+});
+
+test("forced切替は旧projectのdraftを保持し新projectへのmutationを遮断する", async () => {
+  let creates = 0;
+  const state = createManagementState({
+    query: createQuery(),
+    service: createService({
+      async createCandidate() {
+        creates += 1;
+        return { ok: false as const, error: { kind: "storage" as const } };
+      },
+    }),
+    createMutationContext: () => context,
+  });
+  await state.load();
+  state.beginCreate(draft);
+
+  state.preserveDraftAfterForcedSwitch(projectId);
+  await state.saveEditor();
+
+  assert.equal(state.value.editor?.projectId, projectId);
+  assert.equal(state.value.editor?.draft.projectId, projectId);
+  assert.deepEqual(state.value.projectChangedWithDraft, { from: projectId });
+  assert.equal(state.value.displayError?.code, "project-changed-with-draft");
+  assert.equal(state.value.mutationsDisabled, true);
+  assert.equal(creates, 0);
 });
 
 test("project 作成は失敗時に pending pre-edit を保持し成功時だけ破棄する", async () => {

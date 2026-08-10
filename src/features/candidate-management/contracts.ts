@@ -74,6 +74,13 @@ export interface CurrentProjectPort {
   >;
 }
 
+/** Candidate-management hooks used by the project-context change guard. */
+export interface CandidateProjectDraftGuard {
+  isDirty(): boolean;
+  discardConfirmedSwitch(from: ProjectId, to: ProjectId): void;
+  preserveForcedSwitch(from: ProjectId | null): void;
+}
+
 export type CaptureDiagnosticReason =
   | "empty"
   | "too-long"

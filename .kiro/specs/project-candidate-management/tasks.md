@@ -225,8 +225,8 @@
   - _Requirements: 1.7, 7.3, 7.4_
   - _Boundary: ProjectContextAdapter, ManagementState_
 
-- [ ] 10. プロジェクト切替時のdraft保護を実装する
-- [ ] 10.1 project-context guard protocolへ候補管理を参加させる
+- [x] 10. プロジェクト切替時のdraft保護を実装する
+- [x] 10.1 project-context guard protocolへ候補管理を参加させる
   - stable guard IDで登録し、候補draftまたはpending pre-editのdirty状態に応じて切替許可または破棄確認要求を返す。
   - guard評価と確認結果をcontext generationおよびrequest IDへ結び付け、古い確認完了をstateへ適用しない。
   - start失敗を判別可能にし、停止時はguardと購読を一度だけ解除する。
@@ -234,7 +234,7 @@
   - _Depends: 9.1; project-context 2.1, 2.3, 2.4_
   - _Requirements: 8.1, 8.2, 8.6_
   - _Boundary: ProjectContextAdapter_
-- [ ] 10.2 通常切替の確認とdraft破棄を管理画面へ統合する
+- [x] 10.2 通常切替の確認とdraft破棄を管理画面へ統合する
   - dirtyな候補draftまたはpre-editを保持したまま破棄確認を表示し、確認処理中も入力を変更しない。
   - 取消ではdraftと現在projectを維持し、確定した切替だけが旧draftを破棄して新しい現在projectの候補を表示する。
   - project CRUD前の確認にも同じdirty判定と確認結果を使用し、取消時は永続操作を開始しない。
@@ -242,7 +242,7 @@
   - _Depends: 10.1_
   - _Requirements: 1.8, 8.2, 8.3, 8.4_
   - _Boundary: ManagementState, ManagementView_
-- [ ] 10.3 強制切替後も旧projectのdraftを安全に保持する
+- [x] 10.3 強制切替後も旧projectのdraftを安全に保持する
   - project削除またはcatalog置換のforced通知ではdirty draftを破棄せず、変更前projectへ固定した回復待ち状態へ移す。
   - draftのproject IDを新しい現在projectへ書き換えず、暗黙の再bindingや保存を禁止する。
   - 利用者へ取消または明示的な再開始を案内し、保存操作が新projectへ到達しないようにする。

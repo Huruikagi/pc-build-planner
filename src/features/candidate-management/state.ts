@@ -41,7 +41,8 @@ export type ManagementDisplayError = {
     | ManagementError["kind"]
     | "snapshot-restore-failed"
     | "project-required"
-    | "context-refresh-failed";
+    | "context-refresh-failed"
+    | "project-changed-with-draft";
 };
 
 /** Draft-relative field key to failure reason, used to mark the offending input. */
@@ -108,6 +109,7 @@ export interface ManagementStateValue extends CandidatePreEditState {
   readonly isSaving: boolean;
   readonly mutationsDisabled: boolean;
   readonly duplicateDecision: DuplicateDecisionState;
+  readonly projectChangedWithDraft: { readonly from: ProjectId | null } | null;
 }
 
 export interface ManagementStateDependencies {
@@ -185,6 +187,7 @@ export class ManagementState {
     isSaving: false,
     mutationsDisabled: false,
     duplicateDecision: { status: "idle" },
+    projectChangedWithDraft: null,
   };
 
   readonly #duplicateMerge: DuplicateMergeState | null;
@@ -261,7 +264,8 @@ export class ManagementState {
   }
 
   #mutationsDisabled(): boolean {
-    if (this.#readBlocked) return true;
+    if (this.#readBlocked || this.#value.projectChangedWithDraft !== null)
+      return true;
     try {
       return !this.#policy.isAllowed("mutation");
     } catch {
@@ -732,6 +736,41 @@ export class ManagementState {
       editor: null,
       displayError: null,
       fieldErrors: emptyFieldErrors,
+      projectChangedWithDraft: null,
+    });
+    this.#syncCurrentProject();
+  }
+
+  /** Guard input: only candidate drafts and unresolved pre-edit are protected. */
+  public hasDirtyProjectDraft(): boolean {
+    return this.#value.editor !== null || this.#value.pendingPreEdit !== null;
+  }
+
+  /** Applies only after project-context has committed a user-confirmed switch. */
+  public discardDraftForConfirmedSwitch(from: ProjectId, to: ProjectId): void {
+    if (!this.hasDirtyProjectDraft()) return;
+    const editor = this.#value.editor;
+    if (editor !== null && editor.projectId !== from) return;
+    this.#set({
+      editor: null,
+      pendingPreEdit: null,
+      deletion: null,
+      projectChangedWithDraft: null,
+      selectedProjectId: to,
+      candidates: this.#filterCandidates(to, this.#value.selectedCategory),
+      displayError: null,
+      fieldErrors: emptyFieldErrors,
+      mutationsDisabled: this.#mutationsDisabled(),
+    });
+  }
+
+  /** Forced catalog changes retain the old binding and fence every mutation. */
+  public preserveDraftAfterForcedSwitch(from: ProjectId | null): void {
+    if (!this.hasDirtyProjectDraft()) return;
+    this.#set({
+      projectChangedWithDraft: { from },
+      displayError: { code: "project-changed-with-draft" },
+      mutationsDisabled: true,
     });
   }
 
@@ -816,6 +855,13 @@ export class ManagementState {
             context,
           );
     if (!result.ok) return this.#mutationFailure(result.error);
+    if (
+      deletion.kind === "project" &&
+      (this.#value.editor?.projectId === deletion.projectId ||
+        this.#value.pendingPreEdit !== null)
+    ) {
+      this.#set({ editor: null, pendingPreEdit: null });
+    }
     this.#set({ deletion: null, isSaving: false });
     if (deletion.kind === "project") await this.#refreshAfterProjectMutation();
     else await this.load();
