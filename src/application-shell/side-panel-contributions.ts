@@ -42,6 +42,7 @@ import {
 import type { SourcePriceRefreshPort } from "../features/source-price-refresh/public.js";
 import type { BackupRestoreDataPort } from "../persistence/public.js";
 import type {
+  ProjectContextChangeGuardRegistrationPort,
   ProjectContextCommandPort,
   ProjectContextReplacementGuardPort,
 } from "../project-context/public.js";
@@ -78,6 +79,7 @@ export interface SidePanelContributionDependencies {
   readonly projectReplacementGuard: ProjectContextReplacementGuardPort;
   /** Post-restore re-validation only; project selection stays with project-context. */
   readonly projectRefresh: Pick<ProjectContextCommandPort, "refresh">;
+  readonly projectGuards?: ProjectContextChangeGuardRegistrationPort;
   readonly transientSurface: TransientSurfaceLifecyclePort;
 }
 
@@ -148,6 +150,14 @@ export const createSidePanelFeatureContributions = (
     ),
     identityNormalizer: createProductIdentityNormalizer(),
     sourcePriceRefresh: duplicateRefreshPort,
+    ...(dependencies.projectGuards === undefined
+      ? {}
+      : {
+          projectContext: {
+            commands: dependencies.projectRefresh,
+            guards: dependencies.projectGuards,
+          },
+        }),
   });
   const currentBuild = createCurrentBuildContribution(context, {
     candidates: candidateManagement.registration.publicApi.query,

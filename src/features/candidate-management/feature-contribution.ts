@@ -3,7 +3,6 @@ import type {
   FeatureContribution,
 } from "../../application-shell/public.js";
 import { createUuid, type RequestId } from "../../domain/public.js";
-import type { ProjectContextReadPort } from "../../project-context/public.js";
 import type { ProductIdentityNormalizer } from "../product-capture/public.js";
 import type { SourcePriceRefreshPort } from "../source-price-refresh/public.js";
 import type {
@@ -14,6 +13,7 @@ import type {
 import { createDuplicateCandidateMatcher } from "./duplicate-matcher.js";
 import { createDuplicateMergeCoordinator } from "./duplicate-merge.js";
 import { createDuplicateUrlRouter } from "./duplicate-url-router.js";
+import { createProjectContextAdapter } from "./project-context-adapter.js";
 import type { CandidateManagementPublicApi } from "./public.js";
 import { createCandidateFeatureRegistration } from "./registration.js";
 import { createCandidateManagementService } from "./service.js";
@@ -50,6 +50,13 @@ export interface CandidateManagementContributionDependencies {
   readonly sourcePage?: SourcePagePort;
   readonly identityNormalizer?: ProductIdentityNormalizer;
   readonly sourcePriceRefresh?: SourcePriceRefreshPort;
+  readonly projectContext?: {
+    readonly commands: Pick<
+      import("../../project-context/public.js").ProjectContextCommandPort,
+      "refresh"
+    >;
+    readonly guards: import("../../project-context/public.js").ProjectContextChangeGuardRegistrationPort;
+  };
 }
 
 /**
@@ -58,7 +65,7 @@ export interface CandidateManagementContributionDependencies {
  * unresolved so no catalog entry is promoted into a save target.
  */
 const createCurrentProjectPort = (
-  read: ProjectContextReadPort | undefined,
+  read: FeatureCompositionContext["projectContext"],
 ): CurrentProjectPort => ({
   getCurrentProject() {
     const snapshot = read?.getSnapshot();
@@ -168,11 +175,29 @@ export const createCandidateManagementContribution = (
           createCandidate: service.createCandidate.bind(service),
         });
 
-  const state = createManagementState({
+  let state: ReturnType<typeof createManagementState> | undefined;
+  const projectContextAdapter =
+    context.projectContext === undefined ||
+    dependencies.projectContext === undefined
+      ? undefined
+      : createProjectContextAdapter({
+          read: context.projectContext,
+          commands: dependencies.projectContext.commands,
+          guards: dependencies.projectContext.guards,
+          draftGuard: {
+            isDirty: () => state?.hasDirtyProjectDraft() ?? false,
+            discardConfirmedSwitch: (from, to) =>
+              state?.discardDraftForConfirmedSwitch(from, to),
+            preserveForcedSwitch: (from) =>
+              state?.preserveDraftAfterForcedSwitch(from),
+          },
+        });
+  state = createManagementState({
     query: service,
     service,
     createMutationContext,
-    currentProject: createCurrentProjectPort(context.projectContext),
+    currentProject:
+      projectContextAdapter ?? createCurrentProjectPort(context.projectContext),
     ...(dependencies.sourcePage === undefined
       ? {}
       : { sourcePage: dependencies.sourcePage }),
@@ -190,6 +215,9 @@ export const createCandidateManagementContribution = (
       mutations: sourceMutations,
     },
     state,
+    ...(projectContextAdapter === undefined
+      ? {}
+      : { lifecycle: projectContextAdapter }),
   });
 
   return {

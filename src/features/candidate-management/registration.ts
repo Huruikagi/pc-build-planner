@@ -53,6 +53,12 @@ export interface CandidateFeatureRegistrationDependencies {
   ) => () => void;
   /** Supplied by the feature-local React/state composition when activation is enabled. */
   readonly state?: ManagementState;
+  /** Feature-local lifecycle resource such as the project-context guard. */
+  readonly lifecycle?: {
+    start():
+      | { readonly ok: true; readonly value: () => void }
+      | { readonly ok: false; readonly error: unknown };
+  };
 }
 
 const unavailableSources = {
@@ -125,7 +131,13 @@ const mountManagementView =
     );
     if (restoredState !== undefined) {
       const restored = codec.restore(restoredState);
-      if (restored.ok) state.applySnapshot(restored.value);
+      const current = state.resolveCurrentProject();
+      const contextMatches =
+        !state.hasCurrentProjectAuthority() ||
+        (restored.ok &&
+          current.status === "resolved" &&
+          restored.value.selectedProjectId === current.projectId);
+      if (restored.ok && contextMatches) state.applySnapshot(restored.value);
       else state.rejectSnapshotRestore();
     }
 
@@ -201,15 +213,25 @@ export const createCandidateFeatureRegistration = (
     getAvailability,
     subscribeAvailability,
     async mount(context: FeatureMountContext) {
-      const handle = await mount({
-        container: context.container,
-        data: dependencies.data,
-        operationPolicy: context.operationPolicy,
-        reportError: context.reportError,
-        ...(context.restoredState === undefined
-          ? {}
-          : { restoredState: context.restoredState }),
-      });
+      const started = dependencies.lifecycle?.start();
+      if (started !== undefined && !started.ok)
+        throw new Error("Candidate management lifecycle could not start.");
+      const releaseLifecycle = started?.ok ? started.value : () => {};
+      let handle: FeatureMountHandle;
+      try {
+        handle = await mount({
+          container: context.container,
+          data: dependencies.data,
+          operationPolicy: context.operationPolicy,
+          reportError: context.reportError,
+          ...(context.restoredState === undefined
+            ? {}
+            : { restoredState: context.restoredState }),
+        });
+      } catch (error) {
+        releaseLifecycle();
+        throw error;
+      }
       reportActivationDiagnostic = context.reportError;
       let unmounted = false;
       return {
@@ -219,7 +241,11 @@ export const createCandidateFeatureRegistration = (
           unmounted = true;
           if (reportActivationDiagnostic === context.reportError)
             reportActivationDiagnostic = undefined;
-          await handle.unmount();
+          try {
+            await handle.unmount();
+          } finally {
+            releaseLifecycle();
+          }
         },
       };
     },

@@ -477,6 +477,11 @@ export class ManagementState {
     }
   }
 
+  /** Whether production supplied the shared project-context authority. */
+  public hasCurrentProjectAuthority(): boolean {
+    return this.dependencies.currentProject !== undefined;
+  }
+
   /**
    * Observes current-context recovery for the mounted panel session. A held
    * pre-edit resumes into the editor as soon as a current project exists, so

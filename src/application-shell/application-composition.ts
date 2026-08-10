@@ -90,6 +90,7 @@ export interface ProductionApplicationCompositionOptions<
       readonly backupRestoreData: BackupRestoreDataPort;
       readonly projectReplacementGuard: ProjectContextReplacementGuardPort;
       readonly projectRefresh: Pick<ProjectContextCommandPort, "refresh">;
+      readonly projectGuards: ProjectContextPublicApi["guards"];
       readonly transientSurface: ReturnType<
         typeof createLateBoundLifecycle
       >["port"];
@@ -296,6 +297,7 @@ export function createProductionApplicationComposition<
    */
   let boundReplacementGuard: ProjectContextReplacementGuardPort | undefined;
   let boundProjectCommands: ProjectContextCommandPort | undefined;
+  let boundProjectGuards: ProjectContextPublicApi["guards"] | undefined;
   let detachedPermitSerial = 0;
   const projectReplacementGuard: ProjectContextReplacementGuardPort = {
     prepare: () =>
@@ -327,15 +329,24 @@ export function createProductionApplicationComposition<
       boundProjectCommands?.refresh() ??
       Promise.resolve(err({ kind: "context-unavailable" as const })),
   };
+  const projectGuards: ProjectContextPublicApi["guards"] = {
+    register: (guard) =>
+      boundProjectGuards?.register(guard) ?? err({ kind: "duplicate-guard" }),
+  };
   const bindProjectCommands = (
-    api: Pick<ProjectContextPublicApi, "commands" | "replacementGuard">,
+    api: Pick<
+      ProjectContextPublicApi,
+      "commands" | "guards" | "replacementGuard"
+    >,
   ): void => {
     boundProjectCommands = api.commands;
     boundReplacementGuard = api.replacementGuard;
+    boundProjectGuards = api.guards;
   };
   const unbindProjectCommands = (): void => {
     boundProjectCommands = undefined;
     boundReplacementGuard = undefined;
+    boundProjectGuards = undefined;
   };
 
   const diagnose = (message: string): void => {
@@ -595,6 +606,7 @@ export function createProductionApplicationComposition<
           backupRestoreData: validatedFoundation.backupRestoreDataPort,
           projectReplacementGuard,
           projectRefresh,
+          projectGuards,
           transientSurface: lateBoundLifecycle.port,
         });
       } catch {

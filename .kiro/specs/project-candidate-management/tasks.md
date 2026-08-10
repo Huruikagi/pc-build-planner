@@ -252,7 +252,7 @@
   - _Boundary: ProjectContextAdapter, ManagementState_
 
 - [ ] 11. activation・snapshot・registrationを現在projectへ統合する
-- [ ] 11.1 pre-edit activationの保存先を現在projectだけから解決する
+- [x] 11.1 pre-edit activationの保存先を現在projectだけから解決する
   - activation受理時にcontext snapshotを読み、`ready`の選択IDだけをunresolved draftへ付与してeditorを開く。
   - payload内project IDはshape検査だけに使い、保存先、fallback、context変更には使用しない。
   - `empty`または`unavailable`はactivation成功の`project-required`としてpendingを保持し、入力元へ失敗を返さない。
@@ -260,7 +260,7 @@
   - _Depends: 9.1, 9.3_
   - _Requirements: 6.6, 7.1, 7.2, 7.3, 7.5, 7.8_
   - _Boundary: CandidateActivation_
-- [ ] 11.2 snapshotのproject metadataを一致検査だけに限定する
+- [x] 11.2 snapshotのproject metadataを一致検査だけに限定する
   - snapshot version 2と既存shapeを維持し、`selectedProjectId`を現在projectとの一致検査にだけ使用する。
   - contextが`ready`でIDが一致し、参照とdraftが検証可能な場合だけ編集状態を復元する。
   - 不一致、ID不存在、empty、unavailable、不正version・shape・内容ではcontextと永続データを変更せず、安全な初期状態または既存pending保持状態へ退避する。
@@ -268,7 +268,7 @@
   - _Depends: 9.1, 10.3_
   - _Requirements: 6.1, 6.2, 9.1, 9.2, 9.3, 9.4, 9.5_
   - _Boundary: ManagementStateSnapshotCodec, ProjectContextAdapter, ManagementState_
-- [ ] 11.3 context adapterをfeature lifecycleとproduction contributionへ接続する
+- [x] 11.3 context adapterをfeature lifecycleとproduction contributionへ接続する
   - composition専用入口からproject-contextのread、command、guard portだけを受け、preference storeやservice内部へ依存しない。
   - mount開始時に通常draftを初期化して検証済みrollback snapshotだけを復元し、同一document sessionのpending pre-editは長寿命state上で保持する。
   - unmount時にcontext購読とguardを一度だけ解除し、再mount後に重複通知や重複guardが残らないようにする。

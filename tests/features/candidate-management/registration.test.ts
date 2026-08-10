@@ -10,6 +10,7 @@ import type {
   CandidatePartId,
   ProjectId,
   Revision,
+  UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
 import type {
@@ -19,9 +20,11 @@ import type {
   UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
 import type { DuplicateMergeCoordinator } from "../../../src/features/candidate-management/duplicate-merge.js";
+import { createProjectContextAdapter } from "../../../src/features/candidate-management/project-context-adapter.js";
 import { createCandidateFeatureRegistration as createCandidateFeatureRegistrationImpl } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
+import type { ProjectContextSnapshot } from "../../../src/project-context/public.js";
 import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
@@ -94,6 +97,44 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
   assert.equal(observed.mutationAllowed, true);
 });
 
+test("feature lifecycleはmountごとに開始しunmountで一度だけ解放する", async () => {
+  let starts = 0;
+  let releases = 0;
+  const registration = createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query: {} as CandidateQuery,
+    lifecycle: {
+      start() {
+        starts += 1;
+        let active = true;
+        return {
+          ok: true as const,
+          value: () => {
+            if (!active) return;
+            active = false;
+            releases += 1;
+          },
+        };
+      },
+    },
+    mount: async () => ({ async unmount() {} }),
+  });
+  const context = {
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+  };
+
+  const first = await registration.mount(context);
+  await first.unmount();
+  await first.unmount();
+  const second = await registration.mount(context);
+  await second.unmount();
+
+  assert.equal(starts, 2);
+  assert.equal(releases, 2);
+});
+
 test("React rootはopaque snapshotを復元し、captureとunmountを一度だけ行う", async () => {
   const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
   const candidateId =
@@ -105,6 +146,32 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     normalizedAttributes: { category: "uncategorized" as const },
     sources: [],
   } satisfies CandidateDraft;
+  let contextRefreshes = 0;
+  const currentProject = (snapshot: ProjectContextSnapshot) =>
+    createProjectContextAdapter({
+      read: {
+        getSnapshot: () => snapshot,
+        subscribe: () => () => {},
+      },
+      commands: {
+        async refresh() {
+          contextRefreshes += 1;
+          return { ok: true as const, value: snapshot };
+        },
+      },
+    });
+  const readySnapshot: ProjectContextSnapshot = {
+    status: "ready",
+    generation: 1,
+    catalog: [
+      {
+        id: projectId,
+        name: "架空プロジェクト",
+        updatedAt: "2026-07-22T00:00:00.000Z" as UtcTimestamp,
+      },
+    ],
+    selectedProjectId: projectId,
+  };
   const query = {
     async listProjects() {
       return {
@@ -209,6 +276,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       expectedRevision: 0 as Revision,
     }),
     duplicateMergeCoordinator,
+    currentProject: currentProject(readySnapshot),
   });
   const targetRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
@@ -234,6 +302,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       : undefined,
     candidateId,
   );
+  assert.equal(contextRefreshes, 0);
   await targetHandle.unmount();
   assert.equal(targetContainer.textContent, "");
 
@@ -260,6 +329,48 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     code: "snapshot-restore-failed",
   });
   await rejectedHandle.unmount();
+
+  const rejectedContexts: readonly ProjectContextSnapshot[] = [
+    {
+      ...readySnapshot,
+      selectedProjectId:
+        "10000000-0000-4000-8000-000000000099" as Uuid as ProjectId,
+    },
+    { status: "empty", generation: 2, catalog: [], selectedProjectId: null },
+    {
+      status: "unavailable",
+      generation: 3,
+      selectedProjectId: null,
+      reason: "catalog-unavailable",
+    },
+  ];
+  for (const snapshot of rejectedContexts) {
+    const rejectedContextState = createManagementState({
+      query,
+      service: {} as CandidateManagementService,
+      createMutationContext: () => ({
+        requestId: "20000000-0000-4000-8000-000000000001" as never,
+        expectedRevision: 0 as Revision,
+      }),
+      currentProject: currentProject(snapshot),
+    });
+    const rejectedContextHandle = await createCandidateFeatureRegistration({
+      data: {} as FoundationScopedDataPort,
+      query,
+      state: rejectedContextState,
+    }).mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+      restoredState: captured?.ok ? captured.value : undefined,
+    });
+    assert.equal(rejectedContextState.value.editor, null);
+    assert.deepEqual(rejectedContextState.value.displayError, {
+      code: "snapshot-restore-failed",
+    });
+    await rejectedContextHandle.unmount();
+  }
+  assert.equal(contextRefreshes, 0);
 });
 
 test("snapshotなしの再mountは前回の未保存draftと削除確認を持ち越さない", async () => {
