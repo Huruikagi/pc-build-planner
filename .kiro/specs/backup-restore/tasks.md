@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 上流公開契約とruntime prerequisiteを固定する
+- [x] 1. 上流公開契約とruntime prerequisiteを固定する
 - [x] 1.1 configured runtime schemaの同等性gateを追加する
   - canonical configured Zod Mini入口、strict plain object、JSON safety、owner error/path変換だけを利用できる状態を確認する
   - 交換形式の既存valid/invalid結果、error code、canonical pathが移行前後で一致し、Zod issueや入力値が公開されないことをcontract testで固定する
@@ -30,7 +30,7 @@
   - _Requirements: 4.5, 5.6, 5.7, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: Application shell recovery consumer contract_
 
-- [ ] 2. 交換形式、容量ポリシー、ファイル入出力を実装する
+- [x] 2. 交換形式、容量ポリシー、ファイル入出力を実装する
 - [x] 2.1 owner-local交換schemaをruntime schema基盤へ移行する
   - strict Envelope、全交換entity、日時・ID・カテゴリ・数量をconfigured schema primitiveで検証する
   - 禁止payload、未知key、非JSON値、ID重複、孤立参照、別project参照を値非露出のfeature errorへ写像する
@@ -81,7 +81,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 6.4, 6.5_
   - _Boundary: BackupService_
 
-- [ ] 3. assessment ticket付き復元serviceを実装する
+- [x] 3. assessment ticket付き復元serviceを実装する
 - [x] 3.1 normal/recovery preflightとpreviewを実装する
   - file入力を交換検証・migration・mapping後にFoundation assessmentへ渡し、正常rootとcorrupt/unsupported rootだけを正しくmode分岐する
   - candidate拒否、容量超過、storage failureをcurrent anomalyと混同せず、opaque assessment ticketを成功時だけRestoreTicketへ保持する
@@ -117,7 +117,7 @@
   - _Requirements: 3.4, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
   - _Boundary: BackupRestoreDataPort integration_
 
-- [ ] 4. project-context lifecycle、状態、表示を実装する
+- [x] 4. project-context lifecycle、状態、表示を実装する
 - [x] 4.1 replacement guard lifecycleをcommit前に順序付ける
   - prepare、confirmation、cancel、begin、completeをpermit lifecycleどおり呼び、begin成功前のFoundation commitを禁止する
   - guard拒否、取消、stale confirmation/permitではfailedまたはcancelledとしてpermitを閉じ、ticketと現在選択を保持する
@@ -168,7 +168,7 @@
   - _Requirements: 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 4.7, 4.8, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: BackupRestoreView, ui-messages catalog_
 
-- [ ] 5. section公開境界とdegraded recoveryを統合する
+- [x] 5. section公開境界とdegraded recoveryを統合する
 - [x] 5.1 capability分離したsection mountとaction policyを実装する
   - read-only snapshot、backup restore capability、replacement guard、refresh capabilityだけをfactoryへ注入し、settingsにはsection mountだけを渡す
   - export、file選択、preflightはread、commitはrecoveryとしてpolicy変更を別々に購読し、normal maintenance中はcommitを拒否する
@@ -187,7 +187,7 @@
   - _Requirements: 4.5, 5.6, 5.7, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: Application shell recovery integration contract_
 
-- [ ] 6. E2Eと最終検証を完了する
+- [x] 6. E2Eと最終検証を完了する
 - [x] 6.1 settingsからの通常バックアップ・復元E2Eを更新する
   - 全カテゴリの架空データをexportし、既存変更後に同じfileを確認付きで復元して再起動する
   - 生成artifactが16 MiB file preflightを通り、project、part、source、normalized attributes、current build参照・数量が復元後に一致することを確認する
