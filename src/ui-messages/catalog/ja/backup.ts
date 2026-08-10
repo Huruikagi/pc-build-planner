@@ -23,6 +23,10 @@ export const backup = {
   partCountLabel: "パーツ数",
   currentBuildCountLabel: "現在構成数",
   confirmAction: "復元を確定",
+  recoveryModeCorrupt:
+    "現在の保存データが破損しています。このファイルからの復元は回復操作として実行されます。",
+  recoveryModeUnsupported:
+    "現在の保存データは対応していない形式です。このファイルからの復元は回復操作として実行されます。",
   draftConfirmationTitle: "未保存の編集の確認",
   draftWarning:
     "現在のプロジェクトに未保存の編集があります。復元するとこの編集は破棄されます。",
@@ -41,6 +45,18 @@ export const backup = {
     "復元が完了しました（プロジェクト{projectCount}件、パーツ{partCount}件、現在構成{currentBuildCount}件）。",
   /** `${base}（位置: ${path}）` の再設計。`{message}` は解決済みの基本文を受け取る。 */
   withPosition: "{message}（位置: {path}）",
+  /** 失敗時の許可action。分類済みcodeと同じ単一policyから引く再試行方針の案内。 */
+  retryGuidance: {
+    "retry-export": "同じ内容でもう一度バックアップを作成できます。",
+    "retry-restore": "同じファイルの検証結果のまま復元を再試行できます。",
+    "reassess-restore":
+      "現在のデータが変わりました。選択したファイルを再確認してからやり直してください。",
+    "select-another-file": "別のファイルを選び直してください。",
+    "resolve-draft":
+      "未保存の編集を保存または破棄してから、復元を再試行してください。",
+    unsupported:
+      "このファイルでは復元できません。別のファイルを選んでください。",
+  },
   errors: {
     "no-file-selected": "ファイルが選択されていません。",
     "multiple-files-selected": "ファイルは一つだけ選択してください。",

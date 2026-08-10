@@ -199,9 +199,10 @@ export interface RestorePostCommitCoordinator {
     readonly permitId: string | null;
     readonly outcome: RestoreCommitOutcome;
   }): Promise<RestoreCompletion>;
+  /** section再mountで再発見したticketはsummaryを伴わないため、省略を許す。 */
   finalizeOnly(
     ticket: BackupRestoreFinalizationTicket,
-    summary: RestoreSummary,
+    summary: RestoreSummary | undefined,
   ): Promise<Result<RestoreCompletion, RestoreError>>;
   refreshOnly(summary: RestoreSummary): Promise<RestoreCompletion>;
 }
@@ -211,7 +212,7 @@ export interface RestorePostCommitCoordinatorDependencies {
   readonly restoreService: {
     finalize(
       ticket: BackupRestoreFinalizationTicket,
-      summary: RestoreSummary,
+      summary: RestoreSummary | undefined,
     ): Promise<Result<RestoreSummary, RestoreError>>;
   };
 }

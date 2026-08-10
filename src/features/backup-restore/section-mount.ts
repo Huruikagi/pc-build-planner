@@ -39,6 +39,7 @@ const createSectionState = (
 ): BackupRestoreState => {
   const restoreService = createRestoreService({
     data: dependencies.restoreData as BackupRestoreDataPort,
+    snapshot: { query: (query) => dependencies.data.query(query) },
   });
   const contextLifecycle = createRestoreContextLifecycle(
     dependencies.replacementGuard !== undefined &&
@@ -75,6 +76,8 @@ export const createBackupRestoreSectionMount = (
   async mount(context) {
     const state = dependencies.state ?? createSectionState(dependencies);
     state.resetForMount();
+    /** 通常idleを描画する前に、Foundation所有のpending finalizationを再水和する。 */
+    await state.rehydratePendingFinalization();
 
     let root: ReturnType<typeof mountBackupRestoreReactRoot> | undefined;
     try {

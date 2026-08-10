@@ -44,7 +44,8 @@ export type BackupRestoreStateValue =
       readonly confirmationId: string;
     }
   | { readonly phase: "restoring"; readonly ticket: RestoreTicket }
-  | { readonly phase: "refreshing-context"; readonly summary: RestoreSummary }
+  /** 再mount由来のfinalize-onlyではsummaryを未取得のまま処理状態を表示する。 */
+  | { readonly phase: "refreshing-context"; readonly summary?: RestoreSummary }
   | {
       readonly phase: "succeeded";
       readonly operation: "backup";
@@ -58,7 +59,8 @@ export type BackupRestoreStateValue =
     }
   | {
       readonly phase: "restored-finalization-required";
-      readonly summary: RestoreSummary;
+      /** section再mountで再発見したticketにはsummaryが伴わない。 */
+      readonly summary?: RestoreSummary;
       readonly finalization: BackupRestoreFinalizationTicket;
     }
   | {
@@ -263,7 +265,8 @@ export class BackupRestoreState {
     if (this.#value.phase !== "restored-finalization-required") return;
     const { summary, finalization } = this.#value;
     const epoch = this.#lifecycleEpoch;
-    this.#set({ phase: "refreshing-context", summary });
+    const withSummary = summary === undefined ? {} : { summary };
+    this.#set({ phase: "refreshing-context", ...withSummary });
 
     const finalized = await this.dependencies.postCommit.finalizeOnly(
       finalization,
@@ -273,7 +276,7 @@ export class BackupRestoreState {
     if (!finalized.ok) {
       this.#set({
         phase: "restored-finalization-required",
-        summary,
+        ...withSummary,
         finalization,
       });
       return;
@@ -305,6 +308,27 @@ export class BackupRestoreState {
   public resetForMount(): void {
     this.#lifecycleEpoch += 1;
     this.#set({ phase: "idle" });
+  }
+
+  /**
+   * 通常idle表示を確定させる前にFoundation所有のpending finalizationを照会する。
+   * 存在すればsummary無しのfinalize-only状態を再水和し、無い・照会失敗ではidleを保つ。
+   */
+  public async rehydratePendingFinalization(): Promise<void> {
+    const find = this.dependencies.restoreService.findPendingFinalization;
+    if (find === undefined) return;
+    const epoch = this.#lifecycleEpoch;
+
+    const pending = await find();
+    if (epoch !== this.#lifecycleEpoch) return;
+    /** 照会中に利用者操作が始まっていた場合はその状態を上書きしない。 */
+    if (this.#value.phase !== "idle") return;
+    if (!pending.ok || pending.value === null) return;
+
+    this.#set({
+      phase: "restored-finalization-required",
+      finalization: pending.value,
+    });
   }
 
   async #startGuardedRestore(ticket: RestoreTicket): Promise<void> {
@@ -405,8 +429,14 @@ export class BackupRestoreState {
     const value = this.#value;
     if (value.phase !== "failed" || value.operation !== "restore")
       return undefined;
-    if (value.retry.kind !== "retryable" || value.retry.action !== action)
-      return undefined;
+    const retry = value.retry;
+    /** 未保存draftの解消は利用者側の操作であり、その後は同じticketで再試行できる。 */
+    const allowed =
+      (retry.kind === "retryable" && retry.action === action) ||
+      (action === "retry-restore" &&
+        retry.kind === "action-required" &&
+        retry.action === "resolve-draft");
+    if (!allowed) return undefined;
     return value.ticket;
   }
 

@@ -860,3 +860,44 @@ test("finalize-onlyとpending discoveryはroot再置換をせずopaque ticketだ
   assert.equal(finalized, finalization);
   assert.equal(commitCalls, 0);
 });
+
+test("summaryを失ったfinalizeは検証済みsnapshotから件数を再構築しroot writeを行わない", async () => {
+  const finalization = "fixture-finalization" as never;
+  let commitCalls = 0;
+  let queries = 0;
+  const service = createRestoreService({
+    data: backupRestorePort({
+      async commit() {
+        commitCalls += 1;
+        throw new Error("finalize must not commit");
+      },
+      async finalize() {
+        return { ok: true, value: { mode: "normal", revision: 7 as never } };
+      },
+    }),
+    snapshot: {
+      async query(query) {
+        queries += 1;
+        return {
+          ok: true,
+          value: query({
+            schemaVersion: 1,
+            revision: 7,
+            projects: [{}, {}],
+            candidateParts: [{}, {}, {}],
+            currentBuilds: [{}],
+            requestDedupe: [],
+            maintenance: { active: false },
+          } as never),
+        };
+      },
+    },
+  });
+
+  assert.deepEqual(await service.finalize?.(finalization, undefined), {
+    ok: true,
+    value: { projectCount: 2, partCount: 3, currentBuildCount: 1 },
+  });
+  assert.equal(queries, 1);
+  assert.equal(commitCalls, 0);
+});

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
+import type { RestoreContextLifecycle } from "../../../src/features/backup-restore/context-lifecycle.js";
 import type {
   BackupArtifact,
   RestoreTicket,
@@ -49,19 +50,31 @@ const buildState = (options: {
   read?: FileGateway["read"];
   preflight?: RestoreService["preflight"];
   commit?: RestoreService["commit"];
-}) =>
-  createBackupRestoreState({
-    ...unattachedContextDependencies(),
+  findPendingFinalization?: RestoreService["findPendingFinalization"];
+  guardPrepare?: RestoreContextLifecycle["prepare"];
+}) => {
+  const context = unattachedContextDependencies();
+  const contextLifecycle: RestoreContextLifecycle =
+    options.guardPrepare === undefined
+      ? context.contextLifecycle
+      : { ...context.contextLifecycle, prepare: options.guardPrepare };
+  return createBackupRestoreState({
+    ...context,
+    contextLifecycle,
     backupService: { create: options.create ?? notExpected("create") },
     restoreService: {
       preflight: options.preflight ?? notExpected("preflight"),
       commit: options.commit ?? notExpected("commit"),
+      ...(options.findPendingFinalization === undefined
+        ? {}
+        : { findPendingFinalization: options.findPendingFinalization }),
     },
     fileGateway: {
       read: options.read ?? notExpected("read"),
       download: options.download ?? notExpected("download"),
     },
   });
+};
 
 async function renderView(state: ReturnType<typeof buildState>) {
   const container = document.createElement("div");
@@ -341,6 +354,190 @@ test("dangerouslySetInnerHTML・innerHTMLを使わずファイル名を安全に
 
   assert.equal(rendered.container.querySelector("img"), null);
   assert.match(rendered.container.innerHTML, /&lt;img/);
+
+  await rendered.cleanup();
+});
+
+const RECOVERY_TICKET: RestoreTicket = {
+  ...FAKE_TICKET,
+  mode: "recovery",
+  currentAnomaly: { code: "corrupt-data" },
+};
+
+test("回復modeのpreviewは現在データの異常を固定文言で案内する", async () => {
+  const state = buildState({
+    preflight: async () => ({ ok: true, value: RECOVERY_TICKET }),
+    read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+  });
+  const rendered = await renderView(state);
+  const input = rendered.container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await selectFile(
+    input,
+    new File(["{}"], "restore.json", { type: "application/json" }),
+  );
+
+  const recovery = rendered.container.querySelector(
+    '[data-region="restore-recovery"]',
+  );
+  assert.ok(recovery);
+  assert.match(
+    recovery.textContent ?? "",
+    new RegExp(defaultMessageResolver("backup.recoveryModeCorrupt")),
+  );
+  assert.ok(rendered.container.querySelector('button[data-action="confirm"]'));
+
+  await rendered.cleanup();
+});
+
+test("未対応の現行データではunsupported向けの回復案内を表示する", async () => {
+  const state = buildState({
+    preflight: async () => ({
+      ok: true,
+      value: {
+        ...FAKE_TICKET,
+        mode: "recovery",
+        currentAnomaly: { code: "unsupported-version" },
+      },
+    }),
+    read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+  });
+  const rendered = await renderView(state);
+  const input = rendered.container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await selectFile(
+    input,
+    new File(["{}"], "restore.json", { type: "application/json" }),
+  );
+
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("backup.recoveryModeUnsupported")),
+  );
+
+  await rendered.cleanup();
+});
+
+test("失敗表示は分類済み文言に加えて再試行方針を示す", async () => {
+  const state = buildState({
+    preflight: async () => ({
+      ok: false,
+      error: { code: "invalid-structure", path: "$.projects[0].name" },
+    }),
+    read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+  });
+  const rendered = await renderView(state);
+  const input = rendered.container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await selectFile(
+    input,
+    new File(["{}"], "restore.json", { type: "application/json" }),
+  );
+
+  const guidance = rendered.container.querySelector(
+    '[data-region="restore-retry-guidance"]',
+  );
+  assert.ok(guidance);
+  assert.match(
+    guidance.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("backup.retryGuidance.select-another-file"),
+    ),
+  );
+  /** 検証pathは内部結果に留め、DOMへ出さない。 */
+  assert.doesNotMatch(rendered.container.textContent ?? "", /projects\[0\]/);
+
+  await rendered.cleanup();
+});
+
+test("未保存draft拒否では解消後の再試行操作と案内を提供する", async () => {
+  const state = buildState({
+    preflight: async () => ({ ok: true, value: FAKE_TICKET }),
+    read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+    guardPrepare: async () => ({ ok: false, error: { code: "guard-failed" } }),
+  });
+  const rendered = await renderView(state);
+  const input = rendered.container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await selectFile(
+    input,
+    new File(["{}"], "restore.json", { type: "application/json" }),
+  );
+  const confirmButton = rendered.container.querySelector(
+    'button[data-action="confirm"]',
+  ) as HTMLButtonElement;
+  await act(async () => confirmButton.click());
+
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("backup.retryGuidance.resolve-draft")),
+  );
+  assert.ok(
+    rendered.container.querySelector('button[data-action="retry-restore"]'),
+  );
+
+  await rendered.cleanup();
+});
+
+test("同一入力を再実行できない失敗では再試行操作を描画しない", async () => {
+  const state = buildState({
+    preflight: async () => ({
+      ok: false,
+      error: { code: "unsupported-version", path: "$.formatVersion" },
+    }),
+    read: async () => ({ ok: true, value: { text: "{}", byteLength: 2 } }),
+  });
+  const rendered = await renderView(state);
+  const input = rendered.container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await selectFile(
+    input,
+    new File(["{}"], "restore.json", { type: "application/json" }),
+  );
+
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("backup.retryGuidance.unsupported")),
+  );
+  assert.equal(
+    rendered.container.querySelector('button[data-action="retry-restore"]'),
+    null,
+  );
+  assert.equal(
+    rendered.container.querySelector('button[data-action="reassess-restore"]'),
+    null,
+  );
+
+  await rendered.cleanup();
+});
+
+test("再水和したfinalize-onlyはsummary無しでも後処理操作だけを提供する", async () => {
+  const state = buildState({
+    findPendingFinalization: async () => ({
+      ok: true,
+      value: "finalization-1" as never,
+    }),
+  });
+  state.resetForMount();
+  await state.rehydratePendingFinalization();
+  const rendered = await renderView(state);
+
+  assert.ok(
+    rendered.container.querySelector('[data-region="restore-finalization"]'),
+  );
+  assert.ok(rendered.container.querySelector('button[data-action="finalize"]'));
+  assert.equal(
+    rendered.container
+      .querySelector('input[type="file"]')
+      ?.hasAttribute("disabled"),
+    true,
+  );
+  assert.doesNotMatch(rendered.container.textContent ?? "", /プロジェクト1件/);
 
   await rendered.cleanup();
 });

@@ -107,6 +107,47 @@ test("回復操作だけが許可される状態ではexportを無効にしてre
   await handle.unmount();
 });
 
+test("mountはpending finalizationを再水和してから最初の描画を行う", async () => {
+  const finalization = "finalization-remount" as never;
+  const rehydrated = createBackupRestoreState({
+    ...unattachedContextDependencies(),
+    backupService: { create: notExpected("create") },
+    restoreService: {
+      preflight: notExpected("preflight"),
+      commit: notExpected("commit"),
+      findPendingFinalization: async () => ({ ok: true, value: finalization }),
+    },
+    fileGateway: {
+      read: notExpected("read"),
+      download: notExpected("download"),
+    },
+  });
+  const section = createBackupRestoreSectionMount({
+    data,
+    state: rehydrated,
+  });
+  const container = document.createElement("div");
+
+  let handle: FeatureMountHandle | undefined;
+  await act(async () => {
+    handle = await section.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+
+  assert.deepEqual(rehydrated.value, {
+    phase: "restored-finalization-required",
+    finalization,
+  });
+  assert.ok(
+    container.querySelector('[data-region="restore-finalization"]'),
+    "finalize-only区画が初回描画で表示される",
+  );
+  await act(async () => handle?.unmount());
+});
+
 test("React root取得後のmount失敗は購読とDOM resourceを解放する", async () => {
   let policyUnsubscribed = 0;
   const idle = { phase: "idle" as const };
@@ -118,6 +159,7 @@ test("React root取得後のmount失敗は購読とDOM resourceを解放する",
       throw new Error("state subscribe failed");
     },
     resetForMount() {},
+    async rehydratePendingFinalization() {},
   } as unknown as ReturnType<typeof state>;
   const section = createBackupRestoreSectionMount({
     data,

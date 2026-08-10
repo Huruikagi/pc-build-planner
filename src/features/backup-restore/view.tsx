@@ -1,9 +1,13 @@
 import type { ChangeEvent } from "react";
 import { useSyncExternalStore } from "react";
-
 import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
-import type { BackupRestoreFailure, BackupRestoreState } from "./state.js";
+import type { RetryPolicy } from "./contracts.js";
+import type {
+  BackupRestoreFailure,
+  BackupRestoreState,
+  BackupRestoreStateValue,
+} from "./state.js";
 
 type DisplayError = BackupRestoreFailure;
 
@@ -39,11 +43,59 @@ const messageFor = (error: DisplayError, messages: MessageResolver): string => {
   return messages(errorMessageKeys[error.code]);
 };
 
+/** 現行rootの異常分類だけを鍵とする回復案内。異常値やfingerprintは受け取らない。 */
+const recoveryMessageKeys = {
+  "corrupt-data": "backup.recoveryModeCorrupt",
+  "unsupported-version": "backup.recoveryModeUnsupported",
+} as const satisfies Record<string, MessageKey>;
+
+/** contracts.tsのretry policyだけを鍵とし、Viewは許可actionを再判定しない。 */
+const retryGuidance = (
+  retry: RetryPolicy,
+  messages: MessageResolver,
+): string => {
+  if (retry.kind === "unsupported")
+    return messages("backup.retryGuidance.unsupported");
+  switch (retry.action) {
+    case "retry-export":
+      return messages("backup.retryGuidance.retry-export");
+    case "retry-restore":
+      return messages("backup.retryGuidance.retry-restore");
+    case "reassess-restore":
+      return messages("backup.retryGuidance.reassess-restore");
+    case "select-another-file":
+      return messages("backup.retryGuidance.select-another-file");
+    case "resolve-draft":
+      return messages("backup.retryGuidance.resolve-draft");
+  }
+};
+
+/** ticketを保持するすべてのphaseから、現行rootの異常分類だけを取り出す。 */
+const currentAnomalyOf = (
+  value: BackupRestoreStateValue,
+): keyof typeof recoveryMessageKeys | undefined => {
+  const ticket =
+    value.phase === "awaiting-replacement-confirmation" ||
+    value.phase === "awaiting-draft-confirmation" ||
+    value.phase === "restoring"
+      ? value.ticket
+      : value.phase === "failed" && value.operation === "restore"
+        ? value.ticket
+        : undefined;
+  return ticket?.currentAnomaly?.code;
+};
+
 const BUSY_PHASES = new Set([
   "exporting",
   "validating",
   "restoring",
   "refreshing-context",
+]);
+
+/** root write済みの状態。file再選択と復元確定を操作面から取り下げる。 */
+const POST_COMMIT_PHASES = new Set([
+  "restored-finalization-required",
+  "restored-context-unavailable",
 ]);
 
 export function BackupRestoreView({
@@ -63,6 +115,7 @@ export function BackupRestoreView({
   );
   const value = state.value;
   const busy = BUSY_PHASES.has(value.phase);
+  const postCommit = POST_COMMIT_PHASES.has(value.phase);
   /** root write済みの三状態は同じ件数summaryを一つのstatusとして示す。 */
   const completedSummary =
     (value.phase === "succeeded" && value.operation === "restore") ||
@@ -70,6 +123,7 @@ export function BackupRestoreView({
     value.phase === "restored-context-unavailable"
       ? value.summary
       : undefined;
+  const currentAnomaly = currentAnomalyOf(value);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -110,7 +164,12 @@ export function BackupRestoreView({
           </p>
         )}
         {value.phase === "failed" && value.operation === "backup" && (
-          <p role="alert">{messageFor(value.error, messages)}</p>
+          <>
+            <p role="alert">{messageFor(value.error, messages)}</p>
+            <p data-region="export-retry-guidance">
+              {retryGuidance(value.retry, messages)}
+            </p>
+          </>
         )}
       </section>
 
@@ -122,12 +181,17 @@ export function BackupRestoreView({
         <h4>{messages("backup.restoreHeading")}</h4>
         <input
           accept="application/json"
-          disabled={busy || !restoreAllowed}
+          disabled={busy || postCommit || !restoreAllowed}
           onChange={handleFileChange}
           type="file"
         />
         {value.phase === "validating" && (
           <p role="status">{messages("backup.validating")}</p>
+        )}
+        {currentAnomaly !== undefined && (
+          <div data-region="restore-recovery">
+            <p>{messages(recoveryMessageKeys[currentAnomaly])}</p>
+          </div>
         )}
         {value.phase === "awaiting-replacement-confirmation" && (
           <div
@@ -230,17 +294,22 @@ export function BackupRestoreView({
         {value.phase === "failed" && value.operation === "restore" && (
           <>
             <p role="alert">{messageFor(value.error, messages)}</p>
-            {value.retry.kind === "retryable" &&
-              value.retry.action === "retry-restore" && (
-                <button
-                  data-action="retry-restore"
-                  disabled={!restoreAllowed}
-                  onClick={() => void state.retryRestore()}
-                  type="button"
-                >
-                  {messages("backup.retryRestoreAction")}
-                </button>
-              )}
+            <p data-region="restore-retry-guidance">
+              {retryGuidance(value.retry, messages)}
+            </p>
+            {((value.retry.kind === "retryable" &&
+              value.retry.action === "retry-restore") ||
+              (value.retry.kind === "action-required" &&
+                value.retry.action === "resolve-draft")) && (
+              <button
+                data-action="retry-restore"
+                disabled={!restoreAllowed}
+                onClick={() => void state.retryRestore()}
+                type="button"
+              >
+                {messages("backup.retryRestoreAction")}
+              </button>
+            )}
             {value.retry.kind === "retryable" &&
               value.retry.action === "reassess-restore" && (
                 <button

@@ -110,9 +110,10 @@ export interface RestoreService {
   commit(
     ticket: RestoreTicket,
   ): Promise<Result<RestoreCommitOutcome | RestoreSummary, RestoreError>>;
+  /** summaryを失った再mount経路では、finalize成功後に検証済みsnapshotから件数を再構築する。 */
   finalize?(
     ticket: BackupRestoreFinalizationTicket,
-    summary: RestoreSummary,
+    summary: RestoreSummary | undefined,
   ): Promise<Result<RestoreSummary, RestoreError>>;
   findPendingFinalization?(): Promise<
     Result<BackupRestoreFinalizationTicket | null, RestoreError>
@@ -121,6 +122,8 @@ export interface RestoreService {
 
 export interface RestoreServiceDependencies {
   readonly data: BackupRestoreDataPort;
+  /** finalize後の件数再構築だけに使う読取専用snapshot。通常CRUDは受け取らない。 */
+  readonly snapshot?: Pick<FoundationScopedDataPort, "query">;
 }
 
 /** ExchangeMigration・ExchangeMapperの失敗codeはRestoreErrorCodeの部分集合であり、そのまま写像できる。 */
@@ -234,7 +237,18 @@ export const createRestoreService = (
     async finalize(ticket, summary) {
       const finalized = await dependencies.data.finalize(ticket);
       if (!finalized.ok) return err(mapFoundationError(finalized.error));
-      return ok(summary);
+      if (summary !== undefined) return ok(summary);
+
+      /** 再mountでsummaryを失った場合だけ、root writeなしで件数を読み直す。 */
+      const snapshot = dependencies.snapshot;
+      if (snapshot === undefined) return err({ code: "storage-unavailable" });
+      const counts = await snapshot.query((root) => ({
+        projectCount: root.projects.length,
+        partCount: root.candidateParts.length,
+        currentBuildCount: root.currentBuilds.length,
+      }));
+      if (!counts.ok) return err(mapFoundationError(counts.error));
+      return ok(counts.value);
     },
 
     async findPendingFinalization() {

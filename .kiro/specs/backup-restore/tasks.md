@@ -143,7 +143,7 @@
   - _Requirements: 1.5, 3.5, 3.6, 4.1, 4.2, 4.3, 4.5, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.4, 6.6_
   - _Boundary: BackupRestoreState pre-commit_
 
-- [ ] 4.4 commit後の状態再水和と単独retryを実装する
+- [x] 4.4 commit後の状態再水和と単独retryを実装する
   - committed後は復元retryを公開せず、summaryを保持したfinalize-onlyまたはrefresh-only状態へ固定する
   - section mount時にpending finalizationを照会し、存在時は通常idleより先にfinalize-only状態を再水和する
   - finalize-only成功後だけrefreshへ進み、refresh-only retryではroot writeとguard lifecycleが0回となる状態testが成功すれば完了とする
@@ -151,7 +151,7 @@
   - _Requirements: 4.4, 4.5, 5.5, 6.6, 6.9, 6.10, 6.11_
   - _Boundary: BackupRestoreState post-commit_
 
-- [ ] 4.5 project-context lifecycleとstateの統合を固定する
+- [x] 4.5 project-context lifecycleとstateの統合を固定する
   - guard拒否、取消、staleでselection、root、ticketが保持され、新しいprepareから再試行できることを検証する
   - committed outcomeではcomplete succeededを一回だけ呼び、finalization中にrefreshせず、refresh失敗後もFoundation commitを再実行しない
   - finalize-only、refresh-only retryのcommand列と最終ready/empty/unavailable表示が期待順に一致すれば完了とする
@@ -159,7 +159,7 @@
   - _Requirements: 4.2, 4.7, 4.8, 5.5, 6.9, 6.10, 6.11_
   - _Boundary: RestoreContextLifecycle and State integration_
 
-- [ ] 4.6 利用者向け区画表示を新状態へ対応させる
+- [x] 4.6 利用者向け区画表示を新状態へ対応させる
   - backupとrestoreをsettings配下の別h4領域にし、消失リスク、自動保存・同期なし、全置換、件数preview、再試行方針を安全な固定文言で表示する
   - 日本語・英語で回復、finalization、context refresh、error policyのkeyとplaceholderを一致させ、言語切替時にも同じ状態を表示する
   - draft確認、recovery mode、finalization required、context unavailable、refresh-only retryを状態に応じて操作可能にする
@@ -232,3 +232,5 @@
 - guard lifecycleは`context-lifecycle.ts`のowner-local adapterが所有し、permitのbegin成功かつ未closeだけをFoundation commitの前提とする。commit後のsucceeded通知は同adapterが一度だけに閉じ、notification失敗で復元成功を取り消さない。
 - project-context公開portがsectionへ合成されるまで、`createUnattachedProjectContextPorts`がprepare=permitted・refresh=context-unavailableとして振る舞う。task 5.1のproduction wiringで実portへ差し替える（DEF-011）。
 - commit前失敗の許可actionは`contracts.ts`の`backupRetryPolicy` / `restoreRetryPolicy` / `restoreContextRetryPolicy`だけが決め、stateとViewは判定を重複させない。
+- commit後の`restored-finalization-required`はsummaryを持たない場合がある。section再mountで`findPendingFinalization`から再水和した状態がそれであり、`finalize`成功後に`BackupSnapshotReadPort`の件数照会でsummaryを再構築する（root writeは0件）。
+- Viewの再試行方針表示と許可actionは`contracts.ts`のretry policyだけから引く。未保存draft（`action-required` / `resolve-draft`）は解消後に同じticketで`retry-restore`できる唯一のaction-requiredであり、stateの`#retryableFailure`がこの一件だけを例外的に許可する。

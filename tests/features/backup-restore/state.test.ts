@@ -77,10 +77,14 @@ const buildRestoreService = (options: {
   preflight?: RestoreService["preflight"];
   reassess?: RestoreService["reassess"];
   commit?: RestoreService["commit"];
+  findPendingFinalization?: RestoreService["findPendingFinalization"];
 }): RestoreService => ({
   preflight: options.preflight ?? notExpected("preflight"),
   reassess: options.reassess ?? notExpected("reassess"),
   commit: options.commit ?? notExpected("commit"),
+  findPendingFinalization:
+    options.findPendingFinalization ??
+    (async () => ({ ok: true, value: null })),
 });
 
 const buildFileGateway = (options: {
@@ -162,10 +166,15 @@ const buildLifecycle = (script: LifecycleScript, calls: string[]) => {
 
 const buildPostCommit = (
   calls: string[],
-  options: { finalize?: RestorePostCommitCoordinator["finalizeOnly"] } = {},
+  options: {
+    finalize?: RestorePostCommitCoordinator["finalizeOnly"];
+    afterCommit?: RestorePostCommitCoordinator["afterCommit"];
+  } = {},
 ): RestorePostCommitCoordinator => ({
-  async afterCommit({ permitId, outcome }) {
+  async afterCommit(input) {
+    const { permitId, outcome } = input;
     calls.push(`afterCommit:${permitId}:${outcome.kind}`);
+    if (options.afterCommit !== undefined) return options.afterCommit(input);
     if (outcome.kind === "committed-finalization-required")
       return {
         kind: "restored-finalization-required",
@@ -180,7 +189,11 @@ const buildPostCommit = (
       options.finalize?.(ticket, summary) ??
       Promise.resolve({
         ok: true,
-        value: { kind: "restored", summary, context: "ready" },
+        value: {
+          kind: "restored",
+          summary: summary ?? FAKE_SUMMARY,
+          context: "ready",
+        },
       })
     );
   },
@@ -196,6 +209,7 @@ const buildState = (options: {
   file?: Parameters<typeof buildFileGateway>[0];
   lifecycle?: LifecycleScript;
   finalize?: RestorePostCommitCoordinator["finalizeOnly"];
+  afterCommit?: RestorePostCommitCoordinator["afterCommit"];
 }) => {
   const calls: string[] = [];
   const state = createBackupRestoreState({
@@ -203,10 +217,12 @@ const buildState = (options: {
     restoreService: buildRestoreService(options.restore ?? {}),
     fileGateway: buildFileGateway(options.file ?? {}),
     contextLifecycle: buildLifecycle(options.lifecycle ?? {}, calls),
-    postCommit: buildPostCommit(
-      calls,
-      options.finalize === undefined ? {} : { finalize: options.finalize },
-    ),
+    postCommit: buildPostCommit(calls, {
+      ...(options.finalize === undefined ? {} : { finalize: options.finalize }),
+      ...(options.afterCommit === undefined
+        ? {}
+        : { afterCommit: options.afterCommit }),
+    }),
   });
   return { state, calls };
 };
@@ -763,6 +779,175 @@ test("download失敗のexportは別file選択ではなく再exportを許可す�
     operation: "backup",
     error: { code: "unreadable" },
     retry: { kind: "retryable", action: "retry-export" },
+  });
+});
+
+test("mount時のpending finalizationは通常idleより先にfinalize-only状態を再水和する", async () => {
+  const { state, calls } = buildState({
+    restore: {
+      findPendingFinalization: async () => ({ ok: true, value: FINALIZATION }),
+      commit: notExpected("commit"),
+      preflight: notExpected("preflight"),
+    },
+  });
+
+  state.resetForMount();
+  assert.deepEqual(state.value, { phase: "idle" });
+  await state.rehydratePendingFinalization();
+
+  assert.deepEqual(state.value, {
+    phase: "restored-finalization-required",
+    finalization: FINALIZATION,
+  });
+  assert.deepEqual(calls, []);
+});
+
+test("pending finalizationが無ければmount後もidleのままである", async () => {
+  const { state } = buildState({
+    restore: {
+      findPendingFinalization: async () => ({ ok: true, value: null }),
+      commit: notExpected("commit"),
+      preflight: notExpected("preflight"),
+    },
+  });
+
+  state.resetForMount();
+  await state.rehydratePendingFinalization();
+
+  assert.deepEqual(state.value, { phase: "idle" });
+});
+
+test("pending finalization照会の失敗はidleを保ちfailedへ倒さない", async () => {
+  const { state } = buildState({
+    restore: {
+      findPendingFinalization: async () => ({
+        ok: false,
+        error: { code: "storage-unavailable" },
+      }),
+      commit: notExpected("commit"),
+      preflight: notExpected("preflight"),
+    },
+  });
+
+  state.resetForMount();
+  await state.rehydratePendingFinalization();
+
+  assert.deepEqual(state.value, { phase: "idle" });
+});
+
+test("再水和したfinalize-onlyはsummary無しで実行しroot writeとguardを呼ばない", async () => {
+  let observed: RestoreSummary | undefined | "unset" = "unset";
+  const { state, calls } = buildState({
+    restore: {
+      findPendingFinalization: async () => ({ ok: true, value: FINALIZATION }),
+      commit: notExpected("commit"),
+      preflight: notExpected("preflight"),
+    },
+    finalize: async (_ticket, summary) => {
+      observed = summary;
+      return {
+        ok: true,
+        value: { kind: "restored", summary: FAKE_SUMMARY, context: "ready" },
+      };
+    },
+  });
+
+  state.resetForMount();
+  await state.rehydratePendingFinalization();
+  calls.length = 0;
+  await state.finalizeRestore();
+
+  assert.equal(observed, undefined);
+  assert.deepEqual(calls, ["finalizeOnly"]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: FAKE_SUMMARY,
+    context: "ready",
+  });
+});
+
+test("再水和したfinalize-onlyの失敗はsummary無しの同じ状態へ戻る", async () => {
+  const { state } = buildState({
+    restore: {
+      findPendingFinalization: async () => ({ ok: true, value: FINALIZATION }),
+      commit: notExpected("commit"),
+      preflight: notExpected("preflight"),
+    },
+    finalize: async () => ({
+      ok: false,
+      error: { code: "maintenance-active" },
+    }),
+  });
+
+  state.resetForMount();
+  await state.rehydratePendingFinalization();
+  await state.finalizeRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "restored-finalization-required",
+    finalization: FINALIZATION,
+  });
+});
+
+test("commit後は復元retryとreassessを公開しない", async () => {
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: {
+          kind: "committed-finalization-required",
+          summary: FAKE_SUMMARY,
+          finalization: FINALIZATION,
+        },
+      }),
+      reassess: notExpected("reassess"),
+    },
+  });
+
+  await state.confirmRestore();
+  calls.length = 0;
+  await state.retryRestore();
+  await state.reassessRestore();
+  state.cancel();
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(state.value, {
+    phase: "restored-finalization-required",
+    summary: FAKE_SUMMARY,
+    finalization: FINALIZATION,
+  });
+});
+
+test("refresh-only retryはroot writeとguard lifecycleを0回で完了する", async () => {
+  const { state, calls } = await validated({
+    restore: {
+      commit: async () => ({
+        ok: true,
+        value: { kind: "committed", summary: FAKE_SUMMARY },
+      }),
+    },
+    afterCommit: async ({ outcome }) => ({
+      kind: "restored-context-unavailable",
+      summary: outcome.summary,
+    }),
+  });
+
+  await state.confirmRestore();
+  assert.deepEqual(state.value, {
+    phase: "restored-context-unavailable",
+    summary: FAKE_SUMMARY,
+  });
+
+  calls.length = 0;
+  await state.refreshContext();
+
+  assert.deepEqual(calls, ["refreshOnly"]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: FAKE_SUMMARY,
+    context: "ready",
   });
 });
 

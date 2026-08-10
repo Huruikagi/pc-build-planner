@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Result } from "../../../src/domain/public.js";
 import {
   createRestoreContextLifecycle,
   createRestorePostCommitCoordinator,
 } from "../../../src/features/backup-restore/context-lifecycle.js";
 import type {
   RestoreCommitOutcome,
+  RestoreError,
   RestoreSummary,
+  RestoreTicket,
 } from "../../../src/features/backup-restore/contracts.js";
+import { createBackupRestoreState } from "../../../src/features/backup-restore/state.js";
 import type { BackupRestoreFinalizationTicket } from "../../../src/persistence/public.js";
 import type {
   ProjectContextCommandPort,
@@ -311,7 +315,7 @@ const buildCoordinator = (
   script: GuardScript & {
     finalize?: (
       ticket: BackupRestoreFinalizationTicket,
-      summary: RestoreSummary,
+      summary: RestoreSummary | undefined,
     ) => Promise<
       | { ok: true; value: RestoreSummary }
       | { ok: false; error: { readonly code: "maintenance-active" } }
@@ -329,7 +333,8 @@ const buildCoordinator = (
       async finalize(ticket, summary) {
         ports.calls.push("finalize");
         if (script.finalize) return script.finalize(ticket, summary);
-        return { ok: true, value: summary };
+        /** summary未保持の再mount経路はserviceが件数を再構築する。ここではSUMMARYで代替する。 */
+        return { ok: true, value: summary ?? SUMMARY };
       },
     },
   });
@@ -493,4 +498,284 @@ test("refresh-only retryはrefreshだけを呼ぶ", async () => {
     context: "ready",
   });
   assert.deepEqual(calls, ["refresh"]);
+});
+
+/**
+ * RestoreContextLifecycle・PostCommitCoordinator・BackupRestoreStateを実装のまま結線し、
+ * guard lifecycleとcommit後retryのcommand列を統合契約として固定する。
+ */
+const TICKET: RestoreTicket = {
+  candidate: { schemaVersion: 1 },
+  mode: "normal",
+  assessment: "assessment-1" as never,
+  preview: {
+    createdAt: "2026-07-24T00:00:00.000Z" as never,
+    formatVersion: 1,
+    projectCount: 1,
+    partCount: 2,
+    currentBuildCount: 1,
+    estimatedBytes: 100,
+  },
+};
+
+const FAKE_FILE = {} as File;
+
+const buildIntegration = (
+  options: {
+    readonly guard?: GuardScript;
+    readonly commit?: () => Result<RestoreCommitOutcome, RestoreError>;
+    readonly finalize?: () => Result<RestoreSummary, RestoreError>;
+  } = {},
+) => {
+  const ports = buildPorts(options.guard ?? {});
+  const lifecycle = createRestoreContextLifecycle({
+    replacementGuard: ports.guard,
+    projectContext: ports.commands,
+  });
+  let commits = 0;
+  const state = createBackupRestoreState({
+    backupService: {
+      create: () => {
+        throw new Error("must not call create");
+      },
+    },
+    restoreService: {
+      async preflight() {
+        return { ok: true, value: TICKET };
+      },
+      async commit() {
+        commits += 1;
+        ports.calls.push("commit");
+        return options.commit?.() ?? { ok: true, value: COMMITTED };
+      },
+    },
+    fileGateway: {
+      async read() {
+        return { ok: true, value: { text: "{}", byteLength: 2 } };
+      },
+      download: () => {
+        throw new Error("must not call download");
+      },
+    },
+    contextLifecycle: lifecycle,
+    postCommit: createRestorePostCommitCoordinator({
+      lifecycle,
+      restoreService: {
+        async finalize(_ticket, summary) {
+          ports.calls.push("finalize");
+          return (
+            options.finalize?.() ?? { ok: true, value: summary ?? SUMMARY }
+          );
+        },
+      },
+    }),
+  });
+  return { ...ports, state, commitCount: () => commits };
+};
+
+test("統合: guard拒否ではcommitせずticketを保持し新しいprepareから再試行できる", async () => {
+  let prepares = 0;
+  const { state, calls, commitCount } = buildIntegration({
+    guard: {
+      async prepare() {
+        prepares += 1;
+        return prepares === 1
+          ? { ok: false, error: { kind: "guard-failed" } }
+          : {
+              ok: true,
+              value: {
+                kind: "permitted",
+                permit: {
+                  id: "permit-1",
+                  baseGeneration: 1,
+                  registryRevision: 1,
+                },
+              },
+            };
+      },
+    },
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error: { code: "guard-failed" },
+    retry: { kind: "action-required", action: "resolve-draft" },
+    ticket: TICKET,
+  });
+  assert.deepEqual(calls, ["prepare"]);
+  assert.equal(commitCount(), 0);
+
+  calls.length = 0;
+  await state.retryRestore();
+
+  assert.deepEqual(calls, [
+    "prepare",
+    "begin:permit-1",
+    "commit",
+    "complete:permit-1:succeeded",
+    "refresh",
+  ]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: SUMMARY,
+    context: "ready",
+  });
+});
+
+test("統合: draft確認の取消はguardを閉じticketを保持したまま置換確認へ戻す", async () => {
+  const { state, calls, commitCount } = buildIntegration({
+    guard: {
+      async prepare() {
+        return {
+          ok: true,
+          value: {
+            kind: "confirmation-required",
+            confirmation: {
+              id: "confirm-1",
+              baseGeneration: 1,
+              registryRevision: 1,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+  state.cancelDraft();
+
+  assert.deepEqual(state.value, {
+    phase: "awaiting-replacement-confirmation",
+    ticket: TICKET,
+  });
+  assert.deepEqual(calls, ["prepare", "cancel:confirm-1"]);
+  assert.equal(commitCount(), 0);
+});
+
+test("統合: stale confirmationはcommitせずticketを保持し再試行を許可する", async () => {
+  let confirms = 0;
+  const { state, calls, commitCount } = buildIntegration({
+    guard: {
+      async prepare() {
+        return {
+          ok: true,
+          value: {
+            kind: "confirmation-required",
+            confirmation: {
+              id: "confirm-1",
+              baseGeneration: 1,
+              registryRevision: 1,
+            },
+          },
+        };
+      },
+      async confirm() {
+        confirms += 1;
+        return { ok: false, error: { kind: "confirmation-stale" } };
+      },
+    },
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+  await state.approveDraft();
+
+  assert.deepEqual(state.value, {
+    phase: "failed",
+    operation: "restore",
+    error: { code: "confirmation-stale" },
+    retry: { kind: "retryable", action: "retry-restore" },
+    ticket: TICKET,
+  });
+  assert.equal(confirms, 1);
+  assert.equal(commitCount(), 0);
+  assert.deepEqual(calls, ["prepare", "confirm:confirm-1"]);
+});
+
+test("統合: finalization required ではrefreshせずfinalize-only retryだけを実行する", async () => {
+  const { state, calls, commitCount } = buildIntegration({
+    commit: () => ({ ok: true, value: COMMITTED_PENDING }),
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+
+  assert.deepEqual(calls, [
+    "prepare",
+    "begin:permit-1",
+    "commit",
+    "complete:permit-1:succeeded",
+  ]);
+  assert.deepEqual(state.value, {
+    phase: "restored-finalization-required",
+    summary: SUMMARY,
+    finalization: FINALIZATION,
+  });
+
+  calls.length = 0;
+  await state.finalizeRestore();
+
+  assert.deepEqual(calls, ["finalize", "refresh"]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: SUMMARY,
+    context: "ready",
+  });
+  assert.equal(commitCount(), 1);
+});
+
+test("統合: refresh失敗後のrefresh-only retryはFoundation commitとguardを再実行しない", async () => {
+  let refreshes = 0;
+  const { state, calls, commitCount } = buildIntegration({
+    guard: {
+      async refresh() {
+        refreshes += 1;
+        return refreshes === 1
+          ? { ok: false, error: { kind: "context-unavailable" } }
+          : { ok: true, value: EMPTY };
+      },
+    },
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+
+  assert.deepEqual(state.value, {
+    phase: "restored-context-unavailable",
+    summary: SUMMARY,
+  });
+
+  calls.length = 0;
+  await state.refreshContext();
+
+  assert.deepEqual(calls, ["refresh"]);
+  assert.deepEqual(state.value, {
+    phase: "succeeded",
+    operation: "restore",
+    summary: SUMMARY,
+    context: "empty",
+  });
+  assert.equal(commitCount(), 1);
+});
+
+test("統合: committed後のsucceeded通知は一度だけで、retry経路でも重複しない", async () => {
+  const { state, calls } = buildIntegration({
+    commit: () => ({ ok: true, value: COMMITTED_PENDING }),
+  });
+
+  await state.validateFile(FAKE_FILE);
+  await state.confirmRestore();
+  await state.finalizeRestore();
+
+  assert.deepEqual(
+    calls.filter((call) => call === "complete:permit-1:succeeded").length,
+    1,
+  );
 });

@@ -24,7 +24,10 @@ export const unattachedContextDependencies = (): {
     postCommit: createRestorePostCommitCoordinator({
       lifecycle: contextLifecycle,
       restoreService: {
-        finalize: async (_ticket, summary) => ({ ok: true, value: summary }),
+        finalize: async (_ticket, summary) =>
+          summary === undefined
+            ? { ok: false, error: { code: "storage-unavailable" } }
+            : { ok: true, value: summary },
       },
     }),
   };

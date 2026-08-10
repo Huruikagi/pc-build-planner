@@ -21,6 +21,10 @@ export const backup = {
   partCountLabel: "Parts",
   currentBuildCountLabel: "Current builds",
   confirmAction: "Confirm restore",
+  recoveryModeCorrupt:
+    "The saved data is corrupted. Restoring from this file runs as a recovery.",
+  recoveryModeUnsupported:
+    "The saved data is in an unsupported format. Restoring from this file runs as a recovery.",
   draftConfirmationTitle: "Unsaved Changes",
   draftWarning:
     "The current project has unsaved changes that the restore will discard.",
@@ -80,6 +84,17 @@ export const backup = {
     },
   },
   withPosition: "{message} (at {path})",
+  retryGuidance: {
+    "retry-export": "You can create the backup again with the same data.",
+    "retry-restore":
+      "You can retry the restore with the same verified file result.",
+    "reassess-restore":
+      "The current data changed. Re-check the selected file, then try again.",
+    "select-another-file": "Choose a different file.",
+    "resolve-draft":
+      "Save or discard the unsaved changes, then retry the restore.",
+    unsupported: "This file can't be restored. Choose a different file.",
+  },
   errors: {
     "no-file-selected": "No file is selected.",
     "multiple-files-selected": "Select only one file.",
