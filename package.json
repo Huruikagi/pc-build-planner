@@ -22,7 +22,7 @@
     "validate:final-build": "node scripts/validate-final-gate.mjs dist",
     "validate:runtime-schema": "node scripts/validate-runtime-schema-csp.mjs",
     "validate:ui-text": "node scripts/validate-ui-text.mjs src/features src/application-shell src/project-context",
-    "validate:ci": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm validate:boundaries && pnpm validate:fixtures && pnpm validate:final-build && pnpm validate:ui-text && pnpm test",
+    "validate:ci": "pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm validate:boundaries && pnpm validate:runtime-schema && pnpm validate:fixtures && pnpm validate:final-build && pnpm validate:ui-text && pnpm test",
     "validate": "pnpm validate:ci && playwright test",
     "package": "pnpm build && node scripts/package.mjs"
   },

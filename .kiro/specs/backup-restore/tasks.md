@@ -188,7 +188,7 @@
   - _Boundary: Application shell recovery integration contract_
 
 - [ ] 6. E2Eと最終検証を完了する
-- [ ] 6.1 settingsからの通常バックアップ・復元E2Eを更新する
+- [x] 6.1 settingsからの通常バックアップ・復元E2Eを更新する
   - 全カテゴリの架空データをexportし、既存変更後に同じfileを確認付きで復元して再起動する
   - 生成artifactが16 MiB file preflightを通り、project、part、source、normalized attributes、current build参照・数量が復元後に一致することを確認する
   - 通常CRUDと再backupが成功し、空rootのbackupも復元可能であるE2Eが成功すれば完了とする
@@ -196,7 +196,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.3, 4.4, 4.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.7_
   - _Boundary: Backup restore normal E2E_
 
-- [ ] 6.2 cleanup、競合、finalization失敗のE2Eを追加する
+- [x] 6.2 cleanup、競合、finalization失敗のE2Eを追加する
   - 取消、guard拒否、commit前失敗、容量超過で既存rootと選択が保持され、容量超過時は別file選択だけが可能なことを検証する
   - control取得後のwrite前cleanup失敗から同じticketでcleanupを再開し、cleanup中のroot write 0件と別ticket拒否を確認する
   - write後cleanup失敗はfinalize-only、context refresh失敗はrefresh-onlyを実行し、どちらもFoundation commitを再実行しない
@@ -205,7 +205,7 @@
   - _Requirements: 3.4, 4.2, 4.5, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 6.4, 6.9, 6.10, 6.11_
   - _Boundary: Backup restore failure recovery E2E_
 
-- [ ] 6.3 破損・未対応rootからの回復E2Eを追加する
+- [x] 6.3 破損・未対応rootからの回復E2Eを追加する
   - corrupt rootとfuture version rootからdegraded settingsを起動し、正常backupのpreflight、明示確認、recovery commitを完了する
   - 回復fileの検証失敗、取消、commit前失敗では元の異常rootと現在選択が変わらず、回復成功を表示しないことを確認する
   - 正常snapshot復帰後に現在projectがreadyまたはemptyへ再検証され、候補管理が利用可能になる
@@ -214,7 +214,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: Backup restore recovery E2E_
 
-- [ ] 6.4 公開境界・security・完全検証gateを通す
+- [x] 6.4 公開境界・security・完全検証gateを通す
   - typecheck、lint、runtime schema boundary、public consumer、fixture、final build、unit、integration、E2Eを共通検証flowで実行する
   - 44件のAcceptance Criteriaがtaskと自動testに対応し、未解決placeholder、旧maintenance fence経路、独立navigation、通常CRUD capability漏出がないことを監査する
   - 入力16 MiBと保存root 10 MiBの境界、自己復元可能性上界、分類済み診断、架空fixtureだけが成果物とtestに残ることを確認する
@@ -237,3 +237,8 @@
 - commit前失敗の許可actionは`contracts.ts`の`backupRetryPolicy` / `restoreRetryPolicy` / `restoreContextRetryPolicy`だけが決め、stateとViewは判定を重複させない。
 - commit後の`restored-finalization-required`はsummaryを持たない場合がある。section再mountで`findPendingFinalization`から再水和した状態がそれであり、`finalize`成功後に`BackupSnapshotReadPort`の件数照会でsummaryを再構築する（root writeは0件）。
 - Viewの再試行方針表示と許可actionは`contracts.ts`のretry policyだけから引く。未保存draft（`action-required` / `resolve-draft`）は解消後に同じticketで`retry-restore`できる唯一のaction-requiredであり、stateの`#retryableFailure`がこの一件だけを例外的に許可する。
+- E2Eは三層に分ける。通常経路（`e2e/backup-restore.spec.ts`）と回復経路（`e2e/backup-restore-recovery.spec.ts`）は実拡張のsettings区画とchrome.storageで駆動し、cleanup・競合・finalization失敗（`e2e/backup-restore-failure-recovery.spec.ts`）はesbuildでbundleしたbrowser harnessで駆動する。
+- degraded startupは`chrome.storage.local.set({localDataRoot: <破損値>})`+reloadで再現できる。表示言語は`uiLanguage`キーへ別保存されるため、破損前に`selectLanguage`で固定すれば回復後も日本語assertionが成立する。
+- fault injectionはstorage boundaryだけで行う。normal commitのcontrol write順は acquire(1) → bindCommit(2) → release(3) であり、[2,3]を失敗させると`precommit-cleanup-pending`、[3]だけなら`committed-finalization-required`になる。root write回数を数えれば「既存データ保持」を観測可能な不変条件として固定できる。
+- E2E specは生の`.locator()`を書けない（`tests/tooling/e2e-locator-boundary.test.ts`）。新しい要素は`e2e/models/`のヘルパーへ寄せる。
+- `pnpm validate:ci`に`validate:runtime-schema`が入っていなかったため6.4で追加した。共通検証flowはこれでtypecheck・public consumer・lint・boundary・runtime schema・fixture・final build（artifact security検査を含む）・ui-text・unit/integrationを網羅する。

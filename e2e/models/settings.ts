@@ -25,6 +25,10 @@ export const selectLanguage = async (
   await languageSelect(page).selectOption(language);
 };
 
+/** Locates the restore file control within any backup/restore surface. */
+export const restoreFileControl = (scope: Locator | Page): Locator =>
+  scope.locator('input[type="file"]');
+
 /** Locates the restore file control inside the restore region. */
 export const restoreFileInput = (restoreRegion: Locator): Locator =>
-  restoreRegion.locator('input[type="file"]');
+  restoreFileControl(restoreRegion);

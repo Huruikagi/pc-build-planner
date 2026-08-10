@@ -26,6 +26,16 @@ export const projectRequired = (page: Page): Locator =>
 export const createCandidateButton = (feature: Locator): Locator =>
   feature.locator("[data-create-candidate]");
 
+/** Locates a normalized-attribute control by its stable attribute key. */
+export const attributeField = (scope: Locator | Page, key: string): Locator =>
+  scope.locator(`[name="attribute-${key}"]`);
+
+/** Locates the free-text escape hatch of a list-valued attribute. */
+export const attributeCustomField = (
+  scope: Locator | Page,
+  key: string,
+): Locator => scope.locator(`[name="attribute-${key}-custom"]`);
+
 export const editCandidateButton = (candidateRow: Locator): Locator =>
   candidateRow.locator("[data-edit-candidate-id]");
 
