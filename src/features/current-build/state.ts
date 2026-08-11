@@ -10,11 +10,13 @@ import {
   type Result,
   type Revision,
 } from "../../domain/public.js";
-import type {
-  CandidateQuery,
-  ProjectSummary,
-} from "../candidate-management/public.js";
+import type { MessageResolver } from "../../ui-messages/public.js";
+import type { CandidateQuery } from "../candidate-management/public.js";
 import type { CategoryPolicy } from "./category-policy.js";
+import {
+  type CategorySelectionSummary,
+  createCategorySummaries,
+} from "./category-summary.js";
 import type {
   BuildCommand,
   BuildError,
@@ -67,12 +69,8 @@ const emptyFieldErrors: BuildFieldErrors = Object.freeze({});
 const emptyQuantityDrafts: Readonly<Record<string, string>> = Object.freeze({});
 
 export interface BuildStateValue {
-  readonly projects: readonly ProjectSummary[];
-  /**
-   * 共通contextの確定状態の射影。`null` は context 未接続を表し、
-   * shell 接続前の legacy mount 経路だけがこの値を取る。
-   */
-  readonly projectAvailability: BuildProjectAvailability["status"] | null;
+  /** 共通contextの確定状態の射影。未接続時は unavailable として閉じる。 */
+  readonly projectAvailability: BuildProjectAvailability["status"];
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   /** All eligible candidates for category summary projection, independent of the active filter. */
@@ -91,7 +89,7 @@ export interface BuildStateValue {
 }
 
 export interface BuildStateDependencies {
-  readonly candidates: CandidateQuery;
+  readonly candidates: Pick<CandidateQuery, "listBuildEligible">;
   readonly query: CurrentBuildQuery;
   readonly service: BuildService;
   readonly policy: CategoryPolicy;
@@ -156,8 +154,7 @@ export class BuildState {
     saving: boolean;
   } | null = null;
   #value: BuildStateValue = {
-    projects: [],
-    projectAvailability: null,
+    projectAvailability: "unavailable",
     selectedProjectId: null,
     selectedCategory: null,
     summaryCandidates: [],
@@ -238,14 +235,36 @@ export class BuildState {
     } catch {
       // Detaching from the shared context is best-effort at unmount.
     }
+    this.#contextGeneration = null;
+    this.#allCandidates = [];
+    this.#revision = 0 as Revision;
+    this.#loadSerial += 1;
+    this.#set({
+      projectAvailability: "unavailable",
+      selectedProjectId: null,
+      summaryCandidates: [],
+      candidates: [],
+      currentBuild: null,
+      quantityDrafts: emptyQuantityDrafts,
+      savingCommand: null,
+      isLoading: false,
+      isSaving: false,
+      mutationsDisabled: true,
+    });
   }
 
   async #applyAvailability(
     availability: BuildProjectAvailability,
   ): Promise<void> {
+    const authorityChanged =
+      this.#contextGeneration !== availability.generation ||
+      this.#value.projectAvailability !== availability.status ||
+      (availability.status === "ready" &&
+        this.#value.selectedProjectId !== availability.projectId);
     this.#contextGeneration = availability.generation;
     // 確定済みcontextが動いた時点で、進行中の確認結果は適用できない。
     this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
+    if (authorityChanged) this.#set({ isSaving: false, savingCommand: null });
     if (availability.status !== "ready") {
       // project 固有の状態を解放し、変更操作を止めた理由を表示できる状態にする。
       this.#allCandidates = [];
@@ -414,11 +433,7 @@ export class BuildState {
 
   #mutationsDisabled(): boolean {
     if (this.#readBlocked) return true;
-    if (
-      this.#value.projectAvailability !== null &&
-      this.#value.projectAvailability !== "ready"
-    )
-      return true;
+    if (this.#value.projectAvailability !== "ready") return true;
     try {
       return !this.#policy.isAllowed("mutation");
     } catch {
@@ -494,53 +509,10 @@ export class BuildState {
       await this.#applyAvailability(context.getCurrent());
       return;
     }
-    this.#set({
-      isLoading: true,
-      displayError: null,
-      fieldErrors: emptyFieldErrors,
+    await this.#applyAvailability({
+      status: "unavailable",
+      generation: (this.#contextGeneration ?? 0) + 1,
     });
-    const projects = await this.dependencies.candidates.listProjects();
-    if (!projects.ok) {
-      this.#readFailure(managementErrorToBuildError(projects.error));
-      return;
-    }
-
-    const selectedProjectId =
-      this.#value.selectedProjectId !== null &&
-      projects.value.some(
-        (project) => project.id === this.#value.selectedProjectId,
-      )
-        ? this.#value.selectedProjectId
-        : (projects.value[0]?.id ?? null);
-
-    this.#set({ projects: projects.value });
-
-    if (selectedProjectId === null) {
-      this.#readBlocked = false;
-      this.#allCandidates = [];
-      this.#set({
-        selectedProjectId: null,
-        summaryCandidates: [],
-        candidates: [],
-        currentBuild: null,
-        quantityDrafts: emptyQuantityDrafts,
-        isLoading: false,
-        mutationsDisabled: this.#mutationsDisabled(),
-      });
-      return;
-    }
-
-    await this.#loadForProject(selectedProjectId, null);
-  }
-
-  /**
-   * Legacy screen-driven switch, kept only for the mount path that predates the
-   * shared context. Once a context is attached the shared project is the sole
-   * authority and this is a no-op.
-   */
-  public async selectProject(projectId: ProjectId): Promise<void> {
-    if (this.#readBlocked || this.#context !== null) return;
-    await this.#loadForProject(projectId, null);
   }
 
   /** Client-side filter over already-loaded candidates; issues no query. */
@@ -575,6 +547,11 @@ export class BuildState {
 
   /** Returns whether the command committed, for callers that gate on the result. */
   async #executeCommand(command: BuildCommand): Promise<boolean> {
+    if (
+      this.#value.projectAvailability !== "ready" ||
+      this.#value.selectedProjectId !== command.projectId
+    )
+      return false;
     if (this.#value.isSaving || this.#mutationsDisabled()) return false;
     this.#set({
       isSaving: true,
@@ -584,10 +561,17 @@ export class BuildState {
     });
     const createRequestId =
       this.dependencies.createRequestId ?? createDomainRequestId;
+    const authorityGeneration = this.#contextGeneration;
     const result = await this.dependencies.service.execute(command, {
       requestId: createRequestId(),
       expectedRevision: this.#revision,
     });
+    if (
+      this.#value.projectAvailability !== "ready" ||
+      this.#value.selectedProjectId !== command.projectId ||
+      this.#contextGeneration !== authorityGeneration
+    )
+      return false;
     if (!result.ok) {
       this.#readBlocked = this.#readBlocked || isTerminalError(result.error);
       this.#set({
@@ -633,6 +617,18 @@ export class BuildState {
       (candidate) =>
         candidate.id === candidatePartId && candidate.projectId === projectId,
     );
+  }
+
+  /** Projects the complete category summary from owner-local state. */
+  public categorySummaries(
+    messages: MessageResolver,
+  ): readonly CategorySelectionSummary[] {
+    return createCategorySummaries({
+      candidates: this.#value.summaryCandidates,
+      currentBuild: this.#value.currentBuild,
+      policy: this.dependencies.policy,
+      messages,
+    });
   }
 
   async #loadForProject(

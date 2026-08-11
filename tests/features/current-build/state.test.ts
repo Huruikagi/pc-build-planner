@@ -14,10 +14,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ProjectSummary,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCategoryPolicy } from "../../../src/features/current-build/category-policy.js";
 import type {
   BuildCommand,
@@ -74,18 +71,11 @@ const candidate = (
     ...overrides,
   }) as CandidatePart;
 
-const project = (id: ProjectId, name: string): ProjectSummary => ({
-  id,
-  name,
-  updatedAt: timestamp,
-});
-
 type BuildByProject = Readonly<
   Record<string, { revision: number; currentBuild: CurrentBuild | null }>
 >;
 
 interface HarnessOptions {
-  readonly projects?: readonly ProjectSummary[];
   readonly eligibleByProject?: Readonly<
     Record<string, readonly CandidatePart[]>
   >;
@@ -130,7 +120,6 @@ const defaultQuery = (buildByProject: BuildByProject): CurrentBuildQuery => ({
 });
 
 const createHarness = (options: HarnessOptions = {}): Harness => {
-  const projects = options.projects ?? [project(projectId, "架空PC構成")];
   const eligibleByProject = options.eligibleByProject ?? {
     [projectId]: [
       candidate(cpuCandidateId),
@@ -149,19 +138,10 @@ const createHarness = (options: HarnessOptions = {}): Harness => {
     context: BuildMutationContext;
   }[] = [];
 
-  const candidates: CandidateQuery = {
-    async listProjects() {
-      return { ok: true, value: projects };
-    },
-    async listCandidates() {
-      return { ok: true, value: [] };
-    },
+  const candidates: Pick<CandidateQuery, "listBuildEligible"> = {
     async listBuildEligible(id: ProjectId) {
       await options.eligibleGate?.(id);
       return { ok: true, value: eligibleByProject[id] ?? [] };
-    },
-    async getCandidateDraft() {
-      throw new Error("not used by state tests");
     },
   };
 
@@ -205,73 +185,29 @@ const createHarness = (options: HarnessOptions = {}): Harness => {
   return { state: createBuildState(dependencies), serviceCalls, queryCalls };
 };
 
-test("loadはプロジェクトを取得し最初のプロジェクトの候補と現在構成を読み込む", async () => {
-  const { state } = createHarness();
-
-  await state.load();
-
-  assert.equal(state.value.selectedProjectId, projectId);
-  assert.equal(state.value.projects.length, 1);
-  assert.equal(state.value.candidates.length, 2);
-  assert.equal(state.value.currentBuild, null);
-  assert.equal(state.value.isLoading, false);
-  assert.equal(state.value.displayError, null);
-});
-
-test("既存の選択projectがまだ存在する場合はloadで維持される（feature再表示の再照会）", async () => {
-  const { state, queryCalls } = createHarness({
-    projects: [
-      project(projectId, "架空PC構成"),
-      project(otherProjectId, "架空別構成"),
-    ],
+const attachReady = (state: ReturnType<typeof createBuildState>) =>
+  state.attachProjectContext({
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => {},
   });
-  await state.load();
-  await state.selectProject(otherProjectId);
-  queryCalls.length = 0;
+
+test("context未接続のloadはunavailableとしてfail closedする", async () => {
+  const { state, queryCalls } = createHarness();
 
   await state.load();
 
-  assert.equal(state.value.selectedProjectId, otherProjectId);
-  assert.deepEqual(queryCalls, [otherProjectId]);
-});
-
-test("selectProjectはプロジェクト切替時に候補と現在構成を再照会する", async () => {
-  const existingBuild: CurrentBuild = {
-    id: buildId,
-    projectId: otherProjectId,
-    items: [
-      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
-    ],
-    updatedAt: timestamp,
-  };
-  const { state, queryCalls } = createHarness({
-    projects: [
-      project(projectId, "架空PC構成"),
-      project(otherProjectId, "架空別構成"),
-    ],
-    eligibleByProject: {
-      [projectId]: [candidate(cpuCandidateId)],
-      [otherProjectId]: [
-        candidate(cpuCandidateId, { projectId: otherProjectId }),
-      ],
-    },
-    buildByProject: {
-      [projectId]: { revision: 0, currentBuild: null },
-      [otherProjectId]: { revision: 3, currentBuild: existingBuild },
-    },
-  });
-  await state.load();
-
-  await state.selectProject(otherProjectId);
-
-  assert.equal(state.value.selectedProjectId, otherProjectId);
-  assert.deepEqual(state.value.currentBuild, existingBuild);
-  assert.deepEqual(queryCalls, [projectId, otherProjectId]);
+  assert.equal(state.value.projectAvailability, "unavailable");
+  assert.equal(state.value.selectedProjectId, null);
+  assert.deepEqual(state.value.candidates, []);
+  assert.deepEqual(queryCalls, []);
+  assert.equal(state.value.mutationsDisabled, true);
 });
 
 test("selectCategoryは追加queryなしで読込済み候補をカテゴリで絞り込む", async () => {
   const { state, queryCalls } = createHarness();
-  await state.load();
+  await state.attachProjectContext(
+    createContextPort(readyAt(1, projectId)).port,
+  );
   const callsAfterLoad = queryCalls.length;
 
   await state.selectCategory("memory");
@@ -296,7 +232,7 @@ test("executeの成功はcommit後snapshotへ置換しrevisionを更新する", 
       value: { revision: 1 as Revision, currentBuild: committedBuild },
     }),
   });
-  await state.load();
+  await attachReady(state);
 
   await state.execute({
     type: "select",
@@ -316,7 +252,7 @@ test("executeの失敗は直前の構成を保持し再試行可能な理由を�
   const { state } = createHarness({
     serviceResult: () => ({ ok: false, error: { kind: "quota" } }),
   });
-  await state.load();
+  await attachReady(state);
   const before = state.value.currentBuild;
 
   await state.execute({
@@ -339,7 +275,7 @@ test("executeの競合失敗は直前の構成を保持し再読込を示すerro
   const { state } = createHarness({
     serviceResult: () => ({ ok: false, error: { kind: "conflict" } }),
   });
-  await state.load();
+  await attachReady(state);
   const before = state.value.currentBuild;
 
   await state.execute({
@@ -373,7 +309,7 @@ test("保存中は同一featureからの操作を二重送信せずserviceを一
     },
   };
   const { state } = createHarness({ service });
-  await state.load();
+  await attachReady(state);
 
   const first = state.execute({
     type: "select",
@@ -398,7 +334,7 @@ test("破損データによるexecute失敗は変更操作を無効化する", a
   const { state } = createHarness({
     serviceResult: () => ({ ok: false, error: { kind: "corrupt-data" } }),
   });
-  await state.load();
+  await attachReady(state);
 
   await state.execute({
     type: "select",
@@ -418,7 +354,7 @@ test("読込時の破損・非対応・利用不能errorは構成変更を無効
   };
   const { state } = createHarness({ query });
 
-  await state.load();
+  await attachReady(state);
 
   assert.equal(state.value.mutationsDisabled, true);
   assert.equal(state.value.displayError?.code, "storage");
@@ -426,7 +362,7 @@ test("読込時の破損・非対応・利用不能errorは構成変更を無効
 
 test("setQuantityDraftはcommit済み構成に触れず数量draftだけを更新する", async () => {
   const { state } = createHarness();
-  await state.load();
+  await attachReady(state);
 
   state.setQuantityDraft(memoryCandidateId, "3");
 
@@ -449,7 +385,7 @@ test("数量変更の成功はcommit済み構成へ反映しdraftを解消する
       value: { revision: 1 as Revision, currentBuild: committedBuild },
     }),
   });
-  await state.load();
+  await attachReady(state);
   state.setQuantityDraft(memoryCandidateId, "3");
 
   await state.execute({
@@ -470,7 +406,7 @@ test("operationPolicyがmutationを禁止すると変更操作が無効化され
   };
   const { state } = createHarness({ operationPolicy: policy });
 
-  await state.load();
+  await attachReady(state);
 
   assert.equal(state.value.mutationsDisabled, true);
 });
@@ -513,10 +449,6 @@ const readyAt = (
 
 const twoProjectHarness = (options: HarnessOptions = {}) =>
   createHarness({
-    projects: [
-      project(projectId, "架空PC構成"),
-      project(otherProjectId, "架空2"),
-    ],
     eligibleByProject: {
       [projectId]: [candidate(cpuCandidateId)],
       [otherProjectId]: [
@@ -547,6 +479,104 @@ test("attachProjectContextはready projectの候補と現在構成だけを読�
     [memoryCandidateId],
   );
   assert.deepEqual(queryCalls, [otherProjectId]);
+});
+
+test("ready authorityと異なるprojectのcommandはmutationへ渡さずstateを変更しない", async () => {
+  const { state, serviceCalls } = twoProjectHarness();
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+  const before = state.value;
+
+  await state.execute({
+    type: "select",
+    projectId: otherProjectId,
+    candidatePartId: memoryCandidateId,
+  });
+
+  assert.equal(serviceCalls.length, 0);
+  assert.equal(state.value, before);
+  assert.equal(state.value.selectedProjectId, projectId);
+});
+
+test("mutation待機中にauthorityが切り替わると旧projectの成功結果を適用しない", async () => {
+  const oldBuild: CurrentBuild = {
+    id: buildId,
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  let resolveService:
+    | ((result: { ok: true; value: CurrentBuildSnapshot }) => void)
+    | undefined;
+  const serviceResult = new Promise<{
+    ok: true;
+    value: CurrentBuildSnapshot;
+  }>((resolve) => {
+    resolveService = resolve;
+  });
+  const service: BuildService = {
+    execute: async () => serviceResult,
+  };
+  const { state } = twoProjectHarness({ service });
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+
+  const pending = state.execute({
+    type: "select",
+    projectId,
+    candidatePartId: cpuCandidateId,
+  });
+  context.publish(readyAt(4, otherProjectId));
+  await flush();
+  const afterSwitch = state.value;
+
+  resolveService?.({
+    ok: true,
+    value: { revision: 99 as Revision, currentBuild: oldBuild },
+  });
+  await pending;
+
+  assert.equal(state.value, afterSwitch);
+  assert.equal(state.value.selectedProjectId, otherProjectId);
+  assert.equal(state.value.currentBuild, null);
+  assert.equal(state.value.displayError, null);
+});
+
+test("mutation待機中にauthorityがunavailableになると旧projectの失敗結果を適用しない", async () => {
+  let resolveService:
+    | ((result: { ok: false; error: BuildError }) => void)
+    | undefined;
+  const serviceResult = new Promise<{ ok: false; error: BuildError }>(
+    (resolve) => {
+      resolveService = resolve;
+    },
+  );
+  const service: BuildService = {
+    execute: async () => serviceResult,
+  };
+  const { state } = twoProjectHarness({ service });
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+
+  const pending = state.execute({
+    type: "select",
+    projectId,
+    candidatePartId: cpuCandidateId,
+  });
+  context.publish({ status: "unavailable", generation: 4 });
+  await flush();
+  const afterRelease = state.value;
+
+  resolveService?.({ ok: false, error: { kind: "storage" } });
+  await pending;
+
+  assert.equal(state.value, afterRelease);
+  assert.equal(state.value.projectAvailability, "unavailable");
+  assert.equal(state.value.selectedProjectId, null);
+  assert.equal(state.value.displayError, null);
+  assert.deepEqual(state.value.fieldErrors, {});
 });
 
 test("ready通知の切替では新しいprojectの候補と構成を読み直す", async () => {
@@ -590,22 +620,10 @@ test("project未確定の間は候補一覧から独自のprojectへfallbackし�
 
   await state.attachProjectContext(context.port);
   await state.load();
-  await state.selectProject(otherProjectId);
 
   assert.equal(state.value.selectedProjectId, null);
   assert.deepEqual(state.value.candidates, []);
   assert.deepEqual(queryCalls, []);
-});
-
-test("context追従中はfeature独自のproject選択で切り替えない", async () => {
-  const { state, queryCalls } = twoProjectHarness();
-  const context = createContextPort(readyAt(3, projectId));
-  await state.attachProjectContext(context.port);
-
-  await state.selectProject(otherProjectId);
-
-  assert.equal(state.value.selectedProjectId, projectId);
-  assert.deepEqual(queryCalls, [projectId]);
 });
 
 test("遅れて完了した旧projectの読込結果を現在stateへ適用しない", async () => {
@@ -702,7 +720,8 @@ test("releaseProjectContextは購読を一度だけ解除し以降の通知を�
   await flush();
 
   assert.equal(context.subscriberCount, 0);
-  assert.equal(state.value.selectedProjectId, projectId);
+  assert.equal(state.value.projectAvailability, "unavailable");
+  assert.equal(state.value.selectedProjectId, null);
   assert.deepEqual(queryCalls, [projectId]);
 });
 
@@ -717,10 +736,6 @@ const draftHarness = (options: HarnessOptions = {}) => {
     updatedAt: timestamp,
   };
   const harness = createHarness({
-    projects: [
-      project(projectId, "架空PC構成"),
-      project(otherProjectId, "架空2"),
-    ],
     eligibleByProject: {
       [projectId]: [
         candidate(memoryCandidateId, {

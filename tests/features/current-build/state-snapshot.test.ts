@@ -10,10 +10,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ProjectSummary,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCategoryPolicy } from "../../../src/features/current-build/category-policy.js";
 import type {
   BuildService,
@@ -63,26 +60,8 @@ const candidate = (
     ...overrides,
   }) as CandidatePart;
 
-const project = (id: ProjectId, name: string): ProjectSummary => ({
-  id,
-  name,
-  updatedAt: timestamp,
-});
-
 const createState = async () => {
-  const candidates: CandidateQuery = {
-    async listProjects() {
-      return {
-        ok: true,
-        value: [
-          project(projectId, "架空PC構成"),
-          project(otherProjectId, "架空別構成"),
-        ],
-      };
-    },
-    async listCandidates() {
-      return { ok: true, value: [] };
-    },
+  const candidates: Pick<CandidateQuery, "listBuildEligible"> = {
     async listBuildEligible(id: ProjectId) {
       return {
         ok: true,
@@ -97,9 +76,6 @@ const createState = async () => {
               ]
             : [],
       };
-    },
-    async getCandidateDraft() {
-      throw new Error("not used by snapshot tests");
     },
   };
   const query: CurrentBuildQuery = {
@@ -122,7 +98,10 @@ const createState = async () => {
     policy: createCategoryPolicy(),
   };
   const state = createBuildState(dependencies);
-  await state.load();
+  await state.attachProjectContext({
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => {},
+  });
   return state;
 };
 

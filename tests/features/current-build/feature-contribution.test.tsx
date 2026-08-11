@@ -3,23 +3,30 @@ import test from "node:test";
 
 import type { FeatureCompositionContext } from "../../../src/application-shell/public.js";
 import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
-import { createCurrentBuildContribution } from "../../../src/features/current-build/feature-contribution.js";
+import {
+  type CurrentBuildContributionDependencies,
+  createCurrentBuildContribution,
+} from "../../../src/features/current-build/feature-contribution.js";
+
+type Assert<T extends true> = T;
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
+    ? true
+    : false;
+
+type _CandidateDependencyKeysAreBuildEligibleOnly = Assert<
+  Equal<
+    keyof CurrentBuildContributionDependencies["candidates"],
+    "listBuildEligible"
+  >
+>;
 
 test("project-context public portがないcompositionは候補一覧へfallbackしない", async () => {
-  let projectQueries = 0;
-  const candidates: CandidateQuery = {
-    async listProjects() {
-      projectQueries += 1;
-      return { ok: true, value: [] };
-    },
-    async listCandidates() {
-      return { ok: true, value: [] };
-    },
+  const candidates: Pick<CandidateQuery, "listBuildEligible"> = {
     async listBuildEligible() {
       return { ok: true, value: [] };
-    },
-    async getCandidateDraft() {
-      throw new Error("not used");
     },
   };
   const contribution = createCurrentBuildContribution(
@@ -36,6 +43,6 @@ test("project-context public portがないcompositionは候補一覧へfallback�
     reportError: () => {},
   });
 
-  assert.equal(projectQueries, 0);
+  assert.equal(contribution.key, "currentBuild");
   await handle.unmount();
 });

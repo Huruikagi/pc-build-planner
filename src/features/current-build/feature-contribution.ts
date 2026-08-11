@@ -25,7 +25,7 @@ export type CurrentBuildContribution = FeatureContribution<
 
 export interface CurrentBuildContributionDependencies {
   /** Project-candidate-management's public query — never a deep import of its internals. */
-  readonly candidates: CandidateQuery;
+  readonly candidates: Pick<CandidateQuery, "listBuildEligible">;
   readonly projectContext?: {
     readonly read: ProjectContextReadPort;
     readonly guards: ProjectContextChangeGuardRegistrationPort;

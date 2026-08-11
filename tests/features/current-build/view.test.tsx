@@ -14,10 +14,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ProjectSummary,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCategoryPolicy } from "../../../src/features/current-build/category-policy.js";
 import type {
   BuildCommand,
@@ -76,12 +73,6 @@ const candidate = (
     ...overrides,
   }) as CandidatePart;
 
-const project = (id: ProjectId, name: string): ProjectSummary => ({
-  id,
-  name,
-  updatedAt: timestamp,
-});
-
 interface Harness {
   readonly state: ReturnType<typeof createBuildState>;
   readonly commands: BuildCommand[];
@@ -110,18 +101,9 @@ const createHarness = (
   let revision = 0;
   const commands: BuildCommand[] = [];
 
-  const candidates: CandidateQuery = {
-    async listProjects() {
-      return { ok: true, value: [project(projectId, "架空PC構成")] };
-    },
-    async listCandidates() {
-      return { ok: true, value: [] };
-    },
+  const candidates: Pick<CandidateQuery, "listBuildEligible"> = {
     async listBuildEligible() {
       return { ok: true, value: eligible };
-    },
-    async getCandidateDraft() {
-      throw new Error("not used by view tests");
     },
   };
   const query: CurrentBuildQuery = {
@@ -151,8 +133,12 @@ const createHarness = (
   return { state: createBuildState(dependencies), commands };
 };
 
-async function renderView(harness: Harness) {
-  await harness.state.load();
+async function renderView(harness: Harness, attachAuthority = true) {
+  if (attachAuthority)
+    await harness.state.attachProjectContext({
+      getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+      subscribe: () => () => {},
+    });
   const user = userEvent.setup();
   const view = render(<BuildView state={harness.state} />);
   const query = <E extends Element = HTMLElement>(selector: string): E => {
@@ -478,7 +464,7 @@ test("共通contextのemptyとunavailableを区別して表示する", async () 
       getCurrent: () => ({ status, generation: 1 }),
       subscribe: () => () => {},
     });
-    const rendered = await renderView(harness);
+    const rendered = await renderView(harness, false);
     assert.match(rendered.text(), new RegExp(expected));
     rendered.unmount();
   }
@@ -555,7 +541,7 @@ test("切替確認の保存と破棄を各ボタンから確定できる", async
         token: `switch-${action}`,
         from: projectId,
         to: null,
-        baseGeneration: 0,
+        baseGeneration: 1,
         cause: "user",
       });
     });
@@ -585,7 +571,10 @@ test("英語でもカテゴリ名と完全な要約をaccessible nameへ残す",
     updatedAt: timestamp,
   };
   const harness = createHarness({ currentBuild: existingBuild });
-  await harness.state.load();
+  await harness.state.attachProjectContext({
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => {},
+  });
   const rendered = render(
     <MessageProvider resolver={resolverFor("en")}>
       <BuildView state={harness.state} />

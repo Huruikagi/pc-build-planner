@@ -15,10 +15,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ProjectSummary,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCategoryPolicy } from "../../../src/features/current-build/category-policy.js";
 import type {
   BuildCommand,
@@ -60,24 +57,9 @@ const memoryCandidate: CandidatePart = {
   updatedAt: timestamp,
 };
 
-const projectSummary: ProjectSummary = {
-  id: projectId,
-  name: "架空PC構成",
-  updatedAt: timestamp,
-};
-
-const buildCandidateQuery = (): CandidateQuery => ({
-  async listProjects() {
-    return { ok: true, value: [projectSummary] };
-  },
-  async listCandidates() {
-    return { ok: true, value: [] };
-  },
+const buildCandidateQuery = (): Pick<CandidateQuery, "listBuildEligible"> => ({
   async listBuildEligible() {
     return { ok: true, value: [memoryCandidate] };
-  },
-  async getCandidateDraft() {
-    throw new Error("not used by registration tests");
   },
 });
 
@@ -102,6 +84,12 @@ const createTestState = () => {
   };
   return createBuildState(dependencies);
 };
+
+const readyProjectContext = (): CurrentBuildProjectContextAdapter => ({
+  getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+  subscribe: () => () => {},
+  registerDraftGuard: () => ({ ok: true, value: () => {} }),
+});
 
 test("現在構成registrationはshell契約へ公開queryとoperation policyを注入する", async () => {
   const query = {} as CurrentBuildQuery;
@@ -143,6 +131,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const sourceRegistration = createCurrentBuildFeatureRegistration({
     query: buildQuery(),
     state: sourceState,
+    projectContext: readyProjectContext(),
   });
   const sourceContainer = document.createElement("div");
   const sourceHandle = await sourceRegistration.mount({
@@ -164,6 +153,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const targetRegistration = createCurrentBuildFeatureRegistration({
     query: buildQuery(),
     state: targetState,
+    projectContext: readyProjectContext(),
   });
   const targetContainer = document.createElement("div");
   const targetHandle = await targetRegistration.mount({
@@ -184,6 +174,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
   const rejectedHandle = await createCurrentBuildFeatureRegistration({
     query: buildQuery(),
     state: rejectedState,
+    projectContext: readyProjectContext(),
   }).mount({
     container: document.createElement("div"),
     operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
@@ -203,6 +194,7 @@ test("snapshotなしの再mountは前回の未保存カテゴリ・数量draft�
   const registration = createCurrentBuildFeatureRegistration({
     query: buildQuery(),
     state,
+    projectContext: readyProjectContext(),
   });
   const policy = { isAllowed: () => true, subscribe: () => () => {} };
 
@@ -227,7 +219,7 @@ test("snapshotなしの再mountは前回の未保存カテゴリ・数量draft�
   assert.equal(state.value.selectedCategory, null);
   assert.deepEqual(state.value.quantityDrafts, {});
   assert.equal(state.value.displayError, null);
-  assert.equal(state.value.projects.length, 1);
+  assert.equal(state.value.selectedProjectId, projectId);
   await second.unmount();
 });
 
@@ -247,6 +239,24 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   );
   assert.equal(container.textContent, "");
   assert.equal(registration.activation, undefined);
+});
+
+test("project contextなしのoptional mount pathはunavailableとしてfail closedする", async () => {
+  const state = createTestState();
+  const handle = await createCurrentBuildFeatureRegistration({
+    query: buildQuery(),
+    state,
+  }).mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+  });
+
+  assert.equal(state.value.projectAvailability, "unavailable");
+  assert.equal(state.value.selectedProjectId, null);
+  assert.deepEqual(state.value.candidates, []);
+  assert.equal(state.value.mutationsDisabled, true);
+  await handle.unmount();
 });
 
 test("mountはguard登録後にcontext authorityを読み込み、その後snapshotを検査する", async () => {

@@ -4,10 +4,7 @@ import type { CandidatePartId, PartCategory } from "../../domain/public.js";
 import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
 import { createCategoryPolicy, isValidQuantity } from "./category-policy.js";
-import {
-  createCategorySummaries,
-  SELECTABLE_BUILD_CATEGORIES,
-} from "./category-summary.js";
+import { SELECTABLE_BUILD_CATEGORIES } from "./category-summary.js";
 import type { BuildDisplayError, BuildState } from "./state.js";
 
 const categoryMessageKeys = {
@@ -76,12 +73,7 @@ export function BuildView({ state }: { readonly state: BuildState }) {
       item,
     ]),
   );
-  const summaries = createCategorySummaries({
-    candidates: value.summaryCandidates,
-    currentBuild: value.currentBuild,
-    policy,
-    messages,
-  });
+  const summaries = state.categorySummaries(messages);
 
   const select = (candidatePartId: CandidatePartId) => {
     if (value.selectedProjectId === null) return;
