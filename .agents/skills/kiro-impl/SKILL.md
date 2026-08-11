@@ -78,6 +78,8 @@ After all parallel research completes, synthesize implementation brief before st
 
 **Implementer agent**: For every implementer spawn or re-dispatch in autonomous mode -- initial implementation, malformed-status recovery, `NEEDS_CONTEXT` retry, reviewer remediation, and post-debug repair -- use the `kiro-implementer` custom agent when available (configured with `model = "gpt-5.6-sol"` and `model_reasoning_effort = "low"` in `.codex/agents/kiro-implementer.toml`). Do not use this role for reviewer or debugger sub-agents. If the custom agent is unavailable, fall back to the built-in `worker` agent while preserving the same task-specific prompt and boundaries.
 
+**Reviewer agent**: For every reviewer spawn or re-dispatch in autonomous mode -- initial task review, malformed-verdict recovery, review after remediation, and review after post-debug repair -- use the `kiro-reviewer` custom agent when available (configured with `model = "gpt-5.6-sol"` and `model_reasoning_effort = "low"` in `.codex/agents/kiro-reviewer.toml`). Do not use this role for implementer or debugger sub-agents. If the custom agent is unavailable, fall back to the built-in `default` agent while preserving the same task-specific prompt, scope, and independence requirements.
+
 If multi-agent capability is available, for each task (one at a time):
 
 **a) Dispatch implementer**:
