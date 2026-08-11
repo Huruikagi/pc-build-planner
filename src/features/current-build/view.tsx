@@ -1,13 +1,13 @@
 import { useState, useSyncExternalStore } from "react";
 
-import {
-  type CandidatePartId,
-  PART_CATEGORIES,
-  type PartCategory,
-} from "../../domain/public.js";
+import type { CandidatePartId, PartCategory } from "../../domain/public.js";
 import type { MessageKey, MessageResolver } from "../../ui-messages/public.js";
 import { useMessages } from "../../ui-messages/public.js";
 import { createCategoryPolicy, isValidQuantity } from "./category-policy.js";
+import {
+  createCategorySummaries,
+  SELECTABLE_BUILD_CATEGORIES,
+} from "./category-summary.js";
 import type { BuildDisplayError, BuildState } from "./state.js";
 
 const categoryMessageKeys = {
@@ -24,11 +24,6 @@ const categoryMessageKeys = {
   other: "category.other",
   uncategorized: "category.uncategorized",
 } as const satisfies Record<PartCategory, MessageKey>;
-
-/** Uncategorized candidates are never build-eligible, so the tab never applies. */
-const selectableCategories = PART_CATEGORIES.filter(
-  (category) => category !== "uncategorized",
-);
 
 const errorMessageKeys = {
   validation: "persistenceError.validation",
@@ -71,13 +66,22 @@ export function BuildView({ state }: { readonly state: BuildState }) {
     Readonly<Record<string, string>>
   >({});
   const value = state.value;
-  const disabled = value.isSaving || value.mutationsDisabled;
+  const disabled =
+    value.isSaving ||
+    value.mutationsDisabled ||
+    value.switchConfirmation !== null;
   const itemsByCandidate = new Map(
     (value.currentBuild?.items ?? []).map((item) => [
       item.candidatePartId,
       item,
     ]),
   );
+  const summaries = createCategorySummaries({
+    candidates: value.summaryCandidates,
+    currentBuild: value.currentBuild,
+    policy,
+    messages,
+  });
 
   const select = (candidatePartId: CandidatePartId) => {
     if (value.selectedProjectId === null) return;
@@ -120,36 +124,89 @@ export function BuildView({ state }: { readonly state: BuildState }) {
 
   return (
     <section aria-label={messages("build.title")} className="current-build">
-      <nav aria-label={messages("build.projectsNav")}>
-        {value.projects.map((project) => (
+      {value.projectAvailability === "empty" ? (
+        <p data-project-availability="empty">
+          {messages("build.projectEmpty")}
+        </p>
+      ) : null}
+      {value.projectAvailability === "unavailable" ? (
+        <p data-project-availability="unavailable" role="alert">
+          {messages("build.projectUnavailable")}
+        </p>
+      ) : null}
+      {value.switchConfirmation === null ? null : (
+        <section
+          aria-label={messages("build.switchConfirmation")}
+          data-region="switch-confirmation"
+        >
+          <p>{messages("build.switchConfirmation")}</p>
           <button
-            aria-current={
-              project.id === value.selectedProjectId ? "page" : undefined
-            }
-            data-project-id={project.id}
-            disabled={disabled}
-            key={project.id}
-            onClick={() => void state.selectProject(project.id)}
+            data-switch-save
+            disabled={value.isSaving}
+            onClick={() => void state.saveSwitchDrafts()}
             type="button"
           >
-            {project.name}
+            {messages("build.switchSave")}
           </button>
-        ))}
-      </nav>
+          <button
+            data-switch-discard
+            disabled={value.isSaving}
+            onClick={() => state.discardSwitchDrafts()}
+            type="button"
+          >
+            {messages("build.switchDiscard")}
+          </button>
+          <button
+            data-switch-cancel
+            disabled={value.isSaving}
+            onClick={() => state.cancelSwitch()}
+            type="button"
+          >
+            {messages("build.switchCancel")}
+          </button>
+        </section>
+      )}
+      {value.orphanedDraft === null ? null : (
+        <aside data-region="orphaned-draft" role="status">
+          <p>{messages("build.orphanedDraft")}</p>
+          <button
+            data-dismiss-orphaned-draft
+            onClick={() => state.dismissOrphanedDraft()}
+            type="button"
+          >
+            {messages("build.orphanedDismiss")}
+          </button>
+        </aside>
+      )}
       <nav aria-label={messages("build.categoryNav")}>
-        {selectableCategories.map((category) => (
-          <button
-            aria-current={
-              category === value.selectedCategory ? "page" : undefined
-            }
-            data-category={category}
-            key={category}
-            onClick={() => state.selectCategory(category)}
-            type="button"
-          >
-            {messages(categoryMessageKeys[category])}
-          </button>
-        ))}
+        {SELECTABLE_BUILD_CATEGORIES.map((category, index) => {
+          const summary = summaries[index];
+          return (
+            <button
+              aria-label={summary?.accessibleText}
+              aria-current={
+                category === value.selectedCategory ? "page" : undefined
+              }
+              className="current-build__category"
+              data-category={category}
+              disabled={value.selectedProjectId === null}
+              key={category}
+              onClick={() => state.selectCategory(category)}
+              type="button"
+            >
+              <span className="current-build__category-name">
+                {messages(categoryMessageKeys[category])}
+              </span>
+              <span
+                aria-hidden="true"
+                className="current-build__category-summary"
+                title={summary?.displayText}
+              >
+                {summary?.displayText}
+              </span>
+            </button>
+          );
+        })}
       </nav>
       {value.candidates.length === 0 ? (
         <p>{messages("build.noCandidates")}</p>
@@ -162,7 +219,8 @@ export function BuildView({ state }: { readonly state: BuildState }) {
             const mode = policy.modeFor(candidate.category);
             const item = itemsByCandidate.get(candidate.id);
             const name = displayName(candidate, messages);
-            const quantityError = quantityErrors[candidate.id];
+            const quantityError =
+              quantityErrors[candidate.id] ?? value.fieldErrors[candidate.id];
 
             if (mode !== "multiple") {
               return (

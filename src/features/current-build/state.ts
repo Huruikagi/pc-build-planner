@@ -75,6 +75,8 @@ export interface BuildStateValue {
   readonly projectAvailability: BuildProjectAvailability["status"] | null;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
+  /** All eligible candidates for category summary projection, independent of the active filter. */
+  readonly summaryCandidates: readonly CandidatePart[];
   readonly candidates: readonly CandidatePart[];
   readonly currentBuild: Readonly<CurrentBuild> | null;
   readonly quantityDrafts: Readonly<Record<string, string>>;
@@ -158,6 +160,7 @@ export class BuildState {
     projectAvailability: null,
     selectedProjectId: null,
     selectedCategory: null,
+    summaryCandidates: [],
     candidates: [],
     currentBuild: null,
     quantityDrafts: emptyQuantityDrafts,
@@ -252,6 +255,7 @@ export class BuildState {
       this.#set({ projectAvailability: availability.status });
       this.#set({
         selectedProjectId: null,
+        summaryCandidates: [],
         candidates: [],
         currentBuild: null,
         quantityDrafts: emptyQuantityDrafts,
@@ -516,6 +520,7 @@ export class BuildState {
       this.#allCandidates = [];
       this.#set({
         selectedProjectId: null,
+        summaryCandidates: [],
         candidates: [],
         currentBuild: null,
         quantityDrafts: emptyQuantityDrafts,
@@ -659,6 +664,7 @@ export class BuildState {
     this.#readBlocked = false;
     this.#set({
       selectedProjectId: projectId,
+      summaryCandidates: eligible.value,
       candidates: this.#filterCandidates(
         projectId,
         this.#value.selectedCategory,
