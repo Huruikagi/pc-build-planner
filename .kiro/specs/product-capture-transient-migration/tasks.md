@@ -281,7 +281,7 @@
   - _Requirements: 1.3, 1.9, 2.5, 5.2, 5.3, 5.7_
   - _Boundary: Capture State, Draft Mapper and Handoff, Shell Lifecycle Integration_
 
-- [ ] 7.6 current-context handoffをproduction compositionへ統合する
+- [x] 7.6 current-context handoffをproduction compositionへ統合する
   - product-captureのruntime、transient lifecycle、candidate intent factoryという3依存を維持したまま、current-context awareなcandidate受理結果を配線する。
   - current projectへbindした場合とpending保持した場合はcapture終了後も同じpre-editを継続し、受理または終了失敗時はcaptureをrollback世代で復元する。
   - stale project入力がcurrent contextを変更せず、context回復後に同じdraftへ戻ることをproduction同形のcompositionで確認する。

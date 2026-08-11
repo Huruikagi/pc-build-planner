@@ -37,6 +37,7 @@ import { isPersistent } from "./contracts.js";
 import type { FeatureCompositionContext } from "./feature-contribution-catalog.js";
 import { createFeatureRegistry } from "./feature-registry.js";
 import { createLateBoundLifecycle } from "./late-bound-lifecycle.js";
+import { createMonotonicProjectReadBinding } from "./monotonic-project-read-binding.js";
 import {
   createProjectContextShellAdapter,
   type ProjectContextShellHandle,
@@ -255,10 +256,6 @@ export function createProductionApplicationComposition<
   let latestShellState: ShellViewState | undefined;
   let transientNotice: "activation-failed" | "activation-expired" | undefined;
   let retryStartup: () => void = () => undefined;
-  let projectSnapshot: ReturnType<ProjectContextReadPort["getSnapshot"]>;
-  const projectListeners = new Set<
-    Parameters<ProjectContextReadPort["subscribe"]>[0]
-  >();
   const unavailableProjectSnapshot: ReturnType<
     ProjectContextReadPort["getSnapshot"]
   > = {
@@ -267,24 +264,10 @@ export function createProductionApplicationComposition<
     selectedProjectId: null,
     reason: "not-initialized",
   };
-  projectSnapshot = unavailableProjectSnapshot;
-  const projectRead: ProjectContextReadPort = {
-    getSnapshot: () => projectSnapshot,
-    subscribe(listener) {
-      projectListeners.add(listener);
-      return () => projectListeners.delete(listener);
-    },
-  };
-  const publishProjectSnapshot = (
-    snapshot: ReturnType<ProjectContextReadPort["getSnapshot"]>,
-  ): void => {
-    if (snapshot.generation < projectSnapshot.generation) return;
-    projectSnapshot = snapshot;
-    for (const listener of [...projectListeners]) listener(snapshot);
-  };
-  const bindProjectRead = (read: ProjectContextReadPort): void => {
-    projectSnapshot = read.getSnapshot();
-  };
+  const projectReadBinding = createMonotonicProjectReadBinding(
+    unavailableProjectSnapshot,
+  );
+  const projectRead = projectReadBinding.read;
 
   /**
    * Feature contributions are composed before project-context exists, and the
@@ -425,7 +408,11 @@ export function createProductionApplicationComposition<
         failures.push(error);
       }
     }
-    projectSnapshot = unavailableProjectSnapshot;
+    try {
+      projectReadBinding.unbind();
+    } catch (error: unknown) {
+      failures.push(error);
+    }
     unbindProjectCommands();
     if (registry) {
       const owned = registry;
@@ -671,7 +658,7 @@ export function createProductionApplicationComposition<
           },
         });
         await projectContext.initialize();
-        bindProjectRead(projectContext.api.read);
+        projectReadBinding.bind(projectContext.api.read);
         bindProjectCommands(projectContext.api);
         const mountedProjectContext = (
           options.createProjectContextAdapter ??
@@ -681,16 +668,14 @@ export function createProductionApplicationComposition<
           read: projectContext.api.read,
           commands: projectContext.api.commands,
           presentation: projectContext.presentation,
-          publishAvailability() {
-            publishProjectSnapshot(projectContext.api.read.getSnapshot());
-          },
+          publishAvailability() {},
         });
         if (mountedProjectContext.ok) {
           projectContextHandle = mountedProjectContext.value;
         } else {
-          publishProjectSnapshot({
+          projectReadBinding.publish({
             status: "unavailable",
-            generation: projectSnapshot.generation + 1,
+            generation: projectRead.getSnapshot().generation + 1,
             selectedProjectId: null,
             reason: "not-initialized",
           });

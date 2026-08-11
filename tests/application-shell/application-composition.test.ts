@@ -26,7 +26,10 @@ import type {
   FoundationScopedDataPort,
   MaintenanceSnapshotSource,
 } from "../../src/persistence/public.js";
-import type { ProjectContextReadPort } from "../../src/project-context/public.js";
+import type {
+  ProjectContextCommandPort,
+  ProjectContextReadPort,
+} from "../../src/project-context/public.js";
 
 const noopTransientActivation = () => ({
   validate: (
@@ -1103,6 +1106,67 @@ test("10.1-10.3: production shellはselector選択を一度配送し依存featur
   assert.ok(
     h.events.indexOf("feature:unmount") < h.events.indexOf("presentation:stop"),
   );
+});
+
+test("production shellはproject catalog refreshをcurrent-context依存featureへ即時投影する", async () => {
+  const h = harness();
+  let projectRead: ProjectContextReadPort | undefined;
+  let refresh: ProjectContextCommandPort["refresh"] | undefined;
+  let projects = [] as Array<{
+    readonly id: ProjectId;
+    readonly name: string;
+    readonly updatedAt: UtcTimestamp;
+  }>;
+  const candidate: ApplicationFeatureRegistration = {
+    ...h.feature,
+    id: id("candidate-management"),
+    publicApi: {
+      query: {
+        async listProjects() {
+          return { ok: true as const, value: projects };
+        },
+      },
+    },
+  };
+  const root = createProductionApplicationComposition({
+    shellContainer: h.shellContainer,
+    initializeFoundation: h.initializeFoundation,
+    createContributions(context, dependencies) {
+      assert.ok(context.projectContext);
+      projectRead = context.projectContext;
+      refresh = dependencies.projectRefresh.refresh;
+      return {
+        features: [
+          { key: "candidateManagement", registration: candidate },
+        ] as const,
+        workerRegistrations: [],
+      };
+    },
+    presentation: h.presentation,
+    workerContext: { addActionHandler: () => () => {}, reportError() {} },
+    reportError() {},
+  });
+
+  assert.equal((await root.start()).ok, true);
+  assert.equal(projectRead?.getSnapshot().status, "empty");
+  let published = 0;
+  const unsubscribe = projectRead?.subscribe(() => {
+    published += 1;
+  });
+
+  projects = [{ id: PROJECT_A, name: "架空A", updatedAt: PROJECT_TIME }];
+  let refreshed: Awaited<ReturnType<NonNullable<typeof refresh>>> | undefined;
+  await act(async () => {
+    refreshed = await refresh?.();
+  });
+
+  assert.equal(refreshed?.ok, true);
+  assert.equal(projectRead?.getSnapshot().status, "ready");
+  assert.equal(projectRead?.getSnapshot().selectedProjectId, PROJECT_A);
+  assert.equal(published, 1);
+
+  unsubscribe?.();
+  await root.stop();
 });
 
 test("10.2/10.3: project-context初期化失敗でも非依存featureとshellを起動し依存featureだけ利用不能にする", async () => {
