@@ -135,9 +135,19 @@ export const createProductCaptureFeatureRegistration = (
     if (dependencies.state.value === null)
       throw new Error("Product capture has not been activated.");
     const mountedActivationId = dependencies.state.value.activationId;
-    const root = mountCaptureReactRoot(context.container, {
-      state: dependencies.state,
-    });
+    let root: ReturnType<typeof mountCaptureReactRoot>;
+    try {
+      root = mountCaptureReactRoot(context.container, {
+        state: dependencies.state,
+      });
+    } catch (error) {
+      if (
+        restored !== undefined &&
+        dependencies.state.value?.activationId === restored.activationId
+      )
+        dependencies.state.deactivate();
+      throw error;
+    }
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     let unmounted = false;
     return {

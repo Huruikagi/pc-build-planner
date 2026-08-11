@@ -211,3 +211,26 @@ test("不正なrollback snapshotはReact mount前に拒否する", async () => {
   );
   assert.equal(capture.value, null);
 });
+
+test("restore後のReact mount失敗は復元stateをinactiveへ戻す", async () => {
+  const capture = state();
+  const registration = createProductCaptureFeatureRegistration({
+    state: capture,
+  });
+
+  await assert.rejects(
+    registration.mount({
+      container: document.createTextNode("mount failure") as never,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+      restoredState: {
+        version: 1,
+        activationId: "rollback-mount-failure" as ActivationId,
+        tabId: 12 as TargetTabId,
+        requestGeneration: 5,
+        handoffInFlightGeneration: 5,
+      },
+    }),
+  );
+  assert.equal(capture.value, null);
+});

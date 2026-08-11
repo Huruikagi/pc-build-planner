@@ -263,7 +263,7 @@
   - _Requirements: 1.4, 1.6, 1.8, 4.6, 5.3_
   - _Boundary: Candidate View, Message Catalog_
 
-- [ ] 7.4 (P) capture registrationのrollback snapshotを実行identityだけへ限定する
+- [x] 7.4 (P) capture registrationのrollback snapshotを実行identityだけへ限定する
   - rollback snapshotにはactivation、固定tab、request generation、handoff中generationだけを保持し、URL、HTML、抽出値、project情報を含めない。
   - source復元時は保存されたgenerationを再構築し、別世代のcallbackやintentを現行結果として受理しない。
   - mount失敗、target受理失敗、restore成功・失敗のregistration contractを上流lifecycle規約に沿って検証する。
