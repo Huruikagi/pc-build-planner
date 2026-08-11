@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type {
   ProjectId,
@@ -13,11 +14,38 @@ import type {
 } from "../../../src/features/compatibility/contracts.js";
 import {
   type CompatibilityState,
-  createCompatibilityState,
+  createCompatibilityState as createProductionCompatibilityState,
 } from "../../../src/features/compatibility/state.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
+
+const readyContext = {
+  getCurrent: () => ({
+    status: "ready" as const,
+    generation: 1,
+    projectId,
+  }),
+  subscribe: () => () => {},
+};
+
+const createCompatibilityState = (dependencies: {
+  readonly query: CompatibilityQuery;
+}) =>
+  createProductionCompatibilityState({
+    ...dependencies,
+    projectContext: readyContext,
+  });
+
+const flush = (): Promise<void> =>
+  new Promise((resolve) => setImmediate(resolve));
+
+const evaluateCurrentProject = async (
+  state: CompatibilityState,
+): Promise<void> => {
+  state.start();
+  await flush();
+};
 
 const reportWith = (
   status: CompatibilityReport["status"],
@@ -87,15 +115,25 @@ test("初期状態はidleとする", () => {
   assert.deepEqual(state.value, { status: "idle" });
 });
 
+test("screen stateの公開surfaceにproject指定evaluate入口を持たない", async () => {
+  const state = createCompatibilityState({
+    query: fixedQuery({ ok: true, value: reportWith("compatible") }),
+  });
+  assert.equal("evaluate" in state, false);
+
+  const source = await readFile("src/features/compatibility/state.ts", "utf8");
+  assert.doesNotMatch(source, /public\s+async\s+evaluate\s*\(/);
+});
+
 test("evaluate呼び出しは即座にloadingへ遷移し完了までreportを保持しない", async () => {
   const { query, resolveCall } = queueQuery();
   const state = createCompatibilityState({ query });
 
-  const evaluation = state.evaluate(projectId);
+  state.start();
   assert.deepEqual(state.value, { status: "loading" });
 
   resolveCall(0, { ok: true, value: reportWith("compatible") });
-  await evaluation;
+  await flush();
   assert.equal(state.value.status, "ready");
 });
 
@@ -105,7 +143,7 @@ test("成功結果はreadyへ集約結果と個別根拠を反映する", async 
     query: fixedQuery({ ok: true, value: report }),
   });
 
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   assert.deepEqual(state.value, { status: "ready", report });
 });
@@ -115,7 +153,7 @@ test("no-buildはempty-buildとしてreasonを識別可能にする", async () =
     query: fixedQuery({ ok: false, error: { kind: "no-build" } }),
   });
 
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   assert.deepEqual(state.value, { status: "empty-build", reason: "no-build" });
 });
@@ -125,7 +163,7 @@ test("invalid-referenceはfailedとしてreasonを識別可能にする", async 
     query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
   });
 
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   assert.deepEqual(state.value, {
     status: "failed",
@@ -143,7 +181,7 @@ test("corrupt-data・unsupported-data・read-failedはfailedとしてreasonを�
       query: fixedQuery({ ok: false, error: { kind } }),
     });
 
-    await state.evaluate(projectId);
+    await evaluateCurrentProject(state);
 
     assert.deepEqual(state.value, { status: "failed", reason: kind });
   }
@@ -153,8 +191,8 @@ test("同時評価では最新世代の完了だけを反映し古い完了を�
   const { query, resolveCall } = queueQuery();
   const state = createCompatibilityState({ query });
 
-  const first = state.evaluate(projectId);
-  const second = state.evaluate(projectId);
+  state.start();
+  const second = state.retry();
 
   resolveCall(1, { ok: true, value: reportWith("compatible") });
   await second;
@@ -164,7 +202,7 @@ test("同時評価では最新世代の完了だけを反映し古い完了を�
   });
 
   resolveCall(0, { ok: false, error: { kind: "read-failed" } });
-  await first;
+  await flush();
   assert.deepEqual(state.value, {
     status: "ready",
     report: reportWith("compatible"),
@@ -175,12 +213,12 @@ test("失敗時は誤った互換性statusを表示せずreadyの結果を保持
   const { query, resolveCall } = queueQuery();
   const state = createCompatibilityState({ query });
 
-  const firstEvaluation = state.evaluate(projectId);
+  state.start();
   resolveCall(0, { ok: true, value: reportWith("incompatible") });
-  await firstEvaluation;
+  await flush();
   assert.equal(state.value.status, "ready");
 
-  const secondEvaluation = state.evaluate(projectId);
+  const secondEvaluation = state.retry();
   assert.deepEqual(state.value, { status: "loading" });
   resolveCall(1, { ok: false, error: { kind: "read-failed" } });
   await secondEvaluation;
@@ -193,9 +231,9 @@ test("状態遷移ごとに購読者へ通知する", async () => {
   const state = createCompatibilityState({ query });
   const count = notifications(state);
 
-  const evaluation = state.evaluate(projectId);
+  state.start();
   assert.equal(count(), 1);
   resolveCall(0, { ok: true, value: reportWith("compatible") });
-  await evaluation;
+  await flush();
   assert.equal(count(), 2);
 });

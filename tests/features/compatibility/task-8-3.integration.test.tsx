@@ -185,8 +185,8 @@ test("feature contributionはproject切替後のreportだけを表示し、旧�
   } as CandidateQuery;
 
   const contribution = createCompatibilityContribution(
-    {} as FeatureCompositionContext,
-    { currentBuildQuery, candidateQuery, projectContext },
+    { projectContext } as FeatureCompositionContext,
+    { currentBuildQuery, candidateQuery },
   );
   const container = document.createElement("div");
   let handle:

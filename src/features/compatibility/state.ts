@@ -32,7 +32,7 @@ interface CompatibilityStateQuery {
 
 export interface CompatibilityStateDependencies {
   readonly query: CompatibilityStateQuery;
-  readonly projectContext?: CompatibilityProjectContextAdapter;
+  readonly projectContext: CompatibilityProjectContextAdapter;
 }
 
 const stateForError = (error: CompatibilityError): CompatibilityStateValue => {
@@ -85,7 +85,7 @@ export class CompatibilityState {
   /** Starts context tracking once and evaluates the adapter's latest snapshot. */
   public start(): void {
     const context = this.dependencies.projectContext;
-    if (context === undefined || this.#unsubscribeContext !== null) return;
+    if (this.#unsubscribeContext !== null) return;
     this.#unsubscribeContext = context.subscribe((availability) => {
       void this.#applyAvailability(availability);
     });
@@ -105,20 +105,10 @@ export class CompatibilityState {
 
   /** Re-reads the authoritative snapshot; never reuses a prior project id. */
   public async retry(): Promise<void> {
-    const context = this.dependencies.projectContext;
-    if (context === undefined) return;
-    await this.#applyAvailability(context.getCurrent(), true);
-  }
-
-  /**
-   * Legacy direct entry point retained until registration adopts start/stop in
-   * task 7.2. It still gets the same request-id latest-completion protection.
-   */
-  public async evaluate(projectId: ProjectId): Promise<void> {
-    const generation = this.#contextGeneration ?? 0;
-    this.#contextGeneration = generation;
-    this.#currentProjectId = projectId;
-    await this.#evaluate(projectId, generation);
+    await this.#applyAvailability(
+      this.dependencies.projectContext.getCurrent(),
+      true,
+    );
   }
 
   async #applyAvailability(

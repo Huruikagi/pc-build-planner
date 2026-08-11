@@ -191,11 +191,10 @@ test("合成入口はcompatibility contributionを組み立てshellが解決で�
 
 test("mountは上流queryから読み取り実際の5規則評価結果を描画する", async () => {
   const context = readyContext();
-  const contribution = createCompatibilityContribution(compositionContext, {
-    currentBuildQuery,
-    candidateQuery,
-    projectContext: context.read,
-  });
+  const contribution = createCompatibilityContribution(
+    { ...compositionContext, projectContext: context.read },
+    { currentBuildQuery, candidateQuery },
+  );
   const container = document.createElement("div");
 
   let handle:
@@ -224,7 +223,7 @@ test("mountは上流queryから読み取り実際の5規則評価結果を描画
   assert.equal(context.releases(), 1);
 });
 
-test("context未注入時は別projectへfallback評価しない", async () => {
+test("context未注入時は利用不能を表示し別projectへfallback評価しない", async () => {
   let buildReads = 0;
   const contribution = createCompatibilityContribution(compositionContext, {
     currentBuildQuery: {
@@ -249,6 +248,13 @@ test("context未注入時は別projectへfallback評価しない", async () => {
   });
 
   assert.equal(buildReads, 0);
-  assert.equal(container.querySelector("[data-status='idle']") !== null, true);
+  assert.equal(
+    container.querySelector("[data-status='context-unavailable']") !== null,
+    true,
+  );
+  const retry = container.querySelector("button");
+  assert.ok(retry, "context-unavailableにretry操作が無い");
+  await act(async () => retry.click());
+  assert.equal(buildReads, 0, "retryが別projectへfallback評価した");
   await act(async () => handle?.unmount());
 });

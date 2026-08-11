@@ -2,7 +2,6 @@ import type {
   FeatureCompositionContext,
   FeatureContribution,
 } from "../../application-shell/public.js";
-import type { ProjectContextReadPort } from "../../project-context/public.js";
 import type { CandidateQuery } from "../candidate-management/public.js";
 import type { CurrentBuildQuery } from "../current-build/public.js";
 import { createCompatibilityProjectContextAdapter } from "./project-context-adapter.js";
@@ -23,9 +22,12 @@ export interface CompatibilityContributionDependencies {
   readonly currentBuildQuery: CurrentBuildQuery;
   /** project-candidate-management's public query — never a deep import of its internals. */
   readonly candidateQuery: CandidateQuery;
-  /** Shell-owned authoritative current-project read port. */
-  readonly projectContext?: ProjectContextReadPort;
 }
+
+const unavailableProjectContext = {
+  getCurrent: () => ({ status: "unavailable" as const, generation: 0 }),
+  subscribe: () => () => {},
+};
 
 /**
  * Assembles the feature from the shell-provided composition context and the
@@ -40,15 +42,13 @@ export const createCompatibilityContribution = (
     currentBuildQuery: dependencies.currentBuildQuery,
     candidateQuery: dependencies.candidateQuery,
   });
-  const projectContextRead =
-    dependencies.projectContext ?? context.projectContext;
   const projectContext =
-    projectContextRead === undefined
-      ? undefined
-      : createCompatibilityProjectContextAdapter(projectContextRead);
+    context.projectContext === undefined
+      ? unavailableProjectContext
+      : createCompatibilityProjectContextAdapter(context.projectContext);
   const state = createCompatibilityState({
     query: service,
-    ...(projectContext === undefined ? {} : { projectContext }),
+    projectContext,
   });
   const registration = createCompatibilityFeatureRegistration({
     query: service,

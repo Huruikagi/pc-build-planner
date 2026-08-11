@@ -20,7 +20,7 @@ import type {
 import type { CompatibilityQuery } from "../../../src/features/compatibility/contracts.js";
 import { createCompatibilityFeatureRegistration } from "../../../src/features/compatibility/registration.js";
 import { createCompatibilityService } from "../../../src/features/compatibility/service.js";
-import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
+import { createCompatibilityState as createProductionCompatibilityState } from "../../../src/features/compatibility/state.js";
 import { CompatibilityView } from "../../../src/features/compatibility/view.js";
 import type {
   BuildError,
@@ -35,13 +35,27 @@ const buildId =
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
 
 const stateForCurrentProject = (query: CompatibilityQuery) =>
-  createCompatibilityState({
+  createProductionCompatibilityState({
     query,
     projectContext: {
       getCurrent: () => ({ status: "ready", generation: 1, projectId }),
       subscribe: () => () => {},
     },
   });
+
+const createCompatibilityState = (dependencies: {
+  readonly query: CompatibilityQuery;
+}) => stateForCurrentProject(dependencies.query);
+
+const flush = (): Promise<void> =>
+  new Promise((resolve) => setImmediate(resolve));
+
+const evaluateCurrentProject = async (
+  state: ReturnType<typeof stateForCurrentProject>,
+): Promise<void> => {
+  state.start();
+  await flush();
+};
 
 const partId = (raw: string): CandidatePartId =>
   raw as unknown as CandidatePartId;
@@ -184,7 +198,7 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
     candidateQuery: candidateQueryReturning({ ok: true, value: [] }),
   });
   const noBuildState = createCompatibilityState({ query: noBuildService });
-  await noBuildState.evaluate(projectId);
+  await evaluateCurrentProject(noBuildState);
   const noBuildView = render(<CompatibilityView state={noBuildState} />);
   assert.ok(
     noBuildView.container.querySelector(
@@ -209,7 +223,7 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
   const invalidReferenceState = createCompatibilityState({
     query: invalidReferenceService,
   });
-  await invalidReferenceState.evaluate(projectId);
+  await evaluateCurrentProject(invalidReferenceState);
   const invalidReferenceView = render(
     <CompatibilityView state={invalidReferenceState} />,
   );
@@ -236,7 +250,7 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
   const readFailedState = createCompatibilityState({
     query: readFailedService,
   });
-  await readFailedState.evaluate(projectId);
+  await evaluateCurrentProject(readFailedState);
   const readFailedView = render(<CompatibilityView state={readFailedState} />);
   assert.ok(
     readFailedView.container.querySelector(
@@ -284,8 +298,8 @@ test("遅延した旧評価が後から完了しても画面は最新の評価�
   });
   const state = createCompatibilityState({ query: service });
 
-  const stale = state.evaluate(projectId); // starts first, resolves last
-  const fresh = state.evaluate(projectId); // starts second, resolves first
+  state.start(); // starts first, resolves last
+  const fresh = state.retry(); // starts second, resolves first
 
   // The fresh (second) request resolves first with a real build.
   resolvers[1]?.({ ok: true, value: snapshotWith(build) });
@@ -296,7 +310,7 @@ test("遅延した旧評価が後から完了しても画面は最新の評価�
   // The stale (first) request resolves later with a contradictory no-build
   // result; it must be discarded rather than overwriting the fresh report.
   resolvers[0]?.({ ok: true, value: snapshotWith(null) });
-  await stale;
+  await flush();
 
   assert.ok(view.container.querySelector("[data-status='ready']"));
   assert.equal(
@@ -367,8 +381,8 @@ test("読取失敗・評価失敗時にパーツ名・URL・属性値をログ�
         error: { kind: "storage" },
       }),
     });
-    await createCompatibilityState({ query: readFailedService }).evaluate(
-      projectId,
+    await evaluateCurrentProject(
+      createCompatibilityState({ query: readFailedService }),
     );
 
     // invalid-reference: the sensitive candidate is present in the pool but
@@ -384,8 +398,8 @@ test("読取失敗・評価失敗時にパーツ名・URL・属性値をログ�
         value: [sensitiveCpu, motherboard],
       }),
     });
-    await createCompatibilityState({ query: invalidReferenceService }).evaluate(
-      projectId,
+    await evaluateCurrentProject(
+      createCompatibilityState({ query: invalidReferenceService }),
     );
 
     // The sensitive candidate genuinely participates in a real evaluation
@@ -403,7 +417,7 @@ test("読取失敗・評価失敗時にパーツ名・URL・属性値をログ�
     const evaluatedState = createCompatibilityState({
       query: evaluatedService,
     });
-    await evaluatedState.evaluate(projectId);
+    await evaluateCurrentProject(evaluatedState);
     render(<CompatibilityView state={evaluatedState} />);
 
     // The shell's own error-reporting channel must not receive sensitive

@@ -96,7 +96,7 @@ const stateWithReadyContext = (query: CompatibilityQuery) => {
 
 test("registrationはshell契約とread-only operation policyへ適合する", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
-  const state = createCompatibilityState({ query });
+  const state = stateWithReadyContext(query).state;
   const observed: { readAllowed?: boolean; mutationAllowed?: boolean } = {};
   const availabilityListeners = new Set<(value: Availability) => void>();
 
@@ -173,9 +173,15 @@ test("mountはcontext購読を開始して現在projectを評価しViewを描画
   assert.equal(context.releases(), 1);
 });
 
-test("context adapterが無ければ評価せずidleのまま描画する", async () => {
+test("context利用不能なら評価せずcontext-unavailableを描画する", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
-  const state = createCompatibilityState({ query });
+  const state = createCompatibilityState({
+    query,
+    projectContext: {
+      getCurrent: () => ({ status: "unavailable", generation: 0 }),
+      subscribe: () => () => {},
+    },
+  });
   const registration = createCompatibilityFeatureRegistration({
     query,
     state,
@@ -192,7 +198,10 @@ test("context adapterが無ければ評価せずidleのまま描画する", asyn
   });
 
   assert.deepEqual(query.calls, []);
-  assert.equal(container.querySelector("[data-status='idle']") !== null, true);
+  assert.equal(
+    container.querySelector("[data-status='context-unavailable']") !== null,
+    true,
+  );
   await act(async () => handle?.unmount());
 });
 

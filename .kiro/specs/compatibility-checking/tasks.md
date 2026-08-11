@@ -171,3 +171,7 @@
   - _Depends: 7.2, 8.1, 8.2; application-shell roadmap production-wiring update_
   - _Requirements: 1.1, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: Compatibility integration and E2E tests_
+
+## Implementation Notes
+
+- 2026-08-12 validation remediation: 画面stateの評価入口は`start()`からcontext adapterを通る経路だけに限定し、直接project IDを渡すlegacy入口を撤去した。`FeatureCompositionContext.projectContext`欠落時もowner-local unavailable adapterで`context-unavailable`へfail closedし、上流queryや別project fallbackへ到達させない。

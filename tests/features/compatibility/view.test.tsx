@@ -19,7 +19,7 @@ import type {
   RuleResult,
 } from "../../../src/features/compatibility/contracts.js";
 import type { CompatibilityProjectContextAdapter } from "../../../src/features/compatibility/project-context-adapter.js";
-import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
+import { createCompatibilityState as createProductionCompatibilityState } from "../../../src/features/compatibility/state.js";
 import { CompatibilityView } from "../../../src/features/compatibility/view.js";
 import {
   defaultMessageResolver,
@@ -106,6 +106,35 @@ afterEach(cleanup);
 const flush = (): Promise<void> =>
   new Promise((resolve) => setImmediate(resolve));
 
+const readyContext: CompatibilityProjectContextAdapter = {
+  getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+  subscribe: () => () => {},
+};
+
+const createCompatibilityState = (
+  dependencies: Omit<
+    Parameters<typeof createProductionCompatibilityState>[0],
+    "projectContext"
+  > &
+    Partial<
+      Pick<
+        Parameters<typeof createProductionCompatibilityState>[0],
+        "projectContext"
+      >
+    >,
+) =>
+  createProductionCompatibilityState({
+    projectContext: readyContext,
+    ...dependencies,
+  });
+
+const evaluateCurrentProject = async (
+  state: ReturnType<typeof createCompatibilityState>,
+): Promise<void> => {
+  state.start();
+  await flush();
+};
+
 const languages = ["ja", "en"] as const;
 
 const reasonMessageKey = (reasonCode: string) => {
@@ -164,7 +193,7 @@ test("loading中は以前のreportを最新結果として表示しない", () =
   })();
   const state = createCompatibilityState({ query });
 
-  void state.evaluate(projectId);
+  state.start();
   const view = render(<CompatibilityView state={state} />);
 
   assert.equal(
@@ -178,7 +207,7 @@ test("no-buildは構成空状態としてreasonを識別可能に表示する", 
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "no-build" } }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -191,7 +220,7 @@ test("不正参照は失敗状態としてno-buildと区別可能なreasonで表
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -204,7 +233,7 @@ test("読取失敗は失敗状態として誤った互換性statusを表示し�
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "read-failed" } }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -254,7 +283,7 @@ test("英語resolverでも状態見出し・理由・再試行を同じmessage k
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(
     <MessageProvider resolver={resolverFor("en")}>
@@ -274,7 +303,7 @@ test("互換性ありの集約結果と個別根拠を同時に表示する", as
       value: reportOf("compatible", [compatibleResult()]),
     }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -297,7 +326,7 @@ test("注意事項ありでは互換と判定不能の個別行を隠さず両�
       value: reportOf("caution", [compatibleResult(), unknownResult()]),
     }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -328,7 +357,7 @@ test("非互換の個別結果は比較値と理由を表示する", async () =>
       value: reportOf("incompatible", [incompatibleResult()]),
     }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -352,7 +381,7 @@ test("外部由来のパーツ名を安全なJSX childとして描画しHTML注�
       value: reportOf("compatible", [unnamedUnsafeResult()]),
     }),
   });
-  await state.evaluate(projectId);
+  await evaluateCurrentProject(state);
 
   const view = render(<CompatibilityView state={state} />);
 
@@ -383,7 +412,7 @@ for (const language of languages) {
     const loadingState = createCompatibilityState({
       query: { evaluate: async () => pending.promise },
     });
-    void loadingState.evaluate(projectId);
+    loadingState.start();
     const loadingView = renderWithLanguage(language, loadingState);
     const loadingStatus = loadingView.getByRole("status");
     assert.equal(loadingStatus.getAttribute("aria-live"), "polite");
@@ -429,7 +458,7 @@ for (const language of languages) {
       const state = createCompatibilityState({
         query: fixedQuery({ ok: false, error: { kind: reason } }),
       });
-      await state.evaluate(projectId);
+      await evaluateCurrentProject(state);
       const view = renderWithLanguage(language, state);
       const region = view.getByRole("status");
       assert.ok(
@@ -452,7 +481,7 @@ for (const language of languages) {
       const state = createCompatibilityState({
         query: fixedQuery({ ok: false, error: { kind: reason } }),
       });
-      await state.evaluate(projectId);
+      await evaluateCurrentProject(state);
       const view = renderWithLanguage(language, state);
       const region = view.getByRole("alert");
       assert.ok(
@@ -486,7 +515,7 @@ for (const language of languages) {
       const state = createCompatibilityState({
         query: fixedQuery({ ok: true, value: reportOf(aggregate, results) }),
       });
-      await state.evaluate(projectId);
+      await evaluateCurrentProject(state);
       const view = renderWithLanguage(language, state);
       const region = view.getByRole("status");
       assert.ok(
@@ -553,7 +582,7 @@ test("架空markup文字列は両言語でtext nodeになり要素やinline hand
         value: reportOf("compatible", [unnamedUnsafeResult()]),
       }),
     });
-    await state.evaluate(projectId);
+    await evaluateCurrentProject(state);
     const view = renderWithLanguage(language, state);
     assert.match(
       view.getByText("<img src=x onerror=alert(1)> 危険なマザーボード名")
