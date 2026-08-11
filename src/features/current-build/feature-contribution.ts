@@ -2,8 +2,14 @@ import type {
   FeatureCompositionContext,
   FeatureContribution,
 } from "../../application-shell/public.js";
+import type {
+  ProjectContextChangeGuardRegistrationPort,
+  ProjectContextReadPort,
+} from "../../project-context/public.js";
 import type { CandidateQuery } from "../candidate-management/public.js";
 import { createCategoryPolicy } from "./category-policy.js";
+import type { CurrentBuildProjectContextAdapter } from "./project-context-adapter.js";
+import { createCurrentBuildProjectContextAdapter } from "./project-context-adapter.js";
 import type { CurrentBuildPublicApi } from "./public.js";
 import { createCurrentBuildQuery } from "./query.js";
 import { createCurrentBuildFeatureRegistration } from "./registration.js";
@@ -20,7 +26,18 @@ export type CurrentBuildContribution = FeatureContribution<
 export interface CurrentBuildContributionDependencies {
   /** Project-candidate-management's public query — never a deep import of its internals. */
   readonly candidates: CandidateQuery;
+  readonly projectContext?: {
+    readonly read: ProjectContextReadPort;
+    readonly guards: ProjectContextChangeGuardRegistrationPort;
+  };
 }
+
+/** Missing shell context is an unavailable authority, never permission to fall back. */
+const unavailableProjectContext: CurrentBuildProjectContextAdapter = {
+  getCurrent: () => ({ status: "unavailable", generation: 0 }),
+  subscribe: () => () => {},
+  registerDraftGuard: () => ({ ok: true, value: () => {} }),
+};
 
 /**
  * Assembles the feature from the shell-provided composition context and the
@@ -48,6 +65,10 @@ export const createCurrentBuildContribution = (
   const registration = createCurrentBuildFeatureRegistration({
     query,
     state,
+    projectContext:
+      dependencies.projectContext === undefined
+        ? unavailableProjectContext
+        : createCurrentBuildProjectContextAdapter(dependencies.projectContext),
   });
 
   return { key: currentBuildContributionKey, registration };

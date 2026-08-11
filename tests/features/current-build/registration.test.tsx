@@ -26,6 +26,7 @@ import type {
   BuildService,
   CurrentBuildQuery,
 } from "../../../src/features/current-build/contracts.js";
+import type { CurrentBuildProjectContextAdapter } from "../../../src/features/current-build/project-context-adapter.js";
 import { createCurrentBuildFeatureRegistration as createCurrentBuildFeatureRegistrationImpl } from "../../../src/features/current-build/registration.js";
 import {
   type BuildStateDependencies,
@@ -246,4 +247,86 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
   );
   assert.equal(container.textContent, "");
   assert.equal(registration.activation, undefined);
+});
+
+test("mountはguard登録後にcontext authorityを読み込み、その後snapshotを検査する", async () => {
+  const state = createTestState();
+  const events: string[] = [];
+  const originalAttach = state.attachProjectContext.bind(state);
+  const originalApply = state.applySnapshot.bind(state);
+  state.attachProjectContext = async (context) => {
+    events.push("context:attach");
+    await originalAttach(context);
+    events.push("context:loaded");
+  };
+  state.applySnapshot = (snapshot) => {
+    events.push("snapshot:apply");
+    originalApply(snapshot);
+  };
+  const adapter: CurrentBuildProjectContextAdapter = {
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => events.push("context:release"),
+    registerDraftGuard: () => {
+      events.push("guard:register");
+      return { ok: true, value: () => events.push("guard:release") };
+    },
+  };
+  const registration = createCurrentBuildFeatureRegistration({
+    query: buildQuery(),
+    state,
+    projectContext: adapter,
+  });
+
+  const handle = await registration.mount({
+    container: document.createElement("div"),
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+    restoredState: {
+      version: 1,
+      selectedProjectId: projectId,
+      selectedCategory: "memory",
+      quantityDrafts: {},
+    },
+  });
+
+  assert.deepEqual(events.slice(0, 4), [
+    "guard:register",
+    "context:attach",
+    "context:loaded",
+    "snapshot:apply",
+  ]);
+  await handle.unmount();
+  await handle.unmount();
+  assert.equal(events.filter((event) => event === "guard:release").length, 1);
+  assert.equal(events.filter((event) => event === "context:release").length, 1);
+});
+
+test("guard登録に失敗したmountはcontextを接続せず失敗する", async () => {
+  const state = createTestState();
+  let subscriptions = 0;
+  const adapter: CurrentBuildProjectContextAdapter = {
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => {
+      subscriptions += 1;
+      return () => {};
+    },
+    registerDraftGuard: () => ({
+      ok: false,
+      error: { kind: "guard-registration-failed" },
+    }),
+  };
+
+  await assert.rejects(
+    createCurrentBuildFeatureRegistration({
+      query: buildQuery(),
+      state,
+      projectContext: adapter,
+    }).mount({
+      container: document.createElement("div"),
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    }),
+    /draft guard/i,
+  );
+  assert.equal(subscriptions, 0);
 });

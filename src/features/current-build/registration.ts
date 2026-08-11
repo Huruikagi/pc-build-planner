@@ -9,9 +9,9 @@ import type {
   OperationPolicy,
   PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
-import type { ProjectId } from "../../domain/public.js";
 import { LanguageProvider } from "../../ui-language/public.js";
 import type { CurrentBuildQuery } from "./contracts.js";
+import type { CurrentBuildProjectContextAdapter } from "./project-context-adapter.js";
 import {
   type CurrentBuildPublicApi,
   createCurrentBuildPublicApi,
@@ -42,26 +42,29 @@ export interface CurrentBuildFeatureRegistrationDependencies {
   ) => () => void;
   /** Supplied by the feature-local React/state composition when the screen is enabled. */
   readonly state?: BuildState;
+  /** Owner-local projection of the project-context public read and guard ports. */
+  readonly projectContext?: CurrentBuildProjectContextAdapter;
 }
 
-/**
- * A non-authoritative peek at the untrusted snapshot's target project, used
- * only to decide which project's candidates to load before validating.
- * `codec.restore` is the sole authority on whether the reference is real.
- */
-const peekSelectedProjectId = (input: unknown): string | null | undefined => {
-  if (typeof input !== "object" || input === null) return undefined;
-  const value = (input as Record<string, unknown>).selectedProjectId;
-  if (value === null) return null;
-  return typeof value === "string" ? value : undefined;
-};
-
 const mountBuildView =
-  (state: BuildState): CurrentBuildMount =>
+  (
+    state: BuildState,
+    projectContext?: CurrentBuildProjectContextAdapter,
+  ): CurrentBuildMount =>
   async ({ container, operationPolicy, restoredState }) => {
     state.attachOperationPolicy(operationPolicy);
     /** A mount starts from persisted data; only a snapshot may restore a screen. */
     state.resetTransientState();
+    const guardRegistration = projectContext?.registerDraftGuard(
+      state.draftGuardOwner(),
+    );
+    if (guardRegistration !== undefined && !guardRegistration.ok) {
+      state.releaseOperationPolicy();
+      throw new Error("Current build draft guard registration failed.");
+    }
+    const releaseGuard = guardRegistration?.ok
+      ? guardRegistration.value
+      : undefined;
     const root: Root = createRoot(container);
     root.render(
       createElement(
@@ -72,38 +75,39 @@ const mountBuildView =
     );
     let unmounted = false;
 
-    await state.load();
-    const codec = createBuildStateSnapshotCodec(state);
-    if (restoredState !== undefined) {
-      const peeked = peekSelectedProjectId(restoredState);
-      if (
-        peeked !== undefined &&
-        peeked !== null &&
-        peeked !== state.value.selectedProjectId
-      ) {
-        await state.selectProject(peeked as ProjectId);
+    try {
+      if (projectContext === undefined) await state.load();
+      else await state.attachProjectContext(projectContext);
+      const codec = createBuildStateSnapshotCodec(state);
+      if (restoredState !== undefined) {
+        const restored = codec.restore(restoredState);
+        if (restored.ok) state.applySnapshot(restored.value);
+        else state.rejectSnapshotRestore();
       }
-      const restored = codec.restore(restoredState);
-      if (restored.ok) {
-        state.applySnapshot(restored.value);
-      } else {
-        await state.load();
-        state.rejectSnapshotRestore();
-      }
-    }
 
-    return {
-      async captureState() {
-        return { ok: true, value: codec.capture(state) };
-      },
-      async unmount() {
-        if (unmounted) return;
-        unmounted = true;
-        state.releaseOperationPolicy();
-        root.unmount();
-        container.replaceChildren();
-      },
-    };
+      return {
+        async captureState() {
+          return { ok: true, value: codec.capture(state) };
+        },
+        async unmount() {
+          if (unmounted) return;
+          unmounted = true;
+          releaseGuard?.();
+          state.releaseProjectContext();
+          state.releaseOperationPolicy();
+          state.resetTransientState();
+          root.unmount();
+          container.replaceChildren();
+        },
+      };
+    } catch (error) {
+      releaseGuard?.();
+      state.releaseProjectContext();
+      state.releaseOperationPolicy();
+      root.unmount();
+      container.replaceChildren();
+      throw error;
+    }
   };
 
 /**
@@ -122,7 +126,7 @@ export const createCurrentBuildFeatureRegistration = (
     dependencies.mount ??
     (dependencies.state === undefined
       ? mountUnavailable
-      : mountBuildView(dependencies.state));
+      : mountBuildView(dependencies.state, dependencies.projectContext));
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
   const subscribeAvailability =

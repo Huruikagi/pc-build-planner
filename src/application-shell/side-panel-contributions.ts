@@ -159,6 +159,15 @@ export const createSidePanelFeatureContributions = (
   });
   const currentBuild = createCurrentBuildContribution(context, {
     candidates: candidateManagement.registration.publicApi.query,
+    ...(context.projectContext === undefined ||
+    dependencies.projectGuards === undefined
+      ? {}
+      : {
+          projectContext: {
+            read: context.projectContext,
+            guards: dependencies.projectGuards,
+          },
+        }),
   });
   const productCapture = createProductCaptureContribution(context, {
     runtime:

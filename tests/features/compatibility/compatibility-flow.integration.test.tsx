@@ -150,10 +150,22 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
           return { ok: true as const, value: undefined };
         },
       },
+      projectContext: {
+        getSnapshot: () => ({
+          status: "ready" as const,
+          generation: 1,
+          catalog: [{ id: projectId, name: "架空構成", updatedAt: timestamp }],
+          selectedProjectId: projectId,
+        }),
+        subscribe: () => () => {},
+      },
     },
     {
       backupRestoreData: data as never,
       ...detachedProjectContextDependencies(),
+      projectGuards: {
+        register: () => ({ ok: true as const, value: () => {} }),
+      },
       transientSurface: idleTransientSurface,
     },
   );
@@ -342,10 +354,22 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
           return { ok: true as const, value: undefined };
         },
       },
+      projectContext: {
+        getSnapshot: () => ({
+          status: "ready" as const,
+          generation: 1,
+          catalog: [{ id: projectId, name: "架空構成", updatedAt: timestamp }],
+          selectedProjectId: projectId,
+        }),
+        subscribe: () => () => {},
+      },
     },
     {
       backupRestoreData: data as never,
       ...detachedProjectContextDependencies(),
+      projectGuards: {
+        register: () => ({ ok: true as const, value: () => {} }),
+      },
       transientSurface: idleTransientSurface,
     },
   );

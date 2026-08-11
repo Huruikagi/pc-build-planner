@@ -201,7 +201,7 @@
   - _Requirements: 1.2, 1.4, 1.5, 1.6, 3.3, 3.4, 3.5, 5.3, 5.4, 5.5, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
   - _Boundary: BuildView_
 
-- [ ] 9. feature lifecycleへcontext連携を統合する
+- [x] 9. feature lifecycleへcontext連携を統合する
   - feature mount時にcontext adapterの購読とdraft guardを登録し、authorityが確定したprojectを読み込んでからsnapshotを検査する。
   - feature contributionへproject-contextのread・guard public portを注入し、command portやcontext内部serviceへ依存しない。
   - captureでは既存version 1 shapeだけを返し、unmountではcontext、guard、operation policy、state、React rootを各一度だけ解放する。
@@ -248,6 +248,8 @@
   - _Boundary: Current build acceptance validation_
 
 ## Implementation Notes
+
+- 9ではCurrentBuildFeatureRegistrationがmount時にdraft guard登録→context authority読込→snapshot検査の順で処理し、unmountでguard・context・operation policy・transient state・React rootを冪等解放する。project-context未注入時は候補一覧先頭へfallbackせずunavailableとしてfail closedにするため、side panel integration harnessもread/guard public portを明示的に注入する必要がある。
 
 - BuildService.execute（2.2）はBuildCommandの3種を単一のswitchで扱うため、CategoryPolicyのmode分岐（single/multiple）は2.2の時点で自然に実装済みとなった。2.3は新規実装ではなく、2.2で未検証だった複数選択カテゴリ経路（追加・数量変更・解除・重複防止・不正数量拒否）へservice testを追加してcanonical構成規則を証明するタスクだった。src側の変更は不要だった。
 - 3.1はlocal-data-foundationのreferenceRepairPolicy（候補削除・カテゴリ変更で変更対象自身のBuildItemだけを無条件に除去し、無関係な参照は触れない）と、current-build-managementのCurrentBuildQuery（2.1）を実データポートで結合するintegration testのみで完結した。src側の変更は不要で、Foundation側の修復が既にrequirement 4.1-4.4を満たしていることを確認できた。

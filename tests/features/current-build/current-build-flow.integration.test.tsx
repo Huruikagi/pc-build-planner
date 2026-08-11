@@ -119,10 +119,24 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
           return { ok: true as const, value: undefined };
         },
       },
+      projectContext: {
+        getSnapshot: () => ({
+          status: "ready" as const,
+          generation: 1,
+          catalog: [
+            { id: projectId, name: "架空統合PC構成", updatedAt: timestamp },
+          ],
+          selectedProjectId: projectId,
+        }),
+        subscribe: () => () => {},
+      },
     },
     {
       backupRestoreData: data as never,
       ...detachedProjectContextDependencies(),
+      projectGuards: {
+        register: () => ({ ok: true as const, value: () => {} }),
+      },
       transientSurface: idleTransientSurface,
     },
   );
