@@ -235,6 +235,7 @@ export class BuildState {
     } catch {
       // Detaching from the shared context is best-effort at unmount.
     }
+    this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
     this.#contextGeneration = null;
     this.#allCandidates = [];
     this.#revision = 0 as Revision;
@@ -256,11 +257,14 @@ export class BuildState {
   async #applyAvailability(
     availability: BuildProjectAvailability,
   ): Promise<void> {
-    const authorityChanged =
-      this.#contextGeneration !== availability.generation ||
+    const selectionChanged =
       this.#value.projectAvailability !== availability.status ||
       (availability.status === "ready" &&
         this.#value.selectedProjectId !== availability.projectId);
+    const authorityChanged =
+      this.#contextGeneration !== availability.generation || selectionChanged;
+    if (selectionChanged)
+      this.#isolateDirtyDrafts(this.#value.selectedProjectId);
     this.#contextGeneration = availability.generation;
     // 確定済みcontextが動いた時点で、進行中の確認結果は適用できない。
     this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
@@ -342,11 +346,16 @@ export class BuildState {
     this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
     // cause "user" は本featureのevaluateで保存・破棄を確定させた後の通知。
     if (change.cause === "user") return;
+    this.#isolateDirtyDrafts(change.from);
+  }
+
+  #isolateDirtyDrafts(projectId: ProjectId | null): void {
+    if (projectId === null) return;
     const drafts = this.#dirtyDrafts();
     if (Object.keys(drafts).length === 0) return;
     // 新しいprojectへ暗黙保存せず、隔離して継続方法を案内できる状態にする。
     this.#set({
-      orphanedDraft: { projectId: change.from, drafts },
+      orphanedDraft: { projectId, drafts },
       quantityDrafts: withoutKeys(this.#value.quantityDrafts, drafts),
     });
   }

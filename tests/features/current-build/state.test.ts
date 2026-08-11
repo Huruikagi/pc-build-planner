@@ -14,6 +14,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
+import { ok } from "../../../src/domain/public.js";
 import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCategoryPolicy } from "../../../src/features/current-build/category-policy.js";
 import type {
@@ -29,10 +30,15 @@ import type {
   BuildProjectAvailability,
   BuildProjectSwitch,
 } from "../../../src/features/current-build/project-context-adapter.js";
+import { createCurrentBuildProjectContextAdapter } from "../../../src/features/current-build/project-context-adapter.js";
 import {
   type BuildStateDependencies,
   createBuildState,
 } from "../../../src/features/current-build/state.js";
+import { createProjectCatalogProjection } from "../../../src/project-context/catalog.js";
+import { createInMemoryProjectPreferencePort } from "../../../src/project-context/preference-store.js";
+import { createProjectContextPublicApi } from "../../../src/project-context/public.js";
+import { createProjectContextService } from "../../../src/project-context/service.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -908,6 +914,9 @@ test("確認中にgenerationが進んだ場合は古い結果でdraftを保存�
 test("forced変更ではdraftを隔離し新projectへ暗黙保存しない", async () => {
   const { state, owner, context, serviceCalls } = await withDraft();
 
+  // project-contextのproduction契約はsnapshot publish後にforced通知する。
+  context.publish({ status: "empty", generation: 8 });
+  await flush();
   owner.notifyForced({
     token: "forced-1",
     from: projectId,
@@ -915,8 +924,6 @@ test("forced変更ではdraftを隔離し新projectへ暗黙保存しない", as
     baseGeneration: 7,
     cause: "catalog-invalidated",
   });
-  context.publish({ status: "empty", generation: 8 });
-  await flush();
 
   assert.equal(serviceCalls.length, 0);
   assert.deepEqual(state.value.orphanedDraft?.drafts, {
@@ -928,6 +935,97 @@ test("forced変更ではdraftを隔離し新projectへ暗黙保存しない", as
   // 利用者が明示的に破棄するまで内容を保持する。
   state.dismissOrphanedDraft();
   assert.equal(state.value.orphanedDraft, null);
+});
+
+test("切替確認中のcontext解除は保留中guard評価をstaleで完了する", {
+  timeout: 500,
+}, async () => {
+  const { state, owner } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  state.releaseProjectContext();
+
+  assert.deepEqual(await pending, {
+    ok: false,
+    error: { kind: "stale-request" },
+  });
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("実project-contextのpublish後forced通知でも旧projectのdraftを保持する", async () => {
+  let projects = [{ id: projectId, name: "架空PC構成", updatedAt: timestamp }];
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection({
+      async list() {
+        return ok(projects);
+      },
+    }),
+    preference: createInMemoryProjectPreferencePort(),
+  });
+  await service.initialize();
+  const api = createProjectContextPublicApi({ service });
+  const adapter = createCurrentBuildProjectContextAdapter({
+    read: api.read,
+    guards: api.guards,
+  });
+  const { state, serviceCalls } = draftHarness();
+  await state.attachProjectContext(adapter);
+  const registered = adapter.registerDraftGuard(state.draftGuardOwner());
+  assert.ok(registered.ok);
+  state.setQuantityDraft(memoryCandidateId, "3");
+
+  projects = [];
+  await service.refresh();
+
+  assert.equal(state.value.projectAvailability, "empty");
+  assert.equal(serviceCalls.length, 0);
+  assert.deepEqual(state.value.orphanedDraft, {
+    projectId,
+    drafts: { [memoryCandidateId]: "3" },
+  });
+  registered.value();
+  state.releaseProjectContext();
+});
+
+test("実project-contextのguard評価中にunmount順で解放しても選択transactionを停止しない", {
+  timeout: 500,
+}, async () => {
+  const projects = [
+    { id: projectId, name: "架空PC構成", updatedAt: timestamp },
+    { id: otherProjectId, name: "架空別構成", updatedAt: timestamp },
+  ];
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection({
+      async list() {
+        return ok(projects);
+      },
+    }),
+    preference: createInMemoryProjectPreferencePort(),
+  });
+  await service.initialize();
+  const api = createProjectContextPublicApi({ service });
+  const adapter = createCurrentBuildProjectContextAdapter({
+    read: api.read,
+    guards: api.guards,
+  });
+  const { state } = draftHarness();
+  await state.attachProjectContext(adapter);
+  const registered = adapter.registerDraftGuard(state.draftGuardOwner());
+  assert.ok(registered.ok);
+  state.setQuantityDraft(memoryCandidateId, "3");
+
+  const selecting = service.select(otherProjectId);
+  await flush();
+  assert.ok(state.value.switchConfirmation);
+
+  // registration.unmountと同じくguard登録を先に解放し、state contextを解除する。
+  registered.value();
+  state.releaseProjectContext();
+
+  const result = await selecting;
+  assert.equal(result.ok, false);
+  assert.equal(state.value.switchConfirmation, null);
 });
 
 test("利用者確定の切替通知ではdraftを隔離状態へ移さない", async () => {
