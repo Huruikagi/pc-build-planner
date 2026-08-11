@@ -513,11 +513,15 @@ export class ManagementState {
 
   #syncCurrentProject(): void {
     const resolution = this.resolveCurrentProject();
+    const forcedDraftError =
+      this.#value.projectChangedWithDraft === null
+        ? null
+        : ({ code: "project-changed-with-draft" } as const);
     if (resolution.status !== "resolved") {
       this.#set({
         selectedProjectId: null,
         candidates: [],
-        displayError: { code: "project-required" },
+        displayError: forcedDraftError ?? { code: "project-required" },
         mutationsDisabled: this.#mutationsDisabled(),
       });
       return;
@@ -528,7 +532,7 @@ export class ManagementState {
         resolution.projectId,
         this.#value.selectedCategory,
       ),
-      displayError: null,
+      displayError: forcedDraftError,
       mutationsDisabled: this.#mutationsDisabled(),
     });
     if (this.#value.pendingPreEdit !== null)
@@ -570,7 +574,11 @@ export class ManagementState {
 
   /** The user explicitly abandons the held pre-edit without persistence. */
   public cancelPendingPreEdit(): void {
-    this.#set({ pendingPreEdit: null });
+    this.#set({
+      pendingPreEdit: null,
+      projectChangedWithDraft: null,
+    });
+    this.#syncCurrentProject();
   }
 
   /** Called only after a newer pre-edit has been accepted into the editor. */
@@ -751,6 +759,14 @@ export class ManagementState {
     return this.#value.editor !== null || this.#value.pendingPreEdit !== null;
   }
 
+  /** Project deletion needs an explicit draft warning only when it can affect current work. */
+  public projectDeletionAffectsDraft(projectId: ProjectId): boolean {
+    return (
+      this.#value.pendingPreEdit !== null ||
+      this.#value.editor?.projectId === projectId
+    );
+  }
+
   /** Applies only after project-context has committed a user-confirmed switch. */
   public discardDraftForConfirmedSwitch(from: ProjectId, to: ProjectId): void {
     if (!this.hasDirtyProjectDraft()) return;
@@ -860,13 +876,6 @@ export class ManagementState {
             context,
           );
     if (!result.ok) return this.#mutationFailure(result.error);
-    if (
-      deletion.kind === "project" &&
-      (this.#value.editor?.projectId === deletion.projectId ||
-        this.#value.pendingPreEdit !== null)
-    ) {
-      this.#set({ editor: null, pendingPreEdit: null });
-    }
     this.#set({ deletion: null, isSaving: false });
     if (deletion.kind === "project") await this.#refreshAfterProjectMutation();
     else await this.load();

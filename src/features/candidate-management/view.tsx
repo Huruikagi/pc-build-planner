@@ -1059,7 +1059,11 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       );
       return project === undefined
         ? null
-        : { kind: "project" as const, name: project.name };
+        : {
+            kind: "project" as const,
+            projectId: project.id,
+            name: project.name,
+          };
     }
     const candidate = value.candidates.find(
       (item) => item.id === deletion.candidateId,
@@ -1356,11 +1360,18 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
         >
           <h2>{messages("candidate.deleteConfirmationHeading")}</h2>
           {deletionTarget.kind === "project" ? (
-            <p>
-              {messages("candidate.deleteProjectMessage", {
-                name: deletionTarget.name,
-              })}
-            </p>
+            <>
+              <p>
+                {messages("candidate.deleteProjectMessage", {
+                  name: deletionTarget.name,
+                })}
+              </p>
+              {state.projectDeletionAffectsDraft(deletionTarget.projectId) ? (
+                <p data-project-deletion-draft-warning>
+                  {messages("candidate.deleteProjectUnsavedDraftWarning")}
+                </p>
+              ) : null}
+            </>
           ) : (
             <p>
               {messages("candidate.deleteCandidateMessage", {

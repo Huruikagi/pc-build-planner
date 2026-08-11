@@ -97,7 +97,13 @@ export type ProjectContextChangeIntent =
       readonly kind: "select-project";
       readonly from: ProjectId;
       readonly to: ProjectId;
-      readonly cause: "user" | "catalog-invalidated";
+      readonly cause: "user";
+    }
+  | {
+      readonly kind: "select-project";
+      readonly from: ProjectId;
+      readonly to: ProjectId | null;
+      readonly cause: "catalog-invalidated";
     }
   | {
       readonly kind: "replace-catalog";

@@ -99,3 +99,100 @@ test("project作成後のrefresh失敗はdraftを保持し、回復操作はmuta
   assert.equal(state.value.pendingPreEdit, null);
   assert.equal(state.value.editor?.projectId, projectId);
 });
+
+test("project削除は確認取消でmutationせず、確定後のforced通知でも旧draftを保持する", async () => {
+  let deletes = 0;
+  let refreshes = 0;
+  let state: ReturnType<typeof createManagementState>;
+  const currentProject: CurrentProjectPort = {
+    getCurrentProject: () => ({ status: "unresolved" }),
+    subscribe: () => () => {},
+    async refresh() {
+      refreshes += 1;
+      state.preserveDraftAfterForcedSwitch(projectId);
+      return { ok: true, value: { status: "unresolved" } };
+    },
+  };
+  const service = {
+    async deleteProject() {
+      deletes += 1;
+      return { ok: true as const, value: undefined };
+    },
+  } as unknown as CandidateManagementService;
+  state = createManagementState({
+    query,
+    service,
+    currentProject,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000072" as never,
+      expectedRevision: 0 as never,
+    }),
+  });
+  state.beginCreate({
+    projectId,
+    category: "uncategorized",
+    product: { name: { original: "削除後も保持する入力" } },
+    normalizedAttributes: { category: "uncategorized" },
+  });
+
+  state.requestDeletion({ kind: "project", projectId });
+  state.cancelDeletion();
+  assert.equal(deletes, 0);
+  assert.equal(refreshes, 0);
+  assert.equal(state.value.editor?.projectId, projectId);
+
+  state.requestDeletion({ kind: "project", projectId });
+  await state.confirmDeletion();
+  assert.equal(deletes, 1);
+  assert.equal(refreshes, 1);
+  assert.equal(state.value.editor?.projectId, projectId);
+  assert.equal(
+    state.value.editor?.draft.product.name.original,
+    "削除後も保持する入力",
+  );
+  assert.deepEqual(state.value.projectChangedWithDraft, { from: projectId });
+  assert.equal(state.value.displayError?.code, "project-changed-with-draft");
+});
+
+test("project削除後のforced通知でもpending pre-editを保持する", async () => {
+  let state: ReturnType<typeof createManagementState>;
+  const currentProject: CurrentProjectPort = {
+    getCurrentProject: () => ({ status: "unresolved" }),
+    subscribe: () => () => {},
+    async refresh() {
+      state.preserveDraftAfterForcedSwitch(projectId);
+      return { ok: true, value: { status: "unresolved" } };
+    },
+  };
+  const service = {
+    async deleteProject() {
+      return { ok: true as const, value: undefined };
+    },
+  } as unknown as CandidateManagementService;
+  state = createManagementState({
+    query,
+    service,
+    currentProject,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000073" as never,
+      expectedRevision: 0 as never,
+    }),
+  });
+  state.holdPendingPreEdit(pending);
+
+  state.requestDeletion({ kind: "project", projectId });
+  await state.confirmDeletion();
+
+  assert.deepEqual(state.value.pendingPreEdit, pending);
+  assert.equal(state.value.editor, null);
+  assert.deepEqual(state.value.projectChangedWithDraft, { from: projectId });
+  assert.equal(state.value.displayError?.code, "project-changed-with-draft");
+  assert.equal(state.value.mutationsDisabled, true);
+
+  state.cancelPendingPreEdit();
+
+  assert.equal(state.value.pendingPreEdit, null);
+  assert.equal(state.value.projectChangedWithDraft, null);
+  assert.equal(state.value.mutationsDisabled, false);
+  assert.equal(state.value.displayError?.code, "project-required");
+});

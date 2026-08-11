@@ -114,6 +114,7 @@ async function renderView(service?: CandidateManagementService) {
   await act(() => root.render(<ManagementView state={state} />));
   return {
     container,
+    state,
     cleanup: async () => {
       await act(() => root.unmount());
       container.remove();
@@ -435,6 +436,33 @@ test("プロジェクト削除では対象と所属候補への影響を確認�
   ) as HTMLButtonElement;
   await act(async () => confirm.click());
   assert.equal(deletedProjectId, firstProjectId);
+
+  await rendered.cleanup();
+});
+
+test("編集中projectの削除確認は未保存入力の保持と保存不能を明示する", async () => {
+  const rendered = await renderView();
+  await act(() =>
+    rendered.state.beginCreate({
+      projectId: firstProjectId,
+      category: "uncategorized",
+      product: { name: { original: "保持する未保存入力" } },
+      normalizedAttributes: { category: "uncategorized" },
+    }),
+  );
+  const request = rendered.container.querySelector(
+    `[data-delete-project-id='${firstProjectId}']`,
+  ) as HTMLButtonElement;
+  await act(async () => request.click());
+
+  const confirmation = rendered.container.querySelector('[role="dialog"]');
+  assert.match(
+    confirmation?.textContent ?? "",
+    new RegExp(
+      defaultMessageResolver("candidate.deleteProjectUnsavedDraftWarning"),
+    ),
+  );
+  assert.equal(rendered.state.value.editor?.projectId, firstProjectId);
 
   await rendered.cleanup();
 });

@@ -51,6 +51,8 @@ export const candidate = {
   deleteConfirmationTitle: "Confirm Deletion",
   deleteConfirmationHeading: "Confirm deletion",
   deleteProjectMessage: 'This also deletes the parts in project "{name}".',
+  deleteProjectUnsavedDraftWarning:
+    "This project has unsaved changes. Your input will be kept after deletion, but it cannot be saved.",
   deleteCandidateMessage: 'This deletes part "{name}".',
   confirmDeleteAction: "Delete",
   editorFormTitle: "Edit Part",

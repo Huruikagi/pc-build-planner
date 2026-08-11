@@ -167,6 +167,7 @@
 
 ## Implementation Notes
 
+- 2026-08-11: refresh で current project が catalog から失効した場合、次の snapshot を commit してから `catalog-invalidated` forced change を一度通知する。fallback があれば `to` はその project ID、empty / unavailable では `null` とし、downstream guard が旧 project の未保存 draft を回復可能なまま fence できるようにする。
 - 1.1: `contracts.ts` は型契約のみ、`catalog.ts` が projection と純粋 snapshot 構築（`createProjectContextSnapshot` / `unavailableProjectContextSnapshot` / `resolveProjectCatalogSelection`）を持つ。generation 採番と transaction 直列化は task 2.3 の service が所有する。service はこれらを再実装せず利用すること。
 - 2.1–2.2: `ProjectChangeGuardCoordinator` は opaque な confirmation / permit と registry revision を保持する。selection の永続化・snapshot commit は task 2.4 の service transaction が所有する。
 - 2.3: `ProjectContextService` は lifecycle の catalog/preference I/O と snapshot publish だけを所有する。guard 付き selection と replacement の service 統合は task 2.4 以降で行う。

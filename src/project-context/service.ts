@@ -109,46 +109,65 @@ export const createProjectContextService = (input: {
   const load = async (
     initial: boolean,
   ): Promise<Result<ProjectContextSnapshot, ProjectContextLifecycleError>> => {
+    const previous = snapshot;
+    const publishLoaded = async (
+      next: ProjectContextSnapshot,
+      catalogInvalidated: boolean,
+    ): Promise<
+      Result<ProjectContextSnapshot, ProjectContextLifecycleError>
+    > => {
+      const committed = publish(next);
+      if (!initial && catalogInvalidated && previous.status === "ready") {
+        await guards.notifyForcedSelection({
+          kind: "select-project",
+          from: previous.selectedProjectId,
+          to: committed.status === "ready" ? committed.selectedProjectId : null,
+          cause: "catalog-invalidated",
+        });
+      }
+      return ok(committed);
+    };
     const catalog = await input.catalog.load();
     if (!catalog.ok)
-      return ok(
-        publish(
-          unavailableProjectContextSnapshot(
-            snapshot.generation + 1,
-            "catalog-unavailable",
-          ),
+      return publishLoaded(
+        unavailableProjectContextSnapshot(
+          snapshot.generation + 1,
+          "catalog-unavailable",
         ),
+        false,
       );
     if (catalog.value.length === 0) {
       const cleared = await input.preference.clear();
       if (!cleared.ok)
-        return ok(
-          publish(
-            unavailableProjectContextSnapshot(
-              snapshot.generation + 1,
-              "preference-write-failed",
-            ),
-          ),
-        );
-      return ok(
-        publish(
-          createProjectContextSnapshot({
-            generation: snapshot.generation + 1,
-            catalog,
-            preferredProjectId: null,
-          }),
-        ),
-      );
-    }
-    const stored = await input.preference.read();
-    if (!stored.ok)
-      return ok(
-        publish(
+        return publishLoaded(
           unavailableProjectContextSnapshot(
             snapshot.generation + 1,
-            "preference-unavailable",
+            "preference-write-failed",
           ),
+          previous.status === "ready",
+        );
+      return publishLoaded(
+        createProjectContextSnapshot({
+          generation: snapshot.generation + 1,
+          catalog,
+          preferredProjectId: null,
+        }),
+        previous.status === "ready",
+      );
+    }
+    const catalogInvalidated =
+      previous.status === "ready" &&
+      !catalog.value.some(
+        (project) => project.id === previous.selectedProjectId,
+      );
+    const stored = await input.preference.read();
+    if (!stored.ok)
+      return publishLoaded(
+        unavailableProjectContextSnapshot(
+          snapshot.generation + 1,
+          "preference-unavailable",
         ),
+        catalogInvalidated,
       );
     const current =
       !initial && snapshot.status === "ready"
@@ -162,23 +181,22 @@ export const createProjectContextService = (input: {
       catalog,
       preferredProjectId: preferred,
     });
-    if (next.status !== "ready") return ok(publish(next));
+    if (next.status !== "ready") return publishLoaded(next, catalogInvalidated);
     if (
       stored.value.kind !== "valid" ||
       stored.value.selectedProjectId !== next.selectedProjectId
     ) {
       const repaired = await input.preference.write(next.selectedProjectId);
       if (!repaired.ok)
-        return ok(
-          publish(
-            unavailableProjectContextSnapshot(
-              snapshot.generation + 1,
-              "preference-write-failed",
-            ),
+        return publishLoaded(
+          unavailableProjectContextSnapshot(
+            snapshot.generation + 1,
+            "preference-write-failed",
           ),
+          catalogInvalidated,
         );
     }
-    return ok(publish(next));
+    return publishLoaded(next, catalogInvalidated);
   };
   const select = async (
     projectId: ProjectId,

@@ -58,6 +58,8 @@ export const candidate = {
   deleteConfirmationHeading: "削除を確認",
   /** 「プロジェクト「{name}」と所属する候補も削除します。」のJSX子要素列を1つの文へ再設計。 */
   deleteProjectMessage: "プロジェクト「{name}」と所属するパーツも削除します。",
+  deleteProjectUnsavedDraftWarning:
+    "このプロジェクトには未保存の編集があります。削除後も入力は保持されますが、保存はできません。",
   /** 「候補「{name}」を削除します。」の再設計。 */
   deleteCandidateMessage: "パーツ「{name}」を削除します。",
   confirmDeleteAction: "削除する",

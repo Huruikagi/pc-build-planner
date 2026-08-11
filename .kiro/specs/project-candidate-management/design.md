@@ -37,7 +37,7 @@
 - 一過性面の起動世代・固定tab・`conclude`・失敗時intent保持
 - source entity・catalog・mutationの実装、および重複候補の照合・統合判断
 - 現在projectの選択、preference、fallback、共通selector、project-context singletonとproduction composition
-- snapshot version/shapeの変更、snapshotからproject-contextを更新する処理
+- 現行snapshot version 3/shapeの追加変更、snapshotからproject-contextを更新する処理
 
 ### Allowed Dependencies
 - `local-data-foundation` のDomainModel、Result、`FoundationDataPort`、原子的root mutation契約
@@ -49,6 +49,9 @@
 - `project-context` のread、command、guard registration port。候補管理はpreference storeやservice内部へ依存しない
 - `product-capture-transient-migration` が利用する現行世代確認済み`FeatureActivationIntent`と`TransientSurfaceLifecyclePort.conclude`のtyped result
 - `candidate-source-bookmarks` が同じ公開APIへ合成する`CandidateSourceCatalogPort`と`CandidateSourceMutationPort`
+- `product-page-capture` が公開する純粋な`ProductIdentityNormalizer`とmanufacturer domain照合能力
+- `source-price-refresh` の公開port。`duplicate-product-merge`のfeature-local coordinatorへcomposition時に注入し、内部moduleへdeep importしない
+- `duplicate-product-merge` が候補管理owner内へ追加するmatcher、判断state/view、snapshot substate。既存CRUD・project binding・保存validatorの所有は移さない
 
 ### Revalidation Triggers
 - `Project`、`CandidatePart`、`SourceInfo`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
@@ -116,6 +119,9 @@ src/features/candidate-management/state.ts     # 読込、pendingPreEdit、proje
 src/features/candidate-management/view.tsx     # 一覧、フォーム、確認のReact component
 src/features/candidate-management/react-root.tsx # FeatureMountContextとReact rootの接続・cleanup
 src/features/candidate-management/styles.css   # 管理画面レイアウトと状態表現
+src/features/candidate-management/source-*.ts # candidate-source-bookmarksが追加したsource facetとowner-local adapter
+src/features/candidate-management/duplicate-*.ts(x) # duplicate-product-mergeが追加した保存前判断とUI substate
+src/features/candidate-management/category-draft.ts # unresolved draftのproject binding
 tests/features/candidate-management/service.test.ts
 tests/features/candidate-management/state.test.ts
 tests/features/candidate-management/view.test.ts
@@ -126,6 +132,8 @@ tests/features/candidate-management/pre-edit-validation.test.ts
 tests/features/candidate-management/project-context-adapter.test.ts
 tests/features/candidate-management/pre-edit-handoff.integration.test.ts
 tests/features/candidate-management/project-switch-protection.integration.test.ts
+tests/features/candidate-management/source-*.test.ts
+tests/features/candidate-management/duplicate-*.test.ts(x)
 ```
 
 ### Modified Files
@@ -293,18 +301,19 @@ interface CandidatePreEditState {
 
 `ManagementStateValue`へ`pendingPreEdit`を追加するが、既存`editor`はproject解決済みcanonical `CandidateDraft`だけを保持する。project作成成功だけではpendingを解決せず、続く`ProjectContextCommandPort.refresh()`が`ready`を返した時点で、その選択IDを保持中draftへ付与してeditorへ遷移する。作成失敗またはrefresh失敗ではpendingを保持する。pendingは候補保存成功、利用者の明示取消、新しい検証済みpre-edit activationでのみ置換・破棄し、capture面の終了、通常のfeature切替では破棄しない。
 
-pendingの寿命は同一side panel document sessionに限定し、長寿命の`ManagementState` instanceが保持する。opaque rollback snapshot、永続root、session storage、Chrome Storage、backupへ含めない。side panel閉鎖、extension reload、browser終了後の再openでは復元も自動再抽出もしない。source editor stateを追加する`candidate-source-bookmarks`のsnapshot version 2契約は維持し、pendingをその永続化対象へ混入させない。
+pendingの寿命は同一side panel document sessionに限定し、長寿命の`ManagementState` instanceが保持する。opaque rollback snapshot、永続root、session storage、Chrome Storage、backupへ含めない。side panel閉鎖、extension reload、browser終了後の再openでは復元も自動再抽出もしない。`candidate-source-bookmarks`の複数source stateと`duplicate-product-merge`の判断substateを含む現行snapshot version 3契約を維持し、pendingをその永続化対象へ混入させない。
 
-feature registrationのmounted handleは、未保存の管理画面stateをopaque snapshotとしてcaptureできる。既存version 2とshapeを維持し、`selectedProjectId`は復元時の一致検査にだけ使う非権威的metadataとする。snapshotは選択category、編集対象、検証済みdraft、削除確認、表示エラーを含み、永続rootや保存中request、購読handle、React objectを含まない。rollbackによる再mount時は`FeatureMountContext`から受け取った`unknown`をfeature内で検証してから復元する。shellはsnapshotの構造・候補値を解釈しない。
+feature registrationのmounted handleは、未保存の管理画面stateをopaque snapshotとしてcaptureできる。現行version 3とshapeを維持し、`selectedProjectId`は復元時の一致検査にだけ使う非権威的metadataとする。snapshotは選択category、編集対象、検証済みdraft、削除確認、表示エラー、複製判断substateを含み、永続rootや保存中request、購読handle、React objectを含まない。rollbackによる再mount時は`FeatureMountContext`から受け取った`unknown`をfeature内で検証してから復元する。shellはsnapshotの構造・候補値を解釈しない。
 
 ```typescript
 interface ManagementStateSnapshot {
-  readonly version: 2;
+  readonly version: 3;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   readonly editor: CandidateEditorSnapshot | null;
   readonly deletion: DeletionConfirmationSnapshot | null;
   readonly displayError: ManagementDisplayError | null;
+  readonly duplicateDecision: DuplicateMergeStateSnapshot | null;
 }
 
 type CandidateEditorSnapshot =
@@ -409,7 +418,7 @@ pre-editのpayload不正はshellの`invalid_activation`へ写像する。payload
 - Handoff/generation integration: 現行世代の`conclude`だけがintentを配送し、candidate-management受理成功で一過性面が終了することを検証する。stale世代とhandoff失敗intent保持は上流fixtureで検証し、候補管理へ世代stateを追加しない。
 - Public consumer contract: `query`、`createCandidateEditorIntent`、`sources: { catalog, mutations }`が同じ`public.ts`から利用でき、`CaptureCandidatePort`、`openCandidateEditor`、内部validatorへのdeep importが存在しないことを型検査する。
 - Project context integration: clean/dirty切替、確認取消/確定、stale確認、forced切替、CRUD mutation失敗時refreshなし、成功時refresh、refresh失敗後のrefresh-only回復を検証する。
-- State snapshot integration: version 2/shapeを維持し、一致するcurrent projectでだけ編集状態を復元する。不一致・不存在・empty/unavailable・不正snapshotがcontext、保存、候補一覧を変更しないことを検証する。
+- State snapshot integration: version 3/shapeを維持し、一致するcurrent projectでだけ編集状態と複製判断substateを復元する。不一致・不存在・empty/unavailable・不正snapshotがcontext、保存、候補一覧を変更しないことを検証する。
 
 ## Security & Performance
 

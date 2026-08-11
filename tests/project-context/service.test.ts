@@ -56,6 +56,58 @@ test("2.3: initialize は valid preference を復元し、missing は先頭へ�
   assert.deepEqual(notices, [1, 2]);
 });
 
+test("4.3/4.4/5.6: refreshで現在projectが失効するとcommit後にfallbackとemptyをforced通知する", async () => {
+  let entries: readonly ProjectCatalogItem[] = [
+    item(A, "架空A"),
+    item(B, "架空B"),
+  ];
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection({
+      async list() {
+        return ok(entries);
+      },
+    }),
+    preference: createInMemoryProjectPreferencePort(),
+  });
+  await service.initialize();
+  const notifications: unknown[] = [];
+  service.registerGuard({
+    id: "draft-owner",
+    async evaluate() {
+      return ok({ kind: "allow" });
+    },
+    notifyForced(intent) {
+      notifications.push({ intent, snapshot: service.getSnapshot() });
+    },
+  });
+
+  entries = [item(B, "架空B")];
+  await service.refresh();
+  assert.deepEqual(notifications, [
+    {
+      intent: {
+        kind: "select-project",
+        from: A,
+        to: B,
+        cause: "catalog-invalidated",
+      },
+      snapshot: service.getSnapshot(),
+    },
+  ]);
+
+  entries = [];
+  await service.refresh();
+  assert.deepEqual(notifications[1], {
+    intent: {
+      kind: "select-project",
+      from: B,
+      to: null,
+      cause: "catalog-invalidated",
+    },
+    snapshot: service.getSnapshot(),
+  });
+});
+
 test("2.3: empty は preference を消去し、catalog/preference failure は unavailable へ閉じて retry で回復する", async () => {
   let failure = true;
   const source: ProjectCatalogSource = {

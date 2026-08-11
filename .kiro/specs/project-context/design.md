@@ -335,7 +335,7 @@ interface ProjectPreferencePort {
 - guard decision は `allow` または `confirmation-required` だけとし、draft data を受け取らない。
 - `ProjectContextChangeIntent` は `select-project` と `replace-catalog` の判別共用体とし、置換候補や backup data を含めない。
 - confirmation と replacement permit は opaque ID、intent、base generation、registry revision を保持する。cancel、generation 変更、target 消失、registry 変更、別 transaction で無効化する。
-- confirmed selection commit、catalog invalidation、確認済み replacement success 後に forced change を通知する。listener failure は隔離する。
+- confirmed selection commit、catalog invalidation、確認済み replacement success 後に forced change を通知する。catalog invalidation は新しい snapshot の commit 後に一度だけ通知し、fallback project ではその ID、empty / unavailable では `null` を `to` に設定する。listener failure は隔離する。
 - replacement completionはoutcomeにかかわらずpermitを通知前に閉じる。failure/cancel は forced notification を送らず、success通知の失敗でもpermitを再開しない。通知自体は snapshot を変更せず、refresh は downstream owner が別途要求する。
 
 **Dependencies**
@@ -352,7 +352,13 @@ type ProjectContextChangeIntent =
       readonly kind: "select-project";
       readonly from: ProjectId;
       readonly to: ProjectId;
-      readonly cause: "user" | "catalog-invalidated";
+      readonly cause: "user";
+    }
+  | {
+      readonly kind: "select-project";
+      readonly from: ProjectId;
+      readonly to: ProjectId | null;
+      readonly cause: "catalog-invalidated";
     }
   | {
       readonly kind: "replace-catalog";
@@ -579,7 +585,7 @@ interface ProjectContextPresentationContribution {
 - `ProjectContextSnapshot`: catalog と選択の一貫性境界。`ready` だけが non-null selection を持つ。
 - `ProjectPreferenceDocumentV1`: root 外の UI preference。version と ID だけを持つ。
 - `ProjectSwitchConfirmation`: memory-only の一時 request。永続化、snapshot、backup へ含めない。
-- `ProjectContextChangeIntent`: project 選択または catalog 全体置換の種類と、guard 判断に必要な最小 context。draft や置換候補を含めない。
+- `ProjectContextChangeIntent`: project 選択または catalog 全体置換の種類と、guard 判断に必要な最小 context。catalog invalidation では fallback ID または選択不能を表す `null` を通知し、draft や置換候補を含めない。
 - `ProjectContextReplacementConfirmation` / `ProjectContextReplacementPermit`: memory-only の一時 lifecycle。generation と guard registry revision に結び付き、永続化、snapshot、backup へ含めない。
 
 不変条件:
@@ -642,7 +648,7 @@ error と log には project name、project ID、storage value、draft、excepti
 - guard confirmation 中に refresh、guard unregister、target deletion が起きた場合に confirmation を stale とする。
 - replacement prepare/confirmation後にgenerationまたはregistry revisionが変わった場合はbeginを拒否し、失敗・取消ではforced通知なし、成功では一回だけ通知する。
 - backup owner相当のsynthetic consumerで `prepare → confirm → begin → complete succeeded → refresh` の順序と、refresh失敗後にreplacementを再実行しないことを検証する。
-- catalog invalidation の forced notification と listener failure isolationを検証し、通知失敗後もpermitが閉鎖済みで通常操作と次のprepareを阻害しないことを確認する。
+- catalog invalidation の snapshot commit 後 forced notification（fallback ID / empty 時の `null`）と listener failure isolation を検証し、通知失敗後も permit が閉鎖済みで通常操作と次の prepare を阻害しないことを確認する。
 - reusable contract kit で downstream adapter が legacy snapshot ID を authority にしないこと、null/unavailable を扱うことを検証可能にする。
 
 ### DOM Tests

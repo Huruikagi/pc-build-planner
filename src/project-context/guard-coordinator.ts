@@ -4,6 +4,15 @@ import type {
   ProjectContextChangeIntent,
 } from "./contracts.js";
 
+type ProjectSelectionIntent = Extract<
+  ProjectContextChangeIntent,
+  { readonly kind: "select-project" }
+>;
+type UserProjectSelectionIntent = Extract<
+  ProjectSelectionIntent,
+  { readonly cause: "user" }
+>;
+
 export type ProjectChangeGuardError =
   | { readonly kind: "duplicate-guard" }
   | { readonly kind: "guard-failed" }
@@ -14,10 +23,7 @@ export type ProjectChangeGuardError =
 
 export interface ProjectSwitchConfirmation {
   readonly id: string;
-  readonly intent: Extract<
-    ProjectContextChangeIntent,
-    { readonly kind: "select-project" }
-  >;
+  readonly intent: UserProjectSelectionIntent;
   readonly baseGeneration: number;
   readonly registryRevision: number;
 }
@@ -71,10 +77,7 @@ export interface ProjectChangeGuardCoordinator {
   unregister(id: string): void;
   registryRevision(): number;
   evaluateSelection(
-    intent: Extract<
-      ProjectContextChangeIntent,
-      { readonly kind: "select-project" }
-    >,
+    intent: UserProjectSelectionIntent,
   ): Promise<Result<SelectionAssessment, ProjectChangeGuardError>>;
   confirmSelection(
     id: string,
@@ -101,10 +104,7 @@ export interface ProjectChangeGuardCoordinator {
     outcome: "succeeded" | "failed" | "cancelled",
   ): Promise<Result<void, ProjectChangeGuardError>>;
   notifyForcedSelection(
-    intent: Extract<
-      ProjectContextChangeIntent,
-      { readonly kind: "select-project" }
-    >,
+    intent: ProjectSelectionIntent,
   ): Promise<Result<void, ProjectChangeGuardError>>;
   invalidatePending(): void;
 }
@@ -227,6 +227,7 @@ export const createProjectChangeGuardCoordinator = (input: {
       if (
         pending === undefined ||
         pending.intent.kind !== "select-project" ||
+        pending.intent.cause !== "user" ||
         stale(pending)
       )
         return err(CONFIRMATION_STALE);
@@ -243,6 +244,7 @@ export const createProjectChangeGuardCoordinator = (input: {
       if (
         pending === undefined ||
         pending.intent.kind !== "select-project" ||
+        pending.intent.cause !== "user" ||
         stale(pending)
       )
         return err(CONFIRMATION_STALE);

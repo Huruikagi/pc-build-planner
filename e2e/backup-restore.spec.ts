@@ -34,6 +34,10 @@ import {
   submitButton,
 } from "./models/locator-primitives.js";
 import {
+  projectContextOption,
+  selectedProjectContextOption,
+} from "./models/project-context.js";
+import {
   backupRestoreSection,
   restoreFileInput,
   selectLanguage,
@@ -173,9 +177,8 @@ const candidateRow = (management: Locator, name: string): Locator =>
 async function createProject(page: Page, management: Locator): Promise<void> {
   await formField(page, "project-name").fill(PROJECT_NAME);
   await submitButton(region(management, "project-form")).click();
-  await expect(
-    page.getByRole("button", { name: PROJECT_NAME, exact: true }),
-  ).toBeVisible();
+  await expect(projectContextOption(page, PROJECT_NAME)).toHaveCount(1);
+  await expect(selectedProjectContextOption(page)).toHaveText(PROJECT_NAME);
 }
 
 async function createCandidate(
@@ -314,6 +317,15 @@ test("side panelからexportした全カテゴリのバックアップが実stor
   }
   await addSources(management, "E2E 架空プロセッサ");
   await seedCurrentBuild(page);
+  await expect
+    .poll(async () => {
+      const stored = await readStoredData(page);
+      const currentBuild = stored.currentBuilds[0] as
+        | ExchangeData["currentBuilds"][number]
+        | undefined;
+      return currentBuild?.items.some((item) => item.quantity === 3);
+    })
+    .toBe(true);
 
   const beforeBackup = await readStoredData(page);
   expect(beforeBackup.projects).toHaveLength(1);
@@ -430,9 +442,8 @@ test("side panelからexportした全カテゴリのバックアップが実stor
   expect(afterRestore).toEqual(beforeBackup);
 
   await openCandidateManagement(page);
-  await expect(
-    page.getByRole("button", { name: PROJECT_NAME, exact: true }),
-  ).toBeVisible();
+  await expect(projectContextOption(page, PROJECT_NAME)).toHaveCount(1);
+  await expect(selectedProjectContextOption(page)).toHaveText(PROJECT_NAME);
   for (const seed of CANDIDATE_SEEDS) {
     await expect(candidateRow(management, seed.name)).toBeVisible();
   }

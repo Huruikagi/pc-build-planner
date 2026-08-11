@@ -191,7 +191,7 @@
 - [x] 8.5 transient handoffと下流公開consumerの回帰を統合検証する
   - 現行世代からのconcludeがtyped intentを一度だけ配送し、既存project解決とproject-required受理の両方でhandoff成功となることを架空fixtureで検証する。
   - stale世代では候補管理が変更されず、activation失敗時は上流がintentを保持することを上流contractとの統合で確認する。
-  - 候補CRUD、保存時validation、source catalog/mutation、duplicate保存前consumer、build向けquery、snapshot version 2が回帰しないことを確認する。
+  - 候補CRUD、保存時validation、source catalog/mutation、duplicate保存前consumer、build向けquery、snapshot version 3が回帰しないことを確認する。
   - アイコン起動から空名手入力または抽出結果を候補管理へ渡し、project 0件なら作成後に編集を継続できるproduction E2Eが成功することを完了条件とする。
   - _Depends: 8.3, 8.4; candidate-source-bookmarks 7.1; product-capture-transient-migration 4.1, 4.2, 4.3_
   - _Requirements: 2.1, 2.3, 3.1, 4.1, 4.5, 6.1, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10_
@@ -261,7 +261,7 @@
   - _Requirements: 6.6, 7.1, 7.2, 7.3, 7.5, 7.8_
   - _Boundary: CandidateActivation_
 - [x] 11.2 snapshotのproject metadataを一致検査だけに限定する
-  - snapshot version 2と既存shapeを維持し、`selectedProjectId`を現在projectとの一致検査にだけ使用する。
+  - snapshot version 3と既存shapeを維持し、`selectedProjectId`を現在projectとの一致検査にだけ使用する。
   - contextが`ready`でIDが一致し、参照とdraftが検証可能な場合だけ編集状態を復元する。
   - 不一致、ID不存在、empty、unavailable、不正version・shape・内容ではcontextと永続データを変更せず、安全な初期状態または既存pending保持状態へ退避する。
   - snapshot integration testで一致時の復元と全拒否分岐を確認し、context commandが一度も呼ばれないことを観測する。
@@ -319,3 +319,5 @@
 - 2026-07-31にChromeの拡張機能アクションから、抽出draftのproject-required表示、project作成後の同一draft編集継続、候補保存・一覧反映までを手動確認した。
 - Production compositionでは内部queryと公開`CandidateQuery`を別々明示配線し、snapshot codecは自身がcaptureする全表示エラーのround-tripを回帰テストで保証する。
 - Task 12.4のproduction E2Eは利用者が到達可能な共通selector、dirty確認、pre-edit継続、公開契約回帰を所有し、`empty`/`unavailable`、forced切替、activation rollbackの障害分岐は12.2・12.3のcontract integrationを正本とする。
+- 2026-08-11の統合再検証で、project削除成功後にdraftをrefresh前に破棄していたsequencingを修正した。削除確認はmutation前に行い、catalog invalidation後は旧project bindingのdraftを保持してmutationをfenceする。
+- rollback snapshotの現行正本は`candidate-source-bookmarks`と`duplicate-product-merge`を統合したversion 3であり、version 2の記述は現行実装へ同期した。
