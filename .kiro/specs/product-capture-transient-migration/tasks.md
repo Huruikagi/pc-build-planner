@@ -272,7 +272,7 @@
   - _Requirements: 1.9, 2.5, 5.2, 5.7_
   - _Boundary: Product Capture Registration_
 
-- [ ] 7.5 candidate受理と原子的終了をretained intentへ統合する
+- [x] 7.5 candidate受理と原子的終了をretained intentへ統合する
   - candidate activationの安定した受理結果を利用し、current projectへのbindingまたはpending pre-edit保持が成功した場合だけ一過性面を終了する。
   - candidate受理失敗と原子的conclude失敗を区別し、どちらもcaptureを終了済みにせず検証済みintentを現行rollback世代へ保持する。
   - retryは保持intentだけを再利用し、ページ再抽出を行わず、stale世代、二重完了、新activation後の旧retryを無効化する。

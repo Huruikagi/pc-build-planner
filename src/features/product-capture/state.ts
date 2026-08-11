@@ -176,10 +176,13 @@ export class CaptureState {
       });
       return;
     }
+    this.#handoffInFlightGeneration = generation;
     const concluded = await this.dependencies.handoff.conclude(
       current.activationId,
       prepared.value,
     );
+    if (this.#handoffInFlightGeneration === generation)
+      this.#handoffInFlightGeneration = null;
     if (!this.#accepts(generation, current.activationId)) return;
     if (concluded.ok) {
       this.deactivate();

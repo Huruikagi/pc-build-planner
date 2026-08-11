@@ -260,6 +260,11 @@ test("shell rollback後も復元したgenerationが進行中handoff失敗を受�
   await concludeStarted;
   const rollback = state.captureRollbackState();
   assert.ok(rollback);
+  assert.equal(
+    rollback.handoffInFlightGeneration,
+    rollback.requestGeneration,
+    "initial conclude must be fenced by the rollback generation",
+  );
 
   state.deactivate();
   state.restoreRollbackState(rollback);

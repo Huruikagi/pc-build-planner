@@ -12,6 +12,10 @@ import type {
   TransientSurfaceError,
   TransientSurfaceLifecyclePort,
 } from "../../../src/application-shell/public.js";
+import {
+  createTransientSurfaceController,
+  type TransientSurfaceHost,
+} from "../../../src/application-shell/transient-surface-controller.js";
 import { err, ok, type Result } from "../../../src/domain/public.js";
 import type {
   CaptureInjectionFailure,
@@ -20,6 +24,10 @@ import type {
 } from "../../../src/features/product-capture/coordinator.js";
 import { createProductCaptureContribution } from "../../../src/features/product-capture/feature-contribution.js";
 import { productCaptureFeatureId } from "../../../src/features/product-capture/registration.js";
+import {
+  type CaptureRollbackState,
+  createCaptureState,
+} from "../../../src/features/product-capture/state.js";
 import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
 
 const A = "activation-a" as ActivationId;
@@ -93,6 +101,9 @@ const captureRuntime = (
 };
 
 type DismissOutcome = "ok" | "err" | "throw" | "deferred";
+type ConcludeOutcome =
+  | Extract<TransientSurfaceError, { readonly kind: "transition-failed" }>
+  | "deferred-success";
 
 /**
  * Wires the production capture contribution to a recording lifecycle seam so
@@ -102,13 +113,18 @@ type DismissOutcome = "ok" | "err" | "throw" | "deferred";
 const harness = async (options: {
   readonly runtime: RuntimePlan;
   readonly dismiss?: DismissOutcome;
+  readonly concludeOutcomes?: readonly ConcludeOutcome[];
 }) => {
   const runtime = captureRuntime(options.runtime);
   const dismissOutcome = options.dismiss ?? "ok";
   const dismissed: Array<[ActivationId, string]> = [];
   const concluded: Array<[ActivationId, FeatureActivationIntent]> = [];
+  const concludeOutcomes = [...(options.concludeOutcomes ?? [])];
   const requestedCapabilities = new Set<string>();
   const pendingDismiss: Array<
+    (value: Result<void, TransientSurfaceError>) => void
+  > = [];
+  const pendingConclude: Array<
     (value: Result<void, TransientSurfaceError>) => void
   > = [];
   let current: ActivationId | null = null;
@@ -131,6 +147,10 @@ const harness = async (options: {
     },
     async conclude(activationId, handoff) {
       concluded.push([activationId, handoff]);
+      const outcome = concludeOutcomes.shift();
+      if (outcome === "deferred-success")
+        return new Promise((resolve) => pendingConclude.push(resolve));
+      if (outcome !== undefined) return err(outcome);
       return ok(undefined);
     },
   };
@@ -189,7 +209,7 @@ const harness = async (options: {
     query,
     text: () => container.textContent ?? "",
     async execute() {
-      const start = query("[data-capture-start]");
+      const start = query("[data-capture-start], [data-capture-retry]");
       assert.ok(start, "expected the explicit capture action");
       await act(async () => {
         await user.click(start);
@@ -213,6 +233,16 @@ const harness = async (options: {
       await act(async () => {
         await flush();
       });
+    },
+    async releaseConclude() {
+      for (const resolve of pendingConclude.splice(0, pendingConclude.length))
+        resolve(ok(undefined));
+      await act(async () => {
+        await flush();
+      });
+    },
+    async waitForConcludeCount(count: number) {
+      while (concluded.length < count) await flush();
     },
   };
 };
@@ -262,6 +292,136 @@ test("通常のhandoffはdismissを使わずconcludeで面を終了する", asyn
   assert.deepEqual(surface.concluded, [[A, intent]]);
   assert.deepEqual(surface.dismissed, []);
   assert.equal(surface.text(), "");
+});
+
+for (const [name, reason] of [
+  ["candidate受理失敗", "target-state-unavailable"],
+  ["原子的conclude失敗", "target-mount-failed"],
+] as const) {
+  test(`${name}を区別して同じretained intentだけをretryする`, async () => {
+    const surface = await harness({
+      runtime: {},
+      concludeOutcomes: [{ kind: "transition-failed", reason }],
+    });
+
+    await surface.execute();
+
+    assert.deepEqual(surface.concluded, [[A, intent]]);
+    assert.ok(surface.query("[data-capture-retry]"));
+    assert.equal(
+      surface
+        .query("[data-capture-handoff-reason]")
+        ?.textContent?.includes(reason),
+      true,
+    );
+
+    await surface.execute();
+
+    assert.deepEqual(surface.concluded, [
+      [A, intent],
+      [A, intent],
+    ]);
+    assert.equal(surface.text(), "");
+  });
+}
+
+test("retry中の新activationは旧retained intentの後着成功を無効化する", async () => {
+  const surface = await harness({
+    runtime: {},
+    concludeOutcomes: [
+      { kind: "transition-failed", reason: "target-state-unavailable" },
+      "deferred-success",
+    ],
+  });
+
+  await surface.execute();
+  const retry = surface.execute();
+  await surface.waitForConcludeCount(2);
+  await surface.replaceGeneration();
+  await surface.releaseConclude();
+  await retry;
+
+  assert.deepEqual(surface.concluded, [
+    [A, intent],
+    [A, intent],
+  ]);
+  assert.ok(surface.query("[data-capture-start]"));
+});
+
+test("実controllerのsource rollback復元後にretained intentだけでretry成功する", async () => {
+  let captures = 0;
+  let activationAttempts = 0;
+  let rollback: CaptureRollbackState | undefined;
+  let controller!: ReturnType<typeof createTransientSurfaceController>;
+  const state = createCaptureState({
+    coordinator: {
+      async captureTab() {
+        captures += 1;
+        return ok({} as never);
+      },
+    },
+    isCurrent: (activationId) => controller.isCurrent(activationId),
+    handoff: {
+      prepare: () => ok(intent),
+      prepareManual: () => intent,
+      conclude: (activationId, value) =>
+        controller.conclude(activationId, value),
+      retry: (activationId, value) => controller.conclude(activationId, value),
+    },
+  });
+  const host: TransientSurfaceHost = {
+    getSelected: () => productCaptureFeatureId,
+    isTransientAvailable: (featureId) => featureId === productCaptureFeatureId,
+    async showTransient(request) {
+      state.activate(request.activationId, request.tabId);
+      return ok(undefined);
+    },
+    async restorePersistent() {
+      return ok(undefined);
+    },
+    async activate() {
+      activationAttempts += 1;
+      rollback = state.captureRollbackState();
+      assert.ok(rollback);
+      state.deactivate();
+      if (activationAttempts === 1) {
+        state.restoreRollbackState(rollback);
+        return err({
+          kind: "transition-failed",
+          reason: "target-state-unavailable",
+        });
+      }
+      return ok(undefined);
+    },
+  };
+  controller = createTransientSurfaceController({ host });
+  assert.equal((await controller.start()).ok, true);
+  assert.equal(
+    (
+      await controller.request({
+        activationId: A,
+        surfaceId: productCaptureFeatureId,
+        tabId: TAB,
+      })
+    ).ok,
+    true,
+  );
+
+  await state.startCapture();
+
+  assert.equal(
+    rollback?.handoffInFlightGeneration,
+    rollback?.requestGeneration,
+  );
+  assert.equal(state.value?.status, "failed");
+  assert.equal(controller.isCurrent(A), true);
+
+  await state.startCapture();
+
+  assert.equal(captures, 1);
+  assert.equal(activationAttempts, 2);
+  assert.equal(state.value, null);
+  assert.deepEqual(controller.getSnapshot(), { kind: "inactive" });
 });
 
 test("注入失敗は失効経路と混同せず同世代の再試行を残す", async () => {
