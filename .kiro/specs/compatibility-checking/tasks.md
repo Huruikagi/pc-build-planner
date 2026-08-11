@@ -113,7 +113,7 @@
   - _Boundary: Compatibility acceptance tests_
 
 - [ ] 6. 現在プロジェクト追従と最新性制御を追加する
-- [ ] 6.1 project contextを互換性評価用availabilityへ射影する
+- [x] 6.1 project contextを互換性評価用availabilityへ射影する
   - 検証済みreadyのprojectIdとgenerationだけをauthorityとして扱い、emptyとunavailableを代替選択なしで区別する
   - 同一generation・同一projectの重複通知で再評価を増やさず、購読解除後の通知が状態を変えないconsumer adapterを提供する
   - ready、empty、unavailableのsnapshotと購読解除が独立テストで観測できる
