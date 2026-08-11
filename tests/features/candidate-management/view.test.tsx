@@ -257,9 +257,21 @@ test("空名を拒否し、フォームからプロジェクトを作成・改�
 });
 
 test("プロジェクト保存の失敗では入力を保持して再試行できる", async () => {
+  let calls = 0;
   const service = {
     async createProject() {
-      return { ok: false as const, error: { kind: "storage" as const } };
+      calls += 1;
+      return calls === 1
+        ? { ok: false as const, error: { kind: "storage" as const } }
+        : {
+            ok: true as const,
+            value: {
+              id: firstProjectId,
+              name: "保存を再試行する構成",
+              createdAt: "2026-07-22T00:00:00.000Z" as never,
+              updatedAt: "2026-07-22T00:00:00.000Z" as never,
+            },
+          };
     },
   } as unknown as CandidateManagementService;
   const rendered = await renderView(service);
@@ -278,6 +290,58 @@ test("プロジェクト保存の失敗では入力を保持して再試行で�
     rendered.container.textContent ?? "",
     new RegExp(defaultMessageResolver("candidate.errors.storage")),
   );
+  assert.equal(calls, 1);
+
+  await act(async () => form.requestSubmit());
+  assert.equal(calls, 2);
+  assert.equal(input.value, "");
+
+  await rendered.cleanup();
+});
+
+test("プロジェクト改名の失敗では入力と対象を保持して再試行できる", async () => {
+  let calls = 0;
+  const service = {
+    async renameProject() {
+      calls += 1;
+      return calls === 1
+        ? { ok: false as const, error: { kind: "storage" as const } }
+        : {
+            ok: true as const,
+            value: {
+              id: firstProjectId,
+              name: "再試行する改名",
+              createdAt: "2026-07-22T00:00:00.000Z" as never,
+              updatedAt: "2026-07-22T00:00:00.000Z" as never,
+            },
+          };
+    },
+  } as unknown as CandidateManagementService;
+  const rendered = await renderView(service);
+  const input = rendered.container.querySelector(
+    "[name='project-name']",
+  ) as HTMLInputElement;
+  const form = rendered.container.querySelector(
+    "[data-region='project-form']",
+  ) as HTMLFormElement;
+  const rename = rendered.container.querySelector(
+    `[data-rename-project-id='${firstProjectId}']`,
+  ) as HTMLButtonElement;
+
+  await act(async () => rename.click());
+  await act(async () => setInputValue(input, "再試行する改名"));
+  await act(async () => form.requestSubmit());
+
+  assert.equal(calls, 1);
+  assert.equal(input.value, "再試行する改名");
+  assert.match(
+    rendered.container.textContent ?? "",
+    new RegExp(defaultMessageResolver("candidate.errors.storage")),
+  );
+
+  await act(async () => form.requestSubmit());
+  assert.equal(calls, 2);
+  assert.equal(input.value, "");
 
   await rendered.cleanup();
 });

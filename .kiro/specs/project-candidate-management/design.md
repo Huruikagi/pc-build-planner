@@ -52,6 +52,7 @@
 - `product-page-capture` が公開する純粋な`ProductIdentityNormalizer`とmanufacturer domain照合能力
 - `source-price-refresh` の公開port。`duplicate-product-merge`のfeature-local coordinatorへcomposition時に注入し、内部moduleへdeep importしない
 - `duplicate-product-merge` が候補管理owner内へ追加するmatcher、判断state/view、snapshot substate。既存CRUD・project binding・保存validatorの所有は移さない
+- 共有コアの `domain/runtime-schema/public.ts`、`ui-messages/public.ts`、`ui-language/public.ts`。候補管理は公開schema primitive、メッセージ解決、LanguageProviderだけを利用し、内部schema、catalog、language storeへdeep importしない
 
 ### Revalidation Triggers
 - `Project`、`CandidatePart`、`SourceInfo`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
@@ -90,7 +91,7 @@ graph LR
 ```
 
 - **Selected pattern**: feature serviceとUI state。入力規則と永続化連携をUIから分離する。
-- **Dependency direction**: `Foundation/ProjectContext/Shell contracts → Feature contracts → Service/Query/Activation/ContextAdapter → UI state → UI/Registration`。右側は左側だけへ依存する。
+- **Dependency direction**: `Foundation/Shared core public APIs/ProjectContext/Shell contracts → Feature contracts → Service/Query/Activation/ContextAdapter → UI state → UI/Registration`。右側は左側だけへ依存し、共有コアは各 `public.ts` だけを公開seamとする。
 - **Existing patterns preserved**: canonical `Result`、判別共用体、単一write authority、feature registration。
 - **Atomicity**: 候補削除・カテゴリ変更はFoundationの一つのroot mutationで参照修復、全体検証、revision更新、保存を完了し、成功後のCurrentBuild別writeを要求しない。
 
@@ -124,14 +125,16 @@ src/features/candidate-management/duplicate-*.ts(x) # duplicate-product-mergeが
 src/features/candidate-management/category-draft.ts # unresolved draftのproject binding
 tests/features/candidate-management/service.test.ts
 tests/features/candidate-management/state.test.ts
-tests/features/candidate-management/view.test.ts
+tests/features/candidate-management/view.test.tsx
 tests/features/candidate-management/registration.test.ts
 tests/features/candidate-management/activation.test.ts
 tests/features/candidate-management/state-snapshot.test.ts
 tests/features/candidate-management/pre-edit-validation.test.ts
 tests/features/candidate-management/project-context-adapter.test.ts
-tests/features/candidate-management/pre-edit-handoff.integration.test.ts
-tests/features/candidate-management/project-switch-protection.integration.test.ts
+tests/features/candidate-management/pending-*.integration.test.ts
+tests/features/candidate-management/current-context-activation.test.ts
+tests/features/candidate-management/project-switch-guard.test.tsx
+tests/features/candidate-management/project-context-refresh.test.ts
 tests/features/candidate-management/source-*.test.ts
 tests/features/candidate-management/duplicate-*.test.ts(x)
 ```
@@ -183,12 +186,12 @@ sequenceDiagram
 |---|---|---|---|---|---|
 | CandidateManagementService | Feature | 管理コマンドと規則 | 1.1–1.7, 2.1–2.6, 4.2–4.6, 5.2, 6.2–6.5 | FoundationDataPort P0 | Service |
 | CandidateQuery | Feature | 絞込済み候補参照 | 3.1–3.6, 6.3–6.5 | FoundationDataPort P0 | Service |
-| PreEditValidation | Feature contract | project未解決draftの構造検証 | 7.1, 7.5–7.8 | Foundation domain validators P0 | Service |
+| PreEditValidation | Feature contract | project未解決draftの構造検証 | 7.1, 7.5–7.8 | Foundation domain validators P0、Runtime schema public API P0 | Service |
 | CandidateActivation | Feature adapter | 候補編集prefillの検証、現在project binding、state適用 | 4.1–4.6, 6.6, 7.1–7.9 | Application shell activation P0、ProjectContextReadPort P0、ManagementState P0 | Service |
 | ProjectContextAdapter | Feature adapter | context購読、dirty guard、強制切替、CRUD後refresh | 1.5–1.8, 2.1, 2.6, 3.1, 3.6–3.7, 7.1–7.5, 8.1–8.6, 9.2–9.4 | ProjectContextPublicApi P0、ManagementState P0 | Service, State |
 | ManagementState | UI state | 編集、dirty、pending pre-edit、project-required、失敗回復、snapshot復元 | 1.3–1.8, 2.3–2.6, 4.5, 5.1–5.4, 6.1–6.2, 7.1–7.10, 8.1–8.6, 9.1–9.5 | Service P0、ProjectContextAdapter P0、FeatureMountContext P1 | State |
-| ManagementView | UI | 一覧、フォーム、project-required、確認 | 1.1–5.4, 7.2–7.7, 7.9, 8.2–8.5, 9.4–9.5 | State P0 | State |
-| CandidateFeatureRegistration | UI adapter | state/view/public API、context adapter、snapshot codecをshell登録契約へ接続 | 1.1–9.5 | ApplicationFeatureRegistration P0、ProjectContextPublicApi P0、ManagementView P0 | Service, State |
+| ManagementView | UI | 一覧、フォーム、project-required、確認 | 1.1–5.4, 7.2–7.7, 7.9, 8.2–8.5, 9.4–9.5 | State P0、UI messages public API P0 | State |
+| CandidateFeatureRegistration | UI adapter | state/view/public API、context adapter、snapshot codecをshell登録契約へ接続 | 1.1–9.5 | ApplicationFeatureRegistration P0、ProjectContextPublicApi P0、ManagementView P0、UI language public API P0、Runtime schema public API P0 | Service, State |
 
 ### Feature Layer
 

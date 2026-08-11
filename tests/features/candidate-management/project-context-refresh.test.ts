@@ -42,6 +42,78 @@ const query: CandidateManagementQuery = {
   },
 };
 
+test("project mutation失敗時はcontext refreshせず既存表示を保持する", async () => {
+  let creates = 0;
+  let renames = 0;
+  let deletes = 0;
+  let refreshes = 0;
+  let deleteShouldFail = true;
+  const currentProject: CurrentProjectPort = {
+    getCurrentProject: () => ({ status: "resolved", projectId }),
+    subscribe: () => () => {},
+    async refresh() {
+      refreshes += 1;
+      return { ok: true, value: { status: "resolved", projectId } };
+    },
+  };
+  const service = {
+    async createProject() {
+      creates += 1;
+      return { ok: false as const, error: { kind: "storage" as const } };
+    },
+    async renameProject() {
+      renames += 1;
+      return { ok: false as const, error: { kind: "storage" as const } };
+    },
+    async deleteProject() {
+      deletes += 1;
+      return deleteShouldFail
+        ? { ok: false as const, error: { kind: "storage" as const } }
+        : { ok: true as const, value: undefined };
+    },
+  } as unknown as CandidateManagementService;
+  const state = createManagementState({
+    query,
+    service,
+    currentProject,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000070" as never,
+      expectedRevision: 0 as never,
+    }),
+  });
+  await state.load();
+  const projectsBefore = state.value.projects;
+
+  await state.createProject("失敗する作成");
+  assert.equal(creates, 1);
+  assert.equal(refreshes, 0);
+  assert.deepEqual(state.value.projects, projectsBefore);
+  assert.equal(state.value.isSaving, false);
+  assert.equal(state.value.displayError?.code, "storage");
+
+  await state.renameProject(projectId, "失敗する改名");
+  assert.equal(renames, 1);
+  assert.equal(refreshes, 0);
+  assert.deepEqual(state.value.projects, projectsBefore);
+  assert.equal(state.value.isSaving, false);
+  assert.equal(state.value.displayError?.code, "storage");
+
+  state.requestDeletion({ kind: "project", projectId });
+  await state.confirmDeletion();
+  assert.equal(deletes, 1);
+  assert.equal(refreshes, 0);
+  assert.deepEqual(state.value.projects, projectsBefore);
+  assert.deepEqual(state.value.deletion, { kind: "project", projectId });
+  assert.equal(state.value.isSaving, false);
+  assert.equal(state.value.displayError?.code, "storage");
+
+  deleteShouldFail = false;
+  await state.confirmDeletion();
+  assert.equal(deletes, 2);
+  assert.equal(refreshes, 1);
+  assert.equal(state.value.deletion, null);
+});
+
 test("project作成後のrefresh失敗はdraftを保持し、回復操作はmutationを再送しない", async () => {
   let creates = 0;
   let refreshes = 0;

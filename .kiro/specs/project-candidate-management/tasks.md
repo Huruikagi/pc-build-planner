@@ -321,3 +321,4 @@
 - Task 12.4のproduction E2Eは利用者が到達可能な共通selector、dirty確認、pre-edit継続、公開契約回帰を所有し、`empty`/`unavailable`、forced切替、activation rollbackの障害分岐は12.2・12.3のcontract integrationを正本とする。
 - 2026-08-11の統合再検証で、project削除成功後にdraftをrefresh前に破棄していたsequencingを修正した。削除確認はmutation前に行い、catalog invalidation後は旧project bindingのdraftを保持してmutationをfenceする。
 - rollback snapshotの現行正本は`candidate-source-bookmarks`と`duplicate-product-merge`を統合したversion 3であり、version 2の記述は現行実装へ同期した。
+- 2026-08-11のfeature validation remediationで、project create・rename・delete失敗時にcontext refreshが0回で既存表示を保持する統合証跡を追加し、共有coreの公開依存と現行テスト配置をdesignへ同期した。
