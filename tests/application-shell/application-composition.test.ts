@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { userEvent } from "@testing-library/user-event";
+import { act } from "react";
 
 import {
   createProductionApplicationComposition,
@@ -680,9 +681,11 @@ test("production startup errorのretry操作は同じpresentationで再起動す
   assert.equal(failed?.kind, "error");
   if (failed?.kind === "error") assert.equal(failed.recoverable, true);
 
-  presentationInput?.onRetry();
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  await act(async () => {
+    presentationInput?.onRetry();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+  });
 
   assert.equal(attempts, 2);
   assert.equal(h.states.at(-1)?.kind, "ready");
@@ -690,7 +693,7 @@ test("production startup errorのretry操作は同じpresentationで再起動す
     h.events.filter((event) => event === "presentation:mount").length,
     1,
   );
-  await root.stop();
+  await act(async () => root.stop());
 });
 
 test("foundation失敗時のpresentation例外をrejectせずtyped failureへ変換する", async () => {
@@ -930,14 +933,28 @@ test("cleanup失敗中は新規startを拒否し、stop再試行成功後だけr
     reportError() {},
   });
 
-  assert.equal((await root.start()).ok, true);
-  await assert.rejects(root.stop(), AggregateError);
-  assert.equal((await root.start()).ok, false);
+  let startResult: Awaited<ReturnType<typeof root.start>> | undefined;
+  await act(async () => {
+    startResult = await root.start();
+  });
+  assert.equal(startResult?.ok, true);
+  await assert.rejects(async () => {
+    await act(async () => root.stop());
+  }, AggregateError);
+  let blockedStartResult: Awaited<ReturnType<typeof root.start>> | undefined;
+  await act(async () => {
+    blockedStartResult = await root.start();
+  });
+  assert.equal(blockedStartResult?.ok, false);
   assert.equal(starts, 1);
-  await root.stop();
-  assert.equal((await root.start()).ok, true);
+  await act(async () => root.stop());
+  let restartResult: Awaited<ReturnType<typeof root.start>> | undefined;
+  await act(async () => {
+    restartResult = await root.start();
+  });
+  assert.equal(restartResult?.ok, true);
   assert.equal(starts, 2);
-  await root.stop();
+  await act(async () => root.stop());
 });
 
 test("malformed foundation handleを下流副作用前に拒否し取得済みdisposeを解放する", async () => {
@@ -1063,7 +1080,11 @@ test("10.1-10.3: production shellはselector選択を一度配送し依存featur
     reportError() {},
   });
 
-  assert.equal((await root.start()).ok, true);
+  let startResult: Awaited<ReturnType<typeof root.start>> | undefined;
+  await act(async () => {
+    startResult = await root.start();
+  });
+  assert.equal(startResult?.ok, true);
   assert.equal(projectRead?.getSnapshot().status, "ready");
   assert.equal(dependent?.getAvailability().status, "available");
   const before = projectRead?.getSnapshot().generation;
@@ -1071,11 +1092,13 @@ test("10.1-10.3: production shellはselector選択を一度配送し依存featur
     "[data-project-context='select']",
   );
   assert.ok(select);
-  await userEvent.setup().selectOptions(select, PROJECT_B);
+  await act(async () => {
+    await userEvent.setup().selectOptions(select, PROJECT_B);
+  });
   assert.equal(projectRead?.getSnapshot().selectedProjectId, PROJECT_B);
   assert.equal(projectRead?.getSnapshot().generation, (before ?? 0) + 1);
 
-  await root.stop();
+  await act(async () => root.stop());
   assert.equal(h.projectContainer.childElementCount, 0);
   assert.ok(
     h.events.indexOf("feature:unmount") < h.events.indexOf("presentation:stop"),
@@ -1126,11 +1149,15 @@ test("10.2/10.3: project-context初期化失敗でも非依存featureとshellを
     reportError() {},
   });
 
-  assert.equal((await root.start()).ok, true);
+  let startResult: Awaited<ReturnType<typeof root.start>> | undefined;
+  await act(async () => {
+    startResult = await root.start();
+  });
+  assert.equal(startResult?.ok, true);
   assert.equal(dependent?.getAvailability().status, "unavailable");
   assert.ok(h.events.includes("feature:mount"));
   assert.equal(h.states.at(-1)?.kind, "ready");
-  await root.stop();
+  await act(async () => root.stop());
 });
 
 test("10.1-10.3: selector mount失敗はshellを継続して依存featureだけfail closedにする", async () => {
