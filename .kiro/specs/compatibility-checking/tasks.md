@@ -146,7 +146,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
 
-- [ ] 8. context追従とアクセシビリティの回帰検証を完成する
+- [x] 8. context追従とアクセシビリティの回帰検証を完成する
 - [x] 8.1 (P) adapterとstateのcontext遷移を自動テストする
   - ready AからB、empty、unavailable、unavailableからready、重複通知、解除後通知、遅延完了破棄、最新snapshot再試行を架空portで検証する
   - project 0件、利用不能、構成空、失敗の各状態が互換性reportを保持せず、異なるprojectへfallbackしないことを検証する
@@ -163,7 +163,7 @@
   - _Requirements: 6.5, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: Compatibility view DOM tests_
 
-- [ ] 8.3 project切替から結果表示までの統合・E2Eを完成する
+- [x] 8.3 project切替から結果表示までの統合・E2Eを完成する
   - feature contributionを架空context、build、candidate queryと合成し、切替後projectだけのreport、旧要求破棄、購読解除、上流不変を検証する
   - production buildした拡張で共通selectorを切り替え、不一致、部分不足、全不足、project 0件、構成空、日英表示を確認する
   - roadmapのapplication-shell production wiring更新は未発番の外部owner taskであり、その完了後だけE2Eを実行する
