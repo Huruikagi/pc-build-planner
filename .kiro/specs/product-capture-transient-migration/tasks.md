@@ -236,7 +236,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
   - _Boundary: QualityGates, SpecTraceability_
 
-- [ ] 7. current context authorityとrollback境界を追補する
+- [x] 7. current context authorityとrollback境界を追補する
 - [x] 7.1 candidate activationを検証済みcurrent contextへ統一する
   - 編集開始payloadを境界で再検証し、保存先はproject-contextが返す検証済みcurrent projectだけから解決する。
   - payload、画面snapshot、legacy handoffに含まれるstaleまたは無効なproject情報を保存先へ使わず、current contextも変更しない。
@@ -290,7 +290,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 1.6, 1.8, 1.9, 4.2, 4.6, 4.7, 4.8, 5.3, 5.5, 5.7_
   - _Boundary: Application Composition, Candidate Activation, Product Capture Handoff Integration_
 
-- [ ] 7.7 更新仕様の回帰gateと同一build smokeを完了する
+- [x] 7.7 更新仕様の回帰gateと同一build smokeを完了する
   - state、runtime、candidate activation、pending recovery、atomic handoffのunit／integration／DOM testを実行し、全36要件のtraceabilityを確認する。
   - typecheck、lint、E2E、公開境界、permission、fixture、artifact、production buildの各gateを実行し、実サイト由来assetや旧capture保存・navigation経路がないことを確認する。
   - 同じcommitの更新production buildをChrome 116以降へ未パッケージロードし、toolbar icon、activeTab付与、固定tabへの実script注入、candidate editor到達をmanual smokeする。
