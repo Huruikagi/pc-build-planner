@@ -141,7 +141,7 @@
   - _Boundary: CurrentBuildProjectContextAdapter_
 
 - [ ] 7. authority追従stateと安全なdraft保存・復元を実装する
-- [ ] 7.1 複数の数量draftを一つの原子的更新として保存する
+- [x] 7.1 複数の数量draftを一つの原子的更新として保存する
   - 全dirty draftを正整数として先に検証し、一件でも不正ならmutationを発行せず直前の構成を維持する。
   - 有効な数量群は旧projectの一つの現在構成更新へまとめ、request IDと読込revisionによる競合検査を適用する。
   - 成功時はcommit後の構成を再照会し、失敗時は保存済み構成と入力値を変更せず回復可能な失敗を返す。
@@ -263,6 +263,8 @@
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
 - Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- `set-quantities`（7.1）の検証順は「選択対象外の候補が一件でもあれば即not-found」→「残りを全件検証してvalidation fieldsへ集約」。fieldsのkeyはcandidatePartIdなので、BuildView（8.2）は入力欄ごとにerrorを対応付けられる。数量が不正でも保存済み構成は一切変更しない（mutation発行ゼロ回）。
+- BuildState.execute（既存）は`set-quantity`/`remove`成功時にだけ該当candidateのquantityDraftを消す。`set-quantities`成功時のdraft掃除はまだ実装していないため、7.3でdraft lifecycleを実装する際に一括保存後の掃除も併せて行う必要がある。
 - project-contextのguard契約（`ProjectContextChangeGuard.evaluate`）が返せるのは`allow`/`confirmation-required`と`guard-failed`だけである。design.mdのSystem Flows（「evaluateはfeature確認の完了を待ち、保存成功または破棄時だけallow」）に従い、current-buildのadapterは`confirmation-required`を返さず、owner（BuildState）の確認完了までevaluateをawaitして`allow`かfailureへ畳む方式にした。candidate-managementのadapterは`confirmation-required`を返してcontext側の確認へ委ねる別方式なので、二つのadapterのguard戦略は意図的に異なる。
 - stale判定は「評価開始時のgeneration」と「後続評価によるtoken追い越し」の二軸で行う。project-contextは`evaluateSelection`成功後にpreference書き込みとpublishを行うため、正常経路ではevaluate中にgenerationは進まない。逆にrefresh・catalog invalidationが割り込むとgenerationが進むので、この検査が古い確認結果の適用を止める。
 - adapterのsubscribeは、generation逆転の無視に加えて「status+projectIdが同じなら再通知しない」内容dedupeを行う。project名編集などcatalogだけが変わるrefreshでgenerationは進むが、current-buildの再読込は不要なため。generationの最大値自体はdedupe時も更新するので単調性は保たれる。

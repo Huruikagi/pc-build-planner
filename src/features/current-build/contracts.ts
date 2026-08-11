@@ -19,6 +19,12 @@ export type BuildCommand =
       readonly candidatePartId: CandidatePartId;
       readonly quantity: number;
     }
+  /** project切替前の一括保存。全件検証後に一つの構成更新へまとめる。 */
+  | {
+      readonly type: "set-quantities";
+      readonly projectId: ProjectId;
+      readonly quantities: Readonly<Record<CandidatePartId, number>>;
+    }
   | {
       readonly type: "remove";
       readonly projectId: ProjectId;

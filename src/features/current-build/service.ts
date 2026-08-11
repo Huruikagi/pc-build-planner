@@ -213,6 +213,46 @@ const applyCommand = (
         ),
       };
     }
+    case "set-quantities": {
+      const targets = currentItems.filter(
+        (item) => command.quantities[item.candidatePartId] !== undefined,
+      );
+      // 選択されていない候補への数量は保存対象にできない。
+      if (targets.length !== Object.keys(command.quantities).length) {
+        return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+      }
+      const fields: Record<string, string> = {};
+      // 一件でも保存できない入力があれば mutation を発行しないため、
+      // 全 draft を先に検証してから項目を組み立てる。
+      for (const item of targets) {
+        const candidate = eligible.get(item.candidatePartId);
+        const quantity = command.quantities[item.candidatePartId];
+        if (candidate === undefined || quantity === undefined)
+          return { ok: false, error: corruptData };
+        const mode = policy.modeFor(candidate.category);
+        if (mode !== "multiple") {
+          fields[item.candidatePartId] = "single-category";
+          continue;
+        }
+        if (!isValidQuantity(mode, quantity))
+          fields[item.candidatePartId] = "invalid";
+      }
+      if (Object.keys(fields).length > 0) {
+        return { ok: false, error: { kind: "validation", fields } };
+      }
+      return {
+        ok: true,
+        value: currentItems.map((item) => {
+          const quantity = command.quantities[item.candidatePartId];
+          return quantity === undefined
+            ? item
+            : {
+                candidatePartId: item.candidatePartId,
+                quantity: quantity as PositiveInteger,
+              };
+        }),
+      };
+    }
     case "remove": {
       return {
         ok: true,

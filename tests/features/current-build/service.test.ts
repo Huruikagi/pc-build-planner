@@ -588,6 +588,196 @@ test("不正な数量は保存前に拒否され既存の有効な構成を保�
   assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
 });
 
+/** 7.1: 切替前の一括保存が使う、複数memory draftを持つ構成。 */
+const multiQuantityHarness = (
+  revision: Revision,
+  options: { readonly mutateFailure?: { readonly code: string } } = {},
+) => {
+  const existingBuild: CurrentBuild = {
+    id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+      { candidatePartId: memoryCandidateId, quantity: 1 as PositiveInteger },
+      {
+        candidatePartId: otherMemoryCandidateId,
+        quantity: 1 as PositiveInteger,
+      },
+    ],
+    updatedAt: timestamp,
+  };
+  return {
+    existingBuild,
+    ...createHarness(
+      rootWith({
+        candidateParts: [
+          candidate(cpuCandidateId),
+          candidate(memoryCandidateId, {
+            category: "memory",
+            normalizedAttributes: memoryAttributes,
+          }),
+          candidate(otherMemoryCandidateId, {
+            category: "memory",
+            normalizedAttributes: memoryAttributes,
+          }),
+        ],
+        currentBuilds: [existingBuild],
+        revision,
+      }),
+      options,
+    ),
+  };
+};
+
+test("複数の数量draftは一つの構成更新へまとめられ保存は一回だけ発行される", async () => {
+  const { service, commands, currentRoot } = multiQuantityHarness(
+    12 as Revision,
+  );
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [memoryCandidateId]: 4, [otherMemoryCandidateId]: 2 },
+    },
+    context(12 as Revision),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.currentBuild?.items, [
+    { candidatePartId: cpuCandidateId, quantity: 1 },
+    { candidatePartId: memoryCandidateId, quantity: 4 },
+    { candidatePartId: otherMemoryCandidateId, quantity: 2 },
+  ]);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0]?.operation.kind, "update");
+  assert.equal(currentRoot().currentBuilds.length, 1);
+});
+
+test("一件でも不正数量があれば全数量を保存せず直前の構成を維持する", async () => {
+  const { service, commands, currentRoot, existingBuild } =
+    multiQuantityHarness(13 as Revision);
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [memoryCandidateId]: 4, [otherMemoryCandidateId]: 0 },
+    },
+    context(13 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "validation");
+  if (result.error.kind !== "validation") return;
+  // 不正だった入力だけを識別できる。
+  assert.deepEqual(Object.keys(result.error.fields), [otherMemoryCandidateId]);
+  assert.equal(commands.length, 0);
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
+});
+
+test("複数不正数量は一度の検証で全件を報告し保存を発行しない", async () => {
+  const { service, commands } = multiQuantityHarness(14 as Revision);
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [memoryCandidateId]: 1.5, [otherMemoryCandidateId]: -2 },
+    },
+    context(14 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok || result.error.kind !== "validation") return;
+  assert.deepEqual(
+    Object.keys(result.error.fields).sort(),
+    [memoryCandidateId, otherMemoryCandidateId].sort(),
+  );
+  assert.equal(commands.length, 0);
+});
+
+test("単一選択カテゴリを含む一括数量は保存前に拒否される", async () => {
+  const { service, commands } = multiQuantityHarness(15 as Revision);
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [cpuCandidateId]: 2, [memoryCandidateId]: 3 },
+    },
+    context(15 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok || result.error.kind !== "validation") return;
+  assert.deepEqual(Object.keys(result.error.fields), [cpuCandidateId]);
+  assert.equal(commands.length, 0);
+});
+
+test("選択対象外の候補を含む一括数量はnot-foundとして保存前に停止する", async () => {
+  const { service, commands, currentRoot, existingBuild } =
+    multiQuantityHarness(16 as Revision);
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [foreignCandidateId]: 2 },
+    },
+    context(16 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "not-found");
+  assert.equal(commands.length, 0);
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
+});
+
+test("一括数量でも読込revisionと異なれば競合として保存前に停止する", async () => {
+  const { service, commands, currentRoot, existingBuild } =
+    multiQuantityHarness(17 as Revision);
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [memoryCandidateId]: 4 },
+    },
+    context(3 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "conflict");
+  assert.equal(commands.length, 0);
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
+});
+
+test("一括数量の保存失敗は回復可能な理由を返し保存済み構成を変えない", async () => {
+  const { service, currentRoot, existingBuild } = multiQuantityHarness(
+    18 as Revision,
+    { mutateFailure: { code: "storage-unavailable" } },
+  );
+
+  const result = await service.execute(
+    {
+      type: "set-quantities",
+      projectId,
+      quantities: { [memoryCandidateId]: 4, [otherMemoryCandidateId]: 2 },
+    },
+    context(18 as Revision),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error.kind, "storage");
+  assert.deepEqual(currentRoot().currentBuilds, [existingBuild]);
+});
+
 test("選択対象外の候補への数量変更はnot-foundとして保存前に拒否する", async () => {
   const existingBuild: CurrentBuild = {
     id: "40000000-0000-4000-8000-000000000001" as Uuid as CurrentBuild["id"],
