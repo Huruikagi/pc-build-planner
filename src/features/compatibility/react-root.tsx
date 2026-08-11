@@ -13,22 +13,44 @@ export interface CompatibilityReactRoot {
 export const mountCompatibilityReactRoot = (
   container: HTMLElement,
   state: CompatibilityState,
+  startProjectTracking = false,
 ): CompatibilityReactRoot => {
   const root: Root = createRoot(container);
   let unmounted = false;
-  root.render(
-    createElement(
-      LanguageProvider,
-      null,
-      createElement(CompatibilityView, { state }),
-    ),
-  );
+  try {
+    root.render(
+      createElement(
+        LanguageProvider,
+        null,
+        createElement(CompatibilityView, { state }),
+      ),
+    );
+    if (startProjectTracking) state.start();
+  } catch (error) {
+    try {
+      state.stop();
+    } finally {
+      try {
+        root.unmount();
+      } finally {
+        container.replaceChildren();
+      }
+    }
+    throw error;
+  }
   return {
     unmount() {
       if (unmounted) return;
       unmounted = true;
-      root.unmount();
-      container.replaceChildren();
+      try {
+        state.stop();
+      } finally {
+        try {
+          root.unmount();
+        } finally {
+          container.replaceChildren();
+        }
+      }
     },
   };
 };

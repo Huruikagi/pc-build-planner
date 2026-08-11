@@ -15,8 +15,13 @@ import type {
   CompatibilityQuery,
   CompatibilityReport,
 } from "../../../src/features/compatibility/contracts.js";
+import { createCompatibilityProjectContextAdapter } from "../../../src/features/compatibility/project-context-adapter.js";
 import { createCompatibilityFeatureRegistration } from "../../../src/features/compatibility/registration.js";
 import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
+import type {
+  ProjectContextReadPort,
+  ProjectContextSnapshot,
+} from "../../../src/project-context/public.js";
 import {
   defaultMessageResolver,
   type MessageKey,
@@ -56,6 +61,39 @@ const queryReturning = (
 
 const allowAll = { isAllowed: () => true, subscribe: () => () => {} };
 
+const stateWithReadyContext = (query: CompatibilityQuery) => {
+  const snapshot: ProjectContextSnapshot = {
+    status: "ready",
+    generation: 1,
+    catalog: [
+      { id: projectId, name: "架空プロジェクト", updatedAt: timestamp },
+    ],
+    selectedProjectId: projectId,
+  };
+  let subscriptions = 0;
+  let releases = 0;
+  const read: ProjectContextReadPort = {
+    getSnapshot: () => snapshot,
+    subscribe() {
+      subscriptions += 1;
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        releases += 1;
+      };
+    },
+  };
+  return {
+    state: createCompatibilityState({
+      query,
+      projectContext: createCompatibilityProjectContextAdapter(read),
+    }),
+    subscriptions: () => subscriptions,
+    releases: () => releases,
+  };
+};
+
 test("registrationはshell契約とread-only operation policyへ適合する", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
   const state = createCompatibilityState({ query });
@@ -65,7 +103,6 @@ test("registrationはshell契約とread-only operation policyへ適合する", a
   const registration = createCompatibilityFeatureRegistration({
     query,
     state,
-    getProjectId: () => projectId,
     subscribeAvailability(listener) {
       availabilityListeners.add(listener);
       return () => availabilityListeners.delete(listener);
@@ -107,13 +144,12 @@ test("registrationはcompatibility識別子とラベルを持つ", () => {
   );
 });
 
-test("mountはgetProjectIdが返すprojectで評価しViewを描画する", async () => {
+test("mountはcontext購読を開始して現在projectを評価しViewを描画する", async () => {
   const query = queryReturning({ ok: true, value: reportOf("incompatible") });
-  const state = createCompatibilityState({ query });
+  const context = stateWithReadyContext(query);
   const registration = createCompatibilityFeatureRegistration({
     query,
-    state,
-    getProjectId: () => projectId,
+    state: context.state,
   });
   const container = document.createElement("div");
 
@@ -127,21 +163,22 @@ test("mountはgetProjectIdが返すprojectで評価しViewを描画する", asyn
   });
 
   assert.deepEqual(query.calls, [projectId]);
+  assert.equal(context.subscriptions(), 1);
   assert.match(
     container.textContent ?? "",
     new RegExp(defaultMessageResolver("compatibility.aggregate.incompatible")),
   );
   await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");
+  assert.equal(context.releases(), 1);
 });
 
-test("getProjectIdがnullを返せば評価せずidleのまま描画する", async () => {
+test("context adapterが無ければ評価せずidleのまま描画する", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
   const state = createCompatibilityState({ query });
   const registration = createCompatibilityFeatureRegistration({
     query,
     state,
-    getProjectId: () => null,
   });
   const container = document.createElement("div");
 
@@ -161,11 +198,10 @@ test("getProjectIdがnullを返せば評価せずidleのまま描画する", asy
 
 test("読取が許可されないoperation policyでは評価しない", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
-  const state = createCompatibilityState({ query });
+  const context = stateWithReadyContext(query);
   const registration = createCompatibilityFeatureRegistration({
     query,
-    state,
-    getProjectId: () => projectId,
+    state: context.state,
   });
   const container = document.createElement("div");
 
@@ -179,16 +215,16 @@ test("読取が許可されないoperation policyでは評価しない", async (
   });
 
   assert.deepEqual(query.calls, []);
+  assert.equal(context.subscriptions(), 0);
   await act(async () => handle?.unmount());
 });
 
 test("unmountはReact rootの解除を一度だけ行いcontainerを空にする", async () => {
   const query = queryReturning({ ok: true, value: reportOf("compatible") });
-  const state = createCompatibilityState({ query });
+  const context = stateWithReadyContext(query);
   const registration = createCompatibilityFeatureRegistration({
     query,
-    state,
-    getProjectId: () => projectId,
+    state: context.state,
   });
   const container = document.createElement("div");
 
@@ -204,8 +240,10 @@ test("unmountはReact rootの解除を一度だけ行いcontainerを空にする
 
   await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");
+  assert.equal(context.releases(), 1);
   await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");
+  assert.equal(context.releases(), 1);
 });
 
 test("mountできるstateを持たないregistrationはmountを成功と偽らない", async () => {
@@ -221,5 +259,74 @@ test("mountできるstateを持たないregistrationはmountを成功と偽ら�
     }),
     /no compatibility state to mount/,
   );
+  assert.equal(container.textContent, "");
+});
+
+test("context購読開始が失敗したmountは作成済みReact rootを解放する", async () => {
+  const query = queryReturning({ ok: true, value: reportOf("compatible") });
+  const state = createCompatibilityState({
+    query,
+    projectContext: {
+      getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+      subscribe() {
+        throw new Error("fixture subscribe failure");
+      },
+    },
+  });
+  const registration = createCompatibilityFeatureRegistration({ query, state });
+  const container = document.createElement("div");
+
+  await act(async () => {
+    await assert.rejects(
+      registration.mount({
+        container,
+        operationPolicy: allowAll,
+        reportError: () => {},
+      }),
+      /fixture subscribe failure/,
+    );
+  });
+  assert.equal(container.textContent, "");
+});
+
+test("context購読解除も失敗するpartial mountでReact root cleanupを継続する", async () => {
+  const query = queryReturning({ ok: true, value: reportOf("compatible") });
+  const snapshot: ProjectContextSnapshot = {
+    status: "ready",
+    generation: 1,
+    catalog: [
+      { id: projectId, name: "架空プロジェクト", updatedAt: timestamp },
+    ],
+    selectedProjectId: projectId,
+  };
+  let snapshotReads = 0;
+  const state = createCompatibilityState({
+    query,
+    projectContext: createCompatibilityProjectContextAdapter({
+      getSnapshot() {
+        snapshotReads += 1;
+        if (snapshotReads > 1) throw new Error("fixture snapshot failure");
+        return snapshot;
+      },
+      subscribe() {
+        return () => {
+          throw new Error("fixture release failure");
+        };
+      },
+    }),
+  });
+  const registration = createCompatibilityFeatureRegistration({ query, state });
+  const container = document.createElement("div");
+
+  await act(async () => {
+    await assert.rejects(
+      registration.mount({
+        container,
+        operationPolicy: allowAll,
+        reportError: () => {},
+      }),
+      /fixture release failure/,
+    );
+  });
   assert.equal(container.textContent, "");
 });

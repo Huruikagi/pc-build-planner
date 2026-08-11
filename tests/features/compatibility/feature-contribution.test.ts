@@ -30,6 +30,10 @@ import type {
   FoundationDataPort,
   FoundationScopedDataPort,
 } from "../../../src/persistence/public.js";
+import type {
+  ProjectContextReadPort,
+  ProjectContextSnapshot,
+} from "../../../src/project-context/public.js";
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -134,11 +138,43 @@ const compositionContext = {
   },
 };
 
+const readyContext = (): {
+  readonly read: ProjectContextReadPort;
+  readonly subscriptions: () => number;
+  readonly releases: () => number;
+} => {
+  const snapshot: ProjectContextSnapshot = {
+    status: "ready",
+    generation: 1,
+    catalog: [
+      { id: projectId, name: "架空プロジェクト", updatedAt: timestamp },
+    ],
+    selectedProjectId: projectId,
+  };
+  let subscriptions = 0;
+  let releases = 0;
+  return {
+    read: {
+      getSnapshot: () => snapshot,
+      subscribe() {
+        subscriptions += 1;
+        let active = true;
+        return () => {
+          if (!active) return;
+          active = false;
+          releases += 1;
+        };
+      },
+    },
+    subscriptions: () => subscriptions,
+    releases: () => releases,
+  };
+};
+
 test("合成入口はcompatibility contributionを組み立てshellが解決できる形にする", async () => {
   const contribution = createCompatibilityContribution(compositionContext, {
     currentBuildQuery,
     candidateQuery,
-    getProjectId: () => projectId,
   });
 
   assert.equal(contribution.key, "compatibility");
@@ -154,10 +190,11 @@ test("合成入口はcompatibility contributionを組み立てshellが解決で�
 });
 
 test("mountは上流queryから読み取り実際の5規則評価結果を描画する", async () => {
+  const context = readyContext();
   const contribution = createCompatibilityContribution(compositionContext, {
     currentBuildQuery,
     candidateQuery,
-    getProjectId: () => projectId,
+    projectContext: context.read,
   });
   const container = document.createElement("div");
 
@@ -179,7 +216,39 @@ test("mountは上流queryから読み取り実際の5規則評価結果を描画
     new RegExp(defaultMessageResolver("compatibility.aggregate.caution")),
   );
   assert.match(container.textContent ?? "", /架空パーツ/);
+  assert.equal(context.subscriptions(), 1);
 
   await act(async () => handle?.unmount());
+  await act(async () => handle?.unmount());
   assert.equal(container.textContent, "");
+  assert.equal(context.releases(), 1);
+});
+
+test("context未注入時は別projectへfallback評価しない", async () => {
+  let buildReads = 0;
+  const contribution = createCompatibilityContribution(compositionContext, {
+    currentBuildQuery: {
+      async getByProject(id) {
+        buildReads += 1;
+        return currentBuildQuery.getByProject(id);
+      },
+    },
+    candidateQuery,
+  });
+  const container = document.createElement("div");
+
+  let handle:
+    | Awaited<ReturnType<typeof contribution.registration.mount>>
+    | undefined;
+  await act(async () => {
+    handle = await contribution.registration.mount({
+      container,
+      operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+      reportError: () => {},
+    });
+  });
+
+  assert.equal(buildReads, 0);
+  assert.equal(container.querySelector("[data-status='idle']") !== null, true);
+  await act(async () => handle?.unmount());
 });

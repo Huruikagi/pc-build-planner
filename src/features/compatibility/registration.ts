@@ -6,7 +6,6 @@ import type {
   OperationPolicy,
   PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
-import type { ProjectId } from "../../domain/public.js";
 import type { CompatibilityQuery } from "./contracts.js";
 import {
   type CompatibilityPublicApi,
@@ -37,32 +36,18 @@ export interface CompatibilityFeatureRegistrationDependencies {
   ) => () => void;
   /** Supplied by the feature-local React/state composition when the screen is enabled. */
   readonly state?: CompatibilityState;
-  /**
-   * Resolves which project's compatibility to evaluate. Project selection is
-   * owned outside this spec's boundary; a `null` result mounts an idle view.
-   * May resolve asynchronously (e.g. via an upstream `listProjects()` query).
-   */
-  readonly getProjectId?: () => ProjectId | null | Promise<ProjectId | null>;
 }
 
 const mountCompatibilityView =
-  (
-    state: CompatibilityState,
-    getProjectId: () => ProjectId | null | Promise<ProjectId | null>,
-  ): CompatibilityMount =>
+  (state: CompatibilityState): CompatibilityMount =>
   async ({ container, operationPolicy }) => {
-    const root = mountCompatibilityReactRoot(container, state);
-    let unmounted = false;
-
-    const projectId = await getProjectId();
-    if (projectId !== null && operationPolicy.isAllowed("read")) {
-      await state.evaluate(projectId);
-    }
-
+    const root = mountCompatibilityReactRoot(
+      container,
+      state,
+      operationPolicy.isAllowed("read"),
+    );
     return {
       async unmount() {
-        if (unmounted) return;
-        unmounted = true;
         root.unmount();
       },
     };
@@ -86,10 +71,7 @@ export const createCompatibilityFeatureRegistration = (
     dependencies.mount ??
     (dependencies.state === undefined
       ? mountUnavailable
-      : mountCompatibilityView(
-          dependencies.state,
-          dependencies.getProjectId ?? (() => null),
-        ));
+      : mountCompatibilityView(dependencies.state));
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
   const subscribeAvailability =

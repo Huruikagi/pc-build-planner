@@ -133,10 +133,10 @@
   - _Requirements: 1.4, 1.6, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: CompatibilityQuery, CompatibilityService, CompatibilityState, CompatibilityView, compatibility message catalogs, task-local tests_
 
-- [ ] 7. 日英表示とfeature lifecycleを統合する
+- [x] 7. 日英表示とfeature lifecycleを統合する
   - _Integrated: 旧タスク7.1の日英状態・根拠・回復表示は、公開状態契約のconsumer移行をatomicに保つためタスク6.2へ統合済み_
 
-- [ ] 7.2 context購読をfeature registrationとmount lifecycleへ接続する
+- [x] 7.2 context購読をfeature registrationとmount lifecycleへ接続する
   - shellから注入されたProjectContextReadPortをowner-local adapterへ渡し、mount時にstate購読と評価を開始する
   - feature-contribution、registration、公開query、React rootを既存ApplicationFeatureRegistration契約へ接続し、unmount時にrootとcontext購読を一度だけ解放する
   - 既存完了タスク5.1は旧production compositionの履歴として保持し、本タスクが共有fileを所有しない現feature境界で置き換える

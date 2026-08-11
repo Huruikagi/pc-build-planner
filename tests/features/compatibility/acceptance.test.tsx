@@ -34,6 +34,15 @@ const buildId =
   "40000000-0000-4000-8000-000000000091" as Uuid as CurrentBuild["id"];
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
 
+const stateForCurrentProject = (query: CompatibilityQuery) =>
+  createCompatibilityState({
+    query,
+    projectContext: {
+      getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+      subscribe: () => () => {},
+    },
+  });
+
 const partId = (raw: string): CandidatePartId =>
   raw as unknown as CandidatePartId;
 
@@ -310,11 +319,10 @@ test("unmount後は購読解除しReact rootを一度だけ除去する", async 
       };
     },
   };
-  const state = createCompatibilityState({ query });
+  const state = stateForCurrentProject(query);
   const registration = createCompatibilityFeatureRegistration({
     query,
     state,
-    getProjectId: () => projectId,
   });
   const container = document.createElement("div");
 
@@ -402,8 +410,7 @@ test("読取失敗・評価失敗時にパーツ名・URL・属性値をログ�
     // content either, even if a future mount path starts wiring it up.
     const registration = createCompatibilityFeatureRegistration({
       query: readFailedService,
-      state: createCompatibilityState({ query: readFailedService }),
-      getProjectId: () => projectId,
+      state: stateForCurrentProject(readFailedService),
     });
     const container = document.createElement("div");
     let handle: Awaited<ReturnType<typeof registration.mount>> | undefined;
