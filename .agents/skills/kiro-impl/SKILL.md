@@ -76,6 +76,8 @@ After all parallel research completes, synthesize implementation brief before st
 
 **Context management**: At the start of each iteration, re-read `tasks.md` to determine the next actionable sub-task. Do NOT rely on accumulated memory of previous iterations. After completing each iteration, retain only a one-line summary (e.g., "1.1: READY_FOR_REVIEW, 3 files changed") and discard the full status report and reviewer details.
 
+**Implementer agent**: For every implementer spawn or re-dispatch in autonomous mode -- initial implementation, malformed-status recovery, `NEEDS_CONTEXT` retry, reviewer remediation, and post-debug repair -- use the `kiro-implementer` custom agent when available (configured with `model = "gpt-5.6-sol"` and `model_reasoning_effort = "low"` in `.codex/agents/kiro-implementer.toml`). Do not use this role for reviewer or debugger sub-agents. If the custom agent is unavailable, fall back to the built-in `worker` agent while preserving the same task-specific prompt and boundaries.
+
 If multi-agent capability is available, for each task (one at a time):
 
 **a) Dispatch implementer**:
