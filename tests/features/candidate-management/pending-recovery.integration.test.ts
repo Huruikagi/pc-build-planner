@@ -89,6 +89,10 @@ const unusedCreate: CandidateManagementService["createProject"] = async () => {
 const currentContext = (initial: ProjectId | null) => {
   const listeners = new Set<() => void>();
   let current = initial;
+  let refreshTarget = initial;
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
   return {
     port: {
       getCurrentProject: () =>
@@ -99,10 +103,24 @@ const currentContext = (initial: ProjectId | null) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      async refresh() {
+        current = refreshTarget;
+        notify();
+        return {
+          ok: true as const,
+          value:
+            current === null
+              ? ({ status: "unresolved" } as const)
+              : ({ status: "resolved", projectId: current } as const),
+        };
+      },
     } satisfies CurrentProjectPort,
     change(next: ProjectId | null) {
       current = next;
-      for (const listener of listeners) listener();
+      notify();
+    },
+    setRefreshTarget(next: ProjectId | null) {
+      refreshTarget = next;
     },
     get listenerCount() {
       return listeners.size;
@@ -121,13 +139,20 @@ const createState = (
     currentProject,
   });
 
-test("明示選択は保持中の同じ pre-edit を再抽出せず editor へ移す", async () => {
-  const state = createState(currentContext(null).port);
+test("未検証project IDでは再開せずcurrent context確定後だけ同じpre-editを開く", async () => {
+  const context = currentContext(null);
+  const state = createState(context.port);
   await state.load();
+  state.attachCurrentProject();
   const pending = prefill("架空の明示選択候補");
   state.holdPendingPreEdit(pending);
 
   state.resumePendingPreEdit(chosenProjectId);
+
+  assert.deepEqual(state.value.pendingPreEdit, pending);
+  assert.equal(state.value.editor, null);
+
+  context.change(chosenProjectId);
 
   assert.equal(state.value.pendingPreEdit, null);
   assert.deepEqual(state.value.editor, {
@@ -137,6 +162,7 @@ test("明示選択は保持中の同じ pre-edit を再抽出せず editor へ�
     captureDiagnostics: pending.captureDiagnostics,
   });
   assert.equal(state.value.selectedProjectId, chosenProjectId);
+  state.releaseCurrentProject();
 });
 
 test("current context の回復は保持中 pre-edit を同じ内容で再開する", async () => {
@@ -177,7 +203,7 @@ test("binding 済み project は以降の context 変更でも置換されない
   await state.load();
   state.attachCurrentProject();
   state.holdPendingPreEdit(prefill("架空の固定候補"));
-  state.resumePendingPreEdit(chosenProjectId);
+  context.change(chosenProjectId);
 
   context.change(recoveredProjectId);
 
@@ -186,8 +212,9 @@ test("binding 済み project は以降の context 変更でも置換されない
   state.releaseCurrentProject();
 });
 
-test("作成成功は service が返した ID をそのまま維持し、失敗は pre-edit を保持する", async () => {
+test("作成成功後もservice返却IDではなくrefresh済みcurrent contextへbindingする", async () => {
   const context = currentContext(null);
+  context.setRefreshTarget(recoveredProjectId);
   let attempts = 0;
   const state = createState(context.port, async ({ name }) => {
     attempts += 1;
@@ -215,11 +242,11 @@ test("作成成功は service が返した ID をそのまま維持し、失敗�
 
   await state.createProject("成功する作成");
   assert.equal(state.value.pendingPreEdit, null);
-  assert.equal(state.value.editor?.projectId, createdProjectId);
+  assert.equal(state.value.editor?.projectId, recoveredProjectId);
 
-  // A later context recovery must not re-resolve the created project.
-  context.change(recoveredProjectId);
-  assert.equal(state.value.editor?.projectId, createdProjectId);
+  // A later context change must not rebind the already-open editor.
+  context.change(chosenProjectId);
+  assert.equal(state.value.editor?.projectId, recoveredProjectId);
   state.releaseCurrentProject();
 });
 

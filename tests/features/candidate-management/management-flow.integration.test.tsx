@@ -78,6 +78,32 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
       "30000000-0000-4000-8000-000000000061" as Uuid as never,
   });
   let revision = 0;
+  let currentProjectId: ProjectId | null = null;
+  const currentProject = {
+    getCurrentProject: () =>
+      currentProjectId === null
+        ? ({ status: "unresolved" } as const)
+        : ({ status: "resolved", projectId: currentProjectId } as const),
+    subscribe: () => () => {},
+    async refresh() {
+      const projects = await service.listProjects();
+      currentProjectId =
+        projects.ok &&
+        projects.value.some((project) => project.id === projectId)
+          ? projectId
+          : null;
+      return {
+        ok: true as const,
+        value:
+          currentProjectId === null
+            ? ({ status: "unresolved" } as const)
+            : ({
+                status: "resolved",
+                projectId: currentProjectId,
+              } as const),
+      };
+    },
+  };
   const state = createManagementState({
     query: service,
     service,
@@ -85,6 +111,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
       requestId: nextRequest(),
       expectedRevision: revision as Revision,
     }),
+    currentProject,
   });
   const registration = createCandidateFeatureRegistration({
     data,
@@ -171,6 +198,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
       requestId: nextRequest(),
       expectedRevision: revision as Revision,
     }),
+    currentProject,
   });
   const reopenedContainer = document.createElement("div");
   const reopenedHandle = await createCandidateFeatureRegistration({
@@ -210,6 +238,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
       requestId: nextRequest(),
       expectedRevision: revision as Revision,
     }),
+    currentProject,
   });
   await finalState.load();
   assert.equal(finalState.value.projects.length, 0);

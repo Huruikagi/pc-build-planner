@@ -247,6 +247,7 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
       expectedRevision: 0 as Revision,
     }),
     duplicateMergeCoordinator,
+    currentProject: currentProject(readySnapshot),
   });
   const sourceRegistration = createCandidateFeatureRegistration({
     data: {} as FoundationScopedDataPort,
@@ -370,6 +371,34 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     });
     await rejectedContextHandle.unmount();
   }
+  const missingAuthorityState = createManagementState({
+    query,
+    service: {} as CandidateManagementService,
+    createMutationContext: () => ({
+      requestId: "20000000-0000-4000-8000-000000000001" as never,
+      expectedRevision: 0 as Revision,
+    }),
+  });
+  const missingAuthorityContainer = document.createElement("div");
+  const missingAuthorityHandle = await createCandidateFeatureRegistration({
+    data: {} as FoundationScopedDataPort,
+    query,
+    state: missingAuthorityState,
+  }).mount({
+    container: missingAuthorityContainer,
+    operationPolicy: { isAllowed: () => true, subscribe: () => () => {} },
+    reportError: () => {},
+    restoredState: captured?.ok ? captured.value : undefined,
+  });
+  assert.equal(missingAuthorityState.value.editor, null);
+  assert.deepEqual(missingAuthorityState.value.displayError, {
+    code: "snapshot-restore-failed",
+  });
+  assert.equal(
+    missingAuthorityContainer.querySelectorAll("[data-project-id]").length,
+    0,
+  );
+  await missingAuthorityHandle.unmount();
   assert.equal(contextRefreshes, 0);
 });
 
@@ -475,6 +504,16 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
         requestId: "20000000-0000-4000-8000-000000000001" as never,
         expectedRevision: 0 as Revision,
       }),
+      currentProject: {
+        getCurrentProject: () => ({ status: "unresolved" }),
+        subscribe: () => () => {},
+        async refresh() {
+          return {
+            ok: false,
+            error: { kind: "context-unavailable" },
+          };
+        },
+      },
     });
   const pending = {
     draft: {
@@ -542,7 +581,9 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
     restoredState: captured?.ok ? captured.value : undefined,
   });
   assert.deepEqual(sessionState.value.pendingPreEdit, pending);
-  assert.equal(sessionState.value.displayError, null);
+  assert.deepEqual(sessionState.value.displayError, {
+    code: "project-required",
+  });
   await second.unmount();
   assert.equal(subscriptions, 2);
   assert.equal(releases, 2);

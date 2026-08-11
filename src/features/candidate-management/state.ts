@@ -352,17 +352,10 @@ export class ManagementState {
 
     const current = this.resolveCurrentProject();
     const selectedProjectId =
-      this.dependencies.currentProject === undefined
-        ? this.#value.selectedProjectId !== null &&
-          projects.value.some(
-            (project) => project.id === this.#value.selectedProjectId,
-          )
-          ? this.#value.selectedProjectId
-          : (projects.value[0]?.id ?? null)
-        : current.status === "resolved" &&
-            projects.value.some((project) => project.id === current.projectId)
-          ? current.projectId
-          : null;
+      current.status === "resolved" &&
+      projects.value.some((project) => project.id === current.projectId)
+        ? current.projectId
+        : null;
     const candidates = await Promise.all(
       projects.value.map(async (project) =>
         this.dependencies.query.listCandidates({ projectId: project.id }),
@@ -397,6 +390,9 @@ export class ManagementState {
 
   public async selectProject(projectId: ProjectId): Promise<void> {
     if (this.#readBlocked) return;
+    const current = this.resolveCurrentProject();
+    if (current.status !== "resolved" || current.projectId !== projectId)
+      return;
     this.#set({
       selectedProjectId: projectId,
       candidates: this.#filterCandidates(
@@ -436,26 +432,6 @@ export class ManagementState {
       return;
     }
     if (!result.ok) return this.#mutationFailure(result.error);
-    // Legacy callers without the context refresh capability retain the
-    // pre-existing direct binding behavior. Production uses the adapter path.
-    if (
-      this.dependencies.currentProject?.refresh === undefined &&
-      this.#value.pendingPreEdit !== null
-    ) {
-      this.#set({
-        projects: [
-          ...this.#value.projects,
-          {
-            id: result.value.id,
-            name: result.value.name,
-            updatedAt: result.value.updatedAt,
-          },
-        ],
-        isSaving: false,
-      });
-      this.resumePendingPreEdit(result.value.id);
-      return;
-    }
     this.#set({ isSaving: false });
     await this.#refreshAfterProjectMutation();
   }
@@ -475,11 +451,6 @@ export class ManagementState {
     } catch {
       return { status: "unresolved" };
     }
-  }
-
-  /** Whether production supplied the shared project-context authority. */
-  public hasCurrentProjectAuthority(): boolean {
-    return this.dependencies.currentProject !== undefined;
   }
 
   /**
@@ -541,12 +512,15 @@ export class ManagementState {
 
   /**
    * Moves the held pre-edit into the editor for one already-decided project,
-   * whether that came from an explicit choice, a creation result, or context
-   * recovery. An open editor is never re-bound to a different project.
+   * after verifying that it matches the current context. An open editor is
+   * never re-bound to a different project.
    */
   public resumePendingPreEdit(projectId: ProjectId): void {
     const pending = this.#value.pendingPreEdit;
     if (pending === null || this.#mutationsDisabled()) return;
+    const current = this.resolveCurrentProject();
+    if (current.status !== "resolved" || current.projectId !== projectId)
+      return;
     this.#set({
       selectedProjectId: projectId,
       candidates: this.#filterCandidates(
@@ -906,6 +880,10 @@ export class ManagementState {
   /** A persisted project mutation is never replayed when context refresh fails. */
   async #refreshAfterProjectMutation(): Promise<void> {
     const refresh = this.dependencies.currentProject?.refresh;
+    if (refresh === undefined) {
+      this.#set({ displayError: { code: "context-refresh-failed" } });
+      return;
+    }
     if (refresh !== undefined) {
       const result = await refresh();
       if (!result.ok) {

@@ -59,12 +59,15 @@ const pendingPrefill: UnresolvedCandidateEditorPrefill = {
   ],
 };
 
-const unusedQuery: CandidateManagementQuery = {
+const pendingQuery: CandidateManagementQuery = {
   async listProjects() {
-    throw new Error("project-required view must not reload projects");
+    return {
+      ok: true,
+      value: [{ id: projectId, name: "created", updatedAt: timestamp }],
+    };
   },
   async listCandidates() {
-    throw new Error("project-required view must not load candidates");
+    return { ok: true, value: [] };
   },
   async getCandidateDraft() {
     throw new Error("not used");
@@ -106,10 +109,25 @@ const renderPending = (
   language: SupportedLanguage,
   createProject: CandidateManagementService["createProject"],
 ) => {
+  let current: ProjectId | null = null;
   const state = createManagementState({
-    query: unusedQuery,
+    query: pendingQuery,
     service: serviceWithCreate(createProject),
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () =>
+        current === null
+          ? { status: "unresolved" }
+          : { status: "resolved", projectId: current },
+      subscribe: () => () => {},
+      async refresh() {
+        current = projectId;
+        return {
+          ok: true,
+          value: { status: "resolved", projectId },
+        };
+      },
+    },
   });
   state.holdPendingPreEdit(pendingPrefill);
   const user = userEvent.setup();
@@ -264,7 +282,7 @@ for (const language of ["ja", "en"] as const) {
 test("dynamic spec rejectionをmapperからunknown activation経由で既存project editorへ安全に1件だけ渡す", async () => {
   const state = createManagementState({
     query: {
-      ...unusedQuery,
+      ...pendingQuery,
       async listProjects() {
         return {
           ok: true,
@@ -340,7 +358,7 @@ const otherProjectId =
   "10000000-0000-4000-8000-000000000026" as Uuid as ProjectId;
 
 const projectListQuery: CandidateManagementQuery = {
-  ...unusedQuery,
+  ...pendingQuery,
   async listProjects() {
     return {
       ok: true,

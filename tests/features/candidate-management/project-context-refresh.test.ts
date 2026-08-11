@@ -48,6 +48,7 @@ test("project mutation失敗時はcontext refreshせず既存表示を保持す�
   let deletes = 0;
   let refreshes = 0;
   let deleteShouldFail = true;
+  let renameShouldFail = true;
   const currentProject: CurrentProjectPort = {
     getCurrentProject: () => ({ status: "resolved", projectId }),
     subscribe: () => () => {},
@@ -63,7 +64,17 @@ test("project mutation失敗時はcontext refreshせず既存表示を保持す�
     },
     async renameProject() {
       renames += 1;
-      return { ok: false as const, error: { kind: "storage" as const } };
+      return renameShouldFail
+        ? { ok: false as const, error: { kind: "storage" as const } }
+        : {
+            ok: true as const,
+            value: {
+              id: projectId,
+              name: "成功する改名",
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+          };
     },
     async deleteProject() {
       deletes += 1;
@@ -98,10 +109,16 @@ test("project mutation失敗時はcontext refreshせず既存表示を保持す�
   assert.equal(state.value.isSaving, false);
   assert.equal(state.value.displayError?.code, "storage");
 
+  renameShouldFail = false;
+  await state.renameProject(projectId, "成功する改名");
+  assert.equal(renames, 2);
+  assert.equal(refreshes, 1);
+  assert.equal(state.value.isSaving, false);
+
   state.requestDeletion({ kind: "project", projectId });
   await state.confirmDeletion();
   assert.equal(deletes, 1);
-  assert.equal(refreshes, 0);
+  assert.equal(refreshes, 1);
   assert.deepEqual(state.value.projects, projectsBefore);
   assert.deepEqual(state.value.deletion, { kind: "project", projectId });
   assert.equal(state.value.isSaving, false);
@@ -110,7 +127,7 @@ test("project mutation失敗時はcontext refreshせず既存表示を保持す�
   deleteShouldFail = false;
   await state.confirmDeletion();
   assert.equal(deletes, 2);
-  assert.equal(refreshes, 1);
+  assert.equal(refreshes, 2);
   assert.equal(state.value.deletion, null);
 });
 

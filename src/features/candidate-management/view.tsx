@@ -1009,12 +1009,6 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
   const [projectNameError, setProjectNameError] = useState<string | null>(null);
   const value = state.value;
 
-  const selectProject = async (
-    projectId: (typeof value.projects)[number]["id"],
-  ) => {
-    await state.selectProject(projectId);
-    rerender();
-  };
   const selectCategory = async (category: PartCategory | null) => {
     await state.selectCategory(category);
     rerender();
@@ -1196,22 +1190,9 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
       >
         {value.projects.map((project) => (
           <span key={project.id}>
-            {state.hasCurrentProjectAuthority() ? (
-              project.id === value.selectedProjectId ? (
-                <span data-current-project>{project.name}</span>
-              ) : null
-            ) : (
-              <button
-                aria-current={
-                  project.id === value.selectedProjectId ? "page" : undefined
-                }
-                data-project-id={project.id}
-                onClick={() => void selectProject(project.id)}
-                type="button"
-              >
-                {project.name}
-              </button>
-            )}
+            {project.id === value.selectedProjectId ? (
+              <span data-current-project>{project.name}</span>
+            ) : null}
             <button
               data-rename-project-id={project.id}
               disabled={value.isSaving || value.mutationsDisabled}

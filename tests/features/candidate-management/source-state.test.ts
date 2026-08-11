@@ -84,6 +84,10 @@ const createState = async (
     query,
     service,
     sourcePage: { open },
+    currentProject: {
+      getCurrentProject: () => ({ status: "resolved", projectId }),
+      subscribe: () => () => {},
+    },
     createMutationContext: () => ({
       requestId: "20000000-0000-4000-8000-000000000001" as Uuid as RequestId,
       expectedRevision: 0 as Revision,

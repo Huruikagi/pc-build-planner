@@ -97,6 +97,10 @@ const createState = async () => {
     query,
     service,
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () => ({ status: "resolved", projectId }),
+      subscribe: () => () => {},
+    },
   });
   await state.load();
   return state;

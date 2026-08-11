@@ -55,7 +55,7 @@
 - 共有コアの `domain/runtime-schema/public.ts`、`ui-messages/public.ts`、`ui-language/public.ts`。候補管理は公開schema primitive、メッセージ解決、LanguageProviderだけを利用し、内部schema、catalog、language storeへdeep importしない
 
 ### Revalidation Triggers
-- `Project`、`CandidatePart`、`SourceInfo`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
+- `Project`、`CandidatePart`、`sources`、`primarySourceId`、カテゴリ、正規化属性、Foundation query/mutation errorの形状変更
 - 未分類候補の公開規則または候補の所属規則変更
 - サイドパネル入口、保存責任、依存方向の変更
 - shell activation envelope、候補変更時の参照修復policy、revision競合規則の変更
@@ -214,7 +214,7 @@ interface MutationContext {
 ```
 
 - 名前はtrim後に非空を要求する。任意項目は欠損を値へ推測変換しない。
-- カテゴリ変更時は共通項目、`sourceInfo`、`sourceSnapshot`を維持し、新カテゴリ属性を明示入力から構築する。
+- カテゴリ変更時は共通項目、`sources`、`primarySourceId`、`sourceSnapshot`を維持し、新カテゴリ属性を明示入力から構築する。
 - serviceは管理入力をFoundation公開の`RootMutationCommand`へ変換するだけで、StorageやCurrentBuildを直接更新しない。
 - Foundationエラーを`validation`、`not-found`、`conflict`、`maintenance`、`storage`、`quota`、`unsupported-data`へ正規化する。
 
@@ -377,7 +377,7 @@ project CRUDの永続mutation成功後だけ`ProjectContextCommandPort.refresh()
 
 ## Data Models
 
-- `CandidateDraft`: 必須の商品名、projectId、categoryと、欠損可能な共通項目・カテゴリ属性・`sourceInfo`・`sourceSnapshot`・確認値。`sourceInfo`は取得URL・取得日時、`sourceSnapshot`は元表記を表し、相互に代用しない。
+- `CandidateDraft`: 必須の商品名、projectId、categoryと、欠損可能な共通項目・カテゴリ属性・`sources`・`primarySourceId`・`sourceSnapshot`・確認値。`sources`は取得URL・取得日時を持つ複数取得元、`primarySourceId`はその代表、`sourceSnapshot`は元表記を表し、相互に代用しない。
 - `UnresolvedCandidateDraft`: `CandidateDraft`からprojectIdだけを除いたcategory判別共用体。空名を含むpre-editの構造的整合を表し、保存可能性を意味しない。
 - `CandidateEditorPrefill`: unresolved draftと任意のprojectId/categoryHintを持つactivation payload。永続entityではない。
 - `CandidateSummary`: id、商品名、カテゴリ、価格、メーカー、型番、欠損状態。
@@ -406,7 +406,7 @@ project CRUDの永続mutation成功後だけ`ProjectContextCommandPort.refresh()
 
 pre-editのpayload不正はshellの`invalid_activation`へ写像する。payload内project IDは保存先判断に使わない。contextが`empty`/`unavailable`であることはactivation失敗ではなく`project-required`状態であり、handoff失敗時のintent保持と再試行表示はproduct captureが所有する。
 
-`ManagementError`の`validation`は`fields`にfield pathをキーとする理由を持つ。serviceは`validateCandidatePartContent`が返す`ValidationError.path`を`product.name`、`sourceInfo.pageUrl`、`sourceInfo.capturedAt`、`normalizedAttributes.<属性名>`のようなdraft相対キーへ正規化し、Viewは対応する入力欄へ`aria-invalid`と`aria-describedby`で結び付けたメッセージを表示する（Requirement 4.5）。項目エラー時も入力内容と既存一覧は保持する。
+`ManagementError`の`validation`は`fields`にfield pathをキーとする理由を持つ。serviceは`validateCandidatePartContent`が返す`ValidationError.path`を`product.name`、`sources.<index>.pageUrl`、`sources.<index>.capturedAt`、`normalizedAttributes.<属性名>`のようなdraft相対キーへ正規化し、Viewは対応する入力欄へ`aria-invalid`と`aria-describedby`で結び付けたメッセージを表示する（Requirement 4.5）。項目エラー時も入力内容と既存一覧は保持する。
 
 ## Testing Strategy
 

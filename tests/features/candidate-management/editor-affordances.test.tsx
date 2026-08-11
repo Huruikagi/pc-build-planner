@@ -126,6 +126,16 @@ const renderView = async (options?: {
     query: query(draftReads),
     service,
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () => ({ status: "resolved", projectId }),
+      subscribe: () => () => {},
+      async refresh() {
+        return {
+          ok: true,
+          value: { status: "resolved", projectId },
+        };
+      },
+    },
     ...(options?.duplicateMergeCoordinator === undefined
       ? {}
       : { duplicateMergeCoordinator: options.duplicateMergeCoordinator }),

@@ -45,6 +45,17 @@ const context: MutationContext = {
   expectedRevision: 0 as Revision,
 };
 
+const currentProject = {
+  getCurrentProject: () => ({ status: "resolved" as const, projectId }),
+  subscribe: () => () => {},
+  async refresh() {
+    return {
+      ok: true as const,
+      value: { status: "resolved" as const, projectId },
+    };
+  },
+};
+
 const createQuery = (failure?: ManagementError): CandidateQuery => ({
   async listProjects() {
     return failure === undefined
@@ -118,6 +129,7 @@ test("読込時に先頭projectと候補一覧を復元し、カテゴリ選択�
     query: createQuery(),
     service: createService(),
     createMutationContext: () => context,
+    currentProject,
   });
 
   await state.load();
@@ -174,6 +186,7 @@ test("forced切替は旧projectのdraftを保持し新projectへのmutationを�
       },
     }),
     createMutationContext: () => context,
+    currentProject,
   });
   await state.load();
   state.beginCreate(draft);
@@ -209,6 +222,7 @@ test("project 作成は失敗時に pending pre-edit を保持し成功時だけ
       },
     }),
     createMutationContext: () => context,
+    currentProject,
   });
   state.holdPendingPreEdit(pendingPreEdit);
 
@@ -236,6 +250,7 @@ test("候補保存の失敗では入力と一覧を保持し、同一操作の�
       },
     }),
     createMutationContext: () => context,
+    currentProject,
   });
   await state.load();
   state.beginCreate(draft);
@@ -451,6 +466,7 @@ test("候補削除の失敗では確認対象と一覧を維持して再試行�
       },
     }),
     createMutationContext: () => context,
+    currentProject,
   });
   await state.load();
   state.requestDeletion({ kind: "candidate", candidateId });

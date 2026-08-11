@@ -133,12 +133,12 @@ const mountManagementView =
       const restored = codec.restore(restoredState);
       const current = state.resolveCurrentProject();
       const contextMatches =
-        !state.hasCurrentProjectAuthority() ||
-        (restored.ok &&
-          current.status === "resolved" &&
-          restored.value.selectedProjectId === current.projectId);
+        restored.ok &&
+        current.status === "resolved" &&
+        restored.value.selectedProjectId === current.projectId;
       if (restored.ok && contextMatches) state.applySnapshot(restored.value);
-      else state.rejectSnapshotRestore();
+      else if (state.value.pendingPreEdit === null)
+        state.rejectSnapshotRestore();
     }
 
     return {

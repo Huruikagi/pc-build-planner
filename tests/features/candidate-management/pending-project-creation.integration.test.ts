@@ -14,6 +14,7 @@ import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
+  CurrentProjectPort,
   ManagementError,
   MutationContext,
   UnresolvedCandidateEditorPrefill,
@@ -47,12 +48,21 @@ const project = (name: string): Project => ({
   updatedAt: timestamp,
 });
 
-const unusedQuery = (): CandidateManagementQuery => ({
+const refreshedQuery = (): CandidateManagementQuery => ({
   async listProjects() {
-    throw new Error("project 作成結果の解決で再一覧取得してはならない");
+    return {
+      ok: true,
+      value: [
+        {
+          id: createdProjectId,
+          name: "架空プロジェクト",
+          updatedAt: timestamp,
+        },
+      ],
+    };
   },
   async listCandidates() {
-    throw new Error("project 作成結果の解決で候補一覧を取得してはならない");
+    return { ok: true, value: [] };
   },
   async getCandidateDraft() {
     throw new Error("not used");
@@ -85,30 +95,47 @@ const serviceWithCreate = (
 
 const createState = (
   createProject: CandidateManagementService["createProject"],
-) =>
-  createManagementState({
-    query: unusedQuery(),
+) => {
+  let current: ProjectId | null = null;
+  const currentProject: CurrentProjectPort = {
+    getCurrentProject: () =>
+      current === null
+        ? { status: "unresolved" }
+        : { status: "resolved", projectId: current },
+    subscribe: () => () => {},
+    async refresh() {
+      current = createdProjectId;
+      return {
+        ok: true,
+        value: { status: "resolved", projectId: createdProjectId },
+      };
+    },
+  };
+  return createManagementState({
+    query: refreshedQuery(),
     service: serviceWithCreate(createProject),
     createMutationContext: () => context,
+    currentProject,
   });
+};
 
-test("project 作成結果の ProjectId を pending draft へ直接適用して editor を開く", async () => {
+test("context authorityなしではproject作成結果をpending draftへ直接適用しない", async () => {
   const pending = prefill("架空の抽出候補");
-  const state = createState(async () => ({
-    ok: true,
-    value: project("架空プロジェクト"),
-  }));
+  const state = createManagementState({
+    query: refreshedQuery(),
+    service: serviceWithCreate(async () => ({
+      ok: true,
+      value: project("架空プロジェクト"),
+    })),
+    createMutationContext: () => context,
+  });
   state.holdPendingPreEdit(pending);
 
   await state.createProject("架空プロジェクト");
 
-  assert.equal(state.value.pendingPreEdit, null);
-  assert.equal(state.value.selectedProjectId, createdProjectId);
-  assert.deepEqual(state.value.editor, {
-    mode: "create",
-    projectId: createdProjectId,
-    draft: { ...pending.draft, projectId: createdProjectId },
-  });
+  assert.deepEqual(state.value.pendingPreEdit, pending);
+  assert.equal(state.value.selectedProjectId, null);
+  assert.equal(state.value.editor, null);
 });
 
 test("project 作成失敗では pending draft と再試行入力を保持し、成功時だけ editor へ移す", async () => {
@@ -138,6 +165,8 @@ test("project 作成失敗では pending draft と再試行入力を保持し、
 });
 
 test("pending project 作成後も既存projectの候補cacheを保持する", async () => {
+  let current = existingProjectId;
+  const listeners = new Set<() => void>();
   const query: CandidateManagementQuery = {
     async listProjects() {
       return {
@@ -148,22 +177,30 @@ test("pending project 作成後も既存projectの候補cacheを保持する", a
             name: "既存の架空プロジェクト",
             updatedAt: timestamp,
           },
-        ],
-      };
-    },
-    async listCandidates() {
-      return {
-        ok: true,
-        value: [
           {
-            id: existingCandidateId,
-            projectId: existingProjectId,
-            category: "uncategorized",
-            name: { original: "既存の架空候補" },
-            hasMissingDetails: true,
+            id: createdProjectId,
+            name: "新しい架空プロジェクト",
             updatedAt: timestamp,
           },
         ],
+      };
+    },
+    async listCandidates(input) {
+      return {
+        ok: true,
+        value:
+          input.projectId === existingProjectId
+            ? [
+                {
+                  id: existingCandidateId,
+                  projectId: existingProjectId,
+                  category: "uncategorized",
+                  name: { original: "既存の架空候補" },
+                  hasMissingDetails: true,
+                  updatedAt: timestamp,
+                },
+              ]
+            : [],
       };
     },
     async getCandidateDraft() {
@@ -180,16 +217,33 @@ test("pending project 作成後も既存projectの候補cacheを保持する", a
       value: project("新しい架空プロジェクト"),
     })),
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () => ({ status: "resolved", projectId: current }),
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      async refresh() {
+        current = createdProjectId;
+        return {
+          ok: true,
+          value: { status: "resolved", projectId: createdProjectId },
+        };
+      },
+    },
   });
   await state.load();
+  state.attachCurrentProject();
   const pending = prefill("新しい架空候補");
   state.holdPendingPreEdit(pending);
 
   await state.createProject("新しい架空プロジェクト");
   assert.equal(state.value.candidates.length, 0);
 
-  await state.selectProject(existingProjectId);
+  current = existingProjectId;
+  for (const listener of listeners) listener();
   assert.equal(state.value.candidates[0]?.id, existingCandidateId);
+  state.releaseCurrentProject();
 });
 
 test("project 作成中の新しい pre-edit activation を成功した project で解決する", async () => {

@@ -45,10 +45,17 @@ const projectSummaries: ProjectSummary[] = [
   },
 ];
 
+const projectSwitches = new WeakMap<
+  ReturnType<typeof createManagementState>,
+  (projectId: ProjectId) => void
+>();
+
 const createState = (
   service: CandidateManagementService = {} as CandidateManagementService,
-) =>
-  createManagementState({
+) => {
+  let currentProjectId: ProjectId | null = firstProjectId;
+  const listeners = new Set<() => void>();
+  const state = createManagementState({
     query: {
       async listProjects() {
         return {
@@ -103,7 +110,38 @@ const createState = (
     } satisfies CandidateQuery,
     service,
     createMutationContext: () => context,
+    currentProject: {
+      getCurrentProject: () =>
+        currentProjectId === null
+          ? { status: "unresolved" }
+          : { status: "resolved", projectId: currentProjectId },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      async refresh() {
+        currentProjectId = projectSummaries.some(
+          (project) => project.id === currentProjectId,
+        )
+          ? currentProjectId
+          : (projectSummaries[0]?.id ?? null);
+        return {
+          ok: true,
+          value:
+            currentProjectId === null
+              ? { status: "unresolved" }
+              : { status: "resolved", projectId: currentProjectId },
+        };
+      },
+    },
   });
+  state.attachCurrentProject();
+  projectSwitches.set(state, (projectId) => {
+    currentProjectId = projectId;
+    for (const listener of listeners) listener();
+  });
+  return state;
+};
 
 async function renderView(service?: CandidateManagementService) {
   const state = createState(service);
@@ -115,6 +153,9 @@ async function renderView(service?: CandidateManagementService) {
   return {
     container,
     state,
+    switchProject: async (projectId: ProjectId) => {
+      await act(async () => projectSwitches.get(state)?.(projectId));
+    },
     cleanup: async () => {
       await act(() => root.unmount());
       container.remove();
@@ -173,10 +214,7 @@ test("プロジェクトまたはカテゴリを切り替えると該当候補�
     "[data-category='all']",
   ) as HTMLButtonElement;
   await act(async () => allCategories.click());
-  const project = rendered.container.querySelector(
-    "[data-project-id='10000000-0000-4000-8000-000000000002']",
-  ) as HTMLButtonElement;
-  await act(async () => project.click());
+  await rendered.switchProject(secondProjectId);
   assert.match(candidateList?.textContent ?? "", /別プロジェクトの GPU/);
   assert.doesNotMatch(candidateList?.textContent ?? "", /未分類の候補/);
 
@@ -240,7 +278,10 @@ test("空名を拒否し、フォームからプロジェクトを作成・改�
     setInputValue(input, "新しい構成");
   });
   await act(async () => form.requestSubmit());
-  assert.match(rendered.container.textContent ?? "", /新しい構成/);
+  assert.equal(
+    projectSummaries.some((project) => project.name === "新しい構成"),
+    true,
+  );
 
   const rename = rendered.container.querySelector(
     `[data-rename-project-id='${firstProjectId}']`,
@@ -476,11 +517,9 @@ test("プロジェクト削除では対象と所属候補への影響を確認�
   const request = rendered.container.querySelector(
     `[data-delete-project-id='${firstProjectId}']`,
   ) as HTMLButtonElement;
-  const projectName = (
-    rendered.container.querySelector(
-      `[data-project-id='${firstProjectId}']`,
-    ) as HTMLButtonElement
-  ).textContent;
+  const projectName =
+    projectSummaries.find((project) => project.id === firstProjectId)?.name ??
+    "";
   await act(async () => request.click());
 
   const confirmation = rendered.container.querySelector('[role="dialog"]');

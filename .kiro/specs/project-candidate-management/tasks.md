@@ -22,7 +22,7 @@
   - _Boundary: CandidateManagementService_
 - [x] 2.3 候補の作成・更新・削除とカテゴリ変更規則を実装する
   - 商品名以外の欠損と未分類を許容し、候補を単一projectへ直接所属させる。
-  - カテゴリ変更で共通項目、sourceInfo、sourceSnapshotを保持し、カテゴリ固有の確認属性だけを明示入力から再構築する。
+  - カテゴリ変更で共通項目、`sources`、`primarySourceId`、`sourceSnapshot`を保持し、カテゴリ固有の確認属性だけを明示入力から再構築する。
   - 削除・カテゴリ変更はFoundationの同一mutationへ委譲し、CurrentBuildを成功後の別writeで更新しない。
   - 有効な候補保存、項目エラー、削除後の他候補保持をサービステストで確認する。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.2, 4.3, 4.4, 4.5, 4.6, 5.2, 5.4_
@@ -163,9 +163,9 @@
   - _Boundary: PreEditValidation_
 
 - [x] 8.2 pending pre-editとproject-required状態を管理stateへ追加する
-  - project未指定時は直近の選択中project、一覧先頭の順に解決し、存在すればprojectId付きcanonical draftとしてeditorを開く。
-  - projectが0件ならactivation成功としてpending draftを保持し、project作成成功時は返却IDで解決して再抽出せずeditorへ遷移する。作成失敗時はpendingを維持する。
-  - pendingはproject作成成功、明示取消、新しいpre-edit activationだけで置換・破棄し、capture終了、通常切替、resetでは失わない。side panel document破棄後は復元しない。
+  - project未指定時は検証済みcurrent contextの`ready.selectedProjectId`だけで解決し、一覧先頭やservice返却IDへfallbackしない。
+  - current contextが`empty`または`unavailable`ならactivation成功としてpending draftを保持し、project作成成功後のrefreshが`ready`を返した時点で再抽出せずeditorへ遷移する。作成またはrefresh失敗時はpendingを維持する。
+  - pendingは保存成功、明示取消、新しいpre-edit activationだけで置換・破棄し、capture終了、通常切替、resetでは失わない。side panel document破棄後は復元しない。
   - 0件受理、作成成功・失敗、取消、新activation、同一session保持、document再生成後の非復元をstate testで観測できることを完了条件とする。
   - _Depends: 8.1_
   - _Requirements: 6.1, 6.6, 7.1, 7.2, 7.3, 7.4, 7.9, 7.10_
@@ -322,3 +322,4 @@
 - 2026-08-11の統合再検証で、project削除成功後にdraftをrefresh前に破棄していたsequencingを修正した。削除確認はmutation前に行い、catalog invalidation後は旧project bindingのdraftを保持してmutationをfenceする。
 - rollback snapshotの現行正本は`candidate-source-bookmarks`と`duplicate-product-merge`を統合したversion 3であり、version 2の記述は現行実装へ同期した。
 - 2026-08-11のfeature validation remediationで、project create・rename・delete失敗時にcontext refreshが0回で既存表示を保持する統合証跡を追加し、共有coreの公開依存と現行テスト配置をdesignへ同期した。
+- 2026-08-11の境界再修正で、context未注入時のproject作成結果IDへのdirect bindingとsnapshot一致検査免除を除去し、pending再開を検証済みcurrent contextだけへ限定した。
