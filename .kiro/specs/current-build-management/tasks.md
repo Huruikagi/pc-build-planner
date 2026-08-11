@@ -149,7 +149,7 @@
   - _Requirements: 3.3, 3.4, 5.1, 5.3, 7.3, 7.4_
   - _Boundary: BuildService_
 
-- [ ] 7.2 検証済みの現在プロジェクトだけを画面stateへ反映する
+- [x] 7.2 検証済みの現在プロジェクトだけを画面stateへ反映する
   - ready通知では同じprojectの候補と現在構成を読み込み、選択projectをcontext snapshotのprojectionとして保持する。
   - emptyまたはunavailable通知ではproject ID、候補、構成を安全に解放し、project固有の変更操作を停止して理由を示せる状態にする。
   - generationと読込開始時のprojectを照合し、遅れて完了した旧projectの結果を現在stateへ適用しない。
@@ -263,6 +263,9 @@
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
 - Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- 7.2ではBuildStateへ`attachProjectContext`/`releaseProjectContext`を追加し、contextが接続されている間だけcontextを唯一の選択authorityにした（`selectProject`はno-op、`load()`はcontextのgetCurrent()経由）。`value.projects`とlegacyな先頭project fallbackは、まだ移行していないview（独自selector）・registration（snapshot peek）・state-snapshot（projects照合）のために残してある。これらは8.2・9・7.4で撤去する前提であり、`projectAvailability === null`がlegacy経路の目印になる。
+- 7.2のempty/unavailable解放は`quantityDrafts`も空にする。requirement 7.7（強制変更でもdraftを保持）と両立させるには、7.3でguardの`notifyForced`がavailability通知より先にdraftを隔離状態（design.mdの`orphanedDraft`）へ移す必要がある。この順序が崩れるとforced変更でdraftが消える。
+- state testでcontext通知が起動する非同期読込を待つには、`await Promise.resolve()`の固定回数ではなく`setTimeout(0)`のmacrotask flushを使う（`#applyAvailability`がPromise.allの読込を挟むため）。
 - `set-quantities`（7.1）の検証順は「選択対象外の候補が一件でもあれば即not-found」→「残りを全件検証してvalidation fieldsへ集約」。fieldsのkeyはcandidatePartIdなので、BuildView（8.2）は入力欄ごとにerrorを対応付けられる。数量が不正でも保存済み構成は一切変更しない（mutation発行ゼロ回）。
 - BuildState.execute（既存）は`set-quantity`/`remove`成功時にだけ該当candidateのquantityDraftを消す。`set-quantities`成功時のdraft掃除はまだ実装していないため、7.3でdraft lifecycleを実装する際に一括保存後の掃除も併せて行う必要がある。
 - project-contextのguard契約（`ProjectContextChangeGuard.evaluate`）が返せるのは`allow`/`confirmation-required`と`guard-failed`だけである。design.mdのSystem Flows（「evaluateはfeature確認の完了を待ち、保存成功または破棄時だけallow」）に従い、current-buildのadapterは`confirmation-required`を返さず、owner（BuildState）の確認完了までevaluateをawaitして`allow`かfailureへ畳む方式にした。candidate-managementのadapterは`confirmation-required`を返してcontext側の確認へ委ねる別方式なので、二つのadapterのguard戦略は意図的に異なる。

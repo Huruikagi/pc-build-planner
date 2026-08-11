@@ -27,6 +27,7 @@ import type {
   CurrentBuildQuery,
   CurrentBuildSnapshot,
 } from "../../../src/features/current-build/contracts.js";
+import type { BuildProjectAvailability } from "../../../src/features/current-build/project-context-adapter.js";
 import {
   type BuildStateDependencies,
   createBuildState,
@@ -93,6 +94,8 @@ interface HarnessOptions {
     | { ok: true; value: CurrentBuildSnapshot }
     | { ok: false; error: BuildError };
   readonly operationPolicy?: OperationPolicy;
+  /** 読込完了の順序を反転させて stale 適用を試すための待ち合わせ。 */
+  readonly eligibleGate?: (id: ProjectId) => Promise<void> | undefined;
 }
 
 interface Harness {
@@ -150,6 +153,7 @@ const createHarness = (options: HarnessOptions = {}): Harness => {
       return { ok: true, value: [] };
     },
     async listBuildEligible(id: ProjectId) {
+      await options.eligibleGate?.(id);
       return { ok: true, value: eligibleByProject[id] ?? [] };
     },
     async getCandidateDraft() {
@@ -465,4 +469,235 @@ test("operationPolicyがmutationを禁止すると変更操作が無効化され
   await state.load();
 
   assert.equal(state.value.mutationsDisabled, true);
+});
+
+/** 7.2: 共通contextの確定済みsnapshotだけを供給する owner fake。 */
+const createContextPort = (initial: BuildProjectAvailability) => {
+  let current = initial;
+  const listeners = new Set<(value: BuildProjectAvailability) => void>();
+  return {
+    get subscriberCount() {
+      return listeners.size;
+    },
+    publish(next: BuildProjectAvailability) {
+      current = next;
+      for (const listener of [...listeners]) listener(next);
+    },
+    port: {
+      getCurrent: () => current,
+      subscribe(listener: (value: BuildProjectAvailability) => void) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+  };
+};
+
+/** context通知が起動する非同期読込の完了まで待つ（固定tick数を仮定しない）。 */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const readyAt = (
+  generation: number,
+  id: ProjectId,
+): BuildProjectAvailability => ({
+  status: "ready",
+  generation,
+  projectId: id,
+});
+
+const twoProjectHarness = (options: HarnessOptions = {}) =>
+  createHarness({
+    projects: [
+      project(projectId, "架空PC構成"),
+      project(otherProjectId, "架空2"),
+    ],
+    eligibleByProject: {
+      [projectId]: [candidate(cpuCandidateId)],
+      [otherProjectId]: [
+        candidate(memoryCandidateId, {
+          projectId: otherProjectId,
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+    },
+    buildByProject: {
+      [projectId]: { revision: 1, currentBuild: null },
+      [otherProjectId]: { revision: 2, currentBuild: null },
+    },
+    ...options,
+  });
+
+test("attachProjectContextはready projectの候補と現在構成だけを読み込む", async () => {
+  const { state, queryCalls } = twoProjectHarness();
+  const context = createContextPort(readyAt(3, otherProjectId));
+
+  await state.attachProjectContext(context.port);
+
+  assert.equal(state.value.projectAvailability, "ready");
+  assert.equal(state.value.selectedProjectId, otherProjectId);
+  assert.deepEqual(
+    state.value.candidates.map((item) => item.id),
+    [memoryCandidateId],
+  );
+  assert.deepEqual(queryCalls, [otherProjectId]);
+});
+
+test("ready通知の切替では新しいprojectの候補と構成を読み直す", async () => {
+  const { state, queryCalls } = twoProjectHarness();
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+
+  context.publish(readyAt(4, otherProjectId));
+  await flush();
+
+  assert.equal(state.value.selectedProjectId, otherProjectId);
+  assert.deepEqual(
+    state.value.candidates.map((item) => item.id),
+    [memoryCandidateId],
+  );
+  assert.deepEqual(queryCalls, [projectId, otherProjectId]);
+});
+
+for (const status of ["empty", "unavailable"] as const) {
+  test(`${status}通知ではproject固有の状態を解放し変更操作を停止する`, async () => {
+    const { state } = twoProjectHarness();
+    const context = createContextPort(readyAt(3, projectId));
+    await state.attachProjectContext(context.port);
+    assert.equal(state.value.selectedProjectId, projectId);
+
+    context.publish({ status, generation: 4 });
+    await flush();
+
+    assert.equal(state.value.projectAvailability, status);
+    assert.equal(state.value.selectedProjectId, null);
+    assert.deepEqual(state.value.candidates, []);
+    assert.equal(state.value.currentBuild, null);
+    assert.deepEqual(state.value.quantityDrafts, {});
+    assert.equal(state.value.mutationsDisabled, true);
+  });
+}
+
+test("project未確定の間は候補一覧から独自のprojectへfallbackしない", async () => {
+  const { state, queryCalls } = twoProjectHarness();
+  const context = createContextPort({ status: "empty", generation: 1 });
+
+  await state.attachProjectContext(context.port);
+  await state.load();
+  await state.selectProject(otherProjectId);
+
+  assert.equal(state.value.selectedProjectId, null);
+  assert.deepEqual(state.value.candidates, []);
+  assert.deepEqual(queryCalls, []);
+});
+
+test("context追従中はfeature独自のproject選択で切り替えない", async () => {
+  const { state, queryCalls } = twoProjectHarness();
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+
+  await state.selectProject(otherProjectId);
+
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.deepEqual(queryCalls, [projectId]);
+});
+
+test("遅れて完了した旧projectの読込結果を現在stateへ適用しない", async () => {
+  const gates = new Map<
+    string,
+    { release: () => void; promise: Promise<void> }
+  >();
+  const gateFor = (id: ProjectId) => {
+    const existing = gates.get(id);
+    if (existing !== undefined) return existing.promise;
+    let release: () => void = () => {};
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    gates.set(id, { release, promise });
+    return promise;
+  };
+  const { state } = twoProjectHarness({ eligibleGate: gateFor });
+  const context = createContextPort(readyAt(3, projectId));
+
+  const attached = state.attachProjectContext(context.port);
+  context.publish(readyAt(4, otherProjectId));
+  // 新しい project の読込を先に確定させ、その後で旧 project の読込を解放する。
+  gates.get(otherProjectId)?.release();
+  await flush();
+  gates.get(projectId)?.release();
+  await attached;
+  await flush();
+
+  assert.equal(state.value.selectedProjectId, otherProjectId);
+  assert.deepEqual(
+    state.value.candidates.map((item) => item.id),
+    [memoryCandidateId],
+  );
+});
+
+test("lifecycle修復後の再読込は追加writeを発行せず有効な参照だけを反映する", async () => {
+  const repaired: CurrentBuild = {
+    id: buildId,
+    projectId,
+    items: [
+      { candidatePartId: cpuCandidateId, quantity: 1 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  let repairedApplied = false;
+  const { state, serviceCalls } = createHarness({
+    eligibleByProject: {
+      [projectId]: [candidate(cpuCandidateId), candidate(memoryCandidateId)],
+    },
+    query: {
+      async getByProject() {
+        return {
+          ok: true,
+          value: {
+            revision: (repairedApplied ? 6 : 5) as Revision,
+            currentBuild: repairedApplied
+              ? repaired
+              : {
+                  ...repaired,
+                  items: [
+                    ...repaired.items,
+                    {
+                      candidatePartId: memoryCandidateId,
+                      quantity: 2 as PositiveInteger,
+                    },
+                  ],
+                },
+          },
+        };
+      },
+    },
+  });
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+  assert.equal(state.value.currentBuild?.items.length, 2);
+
+  // 上流 mutation と同じ commit で参照が修復された後の再照会。
+  repairedApplied = true;
+  await state.load();
+
+  assert.deepEqual(state.value.currentBuild?.items, repaired.items);
+  assert.equal(serviceCalls.length, 0);
+});
+
+test("releaseProjectContextは購読を一度だけ解除し以降の通知を無視する", async () => {
+  const { state, queryCalls } = twoProjectHarness();
+  const context = createContextPort(readyAt(3, projectId));
+  await state.attachProjectContext(context.port);
+
+  state.releaseProjectContext();
+  state.releaseProjectContext();
+  context.publish(readyAt(4, otherProjectId));
+  await flush();
+
+  assert.equal(context.subscriberCount, 0);
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.deepEqual(queryCalls, [projectId]);
 });

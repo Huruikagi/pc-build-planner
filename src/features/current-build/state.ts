@@ -20,7 +20,17 @@ import type {
   BuildService,
   CurrentBuildQuery,
 } from "./contracts.js";
+import type {
+  BuildProjectAvailability,
+  CurrentBuildProjectContextAdapter,
+} from "./project-context-adapter.js";
 import { managementErrorToBuildError } from "./service.js";
+
+/** 共通contextの読取だけを使う。project選択commandは持ち込まない。 */
+export type CurrentBuildProjectContextReadPort = Pick<
+  CurrentBuildProjectContextAdapter,
+  "getCurrent" | "subscribe"
+>;
 
 export type BuildDisplayError = {
   readonly code: BuildError["kind"] | "snapshot-restore-failed";
@@ -39,6 +49,11 @@ const emptyQuantityDrafts: Readonly<Record<string, string>> = Object.freeze({});
 
 export interface BuildStateValue {
   readonly projects: readonly ProjectSummary[];
+  /**
+   * 共通contextの確定状態の射影。`null` は context 未接続を表し、
+   * shell 接続前の legacy mount 経路だけがこの値を取る。
+   */
+  readonly projectAvailability: BuildProjectAvailability["status"] | null;
   readonly selectedProjectId: ProjectId | null;
   readonly selectedCategory: PartCategory | null;
   readonly candidates: readonly CandidatePart[];
@@ -95,8 +110,13 @@ export class BuildState {
   #listeners = new Set<() => void>();
   #readBlocked = false;
   #revision: Revision = 0 as Revision;
+  #context: CurrentBuildProjectContextReadPort | null = null;
+  #unsubscribeContext: (() => void) | undefined;
+  #contextGeneration: number | null = null;
+  #loadSerial = 0;
   #value: BuildStateValue = {
     projects: [],
+    projectAvailability: null,
     selectedProjectId: null,
     selectedCategory: null,
     candidates: [],
@@ -148,8 +168,68 @@ export class BuildState {
     }
   }
 
+  /**
+   * Subscribes to the shared current project. From this point the context is
+   * the only selection authority: the feature neither falls back to another
+   * project nor accepts a screen-driven selection.
+   */
+  public async attachProjectContext(
+    context: CurrentBuildProjectContextReadPort,
+  ): Promise<void> {
+    this.releaseProjectContext();
+    this.#context = context;
+    this.#unsubscribeContext = context.subscribe((availability) => {
+      void this.#applyAvailability(availability);
+    });
+    await this.#applyAvailability(context.getCurrent());
+  }
+
+  /** Detaches from the shared context exactly once when the feature unmounts. */
+  public releaseProjectContext(): void {
+    const owned = this.#unsubscribeContext;
+    this.#unsubscribeContext = undefined;
+    this.#context = null;
+    try {
+      owned?.();
+    } catch {
+      // Detaching from the shared context is best-effort at unmount.
+    }
+  }
+
+  async #applyAvailability(
+    availability: BuildProjectAvailability,
+  ): Promise<void> {
+    this.#contextGeneration = availability.generation;
+    if (availability.status !== "ready") {
+      // project 固有の状態を解放し、変更操作を止めた理由を表示できる状態にする。
+      this.#allCandidates = [];
+      this.#revision = 0 as Revision;
+      this.#loadSerial += 1;
+      // 先に availability を確定させてから変更可否を評価する。
+      this.#set({ projectAvailability: availability.status });
+      this.#set({
+        selectedProjectId: null,
+        candidates: [],
+        currentBuild: null,
+        quantityDrafts: emptyQuantityDrafts,
+        savingCommand: null,
+        isLoading: false,
+        isSaving: false,
+        mutationsDisabled: this.#mutationsDisabled(),
+      });
+      return;
+    }
+    this.#set({ projectAvailability: "ready" });
+    await this.#loadForProject(availability.projectId, availability.generation);
+  }
+
   #mutationsDisabled(): boolean {
     if (this.#readBlocked) return true;
+    if (
+      this.#value.projectAvailability !== null &&
+      this.#value.projectAvailability !== "ready"
+    )
+      return true;
     try {
       return !this.#policy.isAllowed("mutation");
     } catch {
@@ -214,8 +294,17 @@ export class BuildState {
     this.#set({ displayError: { code: "snapshot-restore-failed" } });
   }
 
-  /** Re-reads projects and, for the selected project, candidates and the current build. */
+  /**
+   * Re-reads the current build for the authoritative project. With a context
+   * attached this issues no write and never selects a project on its own —
+   * it is also the post-repair re-query path.
+   */
   public async load(): Promise<void> {
+    const context = this.#context;
+    if (context !== null) {
+      await this.#applyAvailability(context.getCurrent());
+      return;
+    }
     this.#set({
       isLoading: true,
       displayError: null,
@@ -251,13 +340,17 @@ export class BuildState {
       return;
     }
 
-    await this.#loadForProject(selectedProjectId);
+    await this.#loadForProject(selectedProjectId, null);
   }
 
-  /** Switches the selected project, re-querying its candidates and current build. */
+  /**
+   * Legacy screen-driven switch, kept only for the mount path that predates the
+   * shared context. Once a context is attached the shared project is the sole
+   * authority and this is a no-op.
+   */
   public async selectProject(projectId: ProjectId): Promise<void> {
-    if (this.#readBlocked) return;
-    await this.#loadForProject(projectId);
+    if (this.#readBlocked || this.#context !== null) return;
+    await this.#loadForProject(projectId, null);
   }
 
   /** Client-side filter over already-loaded candidates; issues no query. */
@@ -341,7 +434,11 @@ export class BuildState {
     );
   }
 
-  async #loadForProject(projectId: ProjectId): Promise<void> {
+  async #loadForProject(
+    projectId: ProjectId,
+    generation: number | null,
+  ): Promise<void> {
+    const token = ++this.#loadSerial;
     this.#set({
       isLoading: true,
       displayError: null,
@@ -351,6 +448,8 @@ export class BuildState {
       this.dependencies.candidates.listBuildEligible(projectId),
       this.dependencies.query.getByProject(projectId),
     ]);
+    // 遅れて完了した旧 project・旧 generation の結果は表示 state へ適用しない。
+    if (this.#isStaleLoad(token, generation)) return;
     if (!eligible.ok) {
       this.#readFailure(managementErrorToBuildError(eligible.error));
       return;
@@ -375,6 +474,13 @@ export class BuildState {
       fieldErrors: emptyFieldErrors,
       mutationsDisabled: this.#mutationsDisabled(),
     });
+  }
+
+  #isStaleLoad(token: number, generation: number | null): boolean {
+    return (
+      token !== this.#loadSerial ||
+      (generation !== null && generation !== this.#contextGeneration)
+    );
   }
 
   #filterCandidates(
