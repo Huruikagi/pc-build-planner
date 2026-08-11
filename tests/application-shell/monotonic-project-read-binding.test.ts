@@ -58,6 +58,23 @@ test("monotonic project read bindingはsame/staleを除外し新generationをexa
   assert.equal(binding.read.getSnapshot().generation, 2);
 });
 
+test("listener例外を隔離し後続consumerへ同じgenerationと次generationを配送する", () => {
+  const binding = createMonotonicProjectReadBinding(snapshot(0));
+  const received: number[] = [];
+  binding.read.subscribe(() => {
+    throw new Error("synthetic listener failure");
+  });
+  binding.read.subscribe((value) => received.push(value.generation));
+
+  binding.publish(snapshot(1));
+  binding.publish(snapshot(1));
+  binding.publish(snapshot(0));
+  binding.publish(snapshot(2));
+
+  assert.deepEqual(received, [1, 2]);
+  assert.equal(binding.read.getSnapshot().generation, 2);
+});
+
 test("unbind失敗は所有権を保持しretry成功後だけ再bindできる", () => {
   const binding = createMonotonicProjectReadBinding(snapshot(0));
   const first = source(snapshot(1));

@@ -19,7 +19,13 @@ export const createMonotonicProjectReadBinding = (
   ): void => {
     if (next.generation <= snapshot.generation) return;
     snapshot = next;
-    for (const listener of [...listeners]) listener(next);
+    for (const listener of [...listeners]) {
+      try {
+        listener(next);
+      } catch {
+        /* listener isolation */
+      }
+    }
   };
   return {
     read: {
