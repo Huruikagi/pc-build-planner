@@ -387,7 +387,7 @@ function validateCandidateEditorPrefill(
 - project-contextが返す検証済みcurrent projectだけをbinding根拠にする。
 - current contextが未選択または利用不能なら、project一覧の先頭やpayload由来IDへfallbackせずactivation成功としてpending pre-editを保持する。
 - staleまたは無効なproject情報がlegacy入力に含まれても破棄し、current contextを変更せずproject未解決payloadとして処理する。
-- project作成成功時はserviceが返したIDをそのまま使い、名前照合や再一覧取得をしない。
+- project作成成功時もservice返却IDへ直接bindingせず、続くproject-context refreshが返す検証済みcurrent projectだけをbinding根拠にする。
 - pending stateは成功、明示取消、新pre-edit activationでのみ破棄し、capture終了では破棄しない。
 - pending stateの寿命は同一side-panel document sessionに限定する。
 

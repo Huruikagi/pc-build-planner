@@ -104,7 +104,7 @@
 
 - **Generalization**: candidate draftとpending pre-editを「project切替で失ってはならないdirty work」として一つのguard判定へ集約する。forced切替は確認可能なuser切替と分け、旧project bindingを保持した回復待ちへ移す。
 - **Build vs. Adopt**: 独自selector、preference、fallback、確認tokenを実装せず、`project-context`のread/command/guard portを採用する。新規依存は追加しない。
-- **Simplification**: `CandidateEditorPrefill.projectId`とsnapshotの`selectedProjectId`は既存shape互換の検査用metadataとして残すが、保存先やcontext変更には使用しない。snapshot versionを上げず、adapter一つへ購読・guard・refresh調停を閉じる。
+- **Simplification**: pre-editの検証済み公開型はproject-freeとし、legacyまたは未信頼payloadのproject情報は受理後に破棄する。snapshotの`selectedProjectId`だけは既存shape互換の一致検査用metadataとして残すが、保存先やcontext変更には使用しない。snapshot versionを上げず、adapter一つへ購読・guard・refresh調停を閉じる。
 
 ### Risks & Mitigations
 

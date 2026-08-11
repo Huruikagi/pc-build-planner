@@ -60,7 +60,7 @@
 - サイドパネル入口、保存責任、依存方向の変更
 - shell activation envelope、候補変更時の参照修復policy、revision競合規則の変更
 - FeatureMountContextの復元state、capture／restore失敗、activation rollback規則の変更
-- `CandidateEditorPrefill`、`UnresolvedCandidateDraft`、pre-edit error、project解決順序、`pendingPreEdit`寿命の変更
+- `UnresolvedCandidateEditorPrefill`、`UnresolvedCandidateDraft`、pre-edit error、project解決順序、`pendingPreEdit`寿命の変更
 - `ProjectContextSnapshot`、generation、guard/confirmation、refresh、forced notification契約の変更
 - candidate-management snapshot version/shape、またはproject metadataの意味の変更
 - 候補管理公開APIの`query`、`createCandidateEditorIntent`、`sources` facetの変更
@@ -176,7 +176,7 @@ sequenceDiagram
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | 安全な編集 | Service、State、View | UpdateCandidateCommand | 保存 |
 | 5.1, 5.2, 5.3, 5.4 | 候補削除 | State、View、Service | DeleteCandidateCommand | 削除 |
 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 復元と下流契約 | Service、CandidateQuery、CandidateActivation、State | CandidateQuery、createCandidateEditorIntent、sources facet | 読込・保存・activation |
-| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10 | 解決前pre-editと現在project binding | CandidateActivation、PreEditValidation、ProjectContextAdapter、ManagementState、ManagementView | CandidateEditorPrefill、ProjectContextReadPort、FeatureActivationAdapter | pre-edit handoff・binding |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10 | 解決前pre-editと現在project binding | CandidateActivation、PreEditValidation、ProjectContextAdapter、ManagementState、ManagementView | UnresolvedCandidateEditorPrefill、ProjectContextReadPort、FeatureActivationAdapter | pre-edit handoff・binding |
 | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6 | project切替時のdraft保護 | ProjectContextAdapter、ManagementState、ManagementView | ProjectSwitchGuard、forced notification | switch guard・強制切替 |
 | 9.1, 9.2, 9.3, 9.4, 9.5 | 非権威的snapshot metadata | StateSnapshotCodec、ProjectContextAdapter、ManagementState | ManagementStateSnapshot、ProjectContextReadPort | restore |
 
@@ -246,10 +246,10 @@ type UnresolvedCandidateDraft = {
   };
 }[PartCategory];
 
-interface CandidateEditorPrefill {
+interface UnresolvedCandidateEditorPrefill {
   readonly draft: UnresolvedCandidateDraft;
-  readonly projectId?: ProjectId;
   readonly categoryHint?: PartCategory;
+  readonly captureDiagnostics?: readonly CaptureDiagnostic[];
 }
 
 interface CandidateManagementPublicApi {
@@ -258,7 +258,7 @@ interface CandidateManagementPublicApi {
     readonly catalog: CandidateSourceCatalogPort;
     readonly mutations: CandidateSourceMutationPort;
   };
-  createCandidateEditorIntent(prefill: CandidateEditorPrefill): FeatureActivationIntent;
+  createCandidateEditorIntent(prefill: UnresolvedCandidateEditorPrefill): FeatureActivationIntent;
 }
 
 type PreEditDraftError =
@@ -268,7 +268,6 @@ type PreEditDraftError =
 
 type CandidateEditorPrefillError =
   | PreEditDraftError
-  | { readonly kind: "invalid-project-id" }
   | { readonly kind: "invalid-category-hint" };
 
 function validatePreEditDraft(
@@ -277,16 +276,16 @@ function validatePreEditDraft(
 
 function validateCandidateEditorPrefill(
   value: unknown,
-): Result<CandidateEditorPrefill, CandidateEditorPrefillError>;
+): Result<UnresolvedCandidateEditorPrefill, CandidateEditorPrefillError>;
 ```
 
 `createCandidateEditorIntent`は型付きprefillからshellの`FeatureActivationIntent`を構築するだけで、navigation、query、state mutationを開始しない。product captureはこの戻り値を現行`activationId`とともに`TransientSurfaceLifecyclePort.conclude`へ渡す。候補管理は起動世代を受け取らず、世代の現行性、stale結果破棄、handoff失敗時のintent保持を再実装しない。`conclude`が返す`Promise<Result<void, TransientSurfaceError>>`では、候補管理adapterの`activate`が成功した場合だけhandoff成功となる。
 
-registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。adapterの型付き境界は既存どおり`validate(intent): Result<CandidateEditorPrefill, FeatureActivationError>`と`activate(prefill): Promise<Result<void, FeatureActivationError>>`である。payload構造不正は`invalid_activation`へ写像し、未信頼値をerror detailへ含めない。形式が正しい任意`projectId`は互換性のため検証するが、保存先、fallback、context変更には使用しない。
+registrationのactivation adapterは受信payloadを`unknown`から再検証し、`featureId`とtargetが候補管理の固定値である場合だけManagementStateへ適用する。adapterの型付き境界は既存どおり`validate(intent): Result<UnresolvedCandidateEditorPrefill, FeatureActivationError>`と`activate(prefill): Promise<Result<void, FeatureActivationError>>`である。payload構造不正は`invalid_activation`へ写像し、未信頼値をerror detailへ含めない。legacyまたは未信頼payloadに`projectId`が含まれてもunknown値として受理後に破棄し、検証済みprefill、保存先、fallback、context変更へ使用しない。
 
 activation時は`ProjectContextReadPort.getSnapshot()`を読み、`ready`ならその`selectedProjectId`だけを付与してcanonical `CandidateDraft`を構築しeditorへ遷移する。`empty`または`unavailable`ならactivation成功として`pendingPreEdit`へprefillを保持し、`project-required`を表示する。候補管理は一覧先頭やpayload内IDへfallbackせず、context snapshotを上書きしない。
 
-`invalid-draft-shape`は必須field/value shape、`invalid-category`は未知category、`category-mismatch`はdraft categoryと`normalizedAttributes.category`の不一致を表す。任意`projectId`の型・空文字は`invalid-project-id`、未知`categoryHint`は`invalid-category-hint`とする。project 0件はerror unionへ追加しない。編集開始検証はcategory・normalized attributes・payload shapeだけを対象にして空名を許可し、保存時は既存`validateCandidatePartContent`を適用して空名を拒否する。仮project ID、unsafe cast、root全体の偽造、保存validatorの重複定義を使用しない。
+`invalid-draft-shape`は必須field/value shape、capture diagnosticsのclosed shape、`invalid-category`は未知category、`category-mismatch`はdraft categoryと`normalizedAttributes.category`の不一致を表す。未知`categoryHint`は`invalid-category-hint`とする。project情報とproject 0件はerror unionへ追加しない。編集開始検証はcategory・normalized attributes・payload shapeだけを対象にして空名を許可し、保存時は既存`validateCandidatePartContent`を適用して空名を拒否する。仮project ID、unsafe cast、root全体の偽造、保存validatorの重複定義を使用しない。
 
 `sources` facetは`candidate-source-bookmarks`が同じ公開APIへ加える既承認の拡張であり、この移行で削除・平坦化しない。`duplicate-product-merge`は`query.listCandidates`と`sources.mutations`だけを公開入口から利用し、pre-edit内部stateやvalidatorへ依存しない。
 
@@ -298,7 +297,7 @@ activation時は`ProjectContextReadPort.getSnapshot()`を読み、`ready`なら�
 
 ```typescript
 interface CandidatePreEditState {
-  readonly pendingPreEdit: CandidateEditorPrefill | null;
+  readonly pendingPreEdit: UnresolvedCandidateEditorPrefill | null;
 }
 ```
 
@@ -379,7 +378,7 @@ project CRUDの永続mutation成功後だけ`ProjectContextCommandPort.refresh()
 
 - `CandidateDraft`: 必須の商品名、projectId、categoryと、欠損可能な共通項目・カテゴリ属性・`sources`・`primarySourceId`・`sourceSnapshot`・確認値。`sources`は取得URL・取得日時を持つ複数取得元、`primarySourceId`はその代表、`sourceSnapshot`は元表記を表し、相互に代用しない。
 - `UnresolvedCandidateDraft`: `CandidateDraft`からprojectIdだけを除いたcategory判別共用体。空名を含むpre-editの構造的整合を表し、保存可能性を意味しない。
-- `CandidateEditorPrefill`: unresolved draftと任意のprojectId/categoryHintを持つactivation payload。永続entityではない。
+- `UnresolvedCandidateEditorPrefill`: unresolved draft、任意のcategory hint、closedなcapture diagnosticsを持つproject-free activation payload。永続entityではなく、legacy payloadのproject情報は検証済み値へ保持しない。
 - `CandidateSummary`: id、商品名、カテゴリ、価格、メーカー、型番、欠損状態。
 - `ManagementError`: UIが次の行動を選べる判別共用体。
 - 保存上の`Project`と`CandidatePart`はFoundation契約をそのまま利用し、重複モデルを作らない。

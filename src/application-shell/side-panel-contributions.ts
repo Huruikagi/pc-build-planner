@@ -150,14 +150,12 @@ export const createSidePanelFeatureContributions = (
     ),
     identityNormalizer: createProductIdentityNormalizer(),
     sourcePriceRefresh: duplicateRefreshPort,
-    ...(dependencies.projectGuards === undefined
-      ? {}
-      : {
-          projectContext: {
-            commands: dependencies.projectRefresh,
-            guards: dependencies.projectGuards,
-          },
-        }),
+    projectContext: {
+      commands: dependencies.projectRefresh,
+      ...(dependencies.projectGuards === undefined
+        ? {}
+        : { guards: dependencies.projectGuards }),
+    },
   });
   const currentBuild = createCurrentBuildContribution(context, {
     candidates: candidateManagement.registration.publicApi.query,

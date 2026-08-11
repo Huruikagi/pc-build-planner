@@ -87,10 +87,10 @@
 2. When 構造的に有効なpre-edit draftを受け取り現在プロジェクトが未選択または利用不能である, the 候補管理機能 shall activationを受理し、同一side panel session内で入力内容を保持した`project-required`状態と選択、作成または回復の案内を表示する
 3. When `project-required`状態で有効な現在プロジェクトが確定する, the 候補管理機能 shall そのプロジェクトへ保持中draftを割り当て、再抽出せず候補編集を開始する
 4. If `project-required`状態でproject作成に失敗する, the 候補管理機能 shall 保持中draftを失わず作成失敗を示して再試行可能にする
-5. If pre-edit payloadにproject IDが含まれる, the 候補管理機能 shall そのIDを保存先またはfallbackの決定に使用せず、検証済みの現在プロジェクトだけから保存先を解決する
+5. If legacyまたは未信頼なpre-edit payloadにproject IDが含まれる, the 候補管理機能 shall その値を検証済みprefillへ保持せず、保存先またはfallbackの決定にも使用せず、検証済みの現在プロジェクトだけから保存先を解決する
 6. When 商品名が空でcategoryと正規化属性が整合するpre-edit draftを受け取る, the 候補管理機能 shall 編集開始を許可して商品名の入力を求める
 7. If 利用者が空の商品名のまま保存しようとする, the 候補管理機能 shall 既存の保存時検証で拒否し編集内容を保持する
-8. If pre-edit payloadの必須形状、category、正規化属性とのcategory整合、任意project IDまたはcategory hintが不正である, the 候補管理機能 shall 未信頼値を表示せずactivationを拒否する
+8. If pre-edit payloadの必須形状、category、正規化属性とのcategory整合、category hintまたはcapture diagnosticsが不正である, the 候補管理機能 shall 未信頼値を表示せずactivationを拒否する
 9. While pre-edit draftを受理済みである, the 候補管理機能 shall 引き渡し元が終了しても保持を継続し、候補保存の成功、利用者の明示取消または新しい検証済みpre-edit activationでのみ置換または破棄する
 10. If side panel documentが閉鎖、extension reloadまたはbrowser終了で破棄される, the 候補管理機能 shall pre-edit draftを永続復元または自動再抽出しない
 

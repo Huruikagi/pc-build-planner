@@ -55,7 +55,7 @@ export interface CandidateManagementContributionDependencies {
       import("../../project-context/public.js").ProjectContextCommandPort,
       "refresh"
     >;
-    readonly guards: import("../../project-context/public.js").ProjectContextChangeGuardRegistrationPort;
+    readonly guards?: import("../../project-context/public.js").ProjectContextChangeGuardRegistrationPort;
   };
 }
 
@@ -183,7 +183,9 @@ export const createCandidateManagementContribution = (
       : createProjectContextAdapter({
           read: context.projectContext,
           commands: dependencies.projectContext.commands,
-          guards: dependencies.projectContext.guards,
+          ...(dependencies.projectContext.guards === undefined
+            ? {}
+            : { guards: dependencies.projectContext.guards }),
           draftGuard: {
             isDirty: () => state?.hasDirtyProjectDraft() ?? false,
             discardConfirmedSwitch: (from, to) =>

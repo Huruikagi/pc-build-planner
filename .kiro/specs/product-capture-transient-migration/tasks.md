@@ -27,21 +27,21 @@
 - [x] 2. candidate-managementへpre-edit状態を統合する
 - [x] 2.1 activation境界でdraftを再検証し既存projectを解決する
   - candidate editor activation adapterで`unknown` payloadを再検証し、不正入力を既存の`invalid_activation`へ写像する。
-  - projectが存在する場合は既定の解決規則でProjectIdを確定し、既存editor stateへdraftを配置する。
+  - project-contextが`ready`の場合だけ検証済みcurrent ProjectIdを確定し、既存editor stateへdraftを配置する。
   - 有効・不正activationと既存project有無の各経路がtyped resultとなり、保存処理を先行させないintegration testを通す。
   - _Requirements: 1.2, 1.4, 4.2, 4.3, 4.5_
   - _Boundary: CandidateManagementActivation, CandidateManagementState_
 
 - [x] 2.2 project不存在時にpending pre-editを保持する
-  - projectが一件もないactivationを成功として受理し、解決前draftを既存management stateへの追加フィールドに保持する。
-  - 新しいpre-edit activation、明示取消、project作成成功だけを同一panel session内の破棄条件にする。
+  - current contextが未選択または利用不能なactivationを成功として受理し、解決前draftを既存management stateへの追加フィールドに保持する。
+  - 新しいpre-edit activation、明示取消、またはrefresh後の検証済みcurrent projectへのbinding成功だけを同一panel session内の破棄条件にする。
   - capture surface終了後もpending draftが残り、再抽出なしでproject作成へ進めるstate testを通す。
   - _Requirements: 1.3, 1.4, 1.6, 4.6_
   - _Boundary: CandidateManagementState, PendingPreEdit_
 
-- [x] 2.3 project作成結果でpending draftをeditorへ移す
-  - project作成serviceが返したProjectIdをそのままpending draftへ適用し、再一覧取得や名前照合を行わずeditor stateへ遷移する。
-  - 作成失敗時はdraftと入力を保持して再試行可能にし、成功時だけpending stateをclearする。
+- [x] 2.3 project作成後のcontext再検証でpending draftをeditorへ移す
+  - project作成serviceが返したProjectIdを保存先へ使用せず、続くrefreshが返した検証済みcurrent ProjectIdだけをpending draftへ適用してeditor stateへ遷移する。
+  - 作成失敗またはrefresh失敗時はdraftと入力を保持して再試行可能にし、検証済みcurrent projectへのbinding成功時だけpending stateをclearする。
   - 成功、失敗、再試行、新しいactivationとの競合を決定的に検証するintegration testを通す。
   - _Requirements: 1.4, 1.7, 4.2, 4.6, 5.4_
   - _Boundary: ProjectCreationService, CandidateManagementState_

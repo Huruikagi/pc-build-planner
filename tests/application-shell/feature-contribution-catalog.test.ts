@@ -246,6 +246,29 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   );
 });
 
+test("candidate contributionはguard未注入でもproject refresh契約を保持する", async () => {
+  const composition = await readFile(
+    "src/application-shell/side-panel-contributions.ts",
+    "utf8",
+  );
+  const projectContextStart = composition.indexOf("projectContext: {");
+  const commands = composition.indexOf(
+    "commands: dependencies.projectRefresh",
+    projectContextStart,
+  );
+  const optionalGuard = composition.indexOf(
+    "dependencies.projectGuards === undefined",
+    commands,
+  );
+
+  assert.ok(projectContextStart >= 0);
+  assert.ok(commands > projectContextStart);
+  assert.ok(
+    optionalGuard > commands,
+    "必須refreshを注入した後でguardだけを任意化する",
+  );
+});
+
 test("組立済みproduct-capture公開APIをproduction-like compositionで一度だけ提供する", async () => {
   const context = {
     data: {

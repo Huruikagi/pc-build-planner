@@ -156,9 +156,9 @@
 
 - [x] 8. 商品取り込みからの解決前pre-edit移行を完成する
 - [x] 8.1 解決前draftと段階別validatorを定義する
-  - projectIdだけを持たないcategory判別draft、任意projectId/category hintを持つprefill、判別可能な構造エラーを候補管理の公開契約へ追加する。
+  - projectIdを持たないcategory判別draft、任意category hintとclosedなcapture diagnosticsを持つproject-free prefill、判別可能な構造エラーを候補管理の公開契約へ追加する。
   - 編集開始では必須shape、category、正規化属性とのcategory整合だけを検証して空名を許可し、保存時は既存の候補内容validatorで空名を拒否する。
-  - 仮project ID、root全体の偽造、unsafe cast、保存validatorの重複定義を使わず、正常・空名・未知category・category不一致・不正project/hintを決定的に判別できることを完了条件とする。
+  - 仮project ID、root全体の偽造、unsafe cast、保存validatorの重複定義を使わず、正常・空名・未知category・category不一致・不正hint/diagnosticsを決定的に判別できることを完了条件とする。legacyまたは未信頼payloadのproject情報は受理後に破棄する。
   - _Requirements: 2.2, 2.3, 4.5, 6.6, 7.1, 7.5, 7.6, 7.7, 7.8_
   - _Boundary: PreEditValidation_
 
@@ -254,7 +254,7 @@
 - [x] 11. activation・snapshot・registrationを現在projectへ統合する
 - [x] 11.1 pre-edit activationの保存先を現在projectだけから解決する
   - activation受理時にcontext snapshotを読み、`ready`の選択IDだけをunresolved draftへ付与してeditorを開く。
-  - payload内project IDはshape検査だけに使い、保存先、fallback、context変更には使用しない。
+  - legacyまたは未信頼payload内のproject情報は検証済みprefillへ保持せず、保存先、fallback、context変更にも使用しない。
   - `empty`または`unavailable`はactivation成功の`project-required`としてpendingを保持し、入力元へ失敗を返さない。
   - activation testでcurrent binding、payload ID非権威性、pending受理、未信頼payload拒否を確認する。
   - _Depends: 9.1, 9.3_
@@ -323,3 +323,4 @@
 - rollback snapshotの現行正本は`candidate-source-bookmarks`と`duplicate-product-merge`を統合したversion 3であり、version 2の記述は現行実装へ同期した。
 - 2026-08-11のfeature validation remediationで、project create・rename・delete失敗時にcontext refreshが0回で既存表示を保持する統合証跡を追加し、共有coreの公開依存と現行テスト配置をdesignへ同期した。
 - 2026-08-11の境界再修正で、context未注入時のproject作成結果IDへのdirect bindingとsnapshot一致検査免除を除去し、pending再開を検証済みcurrent contextだけへ限定した。
+- 2026-08-11のfeature validation remediationで、project-free prefillとlegacy project情報破棄をrequirements・design・tasksへ同期し、application shellの必須project refresh注入を任意guardから分離した。
