@@ -155,7 +155,7 @@
   - _Requirements: 1.6, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9_
   - _Boundary: Compatibility context adapter and state tests_
 
-- [ ] 8.2 (P) 日英DOMと回復操作を自動テストする
+- [x] 8.2 (P) 日英DOMと回復操作を自動テストする
   - 日本語・英語で全結果、空・失敗理由、再試行ラベルが対応するmessageから表示されることをtesting-libraryで検証する
   - テキスト識別、live region、native buttonのkeyboard操作、安全なJSX child描画をuser-eventと架空文字列で検証する
   - 両言語の全状態とアクセシビリティ要件がDOM testで再現可能になる

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import { userEvent } from "@testing-library/user-event";
 import { act } from "react";
 
 import type {
@@ -104,6 +105,38 @@ afterEach(cleanup);
 
 const flush = (): Promise<void> =>
   new Promise((resolve) => setImmediate(resolve));
+
+const languages = ["ja", "en"] as const;
+
+const reasonMessageKey = (reasonCode: string) => {
+  switch (reasonCode) {
+    case "value-equal":
+      return "compatibility.reasons.value-equal" as const;
+    case "value-not-included":
+      return "compatibility.reasons.value-not-included" as const;
+    case "input-missing":
+      return "compatibility.reasons.input-missing" as const;
+    default:
+      throw new Error(`unexpected fixture reason: ${reasonCode}`);
+  }
+};
+
+const contextFor = (
+  status: "empty" | "unavailable",
+): CompatibilityProjectContextAdapter => ({
+  getCurrent: () => ({ status, generation: 1 }),
+  subscribe: () => () => {},
+});
+
+const renderWithLanguage = (
+  language: (typeof languages)[number],
+  state: ReturnType<typeof createCompatibilityState>,
+) =>
+  render(
+    <MessageProvider resolver={resolverFor(language)}>
+      <CompatibilityView state={state} />
+    </MessageProvider>,
+  );
 
 test("idle状態は評価開始前であることを識別可能に表示する", () => {
   const state = createCompatibilityState({
@@ -325,4 +358,210 @@ test("外部由来のパーツ名を安全なJSX childとして描画しHTML注�
 
   assert.match(view.container.textContent ?? "", /危険なマザーボード名/);
   assert.equal(view.container.querySelector("img"), null);
+});
+
+for (const language of languages) {
+  test(`${language}: idle/loading/no-projects/context-unavailableをcatalog文言とlive regionで識別できる`, async () => {
+    const messages = resolverFor(language);
+
+    const idleState = createCompatibilityState({
+      query: fixedQuery({ ok: true, value: reportOf("compatible", []) }),
+    });
+    const idleView = renderWithLanguage(language, idleState);
+    assert.ok(
+      idleView.getByRole("heading", {
+        name: messages("compatibility.state.idle"),
+      }),
+    );
+    assert.match(
+      idleView.container.textContent ?? "",
+      new RegExp(messages("compatibility.idle")),
+    );
+    idleView.unmount();
+
+    const pending = deferred<Result<CompatibilityReport, CompatibilityError>>();
+    const loadingState = createCompatibilityState({
+      query: { evaluate: async () => pending.promise },
+    });
+    void loadingState.evaluate(projectId);
+    const loadingView = renderWithLanguage(language, loadingState);
+    const loadingStatus = loadingView.getByRole("status");
+    assert.equal(loadingStatus.getAttribute("aria-live"), "polite");
+    assert.match(
+      loadingStatus.textContent ?? "",
+      new RegExp(messages("compatibility.loading")),
+    );
+    loadingView.unmount();
+
+    for (const [contextStatus, stateStatus, messageKey] of [
+      ["empty", "no-projects", "compatibility.noProjects"],
+      [
+        "unavailable",
+        "context-unavailable",
+        "compatibility.contextUnavailable",
+      ],
+    ] as const) {
+      const state = createCompatibilityState({
+        query: fixedQuery({ ok: true, value: reportOf("compatible", []) }),
+        projectContext: contextFor(contextStatus),
+      });
+      state.start();
+      await flush();
+      const view = renderWithLanguage(language, state);
+      const region =
+        contextStatus === "empty"
+          ? view.getByRole("status")
+          : view.getByRole("alert");
+      assert.ok(view.container.querySelector(`[data-status='${stateStatus}']`));
+      assert.match(region.textContent ?? "", new RegExp(messages(messageKey)));
+      assert.equal(
+        region.getAttribute("aria-live"),
+        contextStatus === "empty" ? "polite" : "assertive",
+      );
+      state.stop();
+      view.unmount();
+    }
+  });
+
+  test(`${language}: empty-buildとfailedの全理由をcatalog文言で表示する`, async () => {
+    const messages = resolverFor(language);
+    for (const reason of ["no-build", "empty-build"] as const) {
+      const state = createCompatibilityState({
+        query: fixedQuery({ ok: false, error: { kind: reason } }),
+      });
+      await state.evaluate(projectId);
+      const view = renderWithLanguage(language, state);
+      const region = view.getByRole("status");
+      assert.ok(
+        view.container.querySelector(`[data-empty-reason='${reason}']`),
+      );
+      assert.match(
+        region.textContent ?? "",
+        new RegExp(messages(`compatibility.empty.${reason}`)),
+      );
+      assert.equal(region.getAttribute("aria-live"), "polite");
+      view.unmount();
+    }
+
+    for (const reason of [
+      "invalid-reference",
+      "corrupt-data",
+      "unsupported-data",
+      "read-failed",
+    ] as const) {
+      const state = createCompatibilityState({
+        query: fixedQuery({ ok: false, error: { kind: reason } }),
+      });
+      await state.evaluate(projectId);
+      const view = renderWithLanguage(language, state);
+      const region = view.getByRole("alert");
+      assert.ok(
+        view.container.querySelector(`[data-failure-reason='${reason}']`),
+      );
+      assert.match(
+        region.textContent ?? "",
+        new RegExp(messages(`compatibility.failure.${reason}`)),
+      );
+      assert.equal(region.getAttribute("aria-live"), "assertive");
+      assert.ok(
+        view.getByRole("button", { name: messages("compatibility.retry") }),
+      );
+      view.unmount();
+    }
+  });
+
+  test(`${language}: readyの全4集約結果と個別結果をcatalog文言で同時表示する`, async () => {
+    const messages = resolverFor(language);
+    const cases: readonly [
+      CompatibilityReport["status"],
+      readonly RuleResult[],
+    ][] = [
+      ["compatible", [compatibleResult()]],
+      ["incompatible", [incompatibleResult()]],
+      ["caution", [compatibleResult(), unknownResult()]],
+      ["unknown", [unknownResult()]],
+    ];
+
+    for (const [aggregate, results] of cases) {
+      const state = createCompatibilityState({
+        query: fixedQuery({ ok: true, value: reportOf(aggregate, results) }),
+      });
+      await state.evaluate(projectId);
+      const view = renderWithLanguage(language, state);
+      const region = view.getByRole("status");
+      assert.ok(
+        view.container.querySelector(`[data-aggregate-status='${aggregate}']`),
+      );
+      assert.match(
+        region.textContent ?? "",
+        new RegExp(messages(`compatibility.aggregate.${aggregate}`)),
+      );
+      assert.equal(region.getAttribute("aria-live"), "polite");
+      for (const result of results) {
+        const row = view.container.querySelector(
+          `[data-rule-id='${result.ruleId}'][data-result-status='${result.status}']`,
+        );
+        assert.ok(row);
+        const reasonKey = reasonMessageKey(result.reasonCode);
+        assert.match(row.textContent ?? "", new RegExp(messages(reasonKey)));
+      }
+      view.unmount();
+    }
+  });
+}
+
+test("native retry buttonはEnterとSpaceのkeyboard操作で最新snapshotを再評価する", async () => {
+  const user = userEvent.setup();
+  let attempts = 0;
+  const context: CompatibilityProjectContextAdapter = {
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => {},
+  };
+  const state = createCompatibilityState({
+    projectContext: context,
+    query: {
+      async evaluate() {
+        attempts += 1;
+        return { ok: false as const, error: { kind: "read-failed" as const } };
+      },
+    },
+  });
+  state.start();
+  await flush();
+  const view = render(<CompatibilityView state={state} />);
+  const retry = view.getByRole("button", { name: "再試行" });
+  assert.equal(retry.tagName, "BUTTON");
+  assert.equal(retry.getAttribute("type"), "button");
+
+  retry.focus();
+  await user.keyboard("{Enter}");
+  await flush();
+  assert.equal(attempts, 2);
+
+  view.getByRole("button", { name: "再試行" }).focus();
+  await user.keyboard(" ");
+  await flush();
+  assert.equal(attempts, 3);
+  state.stop();
+});
+
+test("架空markup文字列は両言語でtext nodeになり要素やinline handlerを生成しない", async () => {
+  for (const language of languages) {
+    const state = createCompatibilityState({
+      query: fixedQuery({
+        ok: true,
+        value: reportOf("compatible", [unnamedUnsafeResult()]),
+      }),
+    });
+    await state.evaluate(projectId);
+    const view = renderWithLanguage(language, state);
+    assert.match(
+      view.getByText("<img src=x onerror=alert(1)> 危険なマザーボード名")
+        .textContent ?? "",
+      /<img src=x onerror=alert\(1\)>/,
+    );
+    assert.equal(view.container.querySelector("img"), null);
+    assert.equal(view.container.querySelector("[onerror]"), null);
+    view.unmount();
+  }
 });
