@@ -123,7 +123,7 @@
   - _Boundary: Current build acceptance validation_
 
 - [ ] 6. 共通の現在プロジェクトへ追従する連携基盤を追加する
-- [ ] 6.1 現在プロジェクトのavailabilityをfeature状態へ投影する
+- [x] 6.1 現在プロジェクトのavailabilityをfeature状態へ投影する
   - 共通contextの確定済みsnapshotからready、empty、unavailableとgenerationだけをowner-localな状態へ投影する。
   - ready時だけproject IDを公開し、emptyまたはunavailable時は独自のproject選択やfallbackを行わない。
   - context通知を購読し、古いgenerationを無視しながら同じ値の不要な再通知を抑止する。
@@ -131,7 +131,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 7.1, 8.2, 8.4_
   - _Boundary: CurrentBuildProjectContextAdapter_
 
-- [ ] 6.2 数量draftの切替guardをowner-localに調停する
+- [x] 6.2 数量draftの切替guardをowner-localに調停する
   - stableなguard所有者として登録し、評価ごとのtoken、切替元・切替先、base generationを保持してfeature側の判断へ渡す。
   - 確認完了前に要求またはgenerationが古くなった場合はallowせず、古い結果をproject-contextへ返さない。
   - forced変更は保存や破棄を代行せずfeature所有者へ通知し、draft内容や保存関数をcontext境界の外へ漏らさない。
@@ -263,4 +263,7 @@
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
 - Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- project-contextのguard契約（`ProjectContextChangeGuard.evaluate`）が返せるのは`allow`/`confirmation-required`と`guard-failed`だけである。design.mdのSystem Flows（「evaluateはfeature確認の完了を待ち、保存成功または破棄時だけallow」）に従い、current-buildのadapterは`confirmation-required`を返さず、owner（BuildState）の確認完了までevaluateをawaitして`allow`かfailureへ畳む方式にした。candidate-managementのadapterは`confirmation-required`を返してcontext側の確認へ委ねる別方式なので、二つのadapterのguard戦略は意図的に異なる。
+- stale判定は「評価開始時のgeneration」と「後続評価によるtoken追い越し」の二軸で行う。project-contextは`evaluateSelection`成功後にpreference書き込みとpublishを行うため、正常経路ではevaluate中にgenerationは進まない。逆にrefresh・catalog invalidationが割り込むとgenerationが進むので、この検査が古い確認結果の適用を止める。
+- adapterのsubscribeは、generation逆転の無視に加えて「status+projectIdが同じなら再通知しない」内容dedupeを行う。project名編集などcatalogだけが変わるrefreshでgenerationは進むが、current-buildの再読込は不要なため。generationの最大値自体はdedupe時も更新するので単調性は保たれる。
 - 全29 acceptance criteria（requirements.md）は既存のunit(category-policy)、contract(contracts/service/query)、integration(reference-repair/query.integration/current-build-flow.integration)、DOM(state/view/registration)、e2eテストで完全に追跡できることを5.2で監査済み。current-build-managementのspecは全task完了。
