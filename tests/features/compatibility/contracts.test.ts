@@ -159,6 +159,7 @@ test("exhaustive switches over RuleId, RuleStatus, AggregateStatus, and Compatib
   const exhaustiveCompatibilityError = (error: CompatibilityError): string => {
     switch (error.kind) {
       case "no-build":
+      case "empty-build":
       case "invalid-reference":
       case "corrupt-data":
       case "unsupported-data":

@@ -1,34 +1,47 @@
-import type { ProjectId } from "../../domain/public.js";
+import type { ProjectId, Result } from "../../domain/public.js";
+import type { CompatibilityError, CompatibilityReport } from "./contracts.js";
 import type {
-  CompatibilityError,
-  CompatibilityQuery,
-  CompatibilityReport,
-} from "./contracts.js";
+  CompatibilityProjectAvailability,
+  CompatibilityProjectContextAdapter,
+} from "./project-context-adapter.js";
 
-export type CompatibilityEmptyReason = "no-build" | "invalid-reference";
+export type CompatibilityEmptyBuildReason = "no-build" | "empty-build";
 export type CompatibilityFailureReason =
+  | "invalid-reference"
   | "corrupt-data"
   | "unsupported-data"
   | "read-failed";
 
-/** Read-only view state; `empty` and `failed` carry the specific error kind so the view can distinguish them. */
 export type CompatibilityStateValue =
   | { readonly status: "idle" }
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly report: CompatibilityReport }
-  | { readonly status: "empty"; readonly reason: CompatibilityEmptyReason }
+  | { readonly status: "no-projects" }
+  | { readonly status: "context-unavailable" }
+  | {
+      readonly status: "empty-build";
+      readonly reason: CompatibilityEmptyBuildReason;
+    }
   | { readonly status: "failed"; readonly reason: CompatibilityFailureReason };
 
+interface CompatibilityStateQuery {
+  evaluate(
+    projectId: ProjectId,
+  ): Promise<Result<CompatibilityReport, CompatibilityError>>;
+}
+
 export interface CompatibilityStateDependencies {
-  readonly query: CompatibilityQuery;
+  readonly query: CompatibilityStateQuery;
+  readonly projectContext?: CompatibilityProjectContextAdapter;
 }
 
 const stateForError = (error: CompatibilityError): CompatibilityStateValue => {
   switch (error.kind) {
     case "no-build":
-      return { status: "empty", reason: "no-build" };
+    case "empty-build":
+      return { status: "empty-build", reason: error.kind };
     case "invalid-reference":
-      return { status: "empty", reason: "invalid-reference" };
+      return { status: "failed", reason: "invalid-reference" };
     case "corrupt-data":
       return { status: "failed", reason: "corrupt-data" };
     case "unsupported-data":
@@ -39,14 +52,16 @@ const stateForError = (error: CompatibilityError): CompatibilityStateValue => {
 };
 
 /**
- * Framework-independent evaluation state. Every `evaluate()` call is assigned
- * a monotonically increasing generation; a completion whose generation no
- * longer matches the latest request is discarded so a slow, superseded
- * evaluation can never overwrite a newer one or resurrect a stale report.
+ * Framework-independent state for the currently selected project.
+ * A completion is accepted only while both its context generation and its
+ * monotonically increasing request id are still current.
  */
 export class CompatibilityState {
   #listeners = new Set<() => void>();
-  #generation = 0;
+  #requestId = 0;
+  #contextGeneration: number | null = null;
+  #currentProjectId: ProjectId | null = null;
+  #unsubscribeContext: (() => void) | null = null;
   #value: CompatibilityStateValue = { status: "idle" };
 
   public constructor(
@@ -67,12 +82,91 @@ export class CompatibilityState {
     };
   }
 
+  /** Starts context tracking once and evaluates the adapter's latest snapshot. */
+  public start(): void {
+    const context = this.dependencies.projectContext;
+    if (context === undefined || this.#unsubscribeContext !== null) return;
+    this.#unsubscribeContext = context.subscribe((availability) => {
+      void this.#applyAvailability(availability);
+    });
+    void this.#applyAvailability(context.getCurrent());
+  }
+
+  /** Stops context delivery and invalidates every outstanding evaluation. */
+  public stop(): void {
+    const unsubscribe = this.#unsubscribeContext;
+    if (unsubscribe === null) return;
+    this.#unsubscribeContext = null;
+    unsubscribe();
+    this.#requestId += 1;
+    this.#contextGeneration = null;
+    this.#currentProjectId = null;
+  }
+
+  /** Re-reads the authoritative snapshot; never reuses a prior project id. */
+  public async retry(): Promise<void> {
+    const context = this.dependencies.projectContext;
+    if (context === undefined) return;
+    await this.#applyAvailability(context.getCurrent(), true);
+  }
+
+  /**
+   * Legacy direct entry point retained until registration adopts start/stop in
+   * task 7.2. It still gets the same request-id latest-completion protection.
+   */
   public async evaluate(projectId: ProjectId): Promise<void> {
-    const generation = ++this.#generation;
+    const generation = this.#contextGeneration ?? 0;
+    this.#contextGeneration = generation;
+    this.#currentProjectId = projectId;
+    await this.#evaluate(projectId, generation);
+  }
+
+  async #applyAvailability(
+    availability: CompatibilityProjectAvailability,
+    force = false,
+  ): Promise<void> {
+    if (
+      !force &&
+      availability.status === "ready" &&
+      this.#contextGeneration === availability.generation &&
+      this.#currentProjectId === availability.projectId
+    ) {
+      return;
+    }
+
+    this.#contextGeneration = availability.generation;
+    this.#currentProjectId =
+      availability.status === "ready" ? availability.projectId : null;
+
+    if (availability.status === "empty") {
+      this.#requestId += 1;
+      this.#set({ status: "no-projects" });
+      return;
+    }
+    if (availability.status === "unavailable") {
+      this.#requestId += 1;
+      this.#set({ status: "context-unavailable" });
+      return;
+    }
+
+    await this.#evaluate(availability.projectId, availability.generation);
+  }
+
+  async #evaluate(
+    projectId: ProjectId,
+    contextGeneration: number,
+  ): Promise<void> {
+    const requestId = ++this.#requestId;
     this.#set({ status: "loading" });
 
     const result = await this.dependencies.query.evaluate(projectId);
-    if (generation !== this.#generation) return;
+    if (
+      requestId !== this.#requestId ||
+      contextGeneration !== this.#contextGeneration ||
+      projectId !== this.#currentProjectId
+    ) {
+      return;
+    }
 
     this.#set(
       result.ok

@@ -178,7 +178,9 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
   await noBuildState.evaluate(projectId);
   const noBuildView = render(<CompatibilityView state={noBuildState} />);
   assert.ok(
-    noBuildView.container.querySelector("[data-empty-reason='no-build']"),
+    noBuildView.container.querySelector(
+      "[data-status='empty-build'][data-empty-reason='no-build']",
+    ),
   );
   assert.equal(
     noBuildView.container.querySelector("[data-aggregate-status]"),
@@ -204,7 +206,7 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
   );
   assert.ok(
     invalidReferenceView.container.querySelector(
-      "[data-empty-reason='invalid-reference']",
+      "[data-status='failed'][data-failure-reason='invalid-reference']",
     ),
   );
   assert.equal(
@@ -288,7 +290,10 @@ test("遅延した旧評価が後から完了しても画面は最新の評価�
   await stale;
 
   assert.ok(view.container.querySelector("[data-status='ready']"));
-  assert.equal(view.container.querySelector("[data-status='empty']"), null);
+  assert.equal(
+    view.container.querySelector("[data-status='empty-build']"),
+    null,
+  );
 });
 
 test("unmount後は購読解除しReact rootを一度だけ除去する", async () => {

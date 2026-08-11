@@ -9,7 +9,7 @@ import type {
   RuleResultParty,
 } from "./contracts.js";
 import type {
-  CompatibilityEmptyReason,
+  CompatibilityEmptyBuildReason,
   CompatibilityFailureReason,
   CompatibilityState,
 } from "./state.js";
@@ -72,14 +72,24 @@ const AGGREGATE_MESSAGE_KEYS = {
 
 const EMPTY_MESSAGE_KEYS = {
   "no-build": "compatibility.empty.no-build",
-  "invalid-reference": "compatibility.empty.invalid-reference",
-} as const satisfies Record<CompatibilityEmptyReason, MessageKey>;
+  "empty-build": "compatibility.empty.empty-build",
+} as const satisfies Record<CompatibilityEmptyBuildReason, MessageKey>;
 
 const FAILURE_MESSAGE_KEYS = {
+  "invalid-reference": "compatibility.failure.invalid-reference",
   "corrupt-data": "compatibility.failure.corrupt-data",
   "unsupported-data": "compatibility.failure.unsupported-data",
   "read-failed": "compatibility.failure.read-failed",
 } as const satisfies Record<CompatibilityFailureReason, MessageKey>;
+
+function RetryButton({ state }: { readonly state: CompatibilityState }) {
+  const messages = useMessages();
+  return (
+    <button type="button" onClick={() => void state.retry()}>
+      {messages("compatibility.retry")}
+    </button>
+  );
+}
 
 const compareValueText = (
   value: string | readonly string[],
@@ -165,6 +175,7 @@ export function CompatibilityView({
         className="compatibility compatibility--idle"
         data-status="idle"
       >
+        <h2>{messages("compatibility.state.idle")}</h2>
         <p>{messages("compatibility.idle")}</p>
       </section>
     );
@@ -177,20 +188,57 @@ export function CompatibilityView({
         className="compatibility compatibility--loading"
         data-status="loading"
       >
-        <p role="status">{messages("compatibility.loading")}</p>
+        <div aria-live="polite" role="status">
+          <h2>{messages("compatibility.state.loading")}</h2>
+          <p>{messages("compatibility.loading")}</p>
+        </div>
       </section>
     );
   }
 
-  if (value.status === "empty") {
+  if (value.status === "no-projects") {
+    return (
+      <section
+        aria-label={messages("compatibility.title")}
+        className="compatibility compatibility--empty"
+        data-status="no-projects"
+      >
+        <div aria-live="polite" role="status">
+          <h2>{messages("compatibility.state.no-projects")}</h2>
+          <p>{messages("compatibility.noProjects")}</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (value.status === "context-unavailable") {
+    return (
+      <section
+        aria-label={messages("compatibility.title")}
+        className="compatibility compatibility--failed"
+        data-status="context-unavailable"
+      >
+        <div aria-live="assertive" role="alert">
+          <h2>{messages("compatibility.state.context-unavailable")}</h2>
+          <p>{messages("compatibility.contextUnavailable")}</p>
+          <RetryButton state={state} />
+        </div>
+      </section>
+    );
+  }
+
+  if (value.status === "empty-build") {
     return (
       <section
         aria-label={messages("compatibility.title")}
         className="compatibility compatibility--empty"
         data-empty-reason={value.reason}
-        data-status="empty"
+        data-status="empty-build"
       >
-        <p>{messages(EMPTY_MESSAGE_KEYS[value.reason])}</p>
+        <div aria-live="polite" role="status">
+          <h2>{messages("compatibility.state.empty-build")}</h2>
+          <p>{messages(EMPTY_MESSAGE_KEYS[value.reason])}</p>
+        </div>
       </section>
     );
   }
@@ -203,7 +251,11 @@ export function CompatibilityView({
         data-failure-reason={value.reason}
         data-status="failed"
       >
-        <p role="alert">{messages(FAILURE_MESSAGE_KEYS[value.reason])}</p>
+        <div aria-live="assertive" role="alert">
+          <h2>{messages("compatibility.state.failed")}</h2>
+          <p>{messages(FAILURE_MESSAGE_KEYS[value.reason])}</p>
+          <RetryButton state={state} />
+        </div>
       </section>
     );
   }
@@ -216,9 +268,12 @@ export function CompatibilityView({
       data-aggregate-status={report.status}
       data-status="ready"
     >
-      <p className="compatibility__summary">
-        {messages(AGGREGATE_MESSAGE_KEYS[report.status])}
-      </p>
+      <div aria-live="polite" role="status">
+        <h2>{messages("compatibility.state.ready")}</h2>
+        <p className="compatibility__summary">
+          {messages(AGGREGATE_MESSAGE_KEYS[report.status])}
+        </p>
+      </div>
       <ul aria-label={messages("compatibility.resultsLabel")}>
         {report.results.map((result) => (
           <ResultRow key={resultKey(result)} result={result} />

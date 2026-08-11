@@ -119,6 +119,7 @@ export interface CompatibilityReport {
 /** Read failures and invalid input, kept distinct from RuleStatus/AggregateStatus values. */
 export type CompatibilityError =
   | { readonly kind: "no-build" }
+  | { readonly kind: "empty-build" }
   | { readonly kind: "invalid-reference" }
   | { readonly kind: "corrupt-data" }
   | { readonly kind: "unsupported-data" }

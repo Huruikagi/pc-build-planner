@@ -110,17 +110,17 @@ test("成功結果はreadyへ集約結果と個別根拠を反映する", async 
   assert.deepEqual(state.value, { status: "ready", report });
 });
 
-test("no-buildは空状態としてreasonを識別可能にする", async () => {
+test("no-buildはempty-buildとしてreasonを識別可能にする", async () => {
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "no-build" } }),
   });
 
   await state.evaluate(projectId);
 
-  assert.deepEqual(state.value, { status: "empty", reason: "no-build" });
+  assert.deepEqual(state.value, { status: "empty-build", reason: "no-build" });
 });
 
-test("invalid-referenceは空状態としてreasonを識別可能にする", async () => {
+test("invalid-referenceはfailedとしてreasonを識別可能にする", async () => {
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
   });
@@ -128,7 +128,7 @@ test("invalid-referenceは空状態としてreasonを識別可能にする", asy
   await state.evaluate(projectId);
 
   assert.deepEqual(state.value, {
-    status: "empty",
+    status: "failed",
     reason: "invalid-reference",
   });
 });

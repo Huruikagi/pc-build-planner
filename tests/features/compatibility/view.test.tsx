@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act } from "react";
 
 import type {
   CandidatePartId,
@@ -16,9 +17,14 @@ import type {
   CompatibilityReport,
   RuleResult,
 } from "../../../src/features/compatibility/contracts.js";
+import type { CompatibilityProjectContextAdapter } from "../../../src/features/compatibility/project-context-adapter.js";
 import { createCompatibilityState } from "../../../src/features/compatibility/state.js";
 import { CompatibilityView } from "../../../src/features/compatibility/view.js";
-import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
+import {
+  defaultMessageResolver,
+  MessageProvider,
+  resolverFor,
+} from "../../../src/ui-messages/public.js";
 
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
@@ -96,6 +102,9 @@ function deferred<T>() {
 
 afterEach(cleanup);
 
+const flush = (): Promise<void> =>
+  new Promise((resolve) => setImmediate(resolve));
+
 test("idle状態は評価開始前であることを識別可能に表示する", () => {
   const state = createCompatibilityState({
     query: fixedQuery({ ok: true, value: reportOf("compatible", []) }),
@@ -132,7 +141,7 @@ test("loading中は以前のreportを最新結果として表示しない", () =
   assert.equal(view.container.querySelector("[data-status='ready']"), null);
 });
 
-test("no-buildは空状態としてreasonを識別可能に表示する", async () => {
+test("no-buildは構成空状態としてreasonを識別可能に表示する", async () => {
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "no-build" } }),
   });
@@ -140,12 +149,12 @@ test("no-buildは空状態としてreasonを識別可能に表示する", async 
 
   const view = render(<CompatibilityView state={state} />);
 
-  const empty = view.container.querySelector("[data-status='empty']");
+  const empty = view.container.querySelector("[data-status='empty-build']");
   assert.ok(empty);
   assert.equal(empty.getAttribute("data-empty-reason"), "no-build");
 });
 
-test("不正参照は空状態としてno-buildと区別可能なreasonで表示する", async () => {
+test("不正参照は失敗状態としてno-buildと区別可能なreasonで表示する", async () => {
   const state = createCompatibilityState({
     query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
   });
@@ -153,9 +162,9 @@ test("不正参照は空状態としてno-buildと区別可能なreasonで表示
 
   const view = render(<CompatibilityView state={state} />);
 
-  const empty = view.container.querySelector("[data-status='empty']");
-  assert.ok(empty);
-  assert.equal(empty.getAttribute("data-empty-reason"), "invalid-reference");
+  const failed = view.container.querySelector("[data-status='failed']");
+  assert.ok(failed);
+  assert.equal(failed.getAttribute("data-failure-reason"), "invalid-reference");
 });
 
 test("読取失敗は失敗状態として誤った互換性statusを表示しない", async () => {
@@ -170,6 +179,59 @@ test("読取失敗は失敗状態として誤った互換性statusを表示し�
   assert.ok(failed);
   assert.equal(failed.getAttribute("data-failure-reason"), "read-failed");
   assert.equal(view.container.querySelector("[data-aggregate-status]"), null);
+});
+
+test("失敗はlive regionとnative buttonを持ち、retryは最新ready snapshotを再評価する", async () => {
+  let attempts = 0;
+  const context: CompatibilityProjectContextAdapter = {
+    getCurrent: () => ({ status: "ready", generation: 1, projectId }),
+    subscribe: () => () => {},
+  };
+  const state = createCompatibilityState({
+    projectContext: context,
+    query: {
+      async evaluate() {
+        attempts += 1;
+        return attempts === 1
+          ? { ok: false as const, error: { kind: "read-failed" as const } }
+          : {
+              ok: true as const,
+              value: reportOf("compatible", [compatibleResult()]),
+            };
+      },
+    },
+  });
+  state.start();
+  await flush();
+  const view = render(<CompatibilityView state={state} />);
+
+  assert.match(view.getByRole("alert").textContent ?? "", /読み込めません/);
+  const retry = view.getByRole("button", { name: "再試行" });
+  assert.equal(retry.tagName, "BUTTON");
+
+  await act(async () => {
+    fireEvent.click(retry);
+    await flush();
+  });
+  assert.ok(view.container.querySelector("[data-status='ready']"));
+  assert.equal(attempts, 2);
+});
+
+test("英語resolverでも状態見出し・理由・再試行を同じmessage key群から表示する", async () => {
+  const state = createCompatibilityState({
+    query: fixedQuery({ ok: false, error: { kind: "invalid-reference" } }),
+  });
+  await state.evaluate(projectId);
+
+  const view = render(
+    <MessageProvider resolver={resolverFor("en")}>
+      <CompatibilityView state={state} />
+    </MessageProvider>,
+  );
+
+  assert.ok(view.getByRole("heading", { name: "Check failed" }));
+  assert.ok(view.getByRole("button", { name: "Retry" }));
+  assert.match(view.getByRole("alert").textContent ?? "", /invalid reference/);
 });
 
 test("互換性ありの集約結果と個別根拠を同時に表示する", async () => {

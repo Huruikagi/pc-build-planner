@@ -269,6 +269,22 @@ test("現在構成がなければno-buildを返し候補照会を行わない", 
   assert.equal(candidateQuery.calls, 0);
 });
 
+test("現在構成recordがあっても選択itemが0件ならempty-buildを返し候補照会を行わない", async () => {
+  const candidateQuery = candidateQueryReturning({ ok: true, value: [] });
+  const service = createCompatibilityService({
+    currentBuildQuery: buildQueryReturning({
+      ok: true,
+      value: snapshotWith({ ...fullBuild(), items: [] }),
+    }),
+    candidateQuery,
+  });
+
+  const result = await service.evaluate(projectId);
+
+  assert.deepEqual(result, { ok: false, error: { kind: "empty-build" } });
+  assert.equal(candidateQuery.calls, 0);
+});
+
 test("現在構成読取の破損はcorrupt-dataへ写像し結果statusと混同しない", async () => {
   const service = createCompatibilityService({
     currentBuildQuery: buildQueryReturning({

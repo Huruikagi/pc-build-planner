@@ -6,6 +6,18 @@ export const compatibility = {
   title: "互換性確認",
   idle: "互換性の評価を開始してください。",
   loading: "評価しています…",
+  retry: "再試行",
+  noProjects: "利用可能なプロジェクトがありません。",
+  contextUnavailable: "現在のプロジェクト情報を利用できません。",
+  state: {
+    idle: "評価待ち",
+    loading: "読み込み中",
+    ready: "評価結果",
+    "no-projects": "プロジェクトなし",
+    "context-unavailable": "プロジェクト情報を利用できません",
+    "empty-build": "判定対象なし",
+    failed: "評価失敗",
+  },
   resultsLabel: "個別判定結果",
   missingFieldsLabel: "不足項目",
   /** 「{側ラベル}が選択されていません。」の再設計。側ラベルは既に解決済みの文字列を受け取る。 */
@@ -56,10 +68,11 @@ export const compatibility = {
   },
   empty: {
     "no-build": "現在構成が選択されていません。パーツを選択してください。",
-    "invalid-reference":
-      "現在構成に不正な参照が含まれています。構成を確認してください。",
+    "empty-build": "現在構成にパーツがありません。パーツを選択してください。",
   },
   failure: {
+    "invalid-reference":
+      "現在構成に不正な参照が含まれています。構成を確認してください。",
     "corrupt-data": "保存データが破損しています。互換性を判定できません。",
     "unsupported-data":
       "保存データが対応していない形式です。互換性を判定できません。",

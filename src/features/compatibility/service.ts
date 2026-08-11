@@ -67,6 +67,9 @@ export const createCompatibilityService = (
     if (currentBuild === null) {
       return err({ kind: "no-build" });
     }
+    if (currentBuild.items.length === 0) {
+      return err({ kind: "empty-build" });
+    }
 
     const candidatesResult =
       await dependencies.candidateQuery.listBuildEligible(projectId);

@@ -314,7 +314,7 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
   await act(async () => buildHandle?.unmount());
 });
 
-test("現在構成が空なら互換性画面は全不足の判定不能を示し、上流保存値を変更しない", async () => {
+test("現在構成recordが空ならempty-buildを示し、上流保存値を変更しない", async () => {
   const data = createFoundationPort();
   const seedService = createCandidateManagementService({
     data,
@@ -426,8 +426,8 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
   assert.equal(candidatesBefore.ok, true);
   assert.equal(buildBefore.ok, true);
 
-  // 何も選択しないまま互換性画面を開く: 全5規則が両側欠如で判定不能となり、
-  // 集約結果は情報不足で判定不能になる。
+  // 何も選択しないまま互換性画面を開くと、構成recordの存在を保ったまま
+  // empty-buildとして結果とは分離される。
   const compatibilityContainer = document.createElement("div");
   let compatibilityHandle:
     | Awaited<ReturnType<typeof compatibility.registration.mount>>
@@ -440,9 +440,10 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
     });
   });
 
-  assert.match(
-    compatibilityContainer.textContent ?? "",
-    new RegExp(defaultMessageResolver("compatibility.aggregate.unknown")),
+  assert.ok(
+    compatibilityContainer.querySelector(
+      "[data-status='empty-build'][data-empty-reason='empty-build']",
+    ),
   );
   assert.doesNotMatch(
     compatibilityContainer.textContent ?? "",
@@ -459,7 +460,7 @@ test("現在構成が空なら互換性画面は全不足の判定不能を示�
   const resultRows = compatibilityContainer.querySelectorAll(
     "[data-result-status='unknown']",
   );
-  assert.equal(resultRows.length, 5, "全5規則が判定不能として表示されていない");
+  assert.equal(resultRows.length, 0, "empty-buildで個別判定を生成している");
 
   await act(async () => compatibilityHandle?.unmount());
 

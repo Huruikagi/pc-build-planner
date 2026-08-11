@@ -3,6 +3,18 @@ export const compatibility = {
   title: "Compatibility Check",
   idle: "Start a compatibility check.",
   loading: "Checking…",
+  retry: "Retry",
+  noProjects: "There are no available projects.",
+  contextUnavailable: "The current project information isn't available.",
+  state: {
+    idle: "Waiting to check",
+    loading: "Loading",
+    ready: "Check results",
+    "no-projects": "No projects",
+    "context-unavailable": "Project information unavailable",
+    "empty-build": "Nothing to check",
+    failed: "Check failed",
+  },
   resultsLabel: "Individual results",
   missingFieldsLabel: "Missing fields",
   missingCategory: "{side} isn't selected.",
@@ -50,10 +62,11 @@ export const compatibility = {
   },
   empty: {
     "no-build": "No current build is selected. Select some parts.",
-    "invalid-reference":
-      "The current build contains an invalid reference. Check the build.",
+    "empty-build": "The current build has no parts. Select some parts.",
   },
   failure: {
+    "invalid-reference":
+      "The current build contains an invalid reference. Check the build.",
     "corrupt-data": "Saved data is corrupted. Compatibility can't be checked.",
     "unsupported-data":
       "Saved data is in an unsupported format. Compatibility can't be checked.",

@@ -112,7 +112,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Boundary: Compatibility acceptance tests_
 
-- [ ] 6. 現在プロジェクト追従と最新性制御を追加する
+- [x] 6. 現在プロジェクト追従と最新性制御を追加する
 - [x] 6.1 project contextを互換性評価用availabilityへ射影する
   - 検証済みreadyのprojectIdとgenerationだけをauthorityとして扱い、emptyとunavailableを代替選択なしで区別する
   - 同一generation・同一projectの重複通知で再評価を増やさず、購読解除後の通知が状態を変えないconsumer adapterを提供する
@@ -121,25 +121,20 @@
   - _Requirements: 1.1, 1.6, 7.1, 7.2, 7.5, 7.7, 7.9_
   - _Boundary: CompatibilityProjectContextAdapter_
 
-- [ ] 6.2 context世代と評価要求番号で画面状態を制御する
+- [x] 6.2 context最新性、empty-build契約、日英回復表示をatomicに統合する
   - ready通知ごとに以前のreportを直ちに外して最新projectを評価し、context generationと要求番号が一致する完了だけをreadyへ反映する
   - empty、unavailable、構成なし、構成空、読取・参照失敗をno-projects、context-unavailable、empty-build、failedとして結果から分離する
+  - 構成recordは存在するが選択itemが0件のとき、query/service契約からempty-buildを生成し、状態と表示まで同じ変更単位で接続する
   - 再試行はadapterの最新snapshotを読み直し、現在readyのprojectだけを再評価する
   - 既存完了タスク4.1の5状態モデルは完了履歴として保持し、本タスクが現設計の7状態とcontext世代モデルで置き換える
   - AからBへの切替、遅延A完了、unavailableからreadyへの回復、再試行で、旧結果や代替projectが表示状態へ戻らない
+  - 日本語と英語の同一message key群で全状態と再試行をアクセシブルに表示し、native button、live region、安全なJSX childをconsumer移行と同じ変更単位で検証する
   - _Depends: 3.1, 3.2, 6.1_
-  - _Requirements: 1.4, 1.6, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9_
-  - _Boundary: CompatibilityState_
+  - _Requirements: 1.4, 1.6, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: CompatibilityQuery, CompatibilityService, CompatibilityState, CompatibilityView, compatibility message catalogs, task-local tests_
 
 - [ ] 7. 日英表示とfeature lifecycleを統合する
-- [ ] 7.1 日英の状態・根拠・回復表示をアクセシブルにする
-  - 日本語と英語の同一message key群で集約結果、個別根拠、読込、projectなし、context利用不能、構成空、失敗、再試行を表示する
-  - 全状態を色だけでなく見出しとテキストで識別可能にし、状態変化をrole="status"または適切なlive regionで通知する
-  - 再試行を識別名付きnative buttonとして提供し、keyboard操作で最新snapshotの再評価を開始する
-  - ページ由来文字列を通常のJSX childとして扱い、日英双方でmarkupが実行されず状態と回復操作がDOM上で確認できる
-  - _Depends: 6.2_
-  - _Requirements: 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.3, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
-  - _Boundary: CompatibilityView, compatibility message catalogs_
+  - _Integrated: 旧タスク7.1の日英状態・根拠・回復表示は、公開状態契約のconsumer移行をatomicに保つためタスク6.2へ統合済み_
 
 - [ ] 7.2 context購読をfeature registrationとmount lifecycleへ接続する
   - shellから注入されたProjectContextReadPortをowner-local adapterへ渡し、mount時にstate購読と評価を開始する
@@ -147,7 +142,7 @@
   - 既存完了タスク5.1は旧production compositionの履歴として保持し、本タスクが共有fileを所有しない現feature境界で置き換える
   - production composition共有fileを本specで変更せず、project-contextとcurrent-buildの更新完了を前提にshellが注入可能なFeatureContributionを返す
   - contract test kitで登録、read-only operation policy、公開API、mount/unmount cleanupが観測できる
-  - _Depends: 6.1, 6.2, 7.1; project-context 2.4, 4.4; current-build-management 9_
+  - _Depends: 6.1, 6.2; project-context 2.4, 4.4; current-build-management 9_
   - _Requirements: 1.1, 1.5, 1.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
 
@@ -164,7 +159,7 @@
   - 日本語・英語で全結果、空・失敗理由、再試行ラベルが対応するmessageから表示されることをtesting-libraryで検証する
   - テキスト識別、live region、native buttonのkeyboard操作、安全なJSX child描画をuser-eventと架空文字列で検証する
   - 両言語の全状態とアクセシビリティ要件がDOM testで再現可能になる
-  - _Depends: 7.1_
+  - _Depends: 6.2_
   - _Requirements: 6.5, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: Compatibility view DOM tests_
 
