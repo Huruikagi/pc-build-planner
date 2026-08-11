@@ -159,7 +159,7 @@
   - _Requirements: 1.1, 1.4, 1.5, 1.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.2, 5.4, 7.1, 7.7, 7.8_
   - _Boundary: BuildState_
 
-- [ ] 7.3 project切替確認と数量draftのlifecycleを管理する
+- [x] 7.3 project切替確認と数量draftのlifecycleを管理する
   - 保存済み数量と異なる入力だけをdirty draftとして追跡し、draftがなければ切替を直ちに許可する。
   - 確認中は対象token、切替元・切替先、base generation、対象draftを保持し、保存、破棄、取消の結果を一度だけ確定する。
   - 保存は旧projectへ全dirty draftを一括commitできた場合だけ、破棄は対象draftを除去した場合だけ切替を許可する。
@@ -263,6 +263,10 @@
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
 - Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- 7.3のdirty draft判定は「currentBuild.itemsに存在し、かつdraft文字列が保存済み数量と異なるもの」に限定した。未選択候補へのdraftは`set-quantities`が保存できない（not-found）ため切替確認の対象にしない。
+- 7.3の確認は`BuildState.draftGuardOwner()`が返すowner objectでadapterへ渡す。`evaluate`はdirty draftがなければ即allow、あればPromiseを保留してUI（saveSwitchDrafts/discardSwitchDrafts/cancelSwitch）の確定を待つ。`#settleSwitch`が一度だけ解決し、二重解決とstale適用を防ぐ。
+- 7.3のstale判定は`#contextGeneration !== baseGeneration`。`#applyAvailability`と`#evaluateSwitch`の先頭でも保留中確認をstaleとして閉じるため、context側が先に進んだ確認結果は保存にも破棄にも使われない。
+- 7.1のnote（`set-quantities`成功時のdraft掃除が未実装）は7.3の`#draftsAfter`で解消済み。`execute()`は`#executeCommand`へ委譲し、切替保存側はcommit可否のbooleanでguardの許可を決める。
 - 7.2ではBuildStateへ`attachProjectContext`/`releaseProjectContext`を追加し、contextが接続されている間だけcontextを唯一の選択authorityにした（`selectProject`はno-op、`load()`はcontextのgetCurrent()経由）。`value.projects`とlegacyな先頭project fallbackは、まだ移行していないview（独自selector）・registration（snapshot peek）・state-snapshot（projects照合）のために残してある。これらは8.2・9・7.4で撤去する前提であり、`projectAvailability === null`がlegacy経路の目印になる。
 - 7.2のempty/unavailable解放は`quantityDrafts`も空にする。requirement 7.7（強制変更でもdraftを保持）と両立させるには、7.3でguardの`notifyForced`がavailability通知より先にdraftを隔離状態（design.mdの`orphanedDraft`）へ移す必要がある。この順序が崩れるとforced変更でdraftが消える。
 - state testでcontext通知が起動する非同期読込を待つには、`await Promise.resolve()`の固定回数ではなく`setTimeout(0)`のmacrotask flushを使う（`#applyAvailability`がPromise.allの読込を挟むため）。

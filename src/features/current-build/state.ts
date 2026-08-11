@@ -7,6 +7,7 @@ import {
   type PartCategory,
   type ProjectId,
   type RequestId,
+  type Result,
   type Revision,
 } from "../../domain/public.js";
 import type {
@@ -21,10 +22,28 @@ import type {
   CurrentBuildQuery,
 } from "./contracts.js";
 import type {
+  BuildContextAdapterError,
+  BuildDraftGuardOwner,
   BuildProjectAvailability,
+  BuildProjectSwitch,
   CurrentBuildProjectContextAdapter,
 } from "./project-context-adapter.js";
 import { managementErrorToBuildError } from "./service.js";
+
+/** 切替確認中に保持する、確認一件分のowner-localな文脈（要件 7.2、7.8）。 */
+export interface BuildSwitchConfirmation {
+  readonly token: string;
+  readonly fromProjectId: ProjectId | null;
+  readonly toProjectId: ProjectId | null;
+  readonly baseGeneration: number;
+  readonly drafts: Readonly<Record<string, string>>;
+}
+
+/** 強制変更で隔離したdraft。利用者が明示的に破棄するまで保持する（要件 7.7）。 */
+export interface BuildOrphanedDraft {
+  readonly projectId: ProjectId | null;
+  readonly drafts: Readonly<Record<string, string>>;
+}
 
 /** 共通contextの読取だけを使う。project選択commandは持ち込まない。 */
 export type CurrentBuildProjectContextReadPort = Pick<
@@ -59,6 +78,8 @@ export interface BuildStateValue {
   readonly candidates: readonly CandidatePart[];
   readonly currentBuild: Readonly<CurrentBuild> | null;
   readonly quantityDrafts: Readonly<Record<string, string>>;
+  readonly switchConfirmation: BuildSwitchConfirmation | null;
+  readonly orphanedDraft: BuildOrphanedDraft | null;
   readonly savingCommand: BuildCommand | null;
   readonly displayError: BuildDisplayError | null;
   readonly fieldErrors: BuildFieldErrors;
@@ -104,6 +125,15 @@ const withoutKey = (
   return next;
 };
 
+const withoutKeys = (
+  record: Readonly<Record<string, string>>,
+  keys: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, string>> => {
+  const next = { ...record };
+  for (const key of Object.keys(keys)) delete next[key];
+  return next;
+};
+
 /** Framework-independent UI state; persistence is accessed only through feature ports. */
 export class BuildState {
   #allCandidates: readonly CandidatePart[] = [];
@@ -114,6 +144,15 @@ export class BuildState {
   #unsubscribeContext: (() => void) | undefined;
   #contextGeneration: number | null = null;
   #loadSerial = 0;
+  #guardOwner: BuildDraftGuardOwner | null = null;
+  #pendingSwitch: {
+    readonly confirmation: BuildSwitchConfirmation;
+    readonly settle: (
+      result: Result<"allow", BuildContextAdapterError>,
+    ) => void;
+    settled: boolean;
+    saving: boolean;
+  } | null = null;
   #value: BuildStateValue = {
     projects: [],
     projectAvailability: null,
@@ -122,6 +161,8 @@ export class BuildState {
     candidates: [],
     currentBuild: null,
     quantityDrafts: emptyQuantityDrafts,
+    switchConfirmation: null,
+    orphanedDraft: null,
     savingCommand: null,
     displayError: null,
     fieldErrors: emptyFieldErrors,
@@ -200,6 +241,8 @@ export class BuildState {
     availability: BuildProjectAvailability,
   ): Promise<void> {
     this.#contextGeneration = availability.generation;
+    // 確定済みcontextが動いた時点で、進行中の確認結果は適用できない。
+    this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
     if (availability.status !== "ready") {
       // project 固有の状態を解放し、変更操作を止めた理由を表示できる状態にする。
       this.#allCandidates = [];
@@ -221,6 +264,148 @@ export class BuildState {
     }
     this.#set({ projectAvailability: "ready" });
     await this.#loadForProject(availability.projectId, availability.generation);
+  }
+
+  /**
+   * The feature owns save/discard/cancel; the adapter only learns whether the
+   * switch may proceed. Draft content never crosses the context boundary.
+   */
+  public draftGuardOwner(): BuildDraftGuardOwner {
+    this.#guardOwner ??= {
+      evaluate: (change) => this.#evaluateSwitch(change),
+      notifyForced: (change) => this.#handleForcedSwitch(change),
+    };
+    return this.#guardOwner;
+  }
+
+  /** Only quantities that differ from what is already saved count as unsaved. */
+  #dirtyDrafts(): Readonly<Record<string, string>> {
+    const drafts: Record<string, string> = {};
+    for (const item of this.#value.currentBuild?.items ?? []) {
+      const draft = this.#value.quantityDrafts[item.candidatePartId];
+      if (draft !== undefined && draft.trim() !== String(item.quantity))
+        drafts[item.candidatePartId] = draft;
+    }
+    return drafts;
+  }
+
+  #evaluateSwitch(
+    change: BuildProjectSwitch,
+  ): Promise<Result<"allow", BuildContextAdapterError>> {
+    const drafts = this.#dirtyDrafts();
+    // 先行する確認は新しい要求に追い越された時点で古い。
+    this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
+    if (Object.keys(drafts).length === 0)
+      return Promise.resolve({ ok: true, value: "allow" });
+    const confirmation: BuildSwitchConfirmation = {
+      token: change.token,
+      fromProjectId: this.#value.selectedProjectId,
+      toProjectId: change.to,
+      baseGeneration: change.baseGeneration,
+      drafts,
+    };
+    return new Promise((resolve) => {
+      this.#pendingSwitch = {
+        confirmation,
+        settle: resolve,
+        settled: false,
+        saving: false,
+      };
+      this.#set({ switchConfirmation: confirmation });
+    });
+  }
+
+  #handleForcedSwitch(change: BuildProjectSwitch): void {
+    this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
+    // cause "user" は本featureのevaluateで保存・破棄を確定させた後の通知。
+    if (change.cause === "user") return;
+    const drafts = this.#dirtyDrafts();
+    if (Object.keys(drafts).length === 0) return;
+    // 新しいprojectへ暗黙保存せず、隔離して継続方法を案内できる状態にする。
+    this.#set({
+      orphanedDraft: { projectId: change.from, drafts },
+      quantityDrafts: withoutKeys(this.#value.quantityDrafts, drafts),
+    });
+  }
+
+  #settleSwitch(result: Result<"allow", BuildContextAdapterError>): void {
+    const pending = this.#pendingSwitch;
+    if (pending === null || pending.settled) return;
+    pending.settled = true;
+    this.#pendingSwitch = null;
+    this.#set({ switchConfirmation: null });
+    pending.settle(result);
+  }
+
+  /** A confirmation whose base generation has moved on must not be applied. */
+  #staleConfirmation(baseGeneration: number): boolean {
+    return (
+      this.#contextGeneration !== null &&
+      this.#contextGeneration !== baseGeneration
+    );
+  }
+
+  /** Commits every unsaved quantity of the previous project as one update. */
+  public async saveSwitchDrafts(): Promise<void> {
+    const pending = this.#pendingSwitch;
+    if (pending === null || pending.saving) return;
+    if (this.#staleConfirmation(pending.confirmation.baseGeneration)) {
+      this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
+      return;
+    }
+    const fromProjectId = pending.confirmation.fromProjectId;
+    if (fromProjectId === null) {
+      this.#settleSwitch({ ok: false, error: { kind: "guard-declined" } });
+      return;
+    }
+    pending.saving = true;
+    const quantities: Record<string, number> = {};
+    for (const [candidatePartId, draft] of Object.entries(
+      pending.confirmation.drafts,
+    ))
+      quantities[candidatePartId] = Number(draft);
+    const saved = await this.#executeCommand({
+      type: "set-quantities",
+      projectId: fromProjectId,
+      quantities: quantities as Readonly<Record<CandidatePartId, number>>,
+    });
+    pending.saving = false;
+    // 全件commitできた場合だけ切替を続行する。
+    this.#settleSwitch(
+      saved
+        ? { ok: true, value: "allow" }
+        : { ok: false, error: { kind: "guard-declined" } },
+    );
+  }
+
+  /** Drops the confirmed drafts and lets the switch continue. */
+  public discardSwitchDrafts(): void {
+    const pending = this.#pendingSwitch;
+    if (pending === null || pending.saving) return;
+    if (this.#staleConfirmation(pending.confirmation.baseGeneration)) {
+      this.#settleSwitch({ ok: false, error: { kind: "stale-request" } });
+      return;
+    }
+    this.#set({
+      quantityDrafts: withoutKeys(
+        this.#value.quantityDrafts,
+        pending.confirmation.drafts,
+      ),
+    });
+    this.#settleSwitch({ ok: true, value: "allow" });
+  }
+
+  /** Keeps both the drafts and the previous project; the switch is abandoned. */
+  public cancelSwitch(): void {
+    const pending = this.#pendingSwitch;
+    if (pending === null || pending.saving) return;
+    this.#settleSwitch({ ok: false, error: { kind: "guard-declined" } });
+  }
+
+  /** Isolated drafts survive until the user explicitly drops them. */
+  public dismissOrphanedDraft(): void {
+    if (this.#value.orphanedDraft === null) return;
+    this.#set({ orphanedDraft: null });
   }
 
   #mutationsDisabled(): boolean {
@@ -380,7 +565,12 @@ export class BuildState {
 
   /** Applies a selection, quantity change, or removal; suppresses duplicate submission. */
   public async execute(command: BuildCommand): Promise<void> {
-    if (this.#value.isSaving || this.#mutationsDisabled()) return;
+    await this.#executeCommand(command);
+  }
+
+  /** Returns whether the command committed, for callers that gate on the result. */
+  async #executeCommand(command: BuildCommand): Promise<boolean> {
+    if (this.#value.isSaving || this.#mutationsDisabled()) return false;
     this.#set({
       isSaving: true,
       savingCommand: command,
@@ -402,21 +592,27 @@ export class BuildState {
         fieldErrors: fieldErrorsOf(result.error),
         mutationsDisabled: this.#mutationsDisabled(),
       });
-      return;
+      return false;
     }
     this.#revision = result.value.revision;
-    const quantityDrafts =
-      command.type === "set-quantity" || command.type === "remove"
-        ? withoutKey(this.#value.quantityDrafts, command.candidatePartId)
-        : this.#value.quantityDrafts;
     this.#set({
       currentBuild: result.value.currentBuild,
-      quantityDrafts,
+      quantityDrafts: this.#draftsAfter(command),
       isSaving: false,
       savingCommand: null,
       displayError: null,
       fieldErrors: emptyFieldErrors,
     });
+    return true;
+  }
+
+  /** Committed quantities are no longer unsaved input. */
+  #draftsAfter(command: BuildCommand): Readonly<Record<string, string>> {
+    if (command.type === "set-quantities")
+      return withoutKeys(this.#value.quantityDrafts, command.quantities);
+    return command.type === "set-quantity" || command.type === "remove"
+      ? withoutKey(this.#value.quantityDrafts, command.candidatePartId)
+      : this.#value.quantityDrafts;
   }
 
   /**

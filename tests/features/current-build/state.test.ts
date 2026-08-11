@@ -27,7 +27,11 @@ import type {
   CurrentBuildQuery,
   CurrentBuildSnapshot,
 } from "../../../src/features/current-build/contracts.js";
-import type { BuildProjectAvailability } from "../../../src/features/current-build/project-context-adapter.js";
+import type {
+  BuildDraftGuardOwner,
+  BuildProjectAvailability,
+  BuildProjectSwitch,
+} from "../../../src/features/current-build/project-context-adapter.js";
 import {
   type BuildStateDependencies,
   createBuildState,
@@ -700,4 +704,228 @@ test("releaseProjectContextは購読を一度だけ解除し以降の通知を�
   assert.equal(context.subscriberCount, 0);
   assert.equal(state.value.selectedProjectId, projectId);
   assert.deepEqual(queryCalls, [projectId]);
+});
+
+/** 7.3: 数量draftを持つ旧projectから切り替える状況。 */
+const draftHarness = (options: HarnessOptions = {}) => {
+  const build: CurrentBuild = {
+    id: buildId,
+    projectId,
+    items: [
+      { candidatePartId: memoryCandidateId, quantity: 1 as PositiveInteger },
+    ],
+    updatedAt: timestamp,
+  };
+  const harness = createHarness({
+    projects: [
+      project(projectId, "架空PC構成"),
+      project(otherProjectId, "架空2"),
+    ],
+    eligibleByProject: {
+      [projectId]: [
+        candidate(memoryCandidateId, {
+          category: "memory",
+          normalizedAttributes: memoryAttributes,
+        }),
+      ],
+      [otherProjectId]: [],
+    },
+    buildByProject: {
+      [projectId]: { revision: 4, currentBuild: build },
+      [otherProjectId]: { revision: 5, currentBuild: null },
+    },
+    ...options,
+  });
+  return { ...harness, build };
+};
+
+const switchTo = (
+  target: ProjectId | null,
+  generation: number,
+): BuildProjectSwitch => ({
+  token: `switch-${generation}`,
+  from: projectId,
+  to: target,
+  baseGeneration: generation,
+  cause: "user",
+});
+
+const withDraft = async (
+  options: HarnessOptions = {},
+): Promise<
+  ReturnType<typeof draftHarness> & {
+    readonly context: ReturnType<typeof createContextPort>;
+    readonly owner: BuildDraftGuardOwner;
+  }
+> => {
+  const harness = draftHarness(options);
+  const context = createContextPort(readyAt(7, projectId));
+  await harness.state.attachProjectContext(context.port);
+  harness.state.setQuantityDraft(memoryCandidateId, "3");
+  return { ...harness, context, owner: harness.state.draftGuardOwner() };
+};
+
+test("未保存の数量draftがなければ切替を確認なしで許可する", async () => {
+  const { state, owner } = await withDraft();
+  // 保存済み数量と同じ入力はdirty draftではない。
+  state.setQuantityDraft(memoryCandidateId, "1");
+
+  const decision = await owner.evaluate(switchTo(otherProjectId, 7));
+
+  assert.deepEqual(decision, { ok: true, value: "allow" });
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("未保存の数量draftがあると切替元・切替先とdraftを保持した確認を開く", async () => {
+  const { state, owner } = await withDraft();
+
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  const confirmation = state.value.switchConfirmation;
+  assert.ok(confirmation);
+  assert.equal(confirmation.fromProjectId, projectId);
+  assert.equal(confirmation.toProjectId, otherProjectId);
+  assert.equal(confirmation.baseGeneration, 7);
+  assert.deepEqual(confirmation.drafts, { [memoryCandidateId]: "3" });
+  assert.equal(state.value.selectedProjectId, projectId);
+
+  state.cancelSwitch();
+  await pending;
+});
+
+test("保存を選ぶと旧projectへ一括commitしてから切替を許可する", async () => {
+  const { state, owner, serviceCalls } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  await state.saveSwitchDrafts();
+
+  assert.deepEqual(await pending, { ok: true, value: "allow" });
+  assert.equal(serviceCalls.length, 1);
+  assert.deepEqual(serviceCalls[0]?.command, {
+    type: "set-quantities",
+    projectId,
+    quantities: { [memoryCandidateId]: 3 },
+  });
+  assert.deepEqual(state.value.quantityDrafts, {});
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("破棄を選ぶと保存せずdraftを取り除いて切替を許可する", async () => {
+  const { state, owner, serviceCalls } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  state.discardSwitchDrafts();
+
+  assert.deepEqual(await pending, { ok: true, value: "allow" });
+  assert.equal(serviceCalls.length, 0);
+  assert.deepEqual(state.value.quantityDrafts, {});
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("取消では数量draftと切替元projectを維持して切替を完了しない", async () => {
+  const { state, owner, serviceCalls } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  state.cancelSwitch();
+
+  const decision = await pending;
+  assert.equal(decision.ok, false);
+  assert.equal(serviceCalls.length, 0);
+  assert.deepEqual(state.value.quantityDrafts, { [memoryCandidateId]: "3" });
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("保存の検証失敗では入力と旧projectを維持し切替を許可しない", async () => {
+  const { state, owner, serviceCalls } = await withDraft({
+    serviceResult: () => ({
+      ok: false,
+      error: {
+        kind: "validation",
+        fields: { [memoryCandidateId]: "invalid" },
+      },
+    }),
+  });
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  await state.saveSwitchDrafts();
+
+  const decision = await pending;
+  assert.equal(decision.ok, false);
+  assert.equal(serviceCalls.length, 1);
+  assert.deepEqual(state.value.quantityDrafts, { [memoryCandidateId]: "3" });
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.equal(state.value.fieldErrors[memoryCandidateId], "invalid");
+});
+
+test("同じ確認への保存操作の重複送信は受け付けない", async () => {
+  const { state, owner, serviceCalls } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  await Promise.all([state.saveSwitchDrafts(), state.saveSwitchDrafts()]);
+  await state.saveSwitchDrafts();
+
+  assert.deepEqual(await pending, { ok: true, value: "allow" });
+  assert.equal(serviceCalls.length, 1);
+});
+
+test("確認中にgenerationが進んだ場合は古い結果でdraftを保存も破棄もしない", async () => {
+  const { state, owner, context, serviceCalls } = await withDraft();
+  const pending = owner.evaluate(switchTo(otherProjectId, 7));
+  await flush();
+
+  context.publish(readyAt(9, projectId));
+  await flush();
+  await state.saveSwitchDrafts();
+
+  const decision = await pending;
+  assert.equal(decision.ok, false);
+  assert.equal(serviceCalls.length, 0);
+  assert.equal(state.value.switchConfirmation, null);
+});
+
+test("forced変更ではdraftを隔離し新projectへ暗黙保存しない", async () => {
+  const { state, owner, context, serviceCalls } = await withDraft();
+
+  owner.notifyForced({
+    token: "forced-1",
+    from: projectId,
+    to: null,
+    baseGeneration: 7,
+    cause: "catalog-invalidated",
+  });
+  context.publish({ status: "empty", generation: 8 });
+  await flush();
+
+  assert.equal(serviceCalls.length, 0);
+  assert.deepEqual(state.value.orphanedDraft?.drafts, {
+    [memoryCandidateId]: "3",
+  });
+  assert.equal(state.value.orphanedDraft?.projectId, projectId);
+  assert.deepEqual(state.value.quantityDrafts, {});
+
+  // 利用者が明示的に破棄するまで内容を保持する。
+  state.dismissOrphanedDraft();
+  assert.equal(state.value.orphanedDraft, null);
+});
+
+test("利用者確定の切替通知ではdraftを隔離状態へ移さない", async () => {
+  const { state, owner } = await withDraft();
+
+  // cause "user" は本featureのevaluateで既に保存・破棄を確定させた後の通知。
+  owner.notifyForced({
+    token: "confirmed-1",
+    from: projectId,
+    to: otherProjectId,
+    baseGeneration: 7,
+    cause: "user",
+  });
+
+  assert.equal(state.value.orphanedDraft, null);
 });
