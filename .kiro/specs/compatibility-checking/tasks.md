@@ -147,7 +147,7 @@
   - _Boundary: CompatibilityFeatureRegistration, ReactRootAdapter_
 
 - [ ] 8. context追従とアクセシビリティの回帰検証を完成する
-- [ ] 8.1 (P) adapterとstateのcontext遷移を自動テストする
+- [x] 8.1 (P) adapterとstateのcontext遷移を自動テストする
   - ready AからB、empty、unavailable、unavailableからready、重複通知、解除後通知、遅延完了破棄、最新snapshot再試行を架空portで検証する
   - project 0件、利用不能、構成空、失敗の各状態が互換性reportを保持せず、異なるprojectへfallbackしないことを検証する
   - context generationと評価要求番号の全分岐が決定的なテスト結果として再現できる

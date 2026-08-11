@@ -53,9 +53,12 @@ const contextHarness = (initial: CompatibilityProjectAvailability) => {
   };
   return {
     adapter,
+    get subscriberCount() {
+      return listeners.size;
+    },
     publish(value: CompatibilityProjectAvailability) {
       current = value;
-      for (const listener of listeners) listener(value);
+      for (const listener of [...listeners]) listener(value);
     },
   };
 };
@@ -111,6 +114,35 @@ test("ready AからBへ切替えると旧reportを直ちに外し遅延A完了�
   assert.deepEqual(state.value, { status: "ready", report: report(projectB) });
 });
 
+test("同一ready通知は重複評価せず同一projectの新generationは再評価する", async () => {
+  const context = contextHarness({
+    status: "ready",
+    generation: 1,
+    projectId: projectA,
+  });
+  const evaluation = queryHarness();
+  const state = createCompatibilityState({
+    query: evaluation.query,
+    projectContext: context.adapter,
+  });
+
+  state.start();
+  context.publish({ status: "ready", generation: 1, projectId: projectA });
+  assert.equal(evaluation.calls.length, 1);
+
+  context.publish({ status: "ready", generation: 2, projectId: projectA });
+  assert.equal(evaluation.calls.length, 2);
+  assert.deepEqual(state.value, { status: "loading" });
+
+  evaluation.calls[0]?.resolve({ ok: true, value: report(projectA) });
+  await flush();
+  assert.deepEqual(state.value, { status: "loading" });
+
+  evaluation.calls[1]?.resolve({ ok: true, value: report(projectA) });
+  await flush();
+  assert.deepEqual(state.value, { status: "ready", report: report(projectA) });
+});
+
 test("emptyとunavailableを分離しunavailableからreadyへ回復する", async () => {
   const context = contextHarness({ status: "empty", generation: 1 });
   const evaluation = queryHarness();
@@ -132,6 +164,39 @@ test("emptyとunavailableを分離しunavailableからreadyへ回復する", asy
   evaluation.calls[0]?.resolve({ ok: true, value: report(projectB) });
   await flush();
   assert.deepEqual(state.value, { status: "ready", report: report(projectB) });
+});
+
+test("ready結果はproject 0件またはcontext利用不能への遷移で直ちに破棄する", async () => {
+  for (const transition of [
+    {
+      availability: { status: "empty", generation: 2 } as const,
+      expected: { status: "no-projects" } as const,
+    },
+    {
+      availability: { status: "unavailable", generation: 2 } as const,
+      expected: { status: "context-unavailable" } as const,
+    },
+  ]) {
+    const context = contextHarness({
+      status: "ready",
+      generation: 1,
+      projectId: projectA,
+    });
+    const evaluation = queryHarness();
+    const state = createCompatibilityState({
+      query: evaluation.query,
+      projectContext: context.adapter,
+    });
+
+    state.start();
+    evaluation.calls[0]?.resolve({ ok: true, value: report(projectA) });
+    await flush();
+    assert.equal(state.value.status, "ready");
+
+    context.publish(transition.availability);
+    assert.deepEqual(state.value, transition.expected);
+    assert.equal(evaluation.calls.length, 1, "代替projectを評価した");
+  }
 });
 
 test("構成なし・構成空・参照失敗を結果から分離する", async () => {
@@ -265,4 +330,32 @@ test("stop前の遅延完了は同一contextで再startした最新評価へ反�
     status: "empty-build",
     reason: "no-build",
   });
+});
+
+test("stopは購読を解除し解除後のcontext通知と遅延完了を破棄する", async () => {
+  const context = contextHarness({
+    status: "ready",
+    generation: 1,
+    projectId: projectA,
+  });
+  const evaluation = queryHarness();
+  const state = createCompatibilityState({
+    query: evaluation.query,
+    projectContext: context.adapter,
+  });
+
+  state.start();
+  assert.equal(context.subscriberCount, 1);
+  state.stop();
+  assert.equal(context.subscriberCount, 0);
+
+  context.publish({ status: "ready", generation: 2, projectId: projectB });
+  evaluation.calls[0]?.resolve({ ok: true, value: report(projectA) });
+  await flush();
+
+  assert.deepEqual(state.value, { status: "loading" });
+  assert.deepEqual(
+    evaluation.calls.map((call) => call.projectId),
+    [projectA],
+  );
 });
