@@ -170,7 +170,7 @@
   - _Requirements: 5.3, 5.5, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
   - _Boundary: BuildState_
 
-- [ ] 7.4 version 1 snapshotを非権威的metadataとして復元する
+- [x] 7.4 version 1 snapshotを非権威的metadataとして復元する
   - 既存のversionとshapeを維持し、unknown入力のfield、値、候補参照をfeature境界で厳密に検証する。
   - snapshotのproject IDは現在のready projectとの一致検査だけに使い、一致時だけカテゴリと参照可能な数量draftを復元する。
   - 不一致、不存在、empty、unavailableでは現在projectを変更せず、安全な初期状態または隔離中draftを維持して案内を返す。
@@ -263,6 +263,8 @@
 - side-panel-contributions.tsはcurrent-buildがcandidate-managementの公開queryへ依存するため、均一なfactory配列パターン（[factory1, factory2].map(f => f(context))）をやめ、依存順に明示的に組み立てる形へ変更した。既存の3test（feature-contribution-catalog.test.ts、root-public-api.test.ts、build-smoke.test.ts）は"candidateManagement"単独を前提にしていたため["candidateManagement","currentBuild"]へ更新が必要だった。build-smoke.test.tsはdist/を検査するため、更新後は`pnpm build`を再実行してから`pnpm test`する必要がある。
 - 実DOM統合testでReactのview click handlerがstate.execute()をvoidで発火（fire-and-forget）する場合、act()コールバック内で固定tick数のflushを仮定するのは脆い。実Foundation write authorityの確定を待つには、public queryをpollingするwaitUntilヘルパーの方が確実。
 - Playwright e2eをworker並列実行すると、UIのPromiseが解決した時点でもchrome.storage.localへの書き込みがまだ確定していないケースがある（並列CPU負荷下でのみ再現）。reload直前にchrome.storage.local.getを直接pollingして永続化を確認してからreloadする方式が、固定waitForTimeoutより確実。
+- 7.4でBuildSnapshotErrorへ`project-mismatch`を追加した。破損（invalid-shape/unsupported-version/invalid-reference）とは区別し、「古い画面状態を今の現在projectへ適用できない」案内に使う。8.2のviewと9のregistrationは、この2系統を別の表示として扱う必要がある。
+- 7.4のcodecは`state.value.projects`を参照しなくなり、現在projectは`state.value.selectedProjectId`（contextからのprojection）とだけ照合する。snapshotのproject IDは一致検査専用で、選択authorityにも復元対象にもしない。empty/unavailable時は7.2の解放処理でselectedProjectIdがnullになるため、照合対象なし=project-mismatchになる。
 - 7.3のdirty draft判定は「currentBuild.itemsに存在し、かつdraft文字列が保存済み数量と異なるもの」に限定した。未選択候補へのdraftは`set-quantities`が保存できない（not-found）ため切替確認の対象にしない。
 - 7.3の確認は`BuildState.draftGuardOwner()`が返すowner objectでadapterへ渡す。`evaluate`はdirty draftがなければ即allow、あればPromiseを保留してUI（saveSwitchDrafts/discardSwitchDrafts/cancelSwitch）の確定を待つ。`#settleSwitch`が一度だけ解決し、二重解決とstale適用を防ぐ。
 - 7.3のstale判定は`#contextGeneration !== baseGeneration`。`#applyAvailability`と`#evaluateSwitch`の先頭でも保留中確認をstaleとして閉じるため、context側が先に進んだ確認結果は保存にも破棄にも使われない。

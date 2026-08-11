@@ -19,6 +19,7 @@ import type {
   BuildService,
   CurrentBuildQuery,
 } from "../../../src/features/current-build/contracts.js";
+import type { BuildProjectAvailability } from "../../../src/features/current-build/project-context-adapter.js";
 import {
   type BuildStateDependencies,
   createBuildState,
@@ -178,7 +179,7 @@ test("未知version、不正shape、stale project参照、stale candidate参照�
       selectedCategory: null,
       quantityDrafts: {},
     }),
-    { ok: false, error: { kind: "invalid-reference" } },
+    { ok: false, error: { kind: "project-mismatch" } },
   );
   assert.deepEqual(
     codec.restore({
@@ -273,4 +274,124 @@ test("category切替で表示から外れた候補への数量draftも読込済�
   );
   const snapshot = codec.capture(state);
   assert.deepEqual(codec.restore(snapshot), { ok: true, value: snapshot });
+});
+
+/** 7.4: 共通contextのavailabilityを与えた state を組み立てる。 */
+const createContextState = async (availability: BuildProjectAvailability) => {
+  const state = await createState();
+  await state.attachProjectContext({
+    getCurrent: () => availability,
+    subscribe: () => () => {},
+  });
+  return state;
+};
+
+const snapshotFor = (id: ProjectId | null, drafts = {}) => ({
+  version: 1 as const,
+  selectedProjectId: id,
+  selectedCategory: "memory" as const,
+  quantityDrafts: drafts,
+});
+
+test("snapshotのproject IDが現在のready projectと一致する場合だけ画面状態を復元する", async () => {
+  const state = await createContextState({
+    status: "ready",
+    generation: 4,
+    projectId,
+  });
+  const codec = createBuildStateSnapshotCodec(state);
+
+  const snapshot = snapshotFor(projectId, { [memoryCandidateId]: "3" });
+  assert.deepEqual(codec.restore(snapshot), { ok: true, value: snapshot });
+});
+
+test("現在のready projectと一致しないsnapshotは現在projectを変更せず復元しない", async () => {
+  const state = await createContextState({
+    status: "ready",
+    generation: 4,
+    projectId,
+  });
+  const codec = createBuildStateSnapshotCodec(state);
+  const before = state.value;
+
+  assert.deepEqual(codec.restore(snapshotFor(otherProjectId)), {
+    ok: false,
+    error: { kind: "project-mismatch" },
+  });
+  assert.equal(state.value.selectedProjectId, projectId);
+  assert.deepEqual(state.value, before);
+});
+
+for (const status of ["empty", "unavailable"] as const) {
+  test(`現在projectが${status}のときはsnapshotで現在projectを決めない`, async () => {
+    const state = await createContextState({ status, generation: 5 });
+    const codec = createBuildStateSnapshotCodec(state);
+
+    assert.deepEqual(codec.restore(snapshotFor(projectId)), {
+      ok: false,
+      error: { kind: "project-mismatch" },
+    });
+    assert.equal(state.value.selectedProjectId, null);
+    assert.equal(state.value.projectAvailability, status);
+  });
+}
+
+test("project一致でも参照できない候補draftはinvalid-referenceとして拒否する", async () => {
+  const state = await createContextState({
+    status: "ready",
+    generation: 4,
+    projectId,
+  });
+  const codec = createBuildStateSnapshotCodec(state);
+
+  assert.deepEqual(
+    codec.restore(snapshotFor(projectId, { [foreignCandidateId]: "2" })),
+    { ok: false, error: { kind: "invalid-reference" } },
+  );
+});
+
+test("復元拒否は隔離中draftと永続データを変更しない", async () => {
+  const state = await createContextState({
+    status: "ready",
+    generation: 4,
+    projectId,
+  });
+  state.setQuantityDraft(memoryCandidateId, "5");
+  // 強制変更で隔離された draft は復元拒否でも保持される。
+  state.draftGuardOwner().notifyForced({
+    token: "forced-1",
+    from: projectId,
+    to: null,
+    baseGeneration: 4,
+    cause: "catalog-invalidated",
+  });
+  const isolated = state.value.orphanedDraft;
+  const codec = createBuildStateSnapshotCodec(state);
+
+  assert.deepEqual(codec.restore(snapshotFor(otherProjectId)), {
+    ok: false,
+    error: { kind: "project-mismatch" },
+  });
+  assert.deepEqual(codec.restore({ version: 3 }), {
+    ok: false,
+    error: { kind: "unsupported-version" },
+  });
+  assert.deepEqual(state.value.orphanedDraft, isolated);
+});
+
+test("captureはversion 1のshapeを変えずcontext由来のproject IDだけを載せる", async () => {
+  const state = await createContextState({
+    status: "ready",
+    generation: 4,
+    projectId,
+  });
+  state.selectCategory("memory");
+  const codec = createBuildStateSnapshotCodec(state);
+
+  assert.deepEqual(codec.capture(state), {
+    version: 1,
+    selectedProjectId: projectId,
+    selectedCategory: "memory",
+    quantityDrafts: {},
+  });
 });

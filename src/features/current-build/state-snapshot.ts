@@ -22,10 +22,15 @@ export interface BuildStateSnapshot {
   readonly quantityDrafts: Readonly<Record<string, string>>;
 }
 
+/**
+ * `project-mismatch` は破損ではなく「古い画面状態を今の現在projectへ適用できない」
+ * ことを表す。復元は行わず、現在projectも永続データも変更しない（要件 8.4）。
+ */
 export type BuildSnapshotError =
   | { readonly kind: "invalid-shape" }
   | { readonly kind: "unsupported-version" }
-  | { readonly kind: "invalid-reference" };
+  | { readonly kind: "invalid-reference" }
+  | { readonly kind: "project-mismatch" };
 
 export interface BuildStateSnapshotCodec {
   capture(state: BuildState): BuildStateSnapshot;
@@ -54,25 +59,31 @@ const snapshotSchema = plainObject({
   quantityDrafts: invalid(quantityDraftsSchema),
 });
 
-const hasProjectReference = (state: BuildState, projectId: string): boolean =>
-  state.value.projects.some((project) => project.id === projectId);
+/**
+ * 現在projectは常にfeature stateの射影から読む。snapshotは候補にならない。
+ * `empty` と `unavailable` では state 側が selectedProjectId を解放済みなので、
+ * 照合対象の現在projectはそのまま null になる。
+ */
+const currentProjectId = (state: BuildState): ProjectId | null =>
+  state.value.selectedProjectId;
 
-const hasValidReferences = (
+const rejectionFor = (
   state: BuildState,
   snapshot: BuildStateSnapshot,
-): boolean => {
-  if (
-    snapshot.selectedProjectId !== null &&
-    !hasProjectReference(state, snapshot.selectedProjectId)
-  ) {
-    return false;
-  }
+): BuildSnapshotError | null => {
   if (snapshot.selectedProjectId === null)
-    return Object.keys(snapshot.quantityDrafts).length === 0;
-  const projectId = snapshot.selectedProjectId;
+    return Object.keys(snapshot.quantityDrafts).length === 0
+      ? null
+      : { kind: "invalid-reference" };
+  const current = currentProjectId(state);
+  // snapshotのproject IDは一致検査にだけ使い、選択authorityにはしない。
+  if (current === null || current !== snapshot.selectedProjectId)
+    return { kind: "project-mismatch" };
   return Object.keys(snapshot.quantityDrafts).every((candidatePartId) =>
-    state.hasCandidateReference(candidatePartId as CandidatePartId, projectId),
-  );
+    state.hasCandidateReference(candidatePartId as CandidatePartId, current),
+  )
+    ? null
+    : { kind: "invalid-reference" };
 };
 
 export const createBuildStateSnapshotCodec = (
@@ -99,8 +110,9 @@ export const createBuildStateSnapshotCodec = (
     });
     if (!decoded.ok) return decoded;
     const snapshot: BuildStateSnapshot = decoded.value;
-    return hasValidReferences(state, snapshot)
+    const rejection = rejectionFor(state, snapshot);
+    return rejection === null
       ? { ok: true, value: snapshot }
-      : { ok: false, error: { kind: "invalid-reference" } };
+      : { ok: false, error: rejection };
   },
 });
