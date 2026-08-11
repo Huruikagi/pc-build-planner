@@ -269,6 +269,27 @@ test("candidate contributionはguard未注入でもproject refresh契約を保�
   );
 });
 
+test("compatibility compositionはcandidate catalogをproject選択authorityへ流用しない", async () => {
+  const composition = await readFile(
+    "src/application-shell/side-panel-contributions.ts",
+    "utf8",
+  );
+  const start = composition.indexOf(
+    "const compatibility = createCompatibilityContribution(context, {",
+  );
+  const end = composition.indexOf("Settings receives", start);
+  assert.ok(start >= 0 && end > start, "compatibility composition境界が不明");
+
+  const compatibilityComposition = composition.slice(start, end);
+  assert.match(compatibilityComposition, /currentBuildQuery:/);
+  assert.match(compatibilityComposition, /candidateQuery:/);
+  assert.doesNotMatch(
+    compatibilityComposition,
+    /getProjectId|\.listProjects\s*\(/,
+    "candidate一覧やshell独自fallbackをcompatibilityの選択authorityへ渡さない",
+  );
+});
+
 test("組立済みproduct-capture公開APIをproduction-like compositionで一度だけ提供する", async () => {
   const context = {
     data: {

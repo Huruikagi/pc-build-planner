@@ -402,6 +402,8 @@
 
 ## Implementation Notes
 
+- 2026-08-11 application-shell 10.2–10.3 validation remediation: compatibility compositionに残っていたcandidate一覧先頭の`getProjectId` fallbackを撤去した。conditional spreadはTypeScriptのexcess-property検査をすり抜けてdead dependencyを残せるため、局所source-contract gateで`getProjectId`と`listProjects()`の再混入を拒否する。
+
 - 2026-08-09 application-shell 11.1–11.3: production-shaped contract/DOM/runtime suite、公開consumer・worker/artifact gate、Chrome side-panel E2Eを再実行した。project未選択時はcompatibilityを利用不能として正しく扱うため、英語UI E2Eは利用可能な常設featureだけの画面内容を検証し、常設navigation全件の存在は別途維持した。`pnpm test` 1,659 pass、`pnpm test:e2e` 27 pass / 1 native-menu skip。
 
 - 2026-08-09 application-shell 10.1–10.3: project selector専用slotとsingleton adapterをproduction compositionへ接続し、同一snapshotを能力別read portと依存feature availabilityへ配送した。selector mount失敗とproject-context初期化失敗はshell全体へ昇格せず、依存featureだけをfail closedにする。生成物のdummy maintenance検出はbundle全体を跨ぐ誤一致を防ぐため局所範囲へ制限した。

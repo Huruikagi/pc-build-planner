@@ -183,15 +183,6 @@ export const createSidePanelFeatureContributions = (
   const compatibility = createCompatibilityContribution(context, {
     currentBuildQuery: currentBuild.registration.publicApi.query,
     candidateQuery: candidateManagement.registration.publicApi.query,
-    ...(context.projectContext === undefined
-      ? {
-          async getProjectId() {
-            const projects =
-              await candidateManagement.registration.publicApi.query.listProjects();
-            return projects.ok ? (projects.value[0]?.id ?? null) : null;
-          },
-        }
-      : {}),
   });
   /**
    * Settings receives the assembled section only. The read view is frozen to
