@@ -99,23 +99,27 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   await navItem(page, "currentBuild").click();
   const buildRegion = featureRoot(page, "currentBuild");
   await expect(buildRegion).toBeVisible();
-  await expect(
-    buildRegion.getByRole("button", {
-      name: "E2E 現在構成プロジェクト",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(categoryButton(buildRegion, "cpu")).toBeEnabled();
 
   // Single-select category: adopt the CPU candidate.
-  await categoryButton(buildRegion, "cpu").click();
+  const cpuCategory = categoryButton(buildRegion, "cpu");
+  await expect(cpuCategory).toHaveAccessibleName(
+    /CPU.*(?:未選択|Not selected)/,
+  );
+  await cpuCategory.focus();
+  await cpuCategory.press("Enter");
+  await expect(cpuCategory).toBeFocused();
+  await expect(cpuCategory).toHaveAttribute("aria-current", "page");
   const cpuRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成CPU" });
   await selectCandidateButton(cpuRow).click();
   await expect(removeCandidateButton(cpuRow)).toBeVisible();
+  await expect(cpuCategory).toHaveAccessibleName(/CPU.*E2E 現在構成CPU/);
 
   // Multiple-select category: add the memory candidate and confirm a quantity.
-  await categoryButton(buildRegion, "memory").click();
+  const memoryCategory = categoryButton(buildRegion, "memory");
+  await memoryCategory.click();
   const memoryRow = region(buildRegion, "candidate-list")
     .getByRole("listitem")
     .filter({ hasText: "E2E 現在構成メモリ" });
@@ -124,6 +128,9 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   await quantityInput(memoryRow).fill("2");
   await confirmQuantityButton(memoryRow).click();
   await expect(quantityInput(memoryRow)).toHaveValue("2");
+  await expect(memoryCategory).toHaveAccessibleName(
+    /(?:メモリ|Memory).*E2E 現在構成メモリ.*2/,
+  );
 
   // chrome.storage.local writes can lag the resolved UI promise under heavy
   // parallel test load; wait for the quantity to be durably persisted before
@@ -181,6 +188,9 @@ test("side panel drives single・複数選択の採用・数量変更・解除�
   // Unselect the memory candidate; the CPU selection must be unaffected.
   await removeCandidateButton(reopenedMemoryRow).click();
   await expect(selectCandidateButton(reopenedMemoryRow)).toBeVisible();
+  await expect(categoryButton(reopenedRegion, "memory")).toHaveAccessibleName(
+    /(?:メモリ|Memory).*(?:未選択|Not selected)/,
+  );
   await categoryButton(reopenedRegion, "cpu").click();
   await expect(removeCandidateButton(reopenedCpuRow)).toBeVisible();
 

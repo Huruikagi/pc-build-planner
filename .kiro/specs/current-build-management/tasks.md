@@ -211,8 +211,8 @@
   - _Requirements: 1.1, 1.5, 1.6, 5.2, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: CurrentBuildFeatureRegistration, FeatureContribution integration_
 
-- [ ] 10. 更新された構成管理契約を横断検証する
-- [ ] 10.1 project切替guardとsnapshot復元を統合検証する
+- [x] 10. 更新された構成管理契約を横断検証する
+- [x] 10.1 project切替guardとsnapshot復元を統合検証する
   - project-context public portのcontract harnessから共通selector相当の切替要求と確定通知を発行し、独自selectorやfallbackなしで追従することを確認する。
   - draft保存、破棄、取消、validation・保存失敗、stale要求、forced変更を検証し、旧projectまたは隔離状態へ正しいdraftが残ることを確認する。
   - 再表示とrollback復元でversion 1 snapshotが現在projectを変更せず、一致時だけ画面stateを復元することを確認する。
@@ -221,7 +221,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: Project context and current build contract integration_
 
-- [ ] 10.2 カテゴリ要約の表示品質を回帰検証する
+- [x] 10.2 カテゴリ要約の表示品質を回帰検証する
   - 単一、複数、未選択の全カテゴリ要約が選択操作と同じUI内に表示され、保存成功直後に更新されることを確認する。
   - 日本語と英語、keyboard操作、focus、aria-current、screen reader向け完全textをDOMとbrowser harnessで確認する。
   - 長い名称と複数項目が視覚的に省略されても操作可能で、markup風の外部名称がtextとして扱われることを確認する。
@@ -230,7 +230,7 @@
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
   - _Boundary: Current build presentation validation_
 
-- [ ] 10.3 参照修復と下流公開契約の回帰を検証する
+- [x] 10.3 参照修復と下流公開契約の回帰を検証する
   - 候補のカテゴリ変更、未分類化、削除、project削除が上流mutationと同じcommitで参照を修復し、current-buildから追加writeが出ないことを再確認する。
   - 不存在、別project、重複、カテゴリ規則違反の参照を採用品として返さず、識別可能な停止errorになることを確認する。
   - 下流queryがprojectごと最大一つの構成を候補IDと正整数数量だけで返し、候補詳細や互換性結果を含めないことを確認する。
@@ -238,7 +238,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: Foundation repair and CurrentBuildPublicApi validation_
 
-- [ ] 10.4 全53受入基準のcanonical validationを完了する
+- [x] 10.4 全53受入基準のcanonical validationを完了する
   - 要件1から9の全53受入基準をunit、contract、DOM、integration、browser harnessのいずれかへ対応付け、未追跡項目がないことを監査する。
   - 型検査、境界検査、lint、unit、contract、DOM、integration、production buildをproject標準の一括検証で実行する。
   - 失敗があれば該当boundaryの実装またはtestを修正し、全suiteを再実行して回帰がないことを確認する。

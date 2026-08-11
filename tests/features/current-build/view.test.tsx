@@ -422,6 +422,52 @@ test("選択成功と同じstate更新でカテゴリ要約を再描画する", 
   );
 });
 
+test("単一カテゴリの置換と解除成功直後に要約を再描画する", async () => {
+  const buildWith = (candidatePartId: CandidatePartId): CurrentBuild => ({
+    id: buildId,
+    projectId,
+    items: [{ candidatePartId, quantity: 1 as PositiveInteger }],
+    updatedAt: timestamp,
+  });
+  const emptyBuild: CurrentBuild = {
+    id: buildId,
+    projectId,
+    items: [],
+    updatedAt: timestamp,
+  };
+  const harness = createHarness({
+    currentBuild: buildWith(cpuCandidateId),
+    serviceResult: (command) => ({
+      ok: true,
+      value: {
+        revision: 1 as never,
+        currentBuild:
+          command.type === "remove"
+            ? emptyBuild
+            : buildWith(otherCpuCandidateId),
+      },
+    }),
+  });
+  const rendered = await renderView(harness);
+  await rendered.user.click(rendered.query("[data-category='cpu']"));
+
+  await rendered.user.click(
+    rendered.query(`[data-select-candidate-id='${otherCpuCandidateId}']`),
+  );
+  assert.equal(
+    rendered.query("[data-category='cpu']").getAttribute("aria-label"),
+    "CPU: 架空CPU 二号",
+  );
+
+  await rendered.user.click(
+    rendered.query(`[data-remove-candidate-id='${otherCpuCandidateId}']`),
+  );
+  assert.equal(
+    rendered.query("[data-category='cpu']").getAttribute("aria-label"),
+    "CPU: 未選択",
+  );
+});
+
 test("共通contextのemptyとunavailableを区別して表示する", async () => {
   for (const [status, expected] of [
     ["empty", "プロジェクトがありません"],
