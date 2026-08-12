@@ -51,7 +51,7 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 
 ## Direct Implementation Candidates
 
-- [ ] runtime-license-notices -- runtime bundleへ含まれる既存依存のMIT notice補完は公開契約や利用者挙動を変えないためdirect implementationとする
+- [x] runtime-license-notices -- runtime bundleへ含まれる既存依存のMIT notice補完は公開契約や利用者挙動を変えないためdirect implementationとする
   - Source: v0.5.0 Approach A viability check（2026-08-12）
   - Scope: `THIRD_PARTY_NOTICES.txt`へReact、React DOM、schedulerのlicense noticeを追加し、runtime依存一覧に対するnotice検証gateを更新する
   - Preserves: runtime bundle、依存version、MV3/CSP、アプリの挙動、Zod notice
@@ -67,3 +67,4 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 
 | Work Item | Type | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|---|
+| runtime-license-notices | direct | GO | 2026-08-13T06:19:17+09:00 | `102d87602919` | `pnpm build` exit 0; `pnpm validate:artifacts` exit 0; `pnpm validate:final-build` exit 0; notice positive/negative test 18/18 pass, exit 0; smoke PASS; review APPROVED; classification DIRECT_CONFIRMED |
