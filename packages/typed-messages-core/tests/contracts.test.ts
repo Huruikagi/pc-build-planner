@@ -4,8 +4,10 @@ import test from "node:test";
 import type {
   DefinitionAt,
   MessageDefinition,
+  MessageDescriptor,
   MessageKeyOf,
   MessageNamespace,
+  ParamsArgsFor,
 } from "../src/contracts.js";
 
 type Equal<Left, Right> =
@@ -16,10 +18,10 @@ type Equal<Left, Right> =
 type Expect<Value extends true> = Value;
 
 const catalog = {
-  greeting: "Hello",
+  greeting: "Hello, {name}! You have {total} items.",
   inbox: {
     forms: {
-      one: "One message",
+      one: "{owner} has one message",
       other: "{count} messages",
     },
   },
@@ -27,7 +29,7 @@ const catalog = {
     summary: {
       selectors: ["visible", "selected"],
       forms: {
-        "one|one": "One visible and selected item",
+        "one|one": "{label}: one visible and selected item",
         other: "{visible} visible and {selected} selected items",
       },
     },
@@ -41,7 +43,9 @@ type CatalogKeys = MessageKeyOf<Catalog>;
 type _AllLeafKeys = Expect<
   Equal<CatalogKeys, "greeting" | "inbox" | "dashboard.summary" | "dashboard.empty">
 >;
-type _PlainLookup = Expect<Equal<DefinitionAt<Catalog, "greeting">, "Hello">>;
+type _PlainLookup = Expect<
+  Equal<DefinitionAt<Catalog, "greeting">, (typeof catalog)["greeting"]>
+>;
 type _PluralLookup = Expect<
   Equal<DefinitionAt<Catalog, "inbox">, (typeof catalog)["inbox"]>
 >;
@@ -52,6 +56,31 @@ type _MultiPluralLookup = Expect<
   >
 >;
 type _UnknownLookup = Expect<Equal<DefinitionAt<Catalog, "missing.key">, never>>;
+type _PlaceholderParams = Expect<
+  Equal<
+    ParamsArgsFor<Catalog, "greeting">,
+    [params: Readonly<{ name: string | number; total: string | number }>]
+  >
+>;
+type _PluralParams = Expect<
+  Equal<
+    ParamsArgsFor<Catalog, "inbox">,
+    [params: Readonly<{ count: number; owner: string | number }>]
+  >
+>;
+type _MultiPluralParams = Expect<
+  Equal<
+    ParamsArgsFor<Catalog, "dashboard.summary">,
+    [
+      params: Readonly<{
+        visible: number;
+        selected: number;
+        label: string | number;
+      }>,
+    ]
+  >
+>;
+type _NoParams = Expect<Equal<ParamsArgsFor<Catalog, "dashboard.empty">, []>>;
 
 const acceptCatalogKey = (_key: CatalogKeys): void => {};
 
@@ -59,6 +88,44 @@ acceptCatalogKey("greeting");
 acceptCatalogKey("dashboard.summary");
 // @ts-expect-error unknown catalog keys must fail consumer type checking
 acceptCatalogKey("dashboard.missing");
+
+const acceptParams = <Key extends CatalogKeys>(
+  _key: Key,
+  ..._params: ParamsArgsFor<Catalog, Key>
+): void => {};
+
+acceptParams("greeting", { name: "Ada", total: 3 });
+acceptParams("inbox", { count: 2, owner: "Ada" });
+acceptParams("dashboard.summary", { visible: 4, selected: 1, label: "Selection" });
+acceptParams("dashboard.empty");
+// @ts-expect-error required placeholder parameter is missing
+acceptParams("greeting", { name: "Ada" });
+// @ts-expect-error extra parameters are rejected for object literals
+acceptParams("inbox", { count: 2, owner: "Ada", extra: "no" });
+// @ts-expect-error placeholders from a single plural dedicated form are required
+acceptParams("inbox", { count: 2 });
+// @ts-expect-error plural selectors must be numeric
+acceptParams("dashboard.summary", { visible: "4", selected: 1, label: "Selection" });
+// @ts-expect-error placeholders from a multi-plural combination form are required
+acceptParams("dashboard.summary", { visible: 4, selected: 1 });
+// @ts-expect-error parameter-free messages do not accept a params argument
+acceptParams("dashboard.empty", {});
+
+const describe = <Key extends CatalogKeys>(
+  key: Key,
+  ...params: ParamsArgsFor<Catalog, Key>
+): MessageDescriptor<Catalog> =>
+  (params.length === 0 ? { key } : { key, params: params[0] }) as MessageDescriptor<Catalog>;
+
+const greetingDescriptor = describe("greeting", { name: "Ada", total: 3 });
+const emptyDescriptor = describe("dashboard.empty");
+// @ts-expect-error descriptors retain their originating catalog nominally
+const wrongCatalogDescriptor: MessageDescriptor<{ readonly other: "Other" }> =
+  greetingDescriptor;
+// @ts-expect-error descriptor creation enforces required parameters
+describe("inbox");
+// @ts-expect-error descriptor creation rejects extra parameters
+describe("inbox", { count: 1, owner: "Ada", extra: 2 });
 
 const definitions: readonly MessageDefinition[] = [
   "Plain",
@@ -72,4 +139,15 @@ const definitions: readonly MessageDefinition[] = [
 test("synthetic catalog supports every definition shape", () => {
   assert.equal(definitions.length, 3);
   assert.deepEqual(catalog.dashboard.summary.selectors, ["visible", "selected"]);
+});
+
+test("descriptor runtime data remains a JSON-safe key and optional params shape", () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(greetingDescriptor)), {
+    key: "greeting",
+    params: { name: "Ada", total: 3 },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(emptyDescriptor)), {
+    key: "dashboard.empty",
+  });
+  void wrongCatalogDescriptor;
 });

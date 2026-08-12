@@ -22,7 +22,7 @@
   - _Requirements: 1.1, 1.5, 3.5_
   - _Boundary: MessageContracts_
 
-- [ ] 1.3 parameterとdescriptorの型契約を完成する
+- [x] 1.3 parameterとdescriptorの型契約を完成する
   - placeholder、single pluralの`count`、multi pluralの全selectorからparameter引数を導出し、placeholderなしのmessageをparameterなしに限定する。
   - catalog genericなnominal descriptor型を、runtimeではkeyと任意paramsだけになるJSON安全なshapeとして定義する。
   - positive/negative型fixtureで欠落・余分parameter、非数値selector、descriptor契約を検査し、有効呼び出しだけが型検査を通ることを完了条件とする。

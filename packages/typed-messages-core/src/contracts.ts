@@ -55,3 +55,52 @@ export type DefinitionAt<
       ? Catalog[Key]
       : never
     : never;
+
+/** JSON-safe values accepted for message interpolation. */
+export type MessageParam = string | number;
+
+/** The runtime parameter object shared by formatters and descriptors. */
+export type MessageParams = Readonly<Record<string, MessageParam>>;
+
+type PlaceholderNames<Text> = Text extends string
+  ? Text extends `${string}{${infer Name}}${infer Rest}`
+    ? Name | PlaceholderNames<Rest>
+    : never
+  : never;
+
+type DefinitionPlaceholders<Definition> = Definition extends string
+  ? PlaceholderNames<Definition>
+  : Definition extends { readonly forms: infer Forms }
+    ? PlaceholderNames<Forms[keyof Forms]>
+    : never;
+
+type SelectorNames<Definition> =
+  Definition extends MultiPluralDefinition<infer Selectors>
+    ? Selectors[number]
+    : Definition extends PluralDefinition
+      ? "count"
+      : never;
+
+type ParamsForDefinition<Definition> = Readonly<{
+  [Name in DefinitionPlaceholders<Definition> | SelectorNames<Definition>]:
+    Name extends SelectorNames<Definition> ? number : MessageParam;
+}>;
+
+/** Derives the optional or required resolver argument tuple for a catalog key. */
+export type ParamsArgsFor<
+  Catalog,
+  Key extends MessageKeyOf<Catalog>,
+> = DefinitionPlaceholders<DefinitionAt<Catalog, Key>> extends never
+  ? SelectorNames<DefinitionAt<Catalog, Key>> extends never
+    ? []
+    : [params: ParamsForDefinition<DefinitionAt<Catalog, Key>>]
+  : [params: ParamsForDefinition<DefinitionAt<Catalog, Key>>];
+
+declare const MESSAGE_DESCRIPTOR_BRAND: unique symbol;
+
+/** A catalog-bound message intent whose runtime data is only key and params. */
+export interface MessageDescriptor<Catalog> {
+  readonly key: MessageKeyOf<Catalog>;
+  readonly params?: MessageParams;
+  readonly [MESSAGE_DESCRIPTOR_BRAND]: Catalog;
+}
