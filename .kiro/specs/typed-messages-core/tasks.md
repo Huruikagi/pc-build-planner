@@ -63,7 +63,7 @@
   - _Boundary: CatalogParity_
   - _Depends: 1.3, 2.2_
 
-- [ ] 2.5 normalizer、formatter、descriptorをtyped resolverへ統合する
+- [x] 2.5 normalizer、formatter、descriptorをtyped resolverへ統合する
   - 任意のliteral catalogからkey・parameter契約を保持するcallable resolverを生成する。
   - 直接keyを解決する経路とdescriptorを解決する経路を同じformat pipelineへ接続する。
   - runtime unknown keyはkey文字列を返し、throwや製品固有fallbackを行わない。
