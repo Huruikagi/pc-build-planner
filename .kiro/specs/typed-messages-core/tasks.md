@@ -7,7 +7,7 @@
 - **Out-of-scope preservation**: configured app adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰を実装taskまたは検証taskへ含めない。
 
 - [ ] 1. Workspace package基盤を確立する
-- [ ] 1.1 最小のprivate workspace package scaffoldを追加する
+- [x] 1.1 最小のprivate workspace package scaffoldを追加する
   - `packages/*`をworkspaceへ登録し、typed messages coreのprivate package metadataとstrictなESM build設定を用意する。
   - package単独のbuild、typecheck、testを後続実装から呼び出せるscript枠を設ける。この段階ではroot orchestration、公開export surface、core実装を確定しない。
   - packageはruntime dependencyを持たず、React、Chrome API、PCドメイン、製品catalog、dynamic code、remote codeを取り込まない構成にする。
