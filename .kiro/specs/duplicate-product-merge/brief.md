@@ -98,3 +98,37 @@
 - 永続化 mutation は単一 write authority へ集約する（steering `structure.md`）。「新規保存してから統合」のような二段 write で整合性を作らない。
 - 抽出元表記をユーザー確認値で暗黙に上書きしない（project-candidate-management 要件4.6）。統合時のマージでもこの原則を守る。
 - 照合ロジックは架空データだけで検証可能にする。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+重複判定が利用する`ProductIdentityNormalizer`をproduct-captureが所有しているため、candidateの同一性判断が取り込みfeatureの公開型とcompositionへ依存し、責務の意味と依存方向が一致していない。
+
+### Current State
+
+本specは型番およびmanufacturer+nameの正規化一致を所有するが、normalizer実装とfactoryはproduct-capture配下にある。candidate duplicate matcherとshellがproduct-captureの公開型・factoryへ依存し、product-capture自身はそのnormalizerを利用していない。
+
+### Desired Outcome
+
+商品同一性normalizerを独立した共有coreの公開入口へ移し、本specとcompositionがそこだけを利用する。大文字小文字、全角半角、空白、型番区切りの現行判定結果を変えない。manufacturer domain mapは取得時補完・source種別推定の責務としてproduct-capture側に残す。
+
+### Scope
+
+- **In**: ProductIdentityNormalizer型・実装・factoryの共有core移動、公開importとcomposition差し替え、normalization characterization test、product-capture依存除去、duplicate matching非回帰。
+- **Out**: 同一性algorithm・精度・confidence変更、manufacturer domain map移動、source URL照合、統合UI変更、保存形式変更。
+
+### Boundary Impact
+
+- **Extends**: 本specが利用する商品同一性規則のcanonical ownerを共有coreとして明確化する。
+- **Preserves**: 自動照合・利用者確定、誤検知時の新規保存、project内限定、既存normalization結果。
+- **Adjacent**: `candidate-source-bookmarks`はsource URL identityを、product-page-captureは取得・manufacturer補完を所有し、商品identity coreはどちらのfeatureにも属さない。
+
+### Dependencies
+
+- **Upstream**: `implementation:candidate-source-bookmarks`のsource循環解消。
+- **Downstream**: v1.0.0 UI刷新前のmodule ownership catalog。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #47。

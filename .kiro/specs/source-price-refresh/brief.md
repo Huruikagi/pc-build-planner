@@ -90,3 +90,37 @@
 - ページ由来の商品値または URL を診断ログへ無制限に記録しない（product-page-capture 要件6.5）。
 - worker bundle を DOM および React 非依存に保つ（application-shell 要件3.6）。
 - テスト資産は架空データのみ。実サイト由来の HTML を使わない。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+価格更新workflowが、CandidateSourceのURL normalization・catalog scope・一意照合・ambiguity判定まで所有し、candidate-managementとの循環依存を形成している。
+
+### Current State
+
+本specはcontext menu起動、固定tabからの価格抽出、source locator、`matchSource`、条件付き価格更新、結果表示を提供する。source照合contractをcandidate-management側へ返すため、双方の公開型と実値が相互依存している。
+
+### Desired Outcome
+
+本specは利用者の明示操作、固定tab、価格抽出、取得結果の検証、source ownerの公開portを使う一意照合、条件付きprice patch、進行・結果表示だけを所有する。URL identity・catalog/matcher・ambiguityのcanonical ownershipは`candidate-source-bookmarks`へ移す。
+
+### Scope
+
+- **In**: source owner公開portへのconsumer移行、match contract差し替え、価格取得workflowとerror mappingの維持、循環依存とshell遅延proxyの撤去、unit/contract/E2E非回帰。
+- **Out**: URL同一性規則の変更、価格抽出・正規化規則の変更、定期監視、価格履歴、source collection policy、UI layout変更。
+
+### Boundary Impact
+
+- **Extends**: source ownerの照合・patch capabilityを使う価格更新consumer contractを明確化する。
+- **Preserves**: 明示操作、activeTab、固定世代、価格だけの更新、失敗時の既存値保持、transient result UI。
+- **Adjacent**: `candidate-source-bookmarks`がURL identity・一意照合・ambiguity・mutationを所有し、product-page-captureは価格抽出portを維持する。
+
+### Dependencies
+
+- **Upstream**: `spec:candidate-source-bookmarks`。
+- **Downstream**: `duplicate-product-merge`の同一URL振り分け、application shell composition簡素化。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #46。

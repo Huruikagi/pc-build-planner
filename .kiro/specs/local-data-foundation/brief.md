@@ -101,3 +101,37 @@ backup-restoreだけが利用する一つの能力別契約から、正常root�
 - **Extends**: foundation runtime contributionの用途別公開handleとbackup向けcapability facade。
 - **Preserves**: 単一write authority、同一Web Lock、maintenance/recovery fencing、raw root非公開、通常featureの最小権限。
 - **Adjacent**: backup-restoreは専用portを消費して正常/回復経路を選び、application-shellは完成済みportをbackup section factoryへだけ注入する。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+永続化のgeneric mechanismとPC Build Planner固有root・error・migration・repair・runtime policyが同じfoundation compositionにあり、安定領域と製品変更の検証範囲を分離できない。
+
+### Current State
+
+本specは`LocalDataRoot`、canonical `Result`/`FoundationError`、schema validation、migration、transaction runner、revision競合、dedupe、capacity、replacement、maintenance、Chrome/in-memory adapter、runtime capabilityを所有する。`StoragePort`とrunnerは具体rootと製品policyへ結合している。
+
+### Desired Outcome
+
+本specはPC固有root、schema、validator、migration、reference repair、mutation operation、FoundationError mapping、worker認可、用途別runtime capabilityを保持し、generic storage・lock・transaction・capacity・replacement mechanismとChrome adapterは`local-data-library-boundaries`が確立する公開APIへ委譲する。
+
+### Scope
+
+- **In**: generic packageを設定するapp adapter、PC固有policyの注入、現行公開capabilityの維持、package公開APIだけを使うcomposition、characterization/contract test、製品変更とpackage変更を分ける検証script。
+- **Out**: 保存schema・schema version・データ意味の変更、reference repair規則の変更、write authority・atomicity・fencingの弱体化、通常featureへのraw root/adapter公開、npm公開。
+
+### Boundary Impact
+
+- **Extends**: generic coreを利用する最初の製品compositionとerror/policy adapterを追加する。
+- **Preserves**: `LocalDataRoot`、canonical app Result/error、単一write authority、原子的mutation/replacement、maintenance/recovery capability分離。
+- **Adjacent**: `local-data-library-boundaries`はgeneric mechanismとplatform adapterを所有し、`backup-restore`は製品交換形式とUIを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-library-boundaries`、`implementation:typed-messages-core`で確立したworkspace運用。
+- **Downstream**: Chrome adapter移行、`backup-restore`のgeneric orchestration利用、下流feature contract。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #20。

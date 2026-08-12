@@ -112,3 +112,37 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
 - 言語state、settings layout、transient activation、capture handoff、backup処理は対象外とする。
 
 初回の横断レビューでは、`ui-internationalization`に残っていた「10名前空間」前提を検出した。この不整合は同specを11名前空間の公開consumer契約へ改訂して解消済みであり、今後も`settings`を別namespaceへaliasして不整合を隠さない。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+型安全なmessageの汎用mechanismとPC Build Planner固有のカタログ・言語policy・React bindingが同じ`src/ui-messages`境界にあり、製品文言だけの変更でも安定したresolver coreの変更影響範囲を分離できない。
+
+### Current State
+
+本specはja/enカタログ、具体MessageKey、resolver、plural・placeholder format、catalog parity、release固有検査、React Providerを一つの公開面から提供する。汎用部分は動作しているが、具体`MESSAGES`、対応言語、fallback、v0.3規則へ結合している。
+
+### Desired Outcome
+
+本specは製品カタログ、具体MessageKey、source/fallback language、release固有parity、configured resolver、React bindingを引き続き所有し、汎用の型・format・resolver factory・parity primitiveは`typed-messages-core`の公開APIだけを利用する。
+
+### Scope
+
+- **In**: workspace packageの公開APIを使うconfigured resolver、製品カタログと具体型の維持、React bindingのapp残置、release固有検査のgeneric parity primitiveへの接続、app consumer contract、既存表示・plural・descriptor・fallbackの非回帰。
+- **Out**: 翻訳変更、対応言語追加、言語保存・切替、React adapterのpackage化、npm公開、UI再設計。
+
+### Boundary Impact
+
+- **Extends**: 製品カタログownerとして、generic coreを設定して利用するconsumer contractを追加する。
+- **Preserves**: ja/enのキー・placeholder parity、具体MessageKey、文言のcanonical ownership、React表示、文言非依存consumer。
+- **Adjacent**: `typed-messages-core`はReact・Chrome・製品カタログ非依存のmechanismだけを所有し、`ui-internationalization`は言語stateとfallback選択を所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:typed-messages-core`。
+- **Downstream**: `implementation:typed-messages-core`の最初のapp consumer、将来のmessage catalog変更。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #27。

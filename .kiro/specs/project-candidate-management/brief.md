@@ -81,3 +81,37 @@
 ### Source
 
 - Milestone v0.4.0 roadmap `project-candidate-management` update、GitHub Issue #29。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+candidate-managementがproject lifecycleと、candidate固有ではない共有`ManagementError`を所有しているため、project概念とデータ操作エラーのcanonical ownerがfeature境界と一致せず、複数featureがcandidate contractへ依存している。
+
+### Current State
+
+本specはproject CRUD、candidate CRUD、project deletion confirmation、project関連message、`ManagementError`とFoundationError mappingを所有する。compatibility、current-build、source-price-refresh等が`ManagementError`をcandidate-managementからimportする。
+
+### Desired Outcome
+
+本specはcandidateの作成・確認・編集・削除、pre-edit、current project binding、draft guard、source editor UIへ責務を限定する。project lifecycleは`project-context`へ移し、共有データ操作errorはfeature外のcanonical coreへ移して、種類・粒度と利用者挙動を変えず公開importを差し替える。
+
+### Scope
+
+- **In**: project CRUD/state/confirmation/messageの撤去とproject-context接続、candidate-only contractへの縮小、`ManagementError`の共有owner移動と改名、FoundationErrorからapp共有errorへのmapping、consumer import移行、既存candidate操作とエラー挙動の回帰検証。
+- **Out**: error種類・粒度・表示の再設計、candidate UI layout変更、project管理画面の情報設計、保存形式変更、candidate CRUDやdraft ownershipの移管。
+
+### Boundary Impact
+
+- **Extends**: candidate-only featureとしてproject lifecycle/shared errorを公開境界外へ移すmigration contractを追加する。
+- **Preserves**: candidate CRUD、pre-edit保持、保存時検証、current-context binding、draft guard、既存error semantics。
+- **Adjacent**: `project-context`がproject lifecycleを、app共有error coreがcross-feature error vocabularyを、foundationが低位の保存errorを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:project-context`、`spec:local-data-library-boundaries`で定めるgeneric errorとapp errorのseam。
+- **Downstream**: `candidate-source-bookmarks`の独立owner化、compatibility/current-build/source-price-refreshのimport移行。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issues #44・#45。

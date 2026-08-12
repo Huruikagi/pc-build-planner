@@ -76,3 +76,37 @@ backup restore は全 catalog を置換する前に feature-owned draft への�
 ### Boundary Impact
 
 `project-context` が guard registry と confirmation authority を引き続き単独所有し、backup-restore は新しい置換 guard capability の consumer となる。project 選択 command と catalog 置換 preparation は能力別 port として分離し、通常 consumer へ不要な権限を渡さない。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+projectの選択・切替・guardは`project-context`が所有する一方、作成・改名・削除のcontract、state、確認、message namespaceはcandidate-managementが所有し、同一概念のlifecycleが二つのmoduleへ分断されている。
+
+### Current State
+
+本specはproject catalog projection、current selection、preference、refresh、change guard、共通selectorを所有し、project CRUDを明示的に対象外としている。candidate-managementがproject lifecycleを実装し、成功後にcontext refreshを呼ぶ。
+
+### Desired Outcome
+
+projectの作成・改名・削除、削除確認、成功後refresh、project関連message namespaceを`project-context`がcanonical ownerとして提供する。削除に伴うcandidate/current-build参照修復のalgorithmはfoundationに残し、candidate-managementはcandidate管理とdraft guardだけを所有する。
+
+### Scope
+
+- **In**: ProjectLifecyclePort/service/state、作成・改名・削除command、削除確認、最小data port、成功後refresh・失敗時非refresh、project関連message namespace、既存見た目を保つpresentation接続、contract/DOM/E2E。
+- **Out**: layout・CSS変更、独立project管理画面、候補一覧/編集の情報設計、reference repair algorithm、保存形式変更、v1.0.0 UI刷新。
+
+### Boundary Impact
+
+- **Extends**: current project contextへproject lifecycleのcanonical ownershipを追加する。
+- **Preserves**: selection preference、fallback、guard、generation、共通selector、foundationの原子的削除と参照修復。
+- **Adjacent**: `project-candidate-management`はproject lifecycleを手放してcurrent contextのconsumerとなり、foundationはroot transaction内の参照整合を維持する。
+
+### Dependencies
+
+- **Upstream**: v0.4.0 `project-context` core contract。
+- **Downstream**: `project-candidate-management`の責務縮小、v1.0.0画面カタログ採取。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #44。

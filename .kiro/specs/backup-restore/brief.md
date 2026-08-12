@@ -82,3 +82,37 @@ backup/restoreは交換形式、preflight、利用者確認、maintenance下の�
 ### Source
 
 - Milestone v0.4.0 roadmap `backup-restore` update、GitHub Issues #24・#29、cross-spec decomposition review。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+backup envelope・artifact・preflight/confirm/commit・ticket/fenceの再利用可能なorchestrationと、PC Build Planner固有交換形式・UI・project-context lifecycleが同じfeature境界にあり、汎用部分の変更影響範囲を独立させられない。
+
+### Current State
+
+本specは保存schemaと独立した交換形式、JSON encode/decode、file UI、preflight、明示確認、maintenance下のatomic replacement、破損root回復、project-context guard/refreshを提供する。orchestrationは具体`BackupDataV1`とPC root mappingへ結合している。
+
+### Desired Outcome
+
+本specはPC固有backup metadata・交換形式mapping・file UI・利用者確認表示・project-context lifecycle・回復導線を保持し、generic envelope/artifact、decode/encode contract、preflight-confirm-commit、ticket/fence、atomic replacement orchestrationはlocal data packageの公開portだけを利用する。
+
+### Scope
+
+- **In**: generic orchestrationへの製品設定、PC交換形式とのadapter、foundation公開capabilityへの接続、既存preflight・確認・回復・refresh結果の非回帰、package/app contractと必要なE2E。
+- **Out**: 交換形式version・内容の変更、保存schema変更、自動backup、UI layout変更、Chrome APIへのgeneric backup層からの直接依存、復元atomicityやfencingの弱体化。
+
+### Boundary Impact
+
+- **Extends**: generic backup orchestrationを設定する製品adapterとconsumer contractを追加する。
+- **Preserves**: 保存schemaと交換形式の独立、明示確認、失敗時の既存データ保持、settings section、project-context guard/refresh。
+- **Adjacent**: `local-data-library-boundaries`はgeneric orchestrationを、`local-data-foundation`はPC rootと用途限定replacement capabilityを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-library-boundaries`、`spec:local-data-foundation`。
+- **Downstream**: Chrome adapter分離後のproduction compositionとrelease validation。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #20。

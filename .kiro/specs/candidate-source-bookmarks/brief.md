@@ -104,3 +104,37 @@
 - 価格・通貨は取得値を尊重し、通貨未確定は「不明」として保持する（steering `product.md`）。
 - feature 外からは `public.ts` のみを利用する境界規約を維持する。
 - テスト資産は架空データのみ。
+
+## Change Brief: v0.5.0
+
+### Problem
+
+CandidateSourceのcatalog・照合・変異責務がcandidate-managementとsource-price-refreshへ分散し、両featureが相互に型と値をimportする循環依存になっている。source概念のcanonical ownerと公開portが実際の配置に反映されていない。
+
+### Current State
+
+本specはsource collection、primary導出、catalog/mutation facet、条件付きprice patchを所有するが、実装の一部はcandidate-management配下にあり、URL identity・locator・match scopeはsource-price-refreshが所有する。shellは遅延proxyで構築循環を回避している。
+
+### Desired Outcome
+
+source collection policy、catalog、reference、mutation、URL identity、scope/matcher、条件付きprice patchを本specの独立共有coreへ集約する。candidate-managementはsource editor UI、source-price-refreshは価格取得workflow、duplicate-product-mergeはsource照合consumerとなり、feature間循環と遅延proxyを解消する。
+
+### Scope
+
+- **In**: 独立共有coreと`public.ts`、source catalog/reference/mutation、URL normalization/identity、一意照合・ambiguity、match scope、条件付きprice patch、既存source policy、consumer移行、export/deep import gate、contract/integration test。
+- **Out**: 価格抽出・context menu・一過性表示、商品同一性判定、source editor UIの再設計、保存schemaの意味変更、価格履歴・監視。
+
+### Boundary Impact
+
+- **Extends**: 既存のsource collection ownerを、catalog・照合・変異を含む独立共有coreへ明確化する。
+- **Preserves**: 1:N source構造、primary導出、原子的mutation、URL安全性、candidate UIと価格更新の利用者挙動。
+- **Adjacent**: `source-price-refresh`はmatch ownershipを手放してworkflow consumerとなり、`project-candidate-management`はsource editor UIだけを保持する。
+
+### Dependencies
+
+- **Upstream**: `implementation:project-candidate-management`のproject/error ownership整理。
+- **Downstream**: `source-price-refresh`の責務縮小、`duplicate-product-merge`の循環解消、shell遅延proxy撤去。
+
+### Source
+
+- Milestone v0.5.0、GitHub Issue #46。
