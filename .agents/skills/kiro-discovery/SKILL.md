@@ -315,6 +315,14 @@ Path E rules:
 **Re-entry (roadmap.md already exists)**:
 Write the next new spec's brief.md and any newly discovered or changed existing-spec Change Briefs to disk. Update roadmap.md if scope/ordering changed, preserving completed items, structured direct-candidate fields, prior phases, prior Change Briefs, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
 
+When a feature already appears completed (`[x]`) under `## Specs (dependency order)` and later receives a Change Brief:
+
+- Preserve its completed Specs row unchanged as the historical record that initial spec generation passed.
+- Add or update the same stable feature name as pending (`[ ]`) under `## Existing Spec Updates`.
+- Invalidate current approvals in `spec.json` normally. The invalidation represents the active Change Brief and does not undo the historical `[x]` record.
+- Keep dependencies for the active revision on the Existing Spec Update row and latest Change Brief. Do not rewrite the completed Specs row to describe the revision.
+- Route the revision through `$kiro-spec-update-batch`; do not send the completed feature back through `$kiro-spec-batch`.
+
 After writing, verify the files exist by reading them back.
 
 ## Step 8: Suggest Next Steps
@@ -334,6 +342,8 @@ Suggest the next command and stop. Do NOT automatically run downstream spec gene
   - After new specs, run `$kiro-spec-update-batch` for all `Existing Spec Updates`; it owns the final roadmap-wide spec review
   - After all specs are ready, run `$kiro-impl-direct <item-id>` for dependency-ready direct candidates
 - Re-entry: `$kiro-spec-init <next-feature-name>` or `$kiro-spec-batch` if multiple specs remain
+
+Completed-spec re-entry overrides the generic Path A and Re-entry routing above: when any completed Specs item has an active Existing Spec Update, use `$kiro-spec-update-batch` regardless of the number of pending updates. The batch skill must reconcile the historical completion record with current invalidated approvals and owns the final roadmap-wide review.
 
 If the decomposition contains only existing-spec updates plus direct implementation candidates, do NOT use Path E. Prefer Path A when one existing spec is the clear home. When a current roadmap owns the phase, persist both work types there and route them to `$kiro-spec-update-batch` and `$kiro-impl-direct`; otherwise recommend the existing-spec update and ordinary direct implementation without creating a roadmap solely for trivial work.
 

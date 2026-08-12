@@ -23,18 +23,23 @@ description: Update every pending existing specification listed in roadmap.md by
 3. Require `.kiro/specs/<feature>/spec.json`, `brief.md`, `requirements.md`, `design.md`, and `tasks.md` to exist.
 4. Require the latest `## Change Brief:` in `brief.md` to match the roadmap item's scope and dependencies. Stop that item if the delta is missing, stale, or contradictory; do not infer it from the one-line roadmap entry.
 5. Confirm the update's approvals are invalidated (`phase: change-brief-created`, affected approvals false, `ready_for_implementation: false`) unless the same update was already regenerated and is resumable.
-6. Read `## Specs (dependency order)` and `## Direct Implementation Candidates` only for dependency and boundary context.
+6. Read `## Specs (dependency order)` and `## Direct Implementation Candidates` only for dependency and boundary context. Build the set of completed-spec re-entry items: stable feature names that are `[x]` under Specs and `[ ]` under Existing Spec Updates.
 7. Run `git status --porcelain` and inspect `git diff` before dispatch. Build a narrow accepted baseline and never revert or overwrite it:
    - Accept discovery handoff changes in a pending existing-update directory only when the diff is limited to the matching latest Change Brief in `brief.md` plus the prescribed approval invalidation/timestamp fields in `spec.json`.
-   - Accept a newly created or discovery-updated `roadmap.md` only when every changed Existing Spec Update matches a feature-local Change Brief, every direct candidate has all five required fields, dependency names resolve, completed/history content is preserved, and no unrelated roadmap section changed. Treat this proven discovery roadmap as the batch input baseline.
+   - Accept a chained handoff from the immediately preceding `$kiro-spec-update-batch` followed by `$kiro-discovery` when current requirements/design/tasks/research changes provably integrate the prior Change Brief, the latest Change Brief is a later append-only delta, and current `spec.json` contains exactly the prescribed invalidation for that latest delta. Treat the proven prior regenerated documents as accepted upstream baseline and regenerate the latest delta; do not require the two handoffs to have been committed between skills.
+   - Accept a newly created or discovery-updated `roadmap.md` only when every changed Existing Spec Update matches a feature-local Change Brief, every direct candidate has all five required fields, dependency names resolve, completed/history content is preserved, and no unrelated roadmap section changed. A completed-spec re-entry must preserve its `[x]` Specs row unchanged and add the active revision only under Existing Spec Updates. Treat this proven discovery roadmap as the batch input baseline.
    - Accept same-Change-Brief interrupted regeneration only when Step 3.8 can prove from disk which phases integrated that exact Change Brief; resume from the first unproved phase and rerun its review gate.
    - Accept uncommitted new-spec directories and roadmap changes from the immediately preceding `$kiro-spec-batch` only when every such spec is complete/approved and the roadmap diff changes only `[ ]` to `[x]` under `## Specs (dependency order)`.
    - Preserve and ignore unrelated dirty files outside roadmap and participating spec directories; never stage them. Stop on overlapping unexplained spec-document changes, uncorroborated roadmap scope/dependency edits, unexpected existing/direct checklist changes, or validation-history changes.
-8. Verify every roadmap entry under `## Specs (dependency order)` has `spec.json`, requirements, design, and tasks generated and approved. Do not continue to final review while any new spec is incomplete or failed.
+8. Verify roadmap entries under `## Specs (dependency order)`:
+   - For an entry not in the completed-spec re-entry set, require `spec.json`, requirements, design, and tasks to exist and be generated and approved for current metadata.
+   - For a completed-spec re-entry, treat `[x]` only as historical proof that the initial spec generation completed. Require all five spec files and all `generated` flags to remain present, but expect current approvals and readiness to be invalidated for the matching latest Change Brief. Process the item through Existing Spec Updates.
+   - Reject a feature that appears under both sections when its Specs row is not `[x]`, its Existing Spec Update is not pending, the latest Change Brief does not match, or the prior generated artifacts are missing.
+   - Do not continue to final review while any non-re-entry new spec is incomplete or failed, or any completed-spec re-entry remains unregenerated.
 
 Dependencies use globally unique work-item names:
 
-- `spec:<name>` requires requirements, design, and tasks generated and approved for the current spec metadata.
+- `spec:<name>` requires requirements, design, and tasks generated and approved for the current spec metadata. If `<name>` is a pending completed-spec re-entry, its historical `[x]` and pre-change approvals do not satisfy the dependency; only successful regeneration of that Existing Spec Update in an earlier wave does.
 - `implementation:<name>` requires every executable task checked, no blocked annotation, and the latest matching `Type=spec` history row to be clean `GO` with `Validated at` not older than the spec's `updated_at`.
 - `direct:<name>` requires the direct checkbox `[x]` and the latest matching `Type=direct` row to be clean `GO`.
 - Bare names in this specification-preparation skill mean `spec:<name>`.
@@ -47,6 +52,8 @@ Build waves from pending existing updates:
 
 - Wave 1: all dependencies are already satisfied
 - Wave N: all remaining dependencies are satisfied by earlier waves or existing completed work
+
+Place completed-spec re-entry items in waves exactly like other pending existing updates. Their historical Specs completion does not pre-satisfy dependencies on the active revision.
 
 Reject cycles, unknown dependency names, and implementation dependencies without clean `GO` evidence. Show the plan before execution, including deferred direct implementation candidates.
 
@@ -122,6 +129,7 @@ For important local issues, dispatch a fresh fixing agent for each affected spec
 - Never claim final cross-spec consistency before both new-spec generation and existing-spec updates are included.
 - Never implement production code from this skill.
 - Never use a roadmap checkbox as the only resumability signal; verify the latest Change Brief integration from spec files and metadata.
+- Never treat approval invalidation for a completed-spec re-entry as an incomplete new spec, and never treat its historical `[x]` as approval of the active Change Brief.
 
 ## Safety and fallback
 
