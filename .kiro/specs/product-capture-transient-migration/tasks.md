@@ -307,3 +307,4 @@
 - 2026-08-11 task 7.1〜7.3の保存先authorityを再同期し、`UnresolvedCandidateEditorPrefill`から`projectId`を外したまま、legacy payloadとproject作成service返却IDを保存先へ使用しない契約へ統一した。current context未選択・利用不能はerrorではなくpending受理とし、共通selector、作成後refresh、context回復の三経路が検証済みcurrent projectで同一pre-editをeditorへ移す。
 - 2026-08-10 project-contextのcatalogはcandidate-managementのproject作成では再読込されないため、同一panel session内はcurrent contextが`empty`のまま残りcaptureがpending pre-editへ落ちる（DEF-020）。production compositionでcurrent contextを新鮮に保つ配線はtask 7.6で行う。
 - 2026-07-30、同一production buildをChromeへ再読み込みし、AMD Ryzen 7 9700Xの商品ページで実toolbar iconから「取り込みを開始」を実行してcandidate詳細編集画面への到達をmanual smoke確認した。
+- 2026-08-12 task 7.4〜7.7でrollback snapshotを実行identityへ限定し、retained intentの原子的retry、current-contextの単調snapshot配送、production同形のbinding／pending回復／stale project排除を完成した。最終validationではlistener例外をconsumer単位で隔離し、application-shellとproject-contextを現HEADで再検証してGOを確認した。
