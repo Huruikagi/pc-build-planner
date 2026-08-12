@@ -102,7 +102,7 @@
   - _Depends: 3.2_
 
 - [ ] 4. Generic packageの検証境界を確定する
-- [ ] 4.1 core変更用の検証scriptを確立する
+- [x] 4.1 core変更用の検証scriptを確立する
   - 既存のpackage単独command、read-only consumer contract、boundary gateをcore contract/runtime変更用の一つの集約scriptから順に呼び出す。
   - product catalog、release rule、configured adapter、表示回帰の検証はこのscriptへ取り込まず、`ui-message-catalog`の製品ownerへ委譲する。
   - 既存の完全検証へpackage-first順序を接続し、package側gateの失敗を成功として扱わない。
