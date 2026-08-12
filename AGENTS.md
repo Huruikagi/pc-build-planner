@@ -38,12 +38,15 @@ Project memory keeps persistent guidance (steering, specs notes, component docs)
     - `$kiro-spec-design {feature} [-y]`
     - `$kiro-validate-design {feature}` (optional: design review)
     - `$kiro-spec-tasks {feature} [-y]`
-  - Multi-spec: `$kiro-spec-batch` — creates all specs from roadmap.md in parallel by dependency wave
-- Phase 2 (Implementation): `$kiro-impl {feature} [tasks]`
+  - Multi-spec new work: `$kiro-spec-batch` — creates new specs from roadmap.md in parallel by dependency wave
+  - Existing-spec revisions: `$kiro-spec-update-batch` — merges all pending Change Briefs, then runs the final roadmap-wide spec review
+- Phase 2 (Implementation):
+  - Spec work: `$kiro-impl {feature} [tasks]`
   - Without task numbers: autonomous mode (subagent per task + independent review + final validation)
   - With task numbers: manual mode (selected tasks in main context, still reviewer-gated before completion)
   - `$kiro-validate-impl {feature}` (standalone re-validation)
-- Progress check: `$kiro-spec-status {feature}` (use anytime)
+  - No-spec roadmap work: `$kiro-impl-direct {item-id}` — revalidates direct classification, implements, reviews, records evidence, and completes the roadmap item
+- Progress check: `$kiro-spec-status {feature-or-direct-item}` (use anytime)
 
 ## Skills Structure
 Skills are located in `.agents/skills/kiro-*/SKILL.md`

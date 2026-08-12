@@ -1,0 +1,7 @@
+interface:
+  display_name: "Existing Spec Update Batch"
+  short_description: "Update existing specs by dependency wave"
+  default_prompt: "Use $kiro-spec-update-batch to update all pending existing specs in roadmap order."
+
+policy:
+  allow_implicit_invocation: false

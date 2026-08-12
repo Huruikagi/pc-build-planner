@@ -1,0 +1,7 @@
+interface:
+  display_name: "Direct Roadmap Implementation"
+  short_description: "Implement a no-spec roadmap work item safely"
+  default_prompt: "Use $kiro-impl-direct to implement a Direct Implementation Candidate from the roadmap."
+
+policy:
+  allow_implicit_invocation: false

@@ -29,7 +29,7 @@ description: Create complete specs (requirements, design, tasks) for all feature
 3. If present, also read for context:
    - `## Existing Spec Updates`
    - `## Direct Implementation Candidates`
-   Do not include these in dependency-wave execution; they are awareness-only inputs for sequencing and consistency review.
+   Do not include these in new-spec dependency-wave execution. Existing updates are an explicit handoff to `$kiro-spec-update-batch`; direct candidates remain boundary and sequencing inputs until implementation.
 4. For each pending feature in `## Specs (dependency order)`, verify `.kiro/specs/<feature>/brief.md` exists
 5. If any brief.md is missing, stop and report: "Missing brief.md for: [list]. Run `$kiro-discovery` to generate briefs first."
 
@@ -81,9 +81,11 @@ If multi-agent is not available, execute features in the wave sequentially.
 3. Display wave completion: "Wave N complete: [features]. Files verified."
 4. Proceed to next wave
 
-## Step 4: Cross-Spec Review
+## Step 4: Review or hand off
 
-After all waves complete, spawn a **single sub-agent** for cross-spec consistency review. Use the `spec-reviewer` custom agent if available (configured with `model = "gpt-5.6-sol"` and `model_reasoning_effort = "high"` in `.codex/agents/spec-reviewer.toml`). This is the highest-value quality gate -- it catches issues that per-spec review gates cannot.
+If any `## Existing Spec Updates` entry is pending, do not run or claim the final cross-spec review here. Report `NEW_SPECS_READY` and hand off to `$kiro-spec-update-batch`, which updates those specs and reviews the complete planned state.
+
+Only when no existing-spec update is pending, spawn a **single sub-agent** for final cross-spec consistency review. Use the `spec-reviewer` custom agent if available (configured with `model = "gpt-5.6-sol"` and `model_reasoning_effort = "high"` in `.codex/agents/spec-reviewer.toml`).
 
 **Sub-agent task**:
 
@@ -92,6 +94,7 @@ Read ALL generated specs and check for consistency across the entire project:
 - `.kiro/specs/*/requirements.md` (for scope and acceptance criteria)
 - `.kiro/specs/*/tasks.md` (for boundary annotations only -- read _Boundary:_ lines, skip task descriptions)
 - `.kiro/steering/roadmap.md`
+- Structured Scope, Preserves, Dependencies, and Validation fields for all direct implementation candidates
 
 Reading priority: Focus on design.md files (they contain interfaces, data models, architecture). For requirements.md, focus on section headings and acceptance criteria. For tasks.md, focus on _Boundary:_ annotations.
 
@@ -103,7 +106,7 @@ Check:
 5. **Naming conventions**: Component names, file paths, API routes, table names consistent across specs?
 6. **Shared infrastructure**: Shared concerns (auth, error handling, logging) handled in one spec and correctly referenced?
 7. **Task boundary alignment**: Task _Boundary:_ annotations partition codebase cleanly? No files claimed by multiple specs?
-8. **Roadmap boundary continuity**: If roadmap includes `Existing Spec Updates` or `Direct Implementation Candidates`, do the generated new specs avoid absorbing that work by accident?
+8. **Roadmap boundary continuity**: Do generated specs avoid absorbing direct implementation work, and do direct candidates still qualify for no-spec implementation?
 9. **Architecture boundary integrity**: Do the specs preserve clean responsibility seams, avoid shared ownership, keep dependency direction coherent, and include enough revalidation triggers to catch downstream impact?
 10. **Change-friendly decomposition**: Has any spec absorbed multiple independent seams that should probably be split instead of kept together?
 
@@ -119,21 +122,22 @@ Output: CONSISTENT areas + ISSUES with (which specs, what's inconsistent, sugges
 1. Scan `.kiro/specs/*/tasks.md` to verify all specs exist
 2. For each completed spec, read spec.json to confirm phase and approvals
 3. Update roadmap.md: mark completed specs as `[x]`
-4. If roadmap.md includes `Existing Spec Updates` or `Direct Implementation Candidates`, leave them untouched and mention them as remaining follow-up items unless already explicitly completed elsewhere
+4. Leave `Direct Implementation Candidates` untouched. Leave `Existing Spec Updates` untouched except for reporting their explicit handoff.
 
 Display final summary:
 ```
-Spec Batch Complete:
+New Spec Batch Complete:
+  Status: COMPLETE / NEW_SPECS_READY
   ✓ app-foundation: X requirements, Y design components, Z tasks
   ✓ block-editor: ...
   ✓ page-management: ...
   ...
   Total: N specs created, M tasks generated
-  Cross-spec review: PASSED / N issues found (M fixed)
+  Cross-spec review: PASSED / DEFERRED_TO_SPEC_UPDATE_BATCH
   Existing spec updates pending: <count or none>
   Direct implementation candidates pending: <count or none>
 
-Next: Review generated specs, then start implementation with $kiro-impl <feature>
+Next: $kiro-spec-update-batch when existing updates remain; otherwise review generated specs, then use $kiro-impl <feature> or $kiro-impl-direct <item-id>
 ```
 
 </instructions>
@@ -144,7 +148,7 @@ Next: Review generated specs, then start implementation with $kiro-impl <feature
 - **Parallel within waves**: All features in the same wave should be dispatched in parallel if multi-agent is available.
 - **No partial waves**: If a feature in a wave fails, still complete the other features in that wave before reporting.
 - **Skip completed specs**: Features with `[x]` in roadmap.md or existing tasks.md are skipped.
-- **`## Specs (dependency order)` remains authoritative for batch execution**: Other roadmap sections are context, not wave inputs.
+- **`## Specs (dependency order)` remains authoritative for new-spec execution**: Existing updates have their own batch skill; direct candidates are never generated as specs here.
 
 ## Safety & Fallback
 
@@ -162,4 +166,5 @@ Next: Review generated specs, then start implementation with $kiro-impl <feature
 - Stop and report: "No roadmap.md found. Run `$kiro-discovery` first."
 
 **All specs already complete**:
-- Report: "All specs in roadmap.md are already complete. Nothing to do."
+- If existing updates remain, report: "All new specs are complete. Next: `$kiro-spec-update-batch`."
+- Otherwise report: "All new specs in roadmap.md are already complete. Nothing to generate."

@@ -1,6 +1,6 @@
 ---
 name: kiro-spec-status
-description: Show specification status and progress
+description: Show specification status and progress, or report a structured direct roadmap item's dependency, validation, and completion state when the requested name is not a spec.
 ---
 
 
@@ -18,12 +18,21 @@ description: Show specification status and progress
 ## Execution Steps
 
 ### Step 1: Load Spec Context
+- First read `.kiro/steering/roadmap.md` when it exists. If `$1` is not a spec directory but exactly matches an item under `## Direct Implementation Candidates`, use Direct Item mode below.
 - Read `.kiro/specs/$1/spec.json` for metadata and phase status
 - Read `.kiro/specs/$1/brief.md` if it exists
 - Read existing files: `requirements.md`, `design.md`, `tasks.md` (if they exist)
 - Check `.kiro/specs/$1/` directory for available files
 - Read `.kiro/steering/roadmap.md` if it exists and this spec appears in it
-- From roadmap.md, read the `## Implementation Validation History` section if present and collect every row whose Feature cell matches `$1`
+- From roadmap.md, read the `## Implementation Validation History` section if present and collect every row whose Work Item cell matches `$1`; accept legacy Feature tables as `Type=spec`
+
+### Direct Item mode
+
+- Read Source, Scope, Preserves, Dependencies, Validation, and checkbox state.
+- Resolve each dependency using the same `spec:`, `implementation:`, and `direct:` rules as `$kiro-impl-direct`.
+- Report whether the item is ready, blocked, completed, or missing required fields.
+- Show matching `Type=direct` validation rows and treat `+dirty`, missing, or mismatched-type rows as invalid completion evidence.
+- Recommend `$kiro-impl-direct <item-id>` only when the item is pending, structurally complete, and dependency-ready.
 
 ### Step 2: Analyze Status
 
@@ -48,12 +57,14 @@ description: Show specification status and progress
 
 ### Step 3: Generate Report
 
+In Direct Item mode, use the roadmap/user language and report: checkbox state, required fields, dependency readiness, matching validation evidence, classification risks, next command, and blockers. Do not fabricate spec phase percentages.
+
 Create report in the language specified in spec.json covering:
 1. **Current Phase & Progress**: Where the spec is in the workflow
 2. **Completion Status**: Percentage complete for each phase
 3. **Task Breakdown**: If tasks exist, show completed/remaining counts
 4. **Boundary Context**: Upstream/downstream, out-of-boundary, and allowed dependency notes when available
-5. **Validation History**: Latest recorded `/kiro-record-validation` result for this spec (result, timestamp, commit marker, evidence), or "not recorded in this milestone" when absent
+5. **Validation History**: Latest recorded `/kiro-record-validation` result for this work item (type, result, timestamp, commit marker, evidence), or "not recorded in this milestone" when absent
 6. **Revalidation Watchlist**: Downstream or adjacent work likely affected by changes to this spec
 7. **Next Actions**: What needs to be done next
 8. **Blockers**: Any issues preventing progress
@@ -65,8 +76,8 @@ Create report in the language specified in spec.json covering:
 ### Error Scenarios
 
 **Spec Not Found**:
-- **Message**: "No spec found for `$1`. Check available specs in `.kiro/specs/`"
-- **Action**: List available spec directories
+- **Message**: "No spec or direct roadmap item found for `$1`."
+- **Action**: List available spec directories and direct item IDs
 
 **No Validation History**:
 - **Behavior**: When the roadmap has no `## Implementation Validation History` section, or no row matches this spec, report validation as not recorded for this milestone

@@ -1,6 +1,6 @@
 ---
 name: kiro-discovery
-description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed), refines ideas through structured dialogue, and persists new briefs or append-only existing-spec Change Briefs.
+description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed), refines ideas through structured dialogue, and persists new briefs, append-only existing-spec Change Briefs, and structured direct roadmap candidates.
 ---
 
 
@@ -11,6 +11,7 @@ description: Entry point for new work. Determines the best action path or work d
   - Correct action path or work decomposition identified based on existing project state
   - User's intent clarified through questions, not assumptions
   - Output is an actionable next step (not just a description)
+  - Every roadmap work item has enough durable scope, dependency, and validation context for its owning execution skill
 </background_information>
 
 <instructions>
@@ -41,7 +42,8 @@ Based on the user's request and the metadata from Step 1, determine which path a
 - The request is a bug fix, config change, simple refactor, or trivial addition
 - No meaningful part of the request needs a new or updated spec boundary
 - The request does not need to update an existing spec either
-- Skip remaining steps
+- If a current roadmap exists and the work belongs to its phase, continue in **Direct Candidate mode** and persist the item in Step 7
+- Otherwise skip remaining steps and recommend ordinary direct implementation outside the roadmap workflow
 
 **Path C: New single-scope feature**
 - The request is new, doesn't overlap with existing specs, and fits in one spec
@@ -54,11 +56,11 @@ Based on the user's request and the metadata from Step 1, determine which path a
 - Use this path only when at least one genuinely new spec boundary is needed
 
 For Path A/C/D/E, present the determined path (or mixed decomposition) to the user and confirm before proceeding.
-For Path B, recommend direct implementation and stop.
+For Path B outside a current roadmap, recommend direct implementation and stop. For roadmap-bound Path B, confirm the direct classification and persist it before suggesting `$kiro-impl-direct`.
 
 ## Step 3: Deep Context Loading
 
-**Only for Path A, C, D, and E.** Now load the context needed for discovery.
+**Only for Path A, roadmap-bound Path B, C, D, and E.** Now load the context needed for discovery.
 
 **In main context** (essential for dialogue with user):
 - **Steering documents**: Read product.md and tech.md (if they exist) for project goals, constraints, and tech stack
@@ -115,6 +117,7 @@ If the viability check reveals issues, present them to the user and revisit the 
   - Existing spec extensions are explicitly listed with their target spec
   - Truly small direct-implementation items are listed separately instead of being forced into a spec
   - Dependencies between specs/workstreams are explicit
+  - Qualify cross-phase dependencies as `spec:<name>`, `implementation:<name>`, or `direct:<name>`; use `none` when there is no prerequisite
   - Consider vertical slices (end-to-end value) vs horizontal layers (one layer at a time) based on the project needs
 - Confirm the final direction
 
@@ -179,6 +182,24 @@ When Path A or Path E adds a new Change Brief or materially updates an existing 
 - Write or update the target spec's Change Brief and, when its content changed, invalidate the target spec's approvals as defined above.
 - If roadmap.md exists and the change belongs to its current phase, add or update the matching item under `## Existing Spec Updates` without disturbing completed items or validation history.
 - Do not create a new spec directory or add the existing feature under `## Specs (dependency order)`.
+- When the same roadmap phase also has small direct follow-ups, record them using the Direct Candidate format below instead of hiding them in the Change Brief.
+
+**Direct Candidate format for roadmap-bound Path B and mixed decompositions**:
+
+```markdown
+- [ ] small-item-a -- [why this stays direct implementation]
+  - Source: [issue, milestone, or user request]
+  - Scope: [files/modules and observable completion]
+  - Preserves: [public behavior, contracts, and boundaries that must not change]
+  - Dependencies: [none, spec:<name>, implementation:<name>, or direct:<name>]
+  - Validation: [canonical tests/build/smoke or other exact evidence]
+```
+
+- Use a globally unique stable item ID.
+- Require all five fields; do not rely on conversation context.
+- Keep the item within one small implementation boundary.
+- If Scope or Preserves reveals a user-observable rule, public contract, or owned responsibility change, reclassify it as an existing-spec update or new spec.
+- For roadmap-bound Path B, add or update the item under `## Direct Implementation Candidates`, preserve completed items/history, verify it by reading back, and do not create spec files.
 
 **For Path C (single spec)**:
 
@@ -259,8 +280,8 @@ Use this roadmap structure:
 
 ## Implementation Validation History
 
-| Feature | Result | Validated at | Commit | Evidence |
-|---|---|---|---|---|
+| Work Item | Type | Result | Validated at | Commit | Evidence |
+|---|---|---|---|---|---|
 ```
 
 Then write `.kiro/specs/<feature>/brief.md` for **every** feature listed under `## Specs (dependency order)` using the Path C brief format. This enables parallel spec creation via `$kiro-spec-batch`.
@@ -275,8 +296,7 @@ Use the same roadmap structure as Path D, plus these additional sections:
 - [ ] existing-feature-b -- [one-line description of the extension]. Dependencies: feature-a
 
 ## Direct Implementation Candidates
-- [ ] small-item-a -- [why this stays direct implementation]
-- [ ] small-item-b -- [why this stays direct implementation]
+[use the Direct Candidate format above]
 
 ## Specs (dependency order)
 - [ ] new-feature-a -- [one-line description]. Dependencies: none
@@ -287,12 +307,13 @@ Path E rules:
 - Keep `## Specs (dependency order)` reserved for **new specs only** so `$kiro-spec-batch` can still parse it unchanged
 - Record existing-spec extensions under `## Existing Spec Updates`
 - Record true no-spec work under `## Direct Implementation Candidates`
+- Follow the Direct Candidate format and classification rules above
 - Write the full `brief.md` for every **new spec** listed under `## Specs (dependency order)`
 - Write or update a Change Brief for **every existing spec** listed under `## Existing Spec Updates`; each roadmap item and Change Brief must describe the same scope and dependencies
 - For every existing spec whose Change Brief changed, invalidate that spec's approvals as defined above
 
 **Re-entry (roadmap.md already exists)**:
-Write the next new spec's brief.md and any newly discovered or changed existing-spec Change Briefs to disk. Update roadmap.md if scope/ordering changed, preserving completed items, prior phases, prior Change Briefs, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
+Write the next new spec's brief.md and any newly discovered or changed existing-spec Change Briefs to disk. Update roadmap.md if scope/ordering changed, preserving completed items, structured direct-candidate fields, prior phases, prior Change Briefs, and every existing row in `## Implementation Validation History`. Discovery creates the empty validation-history table but never adds validation records; `$kiro-record-validation` owns those append-only entries.
 
 After writing, verify the files exist by reading them back.
 
@@ -300,8 +321,9 @@ After writing, verify the files exist by reading them back.
 
 Suggest the next command and stop. Do NOT automatically run downstream spec generation from this skill.
 
-- Path A: `$kiro-spec-requirements {feature}` to integrate the latest Change Brief into the existing requirements
-- Path B: Recommend direct implementation without creating a spec
+- Path A: use `$kiro-spec-update-batch` when the current roadmap has multiple pending existing updates; otherwise use `$kiro-spec-requirements {feature}` for the single Change Brief
+- Path B in a current roadmap: `$kiro-impl-direct <item-id>` after persisting all required fields
+- Path B outside a roadmap: Recommend ordinary direct implementation without creating a spec
 - Path C: Default to `$kiro-spec-init <feature-name>`
   - Optional fast path: `$kiro-spec-quick <feature-name>` when the user explicitly wants to continue immediately
 - Path D: Default to `$kiro-spec-batch` (creates all specs in parallel based on roadmap.md dependency order)
@@ -309,15 +331,16 @@ Suggest the next command and stop. Do NOT automatically run downstream spec gene
 - Path E: Choose the next command based on the new-spec portion of the decomposition
   - If there is exactly one new spec: `$kiro-spec-init <new-feature-name>`
   - If there are multiple new specs: `$kiro-spec-batch`
-  - Also note which existing specs now have Change Briefs ready for `$kiro-spec-requirements <feature>`
+  - After new specs, run `$kiro-spec-update-batch` for all `Existing Spec Updates`; it owns the final roadmap-wide spec review
+  - After all specs are ready, run `$kiro-impl-direct <item-id>` for dependency-ready direct candidates
 - Re-entry: `$kiro-spec-init <next-feature-name>` or `$kiro-spec-batch` if multiple specs remain
 
-If the decomposition contains only existing-spec updates plus direct implementation candidates, do NOT use Path E. Prefer Path A when one existing spec is the clear home, or recommend the existing-spec update plus direct implementation work without creating roadmap entries.
+If the decomposition contains only existing-spec updates plus direct implementation candidates, do NOT use Path E. Prefer Path A when one existing spec is the clear home. When a current roadmap owns the phase, persist both work types there and route them to `$kiro-spec-update-batch` and `$kiro-impl-direct`; otherwise recommend the existing-spec update and ordinary direct implementation without creating a roadmap solely for trivial work.
 
 </instructions>
 
 ## Critical Constraints
-- **Files on disk are the source of continuity**: For Path A/C/D/E, write full briefs, existing-spec Change Briefs, and roadmap.md to disk as applicable before suggesting the next command. Do NOT leave discovery results only in conversation text.
+- **Files on disk are the source of continuity**: For Path A/roadmap-bound Path B/C/D/E, write full briefs, existing-spec Change Briefs, structured direct candidates, and roadmap.md to disk as applicable before suggesting the next command. Do NOT leave discovery results only in conversation text.
 
 ## Safety & Fallback
 

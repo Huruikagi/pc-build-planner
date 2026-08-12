@@ -22,10 +22,12 @@ description: 完了済みKiroマイルストーンを正式リリースする。
 ## 2. マイルストーン完了証拠を監査する
 
 - GitHub連携を優先して対象マイルストーンの全Issueを取得する。マイルストーンやActions情報が不足する場合だけ認証済み`gh`を使う。
-- roadmapがあればscope、spec一覧、Existing Spec Updates、Direct Implementation Candidates、Implementation Validation Historyを読む。
+- roadmapがあればscope、spec一覧、Existing Spec Updates、各Direct Implementation Candidateの構造化フィールド、Implementation Validation Historyを読む。
 - 対応する各specの`spec.json`と`tasks.md`を確認し、未完了task 0件を要求する。
 - 対象specごとに現在のマイルストーンで`GO`のvalidation記録を要求する。`+dirty`、`NO-GO`、`MANUAL_VERIFY_REQUIRED`、記録なしを完了証拠にしない。
-- spec外のIssueは、成果物またはsteering文書への反映を直接確認する。
+- `Direct Implementation Candidates`は全項目`[x]`、`Type=direct`のcleanな`GO`記録、Sourceとの対応、Scopeの成果物、Preserves不変、Validation evidenceを要求する。
+- legacy validation tableは全行`Type=spec`として解釈するが、direct itemの完了証拠には使用しない。
+- roadmapに載らないspec外のIssueは、成果物またはsteering文書への反映を直接確認する。
 - 各open Issueを完了済みscopeへ明示的に対応付ける。対応不能、未実装、未検証、曖昧なIssueが一つでもあれば、Issueを閉じずに停止する。
 - Issue本文の古いcheckboxが未更新でも、承認済みspec、完了task、GO記録、現行成果物が要求を置き換えたことを説明できる場合だけ完了と判断する。
 

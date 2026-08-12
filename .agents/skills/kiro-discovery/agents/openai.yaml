@@ -1,6 +1,6 @@
 interface:
   display_name: "Discovery"
-  short_description: "Route new work and persist new briefs or existing-spec Change Briefs"
+  short_description: "Route and persist spec or direct roadmap work"
 
 policy:
   allow_implicit_invocation: false
