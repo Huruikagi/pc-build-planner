@@ -9,7 +9,10 @@ import type {
   TargetTabId,
 } from "../../src/application-shell/public.js";
 import { createShellPresentation } from "../../src/application-shell/shell-presentation.js";
-import { createSidePanelFeatureContributions } from "../../src/application-shell/side-panel-contributions.js";
+import {
+  createSidePanelFeatureContributions,
+  projectCatalogSourceFromSidePanelContributions,
+} from "../../src/application-shell/side-panel-contributions.js";
 import {
   type LocalDataRoot,
   ok,
@@ -148,6 +151,7 @@ function createCurrentContextHandoffHarness(options: {
         workerRegistrations: [],
       };
     },
+    createProjectCatalogSource: projectCatalogSourceFromSidePanelContributions,
     presentation: createShellPresentation(),
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},

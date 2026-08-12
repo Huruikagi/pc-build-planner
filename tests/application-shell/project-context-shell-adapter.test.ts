@@ -98,3 +98,51 @@ test("10.1/10.2: selectorを専用slotへ一度だけmountし、snapshotを単�
   assert.equal(unmounts, 1);
   assert.equal(unsubscribes, 1);
 });
+
+test("10.1: cleanup失敗時は未解放resourceだけを次のstopで再試行する", () => {
+  let unsubscribeAttempts = 0;
+  let unmountAttempts = 0;
+  const read: ProjectContextReadPort = {
+    getSnapshot: () => ({
+      status: "empty",
+      generation: 1,
+      catalog: [],
+      selectedProjectId: null,
+    }),
+    subscribe() {
+      return () => {
+        unsubscribeAttempts += 1;
+        if (unsubscribeAttempts === 1) throw new Error("unsubscribe failed");
+      };
+    },
+  };
+  const presentation: ProjectContextPresentationContribution = {
+    mount() {
+      return ok({
+        unmount() {
+          unmountAttempts += 1;
+        },
+      });
+    },
+  };
+  const mounted = createProjectContextShellAdapter().mount({
+    container: document.createElement("div"),
+    read,
+    commands: {} as never,
+    presentation,
+    publishAvailability() {},
+  });
+  assert.equal(mounted.ok, true);
+  if (!mounted.ok) return;
+
+  assert.throws(() => mounted.value.stop(), AggregateError);
+  assert.equal(unsubscribeAttempts, 1);
+  assert.equal(unmountAttempts, 1);
+
+  mounted.value.stop();
+  assert.equal(unsubscribeAttempts, 2);
+  assert.equal(unmountAttempts, 1);
+  mounted.value.stop();
+  assert.equal(unsubscribeAttempts, 2);
+  assert.equal(unmountAttempts, 1);
+});

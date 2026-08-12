@@ -5,6 +5,7 @@ import {
   initializeProductionFoundationRuntimeContribution,
 } from "../persistence/public.js";
 import type {
+  ProjectCatalogSource,
   ProjectContextCommandPort,
   ProjectContextPublicApi,
   ProjectContextReadPort,
@@ -50,6 +51,7 @@ import type {
 import { createShellPresentation } from "./shell-presentation.js";
 import {
   createSidePanelFeatureContributions,
+  projectCatalogSourceFromSidePanelContributions,
   type SidePanelFeatureContributions,
 } from "./side-panel-contributions.js";
 import {
@@ -97,6 +99,10 @@ export interface ProductionApplicationCompositionOptions<
       >["port"];
     },
   ) => ApplicationRuntimeContributions<TFeatures>;
+  /** Owner-provided typed catalog source; composition never inspects feature APIs. */
+  readonly createProjectCatalogSource?: (
+    features: TFeatures,
+  ) => ProjectCatalogSource;
   readonly presentation: ShellPresentationAdapter;
   readonly workerContext: WorkerRegistrationContext;
   readonly reportError: (message: string) => void;
@@ -159,6 +165,7 @@ export function createProductionSidePanelComposition(
       ) as unknown as SidePanelFeatureContributions,
       workerRegistrations: [],
     }),
+    createProjectCatalogSource: projectCatalogSourceFromSidePanelContributions,
     presentation: createShellPresentation(),
     workerContext: {
       addActionHandler() {
@@ -626,39 +633,13 @@ export function createProductionApplicationComposition<
         await cleanup().catch(() => diagnose("presentation rollback failed"));
         return err({ kind: "startup_failed", message: STARTUP_ERROR });
       }
-      const candidate = contributions.features.find(
-        (contribution) => contribution.key === "candidateManagement",
+      const projectCatalogSource = options.createProjectCatalogSource?.(
+        contributions.features,
       );
-      const candidateQuery = (
-        candidate?.registration.publicApi as
-          | {
-              readonly query?: {
-                readonly listProjects?: () => Promise<unknown>;
-              };
-            }
-          | undefined
-      )?.query;
-      if (
-        typeof candidateQuery?.listProjects === "function" &&
-        presentation.projectContainer
-      ) {
-        const listProjects = candidateQuery.listProjects;
-        const projectContext = createProductionProjectContext({
-          async list() {
-            const listed = await listProjects();
-            if (
-              typeof listed !== "object" ||
-              listed === null ||
-              !("ok" in listed) ||
-              listed.ok !== true ||
-              !("value" in listed)
-            )
-              return err({ kind: "source-unavailable" as const });
-            return ok(listed.value as never);
-          },
-        });
+      if (projectCatalogSource && presentation.projectContainer) {
+        const projectContext =
+          createProductionProjectContext(projectCatalogSource);
         await projectContext.initialize();
-        projectReadBinding.bind(projectContext.api.read);
         bindProjectCommands(projectContext.api);
         const mountedProjectContext = (
           options.createProjectContextAdapter ??
@@ -668,7 +649,9 @@ export function createProductionApplicationComposition<
           read: projectContext.api.read,
           commands: projectContext.api.commands,
           presentation: projectContext.presentation,
-          publishAvailability() {},
+          publishAvailability() {
+            projectReadBinding.publish(projectContext.api.read.getSnapshot());
+          },
         });
         if (mountedProjectContext.ok) {
           projectContextHandle = mountedProjectContext.value;

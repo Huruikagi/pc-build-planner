@@ -62,7 +62,6 @@ export const createProjectContextShellAdapter =
         ? T
         : never;
       let unsubscribe: (() => void) | undefined;
-      let stopped = false;
       let generation = -1;
 
       const publish = (
@@ -73,21 +72,28 @@ export const createProjectContextShellAdapter =
         input.publishAvailability(projectAvailability(snapshot));
       };
       const stop = (): void => {
-        if (stopped) return;
-        stopped = true;
+        if (unsubscribe === undefined && presentationHandle === undefined)
+          return;
         const failures: unknown[] = [];
-        try {
-          unsubscribe?.();
-        } catch (error) {
-          failures.push(error);
+        const ownedUnsubscribe = unsubscribe;
+        if (ownedUnsubscribe !== undefined) {
+          try {
+            ownedUnsubscribe();
+            if (unsubscribe === ownedUnsubscribe) unsubscribe = undefined;
+          } catch (error) {
+            failures.push(error);
+          }
         }
-        unsubscribe = undefined;
-        try {
-          presentationHandle?.unmount();
-        } catch (error) {
-          failures.push(error);
+        const ownedPresentation = presentationHandle;
+        if (ownedPresentation !== undefined) {
+          try {
+            ownedPresentation.unmount();
+            if (presentationHandle === ownedPresentation)
+              presentationHandle = undefined as never;
+          } catch (error) {
+            failures.push(error);
+          }
         }
-        presentationHandle = undefined as never;
         if (failures.length > 0)
           throw new AggregateError(
             failures,

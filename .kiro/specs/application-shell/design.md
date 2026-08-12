@@ -51,7 +51,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - Chrome 116以降のManifest V3 Side Panel API、React 19系、React DOM、CSS。
 - dependency direction: `contracts → registry/state → host → React view/root adapter → composition → runtime/root entry`。逆向きimportは禁止する。
 - `src/runtime/side-panel.ts`と`side-panel-bootstrap.ts`はapplication-shellのproduction composition factory、ui-language所有の`runtime.ts` composition seam、および一過性surface用runtime adapterだけをimportする。foundation factory、具体feature registration、worker registration、ui-languageのstore・document sync・preference実装を直接importしない。
-- `src/runtime/service-worker.ts`はproduction worker compositionとChrome message target adapterだけを所有し、Storage、Repository、foundation内部、DOM、Reactをimportしない。
+- `src/runtime/service-worker.ts`はproduction worker composition、Chrome message target、および`transient-feature-surface`が所有するgesture ingress・activation transportのruntime adapterを合成する。Storage、Repository、foundation内部、DOM、React、side panel UI contributionをimportしない。
 - production composition modulesだけがfoundationの公開factoryと下流featureの`public.ts`またはregistration公開入口を具体依存として知る。下流feature内部へのdeep importは禁止する。
 - `ui-messages`の公開型`MessageKey`・`MessageDescriptor`と解決契約`useMessages()`（`src/ui-messages/public.ts`）。ナビゲーションラベルと共通状態文言（`ShellViewState`/`ShellMaintenanceState`のmessage）の表示文字列化にだけ使用し、カタログの内部実装・言語別値へdeep importしない。
 - `ui-language`の公開Provider`LanguageProvider`（`src/ui-language/public.ts`）と、shell所有runtime入口だけが利用するcomposition seam（`src/ui-language/runtime.ts`）。shell viewはProviderだけを組み込み、`LanguageSelectControl`の配置はsettings featureへ委ねる。runtime入口もpreference store実装へ直接deep importせず、runtime seamから初期化する。
@@ -135,6 +135,8 @@ src/
 │   ├── maintenance-projection.ts      # 世代付き状態の単調projection
 │   ├── mutation-gate.ts               # UI操作種別とmaintenance抑止判定
 │   ├── activation-router.ts            # feature-neutral intentの対象解決と一回配送
+│   ├── late-bound-lifecycle.ts         # side panel専用の一過性lifecycle遅延bind
+│   ├── monotonic-project-read-binding.ts # project snapshotの単調fan-out
 │   ├── side-panel-host.ts             # navigationとfeature lifecycle調停
 │   ├── worker-composition.ts          # feature提供worker registrationの一回限り合成
 │   ├── shell-view.tsx                  # loading/error/maintenance/navigation/transientNoticeのReact表示。loading/startup errorでは二言語settings回復案内を描画する
@@ -147,6 +149,10 @@ src/
 │   ├── production-worker-composition.ts # foundation message registrationとcatalog workerのcontext別合成
 │   ├── feature-contribution-catalog.ts # contribution契約とworker安全なcatalog（DOM/React非依存）
 │   ├── side-panel-contributions.ts     # side panel専用contribution factoryの唯一の集約点
+│   ├── application-shell-integration.ts # host・maintenance・mutation gateの統合
+│   ├── runtime-bootstrap.ts            # runtime起動の一回限りcomposition
+│   ├── public.ts                       # side panel consumer向け公開境界
+│   ├── worker-public.ts                # worker consumer向け公開境界
 │   └── public-api-registry.ts          # feature public contractの型付き合成
 ├── runtime/
 │   ├── side-panel.ts                  # side panel bootstrap入口
@@ -187,7 +193,7 @@ backup/restoreが必要とする完全`FoundationDataPort`と、一過性feature
 
 - `feature-contribution-catalog.ts`はcontribution型、決定順序helper、およびworker registration・worker-safe metadataだけを持つworker安全なcatalogを所有する。worker catalogの公開型はUI registrationを受け入れず、宣言順を決定順序として維持する。この moduleはDOM、React、feature UI moduleへ到達してはならない。`src/runtime/service-worker.ts`はこのcatalogだけを参照する。
 - `side-panel-contributions.ts`はUI contributionを具体合成する唯一の面とし、settingsをpersistent、product-capture等をtransientとして受け入れる。source-price-refreshのcontext menu worker contributionはここへ混在させない。
-- `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。
+- `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。candidate-managementの型付きqueryから`ProjectCatalogSource`へ絞り込むadapterもこのcomposition境界が公開し、application compositionはfeature keyやpublic API shapeを文字列検索しない。
 - `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
 - candidate-managementのduplicate mergeからsource-price-refreshを呼ぶ依存は、`side-panel-contributions.ts`が所有するlate-bound `SourcePriceRefreshPort` proxyで循環を解消する。proxyはsource-price-refreshの公開portだけを委譲し、未bind時は安定したtyped failureを返す。価格更新や重複判定の業務規則をshellへ持ち込まない。
 - `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
@@ -459,7 +465,7 @@ interface SidePanelHost {
 
 **Responsibilities & Constraints**
 - shellが所有する専用containerへproject-context presentation contributionをmountし、そのhandleを停止まで単独所有する。
-- `ProjectContextReadPort`の同一snapshotをselectorとproject依存availability projectionへ配送し、選択要求は`ProjectContextCommandPort`へそのまま委譲する。
+- `ProjectContextReadPort`の同一snapshotをselectorとproject依存availability projectionへ配送し、選択要求は`ProjectContextCommandPort`へそのまま委譲する。adapterのavailability publish callbackがapplication-shell所有の単調read bindingへ現在snapshotをfan-outし、productionでno-op callbackを渡さない。
 - `ready`だけをproject依存能力の利用可能条件とし、`empty | unavailable`からproject IDを推測しない。
 - project-contextのcatalog、preference、fallback、guard、CRUD、未保存編集判断を所有しない。
 
@@ -492,7 +498,7 @@ interface ProjectContextShellAdapter {
 ```
 
 - Preconditions: containerはshell presentationが生成したproject selector専用slotであり、feature主表示slotとは異なる。
-- Postconditions: mount成功後、presentationとread購読は一組だけ存在し、停止時に両方を冪等に解除する。
+- Postconditions: mount成功後、presentationとread購読は一組だけ存在し、停止時に両方を冪等に解除する。cleanupが部分失敗した場合は成功済みresourceだけを手放し、未解放resourceを次回`stop()`まで保持する。
 - Invariants: snapshot generationを後退させず、project-context障害をshell全体、settings、backup recoveryのstartup failureへ昇格させない。
 
 **Implementation Notes**

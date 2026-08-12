@@ -402,6 +402,8 @@
 
 ## Implementation Notes
 
+- 2026-08-12 validation remediation: project selector cleanupは成功済みresourceだけを手放し、unsubscribeまたはunmount失敗を次回`stop()`で再試行する。project snapshotは`ProjectContextShellAdapter` callbackから単調read bindingへfan-outし、catalog sourceはside-panel contributionが公開する型付きadapterで注入してfeature keyとpublic API shapeの動的探索を廃止した。
+
 - 2026-08-11 application-shell 10.2–10.3 validation remediation: compatibility compositionに残っていたcandidate一覧先頭の`getProjectId` fallbackを撤去した。conditional spreadはTypeScriptのexcess-property検査をすり抜けてdead dependencyを残せるため、局所source-contract gateで`getProjectId`と`listProjects()`の再混入を拒否する。
 
 - 2026-08-09 application-shell 11.1–11.3: production-shaped contract/DOM/runtime suite、公開consumer・worker/artifact gate、Chrome side-panel E2Eを再実行した。project未選択時はcompatibilityを利用不能として正しく扱うため、英語UI E2Eは利用可能な常設featureだけの画面内容を検証し、常設navigation全件の存在は別途維持した。`pnpm test` 1,659 pass、`pnpm test:e2e` 27 pass / 1 native-menu skip。

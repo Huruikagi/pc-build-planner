@@ -16,6 +16,7 @@ import type {
 
 export type {
   ProjectCatalogItem,
+  ProjectCatalogSource,
   ProjectContextChangeGuard,
   ProjectContextChangeIntent,
   ProjectContextSnapshot,

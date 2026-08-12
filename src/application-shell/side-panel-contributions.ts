@@ -42,6 +42,7 @@ import {
 import type { SourcePriceRefreshPort } from "../features/source-price-refresh/public.js";
 import type { BackupRestoreDataPort } from "../persistence/public.js";
 import type {
+  ProjectCatalogSource,
   ProjectContextChangeGuardRegistrationPort,
   ProjectContextCommandPort,
   ProjectContextReplacementGuardPort,
@@ -61,6 +62,19 @@ export type SidePanelFeatureContributions = readonly [
   SettingsContribution,
   SourcePriceRefreshContribution,
 ];
+
+/** Typed catalog seam from the feature-owned query into project-context. */
+export const projectCatalogSourceFromSidePanelContributions = (
+  contributions: SidePanelFeatureContributions,
+): ProjectCatalogSource => ({
+  async list() {
+    const listed =
+      await contributions[0].registration.publicApi.query.listProjects();
+    return listed.ok
+      ? { ok: true, value: listed.value }
+      : { ok: false, error: { kind: "source-unavailable" } };
+  },
+});
 
 /** Real `chrome.tabs`/`chrome.scripting` handles, supplied by the runtime entrypoint. */
 export interface SidePanelChromeApis {

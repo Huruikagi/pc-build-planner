@@ -1078,6 +1078,17 @@ test("10.1-10.3: production shellはselector選択を一度配送し依存featur
         workerRegistrations: [],
       };
     },
+    createProjectCatalogSource: () => ({
+      async list() {
+        return {
+          ok: true,
+          value: [
+            { id: PROJECT_A, name: "架空A", updatedAt: PROJECT_TIME },
+            { id: PROJECT_B, name: "架空B", updatedAt: PROJECT_TIME },
+          ],
+        };
+      },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -1142,6 +1153,11 @@ test("production shellはproject catalog refreshをcurrent-context依存feature�
         workerRegistrations: [],
       };
     },
+    createProjectCatalogSource: () => ({
+      async list() {
+        return { ok: true, value: projects };
+      },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -1208,6 +1224,11 @@ test("10.2/10.3: project-context初期化失敗でも非依存featureとshellを
         workerRegistrations: [],
       };
     },
+    createProjectCatalogSource: () => ({
+      async list() {
+        return { ok: false, error: { kind: "source-unavailable" } };
+      },
+    }),
     presentation: h.presentation,
     workerContext: { addActionHandler: () => () => {}, reportError() {} },
     reportError() {},
@@ -1253,6 +1274,14 @@ test("10.1-10.3: selector mount失敗はshellを継続して依存featureだけf
         workerRegistrations: [],
       };
     },
+    createProjectCatalogSource: () => ({
+      async list() {
+        return {
+          ok: true,
+          value: [{ id: PROJECT_A, name: "架空A", updatedAt: PROJECT_TIME }],
+        };
+      },
+    }),
     presentation: h.presentation,
     createProjectContextAdapter: () => ({
       mount: () => ({
@@ -1267,7 +1296,7 @@ test("10.1-10.3: selector mount失敗はshellを継続して依存featureだけf
   assert.equal((await root.start()).ok, true);
   assert.deepEqual(projectRead?.getSnapshot(), {
     status: "unavailable",
-    generation: 2,
+    generation: 1,
     selectedProjectId: null,
     reason: "not-initialized",
   });
