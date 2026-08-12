@@ -11,5 +11,10 @@ test("package scaffold remains private and runtime dependency-free", async () =>
   assert.equal(manifest.type, "module");
   assert.equal("dependencies" in manifest, false);
   assert.equal("peerDependencies" in manifest, false);
-  assert.equal("exports" in manifest, false);
+  assert.deepEqual(manifest.exports, {
+    ".": {
+      types: "./dist/index.d.ts",
+      import: "./dist/index.js",
+    },
+  });
 });

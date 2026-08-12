@@ -73,7 +73,7 @@
   - _Depends: 2.1, 2.2, 2.3_
 
 - [ ] 3. Package公開面とread-only consumerを統合する
-- [ ] 3.1 package root exportを確定する
+- [x] 3.1 package root exportを確定する
   - packageの唯一のpublic entryから型、formatter、normalizer、resolver、descriptor、parityのconsumer向けsymbolだけをnamed exportする。
   - export mapの`.`をbuild済みESM JavaScriptとdeclarationへ対応させ、source、test、内部subpathを公開しない。
   - packageをprivateかつruntime dependencyなしに保ち、公開成果物へ内部source、test、製品型を含めない。
