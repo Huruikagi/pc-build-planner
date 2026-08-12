@@ -50,11 +50,11 @@ const featureSources = async (): Promise<
   );
 };
 
-test("44件のAcceptance Criteriaがすべてtaskへ割り当てられている", async () => {
+test("52件のAcceptance Criteriaがすべてtaskへ割り当てられている", async () => {
   const requirements = await readFile(`${SPEC_DIR}/requirements.md`, "utf8");
   const tasks = await readFile(`${SPEC_DIR}/tasks.md`, "utf8");
   const criteria = acceptanceCriteria(requirements);
-  assert.equal(criteria.length, 44);
+  assert.equal(criteria.length, 52);
 
   const covered = new Set<string>();
   for (const line of tasks.split(/\r?\n/)) {
