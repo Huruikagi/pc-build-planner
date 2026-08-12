@@ -289,7 +289,14 @@ export async function measureProductionBundles() {
 /** Notice asset required in the build staging directory and release archive. */
 export const LICENSE_NOTICE_FILE_NAME = "THIRD_PARTY_NOTICES.txt";
 
-const noticeRequiredFragments = [/zod/i, /MIT License/, /Permission is hereby/];
+const noticeRequiredFragments = [
+  /zod 4\.4\.3/,
+  /react 19\.2\.8/,
+  /react-dom 19\.2\.8/,
+  /scheduler 0\.27\.0/,
+  /MIT License/,
+  /Permission is hereby/,
+];
 
 /**
  * Contract shared by build staging and archive verification: the notice must

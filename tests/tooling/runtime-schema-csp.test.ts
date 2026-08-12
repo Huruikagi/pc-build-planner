@@ -116,13 +116,47 @@ test("PRODUCTION_ENTRIESは実在するproduction entry sourceを指す", async 
   for (const entry of PRODUCTION_ENTRIES) await access(entry.source);
 });
 
-test("配布用license noticeがZodのMIT notice契約を満たす", async () => {
+test("配布用license noticeが全runtime依存のMIT notice契約を満たす", async () => {
   const notice = await readFile(LICENSE_NOTICE_FILE_NAME, "utf8");
 
-  assert.match(notice, /zod/i);
-  assert.match(notice, /MIT License/);
-  assert.match(notice, /4\.4\.3/);
+  for (const dependency of [
+    ["zod", "4.4.3"],
+    ["react", "19.2.8"],
+    ["react-dom", "19.2.8"],
+    ["scheduler", "0.27.0"],
+  ]) {
+    assert.match(notice, new RegExp(`${dependency[0]} ${dependency[1]}`));
+  }
   await validateLicenseNoticeAsset(".");
+});
+
+test("notice gateはruntime依存ごとのnotice欠落を拒否する", async () => {
+  const completeNotice = await readFile(LICENSE_NOTICE_FILE_NAME, "utf8");
+
+  for (const [dependency, version] of [
+    ["zod", "4.4.3"],
+    ["react", "19.2.8"],
+    ["react-dom", "19.2.8"],
+    ["scheduler", "0.27.0"],
+  ]) {
+    const directory = await mkdtemp(join(tmpdir(), "runtime-license-notice-"));
+    try {
+      await writeFile(
+        join(directory, LICENSE_NOTICE_FILE_NAME),
+        completeNotice.replace(
+          `${dependency} ${version}`,
+          `omitted-runtime-dependency ${version}`,
+        ),
+        "utf8",
+      );
+      await assert.rejects(
+        () => validateLicenseNoticeAsset(directory),
+        /runtime dependency/i,
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("notice欠落のstaging/archiveはgateで失敗する", async () => {
