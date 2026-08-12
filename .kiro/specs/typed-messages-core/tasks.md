@@ -30,7 +30,7 @@
   - _Boundary: MessageContracts_
 
 - [ ] 2. Package coreの純粋mechanismを実装する
-- [ ] 2.1 (P) 決定的なmessage formatterを実装する
+- [x] 2.1 (P) 決定的なmessage formatterを実装する
   - plain文字列、string/number interpolation、single pluralのzero/one/other選択、multi pluralのselector順combination選択を実装する。
   - 専用form、selector、parameterが不足する場合は`other`と未解決placeholderへ安全にfallbackし、例外を送出しない。
   - synthetic definitionだけを使うunit testで全選択規則とfallbackを固定し、同じ入力が常に同じ文字列を返して全件成功することを完了条件とする。
