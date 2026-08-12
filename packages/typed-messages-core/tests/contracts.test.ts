@@ -8,6 +8,7 @@ import type {
   MessageKeyOf,
   MessageNamespace,
   ParamsArgsFor,
+  ParamsForKey,
 } from "../src/contracts.js";
 
 type Equal<Left, Right> =
@@ -89,12 +90,20 @@ acceptCatalogKey("dashboard.summary");
 // @ts-expect-error unknown catalog keys must fail consumer type checking
 acceptCatalogKey("dashboard.missing");
 
-const acceptParams = <Key extends CatalogKeys>(
+const acceptParams = <
+  Key extends CatalogKeys,
+  const Params extends ParamsForKey<Catalog, Key> = ParamsForKey<Catalog, Key>,
+>(
   _key: Key,
-  ..._params: ParamsArgsFor<Catalog, Key>
+  ..._params: ParamsArgsFor<Catalog, Key, Params>
 ): void => {};
 
 acceptParams("greeting", { name: "Ada", total: 3 });
+const exactGreetingParams = { name: "Ada", total: 3 };
+acceptParams("greeting", exactGreetingParams);
+const widerGreetingParams = { name: "Ada", total: 3, language: "en" };
+// @ts-expect-error extra parameters are rejected when passed through a variable
+acceptParams("greeting", widerGreetingParams);
 acceptParams("inbox", { count: 2, owner: "Ada" });
 acceptParams("dashboard.summary", { visible: 4, selected: 1, label: "Selection" });
 acceptParams("dashboard.empty");
@@ -111,13 +120,19 @@ acceptParams("dashboard.summary", { visible: 4, selected: 1 });
 // @ts-expect-error parameter-free messages do not accept a params argument
 acceptParams("dashboard.empty", {});
 
-const describe = <Key extends CatalogKeys>(
+const describe = <
+  Key extends CatalogKeys,
+  const Params extends ParamsForKey<Catalog, Key> = ParamsForKey<Catalog, Key>,
+>(
   key: Key,
-  ...params: ParamsArgsFor<Catalog, Key>
+  ...params: ParamsArgsFor<Catalog, Key, Params>
 ): MessageDescriptor<Catalog> =>
-  (params.length === 0 ? { key } : { key, params: params[0] }) as MessageDescriptor<Catalog>;
+  (params.length === 0 ? { key } : { key, params: params[0] }) as unknown as MessageDescriptor<Catalog>;
 
 const greetingDescriptor = describe("greeting", { name: "Ada", total: 3 });
+describe("greeting", exactGreetingParams);
+// @ts-expect-error descriptor helpers reject extra parameters from variables
+describe("greeting", widerGreetingParams);
 const emptyDescriptor = describe("dashboard.empty");
 // @ts-expect-error descriptors retain their originating catalog nominally
 const wrongCatalogDescriptor: MessageDescriptor<{ readonly other: "Other" }> =

@@ -5,14 +5,18 @@ import type {
   MessageNamespace,
   MessageParams,
   ParamsArgsFor,
+  ParamsForKey,
 } from "./contracts.js";
 import { flattenCatalog } from "./catalog.js";
 import { formatMessage } from "./format.js";
 
 export interface MessageResolver<Catalog> {
-  <Key extends MessageKeyOf<Catalog>>(
+  <
+    Key extends MessageKeyOf<Catalog>,
+    const Params extends ParamsForKey<Catalog, Key> = ParamsForKey<Catalog, Key>,
+  >(
     key: Key,
-    ...params: ParamsArgsFor<Catalog, Key>
+    ...params: ParamsArgsFor<Catalog, Key, Params>
   ): string;
   resolveDescriptor(descriptor: MessageDescriptor<Catalog>): string;
 }

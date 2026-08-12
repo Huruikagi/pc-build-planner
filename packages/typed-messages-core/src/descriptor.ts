@@ -2,12 +2,16 @@ import type {
   MessageDescriptor,
   MessageKeyOf,
   ParamsArgsFor,
+  ParamsForKey,
 } from "./contracts.js";
 
 export interface MessageDescriptorFactory<Catalog> {
-  <Key extends MessageKeyOf<Catalog>>(
+  <
+    Key extends MessageKeyOf<Catalog>,
+    const Params extends ParamsForKey<Catalog, Key> = ParamsForKey<Catalog, Key>,
+  >(
     key: Key,
-    ...params: ParamsArgsFor<Catalog, Key>
+    ...params: ParamsArgsFor<Catalog, Key, Params>
   ): MessageDescriptor<Catalog>;
 }
 

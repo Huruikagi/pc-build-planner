@@ -26,8 +26,13 @@ const describeMessage = createMessageDescriptorFactory<SyntheticCatalog>();
 const factoryContract: MessageDescriptorFactory<SyntheticCatalog> = describeMessage;
 
 if (false) {
+  const exactOwnerParams = { name: "Ada" };
+  const widerOwnerParams = { name: "Ada", language: "en" };
   describeMessage("status.ready");
   describeMessage("status.owner", { name: "Ada" });
+  describeMessage("status.owner", exactOwnerParams);
+  // @ts-expect-error extra parameters from variables are rejected
+  describeMessage("status.owner", widerOwnerParams);
   describeMessage("resultCount", { count: 2 });
   // @ts-expect-error unknown keys are rejected
   describeMessage("status.missing");

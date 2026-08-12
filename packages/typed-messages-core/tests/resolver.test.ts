@@ -36,8 +36,13 @@ const describeMessage = createMessageDescriptorFactory<SyntheticCatalog>();
 const resolverContract: MessageResolver<SyntheticCatalog> = resolve;
 
 if (false) {
+  const exactGreetingParams = { name: "Ada" };
+  const widerGreetingParams = { name: "Ada", language: "en" };
   resolve("navigation.home");
   resolve("navigation.greeting", { name: "Ada" });
+  resolve("navigation.greeting", exactGreetingParams);
+  // @ts-expect-error extra parameters from variables are rejected
+  resolve("navigation.greeting", widerGreetingParams);
   resolve("itemCount", { count: 2 });
   resolve("allocation", { used: 1, available: 3 });
   // @ts-expect-error unknown nested keys are rejected

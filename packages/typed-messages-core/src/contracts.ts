@@ -86,15 +86,26 @@ type ParamsForDefinition<Definition> = Readonly<{
     Name extends SelectorNames<Definition> ? number : MessageParam;
 }>;
 
+/** The parameter object derived for one catalog key. */
+export type ParamsForKey<
+  Catalog,
+  Key extends MessageKeyOf<Catalog>,
+> = ParamsForDefinition<DefinitionAt<Catalog, Key>>;
+
+type ExactParams<Expected, Actual> = Exclude<keyof Actual, keyof Expected> extends never
+  ? Actual
+  : Actual & Readonly<Record<Exclude<keyof Actual, keyof Expected>, never>>;
+
 /** Derives the optional or required resolver argument tuple for a catalog key. */
 export type ParamsArgsFor<
   Catalog,
   Key extends MessageKeyOf<Catalog>,
+  Params extends ParamsForKey<Catalog, Key> = ParamsForKey<Catalog, Key>,
 > = DefinitionPlaceholders<DefinitionAt<Catalog, Key>> extends never
   ? SelectorNames<DefinitionAt<Catalog, Key>> extends never
     ? []
-    : [params: ParamsForDefinition<DefinitionAt<Catalog, Key>>]
-  : [params: ParamsForDefinition<DefinitionAt<Catalog, Key>>];
+    : [params: ExactParams<ParamsForKey<Catalog, Key>, Params>]
+  : [params: ExactParams<ParamsForKey<Catalog, Key>, Params>];
 
 declare const MESSAGE_DESCRIPTOR_BRAND: unique symbol;
 
