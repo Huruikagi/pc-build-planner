@@ -15,7 +15,7 @@
   - _Requirements: 5.3, 5.4, 5.5, 6.1_
   - _Boundary: WorkspaceValidation_
 
-- [ ] 1.2 catalog definitionとkey導出の型基盤を実装する
+- [x] 1.2 catalog definitionとkey導出の型基盤を実装する
   - plain、single plural、multi plural、nested namespaceのdefinition契約を定義する。
   - 全leafからdot keyとdefinition lookupを導出し、製品catalogや言語識別子へ固定しない。
   - synthetic nested catalogの型fixtureで有効keyが解決され、未知keyが期待したcompile errorになることを完了条件とする。
