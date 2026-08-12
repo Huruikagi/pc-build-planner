@@ -90,7 +90,7 @@
   - _Boundary: WorkspaceValidation_
   - _Depends: 3.1_
 
-- [ ] 3.3 workspace consumer、boundary、topological build gateを接続する
+- [x] 3.3 workspace consumer、boundary、topological build gateを接続する
   - root workspaceからpackageへ`workspace:*`でlinkし、lockfileへworkspace解決を記録する。
   - package root exportだけでsynthetic catalogの設定、resolve、descriptor、parityを利用するread-only consumer fixtureを公開consumer型検査へ追加する。
   - fixtureは製品catalog、configured adapter、React binding、製品runtime wiringをimport・変更せず、generic契約だけを読み取る。

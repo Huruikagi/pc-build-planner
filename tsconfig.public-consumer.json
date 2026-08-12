@@ -7,6 +7,7 @@
   },
   "include": [
     "tests/tooling/public-api-consumer.ts",
+    "tests/tooling/typed-messages-consumer.ts",
     "tests/tooling/backup-restore-prerequisites.ts",
     "tests/tooling/source-price-refresh-consumer.ts",
     "tests/tooling/source-price-refresh-duplicate-product-merge-consumer.ts",

@@ -13,6 +13,68 @@ import {
 } from "../../scripts/validate-boundaries.mjs";
 import { validateUiTextRoots } from "../../scripts/validate-ui-text.mjs";
 
+test("typed messages package境界はdeep importとappへの逆依存を拒否する", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "tests/tooling/consumer.ts",
+      source: [
+        'import "@pc-build-planner/typed-messages-core/src/contracts.js";',
+        'import "../../packages/typed-messages-core/dist/index.js";',
+      ].join("\n"),
+    },
+    {
+      path: "packages/typed-messages-core/src/reverse.ts",
+      source: [
+        'import "../../../src/ui-messages/public.js";',
+        'import "react";',
+        'import "react-dom/client";',
+        'import type {} from "chrome-types";',
+      ].join("\n"),
+    },
+  ]);
+
+  assert.deepEqual(
+    violations.map(({ rule }) => rule),
+    [
+      "typed-messages-core-public-entry-only",
+      "typed-messages-core-package-independence",
+    ],
+  );
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "tests/tooling/typed-messages-consumer.ts",
+        source: 'import {} from "@pc-build-planner/typed-messages-core";',
+      },
+    ]),
+    [],
+  );
+});
+
+test("typed messages consumerとpackage-first root gateがmanifestへ接続される", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const consumerConfig = JSON.parse(
+    await readFile("tsconfig.public-consumer.json", "utf8"),
+  );
+
+  assert.equal(
+    packageJson.devDependencies["@pc-build-planner/typed-messages-core"],
+    "workspace:*",
+  );
+  assert.ok(
+    consumerConfig.include.includes("tests/tooling/typed-messages-consumer.ts"),
+  );
+  assert.match(packageJson.scripts.build, /typed-messages-core/);
+  assert.match(
+    packageJson.scripts["validate:boundaries"],
+    /packages\/typed-messages-core.*typed-messages-consumer/,
+  );
+  assert.match(
+    packageJson.scripts["validate:ci"],
+    /build.*typecheck:public-consumer.*validate:boundaries/,
+  );
+});
+
 /** boundary ruleとStorageAccessGuardを同じ入力へ同時に適用する（三条件の同時検査）。 */
 const allBoundaryViolations = (sources) => [
   ...findBoundaryViolations(sources),

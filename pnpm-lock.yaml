@@ -220,6 +220,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.7
         version: 2.5.7
+      '@pc-build-planner/typed-messages-core':
+        specifier: workspace:*
+        version: link:packages/typed-messages-core
       '@playwright/test':
         specifier: 1.61.1
         version: 1.61.1

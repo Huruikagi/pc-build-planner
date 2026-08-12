@@ -261,6 +261,28 @@ const isForbiddenProjectContextConsumerImport = (sourcePath, specifier) => {
   return entry !== "public";
 };
 
+const TYPED_MESSAGES_PACKAGE = "@pc-build-planner/typed-messages-core";
+
+/** @param {string} specifier */
+const isTypedMessagesDeepImport = (specifier) =>
+  specifier.replaceAll("\\", "/").startsWith(`${TYPED_MESSAGES_PACKAGE}/`) ||
+  /(?:^|\/)packages\/typed-messages-core\/(?:src|dist)(?:\/|$)/.test(
+    specifier.replaceAll("\\", "/"),
+  );
+
+/** @param {string} sourcePath @param {string} specifier */
+const isForbiddenTypedMessagesDependency = (sourcePath, specifier) => {
+  const normalizedSource = sourcePath.replaceAll("\\", "/");
+  if (!/(?:^|\/)packages\/typed-messages-core\//.test(normalizedSource))
+    return false;
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  return (
+    /^(?:react(?:-dom)?(?:\/.*)?|chrome-types(?:\/.*)?)$/.test(
+      normalizedSpecifier,
+    ) || /(?:^|\/)src(?:\/|$)/.test(normalizedSpecifier)
+  );
+};
+
 // ProjectContextBoundaryGate (8.1, 8.4): preference adapter は storage API を
 // injection で受け取るため、key scope は expression chain ではなく file scope で
 // 検査する。`get` / `set` / `remove` の key argument が静的な文字列 literal として
@@ -1163,6 +1185,30 @@ export const findBoundaryViolations = (sources) => {
               )
           )
             rules.add("project-context-consumer-public-entry-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isTypedMessagesDeepImport(token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("typed-messages-core-public-entry-only");
+          if (
+            token.kind === SyntaxKind.StringLiteral &&
+            isForbiddenTypedMessagesDependency(normalizedPath, token.value) &&
+            tokens
+              .slice(Math.max(0, index - 4), index)
+              .some(({ kind }) =>
+                [SyntaxKind.ImportKeyword, SyntaxKind.FromKeyword].includes(
+                  kind,
+                ),
+              )
+          )
+            rules.add("typed-messages-core-package-independence");
           const pathValue = memberPath(tokens, index, aliases);
           if (
             !isWebLocksAdapter &&
