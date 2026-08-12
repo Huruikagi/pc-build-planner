@@ -54,8 +54,8 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 
 ## Specs (dependency order)
 
-- [ ] typed-messages-core -- React・Chrome・製品カタログ非依存の型安全なmessage coreとworkspace運用を確立する。 Dependencies: none
-- [ ] local-data-library-boundaries -- local data core、Chrome adapter、backup orchestration、製品policyの依存方向と抽出waveを確立する。 Dependencies: implementation:typed-messages-core
+- [x] typed-messages-core -- React・Chrome・製品カタログ非依存の型安全なmessage coreとworkspace運用を確立する。 Dependencies: none
+- [x] local-data-library-boundaries -- local data core、Chrome adapter、backup orchestration、製品policyの依存方向と抽出waveを確立する。 Dependencies: implementation:typed-messages-core
 
 ## Implementation Validation History
 
