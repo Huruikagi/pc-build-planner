@@ -1,5 +1,11 @@
 # Implementation Plan
 
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: product adapter・PC policy injectionは10.1–10.2、共有`AppDataError`と公開exportは11.1、用途別runtime capabilityは11.2、下流consumer migration seamは11.3、characterization・error contract・capability boundary・変更種別別検証は12.1–12.4で扱う。
+- **Out-of-scope preservation**: generic core、Chrome adapter、generic backup orchestration、下流feature実装、保存schema/error semanticsの変更をtaskへ含めない。既完了task 1–9とImplementation Notesは履歴として保持する。
+
 - [x] 1. TypeScript拡張プロジェクトと検証基盤を整える
 - [x] 1.1 厳密な型検査、ビルド、テストを実行できる開発環境を構成する
   - Node.js 26とpnpm 11で再現可能なTypeScript、ESMバンドル、テスト、Biomeの設定と共通検証コマンドを追加する
@@ -441,7 +447,87 @@
   - _Requirements: 1.1, 1.2, 1.4, 2.8, 4.6, 4.7, 5.4, 5.5, 6.3, 7.9, 7.10, 7.12, 7.14, 8.1, 8.2, 8.3_
   - _Boundary: Recovery and Schema Final Validation_
 
+- [ ] 10. package公開portへPC product policyを接続する
+- [ ] 10.1 product local-data adapterを確立する
+  - `local-data-library-boundaries`の公開entry consumer fixture（5.1）とroot topological build・変更scope最終gate（5.5）が完了してから着手する。
+  - `@pc-build-planner/local-data`のworkspace依存と宣言済みroot/Chrome exportを製品consumerへ固定し、PC root、schema正規値、validator、migration、reference repair、mutation operation、worker policyを設定する。
+  - package内部moduleへのdeep import、独自transaction・lock・Chrome adapter・generic backup orchestrationの再実装を行わない。
+  - 完了時、product adapterがpackage公開型だけで型検査され、PC policyの全必須hookを提供する。
+  - _Depends: local-data-library-boundaries 5.1, local-data-library-boundaries 5.5_
+  - _Requirements: 9.1, 9.2_
+  - _Boundary: ProductLocalDataAdapter_
+
+- [ ] 10.2 package errorを既存FoundationErrorへ意味不変で適合する
+  - packageのgeneric error分類を、既存`FoundationError`の種類、payload、利用側判定contextへ決定的に適合する。
+  - 未知または不完全な境界値を既知errorへ推測で畳み込まず、validation段階でfail closedに拒否する。
+  - 完了時、全既存variantの種類・意味・粒度が変わらず、欠落mappingを型検査またはcontract testが検出する。
+  - _Depends: 10.1_
+  - _Requirements: 3.4, 9.3, 9.5, 9.6_
+  - _Boundary: ProductLocalDataAdapter, FoundationErrorAdapter_
+
+- [ ] 11. 共有AppDataErrorと用途別公開capabilityを確立する
+- [ ] 11.1 (P) 共有AppDataError vocabularyと公開mappingを追加する
+  - candidate-managementから独立した共有data operation errorを定義し、全`FoundationError` variantのcode、payload、判定contextを一対一で保持する。
+  - feature固有のvalidation・workflow errorを吸収せず、domain公開入口だけから型とexhaustive mapperを利用可能にする。
+  - unknownなruntime error入力を境界validatorで検証し、不完全・未知値を既知variantへ変換せず観測可能なtyped validation failureとして返す。
+  - 完了時、公開consumerが共有errorを判別でき、全variant mappingと未知境界値のfail-closed contractが成功する。
+  - _Depends: 10.2_
+  - _Requirements: 9.4, 9.5, 9.6_
+  - _Boundary: AppDataErrorMapper, DomainPublicApi_
+
+- [ ] 11.2 (P) product adapter上へ用途別runtime capabilityを構成する
+  - 通常feature向けquery/mutation、read-only maintenance、worker registration、backup向けreplacement/recovery/finalizationを既存用途別handleへ接続する。
+  - 通常handleへbackup能力を、backup handleへ通常CRUD・raw root・package storage/lock・内部adapterを公開しない。
+  - 完了時、両handleのpositive/negative runtime shapeとaccess restriction失敗時のfail-closed初期化が既存contractどおりになる。
+  - _Depends: 10.2_
+  - _Requirements: 3.10, 7.15, 7.16, 7.17, 9.3, 9.8_
+  - _Boundary: RuntimeContributionFactory_
+
+- [ ] 11.3 下流consumer migration contractを固定する
+  - candidate-management、current-build、compatibility、candidate-source、source-price-refreshが共有`AppDataError`を、backup-restoreが用途限定capabilityを公開入口から利用できるtype fixtureを追加する。
+  - 下流実装ファイルは変更せず、candidate-owned共有error、`FoundationError`直接依存、product adapter再定義、package deep importをnegative fixtureで拒否する。
+  - 完了時、全consumer seamのpositive fixtureが型検査され、各negative fixtureが狙った所有権違反で失敗する。
+  - _Depends: 11.1, 11.2_
+  - _Requirements: 9.7, 9.8, 9.10_
+  - _Boundary: ProductConsumerContract_
+
+- [ ] 12. 製品境界のcharacterizationと変更影響gateを統合する
+- [ ] 12.1 product adapterのcharacterization回帰を追加する
+  - 架空fixtureだけでPC schema/migration/repair、revision、atomicity、worker再生成・fencing・認可をpackage公開port経由で検証する。
+  - 移管前の既存receiptと失敗結果をfixture化し、保存schema・error semantics・repair規則を変更しない。
+  - 完了時、product adapterのcharacterization suiteが既存の成功・失敗・data保全結果と一致する。
+  - _Depends: 11.3_
+  - _Requirements: 8.1, 8.2, 8.3, 9.1, 9.3, 9.9_
+  - _Boundary: ProductLocalDataValidation_
+
+- [ ] 12.2 (P) AppDataError mapping contractを追加する
+  - 全`FoundationError` variantのcode/payload/context一対一mappingと、公開consumerでのexhaustive判定を架空値で検証する。
+  - unknown・不完全なruntime値が既知errorへ縮退せずtyped validation failureとなることをnegative testで固定する。
+  - 完了時、mapping欠落、variant統合、payload欠落の各fixtureが狙ったcontract違反として失敗する。
+  - _Depends: 11.1_
+  - _Requirements: 9.4, 9.5, 9.6, 9.7_
+  - _Boundary: AppDataErrorContract_
+
+- [ ] 12.3 (P) runtime capabilityとimport ownershipのnegative gateを追加する
+  - 通常/backup capability分離、raw root/internal adapter非露出、package deep import、candidate-owned共有error、製品adapterのpackage側所有を個別negative fixtureで拒否する。
+  - 各negative fixtureは一つの違反だけを持ち、positive public consumer fixtureは宣言済み入口だけで型検査する。
+  - 完了時、通常・backupのpositive runtime shapeと全ownership negative gateが決定的に成功する。
+  - _Depends: 11.2, 11.3_
+  - _Requirements: 9.2, 9.7, 9.8_
+  - _Boundary: RuntimeCapabilityBoundaryGate_
+
+- [ ] 12.4 package変更と製品変更を分ける検証routingを完成する
+  - product adapter・PC policyだけの変更はfoundation characterizationとproduct consumer contractを実行する。
+  - package公開契約・generic error変更はpackage gateに加え、product adapter、AppDataError mapper、candidate-management、current-build、compatibility、candidate-source、source-price-refresh、backup-restore seamを実行する再現可能なscriptへ統合する。
+  - package内部import、export map不整合、mapping欠落、downstream seam不整合のいずれかがあれば成功扱いにしない。
+  - 完了時、製品変更とpackage変更のpositive/negative検証fixtureが期待する範囲を実行し、共通validation flowが成功する。
+  - _Depends: 12.1, 12.2, 12.3_
+  - _Requirements: 9.2, 9.9, 9.10_
+  - _Boundary: WorkspaceValidation_
+
 ## Implementation Notes
+
+- **Fresh task-graph sanity review (2026-08-12 dependency remediation)**: task 10.1の開始条件と`_Depends`が`local-data-library-boundaries 5.1/5.5`で一致し、5.5から5.1へ至るupstream chainは下流specへ逆依存しない。task 10.1→10.2→11→12の既存順序、単一boundary、observable completion、69 AC traceを再監査し、hidden prerequisite・循環・requirements/design矛盾なしでPASSとした。
 
 - 候補取得元の欠損や元表記snapshotは下流で補完せず、Foundationのoptional canonical契約へそのまま保存する。
 

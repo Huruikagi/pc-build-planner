@@ -2,13 +2,19 @@
 
 ## Introduction
 
-後続機能を実装する開発者が共通かつ安全な契約を利用できるように、Chrome 116以降のManifest V3拡張として動作する実行骨格、バージョン付きドメインモデル、検証付きローカル永続化を提供する。本機能により、機能ごとのモデル分岐、未信頼データによる破損、容量超過、将来のスキーマ移行困難を予防する。さらに、保存スキーマの現行版を一つの公開契約から判定できるようにし、保存ルートが破損または未対応版で通常利用できない場合も、利用者が明示的に選んだ有効なバックアップ候補による回復を安全に開始できるようにする。
+後続機能を実装する開発者が共通かつ安全な契約を利用できるように、Chrome 116以降のManifest V3拡張として動作する実行骨格、バージョン付きPCドメインモデル、検証付きローカル永続化を提供する。本機能により、機能ごとのモデル分岐、未信頼データによる破損、容量超過、将来のスキーマ移行困難を予防する。さらに、保存スキーマの現行版を一つの公開契約から判定できるようにし、保存ルートが破損または未対応版で通常利用できない場合も、利用者が明示的に選んだ有効なバックアップ候補による回復を安全に開始できるようにする。v0.5.0では、汎用storage・lock・transaction・replacement mechanismを上流workspace packageへ委譲し、本仕様は保存データの意味を決める製品adapter、PC固有policy、用途別runtime capability、および共有data operation errorのcanonical ownerとして既存挙動を維持する。
 
 ## Boundary Context
 
-- **In scope**: MV3拡張骨格、共有ドメイン契約、ID・日時規約、現行保存スキーマ版の一元的な公開、バージョン付き保存スキーマ、入力検証、CRUD基盤、参照整合性を保つ一括変更、正常・破損・未対応版の保存ルートに対する評価済み置換、保守操作中の保存抑止、容量監視、保存アクセス制限、移行境界、架空データによる検証。
-- **Out of scope**: 保存スキーマ版の値または保存データの意味・構造の変更、管理UI、商品ページ解析、候補・構成の業務操作、互換性規則、JSONファイルの入出力と回復確認UI、暗黙の初期化または自動破棄、サイト別処理、表示言語などドメイン外の利用者インターフェース設定の保存。
-- **Adjacent expectations**: 後続機能は本仕様のデータ契約と保存操作を利用するが、各機能固有の業務規則とユーザー表示を本基盤へ持ち込まない。バックアップ復元機能はJSONファイルの入出力、回復候補の提示、利用者の明示確認、回復後の利用者向け導線を所有し、本基盤が公開する現行スキーマ版と評価・置換・保守契約を利用する。表示言語のようなドメイン外の利用者インターフェース設定は、本基盤の保存ポートを経由しない独立した保存領域を用いてよく、本基盤はその整合性・容量・スキーマ版数を保証しない。
+- **In scope**: MV3拡張骨格、共有PCドメイン契約、ID・日時規約、現行保存スキーマ版の一元的な公開、バージョン付き保存スキーマ、入力検証、具体migration・reference repair、汎用packageへPC policyを設定するproduct local-data adapter、検証付きCRUD、正常・破損・未対応版rootの用途別runtime capability、低位`FoundationError`と一対一対応する共有`AppDataError`、容量監視、保存アクセス制限、架空データによるcharacterization・contract検証。
+- **Out of scope**: generic storage・lock・transaction・capacity・replacement mechanism、Chrome adapter、generic backup orchestrationの実装、保存スキーマ版の値または保存データの意味・構造の変更、error種類・意味・粒度の変更、管理UI、商品ページ解析、候補・構成の業務操作、互換性規則、JSONファイルの入出力と回復確認UI、暗黙の初期化または自動破棄、サイト別処理、表示言語などドメイン外の利用者インターフェース設定の保存、npm公開。
+- **Adjacent expectations**: `local-data-library-boundaries`は汎用mechanism、Chrome adapter、generic backup orchestrationを所有し、本仕様はその公開APIだけを使ってPC固有policyと用途別能力を構成する。候補管理、現在構成、互換性、candidate source、価格更新は共有`AppDataError`だけを公開入口から利用し、低位errorやproduct adapterを再所有しない。バックアップ復元機能は製品交換形式、file I/O、利用者確認、product backup adapterを所有し、本仕様の用途限定replacement capabilityを利用する。表示言語のようなドメイン外設定は独立保存領域を用い、本基盤はその整合性・容量・schema versionを保証しない。
+
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: product adapterとPC policy injectionは9.1–9.3、共有`AppDataError` vocabulary・一対一mapping・公開exportは9.4–9.6、用途別runtime capabilityとpackage公開API限定compositionは9.7–9.8、characterization・contract・変更種別別検証は9.9–9.10で扱う。
+- **Out-of-scope preservation**: generic core、Chrome adapter、generic backup orchestration、保存schemaの意味、`FoundationError`の種類・意味・粒度、raw rootと内部adapterの非公開、single write authority、atomicity、maintenance/recovery fencing、reference repair、worker認可を変更しない。
 
 ## Requirements
 
@@ -110,3 +116,19 @@
 1. When 基盤テストを実行する, the ローカルデータ基盤 shall 架空の商品、プロジェクト、構成データだけで主要契約を検証する
 2. The ローカルデータ基盤 shall CRUD、入力拒否、破損読取、未知バージョン拒否、容量不足、移行成功、移行失敗、アクセス拒否、参照修復、競合拒否、正常ルート置換、破損または未対応ルートからの回復用置換、およびbackup専用能力から通常CRUD・未検証root・保存adapter・排他制御へ到達できないことを自動検証可能にする
 3. The ローカルデータ基盤 shall 実サイト由来のHTML、画像、取得商品データをテスト資産として必要としない
+
+### Requirement 9: 製品adapterと共有data operation error境界
+
+**Objective:** As a PC Build Planner feature developer, I want PC固有の保存policyと共有data operation errorを一つの公開境界から利用したい, so that generic packageや候補管理featureへ製品責務を重複させず既存挙動を維持できる
+
+#### Acceptance Criteria
+1. When PC Build Plannerが汎用local data packageを構成する, the ローカルデータ基盤 shall 現行のPC root、schema version、validator、migration、reference repair、mutation operationを製品policyとして設定する
+2. The ローカルデータ基盤 shall 汎用packageの公開入口だけを利用して製品adapterを構成し、package内部moduleへ依存しない
+3. When 製品adapter経由で既存のread、mutation、replacement、maintenance、recovery操作を実行する, the ローカルデータ基盤 shall 保存schema、revision、repair、atomicity、fencing、認可、および失敗結果の意味を変更しない
+4. The ローカルデータ基盤 shall data operationの失敗を候補管理featureに属さない共有`AppDataError` vocabularyとして公開する
+5. When 低位`FoundationError`を共有errorへ変換する, the ローカルデータ基盤 shall 各error種類、意味、粒度、および利用側が判定する文脈を一対一に保持する
+6. If 未知の低位error値または不完全なerror値を受け取る, the ローカルデータ基盤 shall 既知の別errorへ推測で畳み込まずfail closedな型付き失敗として扱う
+7. When 候補管理、現在構成、互換性、candidate source、または価格更新がdata operation errorを扱う, the ローカルデータ基盤 shall 共有公開入口から同じ`AppDataError`契約を利用可能にし、各consumerへ`FoundationError`、product adapter、またはcandidate-owned errorの再定義を要求しない
+8. When backup-restoreが保存rootの評価、置換、回復、またはfinalizationを要求する, the ローカルデータ基盤 shall 通常CRUDとraw rootと内部adapterを含まない用途限定runtime capabilityを提供する
+9. When product local-data adapterまたはPC policyだけが変更される, the ローカルデータ基盤 shall 汎用packageの公開契約を変更せず製品ownerのcharacterization・consumer contractで影響を検証可能にする
+10. If 汎用packageの公開契約またはgeneric error分類が変更される, the ローカルデータ基盤 shall product adapter、`AppDataError` mapping、候補管理、現在構成、互換性、candidate source、価格更新、backup-restoreの接続を再検証対象として識別する

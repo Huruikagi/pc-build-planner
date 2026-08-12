@@ -1,5 +1,11 @@
 # Implementation Plan
 
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: candidate-owned `ManagementError` import/mappingの撤去と共有`AppDataError` consumer projectionは11.1、candidate query・current-build query・mutationのcontract移行と公開consumer検証は11.2、current project追従・構成操作・数量・参照整合・snapshot・表示・失敗時data保持の非回帰は11.3で扱う。
+- **Out-of-scope preservation**: 共有`AppDataError`のcanonical定義・低位mapping・種類・意味・粒度、構成規則、UI layout、保存schema、project-context/application-shell実装をtaskへ含めない。既完了task 1–10とImplementation Notesは履歴として保持する。
+
 - [x] 1. 現在構成の公開契約とカテゴリポリシーを確立する
 - [x] 1.1 現在構成の操作・読取・失敗契約を定義する
   - Foundationが所有するID、CurrentBuild、BuildItem、正整数、revision、Resultを再利用し、候補詳細や互換性結果を重複させない。
@@ -247,7 +253,39 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9_
   - _Boundary: Current build acceptance validation_
 
+- [ ] 11. 共有AppDataError consumerへ移行し既存挙動を回帰検証する
+- [ ] 11.1 共有data operation errorを既存の構成回復分類へ投影する
+  - domain公開入口の共有`AppDataError`を受け、全variantの種類と判定文脈を既存`BuildError`のcorrupt-data、unsupported-data、conflict、maintenance、quota、storageへ意味不変で写像する。
+  - 数量validation、候補不存在、カテゴリ規則違反は現在構成固有errorのまま維持し、共有errorのcanonical定義、低位mapping、payload、粒度を再定義しない。
+  - defaultで未知variantを既知分類へ推測せず、共有contract変更時に型検査または全variant contractが未対応mappingを検出する。
+  - 完了時、共有errorの全variantとpayload/contextを使うunit contractが既存回復分類を確認し、variant欠落を許さない。
+  - _Depends: local-data-foundation 11.1_
+  - _Requirements: 10.1, 10.2, 10.3, 10.4_
+  - _Boundary: AppDataErrorProjection_
+
+- [ ] 11.2 current-buildのdata failure seamと公開consumer契約を共有errorへ差し替える
+  - **実装開始条件**: 11.1の共有error projectionと`project-candidate-management` 14.2のcandidate query共有`AppDataError`移行が完了していること。いずれか未完了ならcandidate-owned error importを先行撤去しない。
+  - candidate build-eligible query、現在構成query、mutation portのdata operation failureを共有`AppDataError`として受け、candidate-owned `ManagementError` importと重複mapperをcurrent-build境界から撤去する。
+  - 候補照会、構成照会、保存の各入口を同じprojectionへ接続し、選択・数量・revision・query結果・公開`BuildError` shapeを変更しない。
+  - public consumerのpositive fixtureでdomain公開入口の共有errorだけを利用できることを確認し、candidate-owned error importとfoundation内部mappingへの依存をnegative boundary gateで拒否する。
+  - 完了時、current-buildの型検査、query/service/state contract、public consumer gateが共有errorだけで成功し、旧共有error importが存在しない。
+  - _Depends: 11.1, project-candidate-management 14.2_
+  - _Requirements: 10.1, 10.2, 10.3, 10.5_
+  - _Boundary: BuildService, CurrentBuildQuery, CurrentBuildPublicApi integration_
+
+- [ ] 11.3 構成管理とproject-context追従の全非回帰を検証する
+  - candidate query、構成query、保存で同じ共有error variantが同じ回復表示・操作可否・draft/data保持へ至ることをunit、contract、DOM、integrationで検証する。
+  - current projectのready/empty/unavailable追従、guardの保存・破棄・取消・forced/stale分岐、単一・複数選択、数量、参照修復、snapshot v1復元、日英カテゴリ要約を既存suiteで再実行する。
+  - 保存失敗時に直前の有効な構成と数量draftが保持され、追加write、project fallback、snapshot起点の選択、UI layout変更が発生しないことを確認する。
+  - 完了時、全59受入基準が自動testへ追跡され、current-build関連の型・境界・unit・contract・DOM・integration・E2E検証が成功する。
+  - _Depends: 11.1, 11.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
+  - _Boundary: Current build shared-error acceptance validation_
+
 ## Implementation Notes
+
+- v0.5.0では共有errorのownerをlocal-data-foundationへ移すが、current-buildの利用者向け`BuildError`と回復挙動は維持する。`AppDataErrorProjection`はconsumer側の意味不変なprojectionであり、`FoundationError`から`AppDataError`への一対一mappingや共有variantを定義しない。
+- 既存task 1–10は実装履歴として完了状態を保持する。task 11だけが`v0.5.0-boundary-reconciliation`の実装差分であり、candidate-management・local-data-foundation・project-context・application-shellの所有ファイルをcurrent-build taskへ含めない。
 
 - 9ではCurrentBuildFeatureRegistrationがmount時にdraft guard登録→context authority読込→snapshot検査の順で処理し、unmountでguard・context・operation policy・transient state・React rootを冪等解放する。project-context未注入時は候補一覧先頭へfallbackせずunavailableとしてfail closedにするため、side panel integration harnessもread/guard public portを明示的に注入する必要がある。
 

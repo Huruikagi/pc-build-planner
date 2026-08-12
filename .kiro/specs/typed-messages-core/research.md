@@ -6,8 +6,9 @@
 - **Discovery Scope**: Extension（既存システムからのintegration-focused extraction）
 - **Key Findings**:
   - 現行`src/ui-messages`の汎用mechanismは`contracts.ts`、`format.ts`、`resolver.ts`、`catalog-parity.ts`に存在するが、resolverとparityが具体的な日本語catalog、`MessageKey`、v0.3 release規則へ結合している。
-  - React binding、対応言語、fallback、configured resolverは製品policyであり、汎用packageへ移す必要がない。coreの公開APIを設定する薄いapp adapterを残せば既存consumerの公開面を維持できる。
-  - repositoryはまだ単一package構成である。最初のworkspace packageにはpackage単独のbuild/typecheck/test、export map、`workspace:*` consumer、topological build、deep import gateを同時に導入する必要がある。
+  - React binding、対応言語、fallback、configured resolver、製品parityは`ui-message-catalog`の製品policyであり、本specでは移行・変更しない。
+  - repositoryはまだ単一package構成である。最初のworkspace packageにはpackage単独のbuild/typecheck/test、export map、syntheticなread-only consumer、topological build、deep import gateを同時に導入する必要がある。
+  - **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`。generic packageとread-only fixtureだけをIn scopeとし、製品adapter・catalog・validation・runtime wiring・表示回帰をOut of scopeとして確定した。
 
 ## Research Log
 
@@ -20,7 +21,7 @@
   - `resolver.ts`の型aliasとfactoryは再利用可能だが、具体的な`MESSAGES`と`MessageKey`を直接importしている。factoryをcatalog genericへ閉じれば結合を除去できる。
   - `catalog-parity.ts`のkey・placeholder比較は汎用だが、required v0.3 keyとbilingual hint判定は製品release policyである。
   - 現行`MessageDescriptor`のnominal brandは実行時propertyを持たず、値は`key`と任意`params`だけなのでJSON直列化可能性を維持できる。
-- **Implications**: 汎用部分を移植し、具体catalogを設定するresolver/descriptorをapp adapterで再公開する。release固有parityはapp側でgeneric issueへ追加する。
+- **Implications**: 汎用部分は独立packageへ実装するが、具体catalogを設定するresolver/descriptor、release固有parity、既存app公開面の変更は`ui-message-catalog`へ委譲する。本specのconsumer evidenceは製品実装を変更しないfixtureに限定する。
 
 ### workspaceと公開境界の現状
 
@@ -29,9 +30,9 @@
 - **Findings**:
   - `pnpm-workspace.yaml`はpackage pathを未登録で、root scriptsはapp単体を直接検証する。
   - 公開consumerとdeep import拒否は既存のTypeScript fixtureとAST boundary scannerで確立済みであり、package境界にも同じ方式を拡張できる。
-  - app production buildはesbuildでbundleされるため、packageを先にbuildしてexport mapの公開成果物から解決するtopological順序が必要である。
+  - root build orchestrationにはpackageを先にbuildするtopological順序が必要だが、製品message runtimeをpackageへ切り替える必要はない。
   - package単独testは既存方針どおり`node:test`、`node:assert/strict`、`tsx`を利用でき、新しいtest runnerは不要である。
-- **Implications**: workspace registration、package scripts、root orchestration、consumer fixture、boundary negative fixtureを一つのfoundation waveとして扱う。
+- **Implications**: workspace registration、package scripts、root orchestration、read-only consumer fixture、boundary negative fixtureを一つのfoundation waveとして扱い、`src/ui-messages/**`を変更対象に含めない。
 
 ### 依存・セキュリティ適合性
 
@@ -48,7 +49,7 @@
 | Option | Description | Strengths | Risks / Limitations | Notes |
 |---|---|---|---|---|
 | 現行moduleをそのまま移動 | `src/ui-messages`全体をpackage化 | 移動が単純 | React、言語、製品catalogまで公開境界へ混入する | 不採用 |
-| 汎用core + app configured adapter | 純粋mechanismだけをpackage化し、製品policyを`src/ui-messages`に残す | 境界が明確で既存表示を維持できる | 一時的にadapterとcoreの2層が必要 | 採用 |
+| 汎用core + read-only fixture | 純粋mechanismだけをpackage化し、製品policyとruntimeは変更しない | owner重複なしでpackage契約を独立検証できる | 製品採用は後続specまで発生しない | 採用 |
 | 多数の小packageへ分割 | format、resolver、parityを別package化 | package単位の分離が最大 | 最初のconsumerに対して運用とversion面が過剰 | 不採用 |
 
 ## Design Decisions
@@ -65,17 +66,17 @@
 - **Trade-offs**: package内では複数の密接なprimitiveをまとめるが、すべて「catalogから型付きmessageを解決する」という一責務に閉じる。
 - **Follow-up**: 2番目のconsumer導入時にpackage名、公開symbol、semver方針を再評価する。
 
-### Decision: catalog genericなconfigured factoryを公開する
+### Decision: catalog genericなfactoryを公開し、製品設定は後続ownerへ委譲する
 
 - **Context**: 現行resolverとdescriptor生成は具体的な`MessageKey`へ結合している。
 - **Alternatives Considered**:
   1. `string` keyを受ける非型付きresolver。
   2. 呼び出しごとにcatalog genericを明示する独立関数群。
   3. catalogからresolverとdescriptor factoryを生成するconfigured API。
-- **Selected Approach**: `createMessageResolver(catalog)`と`createMessageDescriptorFactory<Catalog>()`を公開し、`MessageResolver<Catalog>`と`MessageDescriptor<Catalog>`を同じ型導出規則へ接続する。
-- **Rationale**: app adapterが一度だけ製品catalogを設定し、既存consumerへ具体型を再公開できる。
-- **Trade-offs**: descriptor factoryの設定コードはapp側に残るが、coreに製品catalog singletonを持ち込まずに済む。
-- **Follow-up**: app移行時に既存の`message()`と`defaultMessageResolver`の公開signatureが維持されることをconsumer fixtureで確認する。
+- **Selected Approach**: `createMessageResolver(catalog)`と`createMessageDescriptorFactory<Catalog>()`を公開し、`MessageResolver<Catalog>`と`MessageDescriptor<Catalog>`を同じ型導出規則へ接続する。synthetic fixtureだけで公開契約を検証する。
+- **Rationale**: generic APIを製品catalogから独立して証明でき、configured app adapterのcanonical ownerと競合しない。
+- **Trade-offs**: 本spec完了時点では製品runtimeはpackageを採用しないが、package境界と型契約は独立して検証できる。
+- **Follow-up**: `ui-message-catalog`が採用時に既存の`message()`と`defaultMessageResolver`の公開signatureを維持する。
 
 ### Decision: parityをmechanismとpolicyへ分ける
 
@@ -83,9 +84,9 @@
 - **Alternatives Considered**:
   1. 現行parity optionsをすべてpackageへ移す。
   2. key・placeholder issueだけをpackageへ移し、製品ruleをapp側で合成する。
-- **Selected Approach**: packageは`missing-key`、`excess-key`、`placeholder-mismatch`だけを安定codeとして返す。compile-time parity型も同じ構造範囲に限定する。
+- **Selected Approach**: packageは`missing-key`、`excess-key`、`placeholder-mismatch`だけを安定codeとして返す。compile-time parity型も同じ構造範囲に限定し、製品ruleの合成や検証scriptは実装しない。
 - **Rationale**: coreの責務を言語・release policy非依存に保てる。
-- **Trade-offs**: app側parity検査がgeneric結果とrelease固有結果を合成する必要がある。
+- **Trade-offs**: 製品側parity検査の統合は`ui-message-catalog`の更新まで延期される。
 - **Follow-up**: `ui-message-catalog`更新時に既存v0.3 ruleの非回帰を検証する。
 
 ### Decision: build済み公開成果物をconsumer境界にする
@@ -94,18 +95,18 @@
 - **Alternatives Considered**:
   1. export mapをpackage sourceへ向ける。
   2. packageをTypeScriptでbuildし、`dist/index.js`と`dist/index.d.ts`だけをexportする。
-- **Selected Approach**: package単独buildでESM JavaScriptとdeclarationを生成し、root app build/typecheckはpackage build後に`workspace:*` dependencyのexport mapから解決する。
-- **Rationale**: 実際のconsumerと同じ公開境界を開発時にも検証できる。
+- **Selected Approach**: package単独buildでESM JavaScriptとdeclarationを生成し、read-only fixtureはpackage build後に`workspace:*` dependencyのexport mapから解決する。
+- **Rationale**: 製品実装を書き換えず、実consumerと同じroot export境界を検証できる。
 - **Trade-offs**: root validationにpackage build前提が増えるため、scriptで順序を固定する。
-- **Follow-up**: clean checkoutからtopological buildとapp consumer typecheckが再現できることを検証する。
+- **Follow-up**: clean checkoutからtopological buildとread-only consumer typecheckが再現できることを検証する。
 
 ## Risks & Mitigations
 
-- 型導出の移植で既存consumerのparameter判定が変わる — compile-time positive/negative fixtureとapp consumer contractで固定する。
-- app adapterへ製品policyを残す際にcore実装が重複する — app側はcatalog設定とpolicy合成だけに限定し、format/resolver/parity実装の重複をboundary testで拒否する。
+- 型導出の移植で公開parameter判定が誤る — compile-time positive/negative fixtureとread-only consumer contractで固定する。
+- 製品実装とpackage実装が一時的に重複する — 本specでは製品側を変更・削除せず、後続`ui-message-catalog`が移行責任を持つことを境界とtaskで固定する。
 - export mapをsource deep importで迂回する — package export map、source scanner、negative fixtureの三段で拒否する。
 - root commandがpackage buildを暗黙に要求する — package単独commandとtopological root scriptを明示し、clean outputからの検証をtooling testで固定する。
-- package変更とcatalog-only変更の検証範囲が再び混ざる —変更種別別scriptをpackage.jsonに置き、tooling testで含まれるgateを検査する。
+- package変更とcatalog-only変更の検証範囲が再び混ざる — core scriptはpackage・read-only fixture・boundaryだけを含め、product-only検証は`ui-message-catalog`へ委譲する。
 
 ## References
 

@@ -1,5 +1,11 @@
 # Implementation Plan
 
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope task delta**: Task 13–16は既存query/editor intentを維持したduplicate専用`CandidateCreatePort`、candidate-only error dependency seam、project lifecycle host、source editor・identity consumer adapter、旧owner撤去、candidate操作非回帰、migration boundary gateを扱う。
+- **Out-of-scope preservation**: Task 1–12とImplementation Notesは実装履歴として保持する。project lifecycle、共有`AppDataError`定義・mapping、source core、product identity core、production composition、error semantics、候補UI layout、既存query/editor intent、保存形式を本specで実装または変更しない。
+
 - [x] 1. 候補管理featureの参加境界を準備する
 - [x] 1.1 shell登録と公開入口の骨格を実装する
   - feature内だけに公開入口、registration、style入口を作り、共有runtime入口、HTML host、root barrelを変更しない。
@@ -313,8 +319,120 @@
   - _Requirements: 1.1, 1.5, 1.8, 2.1, 2.6, 3.1, 3.6, 3.7, 6.1, 6.6, 7.1, 7.2, 7.3, 8.2, 8.3, 8.4, 8.5, 9.3, 9.4_
   - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, Production Candidate Management E2E_
 
+- [ ] 13. Candidate-onlyの移行seamを確立する
+- [ ] 13.1 candidate公開契約と共有data errorのconsumer seamを固定する
+  - 既存の候補queryとtyped editor intentを非回帰で維持し、重複商品workflowがmatchなしまたは明示新規保存を一度だけ委譲するcreate-only `CandidateCreatePort`をcanonical public entryへ追加する。
+  - `CandidateCreatePort`はcandidate draftとmutation contextを受ける作成だけを公開し、update/delete、project lifecycle、source match/add/conditional mutation、共有data errorのownershipを公開面へ含めない。
+  - 候補固有の項目検証と共有`AppDataError`を区別し、既存data errorのvariant、payload、表示結果をcharacterization fixtureで固定する。
+  - 完了時、query・`CandidateCreatePort`・typed editor intentを正しい公開入口から使うconsumerが型検査され、旧`ManagementError`、candidate-owned mapper/exportまたはcandidate-owned source portを使うfixtureが所有権違反として失敗する。
+  - _Depends: local-data-foundation 11.1, 11.3_
+  - _Requirements: 1.8, 2.5, 4.5, 5.4, 6.2, 6.10_
+  - _Boundary: CandidateManagementPublicApi, CandidateCreatePort, CandidateOperationError_
+- [ ] 13.2 project lifecycle presentationのhost seamを追加する
+  - 共通project lifecycle portとhost-neutral presentation contributionを既存project操作領域へ接続し、候補管理内でcommand、validation、削除確認、refresh、messageを再実装しない。
+  - current project購読、候補draft guard、forced切替保護を既存adapterに残し、lifecycle成功snapshotだけから候補一覧とpending pre-editを更新する。
+  - 完了時、共通presentationが既存領域でmount/unmountされ、dirty取消ではlifecycle mutationが始まらず、commit後refresh失敗では共通のrefresh-only回復だけが利用できる。
+  - _Depends: project-context 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 8.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 3.1, 3.6, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+  - _Boundary: ProjectLifecycleHostAdapter, ProjectContextAdapter_
+- [ ] 13.3 (P) source editorのconsumer seamを追加する
+  - **実装開始条件**: `candidate-source-bookmarks` 10.4のcanonical source public entryとconsumer contractが利用可能であること。未完了なら旧内部coreへ接続する暫定seamを追加しない。
+  - 取得元ownerのcatalog/mutation portを既存source editor stateへ適合する依存境界を追加する。
+  - source entity・URL identity・mutationを実装、再公開、複製せず、canonical port未注入時は旧内部coreへfallbackしない。
+  - 完了時、架空の公開portから取得元表示・変更結果を既存UI stateへ渡せ、未注入・失敗時は候補draftと既存表示を保持したfail-closed結果になる。
+  - _Requirements: 4.1, 4.3, 4.6, 6.3, 6.7, 6.8_
+  - _Boundary: CandidateSourceEditorAdapter_
+  - _Depends: candidate-source-bookmarks 10.4_
+- [ ] 13.4 (P) 商品同一性のconsumer seamを追加する
+  - **実装開始条件**: `duplicate-product-merge` 6.1のcanonical identity public entryが利用可能であること。未完了ならproduct captureまたは旧内部処理へ接続する暫定seamを追加しない。
+  - 商品同一性ownerのnormalizer/判断contractを既存の保存前判断stateへ適合する依存境界を追加する。
+  - product identity・matcher・統合mutationを実装または再公開せず、canonical contract未注入時はproduct captureまたは旧内部処理へfallbackしない。
+  - 完了時、架空の公開contractから重複判断を既存UI stateへ渡せ、未注入・失敗時はcandidate draftと判断stateを保持したfail-closed結果になる。
+  - _Requirements: 6.9_
+  - _Boundary: CandidateIdentityConsumer_
+  - _Depends: duplicate-product-merge 6.1_
+
+- [ ] 14. 移管済み責務をcandidate境界から撤去する
+- [ ] 14.1 旧project lifecycle実装を共通hostへ置き換える
+  - 共通presentationのhost contractが利用可能になってから、candidate-owned project service、state、form、削除確認、message発火を同じ変更で撤去する。
+  - candidate draft guard、current project binding、project-required、既存host containerと操作順を維持し、旧command authorityとの共存期間を作らない。
+  - 完了時、project操作は共通lifecycleへ一回だけ到達し、候補管理内に重複form・確認・message・refresh処理が存在しない。
+  - _Depends: 13.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+  - _Boundary: ProjectLifecycleHostAdapter, ManagementState, ManagementView_
+- [ ] 14.2 共有data errorのimportとCandidateCreatePort実装へ移行する
+  - 候補service、query、stateのdata operation failureをfoundation公開入口の`AppDataError`へ差し替え、旧`ManagementError`定義・`FoundationError` mapping・公開exportを撤去する。
+  - 13.1で固定した`CandidateCreatePort`を共有`AppDataError`対応済みの既存candidate create serviceへ接続し、matchなし・明示新規保存の一回だけcreateを実行する。queryとtyped editor intentの既存実装は変更しない。
+  - 候補固有field validationだけをowner-local errorとして残し、data errorの種類・粒度・表示・入力と一覧の保持を変更しない。
+  - 完了時、全data pathと`CandidateCreatePort`が共有variantをexhaustiveに扱い、旧mapperやcandidate-owned共有errorへの参照が0件で、既存の各失敗表示、query、typed editor intentが同じ利用者・consumer結果になる。
+  - _Depends: 13.1_
+  - _Requirements: 2.5, 4.5, 5.4, 6.2, 6.10_
+  - _Boundary: CandidateManagementService, CandidateQuery, CandidateCreatePort, ManagementState_
+- [ ] 14.3 candidate-owned source coreをcanonical ownerへ移す
+  - **実装開始条件**: 13.3のconsumer seamと`candidate-source-bookmarks` 10.4のcanonical source public entryが利用可能であること。いずれか未完了なら旧ownerを先行削除せず、このtaskを開始しない。
+  - 公開contractが利用可能になった後だけ、candidate-owned source catalog/mutation/URL identityを撤去し、consumer adapterと既存source editor state/viewだけを残す。
+  - 完了時、取得元編集がcanonical公開port経由で成功し、旧source export、deep import、暗黙fallbackをnegative fixtureが拒否する。
+  - _Depends: 13.3, candidate-source-bookmarks 10.4_
+  - _Requirements: 4.1, 4.3, 4.6, 6.3, 6.7, 6.8_
+  - _Boundary: CandidateSourceEditorAdapter, CandidateManagementPublicApi_
+- [ ] 14.4 旧product identity依存をcanonical ownerへ移す
+  - **実装開始条件**: 13.4のconsumer seamと`duplicate-product-merge` 6.1のcanonical identity public entryが利用可能であること。いずれか未完了ならproduct-capture identity importを先行削除せず、このtaskを開始しない。
+  - 公開contractが利用可能になった後だけproduct-capture identity importを撤去し、consumer adapterと既存duplicate判断state/viewだけを残す。
+  - 完了時、重複確認がcanonical公開contract経由で成功し、旧identity import、deep import、暗黙fallbackをnegative fixtureが拒否する。
+  - _Depends: 13.4, duplicate-product-merge 6.1_
+  - _Requirements: 6.9_
+  - _Boundary: CandidateIdentityConsumer_
+
+- [ ] 15. Candidate管理の非回帰を境界別に検証する
+- [ ] 15.1 候補CRUD・照会・error表示を回帰する
+  - 欠損・未分類を許容する作成、カテゴリ別照会、完全draft編集、カテゴリ変更、候補削除を共有`AppDataError` consumer化後も検証する。
+  - current project以外への表示・保存、保存失敗時のdraft消失、data error variant統合が起きないことを架空fixtureで確認する。
+  - 完了時、候補CRUDと一覧・項目error・保存errorのunit/DOM/integration suiteが移行前と同じ利用者結果で成功する。
+  - _Depends: 14.2_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.4, 6.5, 6.6, 6.10_
+  - _Boundary: CandidateManagementService, CandidateQuery, ManagementState, ManagementView_
+- [ ] 15.2 pre-edit・draft guard・snapshot契約を回帰する
+  - readyへのpre-edit binding、empty/unavailableのpending、共通lifecycle成功後の継続、通常/強制切替時のdraft保護を検証する。
+  - snapshot version 3/shape、project IDの非権威性、pendingのsession限定寿命を維持し、lifecycle hostがcontextやsnapshot authorityを逆流させないことを確認する。
+  - 完了時、activation、guard、forced notification、snapshotの全既存分岐が成功し、draftが暗黙破棄・再binding・永続化されない。
+  - _Depends: 14.1_
+  - _Requirements: 6.1, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2, 9.3, 9.4, 9.5_
+  - _Boundary: CandidateActivation, ProjectContextAdapter, ManagementStateSnapshotCodec_
+- [ ] 15.3 (P) source editorを回帰する
+  - canonical source portによる一覧、追加、変更、削除を既存UI操作から検証する。
+  - port失敗・未注入では候補draftとsource表示を保持し、旧coreへfallbackしないことを確認する。
+  - 完了時、source editorのlayout・操作順・error表示が移行前と同じで、owner境界だけが差し替わったsuiteになる。
+  - _Depends: 14.3_
+  - _Requirements: 4.1, 4.3, 4.6, 6.3, 6.7, 6.8_
+  - _Boundary: CandidateSourceEditorAdapter, ManagementView_
+- [ ] 15.4 (P) 商品同一性consumerを回帰する
+  - canonical identity contractによる保存前判断を既存UI操作から検証する。
+  - contract失敗・未注入ではcandidate draftとduplicate判断stateを保持し、product captureまたは旧matcherへfallbackしないことを確認する。
+  - 完了時、duplicate判断UXが移行前と同じで、identity ownerだけが差し替わったsuiteになる。
+  - _Depends: 14.4_
+  - _Requirements: 6.9_
+  - _Boundary: CandidateIdentityConsumer, ManagementView_
+
+- [ ] 16. migration boundaryと利用者フローを統合検証する
+- [ ] 16.1 公開importと旧owner撤去を機械gateで固定する
+  - 正常fixtureはproject lifecycle、`AppDataError`、source、identityを各canonical公開入口だけから利用し、candidate公開APIの既存query・duplicate専用`CandidateCreatePort`・typed intentを型検査する。
+  - negative fixtureはcandidate-owned project lifecycle、`ManagementError`/mapper、source core/re-export、product-capture identity import、隣接ownerへのdeep importを一違反ずつ拒否する。
+  - 完了時、全positive/negative fixtureが狙った結果となり、candidate境界に移管元実装または共有proxyが残っていない。
+  - _Depends: 14.1, 14.2, 14.3, 14.4_
+  - _Requirements: 1.8, 6.3, 6.4, 6.5, 6.7, 6.8, 6.9, 6.10_
+  - _Boundary: CandidateManagementBoundaryGate_
+- [ ] 16.2 共通project操作とcandidate管理の統合回帰を完成する
+  - 既存host領域の共通project操作、候補CRUD、pre-edit継続、dirty取消/確定、source editor、重複判断、共有data error表示をDOM・integrationで通し、既存production artifactのcandidate flowが回帰しないことを確認する。
+  - project操作control、削除確認、messageが重複せず、候補UI layout、snapshot version 3、保存形式、既存error semanticsが変わらないことを確認する。
+  - 移行後portのproduction注入、旧shell proxy撤去、移行後production E2Eはapplication-shellの後続taskへ残し、本taskは公開seamを使うsynthetic compositionとcandidate-owned runtime回帰だけを変更する。
+  - 完了時、全candidate利用者フローと境界gateが成功し、後続application-shellが公開portだけでproduction wiringを完了できる。
+  - _Depends: 15.1, 15.2, 15.3, 15.4, 16.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2, 9.3, 9.4, 9.5_
+  - _Boundary: CandidateFeatureRegistration, ManagementView, Production Candidate Management E2E_
+
 ## Implementation Notes
 
+- **Fresh task-graph sanity review (2026-08-12)**: Requirements/Designから独立してTask 13–16を再監査した。13.1で`CandidateCreatePort`のpublic shapeを固定し、14.2で共有`AppDataError`対応済みcandidate create実装へ接続してから15.1・16.1・16.2で非回帰を検証する順序は一方向である。13.4/14.4はduplicate-product-merge 6.1だけを待ち、duplicate 6.2はcandidate 14.2を待つため、依存はidentity 6.1→candidate移行→candidate 14.2→duplicate 6.2となりcycleを形成しない。query/editor intent、candidate CRUD ownership、source owner境界、全AC・file・dependency traceに欠落はなくPASSとした。
 - project削除カスケードはlocal-data-foundation 3.9／task 6.9が所有し、CandidateManagementServiceは単一project-delete mutationだけを発行する。
 - 2026-07-31にChromeの拡張機能アクションから、抽出draftのproject-required表示、project作成後の同一draft編集継続、候補保存・一覧反映までを手動確認した。
 - Production compositionでは内部queryと公開`CandidateQuery`を別々明示配線し、snapshot codecは自身がcaptureする全表示エラーのround-tripを回帰テストで保証する。

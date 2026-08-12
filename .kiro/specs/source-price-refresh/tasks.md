@@ -1,5 +1,12 @@
 # 実装計画
 
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope**: source public match/conditional patch consumer、`ManagementError`撤去、共有`AppDataError` mapping、価格workflowとunit/contract/runtime/UI/E2E非回帰をtask 7へ割り当てる。
+- **Out of scope**: URL identity・source core/policy/ambiguity、candidate mutation、canonical error定義・意味・粒度、価格抽出規則、監視・履歴、application-shell composition、UI layout。
+- **History preservation**: task 1〜6の完了履歴とnative menu証跡を維持し、boundary reconciliation差分だけを未完了taskとして追加する。
+
 - [x] 1. 公開境界と実行前提を確立する
 
 - [x] 1.1 上流portを消費する価格更新の公開契約を確立する
@@ -197,7 +204,39 @@
   - _Boundary: ValidationGates, NativeMenuSmokeRecord_
   - _Depends: 6.1, 6.2_
 
+- [ ] 7. canonical source/error consumer境界へ移行する
+
+- [ ] 7.1 source match/conditional patchと共有errorのconsumer contractを固定する
+  - **実装開始条件**: `candidate-source-bookmarks` 10.4のcanonical match/conditional price patch public entryと`local-data-foundation` 11.1の`AppDataError`公開入口が利用可能であること。いずれか未完了なら旧ownerを先行削除せず待機する。
+  - source ownerの公開match portへcatalog/candidate scopeとpage URLを渡し、unique target、ambiguity、eligibility、opaque preconditionを受け取るpositive consumer fixtureを追加する。
+  - conditional patchへtarget、precondition、price、capturedAtだけを渡し、primary projectionと非対象field保持をsource ownerへ委譲する契約を固定する。
+  - foundation公開入口の`AppDataError`をexhaustiveに扱い、旧`ManagementError`、candidate-management source proxy、URL identity/locator、内部source mutation、FoundationError mapperへのimportをnegative gateで拒否する。
+  - _Depends: local-data-foundation 11.1, candidate-source-bookmarks 10.4_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 4.1, 4.5, 6.3, 6.4, 7.1, 7.2, 7.5, 7.7_
+  - _Boundary: SourcePublicPortAdapter, SourcePriceRefreshPublicApi consumer contract_
+
+- [ ] 7.2 price refresh workflow/state/UIをcanonical portへ接続する
+  - fixed-tab extraction後にsource public match→conditional patchを一度だけ呼び、旧URL normalization、catalog走査、source再読込、candidate mutationをfeature内から撤去する。
+  - `AppDataError`のvalidation、conflict、maintenance、storage、quota、unsupported-dataを既存`SourcePriceRefreshError`、recoverability、messageへ意味・粒度を変えず写像する。
+  - explicit context menu action、activeTab、世代gate、price-only patch、失敗時の旧price/capturedAt保持、primary/non-primary projection、unexpected throw containmentを維持する。
+  - feature contributionとworker-safe menu registrationだけを公開し、application-shell composition file、source owner、candidate-management、foundation実装を変更しない。
+  - _Depends: 7.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.6, 7.2, 7.3, 7.4, 7.5, 7.6_
+  - _Boundary: SourcePriceRefreshService, State, View, FeatureContribution, WorkerPublic_
+
+- [ ] 7.3 contract・runtime・UI・E2Eとownership gateを完了する
+  - source match/patch consumer contract、全`AppDataError` mapping、fixed-tab extraction、generation fence、context menu runtime、state/DOM、primary/non-primary、no-match/ambiguous/ineligible/conflict/storage failureを架空fixtureで回帰する。
+  - production activation transport後段のPlaywrightと既存native menu証跡を再検証し、価格workflow移行後も明示操作からtransient結果までの利用者結果が一致することを確認する。
+  - source owner、Foundation error owner、application-shell composition owner、本specのprice workflow/UI ownerが重複せず、循環proxy、deep import、旧`ManagementError`、production shell file変更がないことを監査する。
+  - 45件のAcceptance Criteria、Change Brief In/Out、file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
+  - _Depends: 7.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
+  - _Boundary: Source price refresh final ownership and regression validation_
+
 ## Implementation Notes
+
+- `v0.5.0-boundary-reconciliation`以後、canonical URL identity/matcher/ambiguity/patchはsource owner、`AppDataError`はFoundation、production compositionはapplication-shellが所有し、本specはprice extraction workflow、state/UI、feature/worker public contributionだけを所有する。
+- **Fresh task-graph sanity review (2026-08-12)**: 独立reviewer dispatchを試みたが共有thread上限で作成できなかったため、update-batch fallbackに従ってRequirements/Designから独立した観点でtask 7を再監査した。7.1→7.2→7.3は一方向で循環せず、上流依存はFoundation共有errorと確定candidate/source public seamだけである。各taskはconsumer contract、workflow統合、最終回帰へ分離され、source core、canonical error、candidate mutation、shell compositionを変更対象に含めない。45 ACとChange Brief In/Out、explicit action・activeTab・固定世代・price-only・failure preservation・transient UIのtraceに欠落はなく、修正指摘なしでPASSとした。
 
 - 6.3: 2026-08-02 15:45 JST、Windows 11 Home（NT 10.0.26200.0）・Playwright 1.61.1のheaded Chromiumで `SOURCE_PRICE_REFRESH_NATIVE_SMOKE=1 pnpm exec playwright test e2e/source-price-refresh.native-smoke.spec.ts --workers=1` を実行し、利用者がbrowser-native「価格を更新」を選択して1 passed（23.6秒、exit 0）。続けて `pnpm validate` はexit 0（Node 1,429/1,429、Playwright 26 passed・native gate 1 skipped）で、native選択証拠は前者、production activation transport後段と全機械gateは後者として分離記録した。要件38件は37件の自動証拠と要件6.5のheaded実選択証拠で全件充足し、関連contract・設計・境界の独立再監査に新たなNO-GO所見はない。
 

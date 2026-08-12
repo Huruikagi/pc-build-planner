@@ -2,6 +2,12 @@
 
 > **実装前提**: 上流 `runtime-schema-validation` の configured runtime schema 公開入口と production gate が実装・検証済みであること。未完了の場合は本 spec 内で代替 schema や direct Zod import を追加せず、Task 1.2 を開始しない。
 
+## Change Brief Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope task delta**: Task 6–9 は `v0.5.0` の `ProjectLifecyclePort` / service / state、作成・改名・削除、削除確認、最小 data port、成功後 refresh・失敗時非 refresh、既存表示を保つ presentation、contract / DOM / E2E を維持し、lifecycle message を semantic intent・発火条件・必要 parameter・key 非依存 descriptor と resolver consumer seam に限定する。
+- **Preserved boundary**: Task 1–5 の selection preference、fallback、guard、generation、selector、replacement guard、implementation notes を維持する。lifecycle の ja/en 物理 catalog file、具体 key/value、descriptor-to-key mapping、aggregation、parity は `ui-message-catalog` に委譲し、layout・CSS、独立 project 管理画面、candidate 一覧/editor 情報設計、foundation の reference repair algorithm、保存形式、v1.0.0 UI 全面刷新は Task 6–9 に含めない。
+
 - [x] 1. project context の基礎契約と信頼境界を確立する
 
 - [x] 1.1 検証済み snapshot と ordered catalog projection を実装する
@@ -165,8 +171,117 @@
   - _Boundary: ProjectContext Final Validation_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
 
+- [ ] 6. canonical project lifecycle の contract と service を追加する
+
+- [ ] 6.1 project lifecycle contract と最小 data port を確立する
+  - project の作成・更新・削除だけを表す mutation、lookup、最新 revision に結び付く mutation context、安定した lifecycle error、commit result の契約を project-context に定義する。
+  - foundation adapter は project mutation だけを一回委譲し、root shape、candidate/current-build collection、reference repair policy、Chrome storage を公開しない。
+  - project 削除が foundation の既存 atomic transaction を通り、所属 candidate/current-build 参照を中間状態なしで修復する positive contract と、repair algorithm を project-context が再実装しない boundary test を追加する。
+  - create/update/delete、not-found、conflict、maintenance、storage、quota、unsupported data が project 名・ID・保存値を含まない結果へ閉じる状態を完了とする。
+  - _Requirements: 9.1, 9.2, 9.6, 9.10_
+  - _Boundary: ProjectLifecycleDataPort_
+
+- [ ] 6.2 project の作成・改名 service を実装する
+  - project 名を trim して空白だけの入力を field validation failure とし、保存と refresh を行わない。
+  - 作成時の ID・日時と改名時の更新日時を project-context が決定し、data port へ一回だけ mutation を要求する。
+  - 保存成功後に context refresh を一回実行し、empty からの作成では作成 project、改名では同じ project ID が最新名で公開されることを固定する。
+  - service 自身を lifecycle single-flight authority とし、public port の直接並行呼出しを含む重複 command を安定した `operation-in-progress` として data mutation 前に拒否する。
+  - validation、mutation failure、成功後 refresh failure の各 test で重複 mutation が発生せず、refresh failure 後は refresh だけを再試行できる状態を完了とする。
+  - _Requirements: 4.1, 4.2, 4.5, 4.6, 9.1, 9.2, 9.3, 9.7, 9.8, 9.10, 9.11, 9.12_
+  - _Boundary: ProjectLifecycleService_
+  - _Depends: 6.1_
+
+- [ ] 6.3 project 削除と post-commit recovery を実装する
+  - 確認済み project ID の delete mutation を data port へ一回だけ要求し、削除 cascade や reference repair の内容を service 内で解釈しない。
+  - 保存失敗では context refresh と generation 更新を行わず、保存成功後だけ最新 catalog を再検証する。
+  - current project 削除後は残る先頭 project または empty、非 current project 削除後は current selection 維持へ既存 fallback 規則で収束させる。
+  - commit 後 refresh failure を mutation failure と区別し、delete を再送せず refresh-only retry で ready/empty へ回復する。retry が別 lifecycle command と重なる場合も lifecycle refresh error の `operation-in-progress` として拒否できる状態を完了とする。
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 9.6, 9.9, 9.10, 9.11, 9.12_
+  - _Boundary: ProjectLifecycleService Delete and Recovery_
+  - _Depends: 6.2_
+
+- [ ] 7. project lifecycle state と既存表示契約を提供する
+
+- [ ] 7.1 framework-independent lifecycle state と削除確認を実装する
+  - name input、rename target、delete confirmation target、pending、field/error、refresh-only recovery を candidate state から独立した state として保持する。
+  - delete request は catalog 上の project ID と表示名を一つの confirmation snapshot へ固定し、cancel では service、preference、generation を変更しない。
+  - command または後続 refresh 中は UI control を無効化し、service の single-flight rejectionを表示可能にする。commit 済み refresh failure 後は mutation control を再送せず retry だけを許可する。
+  - create、rename、delete confirm/cancel、stale target、failure/retry の state test で candidate draft/list/editor state を必要とせず全遷移を観測できる状態を完了とする。
+  - _Requirements: 9.3, 9.4, 9.5, 9.10, 9.11, 9.12, 10.3, 10.6_
+  - _Boundary: ProjectLifecycleState_
+  - _Depends: 6.3_
+
+- [ ] 7.2 project lifecycle の semantic message descriptor を追加する
+  - project 一覧、作成、改名、対象名と所属候補も削除される影響を示す削除確認、validation、mutation failure、pending、refresh retry を区別する key 非依存の intent と必要 parameter を定義する。
+  - lifecycle state と command result の各遷移を descriptor へ写像し、locale や物理 `MessageKey` に依存せず同じ意味・発火条件を保つ。
+  - presentation が descriptor を渡す resolver consumer port を提供し、ja/en catalog file、具体 key/value、descriptor-to-key mapping、aggregation、parity を project-context へ追加しない。
+  - descriptor contract test で全 intent の発火条件と project 名・operation・安定 error category parameter が観測でき、catalog 内部を import しない状態を完了とする。
+  - _Requirements: 10.1, 10.3, 10.7_
+  - _Boundary: ProjectLifecycleMessageDescriptors_
+  - _Depends: 7.1_
+
+- [ ] 7.3 lifecycle presentation と host-neutral mount contract を実装する
+  - lifecycle state と read/lifecycle port だけを使い、既存の project nav、create/rename form、対象名と所属候補も削除される影響を明示する delete confirmation の role・label・操作順を再現する。
+  - keyboard、focus、pending status、field error、confirm/cancel、refresh retry、resolver 差し替えによる日英切替を提供し、descriptor parameter の project 名と解決済み message を text child として描画する。
+  - layout class と CSS rule、独立管理画面、candidate 一覧/editor の構造を追加せず、既存 host container へ mount/unmount できる contribution にする。
+  - DOM contract で language switch 後も入力・確認・現在選択を維持し、markup-like project 名から HTML node が生成されず、unmount 後に subscription と DOM が残らない状態を完了とする。
+  - _Requirements: 9.4, 9.5, 9.12, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
+  - _Boundary: ProjectLifecyclePresentation_
+  - _Depends: 7.1, 7.2_
+
+- [ ] 8. lifecycle capability、boundary、横断検証を統合する
+
+- [ ] 8.1 public/runtime facade へ project lifecycle capability を統合する
+  - lifecycle port を read、selection command、guard registration、replacement guard と別の frozen capability として公開する。
+  - runtime seam は最小 foundation adapter、lifecycle service/state、注入された message resolver consumer port を使う presentation を組み立てる factory を公開し、singleton の生成・保持、物理 catalog adapter の生成、production host wiring は downstream application shell に残す。candidate-management や application-shell の具体 module を import しない。
+  - capability consumer test で read-only、selection、replacement、lifecycle の各 owner が不要な service/data/preference capability へ到達できず、lifecycle refresh error が busy と context refresh failure を型安全に区別できる状態を完了とする。
+  - _Requirements: 6.2, 6.6, 8.5, 9.1, 9.2, 9.6, 10.6_
+  - _Boundary: ProjectContextPublicApi and Runtime_
+  - _Depends: 6.3, 7.3_
+
+- [ ] 8.2 lifecycle import と data ownership の negative boundary gate を追加する
+  - project-context の lifecycle implementation が許可された domain、runtime validation、foundation public adapter、ui-language、ui-messages、React 以外へ依存しないことを検査する。
+  - candidate-management 内部、foundation repair policy/root shape、Chrome storage、別 feature、application-shell への deep import と、通常 consumer への lifecycle data/service instance 公開を negative fixture で拒否する。
+  - lifecycle implementation から ja/en catalog file、具体 `MessageKey`、catalog aggregation への import と、project-context 内での descriptor-to-key mapping を negative fixture で拒否する。
+  - layout/CSS、candidate view/state、保存 schema、backup format の変更が本 spec の task boundaryへ混入していないことを差分と gate で確認する。
+  - positive consumer と全 negative fixture が安定した rule で期待どおり pass/fail する状態を完了とする。
+  - _Requirements: 8.4, 8.5, 8.6, 9.6, 10.6, 10.7_
+  - _Boundary: ProjectContextBoundaryGate Lifecycle_
+  - _Depends: 8.1_
+
+- [ ] 8.3 (P) lifecycle contract と DOM integration test を完成する
+  - synthetic data port で create/rename/delete、delete cancel、foundation repair 済み delete result、mutation failure、refresh failure/retry、public lifecycle port の並行呼出し rejection を一つの contract harness で検証する。
+  - lifecycle presentation を testing-library と user-event で操作し、所属候補も削除される影響 warning、既存 role/label、keyboard、focus、pending、semantic descriptor の発火条件・parameter、synthetic resolver consumption、安全な text rendering を固定する。
+  - selection/preference/guard/replacement の既存 contract suite と組み合わせても generation、fallback、forced notification、subscriber isolation が退行しないことを確認する。
+  - 全 lifecycle branch が一回 mutationと成功後一回 refresh、失敗時非 refresh、commit後 refresh-only retry の観測可能な証拠を持つ状態を完了とする。
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 10.1, 10.2, 10.3, 10.4, 10.5, 10.7_
+  - _Boundary: ProjectLifecycle Contract and DOM Validation_
+  - _Depends: 8.1_
+
+- [ ] 8.4 core browser E2E と downstream migration contract を提供する
+  - test-only browser harness へ synthetic な日英 resolver を注入し、create、rename、所属候補への影響を示すdelete確認/取消、delete後fallback/empty、mutation failure、refresh-only recovery を日本語・英語と keyboard で操作する。
+  - project lifecycle host の locator、capability injection、message descriptor、旧 candidate project UI 撤去後の期待値を downstream `ui-message-catalog` と `project-candidate-management` が再利用できる contract kit にする。
+  - production candidate/application-shell の具体 wiring、layout/CSS、candidate editor/list を core harness に取り込まず、downstream 接続後の横断 E2E revalidation trigger を固定する。
+  - core E2E が架空 project だけで成功し、candidate host migration 後に同じ見た目・操作・selection consistency を再検証可能な状態を完了とする。
+  - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+  - _Boundary: ProjectLifecycle Core Browser E2E and Downstream Contract Kit_
+  - _Depends: 8.2, 8.3_
+
+- [ ] 9. Change Brief v0.5.0-boundary-reconciliation の完全 validation と downstream readiness を確定する
+  - lifecycle data/service/state/presentation/semantic message descriptor、public/runtime、boundary、contract、DOM、core E2E の focused test を先に実行し、失敗 boundary を特定する。
+  - typecheck、public consumer typecheck、lint、unit/contract/DOM test、boundary、fixture、UI text、production build、Playwright E2E の既存 validation flow を通す。
+  - Change Brief `v0.5.0-boundary-reconciliation` の全 In-scope item と Requirement 9–10 の traceabilityを再確認し、ja/en 物理 catalog/key/value/aggregation/parityを含む全 Out-of-scope item、`v0.5.0` lifecycle behavior、既存 Task 1–5 の承認済み behaviorが保たれていることを差分検査する。
+  - downstream `ui-message-catalog` が descriptor-to-key adapter と物理 catalogを実装でき、`project-candidate-management` が旧 project lifecycle を撤去して host 接続できる contract と revalidation trigger が揃い、実サイト由来 fixture や未所有 production wiring が混入せず全 gate が成功する状態を完了とする。
+  - _Requirements: 4.1, 8.4, 8.5, 8.8, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+  - _Boundary: ProjectContext Change Brief v0.5.0 Boundary Reconciliation Final Validation_
+  - _Depends: 8.4_
+
 ## Implementation Notes
 
+- 2026-08-12 / Change Brief `v0.5.0`: project lifecycle の canonical owner を project-context へ追加する。Task 6–9 は既存 Task 1–5 の完成済み selection/preference/guard/selector/replacement 実装を置換せず拡張する。
+- 2026-08-12 / Change Brief `v0.5.0-boundary-reconciliation`: project-context は lifecycle message の semantic intent・発火条件・parameter descriptor と resolver consumer seam だけを所有する。ja/en catalog file、具体 key/value、descriptor-to-key mapping、aggregation、parity は `ui-message-catalog` が所有し、Task 7–9 では変更しない。
+- 6.1–6.3: project delete は foundation data adapter への一回の mutation だけを行い、candidate/current-build reference repair algorithm を project-context へ複製しない。mutation 成功後の refresh failure は commit 済みとして扱い、retry は refresh だけを再実行する。
+- 7–8: project-context が lifecycle state/message semantics/presentation を所有し、`ui-message-catalog` が物理 catalog adapterを、candidate-management が downstream Change Brief で host 接続と旧 project UI 撤去を行う。本 spec では `src/ui-messages/catalog/*`、catalog aggregation/parity、`src/features/candidate-management/*`、layout、CSS、独立管理画面を変更しない。
 - 2026-08-11: refresh で current project が catalog から失効した場合、次の snapshot を commit してから `catalog-invalidated` forced change を一度通知する。fallback があれば `to` はその project ID、empty / unavailable では `null` とし、downstream guard が旧 project の未保存 draft を回復可能なまま fence できるようにする。
 - 1.1: `contracts.ts` は型契約のみ、`catalog.ts` が projection と純粋 snapshot 構築（`createProjectContextSnapshot` / `unavailableProjectContextSnapshot` / `resolveProjectCatalogSelection`）を持つ。generation 採番と transaction 直列化は task 2.3 の service が所有する。service はこれらを再実装せず利用すること。
 - 2.1–2.2: `ProjectChangeGuardCoordinator` は opaque な confirmation / permit と registry revision を保持する。selection の永続化・snapshot commit は task 2.4 の service transaction が所有する。

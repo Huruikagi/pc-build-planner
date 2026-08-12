@@ -2,11 +2,18 @@
 
 ## Overview
 
-**Purpose**: 本 spec は、UI に表示される全ての文言を単一の型付きカタログから解決する構造を維持し、v0.3.0 の一過性表示面と設定画面が必要とする日本語・英語文言、および廃止キーの移行契約を確定する。
+**Purpose**: 本 spec は、UI に表示される全ての文言を単一の型付きカタログから解決する構造を維持し、最新の Change Brief `v0.5.0-boundary-reconciliation` として configured app adapter、全ja/en物理catalog、具体`MessageKey`、descriptor mapping、placeholder parityを単独所有する。
 
 **Users**: 拡張の利用者は新しい回復案内と設定画面文言を表示言語で読み、開発者は同じ型付きキー契約を参照する。
 
-**Impact**: 既存 `src/ui-messages/` の10名前空間へ11番目の `settings` を追加し、`nav`、`shell`、`capture`を更新する。`nav.productCapture`と`nav.backupRestore`を削除し、`nav.settings`へ移行する。参照側は既存の`MessageKey`、`MessageDescriptor`、`useMessages()`を変更せず利用する。
+**Impact**: v0.3.0までに確立したja/enカタログ、11名前空間、dead key撤去、具体`MessageKey`と既存app公開面、およびv0.5.0のgeneric core委譲を保持する。12番目の`projectContext`名前空間とkey非依存descriptorから具体keyへの製品adapterを追加し、project lifecycleの物理catalogとparityを本境界へ一本化する。
+
+### Change Brief Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope realization**: configured app adapter、project lifecycleのja/en key/value、descriptor-to-key mapping、12名前空間のcatalog aggregation、placeholder parity、既存public consumer contract、製品validationを統合する。
+- **Preserved**: `v0.5.0`のpackage root API利用、全文言の唯一のsource of truth、configured resolver、React binding、既存表示と文言非依存consumerを維持する。
+- **Out-of-scope preservation**: project lifecycle command/state/semantic intent/発火判断/key非依存descriptor生成、言語保存・切替、React package化、layout/CSS、generic core実装を変更しない。
 
 ### Goals
 
@@ -17,6 +24,9 @@
 - スタイル定義とテストから、表示文言を識別子として使う構造を除去する。
 - 承認済みfeature変更以外の表示・操作結果を回帰させずに達成する。
 - 「文言が view に戻ってくる」ことを機械検査で恒久的に防ぐ。
+- package root公開APIだけで製品catalogを設定し、既存resolver、descriptor、plural、placeholder、fallback、React表示を非回帰で維持する。
+- generic core変更とcatalog/release-rule-only変更の検証範囲を分離する。
+- project lifecycleのsemantic descriptorを具体keyとja/en値へ一意に写像し、全分岐のparityを製品gateで固定する。
 
 ### Non-Goals
 
@@ -27,12 +37,15 @@
 - 商品カテゴリ推定のキーワード辞書、価格表記のパースロジック。ロケール別データ・ロジックであり文言ではない。
 - ドメイン層および互換性判定ルールへの変更。既に列挙コードで結果を返しており文言を持たない。
 - 一過性featureのactivation配送・寿命、product-captureの抽出・handoff、settings layout・mount、backup/restore処理。
+- 汎用coreの再実装、package内部moduleの利用、React bindingのpackage化、対応言語・翻訳の追加、npm公開、UI再設計。
 
 ## Boundary Commitments
 
 ### This Spec Owns
 
-- `src/ui-messages/` 境界の全て — メッセージ値の型、キー空間、日本語・英語のメッセージ値、プレースホルダ整合、複数形選択、メッセージ記述子、React Context による供給。
+- `src/ui-messages/` の製品責務 — 具体的なキー空間、日本語・英語のメッセージ値、source/fallback language、原語表記、release固有parity、configured resolver/descriptor、React Context による供給。
+- `projectContext.lifecycle.*` の具体key/value、key非依存descriptorから具体keyへのmapping、12名前空間への集約とplaceholder parity。
+- `typed-messages-core`のroot公開APIを設定し、既存app公開APIへ適合させる最初のconsumer contract。
 - 11番目の`settings`名前空間と、`nav`・`shell`・`capture`に追加・削除するv0.3.0 key集合。
 - `nav.productCapture`と`nav.backupRestore`の削除、`nav.settings`への置換、およびdead consumer検査。
 - `settings-screen`などproducerが定めた表示意味を受け取り、exact key、ja/en値、placeholder、parity、削除checkpointへ写像すること。producerは意味要件・consumer・layoutだけを所有し、catalog dataを共同所有しない。
@@ -45,6 +58,9 @@
 
 ### Out of Boundary
 
+- 汎用`MessageDefinition`、key/parameter型導出、format、catalog normalizer、resolver/descriptor factory、generic parity primitive、およびpackage公開境界。これらは`typed-messages-core`が所有する。
+- package内部module、React adapterのpackage化、npm publish、3言語目の翻訳。
+- project lifecycle command/state、semantic intentと発火条件、key非依存descriptor生成、host layout/CSS。これらは`project-context`またはdownstream host ownerが所有する。
 - runtimeのロケール選択、現在言語state、初期値解決、言語切り替え UI、言語の永続化 — `ui-internationalization` が所有する。static supported-locale registry、原語表記、静的な言語別resolverは`ui-message-catalog`が所有し公開する。
 - transient lifecycle、capture state、settings view/layout、backup section mount、shell state遷移。各producer specが所有し、本specはmessage keyを供給するだけである。
 - `settings-screen`が定める区画名の意味、表示場所、見出し階層、回復状態の発火条件。`settings-screen`のcatalog作業記述は本specのkey/valueを消費・受け入れ検証する意味であり、catalog file/valueの実装ownershipを持たない。
@@ -57,6 +73,8 @@
 
 ### Allowed Dependencies
 
+- `src/ui-messages/` → `@pc-build-planner/typed-messages-core`（package root exportのみ）。内部subpathへのdeep importは禁止する。
+- `src/ui-messages/project-lifecycle-message-adapter.ts` → `src/project-context/public.ts`（`ProjectLifecycleMessageDescriptor`の型のみ）。runtime import、project-context内部module、state/serviceへの依存は禁止する。
 - `src/ui-messages/` → `src/domain/public.js`（**型のみ**。`PartCategory` に対するカテゴリ表示名の網羅性を型で保証するため）。
 - `src/ui-messages/` → React 19（`createContext` / `useContext` のみ）。
 - `src/ui-messages/languages.ts`は対応言語の単一定義、原語表記、静的に生成した言語別resolverを所有し、`src/ui-messages/public.ts`からregistry/resolver能力だけを公開する。言語state・保存・初期値解決は`ui-language`所有であり本境界へ持ち込まない。
@@ -64,6 +82,7 @@
 - `e2e/`、`tests/` → `src/ui-messages/public.js`。
 - **禁止**: `src/ui-messages/` から `src/ui-language/`、`src/application-shell/`、`src/features/`、`src/persistence/` への依存。registryは静的catalog能力に閉じ、言語runtimeへ逆依存しない。
 - **禁止**: view からの `src/ui-messages/catalog/` 配下の直接 import。view は `useMessages()` だけを経路とする。
+- **禁止**: `src/ui-messages/`で汎用format、resolver factory、descriptor factory、generic parityを重複実装すること。
 
 ### Revalidation Triggers
 
@@ -76,6 +95,9 @@
 - `nav.settings`、`settings.*`、または削除対象navigation keyのconsumer変更。
 - canonical `PersistentApplicationFeatureRegistration.navigation`、または常設／一過性branchの相関変更。
 - `data-region` / `data-action` の命名規約の変更（`styles.css` と E2E ヘルパの双方へ波及する）。
+- `typed-messages-core`の`MessageDefinition`、placeholder/plural規則、resolver/descriptor/parity公開shape、package export mapの変更。
+- app adapterのcatalog flattening、configured resolver、release固有parity合成、React binding公開signatureの変更。
+- `ProjectLifecycleMessageDescriptor`のintent・parameter union、descriptor-to-key mapping、`projectContext.lifecycle.*` key/value、またはproject lifecycle hostのresolver seamの変更。production host wiringと横断E2Eはdownstream `application-shell`を再検証する。
 
 ## Architecture
 
@@ -166,14 +188,15 @@ src/
 │   ├── contracts.ts             # メッセージ値・パラメータ・記述子の型、キー導出の型ユーティリティ
 │   ├── catalog/                 # ja/enで同じ名前空間・キー集合を保持する
 │   │   ├── index.ts             # 型付きkey空間の唯一の集約点
-│   │   ├── ja/index.ts          # 11個の名前空間を束ねるソース形状
-│   │   ├── en/index.ts          # jaと同じ11名前空間を束ねる
+│   │   ├── ja/index.ts          # 12個の名前空間を束ねるソース形状
+│   │   ├── en/index.ts          # jaと同じ12名前空間を束ねる
 │   │   ├── common.ts            # 機能横断の短語
 │   │   ├── category.ts          # パーツカテゴリ表示名（PartCategory を網羅）
 │   │   ├── persistence-error.ts # 永続化失敗の文言
 │   │   ├── nav.ts               # ナビゲーションラベル
 │   │   ├── shell.ts             # シェルの状態表示と起動・搭載失敗
 │   │   ├── settings.ts          # 設定画面、言語区画、backup区画の見出し・説明
+│   │   ├── project-context.ts   # project lifecycleの一覧・操作・失敗・回復文言
 │   │   ├── candidate.ts         # 候補管理
 │   │   ├── build.ts             # 現在構成
 │   │   ├── compatibility.ts     # 互換性確認
@@ -183,6 +206,7 @@ src/
 │   ├── resolver.ts              # カタログから resolver を組み立てる
 │   ├── languages.ts             # 対応言語registryと静的resolver
 │   ├── catalog-parity.ts        # ja/en exact-key・placeholder parity gate
+│   ├── project-lifecycle-message-adapter.ts # semantic descriptorから具体keyへの製品mapping
 │   ├── message-context.ts       # createElementベースのMessageProviderとuseMessages
 │   └── public.ts                # 唯一の公開入口
 scripts/
@@ -195,6 +219,9 @@ e2e/
 
 - `src/ui-messages/catalog/ja/settings.ts` — 日本語のsettings画面・表示言語区画・backup区画のcanonical値。
 - `src/ui-messages/catalog/en/settings.ts` — 日本語側と同じキー・placeholderを持つ英語値。
+- `src/ui-messages/catalog/ja/project-context.ts` — project lifecycle intentに対応する日本語の物理catalog値。
+- `src/ui-messages/catalog/en/project-context.ts` — 日本語側と同じkey・placeholder契約を持つ英語値。
+- `src/ui-messages/project-lifecycle-message-adapter.ts` — `ProjectLifecycleMessageDescriptor`を具体`MessageKey`へ全分岐写像し、configured resolverで解決する製品adapter。
 
 ### Modified Files (Existing)
 
@@ -206,8 +233,10 @@ e2e/
 | `src/ui-messages/catalog/{ja,en}/nav.ts` | `nav.settings`を追加し、`nav.productCapture`と`nav.backupRestore`を削除 |
 | `src/ui-messages/catalog/{ja,en}/shell.ts` | 一過性起動失敗・失効noticeとloading/startup failure時の二言語settings回復案内を追加 |
 | `src/ui-messages/catalog/{ja,en}/capture.ts` | 権限再付与、新世代起動、handoff結果保持・再試行の案内を追加または既存失敗文言から改訂 |
-| `src/ui-messages/catalog/{ja,en}/index.ts` | `settings`を11番目の名前空間として集約し、ja/en parityを維持 |
-| `src/ui-messages/catalog-parity.ts` / `tests/ui-messages/catalog-parity.test.ts` | 追加キーの双方向網羅、プレースホルダ一致、廃止キー不在を検証 |
+| `src/ui-messages/catalog/{ja,en}/index.ts` | 既存11名前空間へ`projectContext`を12番目として集約し、ja/en parityを維持 |
+| `src/ui-messages/catalog-parity.ts` / `tests/ui-messages/catalog-parity.test.ts` | 追加キーの双方向網羅、プレースホルダ一致、廃止キー不在、project lifecycle mappingの全分岐を検証 |
+| `src/ui-messages/public.ts` / `worker-public.ts` | 既存公開面を維持し、host compositionが利用するproject lifecycle resolver adapterを通常consumer側だけから公開 |
+| `tests/ui-messages/project-lifecycle-message-adapter.test.ts` | 全intent・operation・impact・error categoryのmapping、ja/en解決、安全なproject名描画を検証 |
 | `src/features/compatibility/view.tsx` | 同上（`RULE_LABELS` / `REASON_LABELS` / `AGGREGATE_LABELS` / `EMPTY_MESSAGES` / `FAILURE_MESSAGES`、および助詞連結2箇所） |
 | `src/features/backup-restore/view.tsx` | 同上（診断メッセージ表、件数を含む完了メッセージ） |
 | `src/features/{candidate-management,product-capture,compatibility,backup-restore}/react-root.tsx` | `MessageProvider` で view を包む |
@@ -260,7 +289,74 @@ catalog ownerとして、producerが要求する利用者向け状態を次のex
 
 ### Implementation Ownership Record
 
-`src/ui-messages/catalog/{ja,en}/`の構造・値、11名前空間の集約、parity型／テスト、dead-key checkpointは、実装時の作業名や導入順にかかわらずすべて`ui-message-catalog`の成果物として所有する。`ui-internationalization`は`src/ui-messages/public.ts`から公開されるregistry／resolverをread-only consumerとして受け入れるだけで、catalog内部の変更権限や共同ownershipを持たない。2026-07-31の横断再検証では、このowner境界、公開consumer、producer-owned表示状態、配布物への静的同梱をfreshな`pnpm validate`で再確認した。
+`src/ui-messages/catalog/{ja,en}/`の構造・値、既存11名前空間と最新`projectContext`を合わせた12名前空間の集約、parity型／テスト、dead-key checkpointは、実装時の作業名や導入順にかかわらずすべて`ui-message-catalog`の成果物として所有する。`ui-internationalization`は`src/ui-messages/public.ts`から公開されるregistry／resolverをread-only consumerとして受け入れるだけで、catalog内部の変更権限や共同ownershipを持たない。2026-07-31の横断再検証では既存11名前空間のowner境界を確認し、Change Brief `v0.5.0-boundary-reconciliation`ではproject lifecycle物理catalogを同じownerへ加算する。
+
+### v0.5.0 Generic Core Integration
+
+Change Brief `v0.5.0`では、上記の製品ownershipを変更せず、汎用mechanismの実装元だけを`@pc-build-planner/typed-messages-core`へ移す。
+
+```mermaid
+graph LR
+    Core[Typed messages core] --> Adapter[Product message adapter]
+    Catalog[Japanese and English catalogs] --> Adapter
+    Release[Product release rules] --> Adapter
+    Adapter --> Language[Language registry]
+    Adapter --> ReactBinding[React message binding]
+    Adapter --> Consumers[App consumers]
+```
+
+- `contracts.ts`はpackage型を製品catalogへ設定し、具体`MessageKey`、`MessageDescriptor`、`MessageResolver`をapp向けaliasとして再公開する。
+- `resolver.ts`はpackageのresolver/descriptor factoryを`MESSAGES`へ設定し、既存`defaultMessageResolver`と`message()`のsignatureを維持する。
+- `catalog-parity.ts`はpackageのgeneric parity issueへ、required release key、固定二言語案内、dead key不在だけを合成する。
+- `languages.ts`、`message-context.ts`、`public.ts`、`worker-public.ts`は製品language policyとReact/worker-safe公開面を保持する。
+- 旧`format.ts`と製品側に重複するgeneric resolver/parity実装は、app consumer切替と同じmigration checkpointで除去する。
+
+#### v0.5.0 File Structure Delta
+
+| ファイル | 責務 |
+|---|---|
+| `src/ui-messages/contracts.ts` | package generic型をja/en製品catalogへ設定する具体型adapter |
+| `src/ui-messages/resolver.ts` | package root factoryからconfigured resolverとdescriptor factoryを生成 |
+| `src/ui-messages/catalog-parity.ts` | generic parity結果と製品release ruleを合成 |
+| `src/ui-messages/languages.ts` | source/fallback language、原語表記、言語別configured resolver registryを保持 |
+| `src/ui-messages/message-context.ts` | React Provider/hookをapp側に残す |
+| `src/ui-messages/public.ts` / `worker-public.ts` | 既存app consumer surfaceを維持 |
+| `tests/ui-messages/**` | catalog、configured adapter、release rule、React表示の製品回帰へ限定 |
+
+packageのmanifest、source、unit test、export map、workspace orchestrationは`typed-messages-core`が所有し、本specのfile ownershipへ含めない。
+
+### v0.5.0 Boundary Reconciliation: Project Lifecycle Catalog
+
+`project-context`は次のkey非依存descriptor unionと発火条件を所有し、本specは値や意味を再定義せず、全分岐を具体keyへ写像する。`projectName`だけをlocale値のplaceholderへ渡し、`operation`、`impact`、`reason`は有限unionから具体keyを選ぶために消費する。
+
+| Descriptor | Concrete MessageKey | Parameter / invariant |
+|---|---|---|
+| `project-list` | `projectContext.lifecycle.projectList` | parameterなし |
+| `create-project` | `projectContext.lifecycle.createProject` | parameterなし |
+| `rename-project` | `projectContext.lifecycle.renameProject` | `{projectName}` |
+| `confirm-delete` + `owned-candidates` | `projectContext.lifecycle.confirmDeleteOwnedCandidates` | `{projectName}`。candidate数は推測しない |
+| `name-required` | `projectContext.lifecycle.nameRequired` | parameterなし |
+| `operation-pending` + `create` | `projectContext.lifecycle.operationPending.create` | parameterなし |
+| `operation-pending` + `rename` | `projectContext.lifecycle.operationPending.rename` | parameterなし |
+| `operation-pending` + `delete` | `projectContext.lifecycle.operationPending.delete` | parameterなし |
+| `operation-pending` + `refresh` | `projectContext.lifecycle.operationPending.refresh` | parameterなし |
+| `operation-failed` + `<reason>` | `projectContext.lifecycle.operationFailed.<reason>` | `validation`、`not-found`、`conflict`、`maintenance`、`storage`、`quota`、`unsupported-data`、`operation-in-progress`、`committed-refresh-failed`を全件個別keyへ写像 |
+| `retry-refresh` | `projectContext.lifecycle.retryRefresh` | parameterなし |
+
+`ProjectLifecycleMessageAdapter`は判別共用体をexhaustiveに処理し、unknown fallbackや自由文字列keyを作らない。具体keyは`MessageKey`の部分型として検査し、ja/enの両catalogで同じplaceholder集合を持つ。`project-context`はこのmapping、物理catalog、catalog aggregationへ依存せず、downstream compositionから注入された`ProjectLifecycleMessageResolver`だけを消費する。
+
+#### Project Lifecycle Integration Flow
+
+```mermaid
+graph LR
+    Semantics[Project lifecycle semantics] --> Descriptor[Key independent descriptor]
+    Descriptor --> Adapter[Product lifecycle message adapter]
+    Catalog[Japanese and English project catalog] --> Adapter
+    Adapter --> Resolver[Configured message resolver]
+    Resolver --> Presentation[Lifecycle presentation]
+```
+
+application shellはadapterとpresentationをcompositionするだけでkey/valueや発火判断を持たない。本specは注入可能なresolver factoryとsynthetic DOM harnessまでを提供し、production hostへのwiring、既存hostのlayout/CSS/role/keyboard/focusを通す横断E2Eはdownstream `application-shell`の受入責務とする。project名がReact text childとして安全に描画できることは本specのinjected harnessで固定する。
 
 ## System Flows
 
@@ -330,6 +426,13 @@ graph LR
 | 10.5 | 言語stateを所有しない | MessageCatalog | — | — |
 | 11.1, 11.2, 11.3, 11.4 | 一過性起動・失効、権限再付与、handoff回復案内 | V03CatalogMigration | canonical exact keys | — |
 | 11.5, 11.6, 11.7, 11.8 | settings文言、二言語shell回復、legacy key撤去、parity | V03CatalogMigration, CatalogParityGate | canonical exact keys | — |
+| 12.1, 12.2, 12.3 | package root APIを設定する製品adapterと既存公開面の維持 | AppMessageAdapter, MessageReactContext, UiMessagesPublicEntry | configured resolver/descriptor、既存app API | v0.5 generic core integration |
+| 12.4, 12.5 | generic parityへの製品rule合成と重複・deep import拒否 | AppMessageAdapter, CatalogParityGate, UiTextGuard | parity issue、boundary gate | v0.5 generic core integration |
+| 12.6, 12.7 | scope外保持とcatalog-only検証 | AppMessageAdapter, ValidationGate | `validate:message-catalog` | v0.5 generic core integration |
+| 13.1, 13.2, 13.3 | lifecycle descriptorの具体key/value・mapping・catalog集約 | ProjectLifecycleMessageAdapter, MessageCatalog | `ProjectLifecycleMessageResolver`, concrete `MessageKey` mapping | Project lifecycle integration flow |
+| 13.4 | 全descriptor分岐とja/en key・placeholder parity | ProjectLifecycleMessageAdapter, CatalogParityGate, ValidationGate | exhaustive union、catalog parity issue | Project lifecycle integration flow |
+| 13.5, 13.7 | semantic ownerと物理catalog ownerの分離、Out-of-scope保持 | ProjectLifecycleMessageAdapter, UiMessagesPublicEntry | type-only descriptor dependency、injected resolver seam | Project lifecycle integration flow |
+| 13.6 | 既存host表示・accessibility・安全なproject名描画の維持 | ProjectLifecycleMessageAdapter, MessageReactContext | configured resolver | Project lifecycle integration flow |
 
 ## Components and Interfaces
 
@@ -351,8 +454,77 @@ graph LR
 | ElementIdentityConvention | features / styles | 文言に依存しない要素識別の規約とスタイル移行 | 8.1, 8.2, 8.4 | FeatureViewAdapters (P0) | — |
 | E2ELocatorHelpers | e2e | 要素特定手順の集約 | 9.1, 9.3, 9.5 | ElementIdentityConvention (P0), MessageResolver (P1) | Service |
 | UiTextGuard | scripts | 文言リテラルと文言依存セレクタの機械検査 | 2.4, 3.4, 8.5 | — | Batch |
+| AppMessageAdapter | ui-messages | package公開APIへ製品catalog/policyを設定し既存app APIを維持 | 12.1〜12.7 | typed-messages-core root export (P0), MessageCatalog (P0) | Service |
+| ProjectLifecycleMessageAdapter | ui-messages | key非依存lifecycle descriptorを具体keyとja/en値へ写像 | 13.1〜13.7 | project-context public type (P0), AppMessageAdapter (P0), MessageCatalog (P0) | Service |
+| ValidationGate | tooling | generic core変更とcatalog-only変更の検証責務を分離 | 2.4, 11.8, 12.5, 12.7, 13.4 | AppMessageAdapter (P0), CatalogParityGate (P0) | Batch |
 
 ### ui-messages
+
+#### AppMessageAdapter
+
+| Field | Detail |
+|---|---|
+| Intent | 製品catalogと言語・release policyをgeneric coreへ設定し、既存app consumer契約を維持する |
+| Requirements | 12.1〜12.7 |
+
+**Responsibilities & Constraints**
+
+- package root exportからのみ型、resolver/descriptor factory、generic parity primitiveを利用する。
+- ja/enカタログから具体`MessageKey`、`MessageDescriptor`、`MessageResolver`を導出し、既存`defaultMessageResolver`、`message()`、`resolverFor()`、Provider/hookの公開signatureを維持する。
+- generic parity issueに製品release ruleだけを合成し、coreへ対応言語・required key・bilingual hintを逆流させない。
+- generic implementationをapp側へ複製せず、catalog/policy/React bindingだけを残す。
+
+**Dependencies**
+
+- Outbound: `@pc-build-planner/typed-messages-core` root export — generic mechanism（P0）
+- Outbound: MessageCatalog — ja/en値と具体key shape（P0）
+- Inbound: MessageReactContext、UiMessagesPublicEntry、app consumers（P0）
+
+**Contracts**: Service [x]
+
+**Implementation Notes**
+
+- Integration: package buildと公開exportが利用可能になった後、contracts/resolver/parityを一つのadapter migrationとして切り替える。
+- Validation: app public consumer、ja/en resolver、descriptor JSON shape、plural、placeholder、fallback、React DOM/E2Eを移行前と同じ結果で通す。
+- Risks: generic型alias移行でnominal descriptor互換が崩れる可能性があるため、shellとworker consumerを同じcheckpointでtypecheckする。
+
+#### ProjectLifecycleMessageAdapter
+
+| Field | Detail |
+|---|---|
+| Intent | project-contextのsemantic descriptorを製品catalogの具体keyへexhaustiveに写像し、configured resolverへ渡す |
+| Requirements | 13.1〜13.7 |
+
+**Responsibilities & Constraints**
+
+- `ProjectLifecycleMessageDescriptor`を型のみで参照し、intent、operation、impact、reasonの全union memberを上記canonical mappingへ対応させる。
+- `projectName`だけを同名placeholderとしてja/enへ渡し、operation・impact・reasonを自由文字列としてcatalogへ流さない。
+- project lifecycleのcommand/state/発火条件を判断せず、受け取ったdescriptorを解決するだけに閉じる。
+- mapping結果は具体`MessageKey`として型検査し、未知intent fallback、互換alias、feature-local物理catalogを作らない。
+
+**Dependencies**
+
+- Outbound: `src/project-context/public.ts` — descriptor型のみ（P0）
+- Outbound: AppMessageAdapter / MessageCatalog — configured resolverとja/en値（P0）
+- Inbound: downstream application shell composition / project lifecycle presentation（P0）
+
+**Contracts**: Service [x]
+
+```typescript
+interface ProjectLifecycleMessageResolver {
+  resolve(descriptor: ProjectLifecycleMessageDescriptor): string;
+}
+
+declare function createProjectLifecycleMessageResolver(
+  messages: MessageResolver,
+): ProjectLifecycleMessageResolver;
+```
+
+**Implementation Notes**
+
+- Integration: `project-context`のdescriptor contract承認後に物理catalogとmappingを加え、application shellにはfactoryだけを公開する。production wiringは行わず、worker-safe入口へReactやpresentationを漏らさない。
+- Validation: 全intent、4 operation、固定impact、9 error reason、ja/en値、placeholder parity、未信頼project名のtext描画をcontract testとinjected DOM harnessで固定する。production hostのrole/keyboard/focus/layoutと横断E2Eはapplication-shell再検証triggerとして引き渡す。
+- Risks: descriptor union追加時のmapping漏れを`never` exhaustivenessとnegative fixtureの双方で失敗させる。
 
 #### V03CatalogMigration
 
@@ -360,7 +532,7 @@ graph LR
 
 #### CatalogParityGate
 
-型検査は11名前空間のja/en双方向網羅を、unit testは全formのplaceholder集合を検証する。gateは二段階とし、移行前checkpointでは追加キーとplaceholder parityだけを検証して旧navigation keyを許容する。consumer切替後checkpointでcatalogと`src/`のconsumerを検索し、`nav.productCapture`と`nav.backupRestore`が残る場合に失敗する。削除済みキーを互換aliasとして保持しない。
+型検査は12名前空間のja/en双方向網羅を、unit testは全formのplaceholder集合を検証する。project lifecycleは全descriptor intent・operation・impact・error reasonが具体keyへ写像されることも同じgateで検証する。既存v0.3 migrationの二段階gateとdead navigation key不在を維持し、削除済みキーを互換aliasとして保持しない。
 
 #### MessageContracts
 
@@ -919,6 +1091,9 @@ export const expectedText: MessageResolver;
 4. `createMessageResolver` が実在キーに対して値を返し、`resolveDescriptor` が未知キーに対してキー文字列を返すこと（1.2）。
 5. カタログの `category` 名前空間が `PartCategory` を網羅していること（5.4）。
 6. `persistenceError` の共有キーと feature 固有キーの値が、移行前の各 view の表と1件ずつ一致すること（5.5, 2.1）。
+7. package generic parity issueへrequired release key、固定二言語案内、dead key不在だけが合成されること（12.4）。
+8. project lifecycleの全intent、4 operation、固定impact、9 error reasonが一意な具体keyへ写像され、union追加時はexhaustiveness検査が失敗すること（13.1, 13.2, 13.4）。
+9. `projectContext`名前空間がja/enの両方へ集約され、key集合と`projectName` placeholderが一致すること（13.2, 13.3, 13.4）。
 
 ### Integration Tests
 
@@ -927,6 +1102,8 @@ export const expectedText: MessageResolver;
 3. ナビゲーションが `labelKey` から現行と同一のラベル・順序・アクセシブル名を生成すること（7.2, 7.3）。
 4. 再設計した文単位メッセージ（削除確認、互換性の不足項目、取り込み完了、復元完了）が、現行と同一の文字列を生成すること（4.3）。
 5. 未検証の外部由来文字列をパラメータに含む描画で、`querySelector("img")` が `null` であること（1.6）。
+6. package root exportだけでconfigured resolver、descriptor、plural、placeholder、fallbackを利用でき、既存app public consumerが同じsignatureで型検査を通ること（12.1, 12.3, 12.5）。
+7. project-contextのkey非依存descriptorを注入resolverでja/enへ解決し、synthetic presentation harnessのrole・labelを保ったまま、markupに見えるproject名をtextとして描画すること（13.1, 13.5, 13.6）。production host wiringを行わない。
 
 ### E2E Tests
 
@@ -935,10 +1112,13 @@ export const expectedText: MessageResolver;
 3. 商品取り込み: 取り込み → 確認 → 保存の一連（9.1, 2.3）。
 4. バックアップ・復元: 作成 → ファイル選択 → 確認 → 復元確定の一連（9.1, 2.3）。
 5. 上記4本を通じて、`styles.css` の移行後も画面が現行と同じ構造で描画されること（8.4）。
+6. projectの作成・改名・削除確認・取消・失敗・refresh再試行のproduction host経路は、application-shellがresolver factoryをcompositionした後のread-only downstream acceptanceとしてja/en横断E2Eを再実行すること（13.1, 13.6）。このE2Eは本spec単独完了の前提にしない。
 
 ### Validation Gate
 
 - `pnpm validate:ui-text` が違反ゼロで通ること（3.4, 8.5）。
+- product catalog/release-rule-only経路が製品parity、configured adapter、表示回帰を実行し、package内部deep importとgeneric実装重複をboundary gateが拒否すること（12.5, 12.7）。
+- product catalog検証が`projectContext`の12番目の集約、descriptor mappingの全分岐、ja/en placeholder parity、project-context側への物理catalog逆流不在を確認すること（13.3, 13.4, 13.5）。
 - `pnpm validate` の全段が成功すること（2.4）。
 
 ## Security Considerations

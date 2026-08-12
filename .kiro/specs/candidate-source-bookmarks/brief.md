@@ -138,3 +138,37 @@ source collection policy、catalog、reference、mutation、URL identity、scope
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #46。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+source core化の方向は正しいが、実装完了をspec更新の前提にした依存と、共有error ownerへの依存がroadmapに表現されていない。
+
+### Current State
+
+source catalog/mutationはcandidate-management、URL identity/matchはsource-price-refreshに分散し、両者をshellの遅延proxyが接続する。
+
+### Desired Outcome
+
+本specがsource model policy、catalog/reference/mutation、URL identity、match scope、一意照合、条件付きprice patchを共有coreとして所有し、共有`AppDataError`を利用する。specは確定契約を前提に更新でき、実装順はtasksで制御する。
+
+### Scope
+
+- **In**: source共有core/public entry、candidate/source-price consumer contract、共有error利用、循環解消、contract/tooling test。
+- **Out**: price extraction、source editor UI、商品identity、保存schema意味変更、shell composition実装。
+
+### Boundary Impact
+
+- **Extends**: sourceに関する唯一のdomain/public ownerを確定する。
+- **Preserves**: 1:N、primary導出、原子的mutation、URL安全性、既存UI/価格更新挙動。
+- **Adjacent**: candidate-managementはeditor UI、source-price-refreshはworkflow、application-shellは公開port compositionだけを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:project-candidate-management`、`spec:local-data-foundation`。
+- **Downstream**: `spec:source-price-refresh`、`spec:duplicate-product-merge`、`spec:application-shell`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

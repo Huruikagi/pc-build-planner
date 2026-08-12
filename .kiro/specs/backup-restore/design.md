@@ -4,7 +4,7 @@
 
 本機能は、ローカルファーストのChrome拡張利用者へ、全プロジェクト、候補パーツ、現在構成を一つのバージョン付きJSONへ退避し、安全に一括復元する機能を提供する。操作面は`settings-screen`が所有する設定画面の区画へ、`BackupRestoreSectionMount`を介して埋め込む。ブラウザ標準のファイルAPIでユーザー操作による入出力を行う。
 
-設計は交換形式、検証・変換、復元調整、UI状態を分離する。永続化モデルを直接公開せず、入力を`unknown`として検証した後に現行`LocalDataRoot`へ変換し、Foundationのcommit point付き単一置換契約で保存する。root write前の失敗では復元前データを維持し、write後のcleanup失敗は復元成功を取り消さずfinalize-only retryへ分離する。
+設計は交換形式、検証・変換、復元調整、UI状態を分離する。`ProductBackupAdapter`がpackageのbackup public portへPC固有codec・mapping・policyとFoundationの限定置換能力を設定し、汎用オーケストレーション手順はpackage実装へ委ねる。永続化モデルを直接公開せず、入力を`unknown`として検証した後に現行`LocalDataRoot`へ変換する。root write前の失敗では復元前データを維持し、write後のcleanup失敗は復元成功を取り消さずfinalize-only retryへ分離する。
 
 ### Goals
 - 保存実装から独立した版付き交換形式で全データを往復可能にする
@@ -13,16 +13,26 @@
 - 確認済みデータだけを一回のroot writeで置換し、commit前失敗時は既存データを保持する
 - バックアップの限界、置換影響、処理結果を設定画面内の区画で明示する
 - バックアップ内部を公開せず、任意containerへ安全にmount・cleanupできるsection契約を提供する
+- `ProductBackupAdapter`をPC固有バックアップ構成の単一所有境界とし、package public portだけから汎用オーケストレーターを利用する
 
 ### Non-Goals
 - 自動、定期、差分、クラウド、同期、圧縮バックアップ
 - 複数バックアップのマージ、CSV入出力、商品カタログ配布
 - 候補や現在構成の業務規則、互換性判定、ブラウザ外の保管
 - 設定画面、常設ナビゲーション、言語区画、shell compositionの所有
+- 汎用バックアップオーケストレーター、そのpublic port、PC root・置換能力のcanonical定義
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope**: `ProductBackupAdapter`、PC交換形式codec・mapping・policy、file UI、確認、project-context guard・refresh、consumer contract、UI、E2E。
+- **Out of scope**: packageの汎用オーケストレーター/public port、FoundationのPC root・置換能力、application shell composition、交換形式や保存schemaの意味変更、自動バックアップ、UI layout。
+- **Preserved behavior**: 明示確認、atomic replacement、競合fencing、commit前cleanup、失敗時の既存データ保持、破損・未対応rootからの回復、finalization/refresh再試行を変更しない。
 
 ## Boundary Commitments
 
 ### This Spec Owns
+- packageのbackup public portをPC固有codec・mapping・policyおよびFoundation capabilityへ接続する`ProductBackupAdapter`
 - `BackupEnvelope`交換形式、形式版、旧交換形式から現行形式への移行
 - 全保存データと交換データ間の変換、交換形式検証、復元プレビュー
 - バックアップ生成と検証済みルートの復元調整
@@ -35,6 +45,9 @@
 - Foundationが返すcommit pointを保持し、置換済みcleanupだけを再試行するfinalization lifecycle
 
 ### Out of Boundary
+- `@pc-build-planner/local-data/backup`の汎用`BackupOrchestrator`、`BackupCodec`、factoryおよびpublic port定義
+- FoundationのPC root/schema/migration/repair、`BackupRestoreDataPort`のcanonical定義と実装
+- application shellのproduction compositionと最終port wiring（本specは公開adapter/section契約だけを提供する）
 - `Project`、`CandidatePart`、`CurrentBuild`の所有権と業務規則
 - Foundationの保存スキーマ、通常CRUD、Chrome Storage APIアダプター
 - ファイルの保存先、保持期間、自動化、暗号化、クラウド転送
@@ -45,6 +58,7 @@
 - 破損・未対応rootを検出したside panelのdegraded startupと`recovery`操作分類（application-shell owner）
 
 ### Allowed Dependencies
+- `@pc-build-planner/local-data/backup`が公開する`BackupOrchestrator`、`BackupCodec`、factory。package内部moduleへdeep importしない
 - Foundationの`LocalDataRoot`、`Result`、エラー契約。export用の`BackupSnapshotReadPort`と、commit point、同一assessment ticketによるpre-commit cleanup再開、永続controlからのpending finalization再発見を提供する`BackupRestoreDataPort`
 - runtime-schema-validationのconfigured Zod Mini入口、strict plain object・JSON safety primitive、owner error/path変換helper。Zod packageや他feature schemaをdeep importしない
 - ui-messagesの公開`MessageKey`・`MessageResolver`・`useMessages()`。利用者向け案内とerror policyは日本語・英語カタログで完全性を保ち、言語別カタログ実装へdeep importしない
@@ -56,7 +70,7 @@
 - application shellの`FeatureMountContext`、`FeatureMountHandle`、operation policy
 - application shellの`recovery` operation kindと、`corrupt-data | unsupported-version`時にもsettingsをmountするdegraded startup契約
 
-依存方向は`Domain contracts → Configured runtime-schema primitives → Owner-local exchange schema and migration → Mapper → Foundation data port（参照・置換・保守）→ Backup and Restore services → State → View and File gateway → Section mount adapter`とし、右側は左側だけへ依存する。File gatewayはFoundation portへ直接アクセスせず、settingsは公開section adapterより内側へ依存しない。
+依存方向は`Domain contracts → Configured runtime-schema primitives → Owner-local PC codec / mapper / policy → package backup public port + Foundation backup capability → ProductBackupAdapter → Backup and Restore facades → State → View and File gateway → Section mount adapter`とし、右側は左側だけへ依存する。Product側はpackage内部の汎用protocolを再実装せず、File gatewayはFoundation portへ直接アクセスせず、settingsは公開section adapterより内側へ依存しない。
 
 ### Revalidation Triggers
 - `LocalDataRoot`、カテゴリ、候補所属、現在構成参照、read-only root queryまたはRepositoryエラーの形状変更
@@ -70,6 +84,7 @@
 - `BackupRestoreSectionMount`、`FeatureMountContext`、settings-owned host lifecycle、File API前提、信頼済みコンテキスト設定の変更
 - application shellのdegraded startup、`recovery`操作可否、正常snapshot復帰通知の変更
 - ui-messagesの`MessageKey`、placeholder、日英catalog parity、言語切替時のProvider契約の変更
+- package backup public contractまたは`ProductBackupAdapter`のconsumer contract、codec設定点の変更
 
 ## Architecture
 
@@ -77,7 +92,7 @@
 
 Foundationは`LocalDataRoot`を単一キーで保存し、読取・保存時にスキーマと参照を検証する。Candidate managementはプロジェクトと候補、Current build managementは構成参照と数量を所有し、どちらもRepositoryを介して保存する。本仕様はこれらの公開保存値だけを入力とし、業務サービスやStorage APIへ直接依存しない。
 
-Foundationは`BackupRestoreDataPort`から、正常rootと破損/未対応rootのassessment、commit pointを判別する置換、opaque ticketによるfinalize-only retryを用途限定で提供する。内部では同じ`WriteAuthority`とWeb Lockへ委譲され、本機能はraw root、Storage、lock、fence、通常CRUDへ到達しない。project-contextはcatalog全体置換用permitとsuccess/failure completion、置換後refreshを能力別portで提供する。本機能は両上流契約を順序付けるが、guard registry、draft内容、selection fallback、原子的writeを再実装しない。
+Foundationは`BackupRestoreDataPort`から、正常rootと破損/未対応rootのassessment、commit pointを判別する置換、opaque ticketによるfinalize-only retryを用途限定で提供する。packageのbackup subpathはcodec注入型の汎用`BackupOrchestrator`を提供する。`ProductBackupAdapter`は両方のpublic contractとPC codec/policyを構成し、feature facadeへ既存のcreate/preflight/reassess/commit/finalize操作を公開する。内部の`WriteAuthority`、Web Lock、raw root、Storage、fence、通常CRUD、およびpackageの汎用protocolへは到達しない。project-contextはcatalog全体置換用permitとsuccess/failure completion、置換後refreshを能力別portで提供し、feature stateが利用者確認を含むlifecycleを汎用orchestratorの外側で順序付ける。
 
 破損・未対応rootでは通常のmaintenance snapshotを構築できない。application shellはこの二つのtyped failureだけを`recovery-required`へ写像し、通常mutationをfail closedで抑止したままsettingsをmountする。backup-restoreのcommitは`recovery` operationとして許可され、その他のstartup failureでは従来どおりglobal startup errorに留まる。Foundationから最初の正常snapshotを受信した時点でshellは通常projectionへ復帰する。
 
@@ -87,18 +102,16 @@ Foundationは`BackupRestoreDataPort`から、正常rootと破損/未対応root�
 graph LR
     View[Backup restore view] --> State[Backup restore state]
     View --> File[File gateway]
-    State --> Export[Backup service]
-    State --> Restore[Restore service]
-    Export --> Mapper[Exchange mapper]
-    Restore --> Validator[Exchange validator]
-    Restore --> Migration[Exchange migration]
-    Restore --> Mapper
-    Export --> Snapshot[Backup snapshot read port]
-    Restore --> Guard[Project context replacement guard]
-    Restore --> Context[Project context refresh]
-    Restore --> Foundation[Backup restore data port]
-    Restore --> Finalize[Finalization lifecycle]
-    Finalize --> Foundation
+    State --> Facade[Backup and restore facades]
+    State --> Guard[Project context replacement guard]
+    State --> Context[Project context refresh]
+    Facade --> Adapter[ProductBackupAdapter]
+    Adapter --> Generic[Package backup orchestrator]
+    Adapter --> Codec[PC backup codec mapper policy]
+    Adapter --> Snapshot[Backup snapshot read port]
+    Adapter --> Foundation[Backup restore data port]
+    Generic --> Codec
+    Generic --> Foundation
     Foundation --> Runner[Root transaction runner]
     Runner --> Schema[Schema validator]
     Runner --> Storage[Chrome storage adapter]
@@ -106,7 +119,7 @@ graph LR
 
 - **Selected pattern**: 機能サービスとポート・アダプター。交換形式の純粋処理とブラウザI/Oを分離する。
 - **Existing patterns preserved**: `unknown`入力検証、判別可能な`Result`、Repository経由の保存、UI stateとDOM viewの分離。
-- **New components rationale**: Exchange componentsは保存版との分離に、RestoreServiceは交換層検証とFoundation置換・保守呼び出しの順序調整に、FileGatewayはDOM固有処理の隔離に必要である。置換・保守・単一writeの原子性はFoundationが所有し新設しない。
+- **New components rationale**: Exchange componentsは保存版との分離に、`ProductBackupAdapter`はpackageの汎用orchestratorとPC固有codec/policy/Foundation capabilityの構成点に、FileGatewayはDOM固有処理の隔離に必要である。汎用protocolはpackage、置換・保守・単一writeの原子性はFoundationが所有し新設しない。
 - **Steering compliance**: MV3同梱コード、最小権限、10MB上限、架空fixture、service worker寿命への非依存を維持する。
 
 ### Technology Stack
@@ -119,6 +132,7 @@ graph LR
 | Messages | ui-messages public resolver / 日英catalog | 案内、操作、分類済みerror、再試行方針 | `useMessages()`だけを利用しcatalog parityを維持 |
 | File I/O | File、Blob、URL、TextEncoder | 読取、生成、UTF-8サイズ | Chrome 116標準、新規依存なし |
 | Data | `BackupSnapshotReadPort` / `BackupRestoreDataPort` | export参照、commit point付き正常置換・異常root回復 | 通常CRUD・Storage API・fence直接利用なし |
+| Generic backup | `@pc-build-planner/local-data/backup` public port | create/preflight/reassess/commit/finalize protocol | product codecとFoundation capabilityを注入し、deep importしない |
 | Context | project-context public ports | 置換前guard、成功後refresh | registry・draft・preference非公開 |
 | Test | Node test runner / jsdom / Playwright | 純粋契約、統合、UI検証 | 架空データのみ |
 
@@ -131,6 +145,7 @@ src/features/backup-restore/section-mount.ts       # section依存組立、mount
 src/features/backup-restore/backup-schema.ts       # configured schema primitiveで組むowner-local Envelope schema定義
 src/features/backup-restore/exchange.ts            # backup-schemaを使う交換形式検証、形式移行、LocalDataRoot変換
 src/features/backup-restore/capacity-policy.ts     # 16 MiB入力上限とexport自己復元可能性の単一policy
+src/features/backup-restore/product-backup-adapter.ts # package orchestratorへPC codec/policyとFoundation capabilityを設定
 src/features/backup-restore/service.ts             # バックアップ生成と復元preflight・commit・pre-commit cleanup再開・finalize
 src/features/backup-restore/context-lifecycle.ts   # replacement guardとpost-commit refreshの順序調整
 src/features/backup-restore/file-gateway.ts        # File読取とBlobダウンロード
@@ -144,6 +159,7 @@ src/ui-messages/catalog/en/backup.ts               # 日本語と同一key・pla
 tests/fixtures/backup.ts                           # 架空の現行・旧版・不正Envelope
 tests/features/backup-restore/exchange.test.ts     # 形式検証、移行、往復、参照検証
 tests/features/backup-restore/capacity-policy.test.ts # 保存上限rootのartifact最大サイズと自己復元可能性
+tests/features/backup-restore/product-backup-adapter.test.ts # package/foundation public contractのconsumer検証
 tests/features/backup-restore/service.test.ts      # export、preflight、commit、pre-commit cleanup再開、失敗不変性
 tests/features/backup-restore/file-gateway.test.ts # UTF-8読取、ファイル名、Blob生成
 tests/features/backup-restore/state.test.ts        # 状態遷移、確認、重複抑止、commit/finalize/refresh再試行
@@ -153,15 +169,16 @@ tests/features/backup-restore/integration.test.ts  # 全データ往復とReposi
 tests/features/backup-restore/backup-restore-flow.integration.test.tsx # sectionからの復元全体flow
 tests/features/backup-restore/recovery.integration.test.ts # degraded startupからの明示的回復とfinalize-only retry
 tests/features/backup-restore/project-context-lifecycle.test.ts # guard、finalization、refresh-only retry
+tests/tooling/backup-restore-consumer.ts           # package backup subpathとFoundation capabilityの公開境界fixture
 tests/ui-messages/catalog-parity.test.ts            # backup日英key・placeholder parity
 e2e/backup-restore.spec.ts                         # settings経由のexport→改変→復元→再起動
 ```
 
-新規作成は`backup-schema.ts`、`capacity-policy.ts`、`context-lifecycle.ts`、`capacity-policy.test.ts`、`recovery.integration.test.ts`、`project-context-lifecycle.test.ts`の6ファイルである。`backup-schema.ts`はconfigured runtime-schema公開入口だけを使うEnvelope schema定義をExchangeValidator境界の内側で分離し、`exchange.ts`は検証・移行・写像の順序調整に専念する。既存の`contracts.ts`、`service.ts`、`state.ts`、`view.tsx`、`operation-kind.ts`、`react-root.tsx`、`section-mount.ts`、`public.ts`、日英の`backup.ts`メッセージカタログと対応testを変更する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、`react-root.tsx`は両operationの可否を別々に購読してViewへ渡す。`exchange.ts`と`file-gateway.ts`は契約追従が必要な場合だけ局所変更し、交換形式やFile APIの責務を広げない。`styles.css`の責務は変更せず、削除対象はない。
+既存実装へ`product-backup-adapter.ts`と対応consumer test/fixtureを追加し、`service.ts`を既存UI向けfacadeとしてadapterへ委譲する。`backup-schema.ts`、`capacity-policy.ts`、`context-lifecycle.ts`、exchange/file/UI/stateと既存testは責務を維持する。`ProductBackupAdapter`だけがpackage backup public portとFoundation capabilityの両方を受け取り、PC codec/mapping/policyを設定する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、shell composition fileは本specの変更対象に含めない。
 
-`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) runtime schema同等性gate、(2) Foundationのassessment ticket付き`BackupRestoreDataPort`とproject-context public ports、(3) application-shell ownerによる`OperationKind`・`recovery-required`のcontract/gate、(4) 本specのfeature実装、(5) production wiringとする。手順3は型・gate契約だけを先行し、手順5のcompositionは本specの完成後に行うため、roadmap上の循環依存を作らない。
+`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) package backup public contract、(2) Foundationの用途限定`BackupRestoreDataPort`、(3) project-context public ports、(4) 本specの`ProductBackupAdapter`とfeature/UI、(5) application-shell ownerによるproduction compositionとする。本specは手順4までを所有し、shell fileを編集しない。
 
-`src/application-shell/side-panel-contributions.ts`と`application-composition.ts`のproduction wiringは当初application-shell ownerのdownstream taskとして切り出す前提だったが、project-context公開portが暫定入口のまま残る欠陥（DEF-011）を解消するため、手順5を本specのtask 5.1で実施した。application-compositionがlate-boundなreplacement guard / refreshを合成し、`side-panel-contributions.ts`が`FoundationScopedDataPort.query`だけをfrozen `BackupSnapshotReadPort`へ狭めてsection factoryへ渡す。この例外はwiring行だけに限定し、feature内部の境界は変えない。settings内部へは完成済みsection mountだけを注入し、read/data/context capabilityを渡さない。
+過去task 5.1でDEF-011を解消するため行ったproduction wiringは履歴として残るが、`v0.5.0-boundary-reconciliation`以後のcanonical所有者はapplication-shellである。本変更は既存wiringの意味や挙動を変更せず、今後のcomposition実装を本specへ再導入しない。
 
 ## System Flows
 
@@ -244,18 +261,23 @@ Foundationはmode別の再assessment、root write、cleanupを一つのcommit pr
 | 3.4 | ファイル安全上限と保存容量拒否 | RestoreService、RestoreFileCapacityPolicy、BackupRestoreDataPort | preflight / assessReplacement / assessRecovery | 復元 |
 | 3.6 | preview | RestoreService、BackupRestoreView | RestorePreview | 復元 |
 | 4.1, 4.2 | 置換確認と取消時保持 | BackupRestoreState、BackupRestoreView | RestoreTicket | 復元 |
-| 4.3, 4.5, 4.6 | 全体置換と共通操作ロック | RestoreService、BackupRestoreDataPort、application shell | commit / finalize-only retry | 復元 |
+| 4.3, 4.5, 4.6 | 全体置換と共通操作ロック | ProductBackupAdapter、BackupRestoreDataPort、BackupRestoreState | commit / finalize-only retry | 復元 |
 | 4.4 | 成功反映 | BackupRestoreState、BackupRestoreSectionMount | RestoreSummary | 復元 |
 | 4.7, 4.8 | 未保存編集保護 | RestoreContextLifecycle、BackupRestoreState | ProjectContextReplacementGuardPort | guarded restore |
 | 5.1, 5.2, 5.3, 5.4 | 原子的失敗回復 | RestoreService、BackupRestoreDataPort | not-committed / committed outcome | 復元 |
 | 5.5 | ticket保持と再試行 | BackupRestoreState | retryRestore / finalize | 復元 |
-| 5.6, 5.7 | 破損・未対応rootからの明示的回復 | RestoreService、BackupRestoreDataPort、BackupRestoreView、application shell | degraded startup / recovery commit | recovery restore |
+| 5.6, 5.7 | 破損・未対応rootからの明示的回復 | ProductBackupAdapter、BackupRestoreDataPort、BackupRestoreView | recovery assessment / commit | recovery restore |
 | 6.1, 6.2, 6.3, 6.4 | 設定内の区画と案内 | BackupRestoreView、BackupRestoreState、BackupRestoreSectionMount | ViewState、FeatureMountContext | 両フロー |
 | 6.5 | 値を露出しない診断 | 全検証・サービス・View | 分類済みerror code | 両フロー |
 | 6.6 | 非永続ドラフト | BackupRestoreState | transient state | 復元 |
 | 6.7 | 独立navigationを要求しない埋め込み | BackupRestoreSectionMount | mount | Settings mount |
-| 6.8 | context unavailable時の到達性 | BackupRestoreSectionMount、BackupRestoreView、application shell | recovery-required mount | Settings mount |
+| 6.8 | context unavailable時の到達性 | BackupRestoreSectionMount、BackupRestoreView | recovery-capable section contract | Settings mount |
 | 6.9, 6.10, 6.11 | 置換後refreshと単独再試行 | RestoreContextLifecycle、BackupRestoreState、BackupRestoreView | ProjectContextCommandPort.refresh | post-restore refresh |
+| 7.1, 7.3 | package public port利用とdeep import禁止 | ProductBackupAdapter | BackupOrchestrator factory | adapter composition |
+| 7.2, 7.4 | PC codec・mapping・policyとFoundation capability接続 | ProductBackupAdapter、ExchangeMapper、RestoreFileCapacityPolicy | BackupCodec / BackupRestoreDataPort | 両フロー |
+| 7.5 | 既存安全性の非回帰 | ProductBackupAdapter、RestoreContextLifecycle、BackupRestoreState | commit/finalize/refresh | guarded restore |
+| 7.6 | shell compositionの分離 | BackupRestoreSectionMount、ProductBackupAdapter | public factory / section mount | downstream composition |
+| 7.7, 7.8 | consumer・contract・UI・E2E検証 | ProductBackupAdapter、BackupRestoreView | public contract fixtures | 全フロー |
 
 ## Components and Interfaces
 
@@ -264,8 +286,9 @@ Foundationはmode別の再assessment、root write、cleanupを一つのcommit pr
 | ExchangeValidator | Exchange | unknownからEnvelopeを交換形式専用規則で検証 | 2.1–3.3, 6.5 | Exchange contracts P0 | Service |
 | ExchangeMigration | Exchange | 対応旧形式を現行へ変換 | 2.4, 2.5, 5.3 | ExchangeValidator P0 | Service |
 | ExchangeMapper | Exchange | Envelopeと保存ルートを相互変換 | 1.1–2.3 | DomainModel P0 | Service |
+| ProductBackupAdapter | Product adapter | package orchestratorへPC codec/mapping/policyとFoundation backup capabilityを設定 | 1.1–7.8 | package backup public port P0、BackupRestoreDataPort P0、PC codec P0 | Service, Consumer contract |
 | BackupService | Feature | 検証済みデータを自己復元可能なfile artifact化 | 1.1–1.7 | BackupSnapshotReadPort P0、Mapper P0、RestoreFileCapacityPolicy P0 | Service |
-| RestoreService | Feature | preflightと正常/回復commitを調整 | 3.1–5.7 | Exchange P0、BackupRestoreDataPort P0、BackupSnapshotReadPort P0 | Service |
+| RestoreService | Feature facade | UI向け既存操作をProductBackupAdapterへ委譲 | 3.1–5.7 | ProductBackupAdapter P0 | Service |
 | RestoreContextLifecycle | Feature | replacement guardとpost-commit refreshを順序付け | 4.7, 4.8, 6.9–6.11 | project-context ports P0 | Service, State |
 | BackupRestoreDataPort | Foundation port | commit point付き置換とfinalize-only retryだけを公開 | 3.1–5.7 | Foundation authority P0 | Service |
 | BackupSnapshotReadPort | Persistence (read-only) | export用の検証済みsnapshot参照 | 1.1, 1.4, 1.5 | FoundationScopedDataPort P0 | Service |
@@ -305,6 +328,26 @@ interface ExchangeMapper {
 MapperはID、日時、確認値、出典、正規化属性、候補所属、構成参照を保持する。保存`schemaVersion`は交換データから信頼せず、現行保存スキーマ版を用いて保存root候補を構築する。この候補は`unknown`として`BackupRestoreDataPort`へ渡し、最終的なschema検証・参照整合性・容量判定はFoundationが行う（feature側でSchemaValidatorや容量判定を重複実行しない）。
 
 ### Feature Layer
+
+#### ProductBackupAdapter
+
+```typescript
+interface ProductBackupAdapterDependencies {
+  readonly backupOrchestratorFactory: BackupOrchestratorFactory;
+  readonly snapshot: BackupSnapshotReadPort;
+  readonly replacement: BackupRestoreDataPort;
+  readonly codec: BackupCodec<LocalDataRoot, RestoreInput, unknown, BackupArtifact, RestorePreview, ProductBackupCodecError>;
+  readonly capacityPolicy: RestoreFileCapacityPolicy;
+  readonly errorPolicy: ProductBackupErrorPolicy;
+}
+
+interface ProductBackupAdapter {
+  readonly backup: BackupService;
+  readonly restore: RestoreService;
+}
+```
+
+factoryは`@pc-build-planner/local-data/backup`の公開subpathからだけ受け取り、PC codecへ`ExchangeValidator`、`ExchangeMigration`、`ExchangeMapper`、artifact命名、容量policy、製品error mappingを閉じ込める。Foundation capabilityは汎用orchestratorが要求するroot assessment/replacement/finalization portへ狭めて渡す。明示確認とproject-context guard/refreshは製品UI lifecycleに残し、汎用orchestratorへ利用者操作やshell stateを持ち込まない。adapterはpackage protocolを複製せず、既存`BackupService`/`RestoreService`形状をfacadeとして公開する。
 
 #### BackupService
 
@@ -529,6 +572,8 @@ root write後の`committed-finalization-required`とcontext refresh失敗は上�
 
 ## Testing Strategy
 
+- **Consumer contract**: packageのbackup public subpathとFoundationのbackup専用capabilityだけで`ProductBackupAdapter`を構成でき、deep import、通常CRUD、raw storage/lock、shell compositionへの依存がないことをcompile fixtureとnegative ownership scanで固定する（7.1–7.7）。
+- **Adapter contract**: PC codec/mapping/policyを注入したgeneric orchestratorでcreate/preflight/reassess/commit/finalizeが既存facadeと同じ結果へ写像され、明示確認・guard前にcommitしないこと、失敗時root保持、commit後finalize/refresh-onlyを検証する（7.2–7.8）。
 - **Unit**: Envelope全フィールド、未知・旧・将来版、非JSON値、禁止内容、ID重複、孤立候補、別プロジェクト構成参照、Mapper往復同値性を検証する。
 - **Foundation port integration**: 正常/異常rootでassessment→commit point→finalizationを検証する。preflight後に先行mutationが確定した場合はassessment ticketをstale拒否して先行変更を保持し、古いticketの再送を拒否したまま新assessmentだけを許可する。commit線形化後の後続mutationはmaintenance/recovery controlで拒否する。候補不正、容量超過、stale cursor、write前失敗では元rootが不変である。control取得後のwrite前cleanup失敗は`precommit-cleanup-pending`となり、同じassessment ticketでcleanupを再開する間のroot writeが0件、別ticketが拒否、worker再生成後もowner/generationが一致し、cleanup後だけ再assessmentしてcommit可能であることを確認する。write後cleanup失敗では`committed-finalization-required`だけを返し、section unmount・新stateでのremount後にpending ticketを再発見し、finalize retry中のroot writeが0件であることを確認する（3.1–5.7）。
 - **Guard/context integration**: guard拒否・取消・staleでticket/selection/rootを保持し、begin前commitを禁止する。committed outcomeではfinalization状態にかかわらずcomplete succeededを一度だけ呼び、finalization完了後だけrefreshする。finalize/refresh retryがFoundation commitを再呼出ししないことを検証する（4.7, 4.8, 6.9–6.11）。

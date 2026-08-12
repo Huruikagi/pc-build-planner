@@ -3,6 +3,12 @@
 > **順序の意図**: スタイルと E2E ロケータの文言非依存化（タスク群1）を、カタログへの文言移送（タスク群3以降）より**先**に行う。逆順にすると同じテストを二度修正することになる。
 >
 > **転記の検証装置**: タスク群3・4では、テスト側の文言リテラルを**無改変のまま残す**。既存テストが緑であることが「表示文言が1文字も変わっていない」ことの証拠になる。期待値のカタログ化はタスク群5でのみ行う。
+>
+> **Change Brief `v0.5.0` merge**: 完了済みタスク1〜7の承認済み挙動と実装記録を保持し、タスク群8だけでgeneric mechanismを`typed-messages-core`公開APIへ委譲する。ja/enカタログ、具体MessageKey、言語policy、release rule、React binding、既存app consumer surfaceは本specに残す。
+> `src/ui-messages/`のconfigured adapter実装は本specタスク8だけが所有する。upstreamはpackage source・root export・package単独gateを所有し、app adapterについては本spec成果物をread-only consumer contractとして受け入れ検証する。
+>
+> **Integrated Change Brief `v0.5.0-boundary-reconciliation`**: タスク群1〜8の既存責務と実装記録を保持し、タスク群9でproject lifecycleの物理catalog ownershipを統合する。`project-context`はsemantic intent・発火条件・必要parameter・key非依存descriptorを所有し、本specは具体key/value、descriptor-to-key mapping、12名前空間の集約、ja/en placeholder parity、製品validationだけを所有する。
+> **Out-of-scope preservation**: project lifecycle command/state/発火判断、言語保存・切替、React package化、UI layout/CSS、generic core実装、候補一覧・editor情報設計をタスク群9へ含めない。
 
 - [x] 1. 文言非依存の要素識別基盤とロケータ移行
 
@@ -317,10 +323,77 @@
   - _Requirements: 1.5, 2.4, 8.4, 9.4, 10.2, 11.8_
   - _Boundary: ValidationGate_
 
+- [ ] 8. Change Brief v0.5.0のgeneric core委譲を統合する
+
+- [ ] 8.1 package公開契約に対する製品adapterの型接合面を確定する
+  - 製品ja/en catalogから具体的なkey、resolver、descriptor型を導出する接合面を、typed messages coreのroot公開型だけで構成する。
+  - source/fallback language、原語表記、release固有規則、React bindingを製品境界に残し、package内部moduleやPC固有catalogをgeneric coreへ持ち込まない。
+  - 完了時、既存appとworker consumerが同じ公開signatureで型検査を通り、未知key・parameter不一致の型安全性が維持される。
+  - _Depends: typed-messages-core 3.1_
+  - _Requirements: 1.1, 1.2, 1.3, 10.1, 12.1, 12.2, 12.5, 12.6_
+  - _Boundary: AppMessageAdapter_
+
+- [ ] 8.2 configured resolverとdescriptorをpackage factoryへ移行する
+  - package rootのresolver/descriptor factoryへ製品catalogを設定し、既存のdefault resolver、message descriptor生成、言語別resolver registryを同じapp公開面で提供する。
+  - plain、placeholder、single/multi plural、descriptor、unknown-key fallbackの表示結果を移行前と一致させ、React Provider/hookを製品側に維持する。
+  - generic format・resolver・descriptor実装の製品側重複をconsumer切替と同じcheckpointで除去する。
+  - 完了時、ja/enのresolver、descriptor、plural、placeholder、fallback、React DOMの既存回帰suiteが全件成功する。
+  - _Requirements: 1.4, 1.5, 2.1, 2.2, 2.4, 3.1, 3.3, 3.5, 4.5, 10.3, 12.1, 12.3, 12.5, 12.6_
+  - _Boundary: AppMessageAdapter, MessageReactContext_
+  - _Depends: 8.1_
+
+- [ ] 8.3 generic parityと製品release ruleを合成する
+  - packageのmissing・excess・placeholder parity結果へ、required release key、固定二言語案内、dead navigation key不在だけを製品側で合成する。
+  - ja/enの具体key/value、placeholder parity、11名前空間、v0.3.0の追加keyとdead key撤去を変更せず、generic parity実装の製品側重複を除去する。
+  - package内部deep import、generic実装重複、製品ruleのpackage混入をboundary/contract gateで拒否する。
+  - 完了時、既存catalog parityのpositive/negative fixtureとrelease固有検査が同じissue意味で成功する。
+  - _Requirements: 7.5, 7.6, 10.1, 10.2, 10.4, 10.6, 11.5, 11.6, 11.7, 11.8, 12.2, 12.4, 12.5, 12.6_
+  - _Boundary: CatalogParityGate, AppMessageAdapter_
+  - _Depends: 8.1_
+
+- [ ] 8.4 product catalog変更経路と完全非回帰を検証する
+  - catalog/release-rule-only検証が製品parity、configured adapter、app public consumer、表示回帰を再現可能に実行し、core変更用package gateと責務を混同しないことをtooling testで固定する。
+  - package単独gate、topological build、app typecheck、public consumer、boundary、UI text、unit/integration/DOM、ja/en E2Eを含む完全検証をfreshに実行する。
+  - 翻訳、対応言語、言語state、React adapter配置、UI layout、npm公開に差分がなく、既存表示・plural・descriptor・fallbackが不変であることを確認する。
+  - 完了時、product-only検証と`pnpm validate`が成功し、Change Brief `v0.5.0`の全In-scope項目とOut-of-scope保持にfresh evidenceがある。
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.3, 12.3, 12.5, 12.6, 12.7_
+  - _Boundary: ValidationGate_
+  - _Depends: 8.2, 8.3_
+
+- [ ] 9. Change Brief v0.5.0-boundary-reconciliationの物理catalog ownershipを統合する
+
+- [ ] 9.1 project lifecycleの日本語・英語catalogと12名前空間集約を追加する
+  - project一覧、作成、改名、削除確認、名前必須、4種類の操作中、9種類の操作失敗、refresh再試行に対応する具体keyとja/en値を、既存catalogの唯一のsource of truthへ追加する。
+  - project名だけを両言語で同じplaceholderとして保持し、operation・impact・error categoryは有限unionごとの具体keyとして定義する。候補数を推測する文言や自由文字列keyを追加しない。
+  - 既存11名前空間へ`projectContext`を12番目として集約し、既存key/value、source/fallback language、release rule、dead key撤去を変更しない。
+  - 完了時、全project lifecycle keyがja/enで解決でき、key集合とplaceholder集合が一致し、既存catalog回帰が全件成功する。
+  - _Depends: 8.4, project-context 7.2_
+  - _Requirements: 1.1, 1.3, 1.4, 1.5, 2.1, 2.3, 10.1, 10.2, 10.6, 12.2, 12.4, 13.1, 13.2, 13.3, 13.4, 13.7_
+  - _Boundary: MessageCatalog, CatalogParityGate_
+
+- [ ] 9.2 key非依存descriptorを具体MessageKeyへ写像する製品adapterを追加する
+  - project-contextの公開descriptor型だけを型参照し、8 intent、4 operation、固定impact、9 error reasonの全分岐をcanonical key contractへexhaustiveに写像する。
+  - project名を同名placeholderとしてconfigured resolverへ渡し、state、command、発火条件を判断せず、未知分岐fallback、互換alias、feature-local catalogを作らない。
+  - adapterを既存app公開面からhost compositionが利用できるresolver factoryとして提供し、project-context内部module、runtime state/service、worker-safe入口へのReact依存を持ち込まない。
+  - 完了時、union memberを追加してmappingを欠落させたnegative fixtureが型検査で失敗し、全descriptorがja/enの期待値へ解決されるcontract testが成功する。
+  - _Depends: 9.1_
+  - _Requirements: 1.2, 1.3, 2.3, 10.3, 12.1, 12.3, 12.5, 13.1, 13.2, 13.3, 13.4, 13.5, 13.7_
+  - _Boundary: ProjectLifecycleMessageAdapter, UiMessagesPublicEntry_
+
+- [ ] 9.3 project lifecycle catalogの製品validationと表示非回帰を確定する
+  - catalog-only gateへ12名前空間、全descriptor mapping、ja/en placeholder parity、project-context側への物理catalog逆流不在を追加し、generic core用package gateと責務を混同しない。
+  - syntheticなproject名と注入presentation harnessでresolver consumption、安全なtext描画、role・labelを検証する。production hostのlayout、CSS、keyboard、focus、作成・改名・削除確認・取消・失敗・refresh再試行の横断E2Eはdownstream application-shellのread-only acceptanceとして明記し、本specでproduction wiringを変更しない。
+  - focused typecheck、catalog parity、adapter contract、injected DOM harness、boundary testを先に実行し、その後package単独gate、topological build、app public consumer、UI text、unit/integrationを含む現時点で実行可能な完全検証をfreshに実行する。production host接続を必要とするja/en E2Eはapplication-shell完了後のrevalidation triggerとして引き渡す。
+  - 完了時、Change Brief `v0.5.0-boundary-reconciliation`の全In-scope項目とRequirement 13のtraceabilityが証明され、全Out-of-scope項目、タスク1〜8の承認済み挙動、既存表示が差分なく保持される。
+  - _Depends: 9.2_
+  - _Requirements: 1.6, 2.1, 2.2, 2.4, 2.5, 3.1, 3.2, 3.4, 3.5, 6.1, 6.2, 6.5, 8.1, 8.3, 8.4, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 12.3, 12.5, 12.6, 12.7, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7_
+  - _Boundary: ValidationGate, ProjectLifecycleMessageAdapter_
+
 ## Implementation Notes
 
 - 2026-07-31 validation remediation: 5つのv0.3 exact keyをproducer-owned production経路へ接続し、`transient-feature-surface`、`application-shell`、`product-capture-transient-migration`で責務を保持したまま再検証した。置換元の`transientActivationUnavailable`はja/enから削除し、TypeScript 7 ASTによるexact constant-expression dead-key gateで再混入を拒否する。修正後は64/64受入基準FULL、依存方向・境界監査PASS、`pnpm validate`とunpacked-extension smokeが成功した。producer変更と再検証結果は各owner specのImplementation Notesへ記録した。
 - 2026-07-31 task 7.3/7.4 revalidation: catalog-owned公開consumer、producer suite、settings両区画、loading/startup hint、言語Provider、安全なtext描画、文言非依存locator、dead-key/parity gateをread-onlyの横断受入として再検証した。`pnpm validate`はexit 0（Node 1157/1157、Playwright 15/15）で、typecheck、public consumer、lint、boundary、fixture、final build、ui-text、unit/integration/DOM、production E2Eをfreshに通過した。64受け入れ基準は既存task 1〜7の`_Requirements_` traceabilityで欠落なく追跡され、権限・CSP・実サイトfixture・catalog migration境界にも新規違反はない。検証中にproducer-owned state/view/layout/発火条件または業務処理は変更していない。
+- 2026-08-12 / Change Brief `v0.5.0-boundary-reconciliation`: project lifecycle messageのsemantic producerは`project-context`、物理catalog ownerは`ui-message-catalog`とする。タスク9は具体key/value、descriptor mapping、12名前空間aggregation、parity、製品validationだけを変更し、project lifecycleのcommand/state/発火判断/key非依存descriptor、host layout/CSS、言語state、generic coreを変更しない。
 
 - remediation-1: `MessageDescriptor` は非公開 `unique symbol` による nominal brand を持ち、`message()` だけを型安全な生成経路とした。runtime bootstrap と shell view の表示値はカタログキーへ移し、公開 API を広げずロジック層から生の英語文言を渡せない境界を固定した。
 - remediation-2: 5本の E2E spec から生の `locator()` 組み立てを除去し、意味単位の識別手順を `e2e/locators.ts` へ集約した。`tests/tooling/e2e-locator-boundary.test.ts` が spec への locator 再混入を拒否する。

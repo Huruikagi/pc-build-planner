@@ -1,5 +1,12 @@
 # 実装計画
 
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope task delta**: Task 9–12は独立source core/public型、URL identity・scope matcher、catalog/mutation/条件付きpatch移管、`AppDataError` projection、candidate editor consumer contract、owner移管の完了検証、境界・回帰gateを扱う。
+- **Out-of-scope preservation**: Task 1–8とImplementation Notesは実装履歴として保持する。価格抽出/workflow、candidate editor UI ownership・再設計、product identity、保存schema意味変更、foundation error定義/mapping、application-shell compositionを本specで実装しない。
+- **Implementation prerequisites**: Task 9は`local-data-foundation` Task 11.1の共有`AppDataError`公開契約を、Task 11は`project-candidate-management` Task 13.3のeditor consumer seamを前提とする。旧owner撤去は新source public port利用可能後だけ行う。
+
 > **実装前提**: product-capture #8が、メーカー登録ドメインの照合をfeature公開入口から利用できる状態であること。マップデータやeTLD+1判定を本spec側へ複製しない。
 
 - [x] 1. 上流公開前提と複数ソースのドメイン・保存schemaを確立する
@@ -164,7 +171,7 @@
 
 - [x] 5.4 downstream向けsource catalog consumer契約を検証する
   - 価格更新consumer fixtureが公開catalogから全候補または候補限定のsource参照を取得できることを検証する。
-  - 同一URLの複数参照をcatalogが保持し、URL同一性・0件・1件・複数件の一致と曖昧さをconsumer側で判定できることを確認する。
+  - 同一URLの複数参照をcatalogが保持する移行前characterizationを固定する。URL同一性・0件・1件・複数件の一致と曖昧さのcanonical判定はTask 9.3・9.4へ移管し、最終状態でconsumer側実装を残さない。
   - source再取得のnot-foundをconsumerがstale targetへ変換でき、foundation rootやcandidate内部moduleをimportしない公開consumer型検査が成功することを完了条件とする。
   - _Requirements: 8.7_
 
@@ -228,6 +235,134 @@
   - _Requirements: 3.2, 3.3, 3.4, 6.4_
   - _Boundary: CandidateSourceMutationPort, CandidateManagementService, CandidateSourceContractTests_
   - _Depends: 7.3_
+
+- [ ] 9. 独立source coreの公開契約を確立する
+
+- [ ] 9.1 source共有型・policy・公開入口を追加する
+  - `src/candidate-sources/`にsource entity input、read-only reference、scope、match result、mutation input/resultの型を定義し、`public.ts`だけから公開する。
+  - 0件以上のsource、存在する唯一のprimary、primaryだけからの代表URL/price導出、価格欠損の非fallback、primary削除replacementを純粋policyとして移す。
+  - foundation canonical candidate shapeを消費するが、root/schema version、backup format、migration、candidate draftをsource公開型として再定義または公開しない。
+  - 型fixtureとpolicy unitで1:N、sourceなし、追加・更新・削除・primary切替、入力不変性を固定する。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 6.1, 8.1, 8.4_
+  - _Boundary: CandidateSourceModel, CandidateSourcePolicy, CandidateSourcesPublicApi_
+  - _Depends: local-data-foundation 11.1_
+
+- [ ] 9.2 (P) AppDataError consumer projectionとsource固有errorを定義する
+  - foundationのdomain公開入口から`AppDataError`だけを消費し、全variantのcode・payload・contextを一対一で保持するexhaustive projectionを追加する。
+  - validation、candidate/source not-found、primary-required、conditional patch precondition、URL identity failureをsource固有errorとして区別し、`AppDataError`へ吸収しない。
+  - `ManagementError`、candidate-owned alias/re-export、`FoundationError` mapping、message stringへの縮退、未知errorの推測をnegative fixtureで拒否する。
+  - 全data variantとsource固有errorのcharacterization/type contractが既存表示粒度を維持することを完了条件とする。
+  - _Requirements: 3.5, 3.7, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5_
+  - _Boundary: AppDataErrorProjection, CandidateSourcePublicError_
+  - _Depends: local-data-foundation 11.1_
+
+- [ ] 9.3 (P) HTTP/HTTPS source URL identityを実装する
+  - 標準`URL`でHTTP/HTTPSだけを解析し、scheme/host/default port/pathの決定的な正規化を利用してfragmentとuserinfoをidentityから除外する。
+  - queryはsource URLの一部として保持し、tracking parameter削除、SKU抽出、domain別商品規則、queryの意味的並べ替えを行わない。
+  - 欠損、不正、unsafe scheme、identity化不能をsource validationとしてfail closedし、完全URLまたはuserinfoをlogへ出さない。
+  - table-driven unitでcase、default port、空path、fragment、userinfo、query、unsafe schemeの正負fixtureを固定する。
+  - _Requirements: 5.4, 9.1, 9.2, 9.3, 9.8_
+  - _Boundary: CandidateSourceUrlIdentity_
+
+- [ ] 9.4 明示scopeの0件・一意・曖昧matcherを実装する
+  - `all-candidates`またはcandidate ID限定scopeのcatalog snapshotを9.3と同じidentity規則で線形照合する。
+  - 0件を`no-match`、1件を`unique`、複数件を全reference付き`ambiguous-match`として返し、primary、保存順、kind、priceで暗黙選択しない。
+  - matcherはretail eligibility、価格抽出、商品identity、duplicate判断を返さず、invalid保存URLを誤一致させない。
+  - scope分離、重複、0/1/many、invalid reference、入力順変更のcontract testを成功条件とする。
+  - _Requirements: 7.3, 8.6, 8.7, 9.4, 9.5, 9.6, 9.7, 9.8_
+  - _Boundary: CandidateSourceMatcherPort_
+  - _Depends: 9.1, 9.3_
+
+- [ ] 10. catalogとmutationをcanonical source ownerへ移す
+
+- [ ] 10.1 read-only catalogを独立coreへ移す
+  - 全候補または指定候補を一回の検証済みsnapshotから列挙し、candidate/source ID、任意URL、任意kind、primary状態だけを投影する。
+  - sourceなしを空配列、未知candidateとcandidate内の未知sourceをentity別not-foundとして返し、重複referenceを除去しない。
+  - foundation root、revision、candidate draft、price、capturedAt、product identityを公開せず、data operation失敗は9.2のprojectionを通す。
+  - catalog public consumer fixtureで全件・candidate限定・ID再取得・not-found・重複保持を検証する。
+  - _Requirements: 7.1, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4_
+  - _Boundary: CandidateSourceCatalogPort_
+  - _Depends: 9.1, 9.2_
+
+- [ ] 10.2 source mutation serviceを独立coreへ移す
+  - add/update/remove/setPrimaryを9.1のpolicyへ委譲し、foundation scoped data port上でcandidate aggregateを一回だけcommitする。
+  - 新規sourceのkind未指定時だけ注入済みmanufacturer-domain classifierを使用し、利用者上書きと既存表示名称を維持する。
+  - validation、primary-required、data operation失敗では旧candidateを保持し、部分更新と暗黙retryを残さない。
+  - 実foundation contractで全mutation、classifier一致/非一致/上書き、atomicity、error projectionを検証する。
+  - _Requirements: 3.1, 3.2, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 6.2, 6.3, 6.4_
+  - _Boundary: CandidateSourceMutationPort, CandidateSourceMutationService_
+  - _Depends: 9.1, 9.2, 10.1_
+
+- [ ] 10.3 条件付き価格patchをcanonical mutationへ統合する
+  - candidate/source ID、期待raw URL、期待kind=`retail`をcommit時の最新sourceへ照合し、price/capturedAtだけを一回のmutationで更新する。
+  - 並行siteName変更を保持し、source/URL/kind不一致を専用precondition、revision競合を`AppDataError`の既存conflictとして区別する。
+  - source削除、URL/kind変更、revision競合、並行siteName変更、成功1commitを実stack contractで固定する。
+  - 価格抽出、eligibility、retry/progress、workflow stateを本serviceへ追加しない。
+  - _Requirements: 3.3, 6.2, 6.4, 6.5, 6.6, 7.1, 7.3, 7.4, 8.6_
+  - _Boundary: CandidateSourceMutationPort, SourcePricePatchContract_
+  - _Depends: 10.2_
+
+- [ ] 10.4 source public entryとconsumer contractを固定する
+  - catalog、mutations、matcher、source公開型を`candidate-sources/public.ts`からだけexportし、candidate-management公開APIへsource coreを再exportしない。
+  - source-price-refreshがmatcherとconditional patchを、duplicate-product-mergeがcandidate限定matcher、source reference、`addSource`と必要なconditional mutationを同じ公開入口から利用できるpositive fixtureを追加する。
+  - duplicate fixtureでno-match→add、一意match→conditional mutation、ambiguous→無変更のrouteを公開型だけで構成でき、read-only referenceだけへ能力を狭めた契約では型検査が失敗することを完了条件とする。
+  - price extractor/workflow、product identity、foundation internals、candidate internals、shell compositionへのdeep importを一違反ずつnegative fixtureで拒否する。
+  - package/typecheckと循環検査で共有coreからfeatures/application-shellへの依存がないことを完了条件とする。
+  - _Requirements: 8.1, 8.4, 8.6, 8.7, 8.8_
+  - _Boundary: CandidateSourcesPublicApi, SourceConsumerContracts_
+  - _Depends: 9.4, 10.1, 10.2, 10.3_
+
+- [ ] 11. candidate editor向けconsumer migration seamを固定する
+
+- [ ] 11.1 source editor adapter向けconsumer contractを固定する
+  - Task 10.4のcatalog/mutation public shapeを使い、candidate editor adapterが一覧、field error、primary replacement、保存中stateへ適合できるpositive type fixtureを追加する。
+  - port未注入または失敗時にdraftとsource表示を保持し、旧candidate-owned coreへfallbackしない期待resultをcontract fixtureで固定する。
+  - source entity・URL identity・mutation、candidate CRUD/state/viewを本taskで実装せず、実adapterは`project-candidate-management` Task 13.3が所有する。
+  - candidate CRUD、pre-edit、draft guard、current project binding、UI layout、message ownershipへ新しい依存を要求しない。
+  - _Requirements: 3.7, 3.8, 4.5, 8.5_
+  - _Boundary: CandidateSourceEditorAdapter_
+  - _Depends: 10.4_
+
+- [ ] 11.2 candidate側owner撤去後の公開境界を検証する
+  - **実装開始条件**: `project-candidate-management` Task 13.3と14.3が完了し、candidate editor adapterがcanonical portへ移行済みであること。
+  - candidate editor state/view/page-open adapterがconsumerとして残り、candidate public APIがcandidate queryとtyped editor intentへ限定されたshapeをcontract testで検証する。
+  - candidate-management側のsource catalog/mutation/URL identity撤去そのものは隣接ownerのTask 14.3へ委ね、本taskではそのfileを実装または削除しない。
+  - 旧`ManagementError`、source facet/re-export、source deep import、暗黙fallback、二重ownerをnegative fixtureで拒否する。
+  - _Requirements: 3.8, 7.2, 8.1, 8.5_
+  - _Boundary: CandidateSourceEditorAdapter, CandidateSourcesPublicApi_
+  - _Depends: 11.1; project-candidate-management 13.3, 14.3_
+
+- [ ] 11.3 既存source editorと安全な再訪を回帰する
+  - 一覧、追加、編集、削除、primary replacement、種別上書き、field error、保存失敗時入力保持を既存DOM操作で検証する。
+  - primaryと任意sourceの新規tab再訪、side panel/current tab/draft保持、unsafe URLでtab API非呼出、追加permissionなしを検証する。
+  - `AppDataError`各既存variantとsource固有errorの表示・回復動作がowner移管前と同じであることをcharacterization fixtureで固定する。
+  - DOM操作とcandidate view実装は`project-candidate-management` Task 15.3が所有し、本taskはその公開port integration結果とsource契約の非回帰を検証する。
+  - production composition E2Eはapplication-shell更新後に実行し、本taskでは注入済みpublic portのfeature integrationまでを完了条件とする。
+  - _Requirements: 3.7, 3.8, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.7, 7.1, 7.3, 7.4_
+  - _Boundary: CandidateSourceEditorAdapter, CandidateManagementView, SourcePagePort_
+  - _Depends: 11.2; project-candidate-management 15.3_
+
+- [ ] 12. 境界と非回帰の最終gateを実行する
+
+- [ ] 12.1 source coreのunit・contract・integration suiteを実行する
+  - typecheck、lint、policy、URL identity、matcher、catalog、mutation、conditional patch、error projectionのsuiteを実行する。
+  - sourceなし、1:N、primary非fallback、全scope、0/1/many、atomicity、precondition/conflict分離、全AppDataError variantが成功することを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8_
+  - _Depends: 10.4_
+
+- [ ] 12.2 public境界・循環・fixture gateを実行する
+  - 正常fixtureはsource公開入口とfoundation domain publicだけを利用し、candidate editor、source-price、duplicate consumerが宣言済み能力だけで型検査されることを確認する。duplicate fixtureはcandidate限定matcher、reference、add、conditional mutationを必須能力として消費する。
+  - negative fixtureはcandidate-owned source re-export、`ManagementError`/mapper、foundation内部、product identity混入、price workflow混入、shell wiring、deep importを一違反ずつ拒否する。
+  - dependency graph、AST import、production artifactの検査でcandidate-sourcesからfeatures/application-shellへの循環がなく、fixtureが架空データだけであることを確認する。
+  - _Requirements: 7.2, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
+  - _Depends: 10.4, 11.2_
+
+- [ ] 12.3 candidate source UXと隣接契約の非回帰gateを実行する
+  - 11.3のDOM/integration、既存backup/schema round trip、source-only価格変更でcompatibility結果不変、product capture初期source handoffを実行する。
+  - source-price-refreshのmatcher/patch consumerとduplicate-product-mergeのcandidate限定matcher/add/conditional mutation consumerは各workflow/identity実装を本specへ取り込まずcontract fixtureだけを実行する。
+  - application-shell compositionが未更新ならproduction E2Eを偽装せず開始条件未充足として記録し、更新後に後続shell gateがpublic port注入を検証する。
+  - _Requirements: 3.7, 3.8, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.7, 8.5, 8.6, 8.7, 8.8_
+  - _Depends: 11.3, 12.1, 12.2_
 
 ## Implementation Notes
 

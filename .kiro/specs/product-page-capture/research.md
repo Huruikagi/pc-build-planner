@@ -2,6 +2,9 @@
 
 ## Summary
 
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Boundary reconciliation finding**: product-capture自身が利用しない`ProductIdentityNormalizer`の型・実装・factory exportを撤去し、取得、manufacturer補完、page price extraction、candidate handoffだけを残す。source prefillはcanonical source公開型、handoffはcandidate公開intent factoryを消費し、共有data errorやshell compositionを所有しない。
+
 - **Feature**: `product-page-capture`
 - **Discovery Scope**: Extension（既存抽出pipelineへのdomain map追加と、一過性handoff契約への移行）
 - **Key Findings**:
@@ -12,6 +15,24 @@
   - metadataはnamespace全体ではなくproperty-to-targetのclosed allowlistで採用し、`og:site_name`だけを任意のsource表示名として扱う必要がある。
 
 ## Research Log
+
+### canonical source・candidate・error seam
+
+- **Sources Consulted**: 承認済み`candidate-source-bookmarks`、`project-candidate-management`、`local-data-foundation`のrequirements/design/tasks、現行product-capture `draft-mapper.ts`・`editor-handoff.ts`・`public.ts`。
+- **Findings**: source型・policy・URL identity・mutationは独立source coreへ移り、candidate public面はqueryとtyped editor intentへ縮小する。`AppDataError`はfoundationが単独所有しcandidate保存failureで使われるが、captureは保存を行わない。現行draft mapperはcandidate-managementからsource ID/typeを取り、handoffはcandidate public factoryを既に利用している。
+- **Implications**: draft mapperのsource型importだけをsource public entryへ移し、candidate intent factory seamを維持する。capture handoff failureを`AppDataError`へmappingせず、`ManagementError`/foundation mapperを追加しない。source ID生成・primary policyをcapture側へ複製しない。
+
+### identity移管とproduction API fallout
+
+- **Sources Consulted**: latest product-page-capture/duplicate-product-merge Change Brief、現行`product-identity-normalizer.ts`、`public.ts`、product-capture/candidate/application compositionのconsumer参照。
+- **Findings**: normalizerはduplicate matching専用でcapture pipelineから未使用だが、module-level public exportに残りcandidate/shell consumerをproduct-captureへ結合する。組立済み`ProductCapturePublicApi`のruntime keyは既にmanufacturer lookupとpage price extractionだけであり、falloutはmodule export、factory import、characterization test、downstream production wiringに集中する。
+- **Implications**: canonical identity public seamとdownstream移行が利用可能になった後だけcapture実装/export/testを撤去する。application-shellとcandidate側import差替えは各owner taskへ委ね、capture specでは正常/negative consumer fixtureとproduction-shaped public key検査だけを所有する。
+
+### source identityとの分離
+
+- **Sources Consulted**: 承認済みcandidate-source-bookmarksのURL identity/matcher契約、product-page-capture metadata/siteName規則。
+- **Findings**: captureのpage URLは取得provenanceとsource prefill値であり、URL identityはsource coreが所有する。`siteName`は表示候補でidentity入力ではない。product identityもsource URL identityもcapture extractionの責務ではない。
+- **Implications**: captureはraw page-derived URLと任意siteNameを検証済みprefillへ渡すだけにし、URL normalization/matching、tracking parameter判断、product identityを実装しない。
 
 ### 一過性surfaceとcapture責務
 

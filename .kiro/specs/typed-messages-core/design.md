@@ -4,7 +4,13 @@
 
 typed messages coreは、カタログからmessage keyとparameter型を導出し、plain、interpolation、single plural、multi pluralを決定的に解決する汎用mechanismを、private workspace packageとして提供する。対象利用者は、PC Build Plannerおよび将来のChrome拡張・Webアプリconsumerを実装する開発者である。
 
-既存`src/ui-messages`から製品非依存の型、format、namespace flattening、resolver factory、descriptor factory、catalog parity primitiveを抽出する。製品側はja/enカタログ、具体的な`MessageKey`、対応言語、fallback、release rule、configured resolver、React bindingを保持し、package公開APIだけを使うadapterへ変わる。既存利用者表示、言語切替、保存状態は変更しない。
+既存`src/ui-messages`で実証済みの製品非依存な型、format、namespace flattening、resolver factory、descriptor factory、catalog parity primitiveを、製品実装を変更せずに独立packageとして確立する。公開APIだけを使うsyntheticなread-only consumer fixtureで契約を証明し、製品catalog、configured adapter、React binding、製品表示の移行は隣接する`ui-message-catalog`へ委譲する。
+
+### Change Integration Context
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: generic型・formatter・resolver/descriptor factory・parity primitiveはPackage Core、package公開入口はPackagePublicEntry、workspace build・deep import gate・read-only consumer fixtureはWorkspaceValidationへ対応する。
+- **Out-of-scope preservation**: configured app adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰をComponent、File Structure Plan、migration、test ownerに含めない。
 
 ### Goals
 
@@ -30,7 +36,7 @@ typed messages coreは、カタログからmessage keyとparameter型を導出�
 - nested namespaceのflat dot-key catalogへの正規化。
 - catalog genericなresolver factoryとdescriptor factory。
 - key・placeholderのcompile-time/runtime parity primitive。
-- package単独build/typecheck/test、app consumer contract、package deep import gate、topological validation script。
+- package単独build/typecheck/test、read-only consumer contract、package deep import gate、topological validation script。
 
 ### Out of Boundary
 
@@ -40,13 +46,15 @@ typed messages coreは、カタログからmessage keyとparameter型を導出�
 - `MessageProvider`、`useMessages`、React ContextとUI integration。
 - `src/ui-language/**`のstate、永続化、browser language、切替workflow。
 - npm publish、外部stable API、2番目のconsumer実装。
+- `src/ui-messages/**`、製品runtime composition、製品表示回帰の変更。
 
 ### Allowed Dependencies
 
 - package runtimeはECMAScript標準APIだけを利用し、runtime dependencyを持たない。
 - package developmentはNode.js 26.5.0、pnpm 11.13.1、TypeScript 7.0.2、tsx 4.23.1、`node:test`を利用する。
-- app側`src/ui-messages`は`@pc-build-planner/typed-messages-core`のroot exportだけへ依存できる。
-- root toolingはpackage manifest、export map、公開consumer fixture、boundary validatorへ依存できる。
+- root workspaceはread-only fixtureの解決専用にpackageを`workspace:*`のdevelopment dependencyとして参照できる。
+- read-only consumer fixtureは`@pc-build-planner/typed-messages-core`のroot exportだけへ依存できる。
+- root toolingはpackage manifest、export map、read-only consumer fixture、boundary validatorへ依存できる。
 - packageからroot `src/`、React、Chrome API、PCドメイン、製品catalogへの依存は禁止する。
 
 ### Revalidation Triggers
@@ -54,16 +62,16 @@ typed messages coreは、カタログからmessage keyとparameter型を導出�
 - `MessageDefinition`、placeholder構文、plural category、multi-selector combination規則の変更。
 - `MessageResolver`、`MessageDescriptor`、factory、parity issueの公開shape変更。
 - package export map、build output、module format、minimum Node/TypeScript条件の変更。
-- app adapterが所有するcatalog flattening、configured resolver、release parity合成方法の変更。
+- `ui-message-catalog`が将来packageを採用する際のconfigured adapterまたはrelease parity合成方法の変更。
 - 2番目のconsumer追加またはnpm公開の検討開始。
 
 ## Architecture
 
 ### Existing Architecture Analysis
 
-現行`src/ui-messages`は共有コアとして`public.ts`を唯一のapp公開入口にしているが、内部では汎用mechanismと製品policyが同居する。`contracts.ts`と`format.ts`はほぼ独立している一方、`resolver.ts`は日本語`MESSAGES`へ、`catalog-parity.ts`は具体`MessageKey`とv0.3 release ruleへ結合する。`languages.ts`と`message-context.ts`は製品側に残すべきconfigured adapterとpresentation adapterである。
+現行`src/ui-messages`は共有コアとして`public.ts`を唯一のapp公開入口にしているが、内部では汎用mechanismと製品policyが同居する。`contracts.ts`と`format.ts`は汎用設計の参照元になる一方、具体catalogへ結合する`resolver.ts`、release ruleを持つ`catalog-parity.ts`、`languages.ts`、`message-context.ts`は本specでは変更しない。
 
-既存consumerは引き続き`src/ui-messages/public.ts`または`worker-public.ts`を利用する。したがってpackage導入はapp公開APIを置換せず、その内部実装元を変更する。workspace packageの公開境界はroot appの公開境界より上流に位置する。
+既存consumerは引き続き`src/ui-messages/public.ts`または`worker-public.ts`を利用する。本specはpackage root exportをsynthetic fixtureから検証するだけで、app公開APIの置換や製品runtime wiringを行わない。
 
 ### Architecture Pattern & Boundary Map
 
@@ -75,21 +83,18 @@ graph LR
     Normalizer --> Resolver
     MessageTypes --> Descriptor[Descriptor factory]
     MessageTypes --> Parity[Catalog parity]
-    CorePublic[Core public export] --> AppAdapter[Product message adapter]
+    CorePublic[Core public export] --> ReadOnlyFixture[Read only consumer fixture]
     Resolver --> CorePublic
     Descriptor --> CorePublic
     Parity --> CorePublic
-    AppCatalog[Product catalogs] --> AppAdapter
-    AppPolicy[Language and release policy] --> AppAdapter
-    AppAdapter --> ReactBinding[Product React binding]
-    AppAdapter --> AppConsumers[Application consumers]
+    CorePublic --> WorkspaceGates[Workspace validation gates]
 ```
 
 **Architecture Integration**:
 
-- **Selected pattern**: Pure core + configured app adapter。catalogに閉じた型付きfactoryをpackageが提供し、製品policyはapp adapterが設定する。
-- **Dependency direction**: `types → formatter/normalizer/parity → resolver/descriptor → public export → app adapter → React/consumer`。右側から左側への逆依存を禁止する。
-- **Existing patterns preserved**: app consumerは`src/ui-messages/public.ts`、worker consumerは`worker-public.ts`だけを利用し、catalog deep importを行わない。
+- **Selected pattern**: Pure core + read-only contract fixture。catalogに閉じた型付きfactoryをpackageが提供し、製品への設定は本specに含めない。
+- **Dependency direction**: `types → formatter/normalizer/parity → resolver/descriptor → public export → fixture/validation`。右側から左側への逆依存を禁止する。
+- **Existing patterns preserved**: app consumerと`src/ui-messages/**`を変更せず、package側に製品catalogを持ち込まない。
 - **New components rationale**: package公開面、workspace orchestration、consumer/boundary gateは最初のpackage運用を実証するために必要である。
 - **Steering compliance**: strict TypeScript、NodeNext ESM、`any`禁止、remote/dynamic code禁止、機械的boundary gate、`node:test`を維持する。
 
@@ -101,7 +106,7 @@ graph LR
 | Type system | TypeScript 7.0.2 / NodeNext | literal catalogから公開型とdeclarationを生成 | strict、`any`禁止 |
 | Workspace | pnpm 11.13.1 | `packages/*`登録、`workspace:*`解決、topological scripts | packageはprivate |
 | Tests | Node 26.5.0 `node:test` + tsx 4.23.1 | package単独unit/type fixture | DOM環境不要 |
-| App bundle | esbuild 0.28.1 | build済みpackage公開成果物をChrome 116向けbundleへ統合 | MV3/CSP維持 |
+| Root orchestration | pnpm scripts | package-firstのtopological buildと公開境界gateを実行 | 製品runtime wiringは変更しない |
 
 ## File Structure Plan
 
@@ -125,19 +130,10 @@ packages/
         ├── format.test.ts           # plain、interpolation、plural fallback
         ├── resolver.test.ts         # nested catalog、unknown key、descriptor解決
         └── parity.test.ts           # key・placeholder issue
-src/
-└── ui-messages/
-    ├── contracts.ts                 # package型を製品具体型へ設定して再公開
-    ├── resolver.ts                  # MESSAGES configured resolver/descriptor
-    ├── catalog-parity.ts            # generic parityと製品release ruleの合成
-    ├── languages.ts                 # 現行language registryとfallbackを保持
-    ├── message-context.ts           # 現行React bindingを保持
-    ├── public.ts                    # 既存app公開APIを維持
-    └── worker-public.ts             # 既存worker-safe公開APIを維持
 tests/
 └── tooling/
-    ├── typed-messages-consumer.ts   # package root exportだけを使う型fixture
-    ├── typed-messages-consumer.test.ts # 公開runtime contract
+    ├── typed-messages-consumer.ts   # synthetic catalogだけを使うread-only型fixture
+    ├── typed-messages-consumer.test.ts # read-only公開runtime contract
     └── public-boundaries.test.ts    # package deep importと逆依存のnegative fixture
 scripts/
 └── validate-boundaries.mjs          # workspace package boundary ruleを追加
@@ -146,40 +142,38 @@ scripts/
 ### Modified Files
 
 - `pnpm-workspace.yaml` — `packages/*`をworkspace package pathへ登録する。
-- `package.json` — packageへの`workspace:*`依存とpackage/app/topological validation scriptsを追加し、既存`build`・`validate:ci`へ順序を統合する。
-- `tsconfig.json` — app typecheckがbuild済みpackage公開型を利用し、package sourceをroot projectへ混在させない設定を維持する。
-- `tsconfig.public-consumer.json` — typed messages app consumer fixtureを公開consumer型検査へ追加する。
-- `scripts/build.mjs` — package build済みを前提にappをbundleする責務は維持し、package内部sourceを直接entryにしない。
-- `tests/ui-messages/{contracts,format,resolver,catalog-parity,public}.test.ts` — 汎用期待値をpackage単独testへ移し、製品configured adapterとrelease policyの回帰へ絞る。
+- `package.json` — read-only fixture用の`workspace:*` development dependencyとpackage用topological validation scriptsを追加し、既存製品validationのownerや内容を変更しない。
+- `tsconfig.json` — package sourceをroot app projectへ混在させない設定を維持する。
+- `tsconfig.public-consumer.json` — read-only typed messages fixtureを公開consumer型検査へ追加する。
+- `scripts/build.mjs` — package-first build順序だけを統合し、製品message実装やruntime entryを変更しない。
 - `pnpm-lock.yaml` — workspace packageと`workspace:*`linkを記録する。
 
 ## System Flows
 
 ```mermaid
 sequenceDiagram
-    participant Catalog as Product catalog
-    participant Adapter as Product adapter
+    participant Catalog as Synthetic catalog
+    participant Fixture as Read only fixture
     participant Core as Typed messages core
-    participant Consumer as App consumer
-    Catalog->>Adapter: Literal catalog
-    Adapter->>Core: Configure resolver and descriptor factory
-    Core-->>Adapter: Catalog typed contracts
-    Consumer->>Adapter: Resolve key or descriptor
-    Adapter->>Core: Definition and params
+    participant Consumer as Fixture caller
+    Catalog->>Fixture: Literal catalog
+    Fixture->>Core: Configure resolver and descriptor factory
+    Core-->>Fixture: Catalog typed contracts
+    Consumer->>Fixture: Resolve key or descriptor
+    Fixture->>Core: Definition and params
     Core-->>Consumer: Deterministic string
 ```
 
-catalog値・言語選択はadapterより上流へ渡さない。coreは渡されたcatalogだけに閉じ、unknown runtime keyではkey文字列を返す。
+fixtureはsynthetic catalogだけを使い、製品catalogや製品実装を書き換えない。coreは渡されたcatalogだけに閉じ、unknown runtime keyではkey文字列を返す。
 
 ```mermaid
 flowchart LR
     CoreChange[Core contract change] --> PackageChecks[Package build typecheck test]
-    PackageChecks --> ConsumerChecks[App consumer and boundary checks]
-    ConsumerChecks --> AppRegression[Configured app regression]
-    CatalogChange[Product catalog change] --> CatalogChecks[Product parity and display checks]
+    PackageChecks --> ConsumerChecks[Read only consumer and boundary checks]
+    ConsumerChecks --> TopologicalBuild[Topological build]
 ```
 
-変更種別別scriptは検証対象を省略するためではなく、core contract変更とproduct-only変更の責任範囲を明示する。完全検証`pnpm validate`は従来どおり両方を包含する。
+core contract用scriptはpackage単独gateとread-only fixtureだけを所有する。product-only変更の検証は`ui-message-catalog`が定義し、本specはそのscriptや製品回帰を追加・変更しない。
 
 ## Requirements Traceability
 
@@ -187,8 +181,8 @@ flowchart LR
 |---|---|---|---|---|
 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | key・parameter型導出 | MessageContracts, CatalogNormalizer, ResolverFactory | `MessageKeyOf`, `ParamsArgsFor` | catalog設定 |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 決定的formatとfallback | MessageFormatter, ResolverFactory | `formatMessage`, `MessageResolver` | message解決 |
-| 3.1, 3.2, 3.3, 3.4, 3.5 | configured resolverとdescriptor | ResolverFactory, DescriptorFactory, AppMessageAdapter | `createMessageResolver`, `createMessageDescriptorFactory` | descriptor解決 |
-| 4.1, 4.2, 4.3, 4.4, 4.5 | generic parity | CatalogParity, AppMessageAdapter | `validateCatalogParity`, parity型 | parity合成 |
+| 3.1, 3.2, 3.3, 3.4, 3.5 | configured resolverとdescriptor | ResolverFactory, DescriptorFactory | `createMessageResolver`, `createMessageDescriptorFactory` | descriptor解決 |
+| 4.1, 4.2, 4.3, 4.4, 4.5 | generic parity | CatalogParity | `validateCatalogParity`, parity型 | parity検査 |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | package公開境界 | PackagePublicEntry, WorkspaceValidation | export map, consumer fixture | topological integration |
 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 独立検証と変更影響 | WorkspaceValidation, PackagePublicEntry | package scripts, root scripts | change-type validation |
 
@@ -203,7 +197,6 @@ flowchart LR
 | DescriptorFactory | package runtime/types | typedでserializableなdescriptorを生成 | 3.2–3.5 | MessageContracts P0 | Service |
 | CatalogParity | package runtime/types | keyとplaceholderの構造差分を検出 | 4.1–4.5 | MessageContracts P0, Normalizer P1 | Service |
 | PackagePublicEntry | package boundary | export mapから到達できる最小公開surfaceを定義 | 5.1–5.5, 6.3–6.4 | package core components P0 | API |
-| AppMessageAdapter | app shared core | 製品catalogとpolicyをpackageへ設定し既存APIを維持 | 3.1–3.5, 4.5, 5.6, 6.5 | PackagePublicEntry P0, product catalog P0 | Service |
 | WorkspaceValidation | tooling | package独立性、export、consumer、変更種別を検証 | 5.1–5.6, 6.1–6.6 | pnpm workspace P0, TypeScript P0 | Batch |
 
 ### Package Core
@@ -305,7 +298,7 @@ export function flattenCatalog<const Catalog extends MessageNamespace>(
 
 **Dependencies**
 
-- Inbound: AppMessageAdapter、将来consumer（P0）
+- Inbound: read-only consumer fixture、将来consumer（P0）
 - Outbound: CatalogNormalizer、MessageFormatter、MessageContracts（P0）
 - External: なし
 
@@ -405,40 +398,9 @@ export function validateCatalogParity(
 
 **Implementation Notes**
 
-- Integration: root appは`workspace:*`でpackageをlinkし、topological build後にroot exportだけを解決する。
+- Integration: root workspaceは`workspace:*`でpackageをlinkし、topological build後にread-only fixtureがroot exportだけを解決する。
 - Validation: export smoke test、consumer typecheck、deep import negative fixtureを同時に通す。
 - Risks: source pathをexportsへ向けるとbuild済み境界を迂回するため禁止する。
-
-### Integration
-
-#### AppMessageAdapter
-
-| Field | Detail |
-|---|---|
-| Intent | 製品catalog/policyをcoreへ設定し既存app公開APIを維持する |
-| Requirements | 3.1–3.5, 4.5, 5.6, 6.5 |
-
-**Responsibilities & Constraints**
-
-- `MESSAGES`から具体`MessageKey`、`MessageResolver`、`MessageDescriptor`をtype aliasとして導出する。
-- package factoryから`defaultMessageResolver`と既存`message()`を構成する。
-- ja/en resolver registry、fallback、React bindingは現行と同じapp公開面に残す。
-- generic parity issuesへrequired release keyとbilingual hint issuesをapp側で追加する。
-- package内部moduleをdeep importせず、root exportだけを利用する。
-
-**Contracts**: Service [x]
-
-```typescript
-export type MessageKey = CoreMessageKeyOf<typeof MESSAGES>;
-export type MessageDescriptor = CoreMessageDescriptor<typeof MESSAGES>;
-export type MessageResolver = CoreMessageResolver<typeof MESSAGES>;
-
-export const defaultMessageResolver: MessageResolver;
-export const message: CoreMessageDescriptorFactory<typeof MESSAGES>;
-```
-
-- Validation: app public consumer fixture、既存ui-messages unit/integration test、ja/en E2Eを変更なしの公開surfaceで通す。
-- Risk: 型alias移行時にnominal descriptor互換が崩れるため、shellとfeature consumerを同じ変更でtypecheckする。
 
 #### WorkspaceValidation
 
@@ -456,7 +418,7 @@ export const message: CoreMessageDescriptorFactory<typeof MESSAGES>;
 **Contracts**: Batch [x]
 
 - Trigger: package scripts、root`build`、`validate:ci`、変更種別別validation script。
-- Input / validation: workspace manifest、package export map、package source/tests、app consumer fixture、source import graph。
+- Input / validation: workspace manifest、package export map、package source/tests、read-only consumer fixture、source import graph。
 - Output / destination: process exit codeとbuild済み`packages/typed-messages-core/dist`。
 - Idempotency & recovery: build outputは毎回再生成し、失敗時は成功markerを残さない。
 
@@ -465,9 +427,8 @@ export const message: CoreMessageDescriptorFactory<typeof MESSAGES>;
 - `pnpm --filter @pc-build-planner/typed-messages-core build`
 - `pnpm --filter @pc-build-planner/typed-messages-core typecheck`
 - `pnpm --filter @pc-build-planner/typed-messages-core test`
-- `pnpm validate:typed-messages-core` — package単独3gate + consumer typecheck + boundary gate。
-- `pnpm validate:message-catalog` — 製品catalog parity、configured adapter、表示回帰。
-- `pnpm build` / `pnpm validate:ci` — package buildを先行させapp consumerと既存gateを包含。
+- `pnpm validate:typed-messages-core` — package単独3gate + read-only consumer typecheck + boundary gate。
+- `pnpm build` / `pnpm validate:ci` — package buildを先行させ既存gateを包含するが、製品message validationの内容は変更しない。
 
 ## Data Models
 
@@ -498,7 +459,7 @@ classDiagram
 
 - 公開runtime値はstring、number、readonly plain objectだけで構成し、JSON安全性を維持する。
 - catalogはbuild-time/static importで供給され、coreはnetworkやruntime downloadを行わない。
-- app adapterはpackage declarationから具体型を導出し、catalog値そのものをpackage singletonへ登録しない。
+- read-only fixtureはpackage declarationからsyntheticな具体型を導出し、catalog値をglobal singletonへ登録しない。
 
 ## Error Handling
 
@@ -536,15 +497,14 @@ runtime loggingは追加しない。メッセージ値やURLをログへ出さ�
 
 ### Integration and Contract Tests
 
-- package root exportだけでcatalog設定、resolve、descriptor、parityが利用できるapp consumer fixtureをstrict typecheckする（5.1、5.6）。
+- package root exportだけでsynthetic catalog設定、resolve、descriptor、parityが利用できるread-only consumer fixtureをstrict typecheckする（5.1、5.6）。
 - package subpath/deep import、packageからroot app/React/Chromeへのimportをboundary negative fixtureで拒否する（5.2、5.3）。
-- app configured adapterが既存`MessageKey`、`message()`、`defaultMessageResolver`、`resolverFor()`、React bindingを維持する（3.1–3.5、6.5）。
-- product parity adapterがgeneric issuesにrelease ruleだけを合成し、core packageに製品keyが含まれないことを検証する（4.5）。
-- clean package outputからtopological buildを実行し、app bundleがpackage root exportを解決する（6.3、6.6）。
+- package sourceとfixtureに製品catalog key、React、Chrome importが含まれず、製品validationをcore scriptへ取り込まないことを検証する（4.5、6.5）。
+- clean package outputからtopological buildを実行し、read-only fixtureがpackage root exportを解決する（6.3、6.6）。
 
 ### E2E/UI Tests
 
-新しいUI flowはない。既存のja/en critical pathを下流回帰として実行し、catalog抽出前後で表示と言語切替が変わらないことを確認する。package単独testではChromeを起動しない。
+新しいUI flowはなく、製品表示回帰は本specの検証対象外である。package単独testではChromeを起動しない。
 
 ### Security Considerations
 
@@ -558,13 +518,11 @@ runtime loggingは追加しない。メッセージ値やURLをログへ出さ�
 ```mermaid
 flowchart LR
     Workspace[Workspace foundation] --> Core[Core package extraction]
-    Core --> Adapter[Product adapter migration]
-    Adapter --> Gates[Consumer and boundary gates]
-    Gates --> Regression[App regression validation]
+    Core --> Public[Package public export]
+    Public --> Gates[Read only consumer and boundary gates]
 ```
 
 1. package manifest、build/typecheck/test、export map、workspace registrationを先に確立する。
-2. 汎用mechanismとpackage testを移し、package単独gateをgreenにする。
-3. app adapterをpackage root exportへ切り替え、製品policyとReact bindingを残す。
-4. consumer/deep import/topological gateを接続する。
-5. app unit/integration/E2Eを実行し、旧汎用実装の重複を除去する。rollback時はapp adapterを旧内部moduleへ戻せる単一migration commit境界を保つ。
+2. 汎用mechanismとpackage testをpackage内へ実装し、package単独gateをgreenにする。
+3. package root exportを確定し、read-only consumer/deep import gateを接続する。
+4. clean outputからtopological buildとpackage単独検証を実行する。rollbackはworkspace登録とpackage追加だけを戻せる境界に保ち、製品実装には触れない。

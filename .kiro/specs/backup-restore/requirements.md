@@ -6,9 +6,16 @@
 
 ## Boundary Context
 
-- **In scope**: 全ローカルデータの手動JSONエクスポート、交換形式とファイル名、手動ファイル選択、サイズ・形式・バージョン・参照整合性の事前検証、置換確認、破損または未対応の現行データからの明示的回復、復元前の未保存編集保護、原子的復元、成功後の現在プロジェクト再検証と再試行、失敗回復、データ消失リスクの案内、および設定画面へ埋め込み可能なバックアップ・復元操作面。
+- **In scope**: 全ローカルデータの手動JSONエクスポート、交換形式とファイル名、手動ファイル選択、サイズ・形式・バージョン・参照整合性の事前検証、置換確認、破損または未対応の現行データからの明示的回復、復元前の未保存編集保護、原子的復元、成功後の現在プロジェクト再検証と再試行、失敗回復、データ消失リスクの案内、設定画面へ埋め込み可能なバックアップ・復元操作面、および共有バックアップオーケストレーターへPC固有の交換形式・mapping・policyと保存基盤の限定置換能力を接続する `ProductBackupAdapter`。
 - **Out of scope**: 自動・定期バックアップ、クラウド保存、通知、端末間同期、差分マージ、破損データの部分修復、自動または無確認の初期化、複数ファイル統合、CSV、商品カタログ再配布、ブラウザ外でのファイル保管、設定画面のlayout・navigation・言語区画・shell composition。
-- **Adjacent expectations**: 保存基盤は破損データを正常値として公開せず、選択された復元対象の整合性と容量を安全に判定し、失敗時に既存データを保持する。現在プロジェクト管理は未保存編集の切替可否と復元後の選択再検証を判定する。設定画面は現在プロジェクトが利用不能でも本機能へ到達できる表示場所を提供する。本機能はこれらの判定と結果を利用者に示し、交換形式、確認、復元、失敗回復、診断の振る舞いを維持する。
+- **Adjacent expectations**: `local-data-library-boundaries` はpackage public portとして汎用バックアップオーケストレーターを所有し、`local-data-foundation` はPC rootと限定された置換・回復能力を所有する。現在プロジェクト管理は未保存編集の切替可否と復元後の選択再検証を判定し、application shellは最終的なport wiringだけを所有する。本機能はpackageの公開境界だけをconsumerとして利用し、PC固有の交換形式、確認、復元、失敗回復、診断の振る舞いを維持する。
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope trace**: `ProductBackupAdapter`、PC交換形式codec・mapping・policy、file UI、明示確認、project-context guard・refresh、ならびにcontract・UI・E2E検証は Requirement 1〜7 に統合する。
+- **Out of scope preservation**: 汎用バックアップオーケストレーターとそのpublic portの定義、PC root・schema・置換能力のcanonical定義、application shellのcomposition実装、交換形式の意味変更、保存schema変更、自動バックアップ、UI layout変更は本変更で扱わない。
+- **Non-regression**: 明示確認、原子的全体置換、競合操作のfencing、失敗時の既存データ保持、破損・未対応データからの回復、および復元後refreshの既存要件を維持する。
 
 ## Requirements
 
@@ -85,3 +92,16 @@
 9. When 復元データの置換が成功する, the バックアップ・復元機能 shall その後にだけ現在プロジェクトの選択を復元後データに対して再検証し、回復後のパーツ管理を利用可能にする
 10. If 復元データの置換成功後に現在プロジェクトの再検証が失敗する, the バックアップ・復元機能 shall 復元成功を取り消さず、現在プロジェクトが利用不能であることと再試行操作を示す
 11. When 利用者が復元後の現在プロジェクト再検証を再試行する, the バックアップ・復元機能 shall 復元済みデータを再度置換せずに現在プロジェクトの利用可否を更新する
+
+### Requirement 7: Product backup adapter と共有境界
+**Objective:** As a 拡張保守者, I want PC固有のバックアップ契約と汎用オーケストレーションの所有境界を一意にしたい, so that 既存の安全性を維持しながら共有packageを独立して進化させられる
+
+#### Acceptance Criteria
+1. When 製品のバックアップ・復元能力を構成する, the バックアップ・復元機能 shall packageが宣言するbackup public portを介して汎用オーケストレーターを利用する
+2. The バックアップ・復元機能 shall `ProductBackupAdapter` をPC交換形式codec、domain mapping、容量・命名・error mapping policy、および保存基盤の限定置換能力を接続する単一の製品所有境界として提供する
+3. The バックアップ・復元機能 shall packageの非公開moduleを参照せず、汎用オーケストレーション手順を製品側へ再実装しない
+4. The `ProductBackupAdapter` shall 保存基盤が公開するbackup専用のroot読取・評価・置換・回復・finalization能力だけを利用し、通常のCRUD、raw storage、lock実装へ依存しない
+5. When 共有オーケストレーターを介して復元する, the バックアップ・復元機能 shall 既存のpreview、明示確認、原子的置換、競合操作のfencing、commit前cleanup、失敗時保持、finalization再試行、および復元後refreshの意味を維持する
+6. The バックアップ・復元機能 shall application shellによる最終compositionを実装せず、shellが接続できる製品adapterと設定画面区画の公開契約だけを提供する
+7. When packageのbackup public contractまたは保存基盤の限定置換契約が変更される, the バックアップ・復元機能 shall `ProductBackupAdapter` のconsumer contractで境界互換性を検証する
+8. When PC交換形式codec、mapping、policy、guard、refreshまたはfile UIを変更する, the バックアップ・復元機能 shall 製品contract、UIおよびE2E検証で既存の復元安全性と利用者操作を確認する

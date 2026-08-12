@@ -28,6 +28,7 @@
 - 互換性画面の読込・評価・失敗状態
 - `project-context` snapshotを互換性機能用availabilityへ射影するconsumer adapter
 - プロジェクト切替世代と評価要求世代を組み合わせたstale結果の破棄
+- 共有`AppDataError`を既存`CompatibilityError`の読取失敗分類へ投影するconsumer側mappingとexhaustiveness契約
 - 互換性画面固有の日英messageとアクセシブルな状態表現
 
 ### Out of Boundary
@@ -36,12 +37,20 @@
 - 高度な規則、バックアップ形式、Chrome Storageアクセス
 - 現在プロジェクトの選択・修復・fallback、共通selector、context preference
 - application shellが所有するsingleton contextとproduction wiring
+- 共有`AppDataError`の定義、`FoundationError`からのmapping、variant・payload・粒度
+- `CurrentBuildQuery`、`CandidateQuery`、foundation adapterの実装または公開shape変更
+
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: candidate queryの共有error consumer移行は`AppDataErrorProjection`と`CompatibilityService`、確定current-build/candidate read-only seamはAllowed Dependenciesとservice contract、contract/DOM/E2E非回帰はTesting Strategyとtask 9、read-only境界は`CompatibilityBoundaryGate`へ反映する。
+- **Out-of-scope preservation**: 5規則、個別・集約result semantics、確認済み属性のみの入力、情報不足、current project追従、stale抑止、日英・accessibility、UI layoutを変更しない。canonical error定義・低位mapping、foundation/current-build/candidate実装、shell wiringをfile planへ含めない。
 
 ### Allowed Dependencies
 - `current-build-management` の `CurrentBuildQuery` と読取専用スナップショット
 - `project-context` の予定公開契約 `ProjectContextReadPort` と `ProjectContextSnapshot`。`ready`の選択IDだけをauthorityとして利用する
 - `project-candidate-management` の `CandidateQuery.listBuildEligible`
-- `local-data-foundation` のID、カテゴリ、CandidatePart、確認状態、`UtcTimestamp`、Result型（正準型を再定義しない）
+- `local-data-foundation` の公開入口にあるID、カテゴリ、CandidatePart、確認状態、`UtcTimestamp`、Result型、共有`AppDataError`（正準型を再定義・再exportしない）
 - 既存のTypeScript strict、React 19系/React DOM、side panel CSS基盤
 - `ui-messages` と `ui-language` の公開resolver/provider
 - application shellの`ApplicationFeatureRegistration`、`FeatureMountContext`、operation policy、contract test kit
@@ -53,6 +62,7 @@
 - 集約優先規則または「注意事項あり」の意味変更
 - `ProjectContextSnapshot`、generation、read port購読契約、current-build側context統合契約の変更
 - UI message key、language provider、ARIA live通知規約の変更
+- `AppDataError`のvariant・payload・判定context・公開export、`BuildError`またはcandidate queryの失敗contract変更
 
 ## Architecture
 
@@ -70,6 +80,9 @@ graph LR
     State --> Service[Compatibility service]
     Service --> Build[Current build query]
     Service --> Candidates[Candidate query]
+    AppError[Shared app data error] --> ErrorProjection[Compatibility error projection]
+    Candidates --> ErrorProjection
+    ErrorProjection --> Service
     Service --> Expand[Target expander]
     Expand --> Rules[Rule registry]
     Rules --> Aggregate[Result aggregator]
@@ -101,6 +114,7 @@ src/features/compatibility/rules.ts               # Rule契約と固定5規則
 src/features/compatibility/target-expander.ts     # 構成候補の検証とペア展開
 src/features/compatibility/aggregator.ts           # 4区分の集約優先規則
 src/features/compatibility/service.ts              # 上流照会、評価、公開Query
+src/features/compatibility/app-data-error-projection.ts # 共有data errorを既存CompatibilityErrorへ意味不変に投影
 src/features/compatibility/project-context-adapter.ts # context snapshot購読とavailability射影
 src/features/compatibility/state.ts                # context追従、読込、最新性、空・失敗状態
 src/features/compatibility/view.tsx                 # 集約結果と根拠のReact component
@@ -110,21 +124,22 @@ tests/features/compatibility/rules.test.ts
 tests/features/compatibility/target-expander.test.ts
 tests/features/compatibility/aggregator.test.ts
 tests/features/compatibility/service.test.ts
+tests/features/compatibility/app-data-error-projection.test.ts
 tests/features/compatibility/project-context-adapter.test.ts
 tests/features/compatibility/state.test.ts
 tests/features/compatibility/view.test.ts
 tests/features/compatibility/compatibility-flow.integration.test.tsx
 tests/features/compatibility/acceptance.test.tsx
+tests/contracts/compatibility-boundary.test.ts      # public read-only seamと旧candidate error importを検査
 e2e/compatibility.spec.ts                           # 共通selector切替、日英、主要結果経路
 ```
 
-`project-context-adapter.ts`、対応unit test、`e2e/compatibility.spec.ts`を新規作成する。その他の列挙済みcompatibility source/testと両言語message catalogは既存fileを変更する。`project-context` coreとcurrent-buildのcontext consumer更新が完了するまでproduction wiring taskを開始しない。
+`app-data-error-projection.ts`と対応unit/contract testを追加し、`service.ts`と公開consumer fixtureを共有error seamへ更新する。その他の列挙済みcompatibility source/testと両言語message catalogは既存fileを必要な非回帰検証だけ変更する。production wiringはapplication-shellの後続updateが所有する。
 
 ### Modified Files
 - `src/features/compatibility/feature-contribution.ts`、`registration.ts`、`react-root.tsx`: shellから注入された`ProjectContextReadPort`をowner-local adapterとstate lifecycleへ接続し、mount時に購読、unmount時に一度だけ解除する。
 - `src/ui-messages/catalog/ja/compatibility.ts`、`src/ui-messages/catalog/en/compatibility.ts`: projectなし、context利用不能、構成空、読込、失敗、再試行、集約・個別根拠の同一key群を追加する。
-- `src/application-shell/side-panel-contributions.ts`: application-shell更新specが所有する合成点で、singletonのcontext read port、`CandidateQuery`、`CurrentBuildQuery`を本機能のcontributionへ注入する。本specはこの共有fileを実装所有しない。
-- shellが実際にcompositionする入口は`feature-contribution.ts`が返す`FeatureContribution`である。`registration.ts`と`public.ts`はその内部で組み立てられ、featureは`side-panel-contributions.ts`以外の共有side panel runtimeとroot `src/index.ts`を変更しない。
+- application shellは後続updateでsingleton context read port、`CandidateQuery`、`CurrentBuildQuery`を本機能の`feature-contribution.ts`へ注入する。本specのfile planとtaskは`src/application-shell/`、共有side panel runtime、root `src/index.ts`を変更しない。
 
 ## System Flows
 
@@ -161,6 +176,7 @@ Stateはcontext generationと評価要求番号の組を最新性tokenとして�
 | 4.1, 4.2, 4.3, 4.4, 4.5 | 個別結果と不足 | RuleRegistry | RuleResult | 個別判定 |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | 集約と根拠 | ResultAggregator、View | CompatibilityReport | 集約・表示 |
 | 6.1, 6.2, 6.3, 6.4, 6.5 | 安全な失敗表示 | Service、State、View | CompatibilityError | 読込・表示 |
+| 6.6, 6.7 | 共有data errorとread-only境界 | AppDataErrorProjection、Service、BoundaryGate | AppDataError、BuildError、CompatibilityError | error projection・public consumer contract |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9 | 現在project追従と回復 | CompatibilityProjectContextAdapter、CompatibilityState、CompatibilityView | ProjectContextReadPort、CompatibilityStateValue | context追従・再試行 |
 | 8.1, 8.2, 8.3, 8.4, 8.5 | 日英・アクセシブル操作 | View、Registration | MessageResolver、ARIA state | 表示・通知 |
 
@@ -172,6 +188,8 @@ Stateはcontext generationと評価要求番号の組を最新性tokenとして�
 | TargetExpander | Domain | 参照検証と候補ペア展開 | 1.1–1.3, 3.1–3.4 | upstream snapshots P0 | Service |
 | ResultAggregator | Domain | 個別結果の4区分集約 | 5.1–5.4 | RuleResult P0 | Service |
 | CompatibilityService | Feature | 上流読取と評価オーケストレーション | 1.1–1.5, 5.5–6.3 | upstream queries P0、domain P0 | Service |
+| AppDataErrorProjection | Feature integration | 共有data operation errorを既存読取失敗分類へ写像 | 6.2, 6.6 | domain public AppDataError P0 | Service |
+| CompatibilityBoundaryGate | Tooling | 上流のread-only public seamと旧error import不在を機械検証 | 1.5, 6.7 | public consumer fixtures P0 | Batch |
 | CompatibilityProjectContextAdapter | Integration | 検証済みcurrent projectの射影と購読 | 1.1, 1.6, 7.1, 7.2, 7.4, 7.5, 7.7, 7.9 | ProjectContextReadPort P0 | Service, State |
 | CompatibilityState | UI state | context追従、最新評価、空・失敗状態 | 1.4, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9 | ContextAdapter P0、Service P0 | State |
 | CompatibilityView | UI | 日英の集約・根拠・不足・回復表示 | 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.3, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5 | State P0、messages P0 | State |
@@ -228,6 +246,18 @@ interface ResultAggregator {
 
 ### Feature Layer
 
+#### AppDataErrorProjection
+
+```typescript
+interface AppDataErrorProjection {
+  toCompatibilityError(error: AppDataError): CompatibilityError;
+}
+```
+
+candidate queryが返すdata operation failureだけを`src/domain/public.ts`の共有`AppDataError`として受け、既存`CompatibilityError`の`corrupt-data`、`unsupported-data`、`read-failed`へ意味不変に投影する。全variantをexhaustiveに処理し、未知variantを既知分類へ推測するdefault fallbackを持たない。`AppDataError`の定義、再export、`FoundationError` mappingは所有しない。
+
+`CurrentBuildQuery.getByProject`は承認済みcurrent-build公開契約どおり`BuildError`を返すため、その既存mappingを維持する。compatibility固有の`no-build`、`empty-build`、`invalid-reference`も共有errorへ吸収しない。両上流の失敗を一つのcandidate-owned error型で受ける設計へ戻さない。
+
 #### CompatibilityService
 
 ```typescript
@@ -246,6 +276,7 @@ interface CompatibilityReport {
 **Dependencies**
 - Outbound: CurrentBuildQuery — 構成スナップショット (P0)
 - Outbound: CandidateQuery — 同一projectの分類済み候補 (P0)
+- Outbound: AppDataErrorProjection — candidate queryの共有data errorを既存読取失敗へ投影 (P0)
 - Outbound: TargetExpander、RuleRegistry、ResultAggregator — 評価 (P0)
 
 構成recordなしは`no-build`、構成recordはあるが選択itemが0件なら`empty-build`、参照不正は`invalid-reference`、上流失敗は`read-failed`として区別する。結果は保存せず、毎回新しい読取から作る。`buildUpdatedAt`は`CurrentBuildSnapshot.currentBuild.updatedAt`（正準`UtcTimestamp`）から採取し、構成が存在しない場合は参照しない。
@@ -285,7 +316,7 @@ adapterは予定される`ProjectContextReadPort`だけへ依存し、catalogや
 
 ## Error Handling
 
-`CompatibilityError`は`no-build`、`empty-build`、`invalid-reference`、`corrupt-data`、`unsupported-data`、`read-failed`を判別する。`no-build`と`empty-build`を構成なしの案内へ、参照不正を修正案内へ、破損・非対応・読取失敗を操作停止表示へ写像する。contextの`empty`と`unavailable`はservice errorへ変換せず、評価前のstateとして保持する。Ruleの属性不足はerrorでなく`unknown`結果とする。ログへパーツ名、URL、属性値、context preferenceを出さない。
+`CompatibilityError`は`no-build`、`empty-build`、`invalid-reference`、`corrupt-data`、`unsupported-data`、`read-failed`を判別し、既存shapeを変更しない。candidate queryの共有`AppDataError`は`AppDataErrorProjection`を一度だけ通し、current-build公開`BuildError`は既存のcompatibility mappingを維持する。同じ共有variantを入口ごとに異なる既知失敗へ推測せず、contract変更時は型検査・consumer gateを失敗させる。contextの`empty`と`unavailable`はservice errorへ変換せず、Ruleの属性不足はerrorでなく`unknown`結果とする。ログへパーツ名、URL、属性値、context preferenceを出さない。
 
 ## Testing Strategy
 
@@ -293,6 +324,7 @@ adapterは予定される`ProjectContextReadPort`だけへ依存し、catalogや
 - **Unit**: 複数メモリ候補の全ペア、数量重複抑止、カテゴリ欠如、不正参照をTargetExpanderで検証する。
 - **Unit**: incompatible優先、compatible+unknownのcaution、全compatible、全unknownをAggregatorで検証する。
 - **Integration**: CurrentBuildQueryとCandidateQueryの架空スナップショットから全5規則のreportを生成し、上流データが変更されないことを検証する。
+- **Shared error contract**: 全`AppDataError` variantのexhaustive projection、current-buildの確定`BuildError` seam、candidate-owned `ManagementError` import不在、read-only queryだけのpositive/negative consumer fixtureを検証する（6.2, 6.6–6.7）。
 - **State/React DOM**: 再評価、旧要求破棄、empty、read failure、安全な文字列描画、集約と個別根拠の同時表示、unmount cleanupを検証する。
 - **Contract/Integration**: contextのready Aからready Bへの切替でA結果を即時除去し、遅延A完了を破棄する。empty、unavailable、unavailableからreadyへの回復、最新snapshotを使う再試行、購読解除を検証する。
 - **React DOM**: 日英切替、全状態のテキスト識別、live region、keyboardでの再試行、安全なJSX child描画をtesting-libraryとuser-eventで検証する。

@@ -80,3 +80,37 @@
 ### Source
 
 - Milestone v0.4.0 roadmap `compatibility-checking` update、GitHub Issue #29。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+compatibility serviceがcandidate-management所有の`ManagementError`へ依存し、read-only評価featureからcandidate固有error ownerへの不要な結合が残る。
+
+### Current State
+
+本specはproject-contextとcurrent-buildを入力に評価する一方、data access failureの型をcandidate-managementからimportする。
+
+### Desired Outcome
+
+本specは`local-data-foundation`の共有`AppDataError`を利用し、candidate/current-buildの公開portだけからread-only評価を続ける。
+
+### Scope
+
+- **In**: error import/mapping migration、contract/DOM/E2E非回帰、read-only境界確認。
+- **Out**: compatibility rule、error semantics、project/current-build ownership、UI layout、shell composition実装。
+
+### Boundary Impact
+
+- **Extends**: 共有error consumer contractだけを追加する。
+- **Preserves**: 4区分、確認済み属性のみ、情報不足扱い、read-only性、stale評価抑止。
+- **Adjacent**: `local-data-foundation`が共有error、current-buildが構成、project-contextが選択、application shellがwiringを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-foundation`、`spec:current-build-management`。
+- **Downstream**: `spec:application-shell`と横断E2E。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

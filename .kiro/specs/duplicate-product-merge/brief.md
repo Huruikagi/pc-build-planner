@@ -132,3 +132,37 @@
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #47。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+product identity shared coreのcanonical spec ownerと、candidate source契約への依存順がroadmapで十分に確定していない。
+
+### Current State
+
+normalizer実装はproduct-captureにあり、本specとcandidate compositionがその公開型へ依存する。同一URLのsource振り分けも新source owner確定前の契約に依存する。
+
+### Desired Outcome
+
+本specがproduct identity normalizerの共有core/public entryをcanonical ownerとして持ち、source照合は`candidate-source-bookmarks`を利用する。product-captureは移管元からnormalizerを撤去する。
+
+### Scope
+
+- **In**: identity type/normalizer/factoryの共有core ownership、source public port consumer、candidate duplicate matcher移行、characterization test。
+- **Out**: identity algorithm変更、manufacturer domain map、source URL規則、merge UI、保存形式、product-captureの取得処理。
+
+### Boundary Impact
+
+- **Extends**: product identity shared coreの単一ownerを本specへ確定する。
+- **Preserves**: normalization結果、自動照合、利用者確定、誤検知時新規保存、project内限定。
+- **Adjacent**: `product-page-capture`は取得とmanufacturer補完を、`candidate-source-bookmarks`はsource identityを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:candidate-source-bookmarks`。
+- **Downstream**: `spec:product-page-capture`、`spec:project-candidate-management`、`spec:application-shell`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

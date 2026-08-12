@@ -135,3 +135,37 @@ backup-restoreだけが利用する一つの能力別契約から、正常root�
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #20。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+product local-data adapterとcross-feature data operation errorのcanonical ownerが未確定で、package specとcandidate-managementがそれぞれ製品責務を持っている。
+
+### Current State
+
+本specはcanonical `Result`/`FoundationError`とPC root policyを所有するが、`ManagementError`はcandidate-managementにあり、生成済みpackage specも`ProductLocalDataAdapter`を実装対象にする。
+
+### Desired Outcome
+
+本specがPC root/schema/migration/repair、product local-data adapter、低位`FoundationError`から意味を変えず写像する共有`AppDataError`と公開入口を単独所有し、generic mechanismだけをpackageへ委譲する。
+
+### Scope
+
+- **In**: product adapter、PC policy injection、共有`AppDataError` vocabulary/mapping/public export、既存`ManagementError` consumer migration contract、用途別runtime capability、characterization/contract test。
+- **Out**: generic core/Chrome adapter/backup orchestration実装、error種類・粒度変更、保存schema意味変更、raw root/adapter公開、npm公開。
+
+### Boundary Impact
+
+- **Extends**: `src/domain`のcanonical Result境界へ共有data operation errorを追加し、製品adapterを本specへ一本化する。
+- **Preserves**: `LocalDataRoot`、`FoundationError`、single write authority、atomicity、fencing、repair、worker認可。
+- **Adjacent**: `local-data-library-boundaries`はgeneric port、candidate/current-build/compatibility/source-priceは共有error consumer、backup-restoreは用途限定replacement consumerとなる。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-library-boundaries`。
+- **Downstream**: `spec:project-candidate-management`、`spec:current-build-management`、`spec:compatibility-checking`、`spec:candidate-source-bookmarks`、`spec:source-price-refresh`、`spec:backup-restore`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

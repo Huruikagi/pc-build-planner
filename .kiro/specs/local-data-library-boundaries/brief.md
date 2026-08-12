@@ -49,3 +49,37 @@ platform-independentなlocal data core、core portを実装するChrome adapter�
 ## Constraints
 
 Manifest V3、Chrome 116+、CSP、10MB容量前提、単一write authority、同一root transaction、atomic replacement、maintenance generation/owner fencing、失敗時の既存データ保持を維持する。packageはPCドメイン型、React、Chrome APIへ意図せず依存しない。`pnpm-workspace.yaml`、`workspace:*`、package単独typecheck/test、topological build、export map、consumer fixtureを再現可能なscriptで検証する。外部公開は行わず、2番目のconsumerでAPIを再評価する。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+生成済みspecが`ProductLocalDataAdapter`と`ProductBackupAdapter`の実装まで所有し、`local-data-foundation`と`backup-restore`の最新Change Briefと二重ownerになっている。
+
+### Current State
+
+generic core、Chrome adapter、backup orchestrationの境界に加え、PC固有root/error/交換形式を設定する製品adapterも本specのdesign/tasksへ含まれる。
+
+### Desired Outcome
+
+本specはgeneric local-data core、Chrome/Web Locks adapter、generic backup orchestration、公開port、package検証だけを所有し、製品adapter実装は既存canonical ownerへ委譲する。
+
+### Scope
+
+- **In**: generic storage/lock/transaction/replacement contract、Chrome adapter、generic backup orchestration、公開export、package test、read-only app contract、deep import gate。
+- **Out**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2E。
+
+### Boundary Impact
+
+- **Extends**: generic packageとplatform adapterの公開portを製品実装なしで確定する。
+- **Preserves**: atomicity、fencing、容量保全、MV3/CSP、package独立検証。
+- **Adjacent**: `local-data-foundation`がproduct local-data adapterを、`backup-restore`がproduct backup adapterを単独所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:typed-messages-core`で確定するworkspace運用。
+- **Downstream**: `spec:local-data-foundation`、`spec:backup-restore`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

@@ -2,9 +2,9 @@
 
 ## 概要
 
-本機能は、candidate-managementの新規候補保存フローへ保存前guardを追加し、対象プロジェクト内の既存候補と取り込みdraftを照合する。一致候補がなければ既存の新規保存をそのまま実行し、一致候補があれば候補管理の非一過性editor内で利用者へ根拠付きで提示する。統合は利用者が一件を明示確定した場合だけ行う。
+本機能は、`src/product-identity/`の共有coreとしてproduct identityの型・normalizer・matcher・factory・唯一の公開入口を所有する。candidate ownerの公開保存前seamへ重複計画を接続し、対象プロジェクト内の既存候補と取り込みdraftをこのcanonical matcherで照合する。一致候補がなければ公開create portへ進み、一致候補があれば候補管理の非一過性editor内で利用者へ根拠付きで提示する。統合は利用者が一件を明示確定した場合だけ行う。
 
-統合時は `candidate-source-bookmarks` の `CandidateSourceMutationPort.addSource` を一度だけ呼び、既存候補の商品値や正規化属性を変更しない。同一URLは `source-price-refresh` のURL identityとcandidate-scoped matchを利用し、新規sourceを追加せず既存sourceの価格更新へ振り分ける。
+統合時はcandidate-source ownerの公開match/add/conditional mutation portを一度だけ呼び、既存候補の商品値や正規化属性を変更しない。同一URLは同じsource ownerのcanonical match結果を利用し、新規sourceを追加せず既存sourceの価格更新workflowへ振り分ける。data operation failureはfoundation公開入口の共有`AppDataError`から既存workflow errorへ写像する。
 
 ### 目標
 
@@ -18,41 +18,56 @@
 - 保存済み候補どうしの事後マージ、project横断照合、fuzzy search、外部商品DB照合
 - source collection、primary、per-source price、URL identity、価格抽出・更新の再定義
 - product-captureの抽出順位、compatibility rule、schema migration、ブラウザ権限の変更
+- candidate/source query・mutation実装、source URL identity、共有error vocabulary/mapping、application shell composition
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope**: canonical identity type/normalizer/matcher/factory/public entry、identity characterization、candidate/source public seam consumer、共有`AppDataError` mapping、duplicate detection、merge planning、confirmation、atomic routing、state/UI、contract/E2E非回帰。
+- **Out of scope**: candidate/source entity/query/mutation実装、canonical error、source URL identity、price refresh、shell production composition、identity algorithmの意味、保存形式、UI layout変更。
+- **Preserved behavior**: project内自動照合、利用者確定、新規保存の安全な初期値、既存値保持、source-add/price-refresh/createの相互排他、失敗時draft保持。
 
 ## 境界コミットメント
 
 ### 本specが所有するもの
 
-- product-captureの既存文字列cleaningと連続性を持つ、照合専用商品識別値normalizerの公開契約。
-- project内candidate summaryと新規draftを受ける純粋な一致判定、カテゴリgate、確信度、根拠、決定的順位。
-- candidate-management create modeの保存前評価、判断保持、統合確認、取消、失敗回復。
+- `src/product-identity/`のcanonical identity value/input/result型、normalizer、matcher、factory、`public.ts`。
+- 型番優先、メーカー+商品名補助、型番不一致fallback禁止、カテゴリgate、確信度、根拠、決定的順位を現行結果のまま提供する純粋identity core。
+- create modeの保存前評価、merge plan、判断保持、統合確認、取消、失敗回復。
 - 新規保存、source追加、同一URL価格更新の相互排他的なルーティング。
+- 共有`AppDataError`から既存duplicate error/state/messageへのconsumer mapping。
 - 統合提示と失敗文言の日本語・英語catalog追加、および自動検証。
 
 ### 境界外
 
+- product identity algorithmの意味・精度・confidence変更、およびmanufacturer domain map。
+- candidate/sourceのcanonical query、create、add/patch、revision/atomicity、公開型と実装。
+- `AppDataError` vocabulary、低位error mapping、公開入口。
+- application shellのproduction composition、遅延proxy、port wiring。
 - `CandidateSource`、`CandidateSourceId`、`primarySourceId`、`CandidateSourceMutationPort` とその原子性は `candidate-source-bookmarks` が所有する。
-- URL同一性、source catalog照合、価格抽出、価格・capturedAt更新、context menu、transient起動、権限・artifact gateは `source-price-refresh` が所有する。
+- URL同一性、source catalog照合、source add・条件付きmutationは `candidate-source-bookmarks` が所有する。価格抽出・更新workflow、context menu、transient起動、権限・artifact gateは `source-price-refresh` が所有する。
 - project/candidate CRUD、保存時validation、revision、mutation contextはcandidate-managementの既存責務である。
 - captureの固定tab実行、一過性面、pre-edit handoff、project解決は `product-capture-transient-migration` の責務である。
 - source product値の食い違い解決、保存済み候補どうしの統合、商品マスターは扱わない。
 
 ### 許可する依存
 
-- `candidate-management/public.ts`: `CandidateQuery.listCandidates`、`CandidateSourceMutationPort`、canonical draft/summary/error contract。
-- `product-capture/public.ts`: `ProductIdentityNormalizer`。内部 `normalizer.ts` へのdeep importは禁止する。
-- `source-price-refresh/public.ts`: `normalizeSourcePageUrl`、`sameSourcePageUrl`、`SourcePriceRefreshPort`、`MatchedCandidateSource`、error/receipt contract。
-- local data foundationの `CandidatePartId`、`ProjectId`、`PartCategory`、`SourcedValue`、`Result<T, E>`。
+- 本spec所有の`src/product-identity/public.ts`が提供する`ProductIdentityMatchPort`と説明可能なmatch result。workflowはidentity内部moduleへdeep importしない。
+- candidate owner `project-candidate-management` のcanonical公開入口が提供するproject限定`CandidateQuery`、duplicate専用の最小`CandidateCreatePort`、canonical draft/summary contract。
+- candidate-source owner `candidate-source-bookmarks` のcanonical公開入口が提供するsource URL matcher、add、conditional mutation。candidate ownerからこれらを取得しない。
+- source-price-refresh公開入口のprice observation workflow/error/receipt contract。URL identityを直接importしない。
+- local data foundation公開入口の`AppDataError`、`CandidatePartId`、`ProjectId`、`PartCategory`、`SourcedValue`、`Result<T, E>`。
 - candidate-managementの既存state/view/snapshotと、ui-message catalog、React 19、標準Unicode/URL API。
 - project候補の読込は `CandidateQuery` に限定し、foundation rootやChrome Storageを直接読まない。
 
 ### 再検証トリガー
 
-- `CandidateSummary`からname、manufacturer、modelNumber、category、projectIdのいずれかが除かれる場合。
+- identity match resultまたはcandidate public summaryからconfidence、evidence、category、projectIdのいずれかが除かれる場合。
 - `CandidateSourceMutationPort.addSource`、`AddCandidateSourceInput`、最初のsourceのprimary規則が変わる場合。
-- `SourcePriceRefreshPort.matchSource` / `refreshCapturedPrice`、URL identity、candidate scope、source kind eligibilityが変わる場合。
+- candidate-source公開`matchByPageUrl` / `addSource` / conditional mutation、URL identity、candidate scope、またはsource-price-refreshの価格workflow/eligibilityが変わる場合。
 - `UnresolvedCandidateDraft`のproject解決、candidate-management create/edit mode、snapshot rollback契約が変わる場合。
-- 商品識別値のUnicode、区切り、confirmed/original優先規則またはcategory集合が変わる場合。
+- identity public contractの商品識別値Unicode、区切り、confirmed/original優先規則またはcategory集合が変わる場合。
+- `AppDataError`のvariant/payload/公開入口またはcandidate error mappingが変わる場合。
 
 ## アーキテクチャ
 
@@ -61,27 +76,29 @@
 - `product-capture-transient-migration` 後、captureは抽出結果を候補管理へ渡して終了する。候補管理がprojectを解決し、canonical draftをeditorへ保持するため、保存前判断はここに置く。
 - `CandidateQuery.listCandidates({projectId})` はproject限定summaryを返し、照合に必要なcategory・name・manufacturer・modelNumberを持つ。新しいfoundation queryやroot readは不要である。
 - `candidate-source-bookmarks` はsource追加のdownstream portを公開する。duplicate coordinatorはsource ID生成、primary変更、revision補完を再実装しない。
-- `source-price-refresh` はURL identityとcandidate-scoped一意照合を公開する。同一URLの定義は本機能へ持ち込まない。
+- `candidate-source-bookmarks` はURL identityとcandidate-scoped一意照合を公開する。同一URLの定義は本機能へ持ち込まない。`source-price-refresh`は一意sourceを受け取った後の価格更新workflowだけを所有する。
 
 ### アーキテクチャパターンと境界マップ
 
 ```mermaid
 graph LR
-    CaptureNormalizer[Product identity normalizer] --> Matcher[Duplicate candidate matcher]
-    CandidateQuery[Candidate query] --> Coordinator[Duplicate merge coordinator]
-    Matcher --> Coordinator
+    IdentityCore[Product identity core] --> IdentityPublic[Identity public entry]
+    IdentityPublic --> Adapter[Duplicate match adapter]
+    CandidateQuery[Candidate public query] --> Coordinator[Duplicate merge coordinator]
+    Adapter --> Coordinator
     Coordinator --> DecisionState[Duplicate decision state]
     DecisionState --> DecisionView[Duplicate decision view]
     Coordinator --> UrlRouter[Duplicate URL router]
-    UrlRouter --> SourceMutation[Candidate source mutation port]
-    UrlRouter --> PriceRefresh[Source price refresh port]
-    CandidateCreate[Candidate create service] --> Coordinator
+    UrlRouter --> SourceMutation[Candidate source public mutation]
+    UrlRouter --> PriceRefresh[Source price refresh workflow]
+    CandidateCreate[Candidate create port] --> Coordinator
+    Error[Shared AppDataError] --> Coordinator
 ```
 
 **アーキテクチャ統合**
 
 - 選択パターン: 純粋matcher + application coordinator + candidate-management state/view。
-- 依存方向: Domain types → upstream public normalizers/ports → Matcher → Coordinator/Router → State → View。
+- 依存方向: Foundation domain types → Product identity core/public entry → Candidate/source/error public ports → Consumer adapters → Coordinator/Router → State → View。
 - 既存パターン: feature外importは `public.ts`、永続化はcanonical port、Reactは表示adapter、errorは判別共用体。
 - 新規componentの理由: matcherをI/Oから分離し、URL/source追加の分岐をURL ownerへ委譲し、UI判断を保存処理から分離する。
 - steering準拠: server/権限/新規libraryなし、single write authority、未信頼値の安全表示、架空fixture。
@@ -92,9 +109,9 @@ graph LR
 |---|---|---|---|
 | UI | React 19 / React DOM | 一致候補、根拠、統合・新規保存判断の表示 | candidate-management既存root内 |
 | Application | TypeScript 7 strict | matcher、coordinator、state、判別union | `any`、unsafe cast禁止 |
-| Domain | 標準Unicode API、canonical domain types | NFKC、case fold、category、ID、SourcedValue | 新規libraryなし |
-| Data | candidate-management/source public ports | project query、candidate create、source add | foundation rootへ直接依存しない |
-| Adjacent | source-price-refresh public port | URL identity、一意source照合、価格更新 | 権限・runtime起動は隣接spec所有 |
+| Identity | `src/product-identity/` canonical core | normalized match、confidence、evidence | 本specが唯一owner、現行algorithm意味を維持 |
+| Data | candidate/source public ports、AppDataError | candidate ownerのproject query/create、source ownerのmatch/add/conditional mutation、data failure | foundation rootへ直接依存しない |
+| Adjacent | candidate-source public matcher/mutation、source-price-refresh public workflow | URL identity、一意source照合・追加・条件付きpatch、価格更新workflow | source coreとworkflow ownerを分離 |
 
 ## ファイル構成計画
 
@@ -102,22 +119,37 @@ graph LR
 
 ```text
 src/
+├── product-identity/
+│   ├── model.ts                            # identity input/result/confidence/evidence型
+│   ├── normalizer.ts                       # NFKC・case・空白・型番区切りの純粋正規化
+│   ├── matcher.ts                          # model/manufacturer-name/category/順位規則
+│   ├── factory.ts                          # typed matcher factory
+│   └── public.ts                           # feature間の唯一のidentity公開入口
 ├── features/
-│   ├── product-capture/
-│   │   └── product-identity-normalizer.ts     # 照合用canonical normalization
+│   ├── duplicate-product-merge/
+│       ├── identity-match-adapter.ts           # identity public resultのduplicate計画への適合
+│       ├── candidate-port-adapter.ts            # candidate query/create/source public port適合
+│       ├── duplicate-merge.ts                  # 保存前評価、merge plan、判断確定
+│       ├── duplicate-url-router.ts             # public source addと価格更新の排他的分岐
+│       ├── error-mapping.ts                    # AppDataErrorの既存workflow結果への写像
+│       ├── public.ts                           # candidate editor/shell向けconsumer contract
+│       └── feature-contribution.ts             # UI contribution factory
 │   └── candidate-management/
-│       ├── duplicate-matcher.ts               # project内の純粋一致判定
-│       ├── duplicate-merge.ts                 # 保存前評価と判断確定
-│       └── duplicate-url-router.ts            # source addと価格更新の排他的分岐
+│       ├── state.ts                            # DuplicateMergeStateのeditor統合点
+│       ├── state-snapshot.ts                   # 判断待ち・失敗snapshot統合点
+│       └── view.tsx                            # DuplicateMergeViewの描画統合点
 ├── ui-messages/catalog/
 │   ├── ja/candidate.ts                        # 日本語の一致・統合・失敗文言
 │   └── en/candidate.ts                        # 英語の同一key文言
-└── application-shell/
-    └── side-panel-contributions.ts            # public port同士のcomposition
+└── application-shell/                         # composition owner（本specでは編集しない）
 
 tests/
-├── features/product-capture/
-│   └── product-identity-normalizer.test.ts
+├── product-identity/
+│   ├── normalizer.test.ts
+│   ├── matcher.test.ts
+│   └── public-consumer.test.ts
+├── features/duplicate-product-merge/
+│   └── identity-match-adapter.test.ts
 ├── features/candidate-management/
 │   ├── duplicate-matcher.test.ts
 │   ├── duplicate-merge.test.ts
@@ -131,18 +163,13 @@ e2e/
 
 ### 変更対象ファイル
 
-- `src/features/product-capture/normalizer.ts` — 制御文字・空白cleaning primitiveを照合normalizerと共有する。
-- `src/features/product-capture/public.ts` — `ProductIdentityNormalizer` とfactoryだけを追加公開する。
-- `src/features/candidate-management/contracts.ts` — 保存前判断、match、receipt、errorの内部型を追加し、upstream source型は再定義しない。
-- `src/features/candidate-management/service.ts` — 既存create serviceをcoordinatorへ接続し、edit modeの保存経路は維持する。
-- `src/features/candidate-management/state.ts` — create modeのevaluate/decide/cancel/retry、二重送信抑止、draft保持を追加する。
-- `src/features/candidate-management/state-snapshot.ts` — pending decisionをversion付きJSONとして検証・復元する。
-- `src/features/candidate-management/view.tsx`、`styles.css` — 候補一覧、根拠、明示選択、新規保存、失敗回復を描画する。
-- `src/features/candidate-management/feature-contribution.ts` — matcher/coordinator/price refresh portをstateへ注入する。
-- `src/features/candidate-management/public.ts` — upstream query/source mutation contractを再公開し、内部matcherを公開しない。
+- `src/product-identity/{model,normalizer,matcher,factory,public}.ts` — canonical identity coreと唯一のfeature間公開入口を所有する。
+- `src/features/duplicate-product-merge/{identity-match-adapter,candidate-port-adapter,duplicate-merge,duplicate-url-router,error-mapping}.ts` — identity/source/candidate public portsを重複計画・確認・排他routeへ適合する。
+- `src/features/duplicate-product-merge/{public,feature-contribution}.ts` — candidate editorとshellが直接接続できるworkflow/UI factoryだけを公開する。
+- `src/features/candidate-management/{state,state-snapshot,view}.ts(x)` — candidate ownerの既存統合点としてcreate modeのevaluate/decide/cancel/retry、二重送信抑止、draft保持と表示だけを接続する。本specはcandidate query/mutationをここへ実装・再公開しない。
 - `src/ui-messages/catalog/ja/candidate.ts`、`en/candidate.ts` — locale parityを保った文言keyを追加する。
-- `src/application-shell/side-panel-contributions.ts` — source-price-refreshのpublic portとcandidate-management contributionをcompositionする。業務判断は持たない。
-- `tests/features/candidate-management/state.test.ts`、`state-snapshot.test.ts`、`view.test.tsx` — 既存editor回帰と新しい判断状態を検証する。
+- application-shell composition fileは変更しない。identity/candidate/source/error public portの最終注入はshell ownerへ委ねる。
+- `tests/features/duplicate-product-merge/`とcandidate editor integration tests — consumer contract、既存editor回帰、判断状態を検証する。
 - `e2e/locators.ts` — feature固有の安定したdata locatorを追加する。
 
 ## システムフロー
@@ -206,69 +233,69 @@ sequenceDiagram
 
 | 要件 | 概要 | コンポーネント | インターフェース | フロー |
 |---|---|---|---|---|
-| 1.1, 1.2, 1.3, 1.4, 1.5 | project内保存前照合 | DuplicateMergeCoordinator、DuplicateCandidateMatcher | `CandidateQuery.listCandidates` | 保存前照合 |
-| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10 | 正規化、category、順位、根拠 | ProductIdentityNormalizer、DuplicateCandidateMatcher | `normalizeProductIdentity`、`match` | 保存前照合 |
+| 1.1, 1.2, 1.3, 1.4, 1.5 | project内保存前照合 | DuplicateMergeCoordinator、DuplicateCandidateMatcher | `CandidateQuery.listCandidates`、`CandidateCreatePort.createCandidate` | 保存前照合 |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10 | canonical identity結果、category、順位、根拠 | IdentityMatchAdapter、DuplicateMergeCoordinator | `ProductIdentityMatchPort` | 保存前照合 |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7 | 明示判断 | DuplicateMergeState、DuplicateMergeView、DuplicateMergeCoordinator | `evaluate`、`complete` | 保存前照合 |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7 | source統合と既存値保持 | DuplicateMergeCoordinator、DuplicateUrlRouter | `CandidateSourceMutationPort.addSource` | 統合確定 |
 | 5.1, 5.2, 5.3, 5.4, 5.5 | 同一URL価格更新分岐 | DuplicateUrlRouter | `matchSource`、`refreshCapturedPrice` | 同一URL分岐 |
 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | 失敗回復と原子性 | DuplicateMergeCoordinator、DuplicateMergeState | typed result、revision-aware upstream ports | 全フロー |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6 | 境界、安全、検証 | 全コンポーネント | public-only imports、message catalog | 全フロー |
+| 8.1, 8.2, 8.3 | canonical identity ownerと共有error consumer | ProductIdentityCore、IdentityMatchAdapter、ErrorMapping | identity public entry、AppDataError | 全フロー |
+| 8.4, 8.5 | error意味とfail-closed保全 | DuplicateMergeCoordinator、State、View | DuplicateMergeError | 全フロー |
+| 8.6 | shell composition分離 | feature contribution、public contract | downstream factory input | composition handoff |
+| 8.7 | public contract再検証 | contract/characterization/UI/E2E | consumer fixtures | 全フロー |
 
 ## コンポーネントとインターフェース
 
 | コンポーネント | 層 | 意図 | 要件 | 主要依存 | 契約 |
 |---|---|---|---|---|---|
-| ProductIdentityNormalizer | Product capture integration | 表示値を変更せず照合キーを生成 | 2.1–2.6, 7.5 | 標準Unicode、既存cleaning | Service |
-| DuplicateCandidateMatcher | Candidate domain | category gate、二段階match、順位、根拠 | 1.2–1.4, 2.1–2.10 | normalizer、domain types | Service |
-| DuplicateMergeCoordinator | Candidate application | 保存前評価と三つのcommit結果を調停 | 1.1–1.5, 3.4–3.7, 4.1–4.7, 6.1–6.6 | query、matcher、router、create service | Service |
+| ProductIdentityCore | Shared domain core | identity型・正規化・一致・順位をcanonicalに提供 | 2.1–2.10, 8.1, 8.2, 8.7 | foundation public types P0 | Service |
+| IdentityMatchAdapter | Consumer adapter | canonical identity matchをduplicate planへ適合 | 1.2–1.4, 2.1–2.10, 8.1, 8.7 | identity public port P0 | Service |
+| CandidatePortAdapter | Consumer adapter | project query/create/source mutationをworkflowへ適合 | 1.1–1.5, 4.1–4.7, 8.2 | candidate public ports P0 | Service |
+| ErrorMapping | Consumer policy | AppDataErrorを既存duplicate resultへ意味を変えず写像 | 6.1–6.6, 8.3–8.5 | foundation domain public P0 | Service |
+| DuplicateMergeCoordinator | Feature application | 保存前評価、merge plan、確認、三つのcommit結果を調停 | 1.1–1.5, 3.4–3.7, 4.1–4.7, 6.1–6.6 | candidate adapter、identity adapter、router | Service |
 | DuplicateUrlRouter | Integration | same URLならrefresh、no-matchならaddを排他的に実行 | 4.1–4.7, 5.1–5.5, 6.2–6.4 | source mutation、price refresh | Service |
 | DuplicateMergeState | UI state | draft、照合中、判断、失敗、再試行を保持 | 3.1–3.7, 5.5, 6.1–6.6 | coordinator、snapshot | State |
 | DuplicateMergeView | UI | 一致根拠と明示判断を安全に描画 | 3.1–3.6, 6.1, 6.4, 7.3–7.5 | state、messages | State |
 
-### Product Capture Integration
+### Canonical Product Identity Core
 
-#### ProductIdentityNormalizer
+#### ProductIdentityCore / ProductIdentityMatchPort
 
 | 項目 | 詳細 |
 |---|---|
-| 意図 | display normalizationと値保存を変えず、照合専用の比較文字列を返す |
-| 要件 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 7.5 |
+| 意図 | 商品識別値を正規化し、説明可能で決定的なmatch結果を唯一の公開入口から提供する |
+| 要件 | 2.1–2.10, 7.5, 8.1, 8.2, 8.7 |
 
 **責務と制約**
 
-- 制御文字を空白へ置換し、NFKC、連続空白の畳み込み、trim、locale-neutral lowercaseを順に適用する。
-- model numberだけはその後に空白、`-`、`_` を除去する。name/manufacturerの内部区切りは保持する。
-- 空文字になった値は `undefined` とし、推測値を作らない。
-- `SourcedValue`からは `confirmed` を優先し、未確認時だけ非空 `original` を使う。この選択は入力を変更しない。
-- product-captureの表示用normalizerは共有cleaning primitiveだけを使い、lowercaseやmodel区切り除去を保存値へ適用しない。
+- confirmed優先、欠損時original、NFKC、locale-neutral case、空白、型番区切りを表示・保存値から分離した比較keyへ正規化する。
+- model high、manufacturer+name supporting、model mismatch fallback禁止、category gate、決定的順位とevidenceを一つのmatcherで返す。
+- `public.ts`は型、matcher port、factoryだけを公開し、normalizer内部、algorithm helper、feature compositionを公開しない。
 
 **依存**
 
-- Inbound: product-capture normalizer、DuplicateCandidateMatcher（P0）
-- Outbound: 標準Unicode API（P0）
+- Inbound: IdentityMatchAdapter、product-page-capture等のpublic consumer（P0）
+- Outbound: foundation domain public types、標準Unicode API（P0）
 
 **契約**: Service [x]
 
 ```typescript
-type ProductIdentityField = "name" | "manufacturer" | "model-number";
-
-interface ProductIdentityNormalizer {
-  normalize(
-    field: ProductIdentityField,
-    value: SourcedValue<string> | undefined,
-  ): string | undefined;
+interface ProductIdentityMatchPort {
+  match(input: {
+    readonly draft: CandidateDraft;
+    readonly candidates: readonly CandidateSummary[];
+  }): Result<readonly CanonicalIdentityMatch[], IdentityMatchError>;
 }
-
-function createProductIdentityNormalizer(): ProductIdentityNormalizer;
 ```
 
-- 前提条件: candidate境界で検証済みの `SourcedValue<string>` または欠損。
-- 事後条件: 同じ入力は同じkeyを返し、raw/confirmed値を更新しない。
-- 不変条件: name/manufacturer/model以外のfield、URL、価格を受け取らない。
+- 前提条件: candidate境界で検証済みのdraftと同一projectのsummary。
+- 事後条件: 同じ入力は同じ説明可能なmatch resultを返し、raw/confirmed値を更新しない。
+- 不変条件: 現行normalization/matching結果を変更せず、比較keyや内部helperをconsumerへ公開しない。
 
-### Candidate Domain
+### Duplicate Match Planning
 
-#### DuplicateCandidateMatcher
+#### IdentityMatchAdapter
 
 | 項目 | 詳細 |
 |---|---|
@@ -277,16 +304,14 @@ function createProductIdentityNormalizer(): ProductIdentityNormalizer;
 
 **責務と制約**
 
-- 両categoryが `uncategorized` 以外で異なるcandidateを最初に除外する。
-- 両model keyが存在して一致すれば `high/model-number`、両方存在して不一致なら除外する。
-- model一致を確定できない場合だけ、manufacturerとnameの両key一致を `supporting/manufacturer-name` とする。
-- identity key不足はmatchにせず、confidence降格や部分一致を作らない。
-- confidence順、次に `CandidatePartId` の安定文字列表現順で並べる。候補配列順やlocaleへ依存しない。
+- canonical identity public matcherへdraftとproject限定summaryを渡す。
+- ownerが返すcategory gate、model high、manufacturer-name supporting、model mismatch、identity不足の結果を変更しない。
+- confidence/evidenceとcandidate IDの決定的順序をmerge planへ写し、独自scoreやfallbackを追加しない。
 
 **依存**
 
 - Inbound: DuplicateMergeCoordinator（P0）
-- Outbound: ProductIdentityNormalizer、canonical CandidateSummary（P0）
+- Outbound: ProductIdentityMatchPort、canonical CandidateSummary（P0）
 
 **契約**: Service [x]
 
@@ -327,8 +352,8 @@ interface DuplicateCandidateMatcher {
 
 **責務と制約**
 
-- evaluateは `CandidateQuery.listCandidates({projectId})` だけを使い、別projectやfoundation rootを読まない。
-- matchなしは既存create serviceへ一度だけ委譲し、matchありはwriteなしのdecision resultを返す。
+- evaluateはcandidate ownerの公開project queryだけを使い、別projectやfoundation rootを読まない。
+- matchなしはcandidate ownerの最小`CandidateCreatePort`へ一度だけ委譲し、matchありはwriteなしのdecision resultを返す。
 - completeのdecisionは `save-new` または一件の `merge` だけを許す。未選択mergeを型で表現しない。
 - merge前にtargetが直近match集合に存在することを検証し、routerへ渡す。router結果以外の補償writeを行わない。
 - edit modeは既存update serviceへそのまま流し、本機能を起動しない。
@@ -336,7 +361,7 @@ interface DuplicateCandidateMatcher {
 **依存**
 
 - Inbound: DuplicateMergeState（P0）
-- Outbound: CandidateQuery、DuplicateCandidateMatcher、DuplicateUrlRouter、CandidateManagementService（P0）
+- Outbound: CandidateQuery、CandidateCreatePort、DuplicateCandidateMatcher、DuplicateUrlRouter（P0）
 
 **契約**: Service [x]
 
@@ -361,7 +386,8 @@ type DuplicateCommitReceipt =
     };
 
 type DuplicateMergeError =
-  | { readonly kind: "management"; readonly cause: ManagementError }
+  | { readonly kind: "data"; readonly cause: AppDataError }
+  | { readonly kind: "identity"; readonly cause: IdentityMatchError }
   | { readonly kind: "source-route"; readonly cause: DuplicateUrlRouteError }
   | { readonly kind: "stale-decision" };
 
@@ -379,7 +405,7 @@ interface DuplicateMergeCoordinator {
 }
 ```
 
-`MutationContext` は既存candidate-management stateが操作ごとに生成して渡す。coordinatorはrequest IDやrevisionを生成・補完せず、`save-new` のときだけ受け取ったcontextを既存create serviceへそのまま委譲する。merge経路のcontext管理は注入済み公開mutation portのownerに留める。
+`MutationContext` は既存candidate-management stateが操作ごとに生成して渡す。coordinatorはrequest IDやrevisionを生成・補完せず、`save-new` のときだけ受け取ったcontextを`CandidateCreatePort`へそのまま委譲する。merge経路のcontext管理は注入済みsource公開mutation portのownerに留める。
 
 `CandidateDraft`に含まれる初期sourceは上流 `CaptureSourceMapper` が構築したcanonical入力を使う。coordinatorはURL、price、capturedAt、kind、siteNameのshapeを再定義せず、`AddCandidateSourceInput` へ上流mapperで写像する。
 
@@ -392,16 +418,16 @@ interface DuplicateMergeCoordinator {
 
 **責務と制約**
 
-- `SourcePriceRefreshPort.matchSource({scope:{kind:"candidate", candidateId}, pageUrl})` を最初に呼ぶ。
+- source ownerの公開candidate-scoped matchを最初に呼ぶ。
 - successは返されたsource IDをtargetに `refreshCapturedPrice` を一度呼ぶ。URLや配列indexでsourceを更新しない。
-- `no-match` だけを `CandidateSourceMutationPort.addSource` へ変換する。
+- `no-match` だけをcandidate-source ownerの公開add portへ変換する。
 - `ambiguous-match`、`invalid-url`、`ineligible-source`、`stale-target`、`price-unavailable`、管理系失敗はaddへfallbackしない。
 - price欠損の同一URLではrefreshを実行せず、既存priceを維持する。
 
 **依存**
 
 - Inbound: DuplicateMergeCoordinator（P0）
-- Outbound: SourcePriceRefreshPort、CandidateSourceMutationPort（P0）
+- Outbound: SourceMatchPort、CandidateSourceAddPort、SourcePriceRefresh workflow（P0）
 
 **契約**: Service [x]
 
@@ -415,7 +441,7 @@ type DuplicateUrlRouteReceipt =
 
 type DuplicateUrlRouteError =
   | { readonly kind: "source-refresh"; readonly cause: SourcePriceRefreshError }
-  | { readonly kind: "source-add"; readonly cause: ManagementError };
+  | { readonly kind: "source-add"; readonly cause: AppDataError };
 
 interface DuplicateUrlRouter {
   route(
@@ -425,7 +451,7 @@ interface DuplicateUrlRouter {
 }
 ```
 
-`CandidateSourceMutationPort` はcommandの成功を `void` で返す既存の一貫した公開契約を維持する。source追加成功receiptは変更対象の `candidateId` だけを返し、最新候補の表示が必要なconsumerは成功後にcanonical queryで再読込する。routerは更新後の `CandidatePart` を合成せず、追加queryも行わない。
+candidate-source ownerの公開add portはcommand成功を既存契約どおり返す。source追加成功receiptは変更対象の `candidateId` だけを返し、最新候補の表示が必要なconsumerは成功後にcanonical candidate queryで再読込する。routerは更新後の `CandidatePart` を合成せず、追加queryも行わない。
 
 ### Candidate UI
 
@@ -492,10 +518,11 @@ summary-only component。candidate-management editorのcreate modeだけに、na
 
 ### データ契約と統合
 
-- 候補読込: `CandidateQuery.listCandidates({projectId})`。返却projectの混在はcontract違反として評価を中止する。
-- source追加: `CandidateSourceMutationPort.addSource(AddCandidateSourceInput)`。source shapeとrevision補完は上流に委譲する。
-- URL照合: `SourcePriceRefreshPort.matchSource({scope:{kind:"candidate", candidateId}, pageUrl})`。
-- price更新: `refreshCapturedPrice({target:{candidateId, sourceId}, observedPageUrl, capturedAt, price})`。price欠損時は呼ばない。
+- 候補読込・新規保存: candidate public `CandidateQuery`と`CandidateCreatePort`。返却projectの混在はcontract違反として評価を中止し、matchなし・明示新規保存だけがcreateへ進む。
+- identity照合: 本spec所有のcanonical `ProductIdentityMatchPort`。workflowはnormalizationとmatching algorithmを公開入口経由で利用し、duplicate feature内へ複製しない。
+- source追加/URL照合: candidate-source public match/add/conditional mutation ports。source shape、URL identity、revision補完はsource ownerへ委譲する。
+- price更新: source-price-refresh public workflow。price欠損時は呼ばない。
+- data failure: foundation domain publicの`AppDataError`。`ManagementError`やcandidate mapperを参照しない。
 - feature間importは各 `public.ts` のみ。source-priceの `CandidateSourceCatalogPort`、captureの `PagePriceExtractionPort`、transient gesture登録は本機能から直接利用しない。
 
 ## エラー処理
@@ -527,8 +554,8 @@ summary-only component。candidate-management editorのcreate modeだけに、na
 
 ### Unit tests
 
-- ProductIdentityNormalizer: 大小文字、全角半角、制御文字、空白、modelの空白/ハイフン/アンダースコア、confirmed優先、空値を検証する（2.1–2.6）。
-- DuplicateCandidateMatcher: model high、manufacturer+name supporting、model不一致fallback禁止、identity不足、分類済み異カテゴリ除外、未分類許容、決定的順位とevidenceを検証する（1.2–1.4、2.1–2.10）。
+- identity core/public contract kit: 大小文字、全角半角、制御文字、空白、model区切り、confirmed優先、model high、manufacturer+name supporting、model不一致fallback禁止、identity不足、category、決定的順位とevidenceのcharacterizationをowner側で固定し、consumerが内部helperへdeep importしないことを検証する（1.2–1.4、2.1–2.10、8.1、8.2、8.7）。
+- IdentityMatchAdapter: canonical match resultだけからduplicate planを構築し、raw normalizationやproduct-capture内部へ依存しないことを検証する（2.1–2.10、8.1）。
 - DuplicateUrlRouter: unique match refresh、no-match add、ambiguous/invalid/stale/ineligible/priceなしの非fallbackを検証する（4.1–4.7、5.1–5.5、6.2–6.4）。
 - DuplicateMergeState: 二重送信抑止、未選択初期値、cancel、retry、明示新規保存、成功時だけeditor終了を検証する（3.1–3.7、6.1–6.6）。
 
@@ -538,6 +565,7 @@ summary-only component。candidate-management editorのcreate modeだけに、na
 - merge確定が `addSource` を一度だけ呼び、新規candidateを作らずproduct/attributes/primaryを保持することを検証する（4.1–4.7）。
 - 同一URLがsource-price public identityで一件へ一致し、addSourceを呼ばずrefresh targetにcanonical source IDを渡すことを検証する（5.1–5.5）。
 - query、conflict、storage、quota、refresh handoff失敗でdraftと既存candidateが保持されることを検証する（6.1–6.6）。
+- candidate/source public consumer contractと全`AppDataError` variant mappingを検証し、旧`ManagementError`、identity/candidate実装、deep import、shell compositionをnegative fixtureで拒否する（8.1–8.7）。
 - snapshot rollbackでdeciding/failedが復元され、不正・未知snapshotがwriteを発生させないことを検証する（3.6、6.1、7.5）。
 
 ### DOM / E2E tests
@@ -547,6 +575,7 @@ summary-only component。candidate-management editorのcreate modeだけに、na
 - E2E: 架空ページ取り込み→candidate editor→既存候補提示→source追加成功→候補が一件のままsourceが増える経路を検証する（1.1、3.4、4.1、4.6）。
 - E2E: 同じ架空URLの再取り込みでsourceが増えず、price refresh receiptへ到達する経路を検証する（5.1、5.2）。
 - E2E: matchなしと「新規保存」選択で従来createが非回帰であることを検証する（1.3、1.4、3.5、6.6）。
+- E2E: canonical identity/candidate/error seam移行後もmodel一致提示、明示統合、source add/price refresh/createの排他、失敗時draft保持が同じ利用者結果になることを検証する（8.1–8.7）。
 
 ## セキュリティ考慮事項
 

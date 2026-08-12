@@ -224,3 +224,76 @@
 - `PersistentApplicationFeatureRegistration`は`presentation: "persistent"`とnavigationを必須とし、その`navigation.labelKey`だけがcatalog key consumerになる。
 - `TransientApplicationFeatureRegistration`は`presentation: "transient"`を明示しnavigationを持たない。transient product-captureにはnavigation metadataも`nav.productCapture`も提供しない。
 - 未知／欠損presentationとbranch矛盾はproducer側のcanonical registry検証へ委ね、catalog側に登録解釈を追加しない。
+
+## Change Brief v0.5.0 Merge Discovery (2026-08-12)
+
+### Summary
+
+- **Discovery Scope**: Extension / integration-focused light discovery
+- **Sources Consulted**: Change Brief `v0.5.0`、roadmap、`typed-messages-core` requirements/design/tasks、現行`src/ui-messages/` file surface、product/tech/structure/security/testing/delivery steering。
+- **Key Findings**:
+  - upstream specはgeneric `MessageDefinition`、key/parameter型導出、format、normalizer、resolver/descriptor factory、parity primitiveをpackage root exportとして確定し、製品catalog・言語policy・React bindingを明示的にout of boundaryとしている。
+  - 現行app consumerは`src/ui-messages/public.ts`または`worker-public.ts`へ依存しているため、公開面を変えず内部実装元だけをpackageへ切り替えられる。
+  - `contracts.ts`、`resolver.ts`、`catalog-parity.ts`は製品adapterとして残せるが、`format.ts`とgeneric resolver/parity実装の重複はpackage consumer migration後に除去する必要がある。
+  - 新規dependencyや外部調査は不要で、workspace packageの公開契約はupstream承認済みdesignにより確定している。
+
+### Decision: Pure coreを採用しconfigured app adapterを残す
+
+- **Alternatives Considered**:
+  1. `src/ui-messages`を丸ごとpackage化する — ja/en catalog、language policy、Reactをgeneric coreへ漏らす。
+  2. packageを使わず既存汎用実装を維持する — v0.5.0の変更影響分離を達成しない。
+  3. package root factoryを製品catalogへ設定しapp公開面を維持する — ownershipとconsumerを保ったままmechanismだけを委譲できる。
+- **Selected Approach**: 3。`typed-messages-core` root exportだけを使う`AppMessageAdapter`を`src/ui-messages`に残す。
+- **Rationale**: build-vs-adoptでは承認済みupstream packageが必要なgeneric契約を全て提供する。新しいwrapper階層や互換aliasを追加せず、既存公開面をconfigured value/type aliasとして維持するのが最小である。
+- **Trade-offs**: packageとapp adapterのmigration checkpointを分離できない。nominal descriptor、parity issue、NodeNext build outputを同時に検証する必要がある。
+
+### Boundary and Validation Consequences
+
+- package内部subpathのdeep importとpackageからapp/React/Chrome/PC catalogへの逆依存はupstream boundary gateが拒否する。
+- app側はgeneric parity結果へrequired release key、固定二言語案内、dead key不在だけを合成する。対応言語やrelease ruleをpackageへ追加しない。
+- `validate:typed-messages-core`はcore変更、`validate:message-catalog`はcatalog/release-rule-only変更を対象とし、完全な`pnpm validate`は両方を包含する。
+- React Provider/hook、source/fallback language、language resolver registry、ja/en E2Eを非回帰証拠として維持する。
+
+### Risks & Mitigations
+
+- **旧generic実装が残り二重sourceになる** — app adapter切替後に重複format/resolver/parityをboundary検査とsource検索で拒否する。
+- **package型aliasでapp consumerが破壊される** — `public.ts`と`worker-public.ts`のstrict consumer fixture、shell/feature typecheckを同じmigration taskで実行する。
+- **generic parityとrelease ruleが再混在する** — package issue codeと製品rule合成を別testで固定し、package fixtureへPC固有keyを含めない。
+- **catalog-only検証が完全検証の代替と誤解される** —変更種別別scriptは局所確認用とし、統合完了gateでは従来どおり`pnpm validate`を要求する。
+
+## Change Brief v0.5.0 Boundary Reconciliation Discovery (2026-08-12)
+
+### Summary
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Discovery Scope**: Extension / integration-focused light discovery
+- **Sources Consulted**: 最新Change Brief、roadmap、承認済み`typed-messages-core`、再生成済み`project-context`のrequirements/design/tasks、現行`ui-message-catalog`文書、product/tech/structure/security/testing/delivery steering。
+- **Key Findings**:
+  - `project-context`はlifecycle messageを8種類のsemantic intent、4種類のoperation、固定impact、9種類のerror reason、`projectName` parameterとしてkey非依存に確定し、物理catalogとdescriptor-to-key mappingを明示的にout of boundaryとしている。
+  - 本specは既に全ja/en物理catalog、具体`MessageKey`、configured resolver、React binding、製品parityのcanonical ownerであり、12番目の`projectContext`名前空間を加えるのが最小の境界変更である。
+  - descriptor型のtype-only参照とresolver consumer seamを使えば、project-contextのstate/serviceや発火判断をcatalogへ移さずにmappingを提供できる。
+  - 外部dependencyやweb調査は不要で、上流の承認済みcontractと既存app adapterだけで設計を確定できる。
+
+### Decision: Semantic descriptorとphysical catalogをtype-only seamで接続する
+
+- **Alternatives Considered**:
+  1. `project-context`内で具体key/valueを持つ — ja/en catalogとparityの共同ownershipが再発する。
+  2. application shellでdescriptor-to-key mappingを持つ — composition ownerへ製品文言policyが漏れる。
+  3. ui-message-catalogがdescriptor型だけを参照し、具体mappingとja/en値を所有する — semantic producerとphysical ownerを一意に保てる。
+- **Selected Approach**: 3。`src/ui-messages/project-lifecycle-message-adapter.ts`が`ProjectLifecycleMessageDescriptor`をtype-onlyで受け、`projectContext.lifecycle.*`の具体keyへexhaustiveに写像する。
+- **Rationale**: project-contextは意味・発火・parameter、ui-message-catalogはkey/value/aggregation/parity、application shellはproduction compositionだけを所有できる。
+- **Trade-offs**: descriptor union変更はcatalog adapterの再検証を必須にする。これはhidden couplingではなく、designのRevalidation Triggerとして明示する。
+
+### Mapping and Parity Consequences
+
+- `projectName`はja/enで同名placeholderを持ち、安全なtext childとして描画する。
+- `operation`、`impact`、`reason`は自由文字列placeholderにせず、有限unionを具体keyへ写像する。未知分岐はfallbackせず型検査とnegative fixtureで拒否する。
+- ja/en集約は既存11名前空間へ`projectContext`を加えた12名前空間となる。過去の11名前空間記録はv0.3.0時点の履歴として保持する。
+- 製品gateはgeneric parityに加え、全descriptor分岐、12名前空間集約、project-context側への物理catalog逆流不在を検査する。
+
+### Risks & Mitigations
+
+- **descriptor追加時にmappingが漏れる** — `never` exhaustivenessと全union fixtureを併用する。
+- **type-only seamがruntime循環へ変わる** — boundary gateでproject-context内部importとruntime importを拒否する。
+- **project lifecycleの意味判断がcatalogへ侵入する** — adapterはdescriptorを解決するだけとし、state/command/発火条件をimportしない。
+- **project名がmarkupとして解釈される** — synthetic markup-like nameを使うDOM contract testでtext描画を固定する。

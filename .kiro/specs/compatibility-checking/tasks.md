@@ -1,5 +1,11 @@
 # Implementation Plan
 
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope task delta**: Task 9はcandidate queryの共有`AppDataError` consumer projection、確定したcurrent-build/candidate read-only public seam、旧candidate error import撤去、contract/DOM/integration/E2E非回帰を扱う。
+- **Out-of-scope preservation**: 既完了Task 1–8とImplementation Notesは履歴として保持する。5規則、4区分、情報不足、current project追従、stale抑止、日英・accessibility、UI layout、共有error定義・低位mapping、foundation/current-build/candidate実装、shell wiringを変更しない。
+
 - [x] 1. 互換性判定の契約と固定ルールを確立する
 - [x] 1.1 判定対象、個別結果、集約結果、失敗の契約を定義する
   - 上流ID・日時・Resultを再利用し、RuleId、確認済み入力、根拠、不足項目を判別可能にする
@@ -171,6 +177,45 @@
   - _Depends: 7.2, 8.1, 8.2; application-shell roadmap production-wiring update_
   - _Requirements: 1.1, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: Compatibility integration and E2E tests_
+
+- [ ] 9. 共有AppDataError consumerへ移行しread-only評価を回帰する
+- [ ] 9.1 共有data errorを既存compatibility失敗分類へ投影する
+  - domain公開入口の`AppDataError`を受け、全variantの種類・payload・判定contextを既存`corrupt-data`、`unsupported-data`、`read-failed`へ意味不変で写像する。
+  - compatibility固有のno-build、empty-build、invalid-referenceとruleのunknown結果を共有errorへ吸収せず、未知variantを既知失敗へ推測するdefault fallbackを持たない。
+  - 完了時、全共有variantのunit contractが既存の失敗分類と回復表示を確認し、variant欠落または誤統合を型検査・testが検出する。
+  - _Depends: local-data-foundation 11.1_
+  - _Requirements: 6.2, 6.6_
+  - _Boundary: AppDataErrorProjection_
+- [ ] 9.2 candidate/current-buildの確定read-only seamへserviceを移行する
+  - candidate queryのdata operation failureをcandidate-owned`ManagementError`ではなく共有`AppDataError`として受け、9.1のprojectionへ接続する。
+  - `CurrentBuildQuery.getByProject`の既存`BuildError`公開shapeとmappingを維持し、両上流を公開queryだけから読み、mutation・foundation内部・owner実装へ依存しない。
+  - 完了時、CompatibilityServiceが両queryのpositive/negative resultを既存report/errorへ変換し、上流データへのwriteが0件で、旧candidate error importが存在しない。
+  - _Depends: 9.1; project-candidate-management 14.2; current-build-management 11.2_
+  - _Requirements: 1.1, 1.5, 6.2, 6.6, 6.7_
+  - _Boundary: CompatibilityService, CompatibilityQuery_
+- [ ] 9.3 公開consumerとread-only境界を機械gateで固定する
+  - positive fixtureはdomain公開`AppDataError`、current-build公開`CurrentBuildQuery`、candidate公開`CandidateQuery`だけでcompatibility serviceを構成する。
+  - negative fixtureはcandidate-owned`ManagementError`、foundation/current-build/candidate内部へのdeep import、mutation port、共有error再定義・再exportを一違反ずつ拒否する。
+  - 完了時、positive/negative fixtureが狙った結果となり、compatibility sourceと生成物がread-only public seamだけへ依存する。
+  - _Depends: 9.2_
+  - _Requirements: 1.5, 6.7_
+  - _Boundary: CompatibilityBoundaryGate_
+- [ ] 9.4 互換性規則とresult semanticsを非回帰検証する
+  - 5規則の一致・不一致・左右欠損、複数選択展開、4区分集約、確認済み属性限定、上流不変性を既存unit/integration suiteで再実行する。
+  - candidate queryとcurrent-build queryの成功・失敗から同じCompatibilityReport/Errorが得られ、評価順序で結果が変わらないことを確認する。
+  - 完了時、rule、expander、aggregator、service suiteが移行前と同じ個別・集約結果で成功し、上流writeが0件である。
+  - _Depends: 9.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.6, 6.7_
+  - _Boundary: RuleRegistry, TargetExpander, ResultAggregator, CompatibilityService tests_
+- [ ] 9.5 context lifecycleと利用者表示を非回帰検証する
+  - **E2E実行条件**: application-shellが移行後の公開portをproduction contributionへ注入済みであること。未完了なら本specでshell wiringを追加せず、unit・contract・DOM・synthetic integrationを完了してproduction E2Eだけを後続ownerの検証へ残す。
+  - candidate/shared errorとcurrent-build errorの各失敗で以前のreportを最新として表示せず、既存と同じ失敗理由・再試行・日英・ARIA・安全なJSX描画になることをDOM testで確認する。
+  - ready/empty/unavailable、project切替、遅延旧評価破棄、構成なし・空構成を回帰し、production wiringを変更せず既存E2Eが後続shell updateから同じ公開seamで実行可能であることを確認する。
+  - 全受入基準をunit、contract、DOM、integration、E2Eのいずれかへ追跡し、未追跡IDがないことを機械確認する。
+  - 完了時、state、DOM、registration、integration suiteと境界gateが成功し、rules/result/UI behaviorとread-only性が移行前と同じ結果になる。
+  - _Depends: 9.3, 9.4_
+  - _Requirements: 1.1, 1.4, 1.5, 1.6, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Boundary: CompatibilityState, CompatibilityView, CompatibilityFeatureRegistration, Compatibility acceptance validation_
 
 ## Implementation Notes
 

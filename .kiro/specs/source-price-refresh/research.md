@@ -116,3 +116,14 @@
 - `.kiro/specs/transient-feature-surface/design.md` — 起動世代、固定tab、store/scheduler、lifecycle port。
 - `.kiro/specs/product-capture-transient-migration/design.md` — 一過性featureのactivation利用パターン。
 - `.kiro/specs/candidate-source-bookmarks/design.md` — source entity、price、primary導出、mutation契約。
+
+### 2026-08-12 v0.5.0 boundary reconciliation light discovery
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Context**: 価格workflowがURL identity、catalog走査、ambiguity、conditional mutationを所有し、candidate-owned `ManagementError`も参照していたため、source/error canonical ownerとの循環proxyが残っていた。
+- **Sources Consulted**: 全steering、`source-price-refresh`全spec文書、承認済み`local-data-foundation`、`project-candidate-management`、latest Change Brief、および確定source seamのupstream記述。
+- **Findings**: source ownerの公開match portがURL identity・scope・一意性・ambiguity・eligibilityを所有し、conditional price patch portがopaque precondition、price/capturedAt限定mutation、primary projectionを所有する。Foundationは低位errorの意味・粒度を一対一で保持する共有`AppDataError`を公開し、candidate-owned `ManagementError`はmigration対象である。application-shellは公開feature/worker contributionの最終compositionだけを所有する。
+- **Selected Approach**: 本featureはfixed-tab price observationをsource public `match`→`patchPrice`へ渡し、共有`AppDataError`を既存`SourcePriceRefreshError`/UI結果へ意味を変えず写像するconsumer adapterだけを所有する。既存explicit action、世代gate、失敗時旧値保持、transient state/viewを維持する。
+- **Alternatives Rejected**: feature内URL normalization/locator継続はsource ownershipを重複させる。candidate-management source proxy継続は循環を残す。`ManagementError`をaliasで残す案は共有error ownerを曖昧にする。shell遅延proxyを本specで撤去・再配線する案はcomposition scope外である。
+- **Out of scope**: canonical URL/source/errorの定義・意味・粒度、candidate mutation、price extraction/normalization、monitoring/history、shell production wiring、UI layout。
+- **Validation implication**: source/error public consumer fixture、旧import/deep proxy negative gate、全AppDataError mapping、workflow unit/runtime/UI/E2E非回帰をtaskへ追加する。

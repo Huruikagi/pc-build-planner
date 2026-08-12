@@ -124,3 +124,29 @@
 - **統合**: featureは`public.ts`とregistration moduleを所有し、共有side panel runtimeとroot barrelを編集しない。
 - **検証**: React DOM表示、旧評価破棄、unmount cleanupを統合testで確認する。
 - **参照**: [React createRoot](https://react.dev/reference/react-dom/client/createRoot)、[React TypeScript](https://react.dev/learn/typescript)
+
+## 2026-08-12 v0.5.0 boundary reconciliation
+
+### Summary
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Discovery Scope**: Extension / Light Integration Update
+- **Sources Consulted**: 最新Change Brief、roadmap、全steering、承認済み`local-data-foundation`・`current-build-management` requirements/design/tasks、本specの全現行文書。
+- **Findings**:
+  - local-data-foundationは全`FoundationError` variantとpayloadを一対一で保持する共有`AppDataError`を`src/domain/public.ts`から公開し、compatibilityを明示的なconsumerとして固定している。
+  - current-buildは共有errorを既存`BuildError`へowner-localに投影し、`CurrentBuildQuery.getByProject`の`Result<CurrentBuildSnapshot, BuildError>` shapeを維持する。
+  - candidate queryのdata operation failureだけがcandidate-owned `ManagementError`から共有`AppDataError`へ移る。compatibility固有のno-build、empty-build、invalid-referenceとruleのunknown resultは共有errorではない。
+  - compatibilityはread-only queryを結合するだけで、foundation/current-build/candidateの実装、mutation、shell compositionを必要としない。
+
+### Design Decisions
+
+- **Generalization**: 全上流errorを一つへ平坦化せず、candidate queryの`AppDataError`とcurrent-buildの確定`BuildError`を各公開seamで受け、既存`CompatibilityError`へ入口別に意味不変で投影する。
+- **Build vs. Adopt**: 共有error variantや低位mapperを再定義せずfoundation公開contractを採用する。current-buildの既存projectionも再実装しない。
+- **Simplification**: 新しいUI stateやerror categoryを追加せず、`AppDataErrorProjection`一つとpublic consumer boundary fixtureだけを追加する。rules、target expansion、aggregation、context generation、viewは変更しない。
+
+### Risks & Mitigations
+
+- shared variant欠落・誤統合 — exhaustive projectionと全variant contractで検出し、default fallbackを禁止する。
+- CurrentBuildQueryの確定seamをAppDataErrorへ誤変更 — positive fixtureで`BuildError`を固定し、upstream実装変更を本taskへ含めない。
+- read-only境界の逆流 — mutation port、foundation内部、candidate-owned error importをnegative gateで拒否する。
+- UI意味の漂流 — 4区分、unknown、失敗表示、stale抑止、日英/ARIAを既存DOM/integration/E2Eで再実行する。

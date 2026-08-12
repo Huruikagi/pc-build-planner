@@ -1,40 +1,32 @@
 # Implementation Plan
 
-- [ ] 1. Workspace基盤と現行挙動の安全網を確立する
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: generic storage/lock/transaction/replacement contractはTasks 2.1–2.7、Chrome adapterはTasks 3.1–3.3、generic backup orchestrationはTasks 4.1–4.2、公開export・package test・read-only app contract・deep import gateはTasks 1.1および5.1–5.5で実装する。
+- **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eをtask boundaryへ含めない。
+
+- [ ] 1. Workspace package基盤を確立する
 - [ ] 1.1 private local data package scaffoldと公開entry枠を追加する
-  - typed messages coreで確立したworkspace運用へlocal data packageを登録し、root core、Chrome、backupの3つの宣言済みentryをbuildできるstrictなESM設定を用意する。
+  - typed messages coreで確立したworkspace運用へlocal data packageを登録し、root core、Chrome、backupの3つの宣言済みentryを持つstrictなESM設定を用意する。
   - package単独build、typecheck、testをroot orchestrationから呼び出せるscript枠を設け、runtime dependency、npm publish設定、未宣言subpathを持たない状態にする。
-  - 完了時、package managerがlocal data packageを一意に認識し、空のbuild済みJavaScriptとdeclarationを各宣言entryから解決できる。
+  - clean build後、3 entryのJavaScriptとdeclarationが生成され、package managerとmodule resolverが宣言済みentryだけを解決できれば完了とする。
   - _Requirements: 7.1, 7.4, 7.8_
   - _Boundary: PackagePublicEntries_
-
-- [ ] 1.2 現行local dataのcharacterization contractを固定する
-  - 既存公開portからrevision、dedupe、競合、修復、容量、正常置換、異常回復、maintenance/recovery fencingを観測する架空fixtureのcontract suiteを用意する。
-  - 保存schema、`FoundationError`、用途限定capabilityを抽出前の期待値として固定し、実サイト由来データを含めない。
-  - 完了時、generic実装へ委譲する前の現行production graphに対して全local data characterization testが成功し、root write回数とfailure時root保持を検出できる。
-  - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6, 4.2, 4.3, 4.7, 6.7_
-  - _Boundary: ProductLocalDataAdapter_
-
-- [ ] 1.3 現行backup orchestrationのcharacterization contractを固定する
-  - 既存backup公開serviceからartifact、交換形式、preview、normal/recovery ticket、pre-commit cleanup、post-commit finalizationを観測する架空fixtureのcontract suiteを用意する。
-  - root write前の失敗とroot write後のfinalization待ちを別々の期待値として固定し、file/UI/project-contextの既存owner境界を変更しない。
-  - 完了時、抽出前のbackup serviceに対して全characterization testが成功し、pre-commit retryとfinalize-only retryのroot write回数を区別できる。
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 6.7_
-  - _Boundary: ProductBackupAdapter_
 
 - [ ] 2. Platform-independentなlocal data coreを実装する
 - [ ] 2.1 製品非依存のResult、port、root policy契約を実装する
   - root decode/migrate、revision、request record、mutation、repair、maintenance controlをconsumerが型付きで設定できる契約を定義する。
   - storage、exclusive lock、capacity、transaction、replacementの公開入力・成功結果・安定errorを定義し、Chrome型、PC型、schema vendor、製品errorを含めない。
-  - positive/negative consumer型fixtureで任意rootを設定でき、`LocalDataRoot`、`FoundationError`、Chrome、React、Zodへのpackage依存がないことを確認できれば完了とする。
+  - positive/negative consumer型fixtureで任意rootを設定でき、package declarationに`LocalDataRoot`、`FoundationError`、Chrome、React、Zodが現れなければ完了とする。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.5, 3.6, 6.4_
   - _Boundary: CoreContracts_
 
 - [ ] 2.2 (P) generic capacity policyを実装する
-  - 現在使用量、candidate直列化後使用量、warning閾値、platform quotaから成功・warning・超過を決定的に評価する。
-  - quotaや10MBをcore定数へ固定せず、platform write rejectionを事前評価と区別できるerrorへ保つ。
-  - below、warning境界、1 byte超過、platform quota rejectionのsynthetic testが成功し、failure時にcandidate writeが0件であれば完了とする。
-  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+  - 現在使用量、candidate直列化後使用量、warning閾値、platform quotaからbelow・warning・exceededを決定的に評価するpure policyを実装する。
+  - quotaや10MBをcore定数へ固定せず、実platform writeとその例外正規化はこのboundaryへ持ち込まない。
+  - warning境界と1 byte超過を含むsynthetic testが成功し、exceededではtransactionへcommit不可の評価を返せれば完了とする。
+  - _Requirements: 3.1, 3.2, 3.3, 3.6_
   - _Boundary: CapacityPolicy_
   - _Depends: 2.1_
 
@@ -46,98 +38,117 @@
   - _Boundary: FencingPolicy_
   - _Depends: 2.1_
 
-- [ ] 2.4 revision・dedupe付きtransaction engineを実装する
-  - exclusive lock取得後にlatest rootをdecode/migrateし、revision、dedupe、fence、mutation、repair、validation、capacityを経てsingle writeするpipelineを構成する。
-  - 同一requestの再試行は重複適用せず、異payload request ID、stale revision、active fence、lock/storage failureをroot未変更のtyped failureとして返す。
-  - 完了時、並行clientとprocess再生成を含むcontract suiteでrevisionが単調増加し、成功transactionごとのroot writeが最大一回、全pre-commit failureで0回になる。
-  - _Requirements: 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 3.4, 3.5_
+- [ ] 2.4 transactionのlatest-read・validation・single-write pipelineを実装する
+  - exclusive lock取得後にlatest rootをdecode/migrateし、mutation、repair、再validation、capacity評価を経て一度だけcommitするpipelineを構成する。
+  - decode、migration、repair、validation、capacity、lock、storageの各pre-commit failureをtyped failureとして返し、既存rootとcommit回数を保持する。
+  - synthetic contractで成功時のroot writeが一回、全pre-commit failureで0回となり、未知の例外値やroot内容を結果・logへ出さなければ完了とする。
+  - _Requirements: 1.6, 2.1, 2.6, 3.1, 3.2, 3.3, 3.5_
   - _Boundary: TransactionEngine_
   - _Depends: 2.2, 2.3_
 
-- [ ] 2.5 評価済みnormal・recovery root replacementを実装する
-  - candidateを副作用なしでdecode/migrate/repair/validate/capacity評価し、candidate digest、revision、raw fingerprint、owner/generationを公開しないopaque ticketへ束ねる。
-  - commit直前にcandidateとpersistent stateを再照合し、normal/recoveryの両modeを同じlock、single write、fence規則で処理する。
-  - pre-commit cleanup pending、stale assessment、committed finalization required、finalize-only retryを判別し、finalize時のroot writeが0件になるtestが成功すれば完了とする。
-  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.3, 5.4, 5.5, 5.6, 5.7_
-  - 2.3で確立したfencing policyを利用し、replacement側でowner/generation state transitionを再実装しない。
-  - _Boundary: ReplacementCoordinator_
+- [ ] 2.5 revision・dedupe・競合・runtime再生成契約をtransactionへ統合する
+  - expected revision、request digest、persistent request record、active fenceを変更前とcommit直前に検査し、revisionを成功時だけ単調に進める。
+  - 同一requestの再試行は重複適用せず、異payload request ID、stale revision、active fenceをroot未変更のtyped failureとして返す。
+  - 並行clientとprocess再生成を含むcontract suiteで重複適用0件、成功ごとのrevision増分1、競合時write 0件を観測できれば完了とする。
+  - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.7_
+  - _Boundary: TransactionEngine_
   - _Depends: 2.4_
 
-- [ ] 3. PC product policyとChrome platformをpackage境界へ接続する
-- [ ] 3.1 PC Build Plannerのlocal data policy adapterを実装する
-  - 既存`LocalDataRoot` decode/migration、revision、request dedupe、mutation、reference repair、maintenance/recovery control、capacity serializationをpackage policyへ設定する。
-  - generic success/errorを既存Result、`FoundationError`、公開data portへ写像し、schema version、storage key、worker認可、runtime capability shapeを製品側に保持する。
-  - characterization suiteが抽出前と同じroot、revision、repair、error、normal/recovery outcomeを返し、保存schema差分が0件であれば完了とする。
-  - pending `local-data-foundation` Existing Spec Updateのschema・error・owner契約変更は行わず、pure delegationに意味変更が必要なら当該updateまで停止する。
-  - _Requirements: 1.1, 1.5, 1.6, 6.5, 6.7_
-  - _Boundary: ProductLocalDataAdapter_
-  - _Depends: 1.2, 2.5_
-
-- [ ] 3.2 (P) Chrome storage・quota・change adapterを実装する
-  - productから渡されたroot/control keyだけを対象にread/write、bytes、quota、TRUSTED_CONTEXTS、change eventをgeneric portへ適合させる。
-  - Promise rejection、不正response、quota rejection、access restriction failureを保存値やChrome例外を含まない安定errorへ正規化する。
-  - Chrome stub contractで対象外key非干渉、10MB platform quota、access成功前handle非公開、変更通知の購読解除が観測できれば完了とする。
-  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, 6.3, 6.4, 7.6_
-  - _Boundary: ChromeStorageAdapter_
-  - _Depends: 2.1, 2.2_
-
-- [ ] 3.3 (P) Chrome exclusive Web Locks adapterを実装する
-  - product compositionが渡す既存固定identityについてexclusive callbackだけを実行し、callback完了・失敗時にlockを解放する。
-  - 同名のtab/worker相当clientを直列化し、別名lockやnested lockをtransaction correctnessへ持ち込まない。
-  - contract testで同時holderが最大一件、callback throw後に次requestが進行し、platform failureがtyped errorになることを確認できれば完了とする。
-  - _Requirements: 2.1, 2.7, 6.2, 6.3, 6.4, 7.6_
-  - _Boundary: ChromeLocksAdapter_
-  - _Depends: 2.1_
-
-- [ ] 3.4 production local data compositionをpackage adapterへ移行する
-  - product policy、Chrome storage、Chrome lockを一つのcanonical graphへ組み立て、既存の通常data port、backup用途限定port、maintenance sourceをproduct-owned runtime compositionが消費できるhandleとして提供する。
-  - worker command authorization、registration factory、listener registration、runtime compositionは製品側の既存ownerに残し、新しいhandleから受け取るdata capabilityだけへ接続する。
-  - access restriction失敗時はfail closedとし、Repository、raw root、Storage、lock、内部authorityを公開handleへ含めない。
-  - production initialization、worker再生成、同時writer、公開capability negative contractが移行前と同じ結果で成功すれば完了とする。
-  - _Requirements: 2.1, 2.6, 2.7, 4.4, 4.5, 6.1, 6.2, 6.3, 6.5, 6.7_
-  - _Boundary: ProductLocalDataAdapter, ChromeStorageAdapter, ChromeLocksAdapter_
-  - _Depends: 3.1, 3.2, 3.3_
-
-- [ ] 4. Generic backup orchestrationと製品backup adapterを統合する
-- [ ] 4.1 generic artifact・preflight・commit・finalize orchestrationを実装する
-  - snapshot reader、codec、artifact policy、replacement portを設定し、backup createとrestore input decode/map/assessmentを製品metadata非依存で順序付ける。
-  - previewとopaque restore ticketだけをconsumerへ返し、confirmed commit、same-ticket cleanup retry、stale reassessment、pending finalization discovery、finalize-only retryを提供する。
-  - synthetic codec contractでproduct field、Chrome、File、DOM、React、project-contextを使わず、pre-commit failureのroot write 0件とpost-commit retryの追加root write 0件が観測できれば完了とする。
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 7.7_
-  - _Boundary: BackupOrchestrator_
+- [ ] 2.6 normal・recovery rootの副作用なしassessmentを実装する
+  - candidateをdecode/migrate/repair/validate/capacity評価し、candidate digest、revision、raw fingerprint、owner/generationを公開しないopaque ticketへ束ねる。
+  - normalと破損・未対応rootのrecoveryを別modeで評価し、assessment中はroot/controlを一度も書き換えない。
+  - stale candidate、revision、owner、generationを識別できるfixtureと、全assessmentでroot write 0件のtestが成功すれば完了とする。
+  - _Requirements: 4.1, 4.3, 4.5, 4.7, 5.3_
+  - _Boundary: ReplacementCoordinator_
   - _Depends: 2.5_
 
-- [ ] 4.2 PC Build Plannerのbackup serviceをgeneric orchestratorへ接続する
-  - 既存exchange validator/migration/mapper、16MiB input policy、artifact naming、clock、snapshot read、Foundation replacement capabilityをproduct codecとadapterとして設定する。
-  - FileGateway、UI state/view、利用者確認、project-context guard/refreshを既存feature側に残し、公開preview、error、ticket、normal/recovery結果を維持する。
-  - backup/restore characterizationと既存normal・corrupt・future root integration testが同じ交換JSON、件数、commit/finalize結果を返せば完了とする。
-  - pending `backup-restore` Existing Spec Updateの交換形式・UI・context lifecycle変更は行わず、pure delegationに意味変更が必要なら当該updateまで停止する。
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 6.6, 6.7_
-  - _Boundary: ProductBackupAdapter_
-  - _Depends: 1.3, 3.4, 4.1_
+- [ ] 2.7 assessment ticketのatomic commitとfinalization lifecycleを実装する
+  - commit直前にcandidateとpersistent stateを再照合し、normal/recovery両modeを同じlock、single write、fence規則で処理する。
+  - pre-commit cleanup pendingはroot未変更のfailure、root write後cleanup未完了はcommitted-finalization-requiredとして区別する。
+  - same-ticket commit retryとfinalize-only retryのcontract testでcommit成功が最大一回、finalize時のroot writeが0件、正常終了後だけ後続mutationが再開すれば完了とする。
+  - _Requirements: 4.2, 4.3, 4.4, 4.5, 4.6, 5.4, 5.5, 5.6, 5.7_
+  - _Boundary: ReplacementCoordinator_
+  - _Depends: 2.6_
 
-- [ ] 5. 公開境界、変更種別別validation、完全回帰を確定する
-- [ ] 5.1 package export、consumer、dependency boundary gateを実装する
+- [ ] 3. Chrome platform adapter subpathを実装する
+- [ ] 3.1 Chrome storage・quota・change adapterを実装する
+  - consumerから渡されたroot/control keyだけを対象にread/write、bytes、platform quota、`TRUSTED_CONTEXTS`、change eventをgeneric portへ適合させる。
+  - Promise rejection、不正response、実writeのquota rejection、access restriction failureを保存値や例外objectを含まない安定codeへ正規化する。
+  - 独立したstorage adapter testで対象外key非干渉、10MB platform quota、quota rejection後のroot保持、access成功前handle非公開、変更購読解除、logが安定codeだけであることを観測できれば完了とする。
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, 6.3, 6.4, 7.6_
+  - _Boundary: ChromeStorageAdapter_
+  - _Depends: 2.1, 2.2, 2.4_
+
+- [ ] 3.2 Chrome exclusive Web Locks adapterを実装する
+  - consumerが渡す一つのlock identityについてexclusive callbackだけを実行し、callback完了・失敗時にlockを解放する。
+  - 同名のtab/worker相当clientを直列化し、別名lockやnested lockをtransaction correctnessへ持ち込まない。
+  - 独立したlock adapter testで同時holderが最大一件、callback throw後に次requestが進行し、platform failureが例外objectを含まないtyped errorになれば完了とする。
+  - _Requirements: 2.1, 2.7, 6.2, 6.3, 6.4, 7.6_
+  - _Boundary: ChromeLocksAdapter_
+  - _Depends: 2.1, 3.1_
+
+- [ ] 3.3 Chrome subpathの公開exportとaggregate contractを統合する
+  - storageとlockのfactoryを`./chrome`の宣言済みentryへ集約し、共有indexとaggregate contract testをこのintegration taskだけで変更する。
+  - root coreやbackup subpathへChrome型が漏れず、Chrome subpathがproduct key、runtime message、application shellを公開しないことを検証する。
+  - clean package buildからChrome consumer fixtureが成功し、root/backup consumer fixtureではChrome型を解決できなければ完了とする。
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 7.1, 7.3, 7.6_
+  - _Boundary: PackagePublicEntries, ChromeStorageAdapter, ChromeLocksAdapter_
+  - _Depends: 3.1, 3.2_
+
+- [ ] 4. Generic backup orchestration subpathを実装する
+- [ ] 4.1 artifact作成とrestore preflightを実装する
+  - snapshot reader、codec、artifact policy、replacement assessmentを注入し、backup artifact作成とuntrusted restore inputのdecode、version変換、mapping、assessmentを順序付ける。
+  - previewとopaque restore ticketだけを返し、candidate、raw root、lock、fence、製品metadataを公開しない。
+  - synthetic codec contractでartifactとpreflightが成功し、decode/map/assessment失敗時のroot writeが0件、Chrome、File、DOM、React、project-context依存が0件なら完了とする。
+  - _Requirements: 5.1, 5.2, 5.3, 5.8, 7.7_
+  - _Boundary: BackupOrchestrator_
+  - _Depends: 2.6_
+
+- [ ] 4.2 confirmed commit・reassessment・finalization retryを実装する
+  - confirmed ticketのcommit、stale ticketのreassessment、same-ticket pre-commit cleanup retry、pending finalization discovery、finalize-only retryを提供する。
+  - commit前failureとcommit済みfinalization待ちを判別共用体で区別し、成功を取り消したりrootを再置換したりしない。
+  - contract testでpre-commit retryまでのroot write 0件、commit成功最大一回、finalize-only retryの追加root write 0件を観測できれば完了とする。
+  - _Requirements: 5.4, 5.5, 5.6, 5.7, 7.7_
+  - _Boundary: BackupOrchestrator_
+  - _Depends: 2.7, 4.1_
+
+- [ ] 5. 公開境界と検証経路を確定する
+- [ ] 5.1 3つの公開entry consumer fixtureを追加する
   - root core、Chrome、backupの各declared entryだけを使うstrict consumer fixtureとruntime smoke testを追加する。
-  - 未宣言subpath、source/dist deep import、coreからChrome/backup/productへの逆依存、Chromeからproductへの依存、backupからChrome/DOM/React/productへの依存を機械的に拒否する。
-  - 完了時、3つのpublic consumerはclean build成果物から成功し、各negative fixtureは対応する違反を一件ずつ検出してgateを失敗させる。
-  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.8, 7.11_
-  - _Boundary: PackagePublicEntries, WorkspaceValidation_
-  - _Depends: 3.4, 4.2_
+  - 各fixtureはclean build済みJavaScript/declarationだけを解決し、package sourceをroot appのTypeScript projectへ混在させない。
+  - 3つのpositive fixtureがclean outputから成功し、未宣言subpathではmodule resolutionが失敗すれば完了とする。
+  - _Requirements: 7.1, 7.4, 7.8_
+  - _Boundary: PackagePublicEntries_
+  - _Depends: 3.3, 4.2_
 
-- [ ] 5.2 core・Chrome・backup・product変更のvalidation経路を分離する
-  - core変更用にpackage build/typecheck/test、consumer、boundary、product contractを、Chrome変更用にadapter contractを、backup変更用にorchestratorとproduct adapter contractを構成する。
-  - product schema/migration/repair/exchange/UIだけの変更はowner-local contractへ限定でき、完全検証は全経路を包含するscript構成にする。
-  - tooling testが各変更種別のgate集合と失敗伝播を検証し、無関係なapp-wide suiteを最小経路へ混入させず必要gateを取りこぼさなければ完了とする。
-  - _Requirements: 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11_
-  - _Boundary: WorkspaceValidation_
+- [ ] 5.2 read-only app contractを追加する
+  - 製品root/error/codec型をconsumer側入力として使い、package公開portへ型接続できることだけを検査する非実行fixtureを追加する。
+  - fixtureは製品adapter、composition、runtime registration、E2Eを定義せず、package declarationへ製品型を混入させない。
+  - backup consumerが通常CRUD、raw root、Storage、lock、fence capabilityを取得できないnegative type fixtureを含め、positive/negative contractが期待どおり成功・失敗すれば完了とする。
+  - _Requirements: 6.5, 6.6, 6.7, 7.9, 7.10, 7.11_
+  - _Boundary: ReadOnlyAppContract_
   - _Depends: 5.1_
 
-- [ ] 5.3 packageとPC Build Plannerの完全回帰を実行する
-  - package 3 entryのbuild・typecheck・test、root typecheck/public consumer、lint、boundary、runtime schema、fixture、build、persistence/backup integration、既存backup E2Eを実行する。
-  - app bundleにpackage内部source、Chrome型のcore漏出、product schemaのpackage漏出、dynamic/remote code、重複generic implementationがないことをartifact gateで確認する。
-  - 完了時、`pnpm validate`が成功し、10MB、TRUSTED_CONTEXTS、single write authority、atomic replacement、persistent fencing、backup export/restore/recoveryのfresh evidenceが揃う。
-  - `runtime-license-notices` Direct Candidateや他Existing Spec Updatesは変更・検証対象へ追加しない。
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11_
-  - _Boundary: WorkspaceValidation, ProductLocalDataAdapter, ProductBackupAdapter_
+- [ ] 5.3 deep import・逆依存・ownership gateを実装する
+  - 未宣言subpath、`src`/`dist` deep import、coreからChrome/backup/productへの逆依存、Chromeからproductへの依存、backupからChrome/DOM/React/productへの依存を機械的に拒否する。
+  - package source/testが`ProductLocalDataAdapter`、`ProductBackupAdapter`、製品composition、E2Eを所有する変更も境界違反として検出する。
+  - positive graphが成功し、各negative fixtureが狙った違反一件だけでgateを失敗させ、他の診断へ依存しなければ完了とする。
+  - _Requirements: 6.4, 6.7, 7.2, 7.3, 7.11_
+  - _Boundary: WorkspaceValidation_
   - _Depends: 5.2_
+
+- [ ] 5.4 core・Chrome・backup・contractのpackage検証経路を分離する
+  - core変更用にbuild/typecheck/unit/consumer/boundary、Chrome変更用にadapter contract、backup変更用にorchestrator contract、公開型変更用にread-only app contractを構成する。
+  - 10MB近傍のsynthetic rootでcore処理のbaselineを記録し、package testのfixture・diagnostic・logが保存内容、商品値、URL、例外objectを出さず安定codeだけを使うことを検査する。
+  - 各変更種別のtooling testが必要gate集合と失敗伝播を再現し、package単独実行でapp source、Chrome実体、DOM、E2Eを起動しなければ完了とする。
+  - _Requirements: 7.5, 7.6, 7.7, 7.9, 7.11_
+  - _Boundary: WorkspaceValidation_
+  - _Depends: 5.3_
+
+- [ ] 5.5 root topological buildと変更scope統合を確定する
+  - root buildがtyped messages coreとlocal data packageをconsumerより先にbuildし、app側がbuild済みpublic exportだけを解決する順序を固定する。
+  - 製品schema、migration、repair、交換形式、adapter、composition、UIだけの変更はpublic contractへ影響しない限り下流ownerの検証へ委譲し、package経路はgeneric contract変更時だけ要求する。
+  - fresh package build/typecheck/test、3 consumer、read-only app contract、boundary gate、topological buildが成功し、いずれかのfailureがroot commandへ伝播する一方、製品composition/E2Eを本specのgateへ吸収しなければ完了とする。
+  - _Requirements: 7.8, 7.9, 7.10, 7.11_
+  - _Boundary: WorkspaceValidation_
+  - _Depends: 5.4_

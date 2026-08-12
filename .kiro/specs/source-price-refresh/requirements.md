@@ -6,9 +6,16 @@
 
 ## 境界コンテキスト
 
-- **対象範囲**: 「価格を更新」コンテキストメニュー、一過性表示面での進行・結果表示、保存済みソースとのURL照合、販売ページからの価格のみの再取得、対象ソースの価格・取得日時の原子的更新、同一URL再取り込みから再利用できる照合・更新能力、権限・失敗・非回帰の検証。
+- **対象範囲**: 「価格を更新」コンテキストメニュー、一過性表示面での進行・結果表示、source ownerの公開portを使う保存済みソースの一意照合、販売ページからの価格のみの再取得、公開patch portを使う対象ソースの価格・取得日時の原子的更新、共有`AppDataError`のconsumer mapping、権限・失敗・非回帰の検証。
 - **対象外**: 定期巡回、バックグラウンド監視、価格履歴、在庫監視、通貨換算、価格以外の再取得、ソースの追加・削除・プライマリ規則、一過性表示面の基盤、抽出順位・価格正規化規則、同一商品の検知・統合判断。
-- **隣接期待**: `transient-feature-surface` の起動世代と固定タブを利用し、`candidate-source-bookmarks` のソースID、取得元別価格、プライマリ導出、原子的mutationを再利用する。同一URLの再取り込みは `duplicate-product-merge` が本機能の公開照合・更新能力へ引き渡し、新規ソースを追加しない。
+- **隣接期待**: `transient-feature-surface` の起動世代と固定タブを利用し、source ownerが所有するURL identity、catalog scope、一意照合、ambiguity、ソースID、取得元別価格、プライマリ導出、条件付きpatchを公開portから再利用する。`local-data-foundation` が共有`AppDataError`のcanonical vocabularyとmappingを所有し、application shellは最終compositionだけを所有する。
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope trace**: source public match/patch portのconsumer化、旧`ManagementError` import撤去、共有`AppDataError` mapping、価格workflowとtransient UIの非回帰を要件2、4、5、6、7へ統合する。
+- **Out of scope preservation**: URL identity、source catalog・policy・ambiguity、candidate mutation、共有errorのcanonical定義・意味・粒度、価格抽出・正規化、定期監視・履歴、application shell composition、UI layoutを変更しない。
+- **Non-regression**: explicit action、activeTab、固定tab/世代、価格だけの更新、失敗時の旧値保持、primary projection、transient result UIを維持する。
 
 ## 要件
 
@@ -31,14 +38,14 @@
 
 #### 受入基準
 
-1. When 価格更新対象ページのURLを取得する, the 価格更新機能 shall HTTPまたはHTTPSのURLだけを照合対象として受理する。
-2. When URLを照合する, the 価格更新機能 shall scheme、host、path、および商品を識別し得るquery値を維持した正規化URLを使用する。
-3. Where URLにfragment、既定port、query順序差、末尾slash差または既知の追跡queryだけの差がある, the 価格更新機能 shall 同一取得元として照合する。
-4. The 価格更新機能 shall hostとpathだけの類似または登録ドメインだけの一致を同一取得元として扱わない。
-5. When 一件の保存済みソースだけが正規化URLに一致する, the 価格更新機能 shall その候補IDとソースIDを更新対象として固定する。
-6. If 保存済みソースが一致しない, the 価格更新機能 shall ソースを新規追加せず、更新対象が見つからないことを提示する。
-7. If 二件以上の保存済みソースが一致する, the 価格更新機能 shall いずれも更新せず、更新対象を一意にできないことを提示する。
-8. If 一致したソースが販売ページとして指定されていない, the 価格更新機能 shall 価格を再取得せず対象外であることを提示する。
+1. When 価格更新対象ページのURLを取得する, the 価格更新機能 shall source ownerの公開match portへURLとcatalog scopeを渡し、その検証済み結果だけを利用する。
+2. When URLを照合する, the 価格更新機能 shall source ownerが返すcanonical URL identityとmatch結果を使用し、正規化規則を再実装しない。
+3. Where URLにsource ownerが同一取得元と定義する表記差がある, the 価格更新機能 shall 公開match portの同一結果を維持する。
+4. The 価格更新機能 shall source ownerが別取得元と判定した類似URLを独自規則で一致へ変更しない。
+5. When source public portが一件の保存済み販売ソースを返す, the 価格更新機能 shall その候補ID、ソースID、および照合preconditionを更新対象として固定する。
+6. If source public portが一致なしを返す, the 価格更新機能 shall ソースを新規追加せず、更新対象が見つからないことを提示する。
+7. If source public portが曖昧な一致を返す, the 価格更新機能 shall いずれも更新せず、更新対象を一意にできないことを提示する。
+8. If source public portが価格更新対象外のソースを返す, the 価格更新機能 shall 価格を再取得せず対象外であることを提示する。
 
 ### 要件 3: 価格だけの再取得
 
@@ -59,11 +66,11 @@
 
 #### 受入基準
 
-1. When 有効な価格を取得し更新対象が現行の保存状態でも一致する, the 価格更新機能 shall 対象ソースの価格と取得日時を一回の整合した更新として確定する。
+1. When 有効な価格を取得し更新対象が現行の保存状態でも一致する, the 価格更新機能 shall source ownerの公開条件付きpatch portを用いて対象ソースの価格と取得日時を一回の整合した更新として確定する。
 2. When 非プライマリソースを更新する, the 価格更新機能 shall 他のソースと候補一覧の代表価格を変更しない。
 3. When プライマリソースを更新する, the 価格更新機能 shall 保存値を複製せず、更新後のプライマリソースから候補一覧の代表価格を導出する。
 4. While ソース価格と取得日時だけを更新する, the 互換性判定機能 shall 確認済みの正規化属性に基づく判定結果を維持する。
-5. If 更新確定前に対象ソースのURL、種別、所属候補または識別子が変わる, the 価格更新機能 shall 古い照合結果で上書きせず再試行可能な競合を提示する。
+5. If 更新確定前に対象ソースのURL、種別、所属候補または識別子が変わる, the 価格更新機能 shall source ownerのprecondition failureを古い照合結果で上書きせず再試行可能な競合として提示する。
 
 ### 要件 5: 失敗時のデータ保全と回復案内
 
@@ -86,8 +93,22 @@
 
 1. The 価格更新機能 shall コンテキストメニュー項目の提供に必要な権限だけを追加し、全サイトへの恒久的な読み取り権限を要求しない。
 2. The 価格更新機能 shall 利用者操作なしの定期巡回、バックグラウンド価格取得または投機的なページ解析を実行しない。
-3. Where 同一URLの再取り込みが検出される, the 価格更新機能 shall コンテキストメニュー経路と同じURL同一性規則および原子的価格更新能力を隣接機能から利用可能にする。
+3. Where 同一URLの再取り込みが検出される, the 価格更新機能 shall source ownerの同じ公開match/patch portを使う価格取得workflowを隣接機能から利用可能にする。
 4. The 価格更新機能 shall URL照合、対象一意性、販売ページ制約、価格選択、失敗時非更新およびプライマリ導出をChrome APIなしの自動テストで検証可能にする。
 5. Where Chrome 116以降の未パッケージ拡張で実行される, the 価格更新機能 shall コンテキストメニュー実行から成功・失敗表示までの主要動線を検証可能にする。
 6. The 価格更新機能 shall worker実行コードをDOMおよびReactへ依存させず、ページ解析を注入先文書へ限定する。
 7. The 価格更新機能 shall 実サイト由来のHTML、画像または商品データをテスト資産として必要としない。
+
+### 要件 7: 共有errorとsource public seamのconsumer境界
+
+**目的:** feature保守者として、価格更新をcanonical source/error ownerの公開契約だけへ接続したい。そうすることで、循環proxyを撤去しながら利用者向け失敗結果を維持できる。
+
+#### 受入基準
+
+1. The 価格更新機能 shall source entity、URL identity、catalog matcher、ambiguity policy、candidate mutationを定義または再公開せず、source ownerの公開match/conditional patch portだけを利用する。
+2. The 価格更新機能 shall 旧candidate-owned `ManagementError`を定義、import、mappingまたは公開せず、foundation公開入口の共有`AppDataError`をconsumerとして利用する。
+3. When 共有`AppDataError`を価格更新errorへ写像する, the 価格更新機能 shall 既存のvalidation、conflict、maintenance、storage、quota、unsupported-dataの種類、意味、粒度および利用者向け結果を変更しない。
+4. If source matchまたはconditional patch portが失敗する, the 価格更新機能 shall canonical errorを既知の別原因へ推測で畳み込まず、既存価格・取得日時・transient stateの保全規則を適用する。
+5. The 価格更新機能 shall candidate-management、source ownerまたはapplication shellに価格workflowのproxyを要求せず、公開portを直接受け取るconsumer contractを提供する。
+6. The 価格更新機能 shall application shellのproduction compositionを実装せず、shellが接続できるfeature contributionとworker-safe menu registrationだけを公開する。
+7. When source public contractまたは共有`AppDataError` contractが変更される, the 価格更新機能 shall consumer contract、unit、runtime、UIおよびE2Eで価格workflowの互換性を再検証する。

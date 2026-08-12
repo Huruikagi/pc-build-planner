@@ -191,6 +191,17 @@
 - `.kiro/specs/project-candidate-management/design.md` — プロジェクト・候補所有境界。
 - `.kiro/specs/current-build-management/design.md` — 現在構成と候補参照契約。
 
+### 2026-08-12 v0.5.0 boundary reconciliation light discovery
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Context**: 汎用backup orchestrationを`local-data-library-boundaries`へ抽出した後も、本specが製品adapterと汎用protocolの双方を所有するように読め、application-shell compositionの過去例外もcanonical境界と競合していた。
+- **Sources Consulted**: 全steering、`backup-restore`全spec文書、承認済み`local-data-library-boundaries`、`local-data-foundation`、`project-context`、latest Change Brief。
+- **Findings**: packageの`./backup`はcodec注入型`BackupOrchestrator`とfactoryを所有する一方、PC交換形式・mapping・capacity/error policy、Foundationの限定置換能力への接続、file UI、確認、guard/refreshは明示的に除外している。FoundationはPC rootとbackup専用のassessment/replacement/recovery/finalization能力を所有し、project-contextはreplacement guardとrefresh portを所有する。application-shellだけが最終compositionを行う。
+- **Selected Approach**: 本specは`ProductBackupAdapter`を単一製品所有境界として追加し、package backup public portへPC codec/mapping/policyとFoundation capabilityを設定する。既存`BackupService`/`RestoreService`はUI facadeとしてadapterへ委譲し、明示確認とguard/refresh lifecycleはgeneric orchestrator外の製品stateに維持する。
+- **Alternatives Rejected**: 汎用orchestratorをfeature内へ複製する案はlibrary boundaryの二重所有になる。FoundationにPC exchange codecを持たせる案は保存rootと交換形式を再結合する。backup-restoreがshell wiringを継続所有する案はcomposition ownerを再び曖昧にするため採用しない。
+- **Out of scope**: generic public contractの再定義、PC root/schema/replacement semanticsの変更、application-shell実装、交換形式・atomicity・fencing・failure preservation・recovery・UI layoutの意味変更。
+- **Validation implication**: package/foundation public contractのconsumer fixture、deep-import/ownership negative gate、adapter contract、既存UI/E2E全安全シナリオを更新対象とする。
+
 ### 2026-07-27 settings-screen統合のlight discovery
 - **Context**: GitHub issue #19に対応し、独立ナビゲーションから設定画面内区画へ配置だけを変更する既存仕様更新。
 - **Sources Consulted**: `.kiro/specs/settings-screen/{brief,requirements,design,tasks}.md`、更新済み`.kiro/specs/application-shell/{requirements,design,tasks}.md`、`ui-internationalization`、`ui-message-catalog`、既存`src/features/backup-restore/`、全steering。

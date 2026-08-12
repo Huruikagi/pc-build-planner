@@ -8,6 +8,7 @@
   - 現行実装は必要な安全性をすでに持つが、`StoragePort`、transaction、replacement、recovery、backup protocolが`LocalDataRoot`と`FoundationError`へ結合している。抽出は挙動追加ではなく、既存characterizationを保った依存反転として行う必要がある。
   - package数を3つへ先に増やさず、単一private package内のroot core export、明示的なChrome subpath、明示的なbackup subpathで依存方向を分ける構成が最小である。宣言済みsubpathは公開API、その他の内部pathはdeep importとして拒否する。
   - Chrome Storageは10MB quota、`getBytesInUse`、`setAccessLevel`、`onChanged`を提供し、Web Locksはtab・worker間で同名exclusive lockを直列化する。platform-native能力を薄いadapterへ閉じ込め、coreにChrome型を入れない設計を維持できる。
+  - `v0.5.0-boundary-reconciliation`により、製品adapter実装は`local-data-foundation`と`backup-restore`へ委譲し、本specのapp接点はpublic portを型検査するread-only contractだけへ縮小する。
 
 ## Research Log
 
@@ -20,7 +21,7 @@
   - `StoragePort`はroot、RecoveryControl、bytes、quota、access restrictionを一つに持ち、Chrome adapterとin-memory adapterが実装する。
   - `LocalDataRoot`、具体migration、reference repair、`FoundationError`、worker authorizationは製品policyでありgeneric coreへ移せない。
   - `BackupRestoreDataPort`は通常CRUDやraw rootを隠す用途限定capabilityとして確立済みである。
-- **Implications**: coreはrootをgeneric型として扱い、revision・dedupe・validation・migration・repair・fenceをconsumer-supplied policyにする。既存公開portのshapeはproduct adapterが維持する。
+- **Implications**: coreはrootをgeneric型として扱い、revision・dedupe・validation・migration・repair・fenceをconsumer-supplied policyにする。製品adapterによる既存公開portの維持は下流`local-data-foundation`が所有し、本specはその型接続可能性だけをread-only fixtureで検証する。
 
 ### Backup orchestrationの切断点
 
@@ -93,7 +94,18 @@
 - **Selected Approach**: product codec/artifact policyとcore replacement portを受けるgeneric orchestratorを`./backup`から公開する。
 - **Rationale**: root commit pointとretry semanticsを再利用し、製品metadataとUIをownerに残せる。
 - **Trade-offs**: generic typesが多い。公開型fixtureで推論可能性を固定する。
-- **Follow-up**: existing backup public behaviorの移行はpending `backup-restore` Change Briefの境界を越えない。
+- **Follow-up**: existing backup public behaviorへの接続はpending `backup-restore` Change Briefが単独所有し、本specは製品codec/adapterを実装しない。
+
+### Decision: 製品adapterを下流canonical ownerへ委譲する
+
+- **Context**: `v0.5.0-boundary-reconciliation`で`ProductLocalDataAdapter`と`ProductBackupAdapter`の二重ownerが判明した。
+- **Alternatives Considered**:
+  1. 本specでpure delegation adapterまで実装し、下流specでは意味変更だけを扱う。
+  2. 本specはgeneric package、Chrome adapter、backup orchestration、公開port、package検証だけを所有する。
+- **Selected Approach**: 2を採用し、app接点は製品型を入力にするread-only compile contractへ限定する。
+- **Rationale**: generic mechanismの独立性を証明しながら、PC root/error/compositionは`local-data-foundation`、製品backup codec/policy/UIは`backup-restore`というcanonical ownershipを守れる。
+- **Trade-offs**: package spec単独ではproduction wiringを完了しない。接続の実行可能性は公開型contractで固定し、実装・integration/E2Eは下流waveで検証する。
+- **Follow-up**: public port変更時は両下流specを再検証し、製品adapter実装を本specへ戻さない。
 
 ## Risks & Mitigations
 
@@ -101,7 +113,7 @@
 - package内subpath間の逆依存 — TypeScript AST boundary gateで`core <- chrome`、`core <- backup`の一方向だけを許可する。
 - root write後の失敗をpre-commit失敗として扱う — commit outcomeを判別共用体にし、finalize-only testでroot write 0件を固定する。
 - Chrome adapterがcontent scriptへstorageを露出する — `TRUSTED_CONTEXTS`成功前はproduction handleを返さずnegative contractを維持する。
-- pending Existing Spec Updatesとの重複 — 本specのapp作業をpure delegation adapterと非回帰testへ限定し、製品schema・error・exchange・UI・lifecycle変更を各Change Briefへ残す。
+- pending Existing Spec Updatesとの重複 — 本specのapp作業をread-only contractへ限定し、製品adapter、schema・error、exchange、composition、UI、lifecycle、E2Eを各canonical ownerのChange Briefへ残す。
 
 ## References
 

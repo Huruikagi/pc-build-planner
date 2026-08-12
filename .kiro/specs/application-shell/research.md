@@ -124,6 +124,17 @@
 - shell/feature DOM所有権の衝突 — presentation handleが返す専用slot以外へのfeature mountを禁止し、統合testで要素同一性とcleanup順序を検査する。
 - production dependencyの仮実装残存 — artifact/boundary testでinactive maintenance stubと共有entryからの下流deep importを拒否する。空feature catalogはempty stateとして検証する。
 
+### 2026-08-12 v0.5.0 boundary reconciliation light discovery
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Context**: project lifecycle、candidate source、product identity、共有error、product adaptersのowner移管後も、production shellにはlate-bound proxyと旧public portが残り、最終API fallout ownerが必要になった。
+- **Sources Consulted**: 全steering、`application-shell`全spec文書、ready済み`product-page-capture`を含むlatest Change Brief記載upstream specs、各public contribution/task metadata。
+- **Findings**: ui-messagesはconfigured resolver、Foundationは`ProductLocalDataAdapter`/`AppDataError`、backupは`ProductBackupAdapter`、project-contextはlifecycle descriptor/catalogを所有する。source/identity/candidate/current-build/compatibility/price/duplicate/captureは各ownerの公開port/contributionを確定し、shellだけがside-panel/worker/root APIの最終compositionを所有する。
+- **Selected Approach**: production compositionで各owner public entryを一度だけ初期化・直接注入し、旧project/source/identity/manufacturer/refresh proxyと旧root APIを撤去する。AppDataErrorやfeature payloadを解釈せず、worker-safe registrationとUI graphを分離する。
+- **Alternatives Rejected**: proxyをaliasとして残す案はowner移管を完結しない。各featureにproduction wiringを戻す案は共有entryの単一所有を破る。shellがcore/domain behaviorを再実装する案は責務逆転になる。
+- **Out of scope**: canonical error/message/catalog/data policy、feature business logic/state/UI、data mutation、backup codec、identity/source/project/candidate/build/compatibility/capture semantics。
+- **Validation implication**: one-shot composition identity、旧proxy negative gate、root API consumer、worker/UI artifact分離、startup/recovery/settings/lifecycleと横断E2Eをtaskへ追加する。
+
 ### 判断: Shellはfeature-neutralなactivation envelopeだけを配送する
 - **背景**: 商品取り込みから候補編集へ検証済みprefillを渡す必要がある一方、shellへ候補固有型を所有させると依存方向が逆転する。
 - **代替案**:

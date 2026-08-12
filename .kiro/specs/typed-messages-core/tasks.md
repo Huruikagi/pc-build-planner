@@ -1,20 +1,32 @@
 # Implementation Plan
 
+## Change Integration Context
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: Tasks 1–2がgeneric型・format・resolver/descriptor factory・parity primitive、Task 3.1がpackage公開入口、Task 3.2がpackage単独検証、Task 3.3がworkspace link・build・deep import gate・read-only consumer fixture、Tasks 4.1–4.2がgeneric package検証を扱う。
+- **Out-of-scope preservation**: configured app adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰を実装taskまたは検証taskへ含めない。
+
 - [ ] 1. Workspace package基盤を確立する
 - [ ] 1.1 最小のprivate workspace package scaffoldを追加する
   - `packages/*`をworkspaceへ登録し、typed messages coreのprivate package metadataとstrictなESM build設定を用意する。
-  - package単独のbuild、typecheck、testを後続実装から呼び出せるscript枠と、rootからpackageを先行実行するorchestration入口を設ける。この段階では公開export surfaceやcore実装を確定しない。
+  - package単独のbuild、typecheck、testを後続実装から呼び出せるscript枠を設ける。この段階ではroot orchestration、公開export surface、core実装を確定しない。
   - packageはruntime dependencyを持たず、React、Chrome API、PCドメイン、製品catalog、dynamic code、remote codeを取り込まない構成にする。
   - 完了時、pnpm filterがpackageを一意に認識し、packageのTypeScript設定をstrictなNodeNext ESM projectとして解釈でき、後続sourceを追加できる状態になる。
   - _Requirements: 5.3, 5.4, 5.5, 6.1_
   - _Boundary: WorkspaceValidation_
 
-- [ ] 1.2 catalog駆動のmessage型契約を実装する
-  - plain、single plural、multi plural、nested namespaceのdefinition契約と、dot key、definition lookup、placeholder、parameter引数の型導出を実装する。
-  - single pluralの`count`とmulti pluralの全selectorを数値として必須化し、placeholderなしのmessageはparameterなしに限定する。
+- [ ] 1.2 catalog definitionとkey導出の型基盤を実装する
+  - plain、single plural、multi plural、nested namespaceのdefinition契約を定義する。
+  - 全leafからdot keyとdefinition lookupを導出し、製品catalogや言語識別子へ固定しない。
+  - synthetic nested catalogの型fixtureで有効keyが解決され、未知keyが期待したcompile errorになることを完了条件とする。
+  - _Requirements: 1.1, 1.5, 3.5_
+  - _Boundary: MessageContracts_
+
+- [ ] 1.3 parameterとdescriptorの型契約を完成する
+  - placeholder、single pluralの`count`、multi pluralの全selectorからparameter引数を導出し、placeholderなしのmessageをparameterなしに限定する。
   - catalog genericなnominal descriptor型を、runtimeではkeyと任意paramsだけになるJSON安全なshapeとして定義する。
-  - positive/negative型fixtureを追加し、有効な呼び出しは型検査を通り、未知key、欠落・余分parameter、非数値selectorは期待したcompile errorになることを完了条件とする。
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.2, 3.4, 3.5_
+  - positive/negative型fixtureで欠落・余分parameter、非数値selector、descriptor契約を検査し、有効呼び出しだけが型検査を通ることを完了条件とする。
+  - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 3.2, 3.4, 3.5_
   - _Boundary: MessageContracts_
 
 - [ ] 2. Package coreの純粋mechanismを実装する
@@ -24,7 +36,7 @@
   - synthetic definitionだけを使うunit testで全選択規則とfallbackを固定し、同じ入力が常に同じ文字列を返して全件成功することを完了条件とする。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
   - _Boundary: MessageFormatter_
-  - _Depends: 1.2_
+  - _Depends: 1.3_
 
 - [ ] 2.2 (P) nested catalog normalizerを実装する
   - 入れ子のnamespaceをdot keyのflat catalogへ変換し、plainとstructured definitionをleafとして保持する。
@@ -40,7 +52,7 @@
   - 型fixtureとruntime testでparameter制約、JSON直列化後のplain shape、製品非依存性を観測できることを完了条件とする。
   - _Requirements: 3.2, 3.3, 3.4, 3.5_
   - _Boundary: DescriptorFactory_
-  - _Depends: 1.2_
+  - _Depends: 1.3_
 
 - [ ] 2.4 generic catalog parityを実装する
   - source/targetのmissing key、excess key、全formを対象にしたplaceholder集合不一致を、安定したissue codeとkeyで返す。
@@ -49,7 +61,7 @@
   - runtime issue testが決定的に成功し、compile-time parity不一致fixtureが期待どおり型検査で拒否されることを完了条件とする。
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   - _Boundary: CatalogParity_
-  - _Depends: 1.2, 2.2_
+  - _Depends: 1.3, 2.2_
 
 - [ ] 2.5 normalizer、formatter、descriptorをtyped resolverへ統合する
   - 任意のliteral catalogからkey・parameter契約を保持するcallable resolverを生成する。
@@ -60,49 +72,50 @@
   - _Boundary: ResolverFactory_
   - _Depends: 2.1, 2.2, 2.3_
 
-- [ ] 3. Package公開面と製品consumerを統合する
-- [ ] 3.1 package root exportと単独検証suiteを確定する
+- [ ] 3. Package公開面とread-only consumerを統合する
+- [ ] 3.1 package root exportを確定する
   - packageの唯一のpublic entryから型、formatter、normalizer、resolver、descriptor、parityのconsumer向けsymbolだけをnamed exportする。
   - export mapの`.`をbuild済みESM JavaScriptとdeclarationへ対応させ、source、test、内部subpathを公開しない。
-  - package単独のbuild、typecheck、testとroot-export smoke testを完成させる。
-  - 完了時、全package filter commandとroot importがclean outputから成功し、未公開subpathはmodule resolutionで利用できない。
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2_
+  - packageをprivateかつruntime dependencyなしに保ち、公開成果物へ内部source、test、製品型を含めない。
+  - 完了時、build済みroot importだけが公開symbolを解決し、未公開subpathはmodule resolutionで利用できない。
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: PackagePublicEntry_
   - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 3.2 PC Build Plannerのconfigured message adapterをpackage公開APIへ移行する
-  - 製品catalogから具体的な`MessageKey`、resolver、descriptor、`message()`を設定し、既存app公開signatureを維持する。
-  - ja/en resolver registry、source/fallback language、原語表記、React Provider/hookを製品側に残し、package root以外をdeep importしない。
-  - generic parity issueへrequired release keyとbilingual hintだけを製品側で合成し、旧generic formatter/resolver/parity実装の重複を除去する。
-  - app public consumer型検査と既存ui-messages testが成功し、ja/enのresolver結果、descriptor表示、言語切替、React bindingが移行前と同じであることを完了条件とする。
-  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.5, 5.6, 6.5_
-  - _Boundary: AppMessageAdapter_
+- [ ] 3.2 package単独検証suiteを完成する
+  - packageだけを対象にbuild、typecheck、testを実行するfilter commandとroot-export smoke testを完成させる。
+  - plain、interpolation、single plural、multi plural、descriptor、parityの正常系とfallbackをsynthetic fixtureで検証する。
+  - 完了時、app sourceを同時検査せずに全package commandがclean outputから成功し、失敗時はnon-zeroで終了する。
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.3, 4.1, 4.2, 4.3, 4.4, 6.1, 6.2, 6.6_
+  - _Boundary: WorkspaceValidation_
   - _Depends: 3.1_
 
 - [ ] 3.3 workspace consumer、boundary、topological build gateを接続する
-  - package root exportだけでcatalog設定、resolve、descriptor、parityを利用するstrict app consumer fixtureを公開consumer型検査へ追加する。
+  - root workspaceからpackageへ`workspace:*`でlinkし、lockfileへworkspace解決を記録する。
+  - package root exportだけでsynthetic catalogの設定、resolve、descriptor、parityを利用するread-only consumer fixtureを公開consumer型検査へ追加する。
+  - fixtureは製品catalog、configured adapter、React binding、製品runtime wiringをimport・変更せず、generic契約だけを読み取る。
   - package内部へのdeep import、packageからapp/React/Chrome/製品catalogへの逆依存、公開外subpathをsource boundary negative fixtureで拒否する。
-  - root buildと検証をpackage-firstのtopological順序へ接続し、app bundleがbuild済みpackage exportを解決するようにする。
+  - root buildと検証をpackage-firstのtopological順序へ接続し、read-only fixtureがbuild済みpackage exportを解決するようにする。
   - 完了時、clean package outputからtopological buildが成功し、core変更の検証経路がpackage単独gate、consumer contract、boundary gateの失敗を取りこぼさない。
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 6.4, 6.6_
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 6.4, 6.5, 6.6_
   - _Boundary: WorkspaceValidation_
-  - _Depends: 3.1, 3.2_
+  - _Depends: 3.2_
 
-- [ ] 4. 変更種別別の検証と完全回帰を確定する
-- [ ] 4.1 core変更とproduct catalog変更の検証scriptを分離する
-  - core contract/runtime変更用scriptにpackage build・typecheck・test、app consumer contract、boundary gateを含める。
-  - product catalog/release rule変更用scriptに製品parity、configured adapter、表示回帰を含め、generic coreの無関係なapp-wide統合検証を最小経路の必須条件にしない。
-  - 既存の完全検証は両経路を包含し、どちらかの失敗を成功として扱わない。
-  - tooling testが各scriptの構成と失敗伝播を確認し、core経路とcatalog-only経路が意図したgate集合を実行することを完了条件とする。
+- [ ] 4. Generic packageの検証境界を確定する
+- [ ] 4.1 core変更用の検証scriptを確立する
+  - 既存のpackage単独command、read-only consumer contract、boundary gateをcore contract/runtime変更用の一つの集約scriptから順に呼び出す。
+  - product catalog、release rule、configured adapter、表示回帰の検証はこのscriptへ取り込まず、`ui-message-catalog`の製品ownerへ委譲する。
+  - 既存の完全検証へpackage-first順序を接続し、package側gateの失敗を成功として扱わない。
+  - tooling testがcore scriptのgate集合、product-only検証の非所有、失敗伝播を確認することを完了条件とする。
   - _Requirements: 6.4, 6.5, 6.6_
-  - _Boundary: WorkspaceValidation, AppMessageAdapter_
-  - _Depends: 3.2, 3.3_
+  - _Boundary: WorkspaceValidation_
+  - _Depends: 3.3_
 
-- [ ] 4.2 packageとappの完全回帰を実行する
-  - package単独build・typecheck・test、root typecheck、public consumer、lint、boundary、runtime schema、fixture、build、unit/integration、既存ja/en E2Eを実行する。
-  - app bundleにReact/Chrome/製品catalogへのpackage逆依存、dynamic/remote code、未公開subpath、重複generic implementationが含まれないことを機械検査する。
-  - PC Build Plannerの表示、言語切替、plural、descriptor、fallbackが変わらず、package parityと製品release parityの両方が成功することを確認する。
-  - 完了時、`pnpm validate`が成功し、package単独性、topological build、consumer契約、既存UI非回帰のfresh evidenceが揃う。
+- [ ] 4.2 package境界のfresh regressionを実行する
+  - package単独build・typecheck・test、read-only public consumer、boundary、topological buildをclean outputから実行する。
+  - package sourceと公開成果物にReact、Chrome、製品catalogへの逆依存、dynamic/remote code、未公開subpathが含まれないことを機械検査する。
+  - plain、interpolation、plural、descriptor、fallback、generic parityのpackage testを実行し、製品catalogや製品表示の回帰を本taskへ追加しない。
+  - 完了時、generic packageの単独性、公開契約、topological build、read-only consumer契約のfresh evidenceが揃う。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
-  - _Boundary: WorkspaceValidation, AppMessageAdapter_
+  - _Boundary: WorkspaceValidation_
   - _Depends: 4.1_

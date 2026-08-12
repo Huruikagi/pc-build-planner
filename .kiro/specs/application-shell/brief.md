@@ -88,3 +88,37 @@ side panelの主要画面から現在projectを常に識別でき、project-cont
 ### Source
 
 - Milestone v0.4.0 roadmap `application-shell recovery contract gate`・`application-shell production wiring` updates、GitHub Issues #24・#29。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+project lifecycle、candidate source、product identityのowner移動後に、現行の遅延proxyと旧公開portを撤去してproduction wiringを完結するownerがroadmapにない。
+
+### Current State
+
+shellはproject catalog source、late-bound project command/guard、manufacturer domain、source refreshを複数のdeferred proxyで接続し、旧owner間の構築循環を吸収している。
+
+### Desired Outcome
+
+shellは確定した各`public.ts`/`feature-contribution.ts`だけをcompositionし、owner移動で不要になったproject/source/identityのproxyと旧wiringを撤去する。業務error、catalog、data policyは解釈しない。
+
+### Scope
+
+- **In**: production composition、obsolete proxy撤去、公開port注入、worker/side-panel wiring、composition/public-boundary test、横断E2E接続。
+- **Out**: project/source/identity/error/catalogの意味・実装、feature UI/state、data mutation、package core。
+
+### Boundary Impact
+
+- **Extends**: v0.5.0 owner移管後のcomposition-only migrationを追加する。
+- **Preserves**: shellのslot/runtime/registration ownership、feature isolation、deep import禁止、recovery表示。
+- **Adjacent**: 各owner specが実装とcontractを持ち、shellは具体ownerの公開contributionだけを接続する。
+
+### Dependencies
+
+- **Upstream**: `spec:ui-message-catalog`、`spec:project-context`、`spec:project-candidate-management`、`spec:current-build-management`、`spec:compatibility-checking`、`spec:candidate-source-bookmarks`、`spec:source-price-refresh`、`spec:duplicate-product-merge`、`spec:product-page-capture`、`spec:backup-restore`。
+- **Downstream**: v0.5.0横断E2E、release validation。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

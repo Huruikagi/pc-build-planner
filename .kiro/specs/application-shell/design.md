@@ -2,7 +2,7 @@
 
 ## 概要
 
-application shellは、Chrome extensionのside panelをfeature-neutralなhostとして構成し、登録済みfeatureのナビゲーションとlifecycleを管理する。単一のcomposition rootがfoundationのmaintenance projectionとfeature registrationを合成し、共有runtime入口とroot公開APIの所有権を一元化する。
+application shellは、Chrome extensionのside panelをfeature-neutralなhostとして構成し、登録済みfeatureのナビゲーションとlifecycleを管理する。単一のcomposition rootがconfigured message resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、project lifecycle descriptor/catalog、各featureの確定public contributionとmaintenance projectionを合成し、共有runtime入口とroot公開APIの所有権を一元化する。
 
 設計はRegistry + Composition Rootパターンを採用する。feature固有のview、状態、業務処理、永続化はshellへ持ち込まず、型付きportを介して参加させる。
 
@@ -15,10 +15,20 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - feature固有のview/state/業務規則の実装。
 - Repository、write authority、maintenance lease、復元処理の実装。
 - Chrome Web Store公開、他ブラウザ対応、旧major互換。
+- product adapter、backup adapter、message/source/identity/project/candidate/build/compatibility/price/duplicate/captureのcore/domain/feature behavior再実装。
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope**: owner移管後のside-panel/worker production composition、configured resolver、product adapters、project lifecycle、全確定public ports、obsolete proxy撤去、root API/boundary/E2E。
+- **Out of scope**: canonical core/domain/error/message/catalog/data policy、feature behavior/state/UI、data mutation、backup codec/protocol。
+- **Preserved behavior**: startup/rollback/cleanup、recovery/settings、project selector、persistent/transient lifecycle、worker/UI分離、安全なtext、feature isolation。
 
 ## 境界コミットメント
 
 ### このspecが所有するもの
+- configured resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、project lifecycle descriptor/catalogと全feature public contributionのproduction root wiring。
+- owner移管で不要となるlate-bound project/source/identity/manufacturer/refresh proxyと旧root APIの撤去。
 - `application-shell/public.ts`に現れる常設／一過性区分、常設だけをnavigation・初期選択・fallbackへ載せるsteady-state shell lifecycle、およびその受け入れ回帰。`presentation`導入と一過性controller実装は`transient-feature-surface`が所有する。
 - `transientNotice`を常設navigationと併存させ安全なテキストとして描画するsteady-state受け入れ。notice導入実装は`transient-feature-surface`が所有する。
 - `ui-messages`が解決したナビゲーションラベル・共通状態文言の描画、およびsettingsを常設featureとして受け入れるhost契約。settings回復案内・header撤去・具体composition変更は`settings-screen`が所有する。
@@ -34,6 +44,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - MV3 service worker contextでfoundation worker registrationとfeature catalogのworker contributionを一度だけ合成するproduction worker composition。
 
 ### 境界外
+- typed message resolver、product local-data/backup adapter、`AppDataError`、project/source/identity/candidate/current-build/compatibility/price/duplicate/capture public contractの定義・意味・実装。
 - feature固有のDOM、state、domain error、保存可否判断。
 - maintenance leaseの取得・更新・owner fencing・commit直前検証。
 - Storage API、Repository、復元、商品抽出、互換性判定。
@@ -45,6 +56,9 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - project catalog、現在projectの選択authority・fallback・preference、project CRUD、切替guard、共通selectorのDOMと文言。これらは`project-context`と各feature ownerが所有する。
 
 ### 許可する依存
+- ui-messagesのconfigured resolver factory、local-data-foundationの`ProductLocalDataAdapter`/`AppDataError`/runtime contributions、backup-restoreの`ProductBackupAdapter`。
+- project-contextのlifecycle descriptor/catalog/read/command/guard/presentation public ports。
+- candidate-source-bookmarks、duplicate-product-merge、project-candidate-management、current-build-management、compatibility-checking、source-price-refresh、product-page-capture、settings-screen、backup-restoreの公開entry。
 - local data foundationの公開型、canonical `Result<T, E>`、query契約、および完了済み`local-data-foundation` task 5.5が公開するread-only `MaintenanceSnapshotSource`。
 - local data foundationが公開済みの`initializeProductionFoundationRuntimeContribution()`。このfactoryは`MaintenanceSnapshotSource`、foundation worker registration、disposeを一つのhandleとして返し、shellへRepositoryやStorage adapterを露出しない。
 - 下流featureのregistration moduleと`public.ts`（composition rootからのみ参照）。
@@ -72,6 +86,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - worker-safe `feature-contribution-catalog.ts`とUI専用`side-panel-contributions.ts`の分離、または`TransientGestureRegistrationPort`のworker composition接続を変更する場合は`source-price-refresh`を再検証する。
 - `ProjectContextSnapshot`、read/command port、presentation contribution、project依存能力注入、またはselector slotの配置を変更する場合は`project-context`と全project依存featureを再検証する。
 - `OperationKind`、recovery-required projection、settings/backup recovery到達契約を変更する場合は`backup-restore`と`settings-screen`を再検証する。
+- configured resolver、Product adapters、AppDataError、project lifecycle descriptor、source/identity/candidate/current-build/compatibility/price/duplicate/capture public portのshapeまたはowner変更。
 
 ## アーキテクチャ
 
@@ -109,6 +124,11 @@ graph TB
     FeatureSlot --> FeatureViews[Feature views]
     PublicContracts[Feature public contracts] --> RootApi[Root public API]
     Root --> RootApi
+    Messages[Configured message resolver] --> Root
+    ProductData[ProductLocalDataAdapter] --> Root
+    ProductBackup[ProductBackupAdapter] --> Root
+    Lifecycle[Project lifecycle descriptor catalog] --> Root
+    PublicPorts[Feature public contributions] --> Root
 ```
 
 - **選択パターン**: Registry + Composition Root。登録・状態・表示を分離し、compositionだけが具体featureを知る。
@@ -146,6 +166,9 @@ src/
 │   ├── shell-presentation.tsx          # shell root、navigation command、feature専用slotの接続
 │   ├── project-context-shell-adapter.ts # project-context presentation lifecycleと依存feature可用性のshell接続
 │   ├── application-composition.ts      # canonical foundationと公開registrationのproduction合成
+│   ├── product-port-composition.ts     # ProductLocalDataAdapter/ProductBackupAdapterと用途別capabilityのroot配線
+│   ├── feature-public-composition.ts   # project/source/identity/candidate/build/compatibility/price/duplicate/capture public portsの直接配線
+│   ├── obsolete-proxy-removal.ts       # 移行期間だけ。旧late-bound proxyが0件であることをgate化後に削除
 │   ├── production-worker-composition.ts # foundation message registrationとcatalog workerのcontext別合成
 │   ├── feature-contribution-catalog.ts # contribution契約とworker安全なcatalog（DOM/React非依存）
 │   ├── side-panel-contributions.ts     # side panel専用contribution factoryの唯一の集約点
@@ -168,6 +191,14 @@ tests/
 既存の`react-shell-root.tsx`、`shell-view.tsx`、`shell-view.css`、`feature-registry.ts`、`side-panel-host.ts`、`shell-presentation.tsx`、`application-composition.ts`を常設／一過性混在とsettings回復表示へ改訂する。`feature-contribution-catalog.ts`はworker registrationだけを含められるworker-safe graphを維持し、`side-panel-contributions.ts`だけがsettingsを含むUI contributionを参照する。`src/domain/`と`src/persistence/`の実装は変更対象外である。各下流featureの登録ファイルと`public.ts`は各feature specが所有し、このspecは変更しない。仮のmaintenance sourceへのfallbackは許可しない。
 
 `project-context-shell-adapter.ts`はproject-contextのpresentation contributionをshellの専用slotへ一度だけmountし、停止時に解除する。snapshotの`ready | empty | unavailable`を業務判断へ変換せず、`unavailable`時はproject依存featureのavailabilityだけを理由付きで閉じる。settingsとbackup recoveryはproject非依存として起動を継続する。
+
+#### v0.5 owner reconciliation composition
+
+`application-composition.ts`はowner公開entryからconfigured message resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、project lifecycle descriptor/catalogを初期化し、candidate/source/identity/current-build/compatibility/price/duplicate/captureのfeature contributionへ必要なportだけを直接渡す。共有`AppDataError`は値・variantを検査せずconsumer間を型付きで接続する。
+
+旧project catalog source、late-bound project command/guard、candidate source/identity、manufacturer domain、source refresh proxyはproduction graphとroot APIから撤去する。必須port欠落時はproxy/no-op/空adapterへfallbackせずtyped startup failureとし、project-context固有のdegraded startup、recovery-required、settings/backup到達規則だけは既存どおり維持する。
+
+worker compositionは各ownerの`worker-public.ts`が提供するregistrationだけを受け取り、configured UI resolver、React/UI contribution、ProductBackupAdapterを参照しない。side-panel compositionはUI contributionを受けるがworker event implementationをdeep importしない。
 
 #### Feature contribution composition
 
@@ -195,7 +226,7 @@ backup/restoreが必要とする完全`FoundationDataPort`と、一過性feature
 - `side-panel-contributions.ts`はUI contributionを具体合成する唯一の面とし、settingsをpersistent、product-capture等をtransientとして受け入れる。source-price-refreshのcontext menu worker contributionはここへ混在させない。
 - `side-panel-contributions.ts`はside panel専用のcontribution factory列を所有する唯一のfileであり、featureの`feature-contribution.ts`公開入口だけをimportする。React依存はこのmodule graphへ閉じ込め、worker bundleへ混入させない。candidate-managementの型付きqueryから`ProjectCatalogSource`へ絞り込むadapterもこのcomposition境界が公開し、application compositionはfeature keyやpublic API shapeを文字列検索しない。
 - `navigator`はcomposition rootのactivate経路へ遅延委譲するobjectとして構築し、feature公開APIとcomposition rootの循環依存を作らない。
-- candidate-managementのduplicate mergeからsource-price-refreshを呼ぶ依存は、`side-panel-contributions.ts`が所有するlate-bound `SourcePriceRefreshPort` proxyで循環を解消する。proxyはsource-price-refreshの公開portだけを委譲し、未bind時は安定したtyped failureを返す。価格更新や重複判定の業務規則をshellへ持ち込まない。
+- candidate-managementのduplicate mergeが利用するsource-price-refresh依存は、確定したfeature公開portをcompositionの構築順序で直接注入する。owner移管前のlate-bound `SourcePriceRefreshPort` proxyと未bind fallbackは撤去し、価格更新や重複判定の業務規則をshellへ持ち込まない。
 - `src/index.ts`はcatalogから導出した`ApplicationApi`型と、合成contextを受け取る`composeApplicationApi(context)`を公開する。data portなしに実featureを実体化できないため、root barrelは即時値を公開しない。
 - feature側CSSは、side panel entryのmodule graphからimportして`dist/side-panel.css`へbundleし、shellが所有する`side-panel.html`から参照する。`src/application-shell/side-panel.css`から`src/ui-language/language-select.css`へのimportはsettings内language controlをbundleへ到達させる明示的CSS composition seamであり、shell header layout ownershipを意味しない。どのentryからも到達しないCSSはproduction artifactに含まれないため、設計上の記載と実体を一致させる。
 
@@ -618,6 +649,21 @@ interface ProductionWorkerComposition {
 - startup failure: settingsを利用可能と偽らず、「設定 / Settings」と既存retryを同じstatusへ提示する。
 - stale maintenance通知: stateを変更せず診断hookへ記録する。
 - runtime終了: unsubscribe/unmountをbest-effortで全件実行し、複数失敗を一つの失敗で隠さない。
+- public port/configured resolver/Product adapter欠落: obsolete proxy、空adapter、no-op resolverへfallbackせず既存startup failureへ写像する。project-contextの既定degraded startup条件だけを例外として維持する。
+
+## 要件11トレーサビリティ
+
+| 要件 | 概要 | コンポーネント | 検証 |
+|---|---|---|---|
+| 11.1 | resolver・Product adapters・project lifecycle初期化 | ApplicationComposition、ProductPortComposition | composition identity/one-shot contract |
+| 11.2 | 全feature public port注入 | FeaturePublicComposition、SidePanelContributions | typed consumer fixture |
+| 11.3 | AppDataError透過接続 | ProductPortComposition | exhaustive consumer contract |
+| 11.4, 11.5 | obsolete proxy撤去とfail-closed | ApplicationComposition、RootPublicApi | negative boundary/startup fixture |
+| 11.6 | worker/UI graph分離 | ProductionWorkerComposition、FeatureContributionCatalog | worker artifact scan |
+| 11.7 | core/domain/feature behavior非再実装 | source/file ownership gate | negative fixture |
+| 11.8 | rollback/stop | ApplicationComposition | fault-injection cleanup order |
+| 11.9 | root API更新 | PublicApiRegistry | public consumer typecheck |
+| 11.10 | 横断非回帰 | ShellIntegration、E2E | production-shaped/E2E |
 
 ## テスト戦略
 
@@ -633,6 +679,9 @@ interface ProductionWorkerComposition {
 - ProjectContextShellAdapterがproject snapshotを解釈せずselector contributionへ渡し、unavailable時にproject依存featureだけを閉じること（3.8–3.9, 9.1–9.5）。
 
 ### Integration Tests
+- configured resolver、ProductLocalDataAdapter、ProductBackupAdapter、project lifecycle descriptor/catalogと全確定feature public portを一度ずつ合成し、依存先が期待するcapability identityと一致することを検証する（11.1–11.3, 11.8–11.10）。
+- obsolete proxy/旧root API/ManagementError aliasがproduction graphに0件で、必須port欠落がno-op fallbackで成功しないことをpublic consumer/boundary fixtureで検証する（11.3–11.7, 11.9）。
+- owner移管後のstartup、rollback、stop、recovery-required、settings、project lifecycle、persistent/transient featureを同じproduction-shaped fixtureで回帰する（11.5, 11.8, 11.10）。
 - compositionが一回だけ実行され、root APIがfeature単位で合成される（3.1–3.4）。
 - persistent／transient混在時もfeature切替でunmount→mount順序となり同時表示が発生せず、transientをnavigation・初期選択・fallbackへ載せない（1.1–1.5, 1.7–1.8）。
 - persistent navigationのtarget mount失敗時は直前featureを新しいhandleで復元し、targetの部分DOMを残さない。復元失敗時も別featureへ遷移できる（4.2–4.3）。

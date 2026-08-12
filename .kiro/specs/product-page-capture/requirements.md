@@ -8,7 +8,13 @@ PCパーツを調査する利用者が閲覧中の商品ページを手作業で
 
 - **In scope**: 現行の起動世代で固定された単一タブの明示的な取り込み、汎用メタ情報・文書構造からの抽出、`og:site_name`による任意の取得元サイト名、明示されたmetadata propertyだけの採用、メーカー公式domainによる欠損メーカー名の最下位補完、値ごとの取得元、未信頼入力の正規化、候補管理への即時引き渡し、制限ページ・権限・抽出・引き渡し失敗の案内、固定タブから同じ抽出規則で価格だけを観測する公開契約。
 - **Out of scope**: 常時監視、一括取得、サーバーアクセス、AI、画像保存、サイト固有DOM抽出、網羅的なmetadata解析、未列挙propertyの取得、ホスト名からのサイト名推測、サイト名によるURL同一性・source永続識別・ページ種別の判定、サイト別の正式対応・取得率保証、取り込み面での確認・補正・project選択・保存、登録後の候補管理、保存済みsourceの意味または交換形式の変更、保存済みsourceへの価格反映、互換性判定。
-- **Adjacent expectations**: 一過性surface基盤が起動世代・固定タブ・表示寿命・原子的引き渡しを提供し、候補管理が解決前draftの受理、取得元サイト名の確認・補正、project解決、保存時検証、永続化を所有する。本機能はmetadataの採否と抽出語彙を所有してそれらの契約を利用し、候補管理の保存規則を重複実装しない。
+- **Adjacent expectations**: 一過性surface基盤が起動世代・固定タブ・表示寿命・原子的引き渡しを提供し、候補管理が解決前draftの受理、取得元サイト名の確認・補正、project解決、保存時検証、永続化を所有する。`candidate-source-bookmarks`がsource型・URL identity・mutationを、`duplicate-product-merge`がproduct identityを、`local-data-foundation`が共有`AppDataError`を所有する。本機能は各公開入口を必要最小限に消費し、identity、source core、data error mapping、候補保存規則を重複実装しない。
+
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: identity export/実装撤去と公開API縮小は9.1–9.3、canonical source型とcandidate public intentへのhandoff移行は9.4–9.7、共有`AppDataError`境界とproduction API falloutは9.8–9.10で扱う。
+- **Out-of-scope preservation**: product identity algorithm/core、source URL identity/catalog/mutation、共有`AppDataError`定義・mapping、candidate CRUD/editor、application-shell compositionを本specで実装しない。activeTab、固定tab、抽出順位、metadata allowlist、manufacturer補完、確認handoff、price extraction、既存UX/error semanticsを維持する。
 
 ## Requirements
 
@@ -104,3 +110,18 @@ PCパーツを調査する利用者が閲覧中の商品ページを手作業で
 6. If ページに明示的な対応範囲へ含まれないmetadata propertyがある, the 商品ページ取り込み機能 shall そのpropertyを商品情報または取得元サイト名の候補として採用しない
 7. If 有効な`og:site_name`がない, the 商品ページ取り込み機能 shall ホスト名または他の未承認情報から取得元サイト名を推測しない
 8. The 商品ページ取り込み機能 shall 取得元サイト名をURL同一性、sourceの永続識別子、またはページ種別の判定に使用しない
+
+### Requirement 9: canonical public seamへのconsumer移行
+**Objective:** As a 保守者, I want 商品取り込みの公開面を取得責務だけへ限定したい, so that source、identity、candidate、data errorのowner変更後も循環や重複実装なしで取り込みを維持できる
+
+#### Acceptance Criteria
+1. The 商品ページ取り込み機能 shall `ProductIdentityNormalizer`の型、実装、factoryおよびpublic exportを提供しない
+2. When product identityが必要になる, the 商品ページ取り込み機能 shall identity algorithmを実行または再公開せず`duplicate-product-merge`のcanonical public seamを隣接ownerとして扱う
+3. The 商品ページ取り込み機能 shall 公開APIをmanufacturer domain lookupとread-only page price extractionへ限定する
+4. When 抽出結果から初期sourceを組み立てる, the 商品ページ取り込み機能 shall `candidate-source-bookmarks`の公開source型を消費し、URL identity、source ID規則、catalogまたはmutationを再実装しない
+5. When 候補editorへのhandoff intentを生成する, the 商品ページ取り込み機能 shall `project-candidate-management`の公開`createCandidateEditorIntent`だけを利用し、candidate query、save serviceまたは内部moduleへ到達しない
+6. If candidate public intent factoryまたは一過性handoffが失敗する, the 商品ページ取り込み機能 shall 現行世代の検証済み抽出結果を保持して既存のhandoff失敗と再試行を提示し、保存失敗または既知の`AppDataError`へ推測しない
+7. The 商品ページ取り込み機能 shall `AppDataError`、`ManagementError`、`FoundationError` mappingまたはcandidate-owned data errorを定義、mapping、再公開しない
+8. When candidate、source、identityまたは`AppDataError`の公開契約が変更される, the 商品ページ取り込み機能 shall draft mapper、handoff、public API、consumer contract、production-shaped composition fixtureを再検証する
+9. If canonical identity public seamがまだ利用可能でない, the 商品ページ取り込み機能 shall identity実装を先行削除してdownstreamを破壊せず、移管完了をidentity ownerの実装開始条件として扱う
+10. The 商品ページ取り込み機能 shall application shellのproduction composition、遅延proxy、singletonまたはconsumer wiringを実装しない

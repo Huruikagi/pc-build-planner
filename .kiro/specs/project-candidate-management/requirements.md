@@ -2,28 +2,34 @@
 
 ## Introduction
 
-複数サイトで見つけたPCパーツを構成検討の単位ごとに整理する利用者向けに、プロジェクトと候補パーツをローカルで管理する。候補管理は共通の現在プロジェクトを唯一の作業対象とし、欠損値と未分類を許容する編集、取り込みから継続するpre-edit、プロジェクト切替時の未保存内容を安全に扱う。
+複数サイトで見つけたPCパーツを構成検討の単位ごとに整理する利用者向けに、候補パーツをローカルで管理する。候補管理は共通の現在プロジェクトを唯一の作業対象とし、欠損値と未分類を許容する編集、取り込みから継続するpre-edit、プロジェクト切替時の未保存内容、既存の取得元編集体験を安全に扱う。プロジェクト自体の作成・改名・削除は共通のプロジェクト機能へ委譲し、候補管理はその表示領域への接続と候補draftの保護だけを担う。
 
 ## Boundary Context
 
-- **In scope**: プロジェクトCRUD、候補パーツCRUD、共通の現在プロジェクトへの追従、カテゴリ別表示、未分類補正、共通項目・カテゴリ別属性・元表記・価格・取得日時の編集、削除確認、project未解決・空名pre-editのsession内保持、project解決後の編集継続、切替時のdraft保護、CRUD後の現在project再検証、既存snapshotの非権威的project metadata検査。
-- **Out of scope**: project context自体の選択・preference・fallback、共通selectorとproduction接続、独立したproject管理画面、複数project同時編集、ページ抽出、現在構成への採用、互換性判定、共通ライブラリ、複製・ステータス、画像、snapshot field削除・version変更、取り込み側intentの再試行。
-- **Adjacent expectations**: `project-context` が検証済みの現在projectと切替確認を提供し、application shellが接続する。`local-data-foundation` の保存契約を利用する。商品取り込みは候補編集intentを渡すが、保存先は候補管理が現在projectだけから解決する。後続の構成管理へ候補参照契約を提供する。
+- **In scope**: 候補パーツCRUD、重複商品workflow専用の最小候補作成契約、共通の現在プロジェクトへの追従、project lifecycle表示領域への接続と旧候補管理内project操作の撤去、カテゴリ別表示、未分類補正、共通項目・カテゴリ別属性・元表記・価格・取得日時・取得元の編集UI、候補削除確認、project未解決・空名pre-editのsession内保持、project解決後の編集継続、切替時のdraft保護、既存snapshotの非権威的project metadata検査、共有データ操作エラーを同じ種類・粒度・表示挙動で扱う移行。
+- **Out of scope**: project lifecycleのcommand・state・確認・message意味、project context自体の選択・preference・fallback、共有selectorとproduction composition、共有データ操作エラーの定義・低位エラーからのmapping、取得元entity・catalog・URL identity・mutation、商品同一性の正規化・照合・統合判断、候補UI layout変更、複数project同時編集、ページ抽出、現在構成への採用、互換性判定、保存形式変更、snapshot field削除・version変更、取り込み側intentの再試行。
+- **Adjacent expectations**: `project-context` がproject lifecycleと検証済みの現在project・切替確認を提供し、候補管理は既存hostへそのpresentationを接続する。`local-data-foundation` が共有データ操作エラーと保存契約を提供する。`candidate-source-bookmarks` が取得元catalog・URL identity・mutationを提供し、候補管理は既存source editor UIから利用する。`duplicate-product-merge` は候補管理のproject限定queryと最小create契約を利用し、商品同一性contractを候補管理へ提供する。商品取り込みは候補編集intentを渡すが、保存先は候補管理が現在projectだけから解決する。後続の構成管理へ候補参照契約を提供する。
+
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: project lifecycle撤去とpresentation接続は1.1–1.8、共有データ操作エラーのconsumer移行は2.5・4.5・5.4・6.2、取得元core撤去とsource editor UI保全は4.1・4.3・4.6・6.3・6.7・6.8、商品同一性contractへの差替えは6.9、重複商品workflow専用の最小候補作成契約は6.10、候補CRUD・pre-edit・current project binding・draft guard非回帰は2–9で扱う。
+- **Out-of-scope preservation**: エラーの種類・粒度・表示、候補UI layout、候補CRUD、既存query、typed editor intent、pre-edit、draft guard、source editor UI、保存形式、snapshot version 3/shapeを変更しない。project lifecycle、共有エラー定義・mapping、取得元core、商品同一性core、production compositionを本specへ取り込まない。
 
 ## Requirements
 
-### Requirement 1: プロジェクトのライフサイクル管理
-**Objective:** As a PC構成を検討する利用者, I want 検討単位となるプロジェクトを安全に管理したい, so that 候補と現在の作業対象を一貫して保てる
+### Requirement 1: 共通プロジェクト操作との安全な統合
+**Objective:** As a PC構成を検討する利用者, I want 候補管理と同じ画面領域から共通のプロジェクト操作を継続したい, so that 候補draftを失わず現在の作業対象を管理できる
 
 #### Acceptance Criteria
-1. When 利用者が有効な名前で作成を確定する, the 候補管理機能 shall 新しい空のプロジェクトを追加し、成功後の現在プロジェクト一覧を反映する
-2. When 利用者がプロジェクト名の変更を確定する, the 候補管理機能 shall 所属候補を維持したまま変更後の名前と現在プロジェクト一覧を反映する
-3. If 利用者が空のプロジェクト名を確定しようとする, the 候補管理機能 shall 理由を示して保存せず入力を保持する
-4. When 利用者がプロジェクトの削除を要求する, the 候補管理機能 shall 所属候補も削除されることを確認してから実行する
-5. When プロジェクトの作成、変更または削除が成功する, the 候補管理機能 shall 最新のプロジェクト一覧に対する現在プロジェクトの再検証が完了してから成功後の表示を確定する
-6. If プロジェクトの保存または削除に失敗する, the 候補管理機能 shall 現在プロジェクトを再検証せず、既存表示と入力を保って再試行可能なエラーを示す
-7. If プロジェクトの変更は成功したが現在プロジェクトの再検証に失敗する, the 候補管理機能 shall 同じ変更を再実行させず、現在の作業対象が利用不能であることと回復操作を示す
-8. When プロジェクトの作成、変更または削除が未保存draftの作業対象へ影響する, the 候補管理機能 shall 永続状態を変更する前に必要な破棄確認を完了する
+1. When 候補管理画面を開く, the 候補管理機能 shall 共通のプロジェクト一覧・作成・改名・削除操作を既存の画面領域から利用可能にする
+2. When 共通のプロジェクト操作が完了する, the 候補管理機能 shall 共通機能が再検証した現在プロジェクトへ候補一覧と編集状態を追従させる
+3. If 共通のプロジェクト操作が入力または保存の問題で失敗する, the 候補管理機能 shall 共通機能が示す理由と再試行操作を候補draftとは独立して表示する
+4. When 利用者がプロジェクトの削除を要求する, the 候補管理機能 shall 共通機能が提供する対象と所属候補への影響を識別できる確認を表示する
+5. When プロジェクト操作が未保存の候補draftまたはpre-editへ影響する, the 候補管理機能 shall 共通の操作が永続状態を変更する前に候補draftの破棄確認へ参加する
+6. When 利用者が候補draftの破棄確認を取り消す, the 候補管理機能 shall 入力内容と現在プロジェクトを維持し、共通のプロジェクト操作を開始させない
+7. If プロジェクト操作は保存済みだが現在プロジェクトの再検証に失敗する, the 候補管理機能 shall 同じ操作を再実行させず、共通機能の再検証専用回復を利用可能にする
+8. The 候補管理機能 shall project lifecycleの入力検証、永続化、再検証、削除確認および利用者向けmessageを候補固有の処理として重複実行しない
 
 ### Requirement 2: 候補パーツの作成と所属
 **Objective:** As a 利用者, I want 欠損のある商品情報でも現在のプロジェクトへ候補を登録したい, so that 調査途中の情報を失わず後から補完できる
@@ -78,6 +84,10 @@
 4. The 候補管理機能 shall 後続の構成管理がプロジェクト別・カテゴリ別に候補を参照できる契約を提供する
 5. While 候補が未分類である, the 候補管理機能 shall 後続の現在構成で利用可能な候補として公開しない
 6. When 後続機能が候補編集内容を指定して詳細編集を要求する, the 候補管理機能 shall 現在プロジェクトの解決結果と入力内容を保持した編集画面またはproject-required案内を開く
+7. When 利用者が候補の取得元を確認または編集する, the 候補管理機能 shall 既存の取得元編集体験を維持し、隣接する取得元機能が提供する検証済みcatalogと変更結果を表示へ反映する
+8. If 取得元の確認または変更に失敗する, the 候補管理機能 shall 候補draftと既存の取得元表示を保持し、既存と同じ種類・粒度で失敗理由を示す
+9. When 候補保存前の商品同一性確認が必要になる, the 候補管理機能 shall 隣接する商品同一性機能の判定結果を利用し、独自の正規化または照合規則で結果を置き換えない
+10. When 重複商品workflowが新規候補としての保存を明示的に選ぶ, the 候補管理機能 shall 検証済みdraftを一度だけ作成できる最小の候補作成契約をcanonical公開入口から提供し、既存の候補照会契約とtyped editor intentの意味を変更しない
 
 ### Requirement 7: 解決前pre-editの受理と現在プロジェクトへのbinding
 **Objective:** As a 商品取り込みから編集を継続する利用者, I want projectや商品名が未解決でも抽出結果を候補管理へ引き継ぎたい, so that 再抽出や仮データ作成をせず常設画面で補正と保存を完了できる

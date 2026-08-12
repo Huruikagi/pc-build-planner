@@ -8,7 +8,13 @@ typed messages coreは、複数のChrome拡張やWebアプリで再利用でき�
 
 - **In scope**: 汎用message definition、カタログからのkey・parameter型導出、format、typed resolver factory、generic descriptor、key・placeholder parity、workspace packageの公開境界、package単独検証、公開APIだけを使うconsumer contract、変更種別ごとの検証範囲。
 - **Out of scope**: PC Build Planner固有のja/enカタログと具体的なMessageKey、対応言語、source/fallback language、原語表記、bilingual hint、release固有規則、表示言語の選択・保存、browser language解決、React binding、npm公開、3言語目の翻訳。
-- **Adjacent expectations**: `ui-message-catalog`は本coreの公開契約を設定して製品カタログ、configured resolver、release規則、React bindingを引き続き所有し、`ui-internationalization`は言語stateとfallback policyを引き続き所有する。
+- **Adjacent expectations**: `ui-message-catalog`は本coreの公開契約を設定するconfigured app adapter、製品カタログ、release規則、製品validation、React bindingを単独で所有し、`ui-internationalization`は言語stateとfallback policyを引き続き所有する。本specのconsumer contractは製品実装を変更しないread-only fixtureに限定する。
+
+## Change Integration Context
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: generic型とresolver/descriptor factoryはRequirements 1・3、formatはRequirement 2、parity primitiveはRequirement 4、package公開入口・workspace build・deep import gate・read-only consumer fixtureはRequirements 5・6で扱う。
+- **Out-of-scope preservation**: configured app adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰は本requirementsへ追加せず、隣接する`ui-message-catalog`の責務として保持する。
 
 ## Requirements
 
@@ -73,7 +79,7 @@ typed messages coreは、複数のChrome拡張やWebアプリで再利用でき�
 3. The typed messages core shall React、Chrome API、PCドメイン型、PC Build Planner固有catalogへのruntime依存または型依存を持たない
 4. The typed messages core shall dynamic code evaluation、remote code、または実行時downloadを必要としない
 5. While typed messages coreが最初のworkspace consumerだけで利用されている, the workspace shall packageをprivateかつ外部stable API未宣言として扱う
-6. When app consumer contractが型検査される, the workspace shall 公開入口だけでcatalog設定、resolver呼び出し、descriptor生成、parity検査を利用できることを示す
+6. When read-only consumer contractが型検査される, the workspace shall 製品実装を変更せず、公開入口だけでsynthetic catalogの設定、resolver呼び出し、descriptor生成、parity検査を利用できることを示す
 
 ### Requirement 6: 独立検証と変更影響の分離
 
@@ -84,6 +90,6 @@ typed messages coreは、複数のChrome拡張やWebアプリで再利用でき�
 1. When typed messages coreの単独typecheckが実行される, the workspace shall app sourceを同時検査しなくても公開型と内部実装を検証する
 2. When typed messages coreの単独testが実行される, the workspace shall plain、interpolation、single plural、multi plural、descriptor、parityの正常系とfallbackを決定的に検証する
 3. When workspaceのtopological buildが実行される, the workspace shall consumerより先にtyped messages coreをbuildし、consumerが公開成果物を解決できる状態にする
-4. When typed messages coreの公開契約またはruntime実装が変更される, the workspace validation shall package単独検証、app consumer contract、公開境界gateを実行する
-5. When PC Build Planner固有のcatalog値またはrelease規則だけが変更される, the workspace validation shall generic coreの無関係な統合検証を必須にせず、製品側の契約と表示回帰へ検証を限定できる
+4. When typed messages coreの公開契約またはruntime実装が変更される, the workspace validation shall package単独検証、read-only consumer contract、公開境界gateを実行する
+5. When PC Build Planner固有のcatalog値、release規則、configured adapter、または表示だけが変更される, the workspace validation shall typed messages coreの製品validationを実行せず、隣接する製品ownerが定める検証へ委譲できる
 6. If package単独検証、consumer contract、topological build、または公開境界gateのいずれかが失敗する, the workspace validation shall 成功として完了しない

@@ -80,3 +80,37 @@ CPU、CPUクーラー、マザーボード、電源、ケースは単一選択�
 ### Source
 
 - Milestone v0.4.0 roadmap `current-build-management` update、GitHub Issues #28・#29。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+current-build serviceがcandidate-management所有の`ManagementError`へ依存し、candidate-only境界への縮小を妨げている。
+
+### Current State
+
+現在構成はproject-contextへ追従するが、data operation failureの公開型をcandidate-managementからimportする。
+
+### Desired Outcome
+
+本specは`local-data-foundation`の共有`AppDataError`を公開入口から利用し、既存のcurrent project追従、構成選択、数量、参照整合、表示挙動を変えない。
+
+### Scope
+
+- **In**: error import/mapping migration、public/contract test、current-build操作とproject-context追従の非回帰。
+- **Out**: error semantics、構成規則、UI layout、保存schema、project-context/application-shell実装。
+
+### Boundary Impact
+
+- **Extends**: 共有error consumer contractだけを追加する。
+- **Preserves**: current build ownership、数量、参照修復、snapshot、既存利用者挙動。
+- **Adjacent**: `local-data-foundation`が共有errorを、project-contextが現在選択を、application shellがport注入を所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-foundation`。
+- **Downstream**: `spec:compatibility-checking`、`spec:application-shell`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

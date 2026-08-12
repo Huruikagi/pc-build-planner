@@ -146,3 +146,37 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #27。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+typed coreとの製品adapter ownershipは整理されたが、project lifecycleの意味ownerとja/en物理catalog ownerが重複し、両specが同じkey/value/parityを実装対象にしている。
+
+### Current State
+
+本specは全ja/en catalogとconfigured resolverを所有する一方、`project-context`の更新済みspecも`projectContext.lifecycle.*`のkey/value追加を所有する。
+
+### Desired Outcome
+
+本specがconfigured app adapterと全ja/en物理catalog、具体MessageKey、placeholder parityを単独所有し、`project-context`から提示される意味・発火条件・descriptor利用契約をcatalogへ統合する。
+
+### Scope
+
+- **In**: configured app adapter、project lifecycleのja/en key/value、catalog aggregation、placeholder parity、既存message consumer/public contract、製品validation。
+- **Out**: project lifecycle command/state/発火判断、言語保存・切替、React package化、UI layout、generic core実装。
+
+### Boundary Impact
+
+- **Extends**: project lifecycle messageの物理catalogとparityを既存catalog ownershipへ追加する。
+- **Preserves**: 全文言の唯一のsource of truth、configured resolver、React binding、既存表示。
+- **Adjacent**: `project-context`はmessageの意味・発火条件・descriptor consumerだけを所有し、`typed-messages-core`はgeneric mechanismだけを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:typed-messages-core`、`spec:project-context`。
+- **Downstream**: `spec:application-shell`と全表示consumerのcontract/E2E。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

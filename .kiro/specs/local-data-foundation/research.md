@@ -220,3 +220,20 @@
 - [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-construct) — strict transactionが必要な場合の代替
 - [Manifest V3](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3) — MV3 runtimeと同梱コード
 - [Improve extension security](https://developer.chrome.com/docs/extensions/develop/migrate/improve-security) — remote code、動的評価、CSP制約
+
+### 2026-08-12 v0.5.0 boundary reconciliationのlight discovery
+
+- **Context**: `local-data-library-boundaries`の承認済み更新がgeneric core、Chrome adapter、backup orchestrationをpackage ownerへ限定したため、製品adapterとcross-feature data errorのcanonical ownerを確定する必要がある。
+- **Sources Consulted**: 最新`v0.5.0-boundary-reconciliation` Change Brief、roadmap、`local-data-library-boundaries` requirements/design/tasks、本specの現行requirements/design/tasks、`tech.md`、`structure.md`、`security.md`。
+- **Findings**: packageは製品root/schema/migration/repair/error mappingと`ProductLocalDataAdapter`を明示的に除外し、公開`.`/`./chrome`からpolicy設定可能なportを提供する。現行`FoundationError`は保存失敗の意味と粒度を既にcanonicalに表現する一方、候補管理所有の`ManagementError`をcurrent-build・compatibility等が利用するとownerが逆転する。backup-restoreは通常CRUDを必要とせず、既存用途限定replacement capabilityを維持できる。
+- **Implications**: 本specがPC policyをpackage公開portへ設定する`ProductLocalDataAdapter`、`FoundationError`と一対一対応する共有`AppDataError`、用途別runtime handleを所有する。package内部、generic Chrome adapter、generic backup orchestrator、下流consumer実装は所有しない。
+- **Synthesis**: Generalizationはdata operation errorの共有公開型だけに限定し、feature固有errorを吸収しない。Build vs. Adoptでは承認済みpackage mechanismを採用し、transaction/adapterを複製しない。Simplificationとして`AppDataError`は新しい粒度を作らず`FoundationError` payloadを意味不変で写像する。
+
+### Decision: product adapterと共有AppDataErrorをfoundationへ一本化する
+
+- **Context**: package specとcandidate-managementの双方が製品責務を持つ重複を解消する。
+- **Alternatives Considered**: packageがproduct adapterを所有、candidate-managementが共有errorを所有、新規app-error specを追加、foundationが両者を所有。
+- **Selected Approach**: foundationがpackage公開portだけを利用するproduct adapterと、`src/domain/public.ts`から公開する`AppDataError` mappingを所有する。
+- **Rationale**: PC root/schema/migration/repairとcanonical Result/`FoundationError`を既に所有する境界であり、errorの意味を変えず一対一mappingできる。下流featureは共有error consumerに限定できる。
+- **Trade-offs**: package error分類または`FoundationError`変更時はcandidate/current-build/compatibility/candidate-source/source-price-refresh/backup-restoreのconsumer contract再検証が必要になる。
+- **Follow-up**: 全variant mapping、package deep import禁止、用途別capability非露出、製品変更/package変更別validationをcontract gateへ固定する。

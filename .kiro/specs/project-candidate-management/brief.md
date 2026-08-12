@@ -115,3 +115,37 @@ candidate-managementがproject lifecycleと、candidate固有ではない共有`
 ### Source
 
 - Milestone v0.5.0、GitHub Issues #44・#45。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+共有データ操作errorの移管先とconsumer範囲が曖昧で、roadmap依存もChange Briefと一致していない。さらにcandidate sourceとproduct identityの移管元撤去が独立updateへ閉じていない。
+
+### Current State
+
+本specは`ManagementError`、project CRUD、source catalog/mutation、product identity consumerを公開し、複数featureとshellがその契約へ依存する。
+
+### Desired Outcome
+
+本specはcandidate CRUD、pre-edit、draft guard、source editor UIへ限定される。project lifecycleは`project-context`、共有`AppDataError`は`local-data-foundation`、source coreは`candidate-source-bookmarks`、product identity coreは`duplicate-product-merge`へ委譲する。
+
+### Scope
+
+- **In**: project lifecycle撤去、`ManagementError`定義とmapping撤去、共有`AppDataError` consumer化、source catalog/mutation撤去、product identity import差替え、candidate操作非回帰。
+- **Out**: error semantics再設計、candidate UI layout、candidate CRUD/draft/source editor UIの移管、保存形式変更。
+
+### Boundary Impact
+
+- **Extends**: 四つの移管元をcandidate-only公開面へ縮小するmigration contractを追加する。
+- **Preserves**: candidate CRUD、pre-edit、current project binding、draft guard、source editor UX、既存error挙動。
+- **Adjacent**: `project-context`、`local-data-foundation`、`candidate-source-bookmarks`、`duplicate-product-merge`が各canonical contractを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:project-context`、`spec:local-data-foundation`。
+- **Downstream**: `spec:candidate-source-bookmarks`、`spec:application-shell`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

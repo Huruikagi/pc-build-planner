@@ -7,7 +7,7 @@
 - **主な知見**:
   - `candidate-source-bookmarks` は `CandidatePart.sources`、`primarySourceId`、`CandidateSourceMutationPort.addSource` を canonical contract とし、downstream は source ID を識別子に使う。URLや配列indexを更新識別子にしてはならない。
   - `product-capture-transient-migration` 後の抽出結果は候補管理の非一過性editorへ引き渡され、project解決と保存は候補管理が所有する。重複提示はcaptureの一過性面ではなく、候補管理の新規保存確定直前へ置く。
-  - 同一URLは本機能で独自正規化せず、`source-price-refresh/public.ts` のURL identityとsource match/update portへ委譲する。新規source追加と価格更新を二重実行しない。
+  - 同一URLは本機能で独自正規化せず、`candidate-sources/public.ts` のURL identity・source matcher・mutationへ委譲する。`source-price-refresh`は価格更新workflowだけを所有し、新規source追加と価格更新を二重実行しない。
 
 ## 調査ログ
 
@@ -19,7 +19,7 @@
   - 現行normalizerは制御文字除去、連続空白の畳み込み、trim、長さ制限、URL・価格の形式検証を所有する。
   - 商品名・メーカー・型番の表示用確認値をlowercaseや区切り除去へ変換すると利用者確認値を壊すため、表示用normalizationと照合キー生成は分離する必要がある。
   - `SourcedValue` は `confirmed` と `original` を分離する。照合は `confirmed` を優先し、欠損時だけ `original` を参照しても保存値を変更しない。
-- **設計への影響**: product-capture内に純粋な `ProductIdentityNormalizer` を置き、既存の制御文字・空白処理を共有する。candidate-managementは `product-capture/public.ts` だけを介して照合キーを得る。
+- **設計への影響**: `src/product-identity/`へ純粋な型・normalizer・matcher・factory・public entryを置き、本specをcanonical ownerとする。product-captureとduplicate workflowはこの公開入口だけを介して照合結果を得る。
 
 ### 候補管理の保存位置とUI寿命
 
@@ -44,12 +44,12 @@
 ### 同一URLと価格更新の責任分界
 
 - **背景**: 同じページの再取り込みでsourceを重複追加せず、URL揺れを複数specで別々に定義しない必要がある。
-- **参照先**: `.kiro/specs/source-price-refresh/brief.md`、同specの並行設計で確定したpublic seam
+- **参照先**: `.kiro/specs/candidate-source-bookmarks/brief.md`とlatest Change Brief、`.kiro/specs/source-price-refresh/brief.md`
 - **知見**:
-  - `normalizeSourcePageUrl` / `sameSourcePageUrl` はscheme・host・pathと業務queryを保持し、hostの小文字化、fragment/default port除去、末尾slash統一、query pair整列、限定tracking key除去を行う。eTLD+1やpathの曖昧一致は行わない。
-  - `SourcePriceRefreshPort.matchSource` はcatalogまたはcandidate scopeで一意の `{candidateId, sourceId}` を返す。
-  - `refreshCapturedPrice` はtarget URLとsource kindを再検証してから、priceとcapturedAtを原子的に更新する。
-- **設計への影響**: 統合確定時はまずcandidate scopeでURLを照合する。一意一致はsource追加せず価格更新portへ渡し、no-matchだけが `addSource` へ進む。ambiguous、stale、price-unavailableはdraftを保持する型付き失敗になる。contextMenus権限、transient起動、artifact gateはsource-price-refreshの所有に残す。
+  - `candidate-source-bookmarks`が標準URLに基づくsource URL identity、明示scopeの0/1/many matcher、addと条件付きprice patchをcanonicalに所有する。
+  - queryはsource URLの一部として保持し、商品同一性推測によるtracking key除去やpath曖昧一致を行わない。
+  - `source-price-refresh`は一意referenceを受け取った後の価格取得workflow、eligibility、retry/progressを所有する。
+- **設計への影響**: 統合確定時はcandidate-source公開matcherでcandidate scopeを照合する。一意一致はsource追加せず価格更新workflowへ渡し、no-matchだけが公開`addSource`へ進む。ambiguous、stale、price-unavailableはdraftを保持する型付き失敗になる。
 
 ### カテゴリと一致キー
 
@@ -88,7 +88,7 @@
 - **検討案**: service内へ埋め込む、React componentで算出する、純粋matcherへ分離する。
 - **採用案**: `DuplicateCandidateMatcher` は入力候補集合から説明付きmatchを返す純粋関数とする。`DuplicateMergeCoordinator` がquery、matcher、source mutationを調停し、state/viewは利用者判断だけを保持する。
 - **理由**: 業務規則とI/Oの境界が明確で、誤検知規則を高速・決定的に検証できる。
-- **トレードオフ**: 型とファイルが増えるが、matcherを公開APIにせずcandidate-management内に留める。
+- **トレードオフ**: 型とファイルが増えるが、identity matcherは`src/product-identity/public.ts`だけから公開し、candidate-management内部には所有させない。
 
 ### 判断: 照合キーを一般化しすぎない
 
@@ -97,12 +97,12 @@
 - **理由**: briefの優先順位を満たす最小構成で、提示根拠を利用者へ説明できる。
 - **フォローアップ**: キー追加・score化は受入基準と誤検知評価を再検証する。
 
-### 判断: URL identityと価格更新を採用し、独自実装しない
+### 判断: source ownerのURL identity/matcher/mutationと価格workflowを分離して採用する
 
 - **背景**: URL正規化はsource-price-refreshと重複しやすい。
-- **採用案**: `sameSourcePageUrl` と `SourcePriceRefreshPort` をそのまま利用する。
-- **理由**: 同一ページの定義と更新targetの再検証が一つのownerに保たれる。
-- **トレードオフ**: source-price-refresh public contract変更時は本specのintegrationを再検証する。
+- **採用案**: `candidate-sources/public.ts`のURL matcher/add/conditional patchと、`source-price-refresh`の価格workflowをそれぞれ利用する。
+- **理由**: source identity・target再検証・mutationはsource ownerへ、価格取得workflowは価格ownerへ一意に保たれる。
+- **トレードオフ**: candidate-sourceまたはsource-price-refresh public contract変更時は本specのintegrationを再検証する。
 
 ## リスクと緩和策
 
@@ -121,3 +121,14 @@
 - `.kiro/specs/candidate-source-bookmarks/design.md` — source model、mutation port、primary規則
 - `.kiro/specs/product-capture-transient-migration/design.md` — candidate editor handoffとproject解決
 - `.kiro/specs/source-price-refresh/brief.md` — 同一URL再取り込みの隣接責任
+
+### 2026-08-12 v0.5.0 boundary reconciliation light discovery
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Context**: duplicate workflowがproduct-capture由来normalizer、candidate-owned source/query/mutationと`ManagementError`を参照し、identity/candidate/errorのcanonical ownerとcompositionに循環proxyを残していた。
+- **Sources Consulted**: 全steering、`duplicate-product-merge`全spec文書、承認済み`local-data-foundation`、`project-candidate-management`、latest Change Brief、および確定identity/candidate public seam記述。
+- **Findings**: roadmapとlatest Change Briefは本specをcanonical product identity coreのownerとする。`project-candidate-management`はproject限定queryとduplicate専用の最小`CandidateCreatePort`を所有し、`candidate-source-bookmarks`はsource URL match/add/conditional mutationとatomicityを所有する。Foundationは共有`AppDataError`を、application-shellは最終port compositionだけを所有する。
+- **Selected Approach**: `src/product-identity/`へ型・normalizer・matcher・factory・public entryを移し、現行algorithm/resultをcharacterizationで固定する。duplicate workflowはそのpublic entryとcandidate/source public portsを相互排他的に利用する。
+- **Alternatives Rejected**: identity coreを外部ownerのconsumer扱いにする案、product-capture/candidate-management proxyや`ManagementError` aliasを残す案、source mutationをmerge coordinatorへ複製する案、shell wiringを本specで変更する案はowner重複または循環を残すため採用しない。
+- **Out of scope**: identity algorithm/result意味の変更、canonical error、candidate/source実装、source URL identity、price refresh、保存schema、shell production composition、merge UI layout。
+- **Validation implication**: identity owner public consumer fixtureとcharacterization、candidate/source/error consumer fixture、旧import/deep proxy negative gate、明示確認・atomic route・draft保持・UI/E2E非回帰をtaskへ追加する。

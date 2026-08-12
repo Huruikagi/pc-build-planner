@@ -77,3 +77,37 @@ JSON-LD、OpenGraph等のメタ情報、タイトル・パンくず、表・定�
 ### Source
 
 - Milestone v0.4.0 roadmap `product-page-capture` update、GitHub Issues #21・#23。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+duplicate matching専用の`ProductIdentityNormalizer`がproduct-captureの公開面にあり、取得featureとcandidate identityを不要に結合している。
+
+### Current State
+
+本specはpage extraction、manufacturer補完、candidate handoffに加え、利用していないidentity normalizer型・factoryを公開し、candidate-managementとshellが依存する。
+
+### Desired Outcome
+
+identity normalizerの実装・factory・public exportを`duplicate-product-merge`所有の共有coreへ移し、本specは取得、manufacturer domain補完、page price extraction、candidate handoffだけを保持する。
+
+### Scope
+
+- **In**: identity export/実装撤去、consumer contract差替えへの移管元test、capture/handoff/manufacturer補完非回帰。
+- **Out**: identity algorithm、candidate duplicate判断、source URL identity、取得規則、domain map移管、UI変更。
+
+### Boundary Impact
+
+- **Extends**: identity移管元として公開面を縮小する。
+- **Preserves**: activeTab、固定tab、metadata抽出、manufacturer補完、candidate handoff、price extraction port。
+- **Adjacent**: `duplicate-product-merge`がidentity coreを、application shellが公開port compositionを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:duplicate-product-merge`。
+- **Downstream**: `spec:application-shell`とcapture/duplicate integration test。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

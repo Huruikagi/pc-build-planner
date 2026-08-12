@@ -9,6 +9,13 @@
   - `project-context` はread portとswitch guard registration portを分離しており、current-buildはowner-local adapterだけで追従とdraft保護を実現できる。
   - 既存snapshot v1はshapeを維持でき、`selectedProjectId`を現在contextとの一致検査専用metadataへ意味変更すればversion bumpは不要である。
   - 現行カテゴリnavigationには選択要約がなく、load済み候補とcurrent buildから純粋なsummary projectionを追加するのが最小変更である。
+  - v0.5.0の共有`AppDataError`はlocal-data-foundationがcanonical ownerであり、current-buildは候補照会を含むdata operation failureを既存`BuildError`へ投影するconsumerだけを所有する。
+
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: `ManagementError` import/mapping撤去、共有`AppDataError` consumer contract、既存`BuildError`への意味不変projection、public/contract test、current-buildとproject-contextの非回帰を調査・設計した。
+- **Out-of-scope preservation**: 共有errorのcanonical定義・低位mapping・種類・意味・粒度、構成規則、UI、snapshot、保存schema、project-context/application-shell実装を変更しない。
 
 ## Research Log
 
@@ -39,6 +46,13 @@
 - **Sources Consulted**: 現行 `view.tsx`、ui message/language方針、security rendering規約。
 - **Findings**: candidate名称はload済みデータから取得でき、保存モデルへのdenormalizationは不要である。React text childとCSS ellipsisを組み合わせれば、markup実行を防ぎながら視覚省略と完全なaccessible textを両立できる。
 - **Implications**: framework非依存の `category-summary.ts` を追加し、viewはprojectionだけを描画する。
+
+### 共有AppDataErrorのconsumer seam
+
+- **Context**: current-buildがcandidate-management所有の`ManagementError`をimportしている境界重複を解消する。
+- **Sources Consulted**: 最新Change Brief、承認済み`local-data-foundation` requirements/design、`src/features/current-build/service.ts`・`query.ts`・`contracts.ts`、candidate public contract。
+- **Findings**: local-data-foundationは`FoundationError`の全variantとpayloadを一対一で保持する`AppDataError`とdomain public exportを所有する。current-buildは従来、candidate query failureとfoundation failureを別々のmapperで同じ`BuildError`回復分類へ畳んでおり、利用者向け`BuildError` shapeとstate/viewの回復判断は維持できる。
+- **Implications**: candidate queryの失敗型とdata port failureを共有`AppDataError`へ統一し、feature-local `error-mapping.ts`のexhaustive projectionへ集約する。共有errorの定義や低位mappingはcurrent-buildへ移さない。
 
 ## Architecture Pattern Evaluation
 
@@ -83,6 +97,15 @@
 - **Trade-offs**: 非同期guard評価とfeature confirmationのowner-local tokenを厳密に同期する必要がある。
 - **Follow-up**: generation、target、registry変更を含むstale race testを追加する。
 
+### Decision: 共有errorを既存BuildErrorへconsumer側で投影する
+
+- **Context**: candidate-owned error依存を撤去しつつ、既存の回復分類、表示、data保持を変更してはならない。
+- **Alternatives Considered**: `BuildError`を`AppDataError`へ置換する、candidate側のaliasを残す、current-buildで共有errorを直接表示する、feature-local projectionを置く。
+- **Selected Approach**: domain public `AppDataError`を候補照会・構成照会・mutationのdata failure contractとして消費し、全variantを既存`BuildError`へexhaustiveに投影する。
+- **Rationale**: canonical ownerをfoundationへ一本化しながら、current-build固有のvalidation/not-foundと利用者向け回復semanticを保持できる。
+- **Trade-offs**: 共有errorのvariant追加・変更はcurrent-build consumer gateを意図的に失敗させ、mapping再確認を必要とする。
+- **Follow-up**: 全variant、negative import、query/mutation同一分類、既存state/view非回帰をcontract testで固定する。
+
 ### Superseded Decision: 候補変更後にfeatureがreconcile writeする
 
 - **Status**: foundationの原子的参照修復により不採用。
@@ -93,6 +116,7 @@
 - **Generalization**: project切替保護をcurrent-build専用selector処理ではなく、project-context guardを受けるowner-local adapterとして一般化した。ただし実装対象は数量draftだけに限定する。
 - **Build vs Adopt**: 新規状態管理libraryやdialog libraryは採用せず、既存external-store state、React、project-context公開protocol、CSSを利用する。
 - **Simplification**: persistence schema、下流DTO、event bus、snapshot version bumpを追加しない。summaryは保存せず派生させる。
+- **Simplification**: error unionを新設・再設計せず、canonical `AppDataError`と既存`BuildError`の間に一つのconsumer projectionだけを置く。
 
 ## Risks & Mitigations
 
@@ -101,10 +125,13 @@
 - 複数dirty draftの部分保存 — 全draftを検証して一つの `CurrentBuild` updateへまとめる `set-quantities` commandで原子化する。
 - forced変更でdraft誤保存 — orphaned draftとして隔離し、新projectのcommandに流さない。
 - 長い名称で操作不能 — visual textだけellipsisにし、button semanticsとaccessible textを維持する。
+- 共有error variant変更の見落とし — exhaustive switch、全variant contract、candidate-owned importのnegative gateで検出する。
+- feature固有errorの共有contractへの混入 — validation/not-found/category ruleの既存testと型境界を維持する。
 
 ## References
 
 - `.kiro/specs/project-context/design.md` — read/guard port、generation、confirmation protocol。
 - `.kiro/specs/local-data-foundation/design.md` — root mutation、参照修復、保存authority。
+- `.kiro/specs/local-data-foundation/design.md` — 共有`AppDataError` vocabulary、mapping、consumer migration contract。
 - `.kiro/specs/project-candidate-management/design.md` — build eligible candidate query。
 - `.kiro/steering/tech.md`、`structure.md`、`security.md` — runtime、境界、表示安全性。

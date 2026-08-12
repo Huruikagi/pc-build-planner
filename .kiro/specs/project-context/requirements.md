@@ -2,13 +2,20 @@
 
 ## Introduction
 
-本仕様は、候補管理、現在構成、互換性確認、商品取り込み後の handoff などが同じ作業対象を参照できるように、アプリ全体で一つの「現在選択中 project」を提供する。選択は検証済み project catalog にだけ基づき、side panel の再オープン、project の作成・削除、backup 復元、読み取り失敗を経ても、利用者が別 project を誤操作しない一貫した状態として公開する。
+本仕様は、候補管理、現在構成、互換性確認、商品取り込み後の handoff などが同じ作業対象を参照できるように、アプリ全体で一つの「現在選択中 project」と project lifecycle を提供する。選択は検証済み project catalog にだけ基づき、side panel の再オープン、project の作成・改名・削除、backup 復元、読み取り失敗を経ても、利用者が別 project を誤操作しない一貫した状態として公開する。
+
+## Change Brief Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Delta**: `v0.5.0` で追加した project lifecycle の command、state、確認、成功・失敗、既存表示を保つ presentation を維持しつつ、project-context の message ownership を意味・発火条件・必要 parameter と descriptor consumption に限定する。
+- **Preserved**: selection preference、fallback、guard、generation、共通 selector、backup replacement guard、project lifecycle の利用者挙動、および foundation が所有する原子的な project 削除と candidate/current-build 参照修復を変更しない。
+- **Out-of-scope preservation**: lifecycle の ja/en 物理 catalog file、具体 key/value、catalog aggregation と parity は `ui-message-catalog` に委譲し、layout・CSS、保存形式、foundation 参照修復へ範囲を広げない。
 
 ## Boundary Context
 
-- **In scope**: 現在 project の snapshot と catalog projection、選択 preference の復元・修復、選択と再検証の transaction、generation と購読、project 選択と catalog 全体置換を扱う change guard protocol、能力別公開 port、共通 selector、日英表示、アクセシビリティ、project-context 専用保存・公開境界 gate。
-- **Out of scope**: project の作成・改名・削除、backup 復元 transaction、商品取り込み handoff の保存先決定、各 feature の state・snapshot・draft・consumer adapter、application shell の slot・singleton composition・production wiring、既存 selector の撤去、独立した project 管理画面、検索・並べ替え・アーカイブ、複数 project の同時表示。
-- **Adjacent expectations**: project catalog と lifecycle 通知は既存 owner から提供され、各 feature は owner-local adapter で context を利用する。backup owner は catalog 置換前に change guard を準備し、置換結果を通知する。既存 snapshot の `selectedProjectId` は shape を維持した非権威的 metadata であり、現在選択を上書きしない。context が unavailable でも application shell は settings と backup recovery を起動できる。
+- **In scope**: 現在 project の snapshot と catalog projection、選択 preference の復元・修復、選択と再検証の transaction、generation と購読、project 選択と catalog 全体置換を扱う change guard protocol、project の作成・改名・削除と削除確認、project lifecycle の状態と成功後再検証、能力別公開 port、共通 selector と project lifecycle presentation、lifecycle message の意味・発火条件・必要 parameter と descriptor consumption、アクセシビリティ、project-context 専用保存・公開境界 gate。
+- **Out of scope**: project lifecycle の ja/en 物理 catalog file、具体 key/value、catalog aggregation と parity、layout・CSS の変更、独立した project 管理画面、候補一覧・候補編集の情報設計、foundation が所有する project 削除時の参照修復規則、canonical root と backup 交換形式の変更、backup 復元 transaction、商品取り込み handoff の保存先決定、各 feature の candidate state・snapshot・draft・consumer adapter、application shell の slot・singleton composition・production wiring、検索・並べ替え・アーカイブ、複数 project の同時表示、v1.0.0 の UI 全面刷新。
+- **Adjacent expectations**: `ui-message-catalog` は project-context が定義する lifecycle message intent と parameter contract に対応する ja/en 物理 catalog、具体 key/value、aggregation、parity を所有する。foundation は project mutation と同じ原子的 transaction 内で candidate/current-build 参照整合性を修復する。candidate-management は candidate 管理と draft guard を所有し、project lifecycle の利用者となる。backup owner は catalog 置換前に change guard を準備し、置換結果を通知する。既存 snapshot の `selectedProjectId` は shape を維持した非権威的 metadata であり、現在選択を上書きしない。context が unavailable でも application shell は settings と backup recovery を起動できる。
 
 ## Requirements
 
@@ -59,7 +66,7 @@
 
 #### Acceptance Criteria
 
-1. When project owner が作成、削除、または置換の成功後に refresh を要求する, the project context shall catalog を再取得し、現在選択を新しい catalog に対して再検証する
+1. When project-context の lifecycle command が作成・改名・削除に成功するか、隣接 owner が catalog 置換の成功後に refresh を要求する, the project context shall catalog を再取得し、現在選択を新しい catalog に対して再検証する
 2. When refresh 後も現在 project が catalog に存在する, the project context shall その選択を維持し、更新された catalog を公開する
 3. If refresh 後に現在 project が存在せず catalog に別 project がある, the project context shall catalog の先頭 project へ決定的に切り替え、preference を修復する
 4. If refresh 後の catalog が空である, the project context shall preference を消去し、`empty` 状態へ移行する
@@ -129,3 +136,36 @@
 6. The project context shall 既存 feature snapshot の version と shape を変更せず、snapshot 内の `selectedProjectId` を選択 authority または fallback として利用しない
 7. If project context が unavailable である, the application shell integration contract shall settings と backup recovery の起動を妨げない
 8. When project-context を検証する, the 検証手順 shall 架空の project と保存値だけを用いて unit、contract、DOM、公開境界、production build、core browser E2E、および downstream 横断 E2E で選択一貫性を確認可能にする
+
+### Requirement 9: canonical project lifecycle
+
+**目的:** 構成検討を整理する利用者として、現在 project と同じ場所で project を作成・改名・削除したい。これにより project の選択と lifecycle を一つの一貫した操作対象として扱える。
+
+#### Acceptance Criteria
+
+1. When 利用者が空白だけではない project 名で作成を確定する, the project context shall 新しい project を保存し、成功後の catalog を再検証する
+2. When 利用者が既存 project の空白だけではない新しい名前を確定する, the project context shall 同じ project の名前を更新し、成功後の catalog と現在選択を再検証する
+3. If 利用者が空白だけの project 名で作成または改名を確定する, the project context shall 入力箇所に修正可能な validation failure を示し、project と現在選択を変更しない
+4. When 利用者が project の削除を要求する, the project context shall 対象 project 名と所属する候補への影響を示す一つの確認を表示し、確認前には削除しない
+5. When 削除確認を利用者が取り消す, the project context shall project、catalog、現在選択、preference、generation を変更しない
+6. When 利用者が project の削除を確認する, the project context shall project とその project に属する candidate/current-build 参照が一つの確定結果として消えるよう削除を一回だけ要求し、成功後の catalog を再検証する
+7. When project の作成が空の catalog に対して成功する, the project context shall 作成した project を決定的な現在 project として公開する
+8. When 現在 project の改名が成功する, the project context shall 同じ project ID の選択を維持し、更新された名前を公開する
+9. When 現在 project の削除が成功する, the project context shall 残る catalog の先頭 project または `empty` 状態へ決定的に移行する
+10. If project lifecycle command が保存前に失敗する, the project context shall 安定した failure を表示可能にし、catalog、現在選択、preference、generation を変更せず、失敗した command を自動再実行しない
+11. If project lifecycle command の保存は成功したが後続 refresh に失敗する, the project context shall 保存済み command を再実行せず context を `unavailable` として公開し、refresh だけを再試行可能にする
+12. While project lifecycle command またはその後続 refresh が進行中である, the project context shall 重複する lifecycle 操作を受け付けず、進行中であることを利用者へ示す
+
+### Requirement 10: project lifecycle presentation と message semantics
+
+**目的:** 利用者として、従来と同じ見た目と操作経路で project を管理したい。これにより責務移管後も候補の検討手順を学び直さずに済む。
+
+#### Acceptance Criteria
+
+1. When project lifecycle の状態または操作結果を表示する, the project context shall 一覧、作成、改名、削除、削除確認、validation、失敗、進行中、再試行を区別する message intent と表示に必要な parameter を descriptor として presentation へ提供する
+2. When project lifecycle presentation が既存の host へ接続される, the project context shall layout と CSS を変更せず、現在の project 一覧、作成・改名 control、削除確認の操作契約を提供する
+3. When 表示言語が日本語と英語の間で変わる, the project lifecycle presentation shall 入力中の名前、削除確認、現在選択、進行中でない lifecycle state を維持したまま文言を切り替える
+4. The project lifecycle presentation shall keyboard だけで project の作成、改名、削除要求、確認、取消、refresh 再試行を操作でき、各入力・状態・確認の目的を読み上げ可能にする
+5. When project 名に markup と解釈可能な文字列が含まれる, the project lifecycle presentation shall その値を text として表示し、実行可能な HTML を生成しない
+6. The project context shall project lifecycle presentation を候補一覧・候補 editor の state と分離し、独立した project 管理画面または v1.0.0 の新しい情報設計を追加しない
+7. When project lifecycle を検証する, the 検証手順 shall 架空の project だけを用いて command contract、state、message intent の発火条件と parameter、descriptor consumption、DOM、公開境界、core browser E2E、および downstream catalog 接続後の横断 E2E を確認可能にする

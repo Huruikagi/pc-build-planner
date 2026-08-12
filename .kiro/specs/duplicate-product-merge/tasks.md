@@ -1,5 +1,12 @@
 # 実装計画
 
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In scope**: canonical identity type/normalizer/matcher/factory/public entry ownership、characterization、candidate/source public seam consumer、`ManagementError`撤去、共有`AppDataError` mapping、duplicate detection・merge planning・confirmation・atomic route・UI/E2E非回帰をtask 6へ割り当てる。
+- **Out of scope**: canonical error、candidate/source entity/query/mutation実装、source URL identity、price refresh、application-shell composition、identity algorithm/result意味・保存形式・UI layout変更。
+- **History preservation**: task 1〜5の完了履歴を維持し、boundary reconciliation差分だけを未完了taskとして追加する。
+
 - [x] 1. 商品識別値を照合専用に正規化する
   - 既存の商品取り込みが使う制御文字除去・空白整理を共有し、表示用の確認値を変えずにNFKC、大文字小文字、型番区切りの差を吸収する。
   - 商品名・メーカー・型番だけを受ける型安全な公開境界を追加し、他featureが内部normalizerを直接参照しない形にする。
@@ -20,7 +27,7 @@
   - _Boundary: DuplicateCandidateMatcher_
 
 - [x] 2.2 (P) 同一URLを価格更新へ、新規URLをsource追加へ振り分ける
-  - source-price-refresh公開のcandidate scope照合を最初に使い、独自のURL正規化や曖昧一致を実装しない。
+  - candidate-source公開のcandidate scope matcherを最初に使い、独自のURL正規化や曖昧一致を実装しない。source-price-refreshは一意target確定後の価格workflowだけに利用する。
   - 一意一致ではcanonical candidate/source IDへ価格観測を渡し、no-matchのときだけ上流source追加を一度呼ぶ。
   - ambiguous、invalid、ineligible、stale、price欠損、管理系失敗をsource追加へfallbackせず、既存sourceと価格を維持する。
   - 成功時に `source-added` または `price-refreshed` の片方だけが返り、両portが同じ操作で呼ばれないunit testが成功することを完了条件とする。
@@ -127,6 +134,39 @@
   - _Boundary: DuplicateProductMergeIntegration_
   - _Depends: 5.3_
 
+- [ ] 6. canonical identity ownerとcandidate/source/error consumer境界を確立する
+
+- [ ] 6.1 canonical product identity shared coreと公開入口を所有する
+  - `src/product-identity/`へidentity input/result型、NFKC・case・空白・型番区切りnormalizer、model/manufacturer-name matcher、factory、`public.ts`を一つのshared coreとして移し、本specを唯一ownerにする。
+  - confirmed優先、model high、manufacturer+name supporting、model mismatch fallback禁止、category gate、confidence/evidence、candidate IDによる決定的順位を移行前と同じ結果で返す。
+  - product-capture、candidate-management、duplicate workflowの全consumerが`src/product-identity/public.ts`だけを利用でき、旧product-capture normalizer/factory、root/shell proxy、identity deep importをpositive/negative fixtureで拒否する。
+  - 大小文字、全角半角、制御文字、空白、型番区切り、identity不足、category、順位/evidenceのcharacterization testが移行前と同じ結果で成功することを完了条件とする。
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 7.5, 8.1, 8.2, 8.7_
+  - _Boundary: ProductIdentityModel, ProductIdentityNormalizer, ProductIdentityMatcher, ProductIdentityFactory, ProductIdentityPublicApi_
+
+- [ ] 6.2 identity・candidate/source・AppDataError公開portへduplicate workflowを接続する
+  - **実装開始条件**: 6.1のidentity public entry、`project-candidate-management` 14.2の共有`AppDataError`対応済み`CandidateCreatePort`、`candidate-source-bookmarks` 10.4のsource URL matcher/add/conditional mutation public entry、Foundationの`AppDataError`公開入口が利用可能であること。未提供時は旧ownerを先行削除せず待機する。
+  - create modeの保存前評価をcandidate public project query→identity public match→merge planへ接続し、matchなしまたは明示新規保存では`CandidateCreatePort`を一度だけ呼び、明示統合を含む既存判断を維持する。
+  - 利用者が一件を確定した後だけcandidate-source公開matcher/add/conditional mutationまたはprice refresh workflowの片方を呼び、candidate createとの二重write、補償write、自動統合を行わない。
+  - `AppDataError`のvalidation、conflict、maintenance、storage、quota、unsupported-dataを既存duplicate error、draft保持、retry/new-save案内へ意味・粒度を変えず写像する。
+  - candidate/source実装とapplication-shell composition fileを変更せず、shellが直接注入できるworkflow consumer contractとUI contributionだけを公開する。
+  - identity/source/error public consumer contractと既存duplicate判断のintegration testが成功することを完了条件とする。
+  - _Depends: 6.1; project-candidate-management 14.2; candidate-source-bookmarks 10.4; local-data-foundation 11.1_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 8.4, 8.5, 8.6_
+  - _Boundary: DuplicateMergeCoordinator, DuplicateUrlRouter, State, View, FeatureContribution_
+
+- [ ] 6.3 characterization・contract・DOM・E2Eとownership gateを完了する
+  - canonical identity characterizationでmodel high、manufacturer+name supporting、model mismatch fallback禁止、表記差、category、順位/evidenceが移行前と一致することを検証する。
+  - matchなし/new save/source add/same-source price route、明示確認/取消、二重送信、stale/conflict/storage/identity failure、primary/product/attributes/draft保持をunit/integration/DOMで回帰する。
+  - 架空ページE2Eでcandidate件数を増やさないsource統合、same-source price route、matchなし・明示新規保存を通し、既存UI/error semanticsが一致することを確認する。
+  - 本specのidentity core/duplicate workflow owner、candidate-sourceのURL identity/catalog/matcher/mutation owner、Foundation error owner、application-shell composition ownerが重複せず、旧import/proxy/deep import/shell file変更がないことを監査する。
+  - 全Acceptance Criteria、Change Brief In/Out、file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
+  - _Depends: 6.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
+  - _Boundary: Duplicate product merge final ownership and regression validation_
+
 ## Implementation Notes
 
+- `v0.5.0-boundary-reconciliation`以後、本specがcanonical product identity coreとduplicate planning・confirmation・atomic routing・state/UIを所有し、candidate-sourceがsource URL identity/catalog/matcher/mutationを、Foundationが`AppDataError`を、application-shellがproduction compositionを所有する。
+- **Fresh task-graph sanity review (2026-08-12)**: Requirements/Designから独立した観点でtask 6を再監査した。6.1 identity owner→project-candidate-management 13.4/14.4を含むcandidate側移行→14.2の確定create seam→6.2 public consumer統合→6.3最終回帰は一方向で循環せず、6.2はproject-candidate-management 14.2、candidate-source 10.4、Foundation 11.1を明示前提にする。candidate 14.2からduplicate側へ戻る依存は現行6.1だけで、6.2以降を要求しないためcycleを形成しない。各taskはidentity core、workflow/UI統合、最終回帰へ分離され、candidate CRUD実装、source実装、canonical error、shell compositionを変更対象に含めない。全ACとChange Brief In/Out、duplicate detection・merge planning・confirmation・atomicity・draft保持・UI/error非回帰traceに欠落はなくPASSとした。
 - feature-localな判断substateを追加するときは、単体snapshot codecだけでなくshellのopaque capture/restore経路へ合成し、serialized snapshotと復号済みstateを型で分離して検証する。

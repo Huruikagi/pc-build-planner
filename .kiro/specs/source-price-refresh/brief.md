@@ -124,3 +124,37 @@
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #46。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+source ownership移管に加え、candidate-owned `ManagementError`を参照するconsumer migrationが本specの依存とscopeに明示されていない。
+
+### Current State
+
+本specはURL identity/matchと価格workflowを所有し、candidate-managementのsource port/errorへ循環依存する。
+
+### Desired Outcome
+
+本specは明示操作、固定tab、価格抽出、結果検証、source coreのmatch/patch利用、共有`AppDataError` mapping、transient表示だけを所有する。
+
+### Scope
+
+- **In**: source public port consumer化、`ManagementError` import撤去、共有error利用、価格workflow非回帰、循環proxy不要化。
+- **Out**: URL identity規則、source policy、error semantics、価格抽出規則、監視・履歴、shell composition実装。
+
+### Boundary Impact
+
+- **Extends**: source/error canonical ownerを利用するworkflow consumer contractを明確化する。
+- **Preserves**: explicit action、activeTab、固定世代、価格だけの更新、失敗時値保持、transient result UI。
+- **Adjacent**: `candidate-source-bookmarks`がsourceを、`local-data-foundation`が共有errorを、application shellがcompositionを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:candidate-source-bookmarks`、`spec:local-data-foundation`。
+- **Downstream**: `spec:application-shell`と価格更新E2E。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

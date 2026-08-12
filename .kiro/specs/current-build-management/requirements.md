@@ -10,6 +10,12 @@ PC構成を検討する利用者が、すべての画面と共通する現在プ
 - **Out of scope**: 現在プロジェクト自体の選択・preference・fallback、共通selectorと本番接続、snapshot field削除・version変更、候補自体の作成・編集、複数構成案、候補比較、自動構成生成、互換性評価、選択規則の変更、購入状態、プロジェクト状態、UI全面刷新。
 - **Adjacent expectations**: `project-context` が検証済みの現在プロジェクトと切替確認を提供し、application shellが接続する。`project-candidate-management` が候補名と分類を、`local-data-foundation` が保存契約を所有する。本機能は選択参照と数量を所有し、下流の互換性確認とバックアップへ現在構成を提供する。
 
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: candidate-owned `ManagementError` から共有 `AppDataError` へのconsumer移行と既存回復分類への意味不変な写像は10.1–10.4、公開contractと非回帰検証は10.5–10.6で扱う。
+- **Out-of-scope preservation**: 共有 `AppDataError` のcanonical定義・低位errorからのmapping・種類・意味・粒度、現在project追従、構成選択規則、数量、参照修復、snapshot version/shape、UI layout、保存schema、project-context/application-shell実装を変更しない。
+
 ## Requirements
 
 ### Requirement 1: プロジェクト別の構成候補表示
@@ -109,3 +115,14 @@ PC構成を検討する利用者が、すべての画面と共通する現在プ
 7. The 現在構成管理機能 shall カテゴリ名と選択要約を日本語と英語で表示可能にする
 8. The 現在構成管理機能 shall カテゴリ選択操作と選択要約をキーボードで利用でき、読み上げ技術がカテゴリ名、選択内容、数量または未選択状態を識別できるようにする
 9. If パーツ名に外部由来の文字列が含まれる, the 現在構成管理機能 shall その文字列を実行可能な内容として解釈せずテキストとして表示する
+
+### Requirement 10: 共有データ操作エラー契約の利用
+**Objective:** As a 現在構成機能の利用者と下流開発者, I want データ操作失敗が共有契約から一貫して扱われること, so that candidate管理の内部契約へ依存せず既存の回復行動と公開挙動を維持できる
+
+#### Acceptance Criteria
+1. When 候補照会または現在構成のデータ操作が共有データ操作エラーで失敗する, the 現在構成管理機能 shall 共有エラーの種類と判定文脈を保持したまま既存の再試行、再読込または操作停止の回復分類へ写像する
+2. The 現在構成管理機能 shall candidate管理機能が所有するデータ操作エラーの定義またはmappingを要求せず、ローカルデータ基盤が公開する共有エラー契約を利用する
+3. The 現在構成管理機能 shall 数量検証、選択対象不存在、カテゴリ規則違反など現在構成固有の失敗を共有データ操作エラーへ吸収せず、既存の機能固有エラーとして扱う
+4. If 共有データ操作エラーの種類、意味または粒度が変更される, the 現在構成管理機能 shall 未対応の共有エラーを既知の回復分類へ推測で変換せず、consumer契約の再検証を要求する
+5. When 現在構成の公開契約を検証する, the 現在構成管理機能 shall candidate管理機能の共有エラー型を経由せず共有エラーを利用できることを確認可能にする
+6. The 現在構成管理機能 shall 共有エラー契約への移行後も現在project追従、構成選択、数量、参照整合性、snapshot、表示および失敗時の既存データ保持を変更しない

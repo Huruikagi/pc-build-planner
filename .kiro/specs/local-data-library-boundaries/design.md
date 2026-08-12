@@ -4,7 +4,13 @@
 
 local data library boundariesは、PC Build Plannerで実証済みのrevision付きtransaction、request dedupe、capacity、atomic root replacement、maintenance/recovery fencing、backup retry protocolを、製品非依存のprivate workspace libraryへ抽出する。対象利用者は、PC Build Plannerと将来のローカルファーストconsumerを実装する開発者である。
 
-単一package `@pc-build-planner/local-data`に、platform-independentなroot export、Chrome adapter専用`./chrome`、backup orchestration専用`./backup`の3つの宣言済みentryを置く。package数を増やさず、source boundary gateで`core → 標準API`、`chrome → core + Chrome API`、`backup → core`の依存方向を強制する。PC Build Planner側は既存`LocalDataRoot`、schema、migration、repair、`FoundationError`、worker認可、交換形式、UIを保持し、adapterからpackage公開APIを設定する。
+単一package `@pc-build-planner/local-data`に、platform-independentなroot export、Chrome adapter専用`./chrome`、backup orchestration専用`./backup`の3つの宣言済みentryを置く。package数を増やさず、source boundary gateで`core → 標準API`、`chrome → core + Chrome API`、`backup → core`の依存方向を強制する。PC Build Planner側の既存`LocalDataRoot`、schema、migration、repair、`FoundationError`、worker認可、交換形式、製品adapter、composition、UI、E2Eは下流canonical ownerに残し、本specは公開型をread-only app contractから検証するだけとする。
+
+### Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: generic storage/lock/transaction/replacement contractはPackage Core、Chrome adapterはPlatform Adapter、generic backup orchestrationはBackup Orchestration、公開export・package test・read-only app contract・deep import gateはPackage Boundary and Toolingで設計する。
+- **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eをcomponent、file plan、task-driving interfaceに含めない。
 
 ### Goals
 
@@ -12,13 +18,14 @@ local data library boundariesは、PC Build Plannerで実証済みのrevision付
 - Chrome storage、quota、access restriction、change event、Web Locksをcore portへ閉じ込める。
 - 製品交換形式に依存しないbackup artifact・preflight・commit・finalize orchestrationを提供する。
 - package単独検証、public consumer contract、deep import gate、topological build、変更種別別validationを再現可能にする。
-- PC Build Plannerの保存schema、交換形式、公開feature挙動、データ保全契約を変更しない。
+- 下流製品ownerが既存の保存schema、交換形式、公開feature挙動、データ保全契約を維持できるpublic portを、read-only contractで確認する。
 
 ### Non-Goals
 
 - `LocalDataRoot`、schema version、具体migration、reference repair、`FoundationError` taxonomyを再設計しない。
 - backup envelope、16MiB file policy、filename、File API、UI、project-context lifecycleをpackageで所有しない。
 - worker caller分類・認可、runtime listener、application shell compositionを移動しない。
+- `ProductLocalDataAdapter`、`ProductBackupAdapter`、製品codec/mapping/policy、製品composition、製品E2Eを実装・変更しない。
 - Chrome以外のproduction adapter、2番目consumer、npm publish、stable APIを実装しない。
 - pending Existing Spec Updatesまたは`runtime-license-notices` Direct Candidateを本specへ取り込まない。
 
@@ -30,14 +37,14 @@ local data library boundariesは、PC Build Plannerで実証済みのrevision付
 - generic `Result`、storage・lock port、root policy、revision・dedupe・transaction、capacity、replacement、maintenance/recovery fenceの契約と純粋mechanism。
 - core portを実装するChrome storage、quota、access restriction、change event、Web Locks adapter。
 - product codec/artifact policyとreplacement capabilityを合成するgeneric backup orchestrator。
-- PC Build Planner固有policyをpackageへ設定し既存公開portへ写像するdelegation adapter。
-- package単独build/typecheck/test、subpath consumer fixture、deep import・逆依存gate、topological build、変更種別別validation。
+- package単独build/typecheck/test、subpath consumer fixture、read-only app contract、deep import・逆依存gate、topological build、変更種別別validation。
 
 ### Out of Boundary
 
 - `src/domain/model.ts`の`LocalDataRoot` shape、`CURRENT_SCHEMA_VERSION`、storage key、具体schema/migration/repairの意味。
 - `FoundationError`の製品分類、worker commandとcaller authorization、runtime listener、application-shell composition。
 - `CurrentBackupEnvelope`、exchange migration/mapping、16MiB input policy、file read/download、backup UI、message catalog、project-context guard/refresh。
+- `ProductLocalDataAdapter`と`ProductBackupAdapter`の実装、製品codec/policyの設定、production wiring、app integration test、E2E。
 - 既存featureの公開挙動やerror粒度の変更、保存data migration、backup交換形式migration。
 - `ui-message-catalog`等の他Existing Spec Updates、runtime license notice、npm metadata、外部consumer support。
 
@@ -46,9 +53,8 @@ local data library boundariesは、PC Build Plannerで実証済みのrevision付
 - package root coreはECMAScript標準APIだけをruntime利用し、Chrome、React、DOM、PC domain、root `src/`、Zodへ依存しない。
 - `./chrome`はpackage coreとChrome 116 APIの構造型だけへ依存し、product schema、runtime message、application shellへ依存しない。
 - `./backup`はpackage coreだけへ依存し、Chrome、DOM、File、React、product exchange schema、project-contextへ依存しない。
-- app local data adapterはpackage rootと製品所有のdomain/schema/migration/repair/errorへ依存できる。
-- app Chrome composition adapterはpackage `./chrome`と製品所有のstorage key・production initialization policyへ依存できる。
-- app backup adapterはpackage `./backup`、既存exchange codec、`BackupRestoreDataPort`、snapshot read capabilityへ依存できる。
+- read-only app contract fixtureはpackage公開entryと製品所有型を型検査入力として参照できるが、製品adapterを定義・構成・実行しない。
+- 下流`local-data-foundation`はpackage root/`./chrome`から製品adapterを構成し、下流`backup-restore`は`./backup`から製品backup adapterを構成する。本specからこれらの内部へ依存しない。
 - workspaceはpnpm 11.13.1、Node.js 26.5.0、TypeScript 7.0.2、Node test runner、tsx、Biome、esbuildの既存stackを使い、新しいruntime dependencyを追加しない。
 
 ### Revalidation Triggers
@@ -56,7 +62,7 @@ local data library boundariesは、PC Build Plannerで実証済みのrevision付
 - `LocalDataPolicy`、`StoragePort`、`ExclusiveLockPort`、transaction receipt/error、assessment/finalization ticketの公開shape変更。
 - Chrome storage key scope、access level、quota source、change event、exclusive lock identityの変更。
 - backup preflight順序、commit point、pre-commit cleanup、post-commit finalization semanticsの変更。
-- product adapterが保持するschema、migration、repair、`FoundationError` mapping、exchange format、project-context lifecycleの変更。
+- downstream product adapterが利用するpublic portとgeneric error分類の変更。
 - package export map、subpath構成、module format、Node/TypeScript minimum、topological build順の変更。
 - 2番目consumer追加、Chrome以外のproduction adapter追加、npm公開検討の開始。
 
@@ -64,9 +70,9 @@ local data library boundariesは、PC Build Plannerで実証済みのrevision付
 
 ### Existing Architecture Analysis
 
-現行`src/persistence`はports and adapters、single write authority、typed Resultを採用しているが、generic mechanismとPC固有policyが同じmodule graphにある。`RootTransactionRunner`は安全性を一か所へ集約し、`ChromeStorageAdapter`と`WebLocksAdapter`は既にplatform I/Oを分離する。一方、公開interfaceが`LocalDataRoot`、`FoundationError`、`RecoveryControl`へ直接結合し、backupの`RestoreService`はexchange/UI ownerの内部にある。
+現行`src/persistence`はports and adapters、single write authority、typed Resultを採用しているが、generic mechanismとPC固有policyが同じmodule graphにある。`RootTransactionRunner`は安全性を一か所へ集約し、`ChromeStorageAdapter`と`WebLocksAdapter`は既にplatform I/Oを分離する。一方、公開interfaceが`LocalDataRoot`、`FoundationError`、`RecoveryControl`へ直接結合し、backupの`RestoreService`はexchange/UI ownerの内部にある。本specは切断後のgeneric portとpackage mechanismだけを所有し、製品側の切断・接続は下流更新へ委譲する。
 
-抽出では既存のtransaction順序を作り直さない。まずcharacterization contractで現在のcommit pointとfailure semanticsを固定し、generic type parameterとpolicy hookへ置き換える。app公開入口は維持し、package型をapp固有型へ写像するadapterを挟む。
+抽出では既存のtransaction順序を作り直さない。synthetic package contractでcommit pointとfailure semanticsを固定し、generic type parameterとpolicy hookを定義する。read-only app contractは公開型が製品型をconsumer入力として受けられることだけを確認し、製品adapterの実装やruntime接続は行わない。
 
 ### Architecture Pattern & Boundary Map
 
@@ -84,19 +90,17 @@ graph LR
     CorePublic --> ChromeLocks
     CorePublic --> BackupFlow[Backup orchestrator]
     BackupFlow --> BackupPublic[Backup public export]
-    CorePublic --> ProductData[Product data adapter]
-    ChromePublic --> ProductRuntime[Product Chrome composition]
-    BackupPublic --> ProductBackup[Product backup adapter]
-    ProductData --> ProductRuntime
-    ProductData --> ProductBackup
+    CorePublic --> AppContract[Read-only app contract]
+    ChromePublic --> AppContract
+    BackupPublic --> AppContract
 ```
 
 **Architecture Integration**:
 
-- **Selected pattern**: Hexagonal core + declared package subpaths + configured product adapters。
-- **Dependency direction**: `contracts → policies → transaction → replacement/fencing → root export → chrome/backup subpaths → product adapters → runtime/feature composition`。逆方向importは禁止する。
+- **Selected pattern**: Hexagonal core + declared package subpaths + read-only consumer contract。
+- **Dependency direction**: `contracts → policies → transaction → replacement/fencing → root export → chrome/backup subpaths → read-only consumer fixtures`。逆方向importは禁止する。
 - **Existing patterns preserved**: canonical Result、single write authority、用途限定backup port、owner-local schema、NodeNext ESM、public entry gate。
-- **New components rationale**: package public entriesとworkspace validationは独立consumer contractに必要であり、product adaptersは保存形式を変えずに依存を反転するために必要である。
+- **New components rationale**: package public entries、platform adapter、generic orchestrator、workspace validationは独立consumer contractに必要である。製品adapterは下流ownerが実装する。
 - **Steering compliance**: MV3/CSP、10MB、TRUSTED_CONTEXTS、single root atomicity、persistent fencing、synthetic fixture、no `any`を維持する。
 
 ### Technology Stack
@@ -144,9 +148,8 @@ tests/
 │   ├── local-data-core-consumer.ts     # root export public type fixture
 │   ├── local-data-chrome-consumer.ts   # declared chrome subpath fixture
 │   ├── local-data-backup-consumer.ts   # declared backup subpath fixture
+│   ├── local-data-app-readonly-consumer.ts # 製品型を入力にする非実行contract
 │   └── public-boundaries.test.ts       # deep importと逆依存negative gate
-└── persistence/
-    └── local-data-library-characterization.test.ts # 既存app公開挙動の同等性
 ```
 
 ### Modified Files
@@ -157,14 +160,9 @@ tests/
 - `tsconfig.public-consumer.json` — 3つの公開consumer fixtureを追加する。
 - `scripts/build.mjs` — local data package build済みをapp bundleの前提に加える。
 - `scripts/validate-boundaries.mjs` — 未宣言subpath、package逆依存、app deep importを拒否する。
-- `src/domain/result.ts` — generic `Result`をpackage rootからre-exportし、`FoundationError`は製品側に残す。
-- `src/persistence/local-data-library-adapter.ts` — `LocalDataRoot`、validator、migration、repair、revision、dedupe、fenceをpackage policyへ設定する新規product adapter。
-- `src/persistence/chrome-storage-adapter.ts`、`src/persistence/web-locks-adapter.ts` — Chrome subpathへ委譲し、製品storage keyと既存public shapeだけを保持する。
-- `src/persistence/root-transaction-runner.ts`、`src/persistence/replacement.ts`、`src/persistence/recovery.ts`、`src/persistence/write-authority.ts` — product固有command/error facadeを保持し、generic mechanismへ委譲する。保存schema・error taxonomyは変更しない。
-- `src/features/backup-restore/service.ts` — product exchange codecと既存Foundation portをbackup orchestratorへ設定するadapterへ縮小する。exchange、file、UI、context lifecycleは変更しない。
-- `tests/persistence/**`、`tests/features/backup-restore/**` — generic期待値をpackageへ移し、product policyと公開挙動のcharacterizationへ絞る。
+- `tests/tooling/local-data-app-readonly-consumer.ts` — downstream ownerの製品型を型入力としてpublic portの接続可能性だけを検証し、adapter実装・composition・runtime実行を持たない。
 
-`local-data-foundation`と`backup-restore`のpending Change Briefが所有するschema、error、交換形式、UI、context lifecycleの変更は上記adapter作業へ含めない。該当ownerの契約変更が必要になった場合は本specを停止し、Existing Spec Updateを先に承認する。
+`local-data-foundation`と`backup-restore`のpending Change Briefが所有するadapter、schema、error、交換形式、UI、context lifecycle、composition、E2Eは上記作業へ含めない。package公開portから製品実装への接続は両ownerの更新で行う。
 
 ## System Flows
 
@@ -173,19 +171,16 @@ tests/
 ```mermaid
 sequenceDiagram
     participant Consumer
-    participant Adapter
     participant Engine
     participant Lock
     participant Storage
-    Consumer->>Adapter: Product mutation command
-    Adapter->>Engine: Generic operation and policy
+    Consumer->>Engine: Generic operation and policy
     Engine->>Lock: Acquire exclusive identity
     Lock->>Storage: Read latest root and control
     Engine->>Engine: Decode migrate fence dedupe mutate repair validate capacity
     Engine->>Storage: Single root write
     Storage-->>Engine: Commit result
-    Engine-->>Adapter: Generic receipt or error
-    Adapter-->>Consumer: Existing product result
+    Engine-->>Consumer: Generic receipt or error
 ```
 
 latest readからsingle writeまでだけをexclusive callback内に置く。network、利用者確認、backup file処理はlock外で完了させ、commit直前にticketとfenceを再検証する。
@@ -212,12 +207,12 @@ stateDiagram-v2
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | generic root・validation・error境界 | CoreContracts, ProductLocalDataAdapter | `LocalDataPolicy`, `CoreResult`, `CoreError` | Mutation transaction |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | generic root・validation・error境界 | CoreContracts | `LocalDataPolicy`, `CoreResult`, `CoreError` | Mutation transaction |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | 原子的transactionと再生成耐性 | TransactionEngine, FencingPolicy | `TransactionPort`, `ExclusiveLockPort` | Mutation transaction |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | capacityとplatform error | CapacityPolicy, ChromeStorageAdapter | `CapacityPort`, `StoragePort` | Mutation transaction |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7 | assessment・replacement・fencing | ReplacementCoordinator, FencingPolicy | `RootReplacementPort`, opaque tickets | Mutation transaction, Restore lifecycle |
-| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8 | generic backup protocol | BackupOrchestrator, ProductBackupAdapter | `BackupCodec`, `BackupOrchestrator` | Restore lifecycle |
-| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7 | Chromeと製品composition分離 | ChromeStorageAdapter, ChromeLocksAdapter, ProductLocalDataAdapter, ProductBackupAdapter | package subpath exports | Mutation transaction |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8 | generic backup protocol | BackupOrchestrator | `BackupCodec`, `BackupOrchestrator` | Restore lifecycle |
+| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7 | Chrome adapterと製品境界分離 | ChromeStorageAdapter, ChromeLocksAdapter, ReadOnlyAppContract | package subpath exports | Mutation transaction |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11 | private公開面とvalidation | PackagePublicEntries, WorkspaceValidation | export map, consumer fixtures, validation batch | Topological validation |
 
 ## Components and Interfaces
@@ -232,8 +227,7 @@ stateDiagram-v2
 | ChromeStorageAdapter | Package chrome | Storage APIをgeneric storage/capacity/change portへ適合 | 3.1–3.5, 6.1, 6.3 | CoreContracts P0, Chrome API P0 | Service, Event |
 | ChromeLocksAdapter | Package chrome | named exclusive Web Lockを提供 | 2.1, 2.7, 6.2–6.4 | CoreContracts P0, Web Locks P0 | Service |
 | BackupOrchestrator | Package backup | artifact・preflight・commit・finalizeを調整 | 5.1–5.8 | CoreContracts P0, ReplacementCoordinator port P0 | Service |
-| ProductLocalDataAdapter | App persistence | PC policyを設定し既存port/errorを維持 | 1.1–1.6, 6.5, 6.7 | Package root P0, product policy P0 | Service |
-| ProductBackupAdapter | Backup feature | exchange codecを設定し既存serviceを維持 | 5.1–5.8, 6.6–6.7 | Package backup P0, exchange P0 | Service |
+| ReadOnlyAppContract | Tooling | 製品型を入力にpublic portの接続可能性だけを検証 | 6.5–6.7, 7.9–7.11 | 3 package entries P0 | Batch |
 | PackagePublicEntries | Package boundary | 3つのdeclared exportだけを公開 | 7.1–7.4, 7.8 | package components P0 | API |
 | WorkspaceValidation | Tooling | 単独・consumer・boundary・topological gate | 7.2–7.11 | pnpm P0, TypeScript P0 | Batch |
 
@@ -298,7 +292,7 @@ export interface TransactionPort<Operation, Value, Error> {
 }
 ```
 
-- Preconditions: adapterがoperationを検証済みproduct commandへ変換する。
+- Preconditions: consumerがoperationを検証済みcommandへ変換する。
 - Postconditions: successはsingle root write済みまたはdedupe済み、failureはroot未変更またはcommit不明としてsuccessを返さない。
 - Invariants: exclusive callback内でlatest rootを読む。expected revision、request digest、active fenceを変更前とcommit直前に確認する。
 
@@ -386,19 +380,9 @@ export interface BackupOrchestrator<RestoreInput, Artifact, Preview, RestoreTick
 }
 ```
 
-- product adapterがsnapshot read、codec、restore input size policy、clock、artifact naming、error mappingを設定する。
+- downstream consumerがsnapshot read、codec、restore input size policy、clock、artifact naming、error mappingを設定する。
 - orchestratorは利用者確認UIを持たない。commit呼び出し時点をconfirmedとみなす。
 - `RestoreTicket`はcandidateとassessmentを内部保持するopaque valueで、UIへraw rootやcontrolを公開しない。
-
-### Product Integration
-
-#### ProductLocalDataAdapter
-
-`LocalDataRoot`のdecode/migration、revision、requestDedupe、maintenance、reference repair、capacity serializationを`LocalDataPolicy`へ設定する。generic errorを既存`FoundationError`へ一対一に写像し、`FoundationScopedDataPort`、`FoundationDataPort`、`BackupRestoreDataPort`、production contributionの公開shapeを維持する。worker authorization、sender classification、storage key、10MB policyは製品側に残す。
-
-#### ProductBackupAdapter
-
-既存`ExchangeValidator`、`ExchangeMigration`、`ExchangeMapper`、`RestoreFileCapacityPolicy`を`BackupCodec`へ設定する。`BackupService`と`RestoreService`の公開結果、preview、error、ticket、state transitionは維持する。FileGateway、React state/view、project-context guard/refreshには触れず、generic orchestrationの前後を既存feature ownerが引き続き制御する。
 
 ### Package Boundary and Tooling
 
@@ -416,10 +400,9 @@ package.jsonの`exports`は上記3 entryだけをbuild済みJavaScript/declarati
 
 - `validate:local-data-core`: package build/typecheck/core tests + root consumer + boundary gate。
 - `validate:local-data-chrome`: Chrome adapter tests + chrome subpath consumer + boundary gate。
-- `validate:local-data-backup`: backup tests + backup subpath consumer + product adapter characterization。
-- `validate:local-data-product`: product policy/error/schema/repair characterization + existing persistence/backup contract tests。
-- root `build` / `validate:ci`: typed-messages-core、local-data packageを先行buildし、app typecheck・test・artifact gateへ接続する。
-- full `pnpm validate`: 既存E2Eを含め、保存・backupの利用者挙動が変わらないことを確認する。
+- `validate:local-data-backup`: backup tests + backup subpath consumer + boundary gate。
+- `validate:local-data-contracts`: 3 public consumer + read-only app contract + deep import/逆依存negative gate。
+- root `build` / `validate:ci`: typed-messages-core、local-data packageを先行buildし、appはbuild済みpublic exportだけを解決する。製品adapter回帰とE2Eの定義は下流ownerに残す。
 
 ## Data Models
 
@@ -427,22 +410,22 @@ package.jsonの`exports`は上記3 entryだけをbuild済みJavaScript/declarati
 
 ```mermaid
 classDiagram
-    class ProductRoot
+    class ConsumerRoot
     class LocalDataPolicy
     class TransactionCommand
     class TransactionReceipt
     class ReplacementTicket
     class RestoreTicket
     class FinalizationTicket
-    LocalDataPolicy --> ProductRoot
+    LocalDataPolicy --> ConsumerRoot
     TransactionCommand --> LocalDataPolicy
-    TransactionReceipt --> ProductRoot
-    ReplacementTicket --> ProductRoot
+    TransactionReceipt --> ConsumerRoot
+    ReplacementTicket --> ConsumerRoot
     RestoreTicket --> ReplacementTicket
-    FinalizationTicket --> ProductRoot
+    FinalizationTicket --> ConsumerRoot
 ```
 
-- `ProductRoot`はpackageが所有しないgeneric型で、保存schemaはconsumer ownerに残る。
+- `ConsumerRoot`はpackageが所有しないgeneric型で、保存schemaはconsumer ownerに残る。
 - `ReplacementTicket`、`RestoreTicket`、`FinalizationTicket`はruntime-only opaque capabilityでありJSON交換形式へ含めない。
 - persistent maintenance/recovery controlの具体配置はpolicy/adapterが決め、PC Build Plannerでは既存root fieldと`foundationRecoveryControl` keyを維持する。
 
@@ -457,7 +440,7 @@ classDiagram
 ### Error Strategy
 
 - core errorは`validation | migration | repair | revision-conflict | request-conflict | maintenance-active | recovery-active | stale-fence | stale-assessment | stale-recovery-state | precommit-cleanup-pending | quota-exceeded | access-denied | lock-unavailable | storage-unavailable`の安定分類を持つ。
-- product adapterは分類を既存`FoundationError`または`RestoreError`へ決定的に写像し、error種類・粒度を増減させない。
+- generic error分類はdownstream consumerがowner-local errorへ決定的に写像できる情報を持つが、packageは製品error型やmappingを所有しない。
 - root write前のfailureだけをerrorにする。write後cleanup failureはcommitted outcomeとして返し、finalize-only recoveryへ進める。
 - packageは保存値、candidate、完全URL、例外objectをloggingしない。toolingはcomponent名、stable code、exit statusだけを観測する。
 
@@ -473,14 +456,13 @@ classDiagram
 ### Integration and Contract Tests
 
 - public consumer fixtureが3つの宣言済みentryだけからstrict typecheckされ、未宣言subpathとpackage reverse importを拒否する（6.4、7.1–7.4）。
+- read-only app contractが製品型をconsumer入力に使い、製品adapterを実装・実行せず3 entryの型接続可能性とpackage成果物への製品型非混入を検証する（6.5–6.7、7.9–7.11）。
 - Chrome adapter contractが10MB platform quota、TRUSTED_CONTEXTS、bytes、change event、Promise rejection、同名exclusive lockをstubで検証する（3.1–3.5、6.1–6.3）。
-- ProductLocalDataAdapter characterizationが既存`FoundationDataPort`のCRUD、repair、error、recovery、maintenance、runtime contributionを移行前後で同一に保つ（6.5、6.7）。
-- ProductBackupAdapter characterizationがexchange version、16MiB policy、preview、commit/finalize、UI-facing errorを同一に保つ（5.1–5.8、6.6–6.7）。
 - clean package outputからtopological buildを実行し、app bundleがbuild済み3 entryだけを解決する（7.8、7.11）。
 
-### E2E/UI Tests
+### E2E/UI Ownership
 
-新しいUIは追加しない。既存backup export、normal restore、corrupt/future root recovery、preflight rejection、post-commit refresh retryのE2Eを下流非回帰として実行する。package単独testではChrome実体、DOM、File APIを起動しない。
+本specはE2E/UI testを追加・変更・実行責務として定義しない。製品adapter、composition、既存backup/restore経路のE2Eは`local-data-foundation`、`backup-restore`、application compositionの下流ownerが自身の更新で扱う。package単独testとread-only app contractはChrome実体、DOM、File APIを起動しない。
 
 ### Security Considerations
 
@@ -500,20 +482,16 @@ classDiagram
 
 ```mermaid
 flowchart LR
-    Characterize[Characterize existing behavior] --> Core[Extract core package]
-    Core --> Product[Configure product adapter]
-    Product --> Chrome[Delegate Chrome adapters]
+    Core[Extract core package] --> Chrome[Extract Chrome adapters]
     Chrome --> Backup[Extract backup orchestration]
-    Backup --> Gates[Enable workspace gates]
-    Gates --> Regression[Run full regression]
+    Backup --> Contract[Add read-only app contract]
+    Contract --> Gates[Enable workspace gates]
 ```
 
-1. 現行app contractとfailure semanticsをcharacterization testで固定する。
-2. package coreとsynthetic contract kitを追加し、app未接続で単独greenにする。
-3. PC policy adapterを追加し、generic transaction/replacementを既存公開portの背後へ接続する。保存schema migrationは行わない。
-4. Chrome storage/Web Locks実装を`./chrome`へ委譲し、production initializationとaccess fail-closedを確認する。
-5. generic backup orchestratorを`./backup`へ追加し、existing exchange/service adapterを同じ公開挙動で接続する。
-6. consumer/boundary/topological/change-type gateを有効化し、重複generic implementationを除去する。
-7. `pnpm validate`でapp非回帰を確認する。rollbackは各waveのadapter delegationを旧内部implementationへ戻せるcommit境界を保つ。
+1. package coreとsynthetic contract kitを追加し、app未接続で単独greenにする。
+2. Chrome storage/Web Locks adapterを`./chrome`へ追加し、stubでaccess fail-closedを確認する。
+3. generic backup orchestratorを`./backup`へ追加し、synthetic codecとreplacement portでretry semanticsを固定する。
+4. read-only app contractで製品型を入力にしたpublic port接続可能性と製品実装非混入を確認する。
+5. consumer/boundary/topological/change-type gateを有効化する。
 
-Existing Spec Updateに属するschema・error・exchange・UI・context lifecycle変更はこのmigrationへ含めない。adapter接続に意味変更が必要と判明した場合は該当Change Brief承認まで停止する。
+製品adapter、schema・error mapping、exchange codec/policy、composition、UI、context lifecycle、E2Eはこのmigrationへ含めない。接続実装は`local-data-foundation`と`backup-restore`のChange Briefで行う。

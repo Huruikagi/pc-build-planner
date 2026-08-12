@@ -6,9 +6,15 @@ local data library boundariesは、複数のローカルファースト製品で
 
 ## Boundary Context
 
-- **In scope**: generic storage・lock port、revision・request dedupe・transaction contract、migration・validation・repair hook、容量とplatform errorの正規化、atomic root replacement、maintenance/recovery fencing、Chrome storage・Web Locks・quota adapter、generic backup artifactとpreflight・confirm・commit・finalize orchestration、製品adapter、workspace公開境界、単独検証、consumer contract、deep import gate、変更種別別の検証範囲。
+- **In scope**: generic storage・lock port、revision・request dedupe・transaction contract、migration・validation・repair hook、容量とplatform errorの正規化、atomic root replacement、maintenance/recovery fencing、Chrome storage・Web Locks・quota adapter、generic backup artifactとpreflight・confirm・commit・finalize orchestration、workspace公開境界、package単独検証、read-only app contract、deep import gate、変更種別別の検証範囲。
 - **Out of scope**: `LocalDataRoot`の具体schemaと意味、PCドメイン操作、具体migration・reference repair・worker認可・製品固有error、backup metadata・交換形式・file I/O・UI・project-context lifecycle、保存schemaや交換形式の意味変更、Chrome以外のproduction adapter、npm公開、stable API宣言。
-- **Adjacent expectations**: `local-data-foundation`はPC固有root、validator、migration、repair、error mapping、runtime capability compositionを保持し、`backup-restore`はPC固有交換形式、file I/O、利用者確認、UI、project-context連携を保持する。`runtime-schema-validation`のcanonical Result変換、owner-local schema、jitless契約を維持し、schema vendorを本libraryの公開契約へ露出しない。
+- **Adjacent expectations**: `local-data-foundation`はPC固有root、validator、migration、repair、error mapping、`ProductLocalDataAdapter`、runtime capability compositionを保持し、`backup-restore`はPC固有交換形式、codec・mapping・policy、`ProductBackupAdapter`、file I/O、利用者確認、UI、project-context連携を保持する。本specは製品compositionとE2Eを変更しない。`runtime-schema-validation`のcanonical Result変換、owner-local schema、jitless契約を維持し、schema vendorを本libraryの公開契約へ露出しない。
+
+## Change Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: generic storage/lock/transaction/replacement contractはRequirements 1–4、Chrome adapterはRequirement 6、generic backup orchestrationはRequirement 5、公開export・package test・read-only app contract・deep import gateはRequirement 7で扱う。
+- **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eは本requirementsの実装対象へ含めず、既存canonical ownerへ委譲する。
 
 ## Requirements
 
@@ -81,9 +87,9 @@ local data library boundariesは、複数のローカルファースト製品で
 7. When finalize-only retryが実行される, the backup orchestration shall rootを再置換せずcleanupとcommit済み状態の確認だけを行う
 8. The backup orchestration shall backup metadataの具体内容、PCドメインの交換entity、file chooser、download、利用者向け確認文言、UI state、project-context lifecycleを汎用契約へ固定しない
 
-### Requirement 6: Chrome adapterと製品compositionの分離
+### Requirement 6: Chrome adapterと製品境界の分離
 
-**Objective:** As a PC Build Planner maintainer, I want platform adapterと製品policyを汎用coreから分離したい, so that 既存Chrome拡張の挙動を保ちながらlibraryを独立検証できる
+**Objective:** As a PC Build Planner maintainer, I want Chrome adapterの公開境界を製品policyから分離したい, so that 製品adapterを本libraryで実装せずplatform能力を独立検証できる
 
 #### Acceptance Criteria
 
@@ -91,9 +97,9 @@ local data library boundariesは、複数のローカルファースト製品で
 2. When Chrome runtimeで排他が要求される, the Chrome adapter shall 同じ保存rootを扱う全writerを共通のexclusive lock identityで直列化する
 3. If Chrome APIが例外または不正な応答を返す, the Chrome adapter shall platform値を漏らさず汎用storage、capacity、access、またはlock errorへ正規化する
 4. The platform-independent local data core shall Chrome API、DOM、React、runtime message、PCドメイン型へruntime依存または型依存を持たない
-5. The PC Build Planner adapter shall `LocalDataRoot`、具体validator・migration・repair、`FoundationError` mapping、worker認可、runtime compositionを製品側に保持する
-6. The PC Build Planner backup adapter shall 交換形式、metadata、file I/O、利用者確認、UI、project-context lifecycleを製品側に保持する
-7. When 既存PC Build Planner consumerが移行される, the product adapters shall 保存schema、交換形式、公開feature挙動、10MB前提、単一write authority、原子的置換、maintenance fencingを変更しない
+5. When read-only app contractがpackage rootを検証する, the workspace shall PCドメイン型を入力に使えても製品root、製品error、製品adapter実装をpackage成果物へ取り込まない
+6. When read-only app contractがbackup subpathを検証する, the workspace shall 製品codecの型をconsumer側入力として接続できても製品交換形式、mapping、policy、adapter実装をpackage成果物へ取り込まない
+7. If package sourceまたはpackage testが製品composition、製品adapter、またはE2Eを直接所有しようとする, the workspace validation shall 境界違反として成功させない
 
 ### Requirement 7: Private workspace公開境界と変更影響検証
 
@@ -109,6 +115,6 @@ local data library boundariesは、複数のローカルファースト製品で
 6. When Chrome adapterが単独検証される, the workspace shall Chrome実体を起動せずstorage、quota、access制限、変更通知、lockのcontractを決定的に検証する
 7. When backup orchestrationが単独検証される, the workspace shall 製品交換形式やUIを必要とせずpreflight、ticket、commit、cleanup、finalizationを架空fixtureだけで検証する
 8. When workspaceのtopological buildが実行される, the workspace shall library成果物をconsumerより先にbuildし、consumerが公開成果物だけを解決できる状態にする
-9. When generic contractまたはruntime mechanismが変更される, the workspace validation shall package単独検証、公開consumer contract、boundary gate、影響するapp adapter回帰を実行する
-10. When PC Build Planner固有schema、migration、repair、交換形式、またはUIだけが変更される, the workspace validation shall generic libraryの無関係なapp-wide検証を必須にせず、製品所有のcontractと回帰へ検証を限定できる
-11. If package単独検証、consumer contract、topological build、boundary gate、または必要なapp回帰のいずれかが失敗する, the workspace validation shall 成功として完了しない
+9. When generic contractまたはruntime mechanismが変更される, the workspace validation shall package単独検証、公開consumer contract、read-only app contract、boundary gateを実行する
+10. When PC Build Planner固有schema、migration、repair、交換形式、adapter、composition、またはUIだけが変更される, the workspace validation shall package公開契約へ影響しない限り製品ownerの検証へ委譲できる
+11. If package単独検証、consumer contract、read-only app contract、topological build、またはboundary gateのいずれかが失敗する, the workspace validation shall 成功として完了しない

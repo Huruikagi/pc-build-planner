@@ -1,5 +1,12 @@
 # Implementation Plan
 
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope task delta**: Task 12–14はcanonical source/candidate public seam consumer移行、identity移管元撤去、data error非所有、product-capture public API fallout、capture/handoff/manufacturer/price/error非回帰を扱う。
+- **Out-of-scope preservation**: Task 1–11とImplementation Notesは実装履歴として保持する。identity core/algorithm、source URL identity/catalog/mutation、`AppDataError`定義・mapping、candidate editor/保存、application-shell compositionを本specで実装しない。
+- **Implementation prerequisites**: identity実装/export撤去は`duplicate-product-merge`のcanonical identity public seamとdownstream consumer移行が利用可能になってから行う。source/candidate import移行は`candidate-source-bookmarks` Task 10.4と`project-candidate-management` Task 13.1の公開shapeを前提とする。
+
 - [x] 1. 固定タブ取り込みの型付き境界と汎用抽出基盤を確立する
   - 明示操作で選ばれた単一タブだけを対象にし、request、tab、page-derived URL、payloadを未信頼境界で検証する。
   - JSON-LD、meta、見出し、パンくず、表、定義リストから根拠付き候補を収集し、生HTMLや画像を境界外へ返さない。
@@ -247,6 +254,84 @@
   - _Depends: 11.2, 11.3_
   - _Requirements: 1.1, 1.4, 1.5, 4.2, 4.3, 6.1, 6.2, 6.4, 7.2, 8.3, 8.4_
   - _Boundary: ProductCaptureE2E, FinalValidation_
+
+- [ ] 12. canonical source・candidate・error consumer seamを固定する
+
+- [ ] 12.1 source prefillをcanonical source公開型へ移行する
+  - `draft-mapper.ts`がcandidate-management内部のsource型ではなく`candidate-sources/public.ts`の初期source入力型だけをimportし、page-derived URL、capturedAt、任意price/kind/siteNameを一件のprefillへ写像する。
+  - source ID生成規則、URL identity、primary policy、catalog、matcher、mutationをcapture側へ複製または呼出しせず、`siteName`をidentityやkind判定へ利用しない。
+  - 有効・欠損・不正siteName、空商品名、欠損price/categoryを含む既存draft mapper fixtureが同じprefill意味を返すことを完了条件とする。
+  - _Requirements: 4.1, 4.4, 4.6, 5.1, 5.4, 8.3, 8.4, 8.7, 8.8, 9.4_
+  - _Boundary: CaptureDraftMapper, CandidateSourcesPublicApi_
+  - _Depends: candidate-source-bookmarks 10.4_
+
+- [ ] 12.2 candidate intent factoryだけを使うhandoff contractを再固定する
+  - candidate公開`createCandidateEditorIntent`へ検証済みprefillを一回渡し、返された`FeatureActivationIntent`だけを`TransientSurfaceLifecyclePort.conclude`へ渡す。
+  - candidate/project query、save service、source mutation、candidate内部module、直接navigationへ到達しないpositive/negative type fixtureを追加する。
+  - factoryまたはconclude失敗時は現行世代の検証済みintentと既存handoff errorを保持し、同世代再試行・新世代破棄・stale隔離を変更しない。
+  - _Requirements: 4.1, 4.2, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 6.4, 9.5, 9.6_
+  - _Boundary: CandidateEditorHandoff, CandidateManagementPublicApi_
+  - _Depends: 12.1; project-candidate-management 13.1_
+
+- [ ] 12.3 data error非所有のboundary contractを追加する
+  - product-capture sourceと公開型が`AppDataError`、`ManagementError`、`FoundationError` mapper、candidate-owned data errorを定義・import・re-exportしていないことをAST/type fixtureで検査する。
+  - candidate intent factory/lifecycle failureをstorage、quota、conflictなど既知のdata errorへ推測せず、既存handoff failureへ閉じるcharacterizationを追加する。
+  - foundation/candidate error契約変更時にcapture consumer fixtureが再実行対象となるscript metadataを追加するが、canonical errorやmappingをcapture側へ追加しない。
+  - _Requirements: 6.3, 6.5, 9.6, 9.7, 9.8_
+  - _Boundary: CaptureErrorBoundary, PublicBoundaryValidation_
+  - _Depends: 12.2; local-data-foundation 11.1, 11.3_
+
+- [ ] 13. identity移管元とproduct-capture公開APIを縮小する
+
+- [ ] 13.1 identity export撤去の開始条件とconsumer contractを固定する
+  - **実装開始条件**: `duplicate-product-merge` 6.1のcanonical identity public entry、`candidate-source-bookmarks` 10.4のsource public entry、`project-candidate-management` 14.4のcandidate identity consumer移行がすべて完了していること。いずれか未完了ならcapture側を先行削除しない。
+  - positive fixtureでduplicate/candidate consumerがcanonical identity入口だけを利用し、capture public entryをidentity目的でimportしないことを確認する。
+  - identity algorithm、Unicode/区切り規則、matcher、confidence、product identity型を本specへ再実装または再公開しない。
+  - _Requirements: 9.1, 9.2, 9.9_
+  - _Boundary: ProductIdentityMigrationSourceContract_
+  - _Depends: duplicate-product-merge 6.1, candidate-source-bookmarks 10.4, project-candidate-management 14.4_
+
+- [ ] 13.2 ProductIdentityNormalizer実装・factory・exportをcaptureから撤去する
+  - 13.1の開始条件充足後だけ`product-identity-normalizer.ts`、capture側characterization test、`public.ts`のidentity type/factory exportを削除する。
+  - captureの表示用normalizer、制御文字・空白cleaning、抽出値、manufacturer domain mapを変更せず、共有primitiveが必要ならidentity ownerからcapture内部への逆依存を作らない。
+  - repo-wide import検査でproduct-capture identity参照が0件、canonical identity characterizationが移管先で同じ結果を維持することを完了条件とする。
+  - _Requirements: 2.2, 3.1, 3.5, 9.1, 9.2, 9.9_
+  - _Boundary: ProductCapturePublicExports, ProductIdentityMigrationSource_
+  - _Depends: 13.1_
+
+- [ ] 13.3 ProductCapturePublicApiとproduction-shaped falloutを検証する
+  - module/public APIのruntime能力を`manufacturerDomains`と`pagePriceExtraction`だけに限定し、identity、candidate query/save、source port、data error、shell proxyを公開しない。
+  - candidate-source manufacturer lookup consumerとsource-price page price consumerがcapture公開入口だけでstrict型検査され、既存method shape・instance identity・read-only性を維持する。
+  - production-shaped fixtureで旧identity factoryを要求するcompositionが明確に型失敗し、正しいcanonical identity別注入とcapture 2能力が共存できることを検証する。application-shell fileは編集しない。
+  - _Requirements: 2.7, 2.8, 2.9, 2.10, 7.3, 9.3, 9.8, 9.10_
+  - _Boundary: ProductCapturePublicApi, ProductionApiFalloutContracts_
+  - _Depends: 12.3, 13.2_
+
+- [ ] 14. capture flowと公開境界の非回帰gateを完了する
+
+- [ ] 14.1 extraction・confirmation handoff・UX/errorを回帰する
+  - fixed tab、activeTab gesture、metadata allowlist、generic extraction、normalization/ranking、siteName、manufacturer補完、空名manual pre-editをsynthetic fixtureで実行する。
+  - handoff成功/失敗/再試行、新世代破棄、tab/permission失効、restricted page、timeout、stale結果隔離を既存unit/integration/DOM suiteで検証する。
+  - 一過性面が実行・実行中・失敗・handoff再試行だけを表示し、確認form、project選択、保存、identity/duplicate UIを持たないことを完了条件とする。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
+  - _Boundary: ProductCaptureRegression_
+  - _Depends: 13.3_
+
+- [ ] 14.2 manufacturer lookupとpage price extractionを回帰する
+  - manufacturer domainの完全/subdomain一致、誤一致防止、最下位補完、既存値非上書き、read-only lookupを架空domainで検証する。
+  - page price portの6 failure、価格欠損、page-derived URL、capturedAt、provenance、通常captureと同じrankingを維持する。
+  - source URL identity、保存済みsource更新、product identity、permission拡張をcapture側で実行しないことをcontract/artifact gateで確認する。
+  - _Requirements: 1.1, 1.3, 2.2, 2.7, 2.8, 2.9, 2.10, 3.2, 6.1, 6.2, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 9.2, 9.3, 9.4_
+  - _Boundary: ManufacturerDomainLookup, PagePriceExtractionPort_
+  - _Depends: 13.3_
+
+- [ ] 14.3 boundary・artifact・production E2Eの最終gateを実行する
+  - typecheck、lint、unit、contract、integration、DOM、boundary、fixture、artifact、buildを順に実行し、identity export、candidate/source deep import、data error再所有、新permission、実サイトfixtureがないことを検証する。
+  - application-shellのcanonical identity/candidate/source wiringが完了済みならicon起動からcandidate editor handoffまでのproduction E2Eを実行する。未完了なら偽装せず外部開始条件未充足として記録し、shell ownerの最終gateへ委ねる。
+  - production E2E実行時はcapture flow、siteName、tab invalidation、新世代、page price consumerが移行前と同じ結果であることを完了条件とする。
+  - _Requirements: 1.1, 1.4, 1.5, 4.1, 4.2, 4.3, 6.1, 6.2, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 9.1, 9.3, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10_
+  - _Boundary: ProductCaptureFinalValidation_
+  - _Depends: 14.1, 14.2_
 
 ## Implementation Notes
 

@@ -112,3 +112,33 @@
 - async確認中のcontext更新によるdraft消失: generationとrequest IDが一致する結果だけを適用する。
 - forced切替後の誤保存: draftのproject IDを書き換えず保存不能な回復待ち状態にする。
 - legacy snapshotによるauthority逆流: current snapshotとの一致検査だけに使い、不一致時はcontextを変更しないcontract testを置く。
+
+## 2026-08-12 v0.5.0 boundary reconciliation
+
+### Summary
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **Discovery Scope**: Extension / Light Integration Update
+- **Sources Consulted**: 最新Change Brief、roadmap、承認済み`project-context`と`local-data-foundation`のrequirements/design/tasks、現行candidate requirements/design/tasks、`product.md`、`tech.md`、`structure.md`。
+- **Findings**:
+  - `project-context`は`ProjectLifecyclePort`、single-flight service、state、削除確認、semantic message descriptor、host-neutral presentationをcanonicalに所有し、候補管理には既存host接続とdraft guard連携だけが残る。
+  - `local-data-foundation`は`FoundationError`と一対一対応する共有`AppDataError`とmapperを`src/domain/public.ts`から公開し、candidate固有validationは各featureに残す。
+  - source editor UXは候補管理の利用者能力だが、source entity・catalog・URL identity・mutationは`candidate-source-bookmarks`へ、product identity normalizerと保存前判断contractは`duplicate-product-merge`へ移る。
+  - `duplicate-product-merge`のmatchなし・明示新規保存経路にはcandidate CRUD ownerが提供するcreate-only seamが必要である。既存`query`と`createCandidateEditorIntent`を変更せず、`CandidateCreatePort`だけをcanonical candidate公開入口へ加えるのが最小境界となる。
+  - application shellは後続waveでproduction注入と旧proxy撤去を所有するため、本specはfeature-local host/consumer seamまでを定義し、runtime compositionを変更しない。
+
+### Design Decisions
+
+- **Generalization**: 旧`ManagementError`全体を別名へコピーせず、候補固有field validationと共有`AppDataError`を合成する`CandidateOperationError`へ縮小する。data operation semanticsは共有ownerのvariantをそのまま保つ。
+- **Build vs. Adopt**: project command/refresh、source catalog/mutation、product identityを再実装せず、承認済み隣接ownerの公開portを採用する。新規外部依存は追加しない。
+- **Simplification**: project CRUD service/state/formをcandidate境界から撤去し、host adapter一つで共通lifecycle presentationを既存領域へmountする。source/identityは各一つのowner-local consumer adapterに限定し、再公開barrelやproxyを作らない。
+- **Candidate create seam**: `CandidateCreatePort`はduplicate workflowの明示新規保存だけに必要な`createCandidate`を公開し、既存`CandidateManagementService`へ委譲する。update/delete、project lifecycle、source mutation、error定義を公開面へ広げず、戻り値は候補固有validationと共有`AppDataError`からなる既存`CandidateOperationError`を維持する。
+
+### Migration Seams and Risks
+
+- project lifecycle移管は共通presentationを先にhostへ接続し、candidate側の旧project service/state/view/messageを同じ変更で撤去する。二重command authorityまたは二重表示をboundary/DOM testで拒否する。
+- `ManagementError`移行は共有`AppDataError` public importへ全candidate data pathを切り替えてから旧definition/mapper/exportを除去する。variant/payload/display regressionはexhaustive contractとDOM testで固定する。
+- `CandidateCreatePort`はTask 13.1でpublic shapeを固定し、Task 14.2で共有`AppDataError`対応済みのcandidate service実装へ接続する。query/editor intentの既存consumer fixtureを同じgateで保持する。
+- source core移管は隣接spec実装前に内部codeを先行削除しない。本specは公開portを受けるadapter seamと旧owner negative gateを定義し、downstream実装完了後に移管元を撤去できるtask順序にする。
+- product identityも同様に`duplicate-product-merge`公開contractが利用可能になってからimportを差し替え、product captureへの依存が残らないことをtype/boundary gateで確認する。
+- snapshot version 3/shape、candidate CRUD、pre-edit寿命、current project binding、draft guard、source editor layout/操作順を変更しない。migration中にcontractが未注入ならfail closedに初期化し、旧ownerへ暗黙fallbackしない。

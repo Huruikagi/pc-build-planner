@@ -116,3 +116,37 @@ backup envelope・artifact・preflight/confirm/commit・ticket/fenceの再利用
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #20。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+product backup adapterの実装ownerがgeneric package specと本specで重複し、production compositionの最終ownerもroadmapに欠けている。
+
+### Current State
+
+本specのChange Briefは製品設定・交換形式adapterを保持する一方、生成済み`local-data-library-boundaries`も`ProductBackupAdapter`を実装対象にする。
+
+### Desired Outcome
+
+本specがproduct backup adapter、PC交換形式codec/mapping/policy、file UI、確認、project-context lifecycleを単独所有し、generic orchestratorはpackage公開portだけから利用する。application shellは確定portを接続するだけとする。
+
+### Scope
+
+- **In**: product backup adapter、交換形式mapping、製品policy、foundation capability接続、guard/refresh、contract/UI/E2E。
+- **Out**: generic orchestrator実装、交換形式意味変更、保存schema変更、自動backup、UI layout、shellのcomposition実装。
+
+### Boundary Impact
+
+- **Extends**: 製品backup設定とadapterの唯一ownerを確定する。
+- **Preserves**: 明示確認、atomic replacement、fencing、失敗時既存データ保持、settings section、回復導線。
+- **Adjacent**: `local-data-library-boundaries`がgeneric orchestration、`local-data-foundation`がreplacement capability、`application-shell`が公開port wiringを所有する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-library-boundaries`、`spec:local-data-foundation`、`spec:project-context`。
+- **Downstream**: `spec:application-shell`、release validation。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

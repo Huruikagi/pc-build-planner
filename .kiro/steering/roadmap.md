@@ -4,17 +4,17 @@
 
 v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で安定した責務をworkspace packageへ抽出し、公開API、allowed dependencies、独立テスト、変更種別ごとの検証範囲を確立する。package数や外部公開そのものを成果にせず、PCドメイン内だけの変更で安定領域を再確認するコストを減らす。
 
-最初に依存の小さいtyped messages coreでworkspace運用を確立し、その知見をlocal data core、Chrome adapter、backup orchestrationの境界へ適用する。同時に、v1.0.0のUI刷新前に、project lifecycle、共有エラー、candidate source、product identityのcanonical ownerを整理する。
+最初に依存の小さいtyped messages coreでworkspace運用を確立し、その知見をlocal data core、Chrome adapter、backup orchestrationの境界へ適用する。同時に、v1.0.0のUI刷新前に、project lifecycle、共有データ操作error、candidate source、product identityのcanonical ownerを整理する。spec生成順は公開契約の確定を基準にし、実装順は各specのtasksで明示する。
 
 ## Approach Decision
 
-- **Chosen**: 責務境界で分ける混合構成。新規package境界は2つの新規specで扱い、既存機能の所有権変更はChange Brief、配布notice修正はDirect Candidateとして扱う。
-- **Why**: 新しい再利用境界だけを新規specにし、既存specの履歴と受け入れ契約を保ちながらowner移動を明示できる。#20をpackage数で先に分割せず、設計と実装のdependency waveで段階化できる。
-- **Rejected alternatives**: core、Chrome adapter、backupを最初から別specへ分割する案はpackage構成を早期固定しすぎるため不採用。#44〜#47をDirectへ寄せる案は公開契約とcanonical ownerの変更をspec外へ隠すため不採用。
+- **Chosen**: 責務境界で分ける混合構成。generic package境界は既存の2新規specへ限定し、製品adapter、共有データ操作error、catalog、composition、consumer移行は既存canonical ownerのChange Briefで扱う。配布notice修正だけをDirect Candidateとする。
+- **Why**: package specが製品adapterまで所有する重複を解消し、`ui-message-catalog`、`local-data-foundation`、`backup-restore`、`application-shell`など既存ownerの履歴と受け入れ契約を保てる。共有errorは新規core specを増やさず、canonical `Result`と`FoundationError`を持つlocal data foundationの製品domain境界へ置く。
+- **Rejected alternatives**: app共有errorだけの新規specは既存`src/domain`と責務が重なるため不採用。横断移行をapplication shellへ集約する案はshellへ業務error・catalog・data policyを漏らすため不採用。core、Chrome adapter、backupを最初から別package specへ分割する案もpackage構成を早期固定しすぎるため不採用。
 
 ## Scope
 
-- **In**: typed messages coreのworkspace package化、local data core・Chrome adapter・backup orchestrationと製品policyの境界確立、project lifecycle・共有データ操作エラー・candidate source・product identityのowner是正、export mapとdeep import gate、package単独検証、変更種別別の下流検証、runtime依存のライセンスnotice整備。
+- **In**: typed messages coreのworkspace package化、local data core・Chrome adapter・backup orchestrationと製品policyの境界確立、project lifecycle・共有データ操作error・candidate source・product identityのowner是正、製品adapterとcatalogの単一owner化、application shellの循環回避proxy撤去、全consumerの公開import移行、export mapとdeep import gate、package単独検証、変更種別別の下流検証、runtime依存のライセンスnotice整備。
 - **Out**: npmへの外部公開、安定版API宣言、2番目のconsumerの本実装、UIの見た目・layout刷新、保存形式やbackup交換形式の意味変更、商品同一性アルゴリズム変更、価格取得ロジック変更、エラー種類・粒度の再設計。
 
 ## Constraints
@@ -29,19 +29,25 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 
 ## Boundary Strategy
 
-- **Why this split**: `typed-messages-core`は純粋で依存が小さくworkspace運用の先行実証に適する。`local-data-library-boundaries`はデータ保全リスクが高いため、generic mechanismと製品policyを一つの設計で比較しつつcore、app consumer、Chrome adapter、backupの順に実装する。既存ownerの移動は元specのChange Briefとして履歴を保つ。
-- **Shared seams to watch**: package公開型とapp adapter、`FoundationError`とapp共有エラー、project-contextとcandidate-management、candidate source ownerとsource-price-refresh、product identityとproduct-capture、package testと下流contract/E2E。
+- **Why this split**: `typed-messages-core`と`local-data-library-boundaries`はgeneric mechanismと公開portだけを所有する。configured message adapter、product local-data adapter、product backup adapter、physical catalog、production compositionは既存製品ownerへ一本化し、移管元と全consumerをChange Briefで明示する。
+- **Shared seams to watch**: package公開型と製品adapter、`FoundationError`と共有`AppDataError`、project lifecycleの意味contractと物理catalog、project-contextとcandidate-management、candidate source ownerとsource-price-refresh、product identityとproduct-capture、application shellのcomposition-only wiring、package testと下流contract/E2E。
 
 ## Existing Spec Updates
 
-- [ ] ui-message-catalog -- 製品カタログとconfigured resolverを残し、typed messageの汎用mechanismをpackageへ委譲する。 Dependencies: spec:typed-messages-core
-- [ ] project-context -- projectの作成・改名・削除と関連message namespaceをcanonical ownerとして引き受ける。 Dependencies: none
-- [ ] project-candidate-management -- project lifecycleと共有`ManagementError`の所有を手放し、candidate管理へ責務を限定する。 Dependencies: spec:project-context
-- [ ] candidate-source-bookmarks -- source catalog・URL identity・照合・変異を独立共有coreへ集約し、循環依存を解消する。 Dependencies: implementation:project-candidate-management
-- [ ] source-price-refresh -- source照合の所有を手放し、明示操作による価格取得と更新workflowへ責務を限定する。 Dependencies: spec:candidate-source-bookmarks
-- [ ] duplicate-product-merge -- 商品同一性normalizerを共有coreへ移し、product-captureへの不要な依存を解消する。 Dependencies: implementation:candidate-source-bookmarks
-- [ ] local-data-foundation -- generic永続化primitiveをpackageへ委譲し、PC固有root・policy・compositionを保持する。 Dependencies: spec:local-data-library-boundaries, implementation:typed-messages-core
-- [ ] backup-restore -- generic backup orchestrationをcoreの公開port上へ委譲し、PC固有交換形式・UI・context lifecycleを保持する。 Dependencies: spec:local-data-library-boundaries, spec:local-data-foundation
+- [x] typed-messages-core -- generic package APIとread-only consumer fixtureへ責務を限定し、configured app adapterと製品検証のownershipを手放す。 Dependencies: none
+- [x] project-context -- project lifecycleの意味・command・stateを引き受け、文言の物理catalog ownershipはui-message-catalogへ委譲する。 Dependencies: none
+- [x] local-data-library-boundaries -- generic local-data core、Chrome adapter、backup orchestrationの公開portへ責務を限定し、製品adapter実装を手放す。 Dependencies: spec:typed-messages-core
+- [x] ui-message-catalog -- configured app message adapterと全ja/en物理catalogを単独所有し、project lifecycle messageを統合する。 Dependencies: spec:typed-messages-core, spec:project-context
+- [x] local-data-foundation -- generic永続化primitiveをpackageへ委譲し、PC固有root・product adapter・共有AppDataErrorをcanonical ownerとして保持する。 Dependencies: spec:local-data-library-boundaries
+- [x] project-candidate-management -- project lifecycle、共有error、candidate source、product identityの所有を手放し、candidate管理へ責務を限定する。 Dependencies: spec:project-context, spec:local-data-foundation
+- [x] current-build-management -- candidate-owned ManagementError importを共有AppDataErrorへ移し、既存のcurrent project追従と構成管理を維持する。 Dependencies: spec:local-data-foundation
+- [x] compatibility-checking -- candidate-owned ManagementError importを共有AppDataErrorへ移し、read-only評価境界を維持する。 Dependencies: spec:local-data-foundation, spec:current-build-management
+- [x] candidate-source-bookmarks -- source catalog・URL identity・照合・変異を独立共有coreへ集約し、循環依存を解消する。 Dependencies: spec:project-candidate-management, spec:local-data-foundation
+- [x] source-price-refresh -- source照合とcandidate-owned errorの所有を手放し、明示操作による価格取得と更新workflowへ責務を限定する。 Dependencies: spec:candidate-source-bookmarks, spec:local-data-foundation
+- [x] duplicate-product-merge -- 商品同一性normalizerを共有coreとして所有し、source ownerを利用してproduct-captureへの不要な依存を解消する。 Dependencies: spec:candidate-source-bookmarks
+- [x] product-page-capture -- 商品同一性normalizerの公開ownershipを手放し、取得・manufacturer補完・candidate handoffへ責務を限定する。 Dependencies: spec:duplicate-product-merge
+- [x] backup-restore -- product backup adapterを単独所有し、generic orchestrationをcoreの公開port上へ委譲する。 Dependencies: spec:local-data-library-boundaries, spec:local-data-foundation, spec:project-context
+- [x] application-shell -- owner確定後の公開portだけをcompositionし、project・source・identityの遅延proxyと旧wiringを撤去する。 Dependencies: spec:ui-message-catalog, spec:project-context, spec:project-candidate-management, spec:current-build-management, spec:compatibility-checking, spec:candidate-source-bookmarks, spec:source-price-refresh, spec:duplicate-product-merge, spec:product-page-capture, spec:backup-restore
 
 ## Direct Implementation Candidates
 

@@ -6,6 +6,12 @@
 
 抽出pipelineはJSON-LD、明示allowlistに含まれるOpenGraph・Twitter Card・product metadata、見出し・パンくず、表・定義リストの汎用候補を収集し、メーカーが欠損する場合だけローカルなメーカーdomain mapを最下位候補として追加する。`og:site_name`は任意のsource表示名として商品項目と分離して扱い、URL同一性やページ種別判定には用いない。固定tabから同じpipelineで価格だけを返す`PagePriceExtractionPort`は維持し、`source-price-refresh`の公開consumer契約を変更しない。
 
+## Change Integration
+
+- **Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope design delta**: `ProductIdentityNormalizer`移管元撤去、`ProductCapturePublicApi`縮小、canonical source型とcandidate intent factoryへのconsumer import移行、data error非所有、production-shaped API fallout検証。
+- **Out-of-scope preservation**: identity core/algorithm、source URL identity/catalog/mutation、`AppDataError`定義・mapping、candidate editor/保存、application-shell wiringを実装しない。capture pipeline、metadata、manufacturer補完、handoff、price extraction、UI/error semanticsを非回帰とする。
+
 ### Goals
 
 - 現行activationの固定タブだけを一回抽出し、stale結果をhandoffしない
@@ -22,6 +28,8 @@
 - サイト固有DOM selector、domain mapを根拠とした追加取得権限またはサイト利用許可
 - 保存済みsourceのURL照合、価格更新、source種別の永続化
 - 生HTML、画像、抽出セッションの永続化
+- product identity normalizer/matcher、source URL identity、source catalog/mutation、共有data error vocabulary/mapping
+- application-shellの遅延proxy、singleton、public port composition
 
 ## Boundary Commitments
 
@@ -43,25 +51,32 @@
 - candidate sourceの種別判定、複数source化、価格反映
 - `siteName`によるURL同一性、source永続識別、source種別またはページ種別の判定
 - メーカー公式であることを推測したentry、販売代理店や地域domainの自動同一視
+- `duplicate-product-merge`所有のproduct identity type/normalizer/factory/matcher
+- `candidate-source-bookmarks`所有のsource entity policy、URL identity、catalog、mutation
+- `local-data-foundation`所有の`AppDataError`と`FoundationError` mapping
 
 ### Allowed Dependencies
 
 - application-shell公開の`ActivationId`、`TargetTabId`、`TransientSurfaceLifecyclePort`、`FeatureActivationIntent`
-- candidate-management公開の`UnresolvedCandidateDraft`とtyped intent factory
+- candidate-management公開の`CandidateEditorPrefill`と`createCandidateEditorIntent` typed factory
+- candidate-source-bookmarks公開の初期source入力型。catalog、matcher、mutationは利用しない
 - candidate-managementのsource classifierはproduct-capture公開の`ManufacturerDomainLookup`だけを利用し、domain map内部をdeep importしない
 - local data foundation公開のcanonical `Result<T, E>`、domain型、`SourcedValue<MoneyValue>`、`UtcTimestamp`
 - Chrome 116以降の既存`activeTab` / `scripting`到達、React 19、TypeScript 7 strict、標準DOM / URL API
 - `web-content-acquisition.md`で許容されたローカルmetadata。新規runtime依存は追加しない
 
+product identity public seamはproduct-captureの依存ではない。移管後のduplicate/candidate consumerがcanonical identity入口を利用し、captureはその型も再exportしない。候補保存が扱う`AppDataError`はcandidate/foundation境界に留まり、captureのhandoff失敗unionへ混ぜない。
+
 ### Revalidation Triggers
 
 - `TransientSurfaceLifecyclePort.conclude`、activation世代、固定tabまたは失効条件が変わる
-- `UnresolvedCandidateDraft`、candidate editor intent、pre-edit受理条件が変わる
+- `CandidateEditorPrefill`、candidate editor intent、pre-edit受理条件が変わる
 - 抽出source priority、`ExtractionSource`、manufacturer provenanceが変わる
 - metadata property allowlist、propertyから取得先項目への写像、`siteName`上限またはsource draft契約が変わる
 - domain entryの所有者、根拠、対象eTLD+1または取得ポリシーが変わる
 - `PagePriceObservation`、`PagePriceExtractionError`、固定tab/page-derived URL照合が変わる
 - `candidate-source-bookmarks`が参照するdomain map契約、または`source-price-refresh`が参照するprice portが変わる
+- canonical source型、candidate intent factory、identity public seam、共有`AppDataError`またはproduct-capture public export集合が変わる
 - **Cross-spec verification**: `candidate-source-bookmarks`は再検証済みで、現行設計は`CandidateEditorPrefill`、typed intent factory、`TransientSurfaceLifecyclePort.conclude`を参照し、旧`CaptureCandidatePort`依存は残っていない。今後このhandoff seamが変わる場合だけ再検証する。
 
 ## Architecture
@@ -133,6 +148,7 @@ src/features/product-capture/
   registration.ts                   # transient contributionとpublic APIの組立
   feature-contribution.ts            # shell公開portだけを受けるcomposition factory
   public.ts                          # ProductCapturePublicApi、manufacturer lookup、price observation公開入口
+  product-identity-normalizer.ts     # remove; canonical identity owner移行後に撤去
   styles.css                         # 一過性表示状態
   editor-navigation.ts               # remove; concludeを迂回する旧直接navigation
   submit-draft.ts                    # remove; candidate保存は境界外
@@ -151,12 +167,14 @@ tests/features/product-capture/
   state.test.ts
   view.test.tsx
   integration.test.ts
+  public.test.ts                     # modify; public key集合とidentity export撤去
+  product-identity-normalizer.test.ts # remove; characterizationはidentity ownerへ移管
 tests/contracts/
   page-price-extraction-contract-kit.test.ts # modify; canonical consumer shape非回帰
 tests/fixtures/product-capture/              # create; metadata allowlist用synthetic data only
 ```
 
-application shellのruntime入口、candidate-management内部、manifest permission集合、source-price-refreshは本specの実装で直接編集しない。product-captureの一過性composition変更は`product-capture-transient-migration`の所有タスクと同じファイルへ着地するため、実装時は同specを先行させて統合する。
+application shellのruntime入口、candidate-management内部、candidate source core、identity core、foundation error、manifest permission集合、source-price-refreshは本specの実装で直接編集しない。identity file/exportはcanonical identity ownerが公開入口を提供しdownstream consumerが移行できた後だけ撤去する。product-captureの一過性composition変更は`product-capture-transient-migration`の所有タスクと同じファイルへ着地するため、実装時は同specを先行させて統合する。
 
 ## System Flows
 
@@ -236,6 +254,7 @@ domain-mapはmanufacturerだけを生成するため価格順位へ影響しな�
 | 7.5, 7.6 | metadata対応表と未列挙property拒否 | GenericExtractor、MetadataPropertyMap | MetadataPropertyRule | metadata allowlist |
 | 8.1, 8.2, 8.3, 8.4 | 任意取得元サイト名 | GenericExtractor、CaptureNormalizer、DraftMapper | SourcedSiteName | metadata allowlist、抽出handoff |
 | 8.5, 8.6, 8.7, 8.8 | metadata採用範囲とsite name非推測・非識別 | MetadataPropertyMap、GenericExtractor、DraftMapper | MetadataPropertyRule | metadata allowlist |
+| 9.1–9.10 | canonical public seam consumer移行 | CaptureDraftMapper、CandidateEditorHandoff、ProductCapturePublicApi | source public input、candidate intent factory、manufacturer lookup、page price port | handoff・public API fallout |
 
 ## Components and Interfaces
 
@@ -383,15 +402,25 @@ export interface ProductCapturePublicApi {
 
 ## Data Models
 
+### Canonical seam migration
+
+`CaptureDraftMapper`はcandidate-management内部のsource型ではなく、`candidate-sources/public.ts`の初期source入力型を使ってpage URL、capturedAt、任意price/kind/siteNameを一件のsource prefillへ写像する。source ID生成規則、URL identity、primary policy、保存mutationはsource ownerへ委ね、mapperはcatalog/mutation portを呼ばない。
+
+`CandidateEditorHandoff`はcandidate公開`createCandidateEditorIntent(prefill)`だけを呼び、返された`FeatureActivationIntent`をlifecycle `conclude`へ渡す。candidate/project query、save service、source mutation、candidate内部型へ到達しない。factory/handoff失敗は現行activationの既存`handoff-failed`として保持し、data operation errorへ分類しない。
+
+`ProductCapturePublicApi`の最終shapeは`manufacturerDomains`と`pagePriceExtraction`だけである。module-level exportにも`ProductIdentityNormalizer`、field type、factoryを残さない。identity characterization testはcanonical identity ownerへ移し、capture側ではexport不存在とcapture pipeline非回帰を検証する。
+
 - `RawCapturePayload`: 注入側から返る未信頼値。request、tab、page URL、candidate shapeを境界検証する。
 - `NormalizedField`: field、normalizedValue、rawValue、source、sourceLabel、validationを持つ。
 - `CaptureResult`: 固定tab、page URL、capturedAt、採用値、任意の`SourcedSiteName`、欠損、棄却理由を持つ一時値。site nameは必須core fieldの欠損集合へ含めない。
-- `UnresolvedCandidateDraft`: project未解決のcandidate-management公開pre-edit契約。captureは保存可能なcanonical draftへ昇格しない。
+- `CandidateEditorPrefill`: project未解決を許すcandidate-management公開pre-edit契約。captureは保存可能なcanonical draftへ昇格しない。
 - `PagePriceObservation`: page-derived URL、取得時点、任意価格だけを持つread-only一時値。
 
 永続modelは本specで追加しない。
 
 ## Error Handling
+
+product-captureは`AppDataError`、`ManagementError`、`FoundationError` mappingを定義・import・再公開しない。candidateの保存はhandoff後に行われる。candidate intent factoryの拒否やlifecycle failureを既知のstorage/quota/conflictへ推測せず、検証済みintentを同一世代で保持して既存再試行を提供する。
 
 - runtime error: `tab-unavailable | permission-lost | restricted-page | tab-changed | injection-failed | invalid-payload`
 - extraction result: 候補欠損は正常な部分結果。domain不一致もerrorにしない。
@@ -422,6 +451,9 @@ export interface ProductCapturePublicApi {
 - 有効なsite nameを任意source表示名としてhandoffし、不正・欠損時も他の商品項目を維持する
 - `PagePriceExtractionPort`の6 failure、価格欠損、元表記、同一pipeline順位をconsumer fixtureで検証する
 - `public.ts`だけをimportするsource-price-refresh相当consumerがstrict型検査を通る
+- source prefill mapperがcandidate-sources公開型とcandidate公開intent factoryだけを利用し、candidate/source内部moduleへdeep importしない
+- product-capture public export集合がmanufacturer lookupとpage price extractionに限定され、identity type/factoryが存在しない
+- negative fixtureが`ManagementError`/`AppDataError`再所有、identity/source core再実装、application-shell wiringを一違反ずつ拒否する
 - 旧`CaptureCandidatePort`、project query、直接navigation、save serviceへの依存がproduct-captureから消える
 
 ### DOM / E2E

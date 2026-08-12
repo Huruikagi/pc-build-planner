@@ -110,3 +110,37 @@ projectの作成・改名・削除、削除確認、成功後refresh、project�
 ### Source
 
 - Milestone v0.5.0、GitHub Issue #44。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+project lifecycleのcanonical ownership拡張が、意味contractだけでなくja/en catalog key/valueの物理ownershipまで含み、`ui-message-catalog`と重複している。
+
+### Current State
+
+更新済みrequirements/design/tasksはproject lifecycle command/stateと同時に`projectContext.lifecycle.*` catalog追加・parityを本specの成果物にしている。
+
+### Desired Outcome
+
+本specはproject lifecycleのcommand、state、確認、成功/失敗、messageの意味・発火条件・descriptor利用を所有し、物理catalog file、翻訳値、具体MessageKey集約、parityは`ui-message-catalog`へ委譲する。
+
+### Scope
+
+- **In**: lifecycle service/state、意味contract、必要message intentとparameter、descriptor consumer、既存presentation接続、成功後refresh。
+- **Out**: ja/en catalog file/key/valueの実装、catalog aggregation/parity、layout/CSS、foundation参照修復、保存形式。
+
+### Boundary Impact
+
+- **Extends**: lifecycle messageを発火するsemantic producer contractを明確化する。
+- **Preserves**: project lifecycle、selection、guard、generation、既存見た目と利用者挙動。
+- **Adjacent**: `ui-message-catalog`が物理catalogとparityを、`application-shell`が確定した公開portのcompositionだけを所有する。
+
+### Dependencies
+
+- **Upstream**: none。
+- **Downstream**: `spec:ui-message-catalog`、`spec:project-candidate-management`、`spec:application-shell`。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。

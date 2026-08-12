@@ -4,7 +4,7 @@
 
 UI 文言が各 view コンポーネントへ直接埋め込まれており、文言が「表示以外の役割」まで担ってしまっている。CSS の属性セレクタが日本語 `aria-label` を参照し、E2E・単体テストのロケータとアサーションが表示文言そのものに依存し、同じ文言が複数箇所で重複定義されている。さらに日本語の助詞を前提とした文字列連結があり、文構造として翻訳が原理的に不可能な箇所が存在する。
 
-本 spec は、UI に表示される全ての文言を単一の型付きカタログから解決する基盤と、その後に追加・移動された利用者向け文言の canonical owner である。初回移行で確立した文言非依存のスタイル・テスト、文単位メッセージ、型付きキー契約を維持しながら、v0.3.0 の一過性表示面と設定画面が必要とする日本語・英語文言を追加し、廃止された常設ナビゲーション文言を削除する。
+本 spec は、UI に表示される全ての文言を単一の型付きカタログから解決する基盤と、その後に追加・移動された利用者向け文言の canonical owner である。初回移行で確立した文言非依存のスタイル・テスト、文単位メッセージ、型付きキー契約、およびv0.3.0で追加した日本語・英語文言とdead key撤去を維持する。Change Brief `v0.5.0`では、製品固有のカタログ・言語policy・React bindingを保持しつつ、汎用message mechanismを`typed-messages-core`の公開契約へ委譲した。最新の Change Brief `v0.5.0-boundary-reconciliation` では、`project-context` が定義する project lifecycle message の意味・発火条件・必要parameterを受け取り、具体的な`MessageKey`、日本語・英語の値、descriptor-to-key mapping、catalog集約、parityを本specの単独所有へ統合する。
 
 カタログのキー体系と参照方法は `ui-internationalization` が導入した日本語・英語の静的カタログと resolver を維持する。機能側は表示文言や言語状態を所有せず、catalog owner がキー、プレースホルダ、ロケール間parity、廃止計画を一貫して管理する。
 
@@ -18,6 +18,15 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
 2. **参照側の契約** — view、shell、ナビゲーション、重複定義、動的合成文（要件2〜7）
 3. **文言依存の剥離** — スタイルとテストが文言を識別子として使わないこと（要件8、要件9）
 4. **v0.3.0の追加・移行** — 一過性起動、権限再付与、新世代起動、設定画面、shell回復案内、dead navigation keyの撤去（要件11）
+5. **v0.5.0のgeneric core委譲** — package公開APIを設定して利用する製品adapterと既存consumerの非回帰（要件12）
+6. **v0.5.0のowner境界調整** — project lifecycle messageの物理catalog、descriptor mapping、ja/en parityの単独所有（要件13）
+
+## Change Brief Integration
+
+- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
+- **In-scope trace**: configured app adapter、project lifecycleの具体`MessageKey`とja/en値、descriptor-to-key mapping、catalog aggregation、placeholder parity、既存message consumer/public contract、製品validationを本specへ統合する。
+- **Preserved behavior**: `v0.5.0`で確定したgeneric core委譲、全表示文言の唯一のsource of truth、configured resolver、React binding、既存表示、文言非依存consumerを維持する。
+- **Out-of-scope preservation**: project lifecycle command/state/意味/発火判断、言語保存・切替、React package化、UI layout、generic core実装を取り込まない。
 
 ## Boundary Context
 
@@ -31,6 +40,9 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
   - 一過性featureの起動失敗・失効案内、商品取り込みの権限再付与・新世代起動・引き渡し再試行案内
   - 設定画面のナビゲーション、見出し、表示言語・バックアップ区画の説明、およびloading・startup failure時の二言語回復案内
   - 廃止されたproduct-capture常設navigationと独立backup navigationのキー撤去
+  - `typed-messages-core`の公開APIだけを用いたconfigured resolver、descriptor factory、generic parity primitiveへの接続
+  - 製品固有の具体`MessageKey`、ja/enカタログ、source/fallback language、release固有検査、React binding、既存app consumer contractの維持
+  - project lifecycleの意味・発火条件・必要parameterに対応する具体`MessageKey`、日本語・英語の値、descriptor-to-key mapping、catalog集約、placeholder parity
 - **Out of scope**:
   - 言語状態、言語切り替え、言語の永続化、ブラウザ言語からの初期値決定（`ui-internationalization` が所有）
   - `_locales/` の導入、`chrome.i18n` の利用、拡張マニフェストの `name` / `description` の国際化（同上）
@@ -40,10 +52,14 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
   - テストフィクスチャ内の日本語データ値（架空の商品名など）。表示文言ではない
   - ドメイン層および互換性判定ルールへの変更。既に文言を持たず列挙コードで結果を返しているため対象外
   - 一過性featureの寿命・activation配送、商品取り込みの抽出・handoff、設定画面のlayout・mount、言語state、backup/restore業務処理
+  - 汎用message型・format・resolver factory・descriptor factory・parity primitiveの再実装、package内部moduleへの依存、React adapterのpackage化、npm公開
+  - project lifecycle command、state、意味、発火条件、descriptor生成、候補一覧・editorのlayoutまたはCSS
 - **Adjacent expectations**:
   - 各機能 spec が定める利用者向け状態と回復操作は本 spec の入力であり、本 spec は対応するmessage keyとロケール値だけを所有する
   - アプリケーションシェルが所有する画面合成と機能の搭載・解放のライフサイクルの責務境界は変更しない
   - `ui-internationalization` は本 spec が確定したキー体系を利用し、言語状態とresolver選択だけを所有する
+  - `typed-messages-core` はReact・Chrome・製品catalog非依存の汎用mechanismを所有し、本specはそのroot公開APIを設定する最初のapp consumerになる
+  - `project-context` はproject lifecycle messageの意味・発火条件・必要parameterをkey非依存descriptorとして提供し、本specはそのdescriptorを具体keyとja/en値へ写像する
 
 ## Requirements
 
@@ -187,3 +203,31 @@ UI 文言が各 view コンポーネントへ直接埋め込まれており、�
 6. While 常設navigationを利用できないloadingまたはglobal startup failure状態, the UIメッセージカタログ shall 表示言語の変更場所が「設定 / Settings」であることと利用可能な回復操作を、現在の表示言語にかかわらず判別できる短い二言語案内として提供する。
 7. The UIメッセージカタログ shall product-captureを常設navigationへ戻す文言、shell headerの言語controlを前提とする文言、またはbackup-restoreの独立navigationを前提とする文言を提供しない。
 8. The 検証フロー shall Requirement 11の全キーが日本語・英語の両方で解決でき、プレースホルダが一致し、廃止キーがcatalogとconsumerに残らないことを確認する。
+
+### Requirement 12: generic coreを設定する製品メッセージadapter
+
+**Objective:** As a 拡張の開発者, I want 製品固有のカタログ契約が汎用message packageの公開APIだけを設定して提供されること, so that 製品文言だけの変更と安定したresolver coreの変更影響を分離できる
+
+#### Acceptance Criteria
+
+1. The UIメッセージカタログ shall `typed-messages-core`の公開入口だけを用いて、製品カタログに対応するconfigured resolverとmessage descriptor生成能力を提供する。
+2. The UIメッセージカタログ shall 日本語・英語の製品カタログ、具体的な`MessageKey`、source language、fallback language、原語表記およびrelease固有検査のcanonical ownerであり続ける。
+3. The UIメッセージカタログ shall 既存のapp consumerに対し、resolver、descriptor、plural、placeholder、fallbackおよびReact表示の利用者向け結果を維持する。
+4. When 日本語・英語のカタログparityを検証する, the UIメッセージカタログ shall generic parity primitiveの結果へrequired release key、固定二言語案内およびdead key不在の製品規則を合成する。
+5. If UIメッセージカタログが`typed-messages-core`の内部moduleを参照する、または汎用format・resolver・parity mechanismを製品側へ重複して保持する, then the 検証フロー shall その境界違反を失敗として報告する。
+6. The UIメッセージカタログ shall 言語状態・保存・切り替え、React adapterのpackage化、対応言語追加、翻訳変更、npm公開またはUI再設計を本更新へ含めない。
+7. When 製品カタログ値またはrelease固有規則だけが変更される, the 検証フロー shall package core変更と区別した製品側のparity、configured adapterおよび表示回帰を再現可能に検証する。
+
+### Requirement 13: project lifecycle messageの物理catalog統合
+
+**Objective:** As a 拡張の利用者, I want projectの作成・改名・削除と回復案内が日本語と英語で一貫して表示されること, so that project lifecycleの責務移管後も同じ意味と操作経路を理解できる
+
+#### Acceptance Criteria
+
+1. When `project-context` がproject一覧、作成、改名、削除確認、名前必須、操作中、操作失敗またはrefresh再試行のmessage intentを提供する, the UIメッセージカタログ shall 各intentを一意な具体`MessageKey`と日本語・英語の値へ解決可能にする。
+2. When project lifecycle messageがproject名、operation、影響または安定したerror categoryを必要とする, the UIメッセージカタログ shall `project-context`が定義したparameterの意味と名前を変えず、project名は両言語で同じplaceholderとして扱い、operation・影響・error categoryは欠落のない具体key mappingとして扱う。
+3. The UIメッセージカタログ shall project lifecycleの全key/value、descriptor-to-key mapping、言語別catalog集約およびplaceholder parityを単一の物理catalog ownerとして提供する。
+4. If project lifecycleの日本語・英語catalogにkeyまたはplaceholderの欠落・余剰がある、descriptor intentに対応する具体keyがない、または未定義のmappingがある, then the 製品検証フロー shall 失敗する。
+5. The UIメッセージカタログ shall project lifecycle command/state、message intentの意味・発火条件、またはkey非依存descriptorの生成を再定義しない。
+6. When project lifecycle messageを既存hostへ表示する, the 拡張 shall 既存のlayout、CSS、role、アクセシブルlabel、keyboard操作および利用者向け結果を維持し、project名を実行可能なmarkupとして解釈しない。
+7. The UIメッセージカタログ shall 言語保存・切り替え、React adapterのpackage化、generic core実装、候補一覧・editorの情報設計、独立project管理画面またはUI全面刷新を本更新へ含めない。

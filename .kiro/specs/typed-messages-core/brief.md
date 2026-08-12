@@ -48,3 +48,37 @@ React、Chrome API、PC Build Planner固有カタログに依存しないtyped m
 ## Constraints
 
 Node.js 26、pnpm 11、TypeScript NodeNext、ESMを維持する。`pnpm-workspace.yaml`へpackage pathを登録し、内部依存は`workspace:*`を使う。packageはReact、Chrome API、PCドメイン型、製品カタログへ依存せず、実行時dynamic codeとremote codeを導入しない。外部公開は行わず、2番目のconsumerでAPIを再評価する。
+
+## Change Brief: v0.5.0-boundary-reconciliation
+
+### Problem
+
+生成済みspecがconfigured `AppMessageAdapter`、製品catalog parity、製品側validationまで実装対象に含め、`ui-message-catalog`のcanonical ownershipと重複している。
+
+### Current State
+
+requirementsはgeneric coreを対象としている一方、design/tasksは`src/ui-messages`の製品adapterと製品検証を本specの成果物として扱う。
+
+### Desired Outcome
+
+本specはgeneric package API、workspace/export map、package単独検証、公開APIだけを使うread-only consumer fixtureへ限定され、configured app adapterと製品catalog検証は`ui-message-catalog`だけが所有する。
+
+### Scope
+
+- **In**: generic型・resolver/descriptor factory・format・parity primitive、package公開入口、workspace build、deep import gate、製品実装を変更しないconsumer型fixture。
+- **Out**: `src/ui-messages`のconfigured adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰。
+
+### Boundary Impact
+
+- **Extends**: package consumer fixtureをread-only contractへ限定する。
+- **Preserves**: generic API、React/Chrome/製品非依存、private package、単独検証。
+- **Adjacent**: `ui-message-catalog`がconfigured adapter、物理catalog、製品validationを単独所有する。
+
+### Dependencies
+
+- **Upstream**: none。
+- **Downstream**: `spec:ui-message-catalog`、`spec:local-data-library-boundaries`のworkspace運用。
+
+### Source
+
+- v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。
