@@ -58,7 +58,12 @@
 
 ## spec の扱い
 
-spec の更新経路は cc-sdd 側が既に持っている。`/kiro-discovery` が新規 spec・既存 spec の更新・spec 不要を判定し、既存 spec の更新は Path A（`/kiro-spec-requirements {feature}`）で行う。roadmap にも `Existing Spec Updates` 欄がある。したがって「spec をいつ触るか」を運用ルールとして別途定める必要はない。
+spec の更新経路は cc-sdd 側が既に持っている。`/kiro-discovery` が新規 spec・既存 spec の更新・spec 不要を判定し、既存 spec の更新は次の2経路に乗る。
+
+- **Path A**（単一の既存 spec に収まる）: `/kiro-spec-requirements {feature}` で対象 spec を更新する。
+- **Path E**（新規 spec と既存 spec 更新の混在）: 既存 spec への拡張を roadmap の `Existing Spec Updates` 欄へ列挙し、そこから各 spec を更新する。
+
+したがって「spec をいつ触るか」を運用ルールとして別途定める必要はない。
 
 決めておくのは、ツールが判断しない一点だけ。
 
