@@ -54,7 +54,7 @@
   - _Boundary: DescriptorFactory_
   - _Depends: 1.3_
 
-- [ ] 2.4 generic catalog parityを実装する
+- [x] 2.4 generic catalog parityを実装する
   - source/targetのmissing key、excess key、全formを対象にしたplaceholder集合不一致を、安定したissue codeとkeyで返す。
   - compile-time parity型を提供し、不一致keyだけを型として識別できるようにする。
   - required release key、bilingual hint、対応言語、source languageなどの製品ruleをcore結果へ含めない。
