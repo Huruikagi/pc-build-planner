@@ -15,7 +15,7 @@ const runtimeSchemaGateReport = {
 };
 
 const runtimeSchemaNotice =
-  "zod 4.4.3\nMIT License\nPermission is hereby granted";
+  "zod 4.4.3\nreact 19.2.8\nreact-dom 19.2.8\nscheduler 0.27.0\nMIT License\nPermission is hereby granted";
 
 const validManifest = {
   manifest_version: 3,
