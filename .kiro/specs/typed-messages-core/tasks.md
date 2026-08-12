@@ -46,7 +46,7 @@
   - _Boundary: CatalogNormalizer_
   - _Depends: 1.2_
 
-- [ ] 2.3 (P) catalog genericなdescriptor factoryを実装する
+- [x] 2.3 (P) catalog genericなdescriptor factoryを実装する
   - catalogから導出されたkeyとparameter契約を適用するconfigured descriptor factoryを提供する。
   - parameterなしではkeyだけ、parameterありではkeyとparamsだけを持つplain valueを返し、製品catalogや言語識別子を埋め込まない。
   - 型fixtureとruntime testでparameter制約、JSON直列化後のplain shape、製品非依存性を観測できることを完了条件とする。
