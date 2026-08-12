@@ -38,7 +38,7 @@
   - _Boundary: MessageFormatter_
   - _Depends: 1.3_
 
-- [ ] 2.2 (P) nested catalog normalizerを実装する
+- [x] 2.2 (P) nested catalog normalizerを実装する
   - 入れ子のnamespaceをdot keyのflat catalogへ変換し、plainとstructured definitionをleafとして保持する。
   - catalog objectを変更せず、空namespaceを含む入力でも決定的な結果を返す。
   - nested、structured、emptyのsynthetic catalogが期待するdot key集合へ変換されるunit testが成功することを完了条件とする。
