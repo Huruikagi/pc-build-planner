@@ -82,7 +82,7 @@
   - _Boundary: PackagePublicEntry_
   - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 3.2 package単独検証suiteを完成する
+- [x] 3.2 package単独検証suiteを完成する
   - packageだけを対象にbuild、typecheck、testを実行するfilter commandとroot-export smoke testを完成させる。
   - plain、interpolation、single plural、multi plural、descriptor、parityの正常系とfallbackをsynthetic fixtureで検証する。
   - 完了時、app sourceを同時検査せずに全package commandがclean outputから成功し、失敗時はnon-zeroで終了する。

@@ -17,4 +17,14 @@ test("package scaffold remains private and runtime dependency-free", async () =>
       import: "./dist/index.js",
     },
   });
+
+  assert.deepEqual(manifest.scripts, {
+    clean: 'node --eval "require(\'node:fs\').rmSync(\'dist\', { recursive: true, force: true })"',
+    build: "tsc -p tsconfig.build.json",
+    typecheck: "tsc --noEmit -p tsconfig.json",
+    "test:unit": "node --import tsx --test tests/**/*.test.ts",
+    test: "pnpm run build && pnpm run test:unit",
+    validate:
+      "pnpm run clean && pnpm run build && pnpm run typecheck && pnpm run test",
+  });
 });
