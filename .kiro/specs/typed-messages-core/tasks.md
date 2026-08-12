@@ -111,7 +111,7 @@
   - _Boundary: WorkspaceValidation_
   - _Depends: 3.3_
 
-- [ ] 4.2 package境界のfresh regressionを実行する
+- [x] 4.2 package境界のfresh regressionを実行する
   - package単独build・typecheck・test、read-only public consumer、boundary、topological buildをclean outputから実行する。
   - package sourceと公開成果物にReact、Chrome、製品catalogへの逆依存、dynamic/remote code、未公開subpathが含まれないことを機械検査する。
   - plain、interpolation、plural、descriptor、fallback、generic parityのpackage testを実行し、製品catalogや製品表示の回帰を本taskへ追加しない。
