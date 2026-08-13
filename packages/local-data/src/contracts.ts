@@ -144,10 +144,6 @@ export interface ReplacementAssessment<Preview> {
   readonly ticket: ReplacementAssessmentTicket;
 }
 
-export interface FinalizationTicket {
-  readonly __opaqueFinalizationTicket: unique symbol;
-}
-
 export interface ReplacementReceipt<Root> {
   readonly root: Root;
   readonly revision: number;
@@ -163,13 +159,13 @@ export interface ReplacementBinding {
   readonly targetRevision: number;
 }
 
-export type RecoveryCommitState<PendingCommit> =
+export type RecoveryCommitState<PendingCommit, FinalizationCapability> =
   | { readonly kind: "clear" }
   | { readonly kind: "precommit-pending"; readonly pending: PendingCommit }
   | {
       readonly kind: "postcommit-finalization";
       readonly pending: PendingCommit;
-      readonly ticket: FinalizationTicket;
+      readonly ticket: FinalizationCapability;
     };
 
 export interface PersistentRecoveryProtocol<
@@ -178,6 +174,7 @@ export interface PersistentRecoveryProtocol<
   RecoveryFence = unknown,
   PendingCommit = unknown,
   CurrentAnomalyState = unknown,
+  FinalizationCapability = unknown,
 > {
   authorizeMutation(control: unknown): CoreResult<void, ProtocolError>;
   observeCurrent(rawRoot: unknown): CoreResult<CurrentAnomalyState, ProtocolError>;
@@ -190,18 +187,18 @@ export interface PersistentRecoveryProtocol<
     control: unknown,
     fence: RecoveryFence,
     binding: ReplacementBinding,
-  ): CoreResult<Readonly<{ control: PersistentRecoveryControl; pending: PendingCommit }>, ProtocolError>;
+  ): CoreResult<Readonly<{ control: PersistentRecoveryControl; pending: PendingCommit; finalization: FinalizationCapability }>, ProtocolError>;
   classifyCurrent(
     control: unknown,
     current: CurrentAnomalyState,
-  ): CoreResult<RecoveryCommitState<PendingCommit>, ProtocolError>;
+  ): CoreResult<RecoveryCommitState<PendingCommit, FinalizationCapability>, ProtocolError>;
   release(
     control: unknown,
     capability: RecoveryFence | PendingCommit,
   ): CoreResult<PersistentRecoveryControl, ProtocolError>;
   finalize(
     control: unknown,
-    ticket: FinalizationTicket,
+    ticket: FinalizationCapability,
     current: CurrentAnomalyState,
   ): CoreResult<PersistentRecoveryControl, ProtocolError>;
 }
@@ -212,22 +209,22 @@ export interface ReplacementCommitInput<Root> {
   readonly ticket: ReplacementAssessmentTicket;
 }
 
-export type ReplacementCommitResult<Receipt> =
+export type ReplacementCommitResult<Receipt, FinalizationCapability = unknown> =
   | { readonly kind: "committed"; readonly receipt: Receipt }
   | {
       readonly kind: "committed-finalization-required";
       readonly receipt: Receipt;
-      readonly finalization: FinalizationTicket;
+      readonly finalization: FinalizationCapability;
     };
 
-export interface RootReplacementPort<Root, Assessment, Receipt, Error> {
+export interface RootReplacementPort<Root, Assessment, Receipt, Error, FinalizationCapability = unknown> {
   assess(candidate: unknown): Promise<CoreResult<Assessment, Error>>;
   assessRecovery(candidate: unknown): Promise<CoreResult<Assessment, Error>>;
   commit(
     input: Readonly<ReplacementCommitInput<Root>>,
-  ): Promise<CoreResult<ReplacementCommitResult<Receipt>, Error>>;
+  ): Promise<CoreResult<ReplacementCommitResult<Receipt, FinalizationCapability>, Error>>;
   findPendingFinalization(): Promise<
-    CoreResult<FinalizationTicket | null, Error>
+    CoreResult<FinalizationCapability | null, Error>
   >;
-  finalize(ticket: FinalizationTicket): Promise<CoreResult<Receipt, Error>>;
+  finalize(ticket: FinalizationCapability): Promise<CoreResult<Receipt, Error>>;
 }

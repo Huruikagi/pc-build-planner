@@ -7,7 +7,6 @@ export type {
   CoreErrorCode,
   CoreResult,
   ExclusiveLockPort,
-  FinalizationTicket,
   LocalDataPolicy,
   PolicyStage,
   LockError,

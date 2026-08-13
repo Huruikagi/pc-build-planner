@@ -27,6 +27,7 @@ export const createBackupOrchestrator = <
   AssessmentPreview,
   Receipt,
   Error,
+  FinalizationCapability = unknown,
 >(
   dependencies: BackupOrchestratorDependencies<
     Root,
@@ -39,9 +40,10 @@ export const createBackupOrchestrator = <
     Preview,
     AssessmentPreview,
     Receipt,
-    Error
+    Error,
+    FinalizationCapability
   >,
-): BackupOrchestrator<RestoreInput, Artifact, Preview, Receipt, Error> => {
+): BackupOrchestrator<RestoreInput, Artifact, Preview, Receipt, Error, FinalizationCapability> => {
   // The binding is deliberately closure-private. The public ticket has no
   // fields, serialization payload, candidate, root, or fencing information.
   const restoreBindings = new WeakMap<object, RestoreBinding<Root, Preview>>();

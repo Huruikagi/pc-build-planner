@@ -7,7 +7,6 @@ import {
 } from "../../src/backup/index.js";
 import type {
   CoreResult,
-  FinalizationTicket,
   ReplacementAssessment,
   ReplacementMode,
 } from "../../src/index.js";
@@ -15,6 +14,7 @@ import type {
 type Failure = { readonly code: string };
 type Root = Readonly<{ revision: number; values: readonly string[] }>;
 type Candidate = Readonly<{ values: readonly string[] }>;
+type OwnerFinalizationCapability = Readonly<{ ownerToken: string }>;
 
 const ok = <T>(value: T): CoreResult<T, Failure> => ({ ok: true, value });
 const failed = (code: string): CoreResult<never, Failure> => ({
@@ -123,8 +123,8 @@ const createLifecycleFixture = (mode: ReplacementMode = "normal") => {
   let rootWrites = 0;
   let commitAttempt = 0;
   let assessmentNumber = 0;
-  const finalization = Object.freeze({}) as FinalizationTicket;
-  const pending = Object.freeze({}) as FinalizationTicket;
+  const finalization: OwnerFinalizationCapability = Object.freeze({ ownerToken: "commit-capability" });
+  const pending: OwnerFinalizationCapability = Object.freeze({ ownerToken: "persisted-capability" });
   const codec: BackupCodec<
     Root,
     string,

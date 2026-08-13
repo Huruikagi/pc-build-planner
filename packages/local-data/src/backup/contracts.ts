@@ -1,6 +1,5 @@
 import type {
   CoreResult,
-  FinalizationTicket,
   ReplacementAssessment,
   ReplacementMode,
   RootReplacementPort,
@@ -46,12 +45,12 @@ export interface BackupPreflight<Preview> {
   readonly ticket: RestoreTicket;
 }
 
-export type BackupCommitResult<Summary> =
+export type BackupCommitResult<Summary, FinalizationCapability> =
   | { readonly kind: "committed"; readonly summary: Summary }
   | {
       readonly kind: "committed-finalization-required";
       readonly summary: Summary;
-      readonly finalization: FinalizationTicket;
+      readonly finalization: FinalizationCapability;
     };
 
 export interface BackupOrchestrator<
@@ -60,6 +59,7 @@ export interface BackupOrchestrator<
   Preview,
   Summary,
   Error,
+  FinalizationCapability = unknown,
 > {
   create(): Promise<CoreResult<Artifact, Error>>;
   preflight(
@@ -70,11 +70,11 @@ export interface BackupOrchestrator<
   ): Promise<CoreResult<Readonly<BackupPreflight<Preview>>, Error>>;
   commit(
     ticket: RestoreTicket,
-  ): Promise<CoreResult<BackupCommitResult<Summary>, Error>>;
+  ): Promise<CoreResult<BackupCommitResult<Summary, FinalizationCapability>, Error>>;
   findPendingFinalization(): Promise<
-    CoreResult<FinalizationTicket | null, Error>
+    CoreResult<FinalizationCapability | null, Error>
   >;
-  finalize(ticket: FinalizationTicket): Promise<CoreResult<Summary, Error>>;
+  finalize(ticket: FinalizationCapability): Promise<CoreResult<Summary, Error>>;
 }
 
 export interface BackupOrchestratorDependencies<
@@ -89,6 +89,7 @@ export interface BackupOrchestratorDependencies<
   AssessmentPreview,
   Receipt,
   Error,
+  FinalizationCapability = unknown,
 > {
   readonly snapshot: BackupSnapshotReader<Root, Error>;
   readonly codec: BackupCodec<
@@ -108,6 +109,7 @@ export interface BackupOrchestratorDependencies<
     Root,
     ReplacementAssessment<AssessmentPreview>,
     Receipt,
-    Error
+    Error,
+    FinalizationCapability
   >;
 }

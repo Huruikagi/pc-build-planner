@@ -178,7 +178,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.7, 4.8, 4.9, 4.10, 4.11_
   - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
 
-- [ ] 6.4 protocol-owned releaseとfinalization lifecycleをreplacementへ統合する
+- [x] 6.4 protocol-owned releaseとfinalization lifecycleをreplacementへ統合する
   - `prepareCommit`がpersistent controlへ束縛したowner-issued finalization capabilityをpendingとともに保持し、pre-commit cleanup、root commit後release、pending finalization discovery、finalize-only retryをowner protocolのopaque capabilityとstate classificationだけで進める。
   - pre-commit failureではroot write 0件、commit済みfailureでは成功を取り消さず、finalizeではroot write capabilityへ到達しない。
   - consumer ownerが定義した`FinalizationCapability`をprotocol、commit state、replacement public portまで独立genericとして保持する。packageはcandidateをactual current rootとして事前分類せず、finalization ticketを生成・cast・wrapper化したりJavaScript参照同一性で検証したりしない。root write失敗ではowner capabilityをcommittedとして公開せず、same-ticket cleanupと全binding再評価を行う。
@@ -255,3 +255,4 @@
 - **Task 6.2**: transactionのroot maintenance controlとpersistent recovery controlは別genericとし、storageから読んだpersistent controlを同型のowner authorizationへ渡す。owner `OutputError`は`fromCore`へ再変換せず、mutation前・commit直前の拒否をそのまま返す。
 - **Task 6.3**: replacement ticketはowner protocolが返すopaque acquired control/fenceのexact pairをprivateに保持し、latest persistent stateを分類した後も`prepareCommit`へそのpairを渡す。protocol failureはmechanism errorへ再変換しない。root `typecheck`の`src/persistence/product-local-data-adapter.ts`追随は下流`local-data-foundation` Task 11.2所有で、本spec Task 8.1の前提となる。
 - **Task 6.4 contract repair (2026-08-14 approved)**: `prepareCommit`はpersistent controlへ束縛したowner-defined `FinalizationCapability`をpendingとともに返し、protocol・commit state・replacement public portまで独立genericとして通す。packageはroot write成功後のcleanup failure時だけcapabilityを公開し、再生成後のdiscoveryと妥当性判定はactual current rootを使うowner protocolへ委譲する。
+- **Task 6.4**: `FinalizationCapability`はbackup subpathまで同じowner genericで伝播する。commit経路はpost-root observation/classificationを行わず、root write失敗はprecommit、cleanup failureだけをcommitted-finalization-requiredとして扱う。persistent ticket検証はcloneされたcontrolと入力capabilityをowner protocolへ渡して行う。

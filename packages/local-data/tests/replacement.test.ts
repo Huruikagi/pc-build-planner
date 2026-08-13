@@ -26,13 +26,16 @@ interface Root {
 }
 
 class SyntheticAnomaly {
-  constructor(readonly healthy: boolean) {}
+  constructor(readonly healthy: boolean, readonly revision?: number) {}
 }
 class SyntheticFence {
   constructor(readonly mode: ReplacementMode, readonly nonce: number) {}
 }
+class SyntheticFinalization {
+  constructor(readonly ownerToken: string) {}
+}
 class SyntheticPending {
-  constructor(readonly fence: SyntheticFence) {}
+  constructor(readonly fence: SyntheticFence, readonly targetRevision: number, readonly finalization: SyntheticFinalization) {}
 }
 class SyntheticControl {
   constructor(readonly phase: "clear" | "pending" = "clear", readonly pending?: SyntheticPending) {}
@@ -68,7 +71,7 @@ const createHarness = (
   decodeFailure?: { at: number; error: CoreError },
 ) => {
   let stored = structuredClone(storedRoot);
-  let control = new SyntheticControl();
+  let control: SyntheticControl = new SyntheticControl();
   let rootWrites = 0;
   let controlWrites = 0;
   let failControlWriteAt: number | undefined;
@@ -77,47 +80,67 @@ const createHarness = (
   let decodeCalls = 0;
   let rejectPreparedFence = false;
   let rejectRelease = false;
+  let rejectFinalize = false;
+  const lifecycleRootWriteCounts: number[] = [];
   const stages: string[] = [];
   const storage: StoragePort<Root, SyntheticControl> = {
     async readRoot() { return { ok: true, value: structuredClone(stored) }; },
     async writeRoot(value) { rootWrites += 1; if (rootWrites === failRootWriteAt) return { ok: false, error: { code: "storage-unavailable" } }; stored = value; return { ok: true, value: undefined }; },
-    async readControl() { return { ok: true, value: control }; },
-    async writeControl(value) { controlWrites += 1; if (controlWrites === failControlWriteAt) return { ok: false, error: { code: "storage-unavailable" } }; control = value; return { ok: true, value: undefined }; },
+    async readControl() { return { ok: true, value: structuredClone(control) }; },
+    async writeControl(value) { controlWrites += 1; if (controlWrites === failControlWriteAt) return { ok: false, error: { code: "storage-unavailable" } }; control = structuredClone(value); return { ok: true, value: undefined }; },
     async bytesInUse() { return { ok: true, value: 100 }; },
     quotaBytes: () => 1_000,
     async restrictToTrustedContexts() { return { ok: true, value: undefined }; },
   };
-  const recovery: PersistentRecoveryProtocol<SyntheticControl, CoreError, SyntheticFence, SyntheticPending, SyntheticAnomaly> = {
+  const recovery: PersistentRecoveryProtocol<SyntheticControl, CoreError, SyntheticFence, SyntheticPending, SyntheticAnomaly, SyntheticFinalization> = {
     authorizeMutation(value) {
-      return value instanceof SyntheticControl && value.phase === "clear"
+      return typeof value === "object" && value !== null && "phase" in value && value.phase === "clear"
         ? { ok: true, value: undefined }
         : { ok: false, error: { code: "recovery-active" } };
     },
     observeCurrent(raw) {
-      return { ok: true, value: new SyntheticAnomaly(typeof raw === "object" && raw !== null && "valid" in raw && raw.valid === true) };
+      lifecycleRootWriteCounts.push(rootWrites);
+      return { ok: true, value: new SyntheticAnomaly(typeof raw === "object" && raw !== null && "valid" in raw && raw.valid === true, typeof raw === "object" && raw !== null && "revision" in raw ? Number(raw.revision) : undefined) };
     },
     acquire(value, mode, current) {
-      if (!(value instanceof SyntheticControl) || value.phase !== "clear" || current.healthy !== (mode === "normal"))
+      const recovered = value as SyntheticControl | undefined;
+      if (recovered?.phase !== "clear" || current.healthy !== (mode === "normal"))
         return { ok: false, error: { code: mode === "normal" ? "stale-fence" : "stale-recovery-state" } };
-      return { ok: true, value: { control: value, fence: new SyntheticFence(mode, ++capability) } };
+      return { ok: true, value: { control: recovered, fence: new SyntheticFence(mode, ++capability) } };
     },
     prepareCommit(value, fence, binding) {
-      if (rejectPreparedFence || !(value instanceof SyntheticControl) || value.phase !== "clear" || fence.mode !== binding.mode)
+      const recovered = value as SyntheticControl | undefined;
+      if (rejectPreparedFence || recovered?.phase !== "clear" || fence.mode !== binding.mode)
         return { ok: false, error: { code: "stale-assessment" } };
-      const pending = new SyntheticPending(fence);
-      return { ok: true, value: { control: new SyntheticControl("pending", pending), pending } };
+      const finalization = new SyntheticFinalization(`owner:${fence.nonce}:${binding.targetRevision}`);
+      const pending = new SyntheticPending(fence, binding.targetRevision, finalization);
+      return { ok: true, value: { control: new SyntheticControl("pending", pending), pending, finalization } };
     },
-    classifyCurrent(value) {
-      if (!(value instanceof SyntheticControl)) return { ok: false, error: { code: "stale-recovery-state" } };
-      return value.phase === "clear" ? { ok: true, value: { kind: "clear" } } : { ok: true, value: { kind: "precommit-pending", pending: value.pending! } };
+    classifyCurrent(value, current) {
+      lifecycleRootWriteCounts.push(rootWrites);
+      const recovered = value as SyntheticControl | undefined;
+      if (recovered === undefined) return { ok: false, error: { code: "stale-recovery-state" } };
+      if (recovered.phase === "clear") return { ok: true, value: { kind: "clear" } };
+      const pending = recovered.pending;
+      if (pending === undefined) return { ok: false, error: { code: "stale-recovery-state" } };
+      return current.revision === pending.targetRevision
+        ? { ok: true, value: { kind: "postcommit-finalization", pending, ticket: pending.finalization } }
+        : { ok: true, value: { kind: "precommit-pending", pending } };
     },
     release(value, capability) {
       if (rejectRelease) return { ok: false, error: { code: "stale-assessment" } };
-      if (!(value instanceof SyntheticControl) || (value.phase === "pending" && value.pending !== capability))
+      const recovered = value as SyntheticControl | undefined;
+      if (recovered === undefined || (recovered.phase === "pending" && recovered.pending?.fence.nonce !== (capability as SyntheticPending).fence.nonce))
         return { ok: false, error: { code: "stale-assessment" } };
       return { ok: true, value: new SyntheticControl() };
     },
-    finalize() { return { ok: false, error: { code: "stale-assessment" } }; },
+    finalize(value, ticket, current) {
+      if (rejectFinalize) return { ok: false, error: { code: "stale-recovery-state" } };
+      const recovered = value as SyntheticControl | undefined;
+      return recovered?.pending?.finalization.ownerToken === ticket.ownerToken && recovered.pending.targetRevision === current.revision
+        ? { ok: true, value: new SyntheticControl() }
+        : { ok: false, error: { code: "stale-assessment" } };
+    },
   };
   const lock: ExclusiveLockPort = { async runExclusive(operation) { return { ok: true, value: await operation() }; } };
   const policy: LocalDataPolicy<Root, { readonly value: string }, FenceControlState, CoreError> = {
@@ -189,9 +212,9 @@ const createHarness = (
     stages,
     writes: () => ({ root: rootWrites, control: controlWrites }),
     stored: () => structuredClone(stored) as Root,
-    persistentControl: () => control,
+    persistentControl: () => structuredClone(control),
     setStored(value: unknown) { stored = structuredClone(value); },
-    setControl(value: SyntheticControl) { control = value; },
+    setControl(value: SyntheticControl) { control = structuredClone(value); },
     decodeCalls: () => decodeCalls,
     failControlWriteAt(value: number) { failControlWriteAt = value; },
     allowControlWrites() { failControlWriteAt = undefined; },
@@ -199,6 +222,9 @@ const createHarness = (
     invalidateProtocolCapability() { rejectPreparedFence = true; },
     failRelease() { rejectRelease = true; },
     allowRelease() { rejectRelease = false; },
+    failFinalize() { rejectFinalize = true; },
+    allowFinalize() { rejectFinalize = false; },
+    lifecycleRootWriteCounts: () => [...lifecycleRootWriteCounts],
   };
 };
 
@@ -433,7 +459,7 @@ test("normal commit rechecks the private binding and writes the root at most onc
     error: { code: "stale-assessment" },
   });
   assert.equal(harness.writes().root, 1);
-  assert.ok(harness.persistentControl() instanceof SyntheticControl);
+  assert.equal(harness.persistentControl().phase, "clear");
 });
 
 test("candidate or persisted fingerprint drift is stale before root write", async () => {
@@ -487,6 +513,10 @@ test("normal and recovery commits preserve the exact acquired opaque control and
     const persistedControl = new FieldlessControl();
     const acquiredControl = new FieldlessControl();
     const acquiredFence = new FieldlessFence();
+    const preparedControl = new FieldlessControl();
+    const preparedPending = new FieldlessPending();
+    class FieldlessFinalization { readonly owner = "fieldless"; }
+    const preparedTicket = new FieldlessFinalization();
     let stored: unknown = mode === "normal" ? root() : { corrupt: true };
     let rootWrites = 0;
     const storage: StoragePort<Root, FieldlessControl> = {
@@ -498,13 +528,17 @@ test("normal and recovery commits preserve the exact acquired opaque control and
       quotaBytes: () => 1_000,
       async restrictToTrustedContexts() { return { ok: true, value: undefined }; },
     };
-    const recovery: PersistentRecoveryProtocol<FieldlessControl, CoreError, FieldlessFence, FieldlessPending, FieldlessAnomaly> = {
+    const recovery: PersistentRecoveryProtocol<FieldlessControl, CoreError, FieldlessFence, FieldlessPending, FieldlessAnomaly, FieldlessFinalization> = {
       authorizeMutation: () => ({ ok: true, value: undefined }),
       observeCurrent: () => ({ ok: true, value: new FieldlessAnomaly() }),
       acquire: () => ({ ok: true, value: { control: acquiredControl, fence: acquiredFence } }),
-      classifyCurrent: (control) => control === persistedControl ? { ok: true, value: { kind: "clear" } } : { ok: false, error: { code: "stale-assessment" } },
+      classifyCurrent: (control) => control === persistedControl
+        ? { ok: true, value: { kind: "clear" } }
+        : control === preparedControl
+          ? { ok: true, value: { kind: "postcommit-finalization", pending: preparedPending, ticket: preparedTicket } }
+          : { ok: false, error: { code: "stale-assessment" } },
       prepareCommit: (control, fence) => control === acquiredControl && fence === acquiredFence
-        ? { ok: true, value: { control: acquiredControl, pending: new FieldlessPending() } }
+        ? { ok: true, value: { control: preparedControl, pending: preparedPending, finalization: preparedTicket } }
         : { ok: false, error: { code: "stale-assessment" } },
       release: () => ({ ok: true, value: persistedControl }),
       finalize: () => ({ ok: false, error: { code: "stale-assessment" } }),
@@ -558,7 +592,11 @@ test("owner protocol failures preserve non-core output identity before root writ
       observeCurrent: () => step === "observe" ? { ok: false, error: protocolError } : { ok: true, value: new SyntheticAnomaly(true) },
       acquire: () => step === "acquire" ? { ok: false, error: protocolError } : { ok: true, value: { control: new SyntheticControl(), fence: new SyntheticFence("normal", 1) } },
       classifyCurrent: () => step === "classify" ? { ok: false, error: protocolError } : { ok: true, value: { kind: "clear" } },
-      prepareCommit: (_control, fence) => step === "prepare" ? { ok: false, error: protocolError } : { ok: true, value: { control: new SyntheticControl("pending"), pending: new SyntheticPending(fence) } },
+      prepareCommit: (_control, fence) => {
+        const finalization = new SyntheticFinalization(`owner:${fence.nonce}:5`);
+        const pending = new SyntheticPending(fence, 5, finalization);
+        return step === "prepare" ? { ok: false, error: protocolError } : { ok: true, value: { control: new SyntheticControl("pending", pending), pending, finalization } };
+      },
       release: () => ({ ok: true, value: new SyntheticControl() }),
       finalize: () => ({ ok: false, error: protocolError }),
     };
@@ -604,6 +642,17 @@ test("post-commit release failure is not reported as plain committed", async () 
   assert.equal(harness.writes().root, 1);
 });
 
+test("commit does not add post-root observe or classify calls", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  const committed = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  assert.equal(committed.ok && committed.value.kind, "committed");
+  assert.equal(harness.writes().root, 1);
+  assert.deepEqual(harness.lifecycleRootWriteCounts(), [0, 0, 0]);
+});
+
 test("post-commit tickets retain their opaque pending state for finalize-only retry", async () => {
   for (const failure of ["release", "control-write"] as const) {
     const harness = createHarness();
@@ -619,9 +668,108 @@ test("post-commit tickets retain their opaque pending state for finalize-only re
     harness.allowRelease();
     harness.allowControlWrites();
     const finalized = await harness.coordinator.finalize(committed.value.finalization);
-    assert.equal(finalized.ok, true, failure);
+    assert.equal(finalized.ok, true, `${failure}: ${JSON.stringify(finalized)}`);
     assert.equal(harness.writes().root, 1, failure);
-    assert.ok(harness.persistentControl() instanceof SyntheticControl, failure);
     assert.equal(harness.persistentControl().phase, "clear", failure);
   }
+});
+
+test("same assessment ticket retries protocol-owned precommit cleanup without an extra root write", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  harness.failRootWriteAt(1);
+  assert.deepEqual(await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket }), {
+    ok: false,
+    error: { code: "storage-unavailable" },
+  });
+  assert.equal(harness.stored().value, "current");
+  harness.failRootWriteAt(99);
+  const retried = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  assert.equal(retried.ok && retried.value.kind, "committed");
+  assert.equal(harness.stored().value, "candidate");
+});
+
+test("precommit cleanup write failure preserves the root and the same ticket remains retryable", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  harness.failRootWriteAt(1);
+  await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  const rootWriteAttempts = harness.writes().root;
+  harness.failControlWriteAt(2);
+  assert.deepEqual(await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket }), {
+    ok: false,
+    error: { code: "storage-unavailable" },
+  });
+  assert.equal(harness.writes().root, rootWriteAttempts);
+  assert.equal(harness.stored().value, "current");
+  harness.allowControlWrites();
+  harness.failRootWriteAt(99);
+  assert.equal((await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket })).ok, true);
+});
+
+test("a recreated coordinator discovers persisted postcommit finalization and finalizes without a root write", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  harness.failRelease();
+  const committed = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  assert.equal(committed.ok && committed.value.kind, "committed-finalization-required");
+  const rootWritesAtCommit = harness.writes().root;
+  harness.allowRelease();
+  const recreated = harness.recreateCoordinator();
+  const pending = await recreated.findPendingFinalization();
+  assert.equal(pending.ok, true);
+  assert.notEqual(pending.ok && pending.value, null);
+  if (!pending.ok || pending.value === null) return;
+  const finalized = await recreated.finalize(pending.value);
+  assert.equal(finalized.ok, true);
+  assert.equal(harness.writes().root, rootWritesAtCommit);
+  assert.equal(harness.persistentControl().phase, "clear");
+});
+
+test("finalize failure preserves protocol error identity and never reaches root write", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  harness.failRelease();
+  const committed = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  assert.equal(committed.ok && committed.value.kind, "committed-finalization-required");
+  if (!committed.ok || committed.value.kind !== "committed-finalization-required") return;
+  const rootWritesAtCommit = harness.writes().root;
+  harness.allowRelease();
+  harness.failFinalize();
+  assert.deepEqual(await harness.coordinator.finalize(committed.value.finalization), {
+    ok: false,
+    error: { code: "stale-recovery-state" },
+  });
+  assert.equal(harness.writes().root, rootWritesAtCommit);
+  assert.equal(harness.stored().value, "candidate");
+});
+
+test("an old cached ticket cannot finalize a newly persisted pending capability", async () => {
+  const harness = createHarness();
+  const assessed = await harness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (!assessed.ok) return;
+  harness.failRelease();
+  const committed = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+  assert.equal(committed.ok && committed.value.kind, "committed-finalization-required");
+  if (!committed.ok || committed.value.kind !== "committed-finalization-required") return;
+  const replacementPending = new SyntheticPending(new SyntheticFence("normal", 999), committed.value.receipt.revision, new SyntheticFinalization("owner:999:replacement"));
+  const replacementControl = new SyntheticControl("pending", replacementPending);
+  harness.setControl(replacementControl);
+  harness.allowRelease();
+  const rootWritesAtCommit = harness.writes().root;
+  assert.deepEqual(await harness.coordinator.finalize(committed.value.finalization), {
+    ok: false,
+    error: { code: "stale-assessment" },
+  });
+  assert.equal(harness.writes().root, rootWritesAtCommit);
+  assert.equal(JSON.stringify(harness.persistentControl()), JSON.stringify(replacementControl));
 });
