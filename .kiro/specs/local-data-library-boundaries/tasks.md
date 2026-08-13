@@ -22,7 +22,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.5, 3.6, 6.4_
   - _Boundary: CoreContracts_
 
-- [ ] 2.2 (P) generic capacity policyを実装する
+- [x] 2.2 (P) generic capacity policyを実装する
   - 現在使用量、candidate直列化後使用量、warning閾値、platform quotaからbelow・warning・exceededを決定的に評価するpure policyを実装する。
   - quotaや10MBをcore定数へ固定せず、実platform writeとその例外正規化はこのboundaryへ持ち込まない。
   - warning境界と1 byte超過を含むsynthetic testが成功し、exceededではtransactionへcommit不可の評価を返せれば完了とする。

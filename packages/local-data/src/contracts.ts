@@ -83,6 +83,7 @@ export interface TransactionCommand<Operation> {
 export interface CapacityStatus {
   readonly beforeBytes: number;
   readonly afterBytes: number;
+  readonly warningThresholdBytes: number;
   readonly quotaBytes: number;
   readonly warning: boolean;
 }
