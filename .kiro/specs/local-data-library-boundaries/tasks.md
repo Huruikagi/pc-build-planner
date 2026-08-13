@@ -87,7 +87,7 @@
   - _Boundary: ChromeLocksAdapter_
   - _Depends: 2.1, 3.1_
 
-- [ ] 3.3 Chrome subpathの公開exportとaggregate contractを統合する
+- [x] 3.3 Chrome subpathの公開exportとaggregate contractを統合する
   - storageとlockのfactoryを`./chrome`の宣言済みentryへ集約し、共有indexとaggregate contract testをこのintegration taskだけで変更する。
   - root coreやbackup subpathへChrome型が漏れず、Chrome subpathがproduct key、runtime message、application shellを公開しないことを検証する。
   - clean package buildからChrome consumer fixtureが成功し、root/backup consumer fixtureではChrome型を解決できなければ完了とする。
