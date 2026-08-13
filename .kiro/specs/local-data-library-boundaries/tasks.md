@@ -46,7 +46,7 @@
   - _Boundary: TransactionEngine_
   - _Depends: 2.2, 2.3_
 
-- [ ] 2.5 revision・dedupe・競合・runtime再生成契約をtransactionへ統合する
+- [x] 2.5 revision・dedupe・競合・runtime再生成契約をtransactionへ統合する
   - expected revision、request digest、persistent request record、active fenceを変更前とcommit直前に検査し、revisionを成功時だけ単調に進める。
   - 同一requestの再試行は重複適用せず、異payload request ID、stale revision、active fenceをroot未変更のtyped failureとして返す。
   - 並行clientとprocess再生成を含むcontract suiteで重複適用0件、成功ごとのrevision増分1、競合時write 0件を観測できれば完了とする。

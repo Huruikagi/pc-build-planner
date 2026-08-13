@@ -7,6 +7,8 @@ import {
   type CoreError,
   type CoreResult,
   type ExclusiveLockPort,
+  type FenceControlState,
+  createFencingPolicy,
   type LocalDataPolicy,
   type StoragePort,
 } from "../src/index.js";
@@ -15,26 +17,38 @@ interface SyntheticRoot {
   readonly revision: number;
   readonly value: string;
   readonly valid: boolean;
+  readonly requests: Readonly<Record<string, { requestId: string; digest: string; revision: number }>>;
+  readonly control: FenceControlState;
 }
 
 type Operation = { readonly value: string };
-type Control = { readonly active: boolean };
+type Control = FenceControlState;
 
 const root = (value = "before"): SyntheticRoot => ({
   revision: 4,
   value,
   valid: true,
+  requests: {},
+  control: { active: false, generation: 0 },
 });
 
-const createHarness = (failure?: string) => {
+const createHarness = (
+  failure?: string,
+  beforeRead?: (readCount: number, current: SyntheticRoot) => SyntheticRoot,
+) => {
   let stored: unknown = root();
   let writes = 0;
   const events: string[] = [];
   let decodeCalls = 0;
+  let readCount = 0;
 
   const storage: StoragePort<SyntheticRoot, Control> = {
     async readRoot() {
       events.push("read");
+      readCount += 1;
+      if (beforeRead && typeof stored === "object" && stored !== null) {
+        stored = beforeRead(readCount, stored as SyntheticRoot);
+      }
       if (failure === "read") return { ok: false, error: { code: "storage-unavailable" } };
       if (failure === "read-throw") throw { secret: stored };
       return { ok: true, value: stored };
@@ -94,10 +108,13 @@ const createHarness = (failure?: string) => {
       return candidate.revision;
     },
     withRevision: (candidate, revision) => ({ ...candidate, revision }),
-    requestRecord: () => undefined,
-    withRequestRecord: (candidate) => candidate,
-    control: () => ({ active: false }),
-    withControl: (candidate) => candidate,
+    requestRecord: (candidate, requestId) => candidate.requests[requestId],
+    withRequestRecord: (candidate, record) => ({
+      ...candidate,
+      requests: { ...candidate.requests, [record.requestId]: record },
+    }),
+    control: (candidate) => candidate.control,
+    withControl: (candidate, control) => ({ ...candidate, control }),
   };
 
   const capacity: CapacityPolicy<SyntheticRoot> = {
@@ -117,24 +134,52 @@ const createHarness = (failure?: string) => {
     },
   };
 
+  let lockTail = Promise.resolve();
   const lock: ExclusiveLockPort = {
     async runExclusive(operation) {
       events.push("lock");
       if (failure === "lock") return { ok: false, error: { code: "lock-unavailable" } };
       if (failure === "lock-throw") throw { stored };
-      return { ok: true, value: await operation() };
+      const previous = lockTail;
+      let release: () => void = () => {};
+      lockTail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      try {
+        return { ok: true, value: await operation() };
+      } finally {
+        release();
+      }
     },
   };
 
+  const dependencies = {
+    storage,
+    lock,
+    policy,
+    capacity,
+    digest: (operation: Operation) => {
+      if (failure === "digest-throw") throw new Error(`private:${operation.value}`);
+      return `value:${operation.value}`;
+    },
+    now: () => 100,
+    fencing: createFencingPolicy<SyntheticRoot>({
+      revision: (candidate) => candidate.revision,
+      read: (candidate) => candidate.control,
+      write: (candidate, control) => ({ ...candidate, control }),
+    }),
+  };
   return {
-    engine: createTransactionEngine({ storage, lock, policy, capacity }),
+    engine: createTransactionEngine(dependencies),
+    createEngine: () => createTransactionEngine(dependencies),
     events,
     getStored: () => stored,
     getWrites: () => writes,
   };
 };
 
-test("latest root is validated, mutated, repaired, revalidated, assessed, and written once", async () => {
+test("latest root is validated, mutated, repaired, revalidated, revisioned, recorded, assessed, and written once", async () => {
   const harness = createHarness();
   const result = await harness.engine.execute({
     requestId: "request-1",
@@ -145,8 +190,12 @@ test("latest root is validated, mutated, repaired, revalidated, assessed, and wr
   assert.deepEqual(result, {
     ok: true,
     value: {
-      revision: 4,
-      value: root("after"),
+      revision: 5,
+      value: {
+        ...root("after"),
+        revision: 5,
+        requests: { "request-1": { requestId: "request-1", digest: "value:after", revision: 5 } },
+      },
       capacity: {
         beforeBytes: 100,
         afterBytes: 5,
@@ -160,8 +209,149 @@ test("latest root is validated, mutated, repaired, revalidated, assessed, and wr
   assert.equal(harness.getWrites(), 1);
   assert.deepEqual(harness.events, [
     "lock", "read", "decode", "apply", "repair", "validate",
-    "bytes", "quota", "capacity", "write",
+    "bytes", "quota", "capacity", "read", "validate", "write",
   ]);
+});
+
+test("persistent request records deduplicate the same request across regenerated engines", async () => {
+  const harness = createHarness();
+  const command = { requestId: "request-1", expectedRevision: 4, operation: { value: "after" } };
+  const first = await harness.engine.execute(command);
+  const second = await harness.createEngine().execute(command);
+
+  assert.equal(first.ok && first.value.revision, 5);
+  assert.equal(second.ok && second.value.revision, 5);
+  assert.equal(second.ok && second.value.deduplicated, true);
+  assert.equal(harness.getWrites(), 1);
+  assert.equal(harness.events.filter((event) => event === "apply").length, 1);
+});
+
+test("request conflicts, stale revisions, and active fences reject before mutation and write", async () => {
+  for (const [setup, command, code] of [
+    [
+      async (harness: ReturnType<typeof createHarness>) => {
+        await harness.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "first" } });
+      },
+      { requestId: "request", expectedRevision: 5, operation: { value: "different" } },
+      "request-conflict",
+    ],
+    [async () => undefined, { requestId: "stale", expectedRevision: 3, operation: { value: "after" } }, "revision-conflict"],
+  ] as const) {
+    const harness = createHarness();
+    await setup(harness);
+    const writesBefore = harness.getWrites();
+    const appliesBefore = harness.events.filter((event) => event === "apply").length;
+    assert.deepEqual(await harness.engine.execute(command), { ok: false, error: { code } });
+    assert.equal(harness.getWrites(), writesBefore);
+    assert.equal(harness.events.filter((event) => event === "apply").length, appliesBefore);
+  }
+
+  const fenced = createHarness();
+  const current = fenced.getStored() as SyntheticRoot;
+  Object.assign(current, {
+    control: {
+      active: true,
+      kind: "maintenance",
+      owner: "worker-a",
+      generation: 1,
+      leaseExpiresAt: 200,
+      revision: 4,
+    },
+  });
+  assert.deepEqual(
+    await fenced.engine.execute({ requestId: "fenced", expectedRevision: 4, operation: { value: "after" } }),
+    { ok: false, error: { code: "maintenance-active" } },
+  );
+  assert.equal(fenced.getWrites(), 0);
+  assert.equal(fenced.events.includes("apply"), false);
+});
+
+test("concurrent clients serialize and each successful mutation advances revision by exactly one", async () => {
+  const harness = createHarness();
+  const results = await Promise.all([
+    harness.engine.execute({ requestId: "one", expectedRevision: 4, operation: { value: "one" } }),
+    harness.engine.execute({ requestId: "two", expectedRevision: 5, operation: { value: "two" } }),
+  ]);
+
+  assert.deepEqual(results.map((result) => result.ok && result.value.revision), [5, 6]);
+  assert.equal(harness.getWrites(), 2);
+  assert.equal((harness.getStored() as SyntheticRoot).revision, 6);
+});
+
+test("precommit latest-state checks reject revision, request, and fence races without writing", async () => {
+  const cases: ReadonlyArray<readonly [string, (current: SyntheticRoot) => SyntheticRoot, CoreError["code"]]> = [
+    ["revision", (current) => ({ ...current, revision: 5 }), "revision-conflict"],
+    [
+      "request",
+      (current) => ({
+        ...current,
+        requests: { request: { requestId: "request", digest: "value:other", revision: 5 } },
+      }),
+      "request-conflict",
+    ],
+    [
+      "fence",
+      (current) => ({
+        ...current,
+        control: {
+          active: true,
+          kind: "recovery",
+          owner: "new-runtime",
+          generation: 2,
+          leaseExpiresAt: 200,
+          revision: 4,
+        },
+      }),
+      "recovery-active",
+    ],
+    [
+      "stale fence owner",
+      (current) => ({
+        ...current,
+        control: { active: true, kind: "maintenance", owner: "", generation: 2, leaseExpiresAt: 200, revision: 4 },
+      }),
+      "stale-fence",
+    ],
+    [
+      "stale fence generation",
+      (current) => ({
+        ...current,
+        control: { active: true, kind: "maintenance", owner: "worker", generation: 0, leaseExpiresAt: 200, revision: 4 },
+      }),
+      "stale-fence",
+    ],
+    [
+      "stale fence revision",
+      (current) => ({
+        ...current,
+        control: { active: true, kind: "maintenance", owner: "worker", generation: 2, leaseExpiresAt: 200, revision: 3 },
+      }),
+      "stale-fence",
+    ],
+  ];
+  for (const [name, change, code] of cases) {
+    const harness = createHarness(undefined, (readCount, current) =>
+      readCount === 2 ? change(current) : current,
+    );
+    assert.deepEqual(
+      await harness.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } }),
+      { ok: false, error: { code } },
+      name,
+    );
+    assert.equal(harness.getWrites(), 0, name);
+  }
+});
+
+test("digest callback exceptions are normalized without leaking operation or writing", async () => {
+  const harness = createHarness("digest-throw");
+  const result = await harness.engine.execute({
+    requestId: "request",
+    expectedRevision: 4,
+    operation: { value: "secret-operation" },
+  });
+  assert.deepEqual(result, { ok: false, error: { code: "validation" } });
+  assert.equal(JSON.stringify(result).includes("secret-operation"), false);
+  assert.equal(harness.getWrites(), 0);
 });
 
 test("every typed pre-commit failure preserves the stored root and writes zero times", async () => {

@@ -7,12 +7,16 @@ import type {
   StoragePort,
   TransactionPort,
 } from "./contracts.js";
+import type { FencingPolicy } from "./fencing.js";
 
 export interface TransactionEngineDependencies<Root, Operation, Control> {
   readonly storage: StoragePort<Root, Control>;
   readonly lock: ExclusiveLockPort;
   readonly policy: LocalDataPolicy<Root, Operation, Control, CoreError>;
   readonly capacity: CapacityPolicy<Root>;
+  readonly digest: (operation: Operation) => string;
+  readonly now: () => number;
+  readonly fencing: FencingPolicy<Root>;
 }
 
 const failure = (code: CoreError["code"]): CoreResult<never, CoreError> => ({
@@ -51,6 +55,72 @@ export const createTransactionEngine = <Root, Operation, Control>(
         );
         if (!decoded.ok) return decoded;
 
+        const digest = runPolicyStage(
+          () => ({ ok: true, value: dependencies.digest(command.operation) }),
+          "validation",
+        );
+        if (!digest.ok) return digest;
+
+        const priorRequest = runPolicyStage(
+          () => ({
+            ok: true,
+            value: dependencies.policy.requestRecord(decoded.value, command.requestId),
+          }),
+          "validation",
+        );
+        if (!priorRequest.ok) return priorRequest;
+        if (priorRequest.value !== undefined) {
+          if (priorRequest.value.digest !== digest.value) return failure("request-conflict");
+
+          const currentBytes = await dependencies.storage.bytesInUse().catch(() =>
+            failure("storage-unavailable"),
+          );
+          if (!currentBytes.ok) return currentBytes;
+          let quotaBytes: number;
+          try {
+            quotaBytes = dependencies.storage.quotaBytes();
+          } catch {
+            return failure("storage-unavailable");
+          }
+          const capacity = runPolicyStage(
+            () => dependencies.capacity.assess(currentBytes.value, decoded.value, quotaBytes),
+            "quota-exceeded",
+          );
+          if (!capacity.ok) return capacity;
+          return {
+            ok: true,
+            value: {
+              revision: priorRequest.value.revision,
+              value: decoded.value,
+              capacity: capacity.value,
+              deduplicated: true,
+            },
+          } satisfies CoreResult<
+            {
+              readonly revision: number;
+              readonly value: Root;
+              readonly capacity: typeof capacity.value;
+              readonly deduplicated: true;
+            },
+            CoreError
+          >;
+        }
+
+        const currentRevision = runPolicyStage(
+          () => ({ ok: true, value: dependencies.policy.revision(decoded.value) }),
+          "validation",
+        );
+        if (!currentRevision.ok) return currentRevision;
+        if (command.expectedRevision !== currentRevision.value) {
+          return failure("revision-conflict");
+        }
+
+        const mutationFence = runPolicyStage(
+          () => dependencies.fencing.authorizeMutation(decoded.value, undefined, dependencies.now()),
+          "stale-fence",
+        );
+        if (!mutationFence.ok) return mutationFence;
+
         const applied = runPolicyStage(
           () => dependencies.policy.apply(decoded.value, command.operation),
           "validation",
@@ -63,8 +133,31 @@ export const createTransactionEngine = <Root, Operation, Control>(
         );
         if (!repaired.ok) return repaired;
 
+        if (currentRevision.value >= Number.MAX_SAFE_INTEGER) return failure("validation");
+        const nextRevision = currentRevision.value + 1;
+        const revisioned = runPolicyStage(
+          () => ({
+            ok: true,
+            value: dependencies.policy.withRevision(repaired.value, nextRevision),
+          }),
+          "validation",
+        );
+        if (!revisioned.ok) return revisioned;
+        const recorded = runPolicyStage(
+          () => ({
+            ok: true,
+            value: dependencies.policy.withRequestRecord(revisioned.value, {
+              requestId: command.requestId,
+              digest: digest.value,
+              revision: nextRevision,
+            }),
+          }),
+          "validation",
+        );
+        if (!recorded.ok) return recorded;
+
         const validated = runPolicyStage(
-          () => dependencies.policy.decodeAndMigrate(repaired.value),
+          () => dependencies.policy.decodeAndMigrate(recorded.value),
           "validation",
         );
         if (!validated.ok) return validated;
@@ -95,14 +188,50 @@ export const createTransactionEngine = <Root, Operation, Control>(
         );
         if (!capacity.ok) return capacity;
 
-        const revision = runPolicyStage(
+        let latestStored;
+        try {
+          latestStored = await dependencies.storage.readRoot();
+        } catch {
+          return failure("storage-unavailable");
+        }
+        if (!latestStored.ok) return latestStored;
+        const latest = runPolicyStage(
+          () => dependencies.policy.decodeAndMigrate(latestStored.value),
+          "validation",
+        );
+        if (!latest.ok) return latest;
+        const latestDigest = runPolicyStage(
+          () => ({ ok: true, value: dependencies.digest(command.operation) }),
+          "validation",
+        );
+        if (!latestDigest.ok) return latestDigest;
+        if (latestDigest.value !== digest.value) return failure("validation");
+        const latestRequest = runPolicyStage(
           () => ({
             ok: true,
-            value: dependencies.policy.revision(validated.value),
+            value: dependencies.policy.requestRecord(latest.value, command.requestId),
           }),
           "validation",
         );
-        if (!revision.ok) return revision;
+        if (!latestRequest.ok) return latestRequest;
+        if (latestRequest.value !== undefined) {
+          return latestRequest.value.digest === digest.value
+            ? failure("revision-conflict")
+            : failure("request-conflict");
+        }
+        const latestRevision = runPolicyStage(
+          () => ({ ok: true, value: dependencies.policy.revision(latest.value) }),
+          "validation",
+        );
+        if (!latestRevision.ok) return latestRevision;
+        if (latestRevision.value !== command.expectedRevision) {
+          return failure("revision-conflict");
+        }
+        const commitFence = runPolicyStage(
+          () => dependencies.fencing.authorizeMutation(latest.value, undefined, dependencies.now()),
+          "stale-fence",
+        );
+        if (!commitFence.ok) return commitFence;
 
         let committed;
         try {
@@ -115,7 +244,7 @@ export const createTransactionEngine = <Root, Operation, Control>(
         return {
           ok: true,
           value: {
-            revision: revision.value,
+            revision: nextRevision,
             value: validated.value,
             capacity: capacity.value,
             deduplicated: false,
