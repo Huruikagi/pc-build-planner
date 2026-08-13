@@ -121,7 +121,7 @@
   - _Boundary: PackagePublicEntries_
   - _Depends: 3.3, 4.2_
 
-- [ ] 5.2 read-only app contractを追加する
+- [x] 5.2 read-only app contractを追加する
   - 製品root/error/codec型をconsumer側入力として使い、package公開portへ型接続できることだけを検査する非実行fixtureを追加する。
   - fixtureは製品adapter、composition、runtime registration、E2Eを定義せず、package declarationへ製品型を混入させない。
   - backup consumerが通常CRUD、raw root、Storage、lock、fence capabilityを取得できないnegative type fixtureを含め、positive/negative contractが期待どおり成功・失敗すれば完了とする。
