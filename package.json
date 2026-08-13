@@ -13,6 +13,7 @@
     "typecheck:public-consumer": "tsc --noEmit -p tsconfig.public-consumer.json",
     "typecheck:typed-messages-consumer": "tsc --noEmit -p tsconfig.typed-messages-consumer.json",
     "typecheck:local-data": "pnpm --filter @pc-build-planner/local-data run typecheck",
+    "typecheck:local-data-public-declarations": "tsc --noEmit -p tsconfig.local-data-public-declarations.json",
     "typecheck:local-data-public-consumers": "tsc --noEmit -p tsconfig.local-data-public-consumers.json",
     "typecheck:local-data-read-only-app-contract": "tsc --noEmit -p tsconfig.local-data-read-only-app-contract.json",
     "clean:local-data": "pnpm --filter @pc-build-planner/local-data run clean",

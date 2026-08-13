@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 export const localDataPublicConsumerGates = Object.freeze([
   Object.freeze(["pnpm", "clean:local-data"]),
   Object.freeze(["pnpm", "--filter", "@pc-build-planner/local-data", "build"]),
+  Object.freeze(["pnpm", "typecheck:local-data-public-declarations"]),
   Object.freeze(["pnpm", "typecheck:local-data-public-consumers"]),
   Object.freeze([
     "node",

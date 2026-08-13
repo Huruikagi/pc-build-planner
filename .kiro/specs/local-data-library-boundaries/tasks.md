@@ -188,7 +188,7 @@
   - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
 
 - [ ] 7. 公開declarationとsynthetic consumer contractを更新する
-- [ ] 7.1 root公開entryへ分離genericとowner protocol contractを公開する
+- [x] 7.1 root公開entryへ分離genericとowner protocol contractを公開する
   - transaction/replacement factory、error adapter、root maintenance、persistent recovery、opaque protocol capabilityの型をroot entryからbuild済みdeclarationとして解決可能にする。
   - `.`、`./chrome`、`./backup`の3 entryだけを維持し、Chrome、製品型、schema vendor、内部moduleをroot declarationへ混入させない。
   - clean package build後にpublic declarationがunsafe castなしでconsumerへ解決され、未宣言subpathは引き続き失敗すれば完了とする。
@@ -256,3 +256,4 @@
 - **Task 6.3**: replacement ticketはowner protocolが返すopaque acquired control/fenceのexact pairをprivateに保持し、latest persistent stateを分類した後も`prepareCommit`へそのpairを渡す。protocol failureはmechanism errorへ再変換しない。root `typecheck`の`src/persistence/product-local-data-adapter.ts`追随は下流`local-data-foundation` Task 11.2所有で、本spec Task 8.1の前提となる。
 - **Task 6.4 contract repair (2026-08-14 approved)**: `prepareCommit`はpersistent controlへ束縛したowner-defined `FinalizationCapability`をpendingとともに返し、protocol・commit state・replacement public portまで独立genericとして通す。packageはroot write成功後のcleanup failure時だけcapabilityを公開し、再生成後のdiscoveryと妥当性判定はactual current rootを使うowner protocolへ委譲する。
 - **Task 6.4**: `FinalizationCapability`はbackup subpathまで同じowner genericで伝播する。commit経路はpost-root observation/classificationを行わず、root write失敗はprecommit、cleanup failureだけをcommitted-finalization-requiredとして扱う。persistent ticket検証はcloneされたcontrolと入力capabilityをowner protocolへ渡して行う。
+- **Task 7.1**: build済みroot/backup declarationだけを解決する専用consumer gateをclean build直後に実行し、owner error/control/finalization capabilityのpublic genericと3-entry export mapをsource aliasなしで固定する。

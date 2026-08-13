@@ -15,6 +15,7 @@ test("local data public consumers validate clean built entries in order", async 
   assert.deepEqual(localDataPublicConsumerGates, [
     ["pnpm", "clean:local-data"],
     ["pnpm", "--filter", "@pc-build-planner/local-data", "build"],
+    ["pnpm", "typecheck:local-data-public-declarations"],
     ["pnpm", "typecheck:local-data-public-consumers"],
     ["node", "--import", "tsx", "tests/tooling/local-data-core-consumer.ts"],
     ["node", "--import", "tsx", "tests/tooling/local-data-chrome-consumer.ts"],
@@ -24,6 +25,10 @@ test("local data public consumers validate clean built entries in order", async 
   assert.equal(
     manifest.scripts["validate:local-data-public-consumers"],
     "node scripts/validate-local-data-public-consumers.mjs",
+  );
+  assert.equal(
+    manifest.scripts["typecheck:local-data-public-declarations"],
+    "tsc --noEmit -p tsconfig.local-data-public-declarations.json",
   );
   assert.equal(
     manifest.scripts["typecheck:local-data-public-consumers"],
