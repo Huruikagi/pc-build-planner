@@ -15,7 +15,7 @@
   - _Boundary: PackagePublicEntries_
 
 - [ ] 2. Platform-independentなlocal data coreを実装する
-- [ ] 2.1 製品非依存のResult、port、root policy契約を実装する
+- [x] 2.1 製品非依存のResult、port、root policy契約を実装する
   - root decode/migrate、revision、request record、mutation、repair、maintenance controlをconsumerが型付きで設定できる契約を定義する。
   - storage、exclusive lock、capacity、transaction、replacementの公開入力・成功結果・安定errorを定義し、Chrome型、PC型、schema vendor、製品errorを含めない。
   - positive/negative consumer型fixtureで任意rootを設定でき、package declarationに`LocalDataRoot`、`FoundationError`、Chrome、React、Zodが現れなければ完了とする。
