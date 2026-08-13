@@ -40,6 +40,23 @@ export interface CoreError {
   readonly code: CoreErrorCode;
 }
 
+export type PolicyStage =
+  | "decode"
+  | "migration"
+  | "mutation"
+  | "repair"
+  | "validation"
+  | "assessment"
+  | "replacement-validation";
+
+export interface ErrorAdapter<PolicyError, OutputError> {
+  fromPolicy(
+    stage: PolicyStage,
+    error: PolicyError,
+  ): CoreResult<OutputError, OutputError>;
+  fromCore(error: CoreError): CoreResult<OutputError, OutputError>;
+}
+
 export interface RequestRecord {
   readonly requestId: string;
   readonly digest: string;
@@ -71,6 +88,7 @@ export interface PersistentControlPolicy {
 
 export interface LocalDataPolicy<Root, Operation, Control, PolicyError> {
   decodeAndMigrate(input: unknown): CoreResult<Root, PolicyError>;
+  decodeFailureStage?(error: PolicyError): "decode" | "migration";
   apply(root: Root, operation: Operation): CoreResult<Root, PolicyError>;
   repair(root: Root, previous: Root): CoreResult<Root, PolicyError>;
   revision(root: Root): number;

@@ -135,6 +135,7 @@ test("10MB近傍synthetic rootの実transaction baselineを記録・検査する
     FenceControlState,
     CoreError
   > = {
+    decodeFailureStage: () => "decode",
     decodeAndMigrate(input) {
       const decoded = decode(input);
       return decodeCalls === 1 ? measure("migrate", () => decoded) : decoded;
@@ -186,6 +187,10 @@ test("10MB近傍synthetic rootの実transaction baselineを記録・検査する
     }),
     persistentControl: {
       authorizeMutation: () => ok(undefined),
+    },
+    errors: {
+      fromPolicy: (_stage, error) => ({ ok: true, value: error }),
+      fromCore: (error) => ({ ok: true, value: error }),
     },
   });
 

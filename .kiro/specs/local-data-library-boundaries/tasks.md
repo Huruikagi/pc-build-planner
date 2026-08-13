@@ -155,7 +155,7 @@
   - _Depends: 5.4_
 
 - [ ] 6. 公開factoryのerror/control境界を修復する
-- [ ] 6.1 consumer-owned policy error adapterをtransaction・replacement両factoryへ統合する
+- [x] 6.1 consumer-owned policy error adapterをtransaction・replacement両factoryへ統合する
   - transactionとreplacementのpolicy error/output errorを別genericとして受け、decode、migration、mutation、repair、validation、assessment、replacement validationの各failureを元payloadと判定contextのまま明示adapterへ渡す。
   - mechanism errorだけをcore error mappingへ渡し、policy failureをstage codeへ縮退したり未知値を既知errorへ推測変換したりしない。
   - synthetic policyの識別可能なerror種類・payload・判定contextがtransaction/replacement両factoryの各stageから同一内容でoutput errorへ到達し、adapterがfail-closed resultを返す場合とthrowする場合のどちらも成功・別の既知errorへ縮退せずroot writeが0件なら完了とする。
@@ -250,3 +250,4 @@
 ## Implementation Notes
 
 - **Fresh task-graph sanity review (2026-08-13 final spec remediation round 2)**: historical Tasks 2.3/2.6の完了記録を維持しつつ、persistent recovery ownershipを6.3–6.4へsupersedeした。Task 6.1はtransaction/replacement両factoryのerror adapterを同じcore contract変更として完結し、Task 7.3がreplacement payload/contextとadapter failure/throwのroot write 0件を独立fixtureで検証する。主経路はpackage 7.4 → `local-data-foundation` 11.2 `validate:local-data-product-contract` → 8.1 → 9.1 → 9.2、下流経路はpackage 7.4/Foundation 11.2 → backup 7.1–7.3、library 9.2 + backup 7.3 → backup 7.4 → application-shell 12.1–12.3で非循環となる。61 ACのtask/design trace、各新規taskのobservable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。
+- **Task 6.1**: decode/migration stageの分類はopaqueなpolicy errorをpackage側で解釈せずconsumer-owned classifierへ委譲し、transaction・replacementのcurrent root・candidate assessment・commit再照合で同じhelperを通す。

@@ -7,6 +7,7 @@ import {
   createTransactionEngine,
   createReplacementCoordinator,
   type CoreError,
+  type ErrorAdapter,
   type CapacityStatus,
   type FenceControlState,
   type LocalDataPolicy,
@@ -39,6 +40,12 @@ const root = (value = "current"): Root => ({
 const createHarness = (
   storedRoot: unknown = root(),
   capabilityId?: () => string,
+  errors: ErrorAdapter<CoreError, CoreError> = {
+    fromPolicy: (_stage: import("../src/index.js").PolicyStage, error: CoreError) => ({ ok: true as const, value: error }),
+    fromCore: (error: CoreError) => ({ ok: true as const, value: error }),
+  },
+  repairError?: CoreError,
+  decodeFailure?: { at: number; error: CoreError },
 ) => {
   let stored = structuredClone(storedRoot);
   let control: unknown = "valid" in (storedRoot as object)
@@ -49,6 +56,7 @@ const createHarness = (
   let failControlWriteAt: number | undefined;
   let failRootWriteAt: number | undefined;
   let capability = 0;
+  let decodeCalls = 0;
   const stages: string[] = [];
   const storage: StoragePort<Root, FenceControlState> = {
     async readRoot() { return { ok: true, value: structuredClone(stored) }; },
@@ -61,8 +69,11 @@ const createHarness = (
   };
   const lock: ExclusiveLockPort = { async runExclusive(operation) { return { ok: true, value: await operation() }; } };
   const policy: LocalDataPolicy<Root, { readonly value: string }, FenceControlState, CoreError> = {
+    decodeFailureStage: (error) => error.code === "migration" ? "migration" : "decode",
     decodeAndMigrate(input) {
+      decodeCalls += 1;
       stages.push("decode");
+      if (decodeFailure?.at === decodeCalls) return { ok: false, error: decodeFailure.error };
       if (typeof input !== "object" || input === null || !("valid" in input))
         return { ok: false, error: { code: "migration" } };
       const value = input as Root;
@@ -71,7 +82,7 @@ const createHarness = (
         : { ok: false, error: { code: "validation" } };
     },
     apply: (candidate, operation) => ({ ok: true, value: { ...candidate, value: operation.value } }),
-    repair(candidate) { stages.push("repair"); return { ok: true, value: { ...candidate, value: candidate.value.trim() } }; },
+    repair(candidate) { stages.push("repair"); return repairError ? { ok: false, error: repairError } : { ok: true, value: { ...candidate, value: candidate.value.trim() } }; },
     revision: (candidate) => candidate.revision,
     withRevision: (candidate, revision) => ({ ...candidate, revision }),
     requestRecord: () => undefined,
@@ -88,6 +99,7 @@ const createHarness = (
     rawFingerprint: (raw: unknown) => `raw:${JSON.stringify(raw)}`,
     newCapabilityId: capabilityId ?? (() => `capability-${++capability}`),
     preview: (candidate: Root, capacity: CapacityStatus, mode: ReplacementMode) => ({ value: candidate.value, bytes: capacity.afterBytes, mode }),
+    errors,
   };
   const coordinator = createReplacementCoordinator(dependencies);
   const transaction = createTransactionEngine({
@@ -112,6 +124,10 @@ const createHarness = (
         return { ok: false as const, error: { code: "stale-fence" as const } };
       },
     },
+    errors: {
+      fromPolicy: (_stage, error) => ({ ok: true, value: error }),
+      fromCore: (error) => ({ ok: true, value: error }),
+    },
   });
   return {
     coordinator,
@@ -123,6 +139,7 @@ const createHarness = (
     persistentControl: () => structuredClone(control),
     setStored(value: unknown) { stored = structuredClone(value); },
     setControl(value: unknown) { control = structuredClone(value); },
+    decodeCalls: () => decodeCalls,
     failControlWriteAt(value: number) { failControlWriteAt = value; },
     allowControlWrites() { failControlWriteAt = undefined; },
     failRootWriteAt(value: number) { failRootWriteAt = value; },
@@ -139,6 +156,208 @@ test("normal assessment repairs, validates, and measures without writes or expos
   assert.equal(JSON.stringify(result.value.ticket), "{}");
   assert.deepEqual(harness.stages, ["decode", "decode", "repair", "decode"]);
   assert.deepEqual(harness.writes(), { root: 0, control: 0 });
+});
+
+test("replacement policy errors preserve identity and context and adapter failures never write", async () => {
+  const policyError = { code: "repair", payload: { candidate: "synthetic" }, context: { mode: "normal" } } as const;
+  const seen: Array<{ stage: string; error: CoreError }> = [];
+  const failClosed = createHarness(root(), undefined, {
+    fromPolicy(stage, error) { seen.push({ stage, error }); return { ok: false as const, error: { code: "request-conflict" as const } }; },
+    fromCore: (error) => ({ ok: true as const, value: error }),
+  }, policyError);
+  assert.deepEqual(await failClosed.coordinator.assess(root("candidate")), { ok: false, error: { code: "request-conflict" } });
+  assert.equal(seen[0]?.stage, "repair");
+  assert.strictEqual(seen[0]?.error, policyError);
+  assert.equal(failClosed.writes().root, 0);
+
+  const throwing = createHarness(root(), undefined, {
+    fromPolicy() { throw new Error("consumer mapping rejected"); },
+    fromCore: (error) => ({ ok: true as const, value: error }),
+  }, policyError);
+  await assert.rejects(() => throwing.coordinator.assess(root("candidate")));
+  assert.equal(throwing.writes().root, 0);
+});
+
+test("replacement decode, migration, and validation stages preserve the exact policy error", async () => {
+  for (const [at, expectedStage] of [[1, "decode"], [2, "migration"], [3, "validation"]] as const) {
+    for (const adapterMode of ["mapped", "fail-closed", "throw"] as const) {
+      const policyError = { code: expectedStage === "migration" ? "migration" as const : "validation" as const, payload: { at }, context: { expectedStage, adapterMode } };
+      const seen: Array<{ stage: string; error: CoreError }> = [];
+      const harness = createHarness(root(), undefined, {
+        fromPolicy(stage, error) {
+          seen.push({ stage, error });
+          if (adapterMode === "throw") throw new Error(`adapter:${expectedStage}`);
+          return adapterMode === "mapped"
+            ? { ok: true, value: { code: "revision-conflict" } }
+            : { ok: false, error: { code: "request-conflict" } };
+        },
+        fromCore: (error) => ({ ok: true, value: error }),
+      }, undefined, { at, error: policyError });
+      const assess = () => harness.coordinator.assess(root("candidate"));
+      if (adapterMode === "throw") await assert.rejects(assess, new RegExp(`adapter:${expectedStage}`));
+      else assert.deepEqual(await assess(), { ok: false, error: { code: adapterMode === "mapped" ? "revision-conflict" : "request-conflict" } });
+      assert.equal(seen[0]?.stage, expectedStage);
+      assert.strictEqual(seen[0]?.error, policyError);
+      assert.equal(harness.writes().root, 0);
+    }
+  }
+});
+
+test("replacement assessment candidate classifies decode and migration policy failures", async () => {
+  for (const expectedStage of ["decode", "migration"] as const) {
+    for (const adapterMode of ["mapped", "fail-closed", "throw"] as const) {
+      const policyError = {
+        code: expectedStage === "migration" ? "migration" as const : "validation" as const,
+        payload: { candidate: "assessment" },
+        context: { expectedStage, adapterMode },
+      };
+      const seen: Array<{ stage: string; error: CoreError }> = [];
+      const harness = createHarness(root(), undefined, {
+        fromPolicy(stage, error) {
+          seen.push({ stage, error });
+          if (adapterMode === "throw") throw new Error(`assessment-candidate:${expectedStage}`);
+          return adapterMode === "mapped"
+            ? { ok: true, value: { code: "revision-conflict" } }
+            : { ok: false, error: { code: "request-conflict" } };
+        },
+        fromCore: (error) => ({ ok: true, value: error }),
+      }, undefined, { at: 2, error: policyError });
+
+      const assess = () => harness.coordinator.assess(root("candidate"));
+      if (adapterMode === "throw") await assert.rejects(assess, new RegExp(`assessment-candidate:${expectedStage}`));
+      else assert.deepEqual(await assess(), { ok: false, error: { code: adapterMode === "mapped" ? "revision-conflict" : "request-conflict" } });
+      assert.equal(seen[0]?.stage, expectedStage);
+      assert.strictEqual(seen[0]?.error, policyError);
+      assert.deepEqual(seen[0]?.error, policyError);
+      assert.equal(harness.writes().root, 0);
+    }
+  }
+});
+
+test("replacement commit candidate classifies decode and migration policy failures", async () => {
+  for (const expectedStage of ["decode", "migration"] as const) {
+    for (const adapterMode of ["mapped", "fail-closed", "throw"] as const) {
+      const policyError = {
+        code: expectedStage === "migration" ? "migration" as const : "validation" as const,
+        payload: { candidate: "commit" },
+        context: { expectedStage, adapterMode },
+      };
+      const seen: Array<{ stage: string; error: CoreError }> = [];
+      const harness = createHarness(root(), undefined, {
+        fromPolicy(stage, error) {
+          seen.push({ stage, error });
+          if (adapterMode === "throw") throw new Error(`commit-candidate:${expectedStage}`);
+          return adapterMode === "mapped"
+            ? { ok: true, value: { code: "revision-conflict" } }
+            : { ok: false, error: { code: "request-conflict" } };
+        },
+        fromCore: (error) => ({ ok: true, value: error }),
+      }, undefined, { at: 5, error: policyError });
+
+      const assessed = await harness.coordinator.assess(root("candidate"));
+      assert.equal(assessed.ok, true);
+      if (!assessed.ok) continue;
+      const commit = () => harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket });
+      if (adapterMode === "throw") await assert.rejects(commit, new RegExp(`commit-candidate:${expectedStage}`));
+      else assert.deepEqual(await commit(), { ok: false, error: { code: adapterMode === "mapped" ? "revision-conflict" : "request-conflict" } });
+      assert.equal(seen[0]?.stage, expectedStage);
+      assert.strictEqual(seen[0]?.error, policyError);
+      assert.deepEqual(seen[0]?.error, policyError);
+      assert.equal(harness.writes().root, 0);
+    }
+  }
+});
+
+test("replacement commit, discovery, and finalize preserve policy failures instead of stale or null", async () => {
+  const policyError = { code: "validation", payload: { token: "same-payload" }, context: { decision: "synthetic" } } as const;
+  const output = { code: "request-conflict" as const };
+  const seen: Array<{ stage: string; error: CoreError }> = [];
+  const errors: ErrorAdapter<CoreError, CoreError> = {
+    fromPolicy(stage, error) { seen.push({ stage, error }); return { ok: true, value: output }; },
+    fromCore: (error) => ({ ok: true, value: error }),
+  };
+
+  const commitFailure = { at: 4, error: policyError };
+  const commitHarness = createHarness(root(), undefined, errors, undefined, commitFailure);
+  const assessed = await commitHarness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (assessed.ok) {
+    assert.deepEqual(await commitHarness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket }), { ok: false, error: output });
+  }
+  assert.equal(commitHarness.writes().root, 0);
+  assert.equal(seen.at(-1)?.stage, "assessment");
+  assert.strictEqual(seen.at(-1)?.error, policyError);
+
+  for (const target of ["find", "finalize"] as const) {
+    const failure = { at: Number.MAX_SAFE_INTEGER, error: policyError };
+    const harness = createHarness(root(), undefined, errors, undefined, failure);
+    const ready = await harness.coordinator.assess(root("candidate"));
+    assert.equal(ready.ok, true);
+    if (!ready.ok) continue;
+    harness.failControlWriteAt(2);
+    const committed = await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: ready.value.ticket });
+    assert.equal(committed.ok, true);
+    harness.allowControlWrites();
+    failure.at = harness.decodeCalls() + 1;
+    if (target === "find") {
+      assert.deepEqual(await harness.coordinator.findPendingFinalization(), { ok: false, error: output });
+    } else {
+      const pending = committed.ok && committed.value.kind === "committed-finalization-required" ? committed.value.finalization : undefined;
+      assert.ok(pending);
+      assert.deepEqual(await harness.coordinator.finalize(pending), { ok: false, error: output });
+    }
+    assert.equal(harness.writes().root, 1);
+    assert.strictEqual(seen.at(-1)?.error, policyError);
+  }
+});
+
+test("replacement adapter throws escape commit and finalize without another root write", async () => {
+  const policyError = { code: "validation", payload: { token: "throw" }, context: { decision: "reject" } } as const;
+  const throwing: ErrorAdapter<CoreError, CoreError> = {
+    fromPolicy() { throw new Error("adapter throw"); },
+    fromCore: (error) => ({ ok: true, value: error }),
+  };
+  const commitHarness = createHarness(root(), undefined, throwing, undefined, { at: 4, error: policyError });
+  const assessed = await commitHarness.coordinator.assess(root("candidate"));
+  assert.equal(assessed.ok, true);
+  if (assessed.ok) {
+    await assert.rejects(() => commitHarness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket }), /adapter throw/);
+  }
+  assert.equal(commitHarness.writes().root, 0);
+
+  const failure = { at: Number.MAX_SAFE_INTEGER, error: policyError };
+  const finalizeHarness = createHarness(root(), undefined, throwing, undefined, failure);
+  const ready = await finalizeHarness.coordinator.assess(root("candidate"));
+  assert.equal(ready.ok, true);
+  if (!ready.ok) return;
+  finalizeHarness.failControlWriteAt(2);
+  const committed = await finalizeHarness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: ready.value.ticket });
+  assert.equal(committed.ok && committed.value.kind, "committed-finalization-required");
+  if (!committed.ok || committed.value.kind !== "committed-finalization-required") return;
+  const finalization = committed.value.finalization;
+  finalizeHarness.allowControlWrites();
+  const writesBeforeFinalize = finalizeHarness.writes().root;
+  failure.at = finalizeHarness.decodeCalls() + 1;
+  await assert.rejects(() => finalizeHarness.coordinator.finalize(finalization), /adapter throw/);
+  assert.equal(finalizeHarness.writes().root, writesBeforeFinalize);
+});
+
+test("replacement assessment and replacement-validation fail-closed adapters preserve output without root writes", async () => {
+  for (const [at, expectedStage] of [[4, "assessment"], [6, "replacement-validation"]] as const) {
+    const policyError = { code: "validation", payload: { at }, context: { expectedStage } } as const;
+    const seen: Array<{ stage: string; error: CoreError }> = [];
+    const harness = createHarness(root(), undefined, {
+      fromPolicy(stage, error) { seen.push({ stage, error }); return { ok: false, error: { code: "request-conflict" } }; },
+      fromCore: (error) => ({ ok: true, value: error }),
+    }, undefined, { at, error: policyError });
+    const assessed = await harness.coordinator.assess(root("candidate"));
+    assert.equal(assessed.ok, true);
+    if (!assessed.ok) continue;
+    assert.deepEqual(await harness.coordinator.commit({ candidate: root("candidate"), mode: "normal", ticket: assessed.value.ticket }), { ok: false, error: { code: "request-conflict" } });
+    assert.equal(seen[0]?.stage, expectedStage);
+    assert.strictEqual(seen[0]?.error, policyError);
+    assert.equal(harness.writes().root, 0);
+  }
 });
 
 test("recovery assesses only an explicit candidate while the current root is corrupt", async () => {

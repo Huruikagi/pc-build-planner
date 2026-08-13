@@ -5,6 +5,7 @@ import {
   createTransactionEngine,
   type CapacityPolicy,
   type CoreError,
+  type ErrorAdapter,
   type CoreResult,
   type ExclusiveLockPort,
   type FenceControlState,
@@ -36,6 +37,11 @@ const createHarness = (
   failure?: string,
   beforeRead?: (readCount: number, current: SyntheticRoot) => SyntheticRoot,
   beforeControlRead?: (readCount: number) => void,
+  policyFailure?: CoreError,
+  errors: ErrorAdapter<CoreError, CoreError> = {
+    fromPolicy: (_stage, error) => ({ ok: true, value: error }),
+    fromCore: (error) => ({ ok: true, value: error }),
+  },
 ) => {
   let stored: unknown = root();
   let writes = 0;
@@ -85,13 +91,14 @@ const createHarness = (
   };
 
   const policy: LocalDataPolicy<SyntheticRoot, Operation, Control, CoreError> = {
+    decodeFailureStage: (error) => error.code === "migration" ? "migration" : "decode",
     decodeAndMigrate(input) {
       decodeCalls += 1;
       events.push(decodeCalls === 1 ? "decode" : "validate");
-      if (failure === "decode") return { ok: false, error: { code: "validation" } };
-      if (failure === "migration") return { ok: false, error: { code: "migration" } };
+      if (failure === "decode") return { ok: false, error: policyFailure ?? { code: "validation" } };
+      if (failure === "migration") return { ok: false, error: policyFailure ?? { code: "migration" } };
       if (failure === "validation" && decodeCalls === 2) {
-        return { ok: false, error: { code: "validation" } };
+        return { ok: false, error: policyFailure ?? { code: "validation" } };
       }
       if (failure === "decode-throw") throw { root: input };
       if (typeof input !== "object" || input === null || !("valid" in input)) {
@@ -101,12 +108,12 @@ const createHarness = (
     },
     apply(current, operation) {
       events.push("apply");
-      if (failure === "apply") return { ok: false, error: { code: "validation" } };
+      if (failure === "apply") return { ok: false, error: policyFailure ?? { code: "validation" } };
       return { ok: true, value: { ...current, value: operation.value } };
     },
     repair(candidate) {
       events.push("repair");
-      if (failure === "repair") return { ok: false, error: { code: "repair" } };
+      if (failure === "repair") return { ok: false, error: policyFailure ?? { code: "repair" } };
       return { ok: true, value: candidate };
     },
     revision(candidate) {
@@ -187,6 +194,7 @@ const createHarness = (
         return { ok: false as const, error: { code: "stale-fence" as const } };
       },
     },
+    errors,
   };
   return {
     engine: createTransactionEngine(dependencies),
@@ -426,6 +434,59 @@ test("every typed pre-commit failure preserves the stored root and writes zero t
   }
 });
 
+test("consumer policy errors preserve identity and context through the explicit adapter", async () => {
+  const policyError = { code: "validation", payload: { field: "value" }, context: { rule: "immutable" } } as const;
+  const seen: Array<{ stage: string; error: CoreError }> = [];
+  const harness = createHarness("apply", undefined, undefined, policyError, {
+    fromPolicy(stage, error) {
+      seen.push({ stage, error });
+      return { ok: true, value: { code: "request-conflict" } };
+    },
+    fromCore: (error) => ({ ok: true, value: error }),
+  });
+  const result = await harness.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } });
+  assert.deepEqual(result, { ok: false, error: { code: "request-conflict" } });
+  assert.equal(seen[0]?.stage, "mutation");
+  assert.strictEqual(seen[0]?.error, policyError);
+  assert.equal(harness.getWrites(), 0);
+});
+
+test("transaction preserves a consumer-classified migration failure stage", async () => {
+  const seen: string[] = [];
+  const harness = createHarness("migration", undefined, undefined, undefined, {
+    fromPolicy(stage, error) { seen.push(stage); return { ok: true, value: error }; },
+    fromCore: (error) => ({ ok: true, value: error }),
+  });
+  await harness.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } });
+  assert.deepEqual(seen, ["migration"]);
+  assert.equal(harness.getWrites(), 0);
+});
+
+test("every transaction policy stage preserves identity for mapped, fail-closed, and throwing adapters", async () => {
+  for (const [failure, expectedStage] of [["decode", "decode"], ["migration", "migration"], ["apply", "mutation"], ["repair", "repair"], ["validation", "validation"]] as const) {
+    for (const adapterMode of ["mapped", "fail-closed", "throw"] as const) {
+      const policyError = { code: failure === "migration" ? "migration" as const : "validation" as const, payload: { failure }, context: { adapterMode } };
+      const seen: Array<{ stage: string; error: CoreError }> = [];
+      const harness = createHarness(failure, undefined, undefined, policyError, {
+        fromPolicy(stage, error) {
+          seen.push({ stage, error });
+          if (adapterMode === "throw") throw new Error(`adapter:${failure}`);
+          return adapterMode === "mapped"
+            ? { ok: true, value: { code: "revision-conflict" } }
+            : { ok: false, error: { code: "request-conflict" } };
+        },
+        fromCore: (error) => ({ ok: true, value: error }),
+      });
+      const execute = () => harness.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } });
+      if (adapterMode === "throw") await assert.rejects(execute, new RegExp(`adapter:${failure}`));
+      else assert.deepEqual(await execute(), { ok: false, error: { code: adapterMode === "mapped" ? "revision-conflict" : "request-conflict" } });
+      assert.equal(seen[0]?.stage, expectedStage);
+      assert.strictEqual(seen[0]?.error, policyError);
+      assert.equal(harness.getWrites(), 0);
+    }
+  }
+});
+
 test("storage commit rejection is typed and does not replace the existing root", async () => {
   for (const failure of ["write", "write-throw"]) {
     const harness = createHarness(failure);
@@ -444,11 +505,10 @@ test("storage commit rejection is typed and does not replace the existing root",
   }
 });
 
-test("unknown exceptions are reduced to stable codes without exposing roots or exception values", async () => {
+test("mechanism exceptions are reduced to stable codes without exposing roots or exception values", async () => {
   for (const [failure, code] of [
     ["lock-throw", "lock-unavailable"],
     ["read-throw", "storage-unavailable"],
-    ["decode-throw", "validation"],
     ["quota-throw", "storage-unavailable"],
   ] as const) {
     const harness = createHarness(failure);
@@ -461,6 +521,19 @@ test("unknown exceptions are reduced to stable codes without exposing roots or e
     assert.equal(JSON.stringify(result).includes("before"), false);
     assert.equal(harness.getWrites(), 0);
   }
+});
+
+test("adapter throws reject without a root write", async () => {
+  const policyThrow = createHarness("decode-throw");
+  assert.deepEqual(await policyThrow.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } }), { ok: false, error: { code: "lock-unavailable" } });
+  assert.equal(policyThrow.getWrites(), 0);
+
+  const adapterThrow = createHarness("apply", undefined, undefined, { code: "validation" }, {
+    fromPolicy() { throw new Error("consumer adapter rejected mapping"); },
+    fromCore: (error) => ({ ok: true, value: error }),
+  });
+  await assert.rejects(() => adapterThrow.engine.execute({ requestId: "request", expectedRevision: 4, operation: { value: "after" } }));
+  assert.equal(adapterThrow.getWrites(), 0);
 });
 
 test("receipt revision failure occurs before commit and exposes neither exception nor root", async () => {

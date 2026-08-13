@@ -1,12 +1,13 @@
-import type { CapacityPolicy, CapacityStatus, CoreError, CoreResult, ExclusiveLockPort, FinalizationTicket, LocalDataPolicy, ReplacementAssessment, ReplacementAssessmentTicket, ReplacementCommitInput, ReplacementCommitResult, ReplacementMode, ReplacementReceipt, StoragePort } from "./contracts.js";
+import type { CapacityPolicy, CapacityStatus, CoreError, CoreResult, ErrorAdapter, ExclusiveLockPort, FinalizationTicket, LocalDataPolicy, PolicyStage, ReplacementAssessment, ReplacementAssessmentTicket, ReplacementCommitInput, ReplacementCommitResult, ReplacementMode, ReplacementReceipt, StoragePort } from "./contracts.js";
 
 interface TicketBinding { readonly id: string; readonly mode: ReplacementMode; readonly candidateDigest: string; readonly storedRevision: number; readonly rawFingerprint: string; readonly owner: string; readonly generation: number }
 interface PendingCommit { readonly ticketId: string; readonly finalizationId: string; readonly mode: ReplacementMode; readonly candidateDigest: string; readonly revision: number; readonly owner: string; readonly generation: number }
 
-export interface ReplacementCoordinatorDependencies<Root, Operation, Control, Preview> {
+export interface ReplacementCoordinatorDependencies<Root, Operation, Control, Preview, PolicyError, OutputError> {
   readonly storage: StoragePort<Root, Control>;
   readonly lock: ExclusiveLockPort;
-  readonly policy: LocalDataPolicy<Root, Operation, Control, CoreError>;
+  readonly policy: LocalDataPolicy<Root, Operation, Control, PolicyError>;
+  readonly errors: ErrorAdapter<PolicyError, OutputError>;
   readonly capacity: CapacityPolicy<Root>;
   readonly candidateDigest: (candidate: Root) => string;
   readonly rawFingerprint: (raw: unknown) => string;
@@ -15,12 +16,22 @@ export interface ReplacementCoordinatorDependencies<Root, Operation, Control, Pr
   readonly preview: (candidate: Root, capacity: CapacityStatus, mode: ReplacementMode) => Preview;
 }
 
-export interface ReplacementCoordinator<Root, Preview> {
-  assess(candidate: unknown): Promise<CoreResult<ReplacementAssessment<Preview>, CoreError>>;
-  assessRecovery(candidate: unknown): Promise<CoreResult<ReplacementAssessment<Preview>, CoreError>>;
-  commit(input: Readonly<ReplacementCommitInput<Root>>): Promise<CoreResult<ReplacementCommitResult<ReplacementReceipt<Root>>, CoreError>>;
-  findPendingFinalization(): Promise<CoreResult<FinalizationTicket | null, CoreError>>;
-  finalize(ticket: FinalizationTicket): Promise<CoreResult<ReplacementReceipt<Root>, CoreError>>;
+export interface ReplacementCoordinator<Root, Preview, Error = CoreError> {
+  assess(candidate: unknown): Promise<CoreResult<ReplacementAssessment<Preview>, Error>>;
+  assessRecovery(candidate: unknown): Promise<CoreResult<ReplacementAssessment<Preview>, Error>>;
+  commit(input: Readonly<ReplacementCommitInput<Root>>): Promise<CoreResult<ReplacementCommitResult<ReplacementReceipt<Root>>, Error>>;
+  findPendingFinalization(): Promise<CoreResult<FinalizationTicket | null, Error>>;
+  finalize(ticket: FinalizationTicket): Promise<CoreResult<ReplacementReceipt<Root>, Error>>;
+}
+
+type PolicyFailure<OutputError> = {
+  readonly ok: false;
+  readonly policyFailure: true;
+  readonly error: OutputError;
+};
+
+class ConsumerAdapterError {
+  constructor(readonly cause: unknown) {}
 }
 
 const failure = (code: CoreError["code"]): CoreResult<never, CoreError> => ({ ok: false, error: { code } });
@@ -37,7 +48,32 @@ const activeFence = (value: unknown, mode: ReplacementMode): { readonly owner: s
   return { owner: input.owner, generation: input.generation as number };
 };
 
-export const createReplacementCoordinator = <Root, Operation, Control, Preview>(dependencies: ReplacementCoordinatorDependencies<Root, Operation, Control, Preview>): ReplacementCoordinator<Root, Preview> => {
+export const createReplacementCoordinator = <Root, Operation, Control, Preview, PolicyError = CoreError, OutputError = CoreError>(dependencies: ReplacementCoordinatorDependencies<Root, Operation, Control, Preview, PolicyError, OutputError>): ReplacementCoordinator<Root, Preview, OutputError> => {
+  const adaptPolicy = <T>(stage: PolicyStage, operation: () => CoreResult<T, PolicyError>): CoreResult<T, OutputError> | PolicyFailure<OutputError> => {
+    const result = operation();
+    if (result.ok) return result;
+    let adapted;
+    try { adapted = dependencies.errors.fromPolicy(stage, result.error); } catch (cause) { throw new ConsumerAdapterError(cause); }
+    const error = adapted.ok ? adapted.value : adapted.error;
+    return { ok: false, policyFailure: true, error };
+  };
+  const decodeAndMigrate = (input: unknown, fallback: PolicyStage): CoreResult<Root, OutputError> | PolicyFailure<OutputError> => {
+    const result = dependencies.policy.decodeAndMigrate(input);
+    if (result.ok) return result;
+    const stage = fallback === "decode" ? dependencies.policy.decodeFailureStage?.(result.error) ?? "decode" : fallback;
+    return adaptPolicy(stage, () => result);
+  };
+  const adaptResult = <T>(result: CoreResult<T, CoreError | OutputError> | PolicyFailure<OutputError>): CoreResult<T, OutputError> => {
+    if (result.ok) return result;
+    if ("policyFailure" in result) return { ok: false, error: result.error };
+    let adapted;
+    try { adapted = dependencies.errors.fromCore(result.error as CoreError); } catch (cause) { throw new ConsumerAdapterError(cause); }
+    return { ok: false, error: adapted.ok ? adapted.value : adapted.error };
+  };
+  const publicResult = async <T>(operation: () => Promise<CoreResult<T, CoreError | OutputError> | PolicyFailure<OutputError>>): Promise<CoreResult<T, OutputError>> => {
+    try { return adaptResult(await operation()); }
+    catch (error) { if (error instanceof ConsumerAdapterError) throw error.cause; throw error; }
+  };
   const bindings = new WeakMap<object, TicketBinding>();
   const finalizations = new WeakMap<object, PendingCommit>();
   const capabilityIds = new Set<string>();
@@ -70,13 +106,13 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
     try { return await dependencies.storage.writeControl(value); } catch { return failure("storage-unavailable"); }
   };
 
-  const evaluate = async (candidateInput: unknown, mode: ReplacementMode): Promise<CoreResult<{ readonly candidate: Root; readonly preview: Preview; readonly binding: TicketBinding }, CoreError>> => {
+  const evaluate = async (candidateInput: unknown, mode: ReplacementMode): Promise<CoreResult<{ readonly candidate: Root; readonly preview: Preview; readonly binding: TicketBinding }, CoreError | OutputError> | PolicyFailure<OutputError>> => {
     let rawRead: CoreResult<unknown | undefined, CoreError>;
     try { rawRead = await dependencies.storage.readRoot(); } catch { return failure("storage-unavailable"); }
     if (!rawRead.ok) return rawRead;
     const rawFingerprint = safeValue(() => dependencies.rawFingerprint(rawRead.value), "validation");
     if (!rawFingerprint.ok) return rawFingerprint;
-    const current = safely(() => dependencies.policy.decodeAndMigrate(rawRead.value), "validation");
+    const current = decodeAndMigrate(rawRead.value, "decode");
     let storedRevision: number;
     if (mode === "normal") {
       if (!current.ok) return current;
@@ -93,11 +129,11 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
     const fence = activeFence(fenceValue, mode);
     if (fence === undefined) return failure(mode === "normal" ? "stale-fence" : "stale-recovery-state");
 
-    const decoded = safely(() => dependencies.policy.decodeAndMigrate(candidateInput), "validation");
+    const decoded = decodeAndMigrate(candidateInput, "decode");
     if (!decoded.ok) return decoded;
-    const repaired = safely(() => dependencies.policy.repair(decoded.value, current.ok ? current.value : decoded.value), "repair");
+    const repaired = adaptPolicy("repair", () => dependencies.policy.repair(decoded.value, current.ok ? current.value : decoded.value));
     if (!repaired.ok) return repaired;
-    const validated = safely(() => dependencies.policy.decodeAndMigrate(repaired.value), "validation");
+    const validated = adaptPolicy("validation", () => dependencies.policy.decodeAndMigrate(repaired.value));
     if (!validated.ok) return validated;
     let currentBytes: CoreResult<number, CoreError>;
     try { currentBytes = await dependencies.storage.bytesInUse(); } catch { return failure("storage-unavailable"); }
@@ -115,17 +151,17 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
     return { ok: true, value: { candidate: validated.value, preview: preview.value, binding: { id: id.value, mode, candidateDigest: digest.value, storedRevision, rawFingerprint: rawFingerprint.value, owner: fence.owner, generation: fence.generation } } };
   };
 
-  const assessMode = async (candidate: unknown, mode: ReplacementMode): Promise<CoreResult<ReplacementAssessment<Preview>, CoreError>> => {
+  const assessMode = async (candidate: unknown, mode: ReplacementMode): Promise<CoreResult<ReplacementAssessment<Preview>, CoreError | OutputError> | PolicyFailure<OutputError>> => {
     const evaluated = await evaluate(candidate, mode);
     if (!evaluated.ok) return evaluated;
     const ticket = Object.freeze({}) as ReplacementAssessmentTicket;
     bindings.set(ticket, evaluated.value.binding);
     return { ok: true, value: { preview: evaluated.value.preview, ticket } };
   };
-  return {
-    assess: (candidate) => assessMode(candidate, "normal"),
-    assessRecovery: (candidate) => assessMode(candidate, "recovery"),
-    async commit(input) {
+  const coordinator = {
+    assess: (candidate: unknown) => assessMode(candidate, "normal"),
+    assessRecovery: (candidate: unknown) => assessMode(candidate, "recovery"),
+    async commit(input: Readonly<ReplacementCommitInput<Root>>) {
       const binding = bindings.get(input.ticket as object);
       if (binding === undefined || binding.mode !== input.mode) return failure("stale-assessment");
       const staleAssessment = () => {
@@ -147,7 +183,8 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
           if (!raw.ok) return raw;
           if (existing !== undefined) {
             if (existing.ticketId !== binding.id) return failure("recovery-active");
-            const committed = safely(() => dependencies.policy.decodeAndMigrate(raw.value), "validation");
+            const committed = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(raw.value));
+            if (!committed.ok && "policyFailure" in committed) return committed;
             if (committed.ok && dependencies.policy.revision(committed.value) === existing.revision && dependencies.candidateDigest(committed.value) === existing.candidateDigest) {
               const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
               if (!bytes.ok) return bytes;
@@ -166,10 +203,10 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
           }
           const fingerprint = safeValue(() => dependencies.rawFingerprint(raw.value), "validation");
           if (!fingerprint.ok) return fingerprint;
-          const decoded = safely(() => dependencies.policy.decodeAndMigrate(raw.value), "validation");
+          const decoded = adaptPolicy("assessment", () => dependencies.policy.decodeAndMigrate(raw.value));
           let revision = 0;
           if (input.mode === "normal") {
-            if (!decoded.ok) return staleAssessment();
+            if (!decoded.ok) return "policyFailure" in decoded ? decoded : staleAssessment();
             const currentRevision = safeValue(() => dependencies.policy.revision(decoded.value), "validation");
             if (!currentRevision.ok) return staleAssessment();
             revision = currentRevision.value;
@@ -182,9 +219,9 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
           if (fingerprint.value !== binding.rawFingerprint || revision !== binding.storedRevision)
             return staleAssessment();
 
-          const candidate = safely(() => dependencies.policy.decodeAndMigrate(input.candidate), "validation");
+          const candidate = decodeAndMigrate(input.candidate, "decode");
           if (!candidate.ok) return candidate;
-          const repaired = safely(() => dependencies.policy.repair(candidate.value, decoded.ok ? decoded.value : candidate.value), "repair");
+          const repaired = adaptPolicy("repair", () => dependencies.policy.repair(candidate.value, decoded.ok ? decoded.value : candidate.value));
           if (!repaired.ok) return repaired;
           const digest = safeValue(() => dependencies.candidateDigest(repaired.value), "validation");
           if (!digest.ok) return digest;
@@ -196,7 +233,7 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
             active: false,
             generation: binding.generation,
           } as Control);
-          const validated = safely(() => dependencies.policy.decodeAndMigrate(committedRoot), "validation");
+          const validated = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(committedRoot));
           if (!validated.ok) return validated;
           const committedDigest = safeValue(() => dependencies.candidateDigest(validated.value), "validation");
           if (!committedDigest.ok) return committedDigest;
@@ -226,7 +263,10 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
             : { ok: true as const, value: { kind: "committed-finalization-required" as const, receipt, finalization } };
         });
         return locked.ok ? locked.value : locked;
-      } catch { return failure("lock-unavailable"); }
+      } catch (error) {
+        if (error instanceof ConsumerAdapterError) throw error.cause;
+        return failure("lock-unavailable");
+      }
     },
     async findPendingFinalization() {
       const control = await readControl();
@@ -235,15 +275,16 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
       if (pending === undefined) return { ok: true, value: null };
       const raw = await dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
       if (!raw.ok) return raw;
-      const decoded = safely(() => dependencies.policy.decodeAndMigrate(raw.value), "validation");
-      if (!decoded.ok || dependencies.policy.revision(decoded.value) !== pending.revision) return { ok: true, value: null };
+      const decoded = adaptPolicy("assessment", () => dependencies.policy.decodeAndMigrate(raw.value));
+      if (!decoded.ok) return "policyFailure" in decoded ? decoded : { ok: true, value: null };
+      if (dependencies.policy.revision(decoded.value) !== pending.revision) return { ok: true, value: null };
       const digest = safeValue(() => dependencies.candidateDigest(decoded.value), "validation");
       if (!digest.ok || digest.value !== pending.candidateDigest) return { ok: true, value: null };
       const ticket = Object.freeze({}) as FinalizationTicket;
       finalizations.set(ticket as object, pending);
       return { ok: true, value: ticket };
     },
-    async finalize(ticket) {
+    async finalize(ticket: FinalizationTicket) {
       const pending = finalizations.get(ticket as object);
       if (pending === undefined) return failure("stale-assessment");
       try {
@@ -254,8 +295,9 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
           if (stored?.finalizationId !== pending.finalizationId) return failure("stale-assessment");
           const raw = await dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
           if (!raw.ok) return raw;
-          const decoded = safely(() => dependencies.policy.decodeAndMigrate(raw.value), "validation");
-          if (!decoded.ok || dependencies.policy.revision(decoded.value) !== pending.revision) return failure("stale-assessment");
+          const decoded = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(raw.value));
+          if (!decoded.ok) return "policyFailure" in decoded ? decoded : failure("stale-assessment");
+          if (dependencies.policy.revision(decoded.value) !== pending.revision) return failure("stale-assessment");
           const digest = safeValue(() => dependencies.candidateDigest(decoded.value), "validation");
           if (!digest.ok || digest.value !== pending.candidateDigest) return failure("stale-assessment");
           const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
@@ -272,7 +314,17 @@ export const createReplacementCoordinator = <Root, Operation, Control, Preview>(
           return { ok: true as const, value: { root: releasedRoot, revision: pending.revision, capacity: capacity.value } };
         });
         return locked.ok ? locked.value : locked;
-      } catch { return failure("lock-unavailable"); }
+      } catch (error) {
+        if (error instanceof ConsumerAdapterError) throw error.cause;
+        return failure("lock-unavailable");
+      }
     },
+  };
+  return {
+    assess: (candidate) => publicResult(() => coordinator.assess(candidate)),
+    assessRecovery: (candidate) => publicResult(() => coordinator.assessRecovery(candidate)),
+    commit: (input) => publicResult<ReplacementCommitResult<ReplacementReceipt<Root>>>(() => coordinator.commit(input)),
+    findPendingFinalization: () => publicResult<FinalizationTicket | null>(() => coordinator.findPendingFinalization() as Promise<CoreResult<FinalizationTicket | null, CoreError | OutputError> | PolicyFailure<OutputError>>),
+    finalize: (ticket) => publicResult<ReplacementReceipt<Root>>(() => coordinator.finalize(ticket)),
   };
 };
