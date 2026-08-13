@@ -17,6 +17,13 @@ test("local data public consumers validate clean built entries in order", async 
     ["pnpm", "--filter", "@pc-build-planner/local-data", "build"],
     ["pnpm", "typecheck:local-data-public-declarations"],
     ["pnpm", "typecheck:local-data-public-consumers"],
+    ["node", "scripts/validate-local-data-transaction-public-contract.mjs"],
+    [
+      "node",
+      "--import",
+      "tsx",
+      "tests/tooling/local-data-replacement-backup-runtime-contract.ts",
+    ],
     ["node", "--import", "tsx", "tests/tooling/local-data-core-consumer.ts"],
     ["node", "--import", "tsx", "tests/tooling/local-data-chrome-consumer.ts"],
     ["node", "--import", "tsx", "tests/tooling/local-data-backup-consumer.ts"],

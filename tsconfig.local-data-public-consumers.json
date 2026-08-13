@@ -8,6 +8,7 @@
   "include": [
     "tests/tooling/local-data-core-consumer.ts",
     "tests/tooling/local-data-chrome-consumer.ts",
-    "tests/tooling/local-data-backup-consumer.ts"
+    "tests/tooling/local-data-backup-consumer.ts",
+    "tests/tooling/local-data-replacement-backup-runtime-contract.ts"
   ]
 }

@@ -204,7 +204,7 @@
   - _Requirements: 1.5, 1.7, 1.8, 4.8, 6.5, 6.7, 6.8, 7.1, 7.5, 7.9, 7.11_
   - _Boundary: SyntheticPublicContract_
 
-- [ ] 7.3 replacement・backup synthetic contractを更新する
+- [x] 7.3 replacement・backup synthetic contractを更新する
   - owner protocolのopaque fence/pending/anomaly型でassessment、commit、pre/post cleanup、find/finalizeを実行するfixtureを追加し、backup orchestrationの既存ticket semanticsを同じ公開port上で再検証する。
   - replacement policy errorの種類・payload・判定contextが明示adapter入力とoutput errorまで保持され、adapterがfail-closed resultを返す場合またはthrowする場合はroot write 0件となるruntime fixtureを追加する。
   - normal/recovery、stale、precommit cleanup、committed finalization、finalize-only retryをprotocol結果だけで駆動する。
@@ -258,3 +258,4 @@
 - **Task 6.4**: `FinalizationCapability`はbackup subpathまで同じowner genericで伝播する。commit経路はpost-root observation/classificationを行わず、root write失敗はprecommit、cleanup failureだけをcommitted-finalization-requiredとして扱う。persistent ticket検証はcloneされたcontrolと入力capabilityをowner protocolへ渡して行う。
 - **Task 7.1**: build済みroot/backup declarationだけを解決する専用consumer gateをclean build直後に実行し、owner error/control/finalization capabilityのpublic genericと3-entry export mapをsource aliasなしで固定する。
 - **Task 7.2**: transaction public contractはbuild済みroot entryだけを使い、positive fixture、adapter欠落/control混同の狙ったnegative診断、decode/migration/mutation/repair/validationのruntime identityを一つのfail-closed validator routeで検証する。
+- **Task 7.3**: replacement/backup public runtime contractはcloneされるsynthetic storageとruntime validatorを使い、unsafe castや参照同一性に依存せず、全replacement policy stage、same-ticket cleanup、reassessment、再生成finalizationをcanonical public consumer routeで検証する。

@@ -14,6 +14,12 @@ export const localDataPublicConsumerGates = Object.freeze([
     "node",
     "--import",
     "tsx",
+    "tests/tooling/local-data-replacement-backup-runtime-contract.ts",
+  ]),
+  Object.freeze([
+    "node",
+    "--import",
+    "tsx",
     "tests/tooling/local-data-core-consumer.ts",
   ]),
   Object.freeze([
