@@ -44,9 +44,11 @@ test("the root declaration stays product and platform independent", async () => 
   }
 
   assert.deepEqual([...visited].sort(), [
+    "capacity.d.ts",
     "contracts.d.ts",
     "fencing.d.ts",
     "index.d.ts",
+    "replacement.d.ts",
     "transaction.d.ts",
   ]);
   const declaration = declarations.join("\n");

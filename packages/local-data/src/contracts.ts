@@ -109,8 +109,14 @@ export interface TransactionPort<Operation, Value, Error> {
   ): Promise<CoreResult<TransactionReceipt<Value>, Error>>;
 }
 
+declare const replacementAssessmentTicketBrand: unique symbol;
 export interface ReplacementAssessmentTicket {
-  readonly __opaqueReplacementTicket: unique symbol;
+  readonly [replacementAssessmentTicketBrand]: "replacement-assessment";
+}
+
+export interface ReplacementAssessment<Preview> {
+  readonly preview: Preview;
+  readonly ticket: ReplacementAssessmentTicket;
 }
 
 export interface FinalizationTicket {

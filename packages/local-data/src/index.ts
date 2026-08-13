@@ -9,6 +9,7 @@ export type {
   FinalizationTicket,
   LocalDataPolicy,
   LockError,
+  ReplacementAssessment,
   ReplacementAssessmentTicket,
   ReplacementCommitInput,
   ReplacementCommitResult,
@@ -22,6 +23,9 @@ export type {
   TransactionPort,
   TransactionReceipt,
 } from "./contracts.js";
+
+export { createCapacityPolicy } from "./capacity.js";
+export type { SerializedBytes } from "./capacity.js";
 
 export { createFencingPolicy } from "./fencing.js";
 export type {
@@ -37,3 +41,9 @@ export type {
 
 export { createTransactionEngine } from "./transaction.js";
 export type { TransactionEngineDependencies } from "./transaction.js";
+
+export { createReplacementCoordinator } from "./replacement.js";
+export type {
+  ReplacementCoordinator,
+  ReplacementCoordinatorDependencies,
+} from "./replacement.js";

@@ -54,7 +54,7 @@
   - _Boundary: TransactionEngine_
   - _Depends: 2.4_
 
-- [ ] 2.6 normal・recovery rootの副作用なしassessmentを実装する
+- [x] 2.6 normal・recovery rootの副作用なしassessmentを実装する
   - candidateをdecode/migrate/repair/validate/capacity評価し、candidate digest、revision、raw fingerprint、owner/generationを公開しないopaque ticketへ束ねる。
   - normalと破損・未対応rootのrecoveryを別modeで評価し、assessment中はroot/controlを一度も書き換えない。
   - stale candidate、revision、owner、generationを識別できるfixtureと、全assessmentでroot write 0件のtestが成功すれば完了とする。
