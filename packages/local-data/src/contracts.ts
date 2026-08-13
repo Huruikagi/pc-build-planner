@@ -156,6 +156,56 @@ export interface ReplacementReceipt<Root> {
 
 export type ReplacementMode = "normal" | "recovery";
 
+export interface ReplacementBinding {
+  readonly mode: ReplacementMode;
+  readonly candidateIdentity: string;
+  readonly currentIdentity: string;
+  readonly targetRevision: number;
+}
+
+export type RecoveryCommitState<PendingCommit> =
+  | { readonly kind: "clear" }
+  | { readonly kind: "precommit-pending"; readonly pending: PendingCommit }
+  | {
+      readonly kind: "postcommit-finalization";
+      readonly pending: PendingCommit;
+      readonly ticket: FinalizationTicket;
+    };
+
+export interface PersistentRecoveryProtocol<
+  PersistentRecoveryControl,
+  ProtocolError,
+  RecoveryFence = unknown,
+  PendingCommit = unknown,
+  CurrentAnomalyState = unknown,
+> {
+  authorizeMutation(control: unknown): CoreResult<void, ProtocolError>;
+  observeCurrent(rawRoot: unknown): CoreResult<CurrentAnomalyState, ProtocolError>;
+  acquire(
+    control: unknown,
+    mode: ReplacementMode,
+    current: CurrentAnomalyState,
+  ): CoreResult<Readonly<{ control: PersistentRecoveryControl; fence: RecoveryFence }>, ProtocolError>;
+  prepareCommit(
+    control: unknown,
+    fence: RecoveryFence,
+    binding: ReplacementBinding,
+  ): CoreResult<Readonly<{ control: PersistentRecoveryControl; pending: PendingCommit }>, ProtocolError>;
+  classifyCurrent(
+    control: unknown,
+    current: CurrentAnomalyState,
+  ): CoreResult<RecoveryCommitState<PendingCommit>, ProtocolError>;
+  release(
+    control: unknown,
+    capability: RecoveryFence | PendingCommit,
+  ): CoreResult<PersistentRecoveryControl, ProtocolError>;
+  finalize(
+    control: unknown,
+    ticket: FinalizationTicket,
+    current: CurrentAnomalyState,
+  ): CoreResult<PersistentRecoveryControl, ProtocolError>;
+}
+
 export interface ReplacementCommitInput<Root> {
   readonly candidate: Root;
   readonly mode: ReplacementMode;

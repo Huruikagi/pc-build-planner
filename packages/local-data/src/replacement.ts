@@ -1,17 +1,30 @@
-import type { CapacityPolicy, CapacityStatus, CoreError, CoreResult, ErrorAdapter, ExclusiveLockPort, FinalizationTicket, LocalDataPolicy, PolicyStage, ReplacementAssessment, ReplacementAssessmentTicket, ReplacementCommitInput, ReplacementCommitResult, ReplacementMode, ReplacementReceipt, StoragePort } from "./contracts.js";
+import type { CapacityPolicy, CapacityStatus, CoreError, CoreResult, ErrorAdapter, ExclusiveLockPort, FinalizationTicket, LocalDataPolicy, PersistentRecoveryProtocol, PolicyStage, RecoveryCommitState, ReplacementAssessment, ReplacementAssessmentTicket, ReplacementBinding, ReplacementCommitInput, ReplacementCommitResult, ReplacementMode, ReplacementReceipt, StoragePort } from "./contracts.js";
 
-interface TicketBinding { readonly id: string; readonly mode: ReplacementMode; readonly candidateDigest: string; readonly storedRevision: number; readonly rawFingerprint: string; readonly owner: string; readonly generation: number }
-interface PendingCommit { readonly ticketId: string; readonly finalizationId: string; readonly mode: ReplacementMode; readonly candidateDigest: string; readonly revision: number; readonly owner: string; readonly generation: number }
+interface TicketBinding<Root, PersistentRecoveryControl, RecoveryFence> {
+  readonly mode: ReplacementMode;
+  readonly candidate: Root;
+  readonly candidateDigest: string;
+  readonly storedRevision: number;
+  readonly rawFingerprint: string;
+  readonly acquiredControl: PersistentRecoveryControl;
+  readonly fence: RecoveryFence;
+}
+interface FinalizationBinding<Root, PersistentRecoveryControl, PendingCommit> {
+  readonly receipt: ReplacementReceipt<Root>;
+  readonly preparedControl: PersistentRecoveryControl;
+  readonly pending: PendingCommit;
+  readonly releasedControl?: PersistentRecoveryControl;
+}
 
-export interface ReplacementCoordinatorDependencies<Root, Operation, Control, Preview, PolicyError, OutputError> {
-  readonly storage: StoragePort<Root, Control>;
+export interface ReplacementCoordinatorDependencies<Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, Preview, PolicyError, OutputError, RecoveryFence = unknown, PendingCommit = unknown, CurrentAnomalyState = unknown> {
+  readonly storage: StoragePort<Root, PersistentRecoveryControl>;
   readonly lock: ExclusiveLockPort;
-  readonly policy: LocalDataPolicy<Root, Operation, Control, PolicyError>;
+  readonly policy: LocalDataPolicy<Root, Operation, RootMaintenanceControl, PolicyError>;
   readonly errors: ErrorAdapter<PolicyError, OutputError>;
+  readonly recovery: PersistentRecoveryProtocol<PersistentRecoveryControl, OutputError, RecoveryFence, PendingCommit, CurrentAnomalyState>;
   readonly capacity: CapacityPolicy<Root>;
   readonly candidateDigest: (candidate: Root) => string;
   readonly rawFingerprint: (raw: unknown) => string;
-  /** Must return a collision-resistant, non-secret runtime capability id. */
   readonly newCapabilityId: () => string;
   readonly preview: (candidate: Root, capacity: CapacityStatus, mode: ReplacementMode) => Preview;
 }
@@ -24,307 +37,161 @@ export interface ReplacementCoordinator<Root, Preview, Error = CoreError> {
   finalize(ticket: FinalizationTicket): Promise<CoreResult<ReplacementReceipt<Root>, Error>>;
 }
 
-type PolicyFailure<OutputError> = {
-  readonly ok: false;
-  readonly policyFailure: true;
-  readonly error: OutputError;
-};
-
-class ConsumerAdapterError {
-  constructor(readonly cause: unknown) {}
-}
-
+type PolicyFailure<E> = { readonly ok: false; readonly policyFailure: true; readonly error: E };
+type ProtocolFailure<E> = { readonly ok: false; readonly protocolFailure: true; readonly error: E };
+class ConsumerAdapterError { constructor(readonly cause: unknown) {} }
 const failure = (code: CoreError["code"]): CoreResult<never, CoreError> => ({ ok: false, error: { code } });
-const safely = <T>(operation: () => CoreResult<T, CoreError>, code: CoreError["code"]): CoreResult<T, CoreError> => {
-  try { return operation(); } catch { return failure(code); }
-};
 const safeValue = <T>(operation: () => T, code: CoreError["code"]): CoreResult<T, CoreError> => {
   try { return { ok: true, value: operation() }; } catch { return failure(code); }
 };
-const activeFence = (value: unknown, mode: ReplacementMode): { readonly owner: string; readonly generation: number } | undefined => {
-  if (typeof value !== "object" || value === null) return undefined;
-  const input = value as Record<string, unknown>;
-  if (input.active !== true || input.kind !== (mode === "normal" ? "maintenance" : "recovery") || typeof input.owner !== "string" || input.owner.length === 0 || !Number.isSafeInteger(input.generation) || (input.generation as number) <= 0) return undefined;
-  return { owner: input.owner, generation: input.generation as number };
-};
 
-export const createReplacementCoordinator = <Root, Operation, Control, Preview, PolicyError = CoreError, OutputError = CoreError>(dependencies: ReplacementCoordinatorDependencies<Root, Operation, Control, Preview, PolicyError, OutputError>): ReplacementCoordinator<Root, Preview, OutputError> => {
-  const adaptPolicy = <T>(stage: PolicyStage, operation: () => CoreResult<T, PolicyError>): CoreResult<T, OutputError> | PolicyFailure<OutputError> => {
+export const createReplacementCoordinator = <Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, Preview, PolicyError = CoreError, OutputError = CoreError, RecoveryFence = unknown, PendingCommit = unknown, CurrentAnomalyState = unknown>(
+  dependencies: ReplacementCoordinatorDependencies<Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, Preview, PolicyError, OutputError, RecoveryFence, PendingCommit, CurrentAnomalyState>,
+): ReplacementCoordinator<Root, Preview, OutputError> => {
+  type Internal<T> = CoreResult<T, CoreError | OutputError> | PolicyFailure<OutputError> | ProtocolFailure<OutputError>;
+  const protocolResult = <T>(result: CoreResult<T, OutputError>): CoreResult<T, OutputError> | ProtocolFailure<OutputError> =>
+    result.ok ? result : { ok: false, protocolFailure: true, error: result.error };
+  const adaptPolicy = <T>(stage: PolicyStage, operation: () => CoreResult<T, PolicyError>): Internal<T> => {
     const result = operation();
     if (result.ok) return result;
-    let adapted;
+    let adapted: CoreResult<OutputError, OutputError>;
     try { adapted = dependencies.errors.fromPolicy(stage, result.error); } catch (cause) { throw new ConsumerAdapterError(cause); }
-    const error = adapted.ok ? adapted.value : adapted.error;
-    return { ok: false, policyFailure: true, error };
+    return { ok: false, policyFailure: true, error: adapted.ok ? adapted.value : adapted.error };
   };
-  const decodeAndMigrate = (input: unknown, fallback: PolicyStage): CoreResult<Root, OutputError> | PolicyFailure<OutputError> => {
+  const decode = (input: unknown, fallback: PolicyStage): Internal<Root> => {
     const result = dependencies.policy.decodeAndMigrate(input);
     if (result.ok) return result;
-    const stage = fallback === "decode" ? dependencies.policy.decodeFailureStage?.(result.error) ?? "decode" : fallback;
-    return adaptPolicy(stage, () => result);
+    return adaptPolicy(fallback === "decode" ? dependencies.policy.decodeFailureStage?.(result.error) ?? "decode" : fallback, () => result);
   };
-  const adaptResult = <T>(result: CoreResult<T, CoreError | OutputError> | PolicyFailure<OutputError>): CoreResult<T, OutputError> => {
+  const adaptResult = <T>(result: Internal<T>): CoreResult<T, OutputError> => {
     if (result.ok) return result;
-    if ("policyFailure" in result) return { ok: false, error: result.error };
-    let adapted;
+    if ("policyFailure" in result || "protocolFailure" in result) return { ok: false, error: result.error };
+    let adapted: CoreResult<OutputError, OutputError>;
     try { adapted = dependencies.errors.fromCore(result.error as CoreError); } catch (cause) { throw new ConsumerAdapterError(cause); }
     return { ok: false, error: adapted.ok ? adapted.value : adapted.error };
   };
-  const publicResult = async <T>(operation: () => Promise<CoreResult<T, CoreError | OutputError> | PolicyFailure<OutputError>>): Promise<CoreResult<T, OutputError>> => {
-    try { return adaptResult(await operation()); }
-    catch (error) { if (error instanceof ConsumerAdapterError) throw error.cause; throw error; }
+  const publicResult = async <T>(operation: () => Promise<Internal<T>>): Promise<CoreResult<T, OutputError>> => {
+    try { return adaptResult(await operation()); } catch (error) { if (error instanceof ConsumerAdapterError) throw error.cause; throw error; }
   };
-  const bindings = new WeakMap<object, TicketBinding>();
-  const finalizations = new WeakMap<object, PendingCommit>();
-  const capabilityIds = new Set<string>();
-  const identifier = (): CoreResult<string, CoreError> => {
-    const value = safeValue(dependencies.newCapabilityId, "validation");
-    if (!value.ok || value.value.length === 0 || capabilityIds.has(value.value))
-      return failure("validation");
-    capabilityIds.add(value.value);
-    return value;
-  };
-
-  const pendingFrom = (value: unknown): PendingCommit | undefined => {
-    if (typeof value !== "object" || value === null) return undefined;
-    const pending = (value as Record<string, unknown>).__replacementPending;
-    if (typeof pending !== "object" || pending === null) return undefined;
-    const p = pending as Record<string, unknown>;
-    if (typeof p.ticketId !== "string" || typeof p.finalizationId !== "string" || (p.mode !== "normal" && p.mode !== "recovery") || typeof p.candidateDigest !== "string" || !Number.isSafeInteger(p.revision) || typeof p.owner !== "string" || !Number.isSafeInteger(p.generation)) return undefined;
-    return p as unknown as PendingCommit;
-  };
-  const withPending = (value: unknown, pending: PendingCommit | undefined): Control => {
-    const base = typeof value === "object" && value !== null ? { ...(value as Record<string, unknown>) } : {};
-    if (pending === undefined) delete base.__replacementPending;
-    else base.__replacementPending = pending;
-    return base as Control;
-  };
-  const readControl = async (): Promise<CoreResult<unknown | undefined, CoreError>> => {
-    try { return await dependencies.storage.readControl(); } catch { return failure("storage-unavailable"); }
-  };
-  const writeControl = async (value: Control): Promise<CoreResult<void, CoreError>> => {
-    try { return await dependencies.storage.writeControl(value); } catch { return failure("storage-unavailable"); }
+  const bindings = new WeakMap<object, TicketBinding<Root, PersistentRecoveryControl, RecoveryFence>>();
+  const finalizations = new WeakMap<object, FinalizationBinding<Root, PersistentRecoveryControl, PendingCommit>>();
+  const readRoot = async () => dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
+  const readControl = async () => dependencies.storage.readControl().catch(() => failure("storage-unavailable"));
+  const writeControl = async (value: PersistentRecoveryControl) => dependencies.storage.writeControl(value).catch(() => failure("storage-unavailable"));
+  const capacityFor = async (candidate: Root): Promise<CoreResult<CapacityStatus, CoreError>> => {
+    const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
+    if (!bytes.ok) return bytes;
+    const quota = safeValue(dependencies.storage.quotaBytes, "storage-unavailable");
+    if (!quota.ok) return quota;
+    try { return dependencies.capacity.assess(bytes.value, candidate, quota.value); } catch { return failure("quota-exceeded"); }
   };
 
-  const evaluate = async (candidateInput: unknown, mode: ReplacementMode): Promise<CoreResult<{ readonly candidate: Root; readonly preview: Preview; readonly binding: TicketBinding }, CoreError | OutputError> | PolicyFailure<OutputError>> => {
-    let rawRead: CoreResult<unknown | undefined, CoreError>;
-    try { rawRead = await dependencies.storage.readRoot(); } catch { return failure("storage-unavailable"); }
-    if (!rawRead.ok) return rawRead;
-    const rawFingerprint = safeValue(() => dependencies.rawFingerprint(rawRead.value), "validation");
-    if (!rawFingerprint.ok) return rawFingerprint;
-    const current = decodeAndMigrate(rawRead.value, "decode");
-    let storedRevision: number;
+  const assessMode = async (candidateInput: unknown, mode: ReplacementMode): Promise<Internal<ReplacementAssessment<Preview>>> => {
+    const raw = await readRoot(); if (!raw.ok) return raw;
+    const fingerprint = safeValue(() => dependencies.rawFingerprint(raw.value), "validation"); if (!fingerprint.ok) return fingerprint;
+    const currentState = protocolResult(dependencies.recovery.observeCurrent(raw.value)); if (!currentState.ok) return currentState;
+    const current = decode(raw.value, "decode");
+    let revision = 0;
     if (mode === "normal") {
       if (!current.ok) return current;
-      const revision = safeValue(() => dependencies.policy.revision(current.value), "validation");
-      if (!revision.ok || !Number.isSafeInteger(revision.value) || revision.value < 0) return failure("validation");
-      storedRevision = revision.value;
-    } else {
-      if (current.ok) return failure("stale-recovery-state");
-      storedRevision = 0;
-    }
-    const persistent = await readControl();
-    if (!persistent.ok) return persistent;
-    const fenceValue = persistent.value;
-    const fence = activeFence(fenceValue, mode);
-    if (fence === undefined) return failure(mode === "normal" ? "stale-fence" : "stale-recovery-state");
-
-    const decoded = decodeAndMigrate(candidateInput, "decode");
-    if (!decoded.ok) return decoded;
-    const repaired = adaptPolicy("repair", () => dependencies.policy.repair(decoded.value, current.ok ? current.value : decoded.value));
-    if (!repaired.ok) return repaired;
-    const validated = adaptPolicy("validation", () => dependencies.policy.decodeAndMigrate(repaired.value));
-    if (!validated.ok) return validated;
-    let currentBytes: CoreResult<number, CoreError>;
-    try { currentBytes = await dependencies.storage.bytesInUse(); } catch { return failure("storage-unavailable"); }
-    if (!currentBytes.ok) return currentBytes;
-    const quota = safeValue(() => dependencies.storage.quotaBytes(), "storage-unavailable");
-    if (!quota.ok) return quota;
-    const capacity = safely(() => dependencies.capacity.assess(currentBytes.value, validated.value, quota.value), "quota-exceeded");
-    if (!capacity.ok) return capacity;
-    const digest = safeValue(() => dependencies.candidateDigest(validated.value), "validation");
-    if (!digest.ok) return digest;
-    const preview = safeValue(() => dependencies.preview(validated.value, capacity.value, mode), "validation");
-    if (!preview.ok) return preview;
-    const id = identifier();
-    if (!id.ok) return id;
-    return { ok: true, value: { candidate: validated.value, preview: preview.value, binding: { id: id.value, mode, candidateDigest: digest.value, storedRevision, rawFingerprint: rawFingerprint.value, owner: fence.owner, generation: fence.generation } } };
-  };
-
-  const assessMode = async (candidate: unknown, mode: ReplacementMode): Promise<CoreResult<ReplacementAssessment<Preview>, CoreError | OutputError> | PolicyFailure<OutputError>> => {
-    const evaluated = await evaluate(candidate, mode);
-    if (!evaluated.ok) return evaluated;
+      const found = safeValue(() => dependencies.policy.revision(current.value), "validation");
+      if (!found.ok || !Number.isSafeInteger(found.value) || found.value < 0) return failure("validation");
+      revision = found.value;
+    } else if (current.ok) return failure("stale-recovery-state");
+    const control = await readControl(); if (!control.ok) return control;
+    const acquired = protocolResult(dependencies.recovery.acquire(control.value, mode, currentState.value)); if (!acquired.ok) return acquired;
+    const decoded = decode(candidateInput, "decode"); if (!decoded.ok) return decoded;
+    const repaired = adaptPolicy("repair", () => dependencies.policy.repair(decoded.value, current.ok ? current.value : decoded.value)); if (!repaired.ok) return repaired;
+    const validated = adaptPolicy("validation", () => dependencies.policy.decodeAndMigrate(repaired.value)); if (!validated.ok) return validated;
+    const capacity = await capacityFor(validated.value); if (!capacity.ok) return capacity;
+    const digest = safeValue(() => dependencies.candidateDigest(validated.value), "validation"); if (!digest.ok) return digest;
+    const preview = safeValue(() => dependencies.preview(validated.value, capacity.value, mode), "validation"); if (!preview.ok) return preview;
     const ticket = Object.freeze({}) as ReplacementAssessmentTicket;
-    bindings.set(ticket, evaluated.value.binding);
-    return { ok: true, value: { preview: evaluated.value.preview, ticket } };
+    bindings.set(ticket, { mode, candidate: validated.value, candidateDigest: digest.value, storedRevision: revision, rawFingerprint: fingerprint.value, acquiredControl: acquired.value.control, fence: acquired.value.fence });
+    return { ok: true, value: { preview: preview.value, ticket } };
   };
+
   const coordinator = {
     assess: (candidate: unknown) => assessMode(candidate, "normal"),
     assessRecovery: (candidate: unknown) => assessMode(candidate, "recovery"),
-    async commit(input: Readonly<ReplacementCommitInput<Root>>) {
+    async commit(input: Readonly<ReplacementCommitInput<Root>>): Promise<Internal<ReplacementCommitResult<ReplacementReceipt<Root>>>> {
       const binding = bindings.get(input.ticket as object);
-      if (binding === undefined || binding.mode !== input.mode) return failure("stale-assessment");
-      const staleAssessment = () => {
-        bindings.delete(input.ticket as object);
-        return failure("stale-assessment");
-      };
+      if (!binding || binding.mode !== input.mode) return failure("stale-assessment");
+      const stale = () => { bindings.delete(input.ticket as object); return failure("stale-assessment"); };
       try {
-        const locked = await dependencies.lock.runExclusive(async () => {
-          const persistent = await readControl();
-          if (!persistent.ok) return persistent;
-          const existing = pendingFrom(persistent.value);
-          const persistentFence = activeFence(persistent.value, input.mode);
-          if (
-            persistentFence?.owner !== binding.owner ||
-            persistentFence.generation !== binding.generation
-          )
-            return staleAssessment();
-          const raw = await dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
-          if (!raw.ok) return raw;
-          if (existing !== undefined) {
-            if (existing.ticketId !== binding.id) return failure("recovery-active");
-            const committed = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(raw.value));
-            if (!committed.ok && "policyFailure" in committed) return committed;
-            if (committed.ok && dependencies.policy.revision(committed.value) === existing.revision && dependencies.candidateDigest(committed.value) === existing.candidateDigest) {
-              const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
-              if (!bytes.ok) return bytes;
-              const quota = safeValue(() => dependencies.storage.quotaBytes(), "storage-unavailable");
-              if (!quota.ok) return quota;
-              const capacity = safely(() => dependencies.capacity.assess(bytes.value, committed.value, quota.value), "quota-exceeded");
-              if (!capacity.ok) return capacity;
-              const finalization = Object.freeze({}) as FinalizationTicket;
-              finalizations.set(finalization as object, existing);
-              bindings.delete(input.ticket as object);
-              return { ok: true as const, value: { kind: "committed-finalization-required" as const, receipt: { root: committed.value, revision: existing.revision, capacity: capacity.value }, finalization } };
-            }
-            const cleaned = await writeControl(withPending(persistent.value, undefined));
-            if (!cleaned.ok) return failure("precommit-cleanup-pending");
-            return failure("precommit-cleanup-pending");
-          }
-          const fingerprint = safeValue(() => dependencies.rawFingerprint(raw.value), "validation");
-          if (!fingerprint.ok) return fingerprint;
-          const decoded = adaptPolicy("assessment", () => dependencies.policy.decodeAndMigrate(raw.value));
+        const locked = await dependencies.lock.runExclusive(async (): Promise<Internal<ReplacementCommitResult<ReplacementReceipt<Root>>>> => {
+          const control = await readControl(); if (!control.ok) return control;
+          const raw = await readRoot(); if (!raw.ok) return raw;
+          const fingerprint = safeValue(() => dependencies.rawFingerprint(raw.value), "validation"); if (!fingerprint.ok) return fingerprint;
+          const currentState = protocolResult(dependencies.recovery.observeCurrent(raw.value)); if (!currentState.ok) return currentState;
+          const classified = protocolResult(dependencies.recovery.classifyCurrent(control.value, currentState.value)); if (!classified.ok) return classified;
+          if (classified.value.kind !== "clear") return failure("recovery-active");
+          const current = adaptPolicy("assessment", () => dependencies.policy.decodeAndMigrate(raw.value));
           let revision = 0;
           if (input.mode === "normal") {
-            if (!decoded.ok) return "policyFailure" in decoded ? decoded : staleAssessment();
-            const currentRevision = safeValue(() => dependencies.policy.revision(decoded.value), "validation");
-            if (!currentRevision.ok) return staleAssessment();
-            revision = currentRevision.value;
-          } else {
-            if (decoded.ok) {
-              bindings.delete(input.ticket as object);
-              return failure("stale-recovery-state");
-            }
-          }
-          if (fingerprint.value !== binding.rawFingerprint || revision !== binding.storedRevision)
-            return staleAssessment();
-
-          const candidate = decodeAndMigrate(input.candidate, "decode");
-          if (!candidate.ok) return candidate;
-          const repaired = adaptPolicy("repair", () => dependencies.policy.repair(candidate.value, decoded.ok ? decoded.value : candidate.value));
-          if (!repaired.ok) return repaired;
-          const digest = safeValue(() => dependencies.candidateDigest(repaired.value), "validation");
-          if (!digest.ok) return digest;
-          if (digest.value !== binding.candidateDigest) return staleAssessment();
+            if (!current.ok) return "policyFailure" in current ? current : stale();
+            const found = safeValue(() => dependencies.policy.revision(current.value), "validation"); if (!found.ok) return stale();
+            revision = found.value;
+          } else if (current.ok) return failure("stale-recovery-state");
+          if (fingerprint.value !== binding.rawFingerprint || revision !== binding.storedRevision) return stale();
+          const candidate = decode(input.candidate, "decode"); if (!candidate.ok) return candidate;
+          const repaired = adaptPolicy("repair", () => dependencies.policy.repair(candidate.value, current.ok ? current.value : candidate.value)); if (!repaired.ok) return repaired;
+          const digest = safeValue(() => dependencies.candidateDigest(repaired.value), "validation"); if (!digest.ok || digest.value !== binding.candidateDigest) return stale();
           if (revision >= Number.MAX_SAFE_INTEGER) return failure("validation");
           const nextRevision = input.mode === "normal" ? revision + 1 : Math.max(1, dependencies.policy.revision(repaired.value));
-          let committedRoot = dependencies.policy.withRevision(repaired.value, nextRevision);
-          committedRoot = dependencies.policy.withControl(committedRoot, {
-            active: false,
-            generation: binding.generation,
-          } as Control);
-          const validated = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(committedRoot));
-          if (!validated.ok) return validated;
-          const committedDigest = safeValue(() => dependencies.candidateDigest(validated.value), "validation");
-          if (!committedDigest.ok) return committedDigest;
-          const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
-          if (!bytes.ok) return bytes;
-          const quota = safeValue(() => dependencies.storage.quotaBytes(), "storage-unavailable");
-          if (!quota.ok) return quota;
-          const capacity = safely(() => dependencies.capacity.assess(bytes.value, validated.value, quota.value), "quota-exceeded");
-          if (!capacity.ok) return capacity;
-          const receipt: ReplacementReceipt<Root> = { root: validated.value, revision: nextRevision, capacity: capacity.value };
-          const finalizationId = identifier();
-          if (!finalizationId.ok) return finalizationId;
-          const pending: PendingCommit = { ticketId: binding.id, finalizationId: finalizationId.value, mode: binding.mode, candidateDigest: committedDigest.value, revision: nextRevision, owner: binding.owner, generation: binding.generation };
-          const prepared = await writeControl(withPending(persistent.value, pending));
-          if (!prepared.ok) return prepared;
-          const rootWrite = await dependencies.storage.writeRoot(validated.value).catch(() => failure("storage-unavailable"));
-          if (!rootWrite.ok) {
-            const cleaned = await writeControl(withPending(persistent.value, undefined));
-            return cleaned.ok ? rootWrite : failure("precommit-cleanup-pending");
-          }
+          const committedRoot = dependencies.policy.withRevision(repaired.value, nextRevision);
+          const validated = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(committedRoot)); if (!validated.ok) return validated;
+          const capacity = await capacityFor(validated.value); if (!capacity.ok) return capacity;
+          const currentIdentity = safeValue(() => dependencies.rawFingerprint(raw.value), "validation"); if (!currentIdentity.ok) return currentIdentity;
+          const replacementBinding: ReplacementBinding = { mode: input.mode, candidateIdentity: digest.value, currentIdentity: currentIdentity.value, targetRevision: nextRevision };
+          const prepared = protocolResult(dependencies.recovery.prepareCommit(binding.acquiredControl, binding.fence, replacementBinding)); if (!prepared.ok) return prepared;
+          const saved = await writeControl(prepared.value.control); if (!saved.ok) return saved;
+          const written = await dependencies.storage.writeRoot(validated.value).catch(() => failure("storage-unavailable")); if (!written.ok) return written;
           bindings.delete(input.ticket as object);
-          const finalization = Object.freeze({}) as FinalizationTicket;
-          finalizations.set(finalization as object, pending);
-          const cleaned = await writeControl({ active: false, generation: binding.generation } as Control);
-          return cleaned.ok
-            ? { ok: true as const, value: { kind: "committed" as const, receipt } }
-            : { ok: true as const, value: { kind: "committed-finalization-required" as const, receipt, finalization } };
+          const released = protocolResult(dependencies.recovery.release(prepared.value.control, prepared.value.pending));
+          const releaseWrite = released.ok ? await writeControl(released.value) : released;
+          const receipt = { root: validated.value, revision: nextRevision, capacity: capacity.value };
+          if (!releaseWrite.ok) {
+            const finalization = Object.freeze({}) as FinalizationTicket;
+            finalizations.set(finalization, {
+              receipt,
+              preparedControl: prepared.value.control,
+              pending: prepared.value.pending,
+              ...(released.ok ? { releasedControl: released.value } : {}),
+            });
+            return { ok: true, value: { kind: "committed-finalization-required", receipt, finalization } };
+          }
+          return { ok: true, value: { kind: "committed", receipt } };
         });
         return locked.ok ? locked.value : locked;
-      } catch (error) {
-        if (error instanceof ConsumerAdapterError) throw error.cause;
-        return failure("lock-unavailable");
-      }
+      } catch (error) { if (error instanceof ConsumerAdapterError) throw error.cause; return failure("lock-unavailable"); }
     },
-    async findPendingFinalization() {
-      const control = await readControl();
-      if (!control.ok) return control;
-      const pending = pendingFrom(control.value);
-      if (pending === undefined) return { ok: true, value: null };
-      const raw = await dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
-      if (!raw.ok) return raw;
-      const decoded = adaptPolicy("assessment", () => dependencies.policy.decodeAndMigrate(raw.value));
-      if (!decoded.ok) return "policyFailure" in decoded ? decoded : { ok: true, value: null };
-      if (dependencies.policy.revision(decoded.value) !== pending.revision) return { ok: true, value: null };
-      const digest = safeValue(() => dependencies.candidateDigest(decoded.value), "validation");
-      if (!digest.ok || digest.value !== pending.candidateDigest) return { ok: true, value: null };
-      const ticket = Object.freeze({}) as FinalizationTicket;
-      finalizations.set(ticket as object, pending);
-      return { ok: true, value: ticket };
-    },
-    async finalize(ticket: FinalizationTicket) {
-      const pending = finalizations.get(ticket as object);
-      if (pending === undefined) return failure("stale-assessment");
+    async findPendingFinalization(): Promise<Internal<FinalizationTicket | null>> { return { ok: true, value: null }; },
+    async finalize(ticket: FinalizationTicket): Promise<Internal<ReplacementReceipt<Root>>> {
+      const binding = finalizations.get(ticket);
+      if (!binding) return failure("stale-assessment");
       try {
-        const locked = await dependencies.lock.runExclusive(async () => {
+        const locked = await dependencies.lock.runExclusive(async (): Promise<Internal<ReplacementReceipt<Root>>> => {
           const control = await readControl();
           if (!control.ok) return control;
-          const stored = pendingFrom(control.value);
-          if (stored?.finalizationId !== pending.finalizationId) return failure("stale-assessment");
-          const raw = await dependencies.storage.readRoot().catch(() => failure("storage-unavailable"));
-          if (!raw.ok) return raw;
-          const decoded = adaptPolicy("replacement-validation", () => dependencies.policy.decodeAndMigrate(raw.value));
-          if (!decoded.ok) return "policyFailure" in decoded ? decoded : failure("stale-assessment");
-          if (dependencies.policy.revision(decoded.value) !== pending.revision) return failure("stale-assessment");
-          const digest = safeValue(() => dependencies.candidateDigest(decoded.value), "validation");
-          if (!digest.ok || digest.value !== pending.candidateDigest) return failure("stale-assessment");
-          const bytes = await dependencies.storage.bytesInUse().catch(() => failure("storage-unavailable"));
-          if (!bytes.ok) return bytes;
-          const quota = safeValue(() => dependencies.storage.quotaBytes(), "storage-unavailable");
-          if (!quota.ok) return quota;
-          const capacity = safely(() => dependencies.capacity.assess(bytes.value, decoded.value, quota.value), "quota-exceeded");
-          if (!capacity.ok) return capacity;
-          const releasedControl = { active: false, generation: pending.generation } as Control;
-          const released = await writeControl(releasedControl);
+          const released = binding.releasedControl === undefined
+            ? protocolResult(dependencies.recovery.release(control.value, binding.pending))
+            : { ok: true as const, value: binding.releasedControl };
           if (!released.ok) return released;
-          finalizations.delete(ticket as object);
-          const releasedRoot = dependencies.policy.withControl(decoded.value, releasedControl);
-          return { ok: true as const, value: { root: releasedRoot, revision: pending.revision, capacity: capacity.value } };
+          const written = await writeControl(released.value);
+          if (!written.ok) return written;
+          finalizations.delete(ticket);
+          return { ok: true, value: binding.receipt };
         });
         return locked.ok ? locked.value : locked;
-      } catch (error) {
-        if (error instanceof ConsumerAdapterError) throw error.cause;
-        return failure("lock-unavailable");
-      }
+      } catch { return failure("lock-unavailable"); }
     },
   };
   return {
     assess: (candidate) => publicResult(() => coordinator.assess(candidate)),
     assessRecovery: (candidate) => publicResult(() => coordinator.assessRecovery(candidate)),
-    commit: (input) => publicResult<ReplacementCommitResult<ReplacementReceipt<Root>>>(() => coordinator.commit(input)),
-    findPendingFinalization: () => publicResult<FinalizationTicket | null>(() => coordinator.findPendingFinalization() as Promise<CoreResult<FinalizationTicket | null, CoreError | OutputError> | PolicyFailure<OutputError>>),
-    finalize: (ticket) => publicResult<ReplacementReceipt<Root>>(() => coordinator.finalize(ticket)),
+    commit: (input) => publicResult(() => coordinator.commit(input)),
+    findPendingFinalization: () => publicResult(() => coordinator.findPendingFinalization()),
+    finalize: (ticket) => publicResult(() => coordinator.finalize(ticket)),
   };
 };

@@ -170,7 +170,7 @@
   - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.7, 4.4, 4.5, 4.8, 6.8_
   - _Boundary: CoreContracts, TransactionEngine_
 
-- [ ] 6.3 owner-provided persistent recovery protocolをreplacementへ統合する
+- [x] 6.3 owner-provided persistent recovery protocolをreplacementへ統合する
   - replacement assessment/commitがfence取得・照合、pending準備、current anomaly分類をowner protocolへ委譲し、package側のcontrol field parserと独自pending markerを除去する。
   - normal/recoveryのcandidate、raw fingerprint、revision、capacity、opaque ticket再照合とroot write一回を維持する。
   - fieldを公開しないsynthetic protocolでnormal/recovery assessmentとcommitが成功し、stale protocol capabilityでは既存rootが保持されれば完了とする。
@@ -252,3 +252,4 @@
 - **Fresh task-graph sanity review (2026-08-13 final spec remediation round 2)**: historical Tasks 2.3/2.6の完了記録を維持しつつ、persistent recovery ownershipを6.3–6.4へsupersedeした。Task 6.1はtransaction/replacement両factoryのerror adapterを同じcore contract変更として完結し、Task 7.3がreplacement payload/contextとadapter failure/throwのroot write 0件を独立fixtureで検証する。主経路はpackage 7.4 → `local-data-foundation` 11.2 `validate:local-data-product-contract` → 8.1 → 9.1 → 9.2、下流経路はpackage 7.4/Foundation 11.2 → backup 7.1–7.3、library 9.2 + backup 7.3 → backup 7.4 → application-shell 12.1–12.3で非循環となる。61 ACのtask/design trace、各新規taskのobservable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。
 - **Task 6.1**: decode/migration stageの分類はopaqueなpolicy errorをpackage側で解釈せずconsumer-owned classifierへ委譲し、transaction・replacementのcurrent root・candidate assessment・commit再照合で同じhelperを通す。
 - **Task 6.2**: transactionのroot maintenance controlとpersistent recovery controlは別genericとし、storageから読んだpersistent controlを同型のowner authorizationへ渡す。owner `OutputError`は`fromCore`へ再変換せず、mutation前・commit直前の拒否をそのまま返す。
+- **Task 6.3**: replacement ticketはowner protocolが返すopaque acquired control/fenceのexact pairをprivateに保持し、latest persistent stateを分類した後も`prepareCommit`へそのpairを渡す。protocol failureはmechanism errorへ再変換しない。root `typecheck`の`src/persistence/product-local-data-adapter.ts`追随は下流`local-data-foundation` Task 11.2所有で、本spec Task 8.1の前提となる。
