@@ -6,7 +6,7 @@
 - **In-scope trace**: generic storage/lock/transaction/replacement contractはTasks 2.1–2.7、Chrome adapterはTasks 3.1–3.3、generic backup orchestrationはTasks 4.1–4.2、公開export・package test・read-only app contract・deep import gateはTasks 1.1および5.1–5.5で実装する。
 - **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eをtask boundaryへ含めない。
 
-- [ ] 1. Workspace package基盤を確立する
+- [x] 1. Workspace package基盤を確立する
 - [x] 1.1 private local data package scaffoldと公開entry枠を追加する
   - typed messages coreで確立したworkspace運用へlocal data packageを登録し、root core、Chrome、backupの3つの宣言済みentryを持つstrictなESM設定を用意する。
   - package単独build、typecheck、testをroot orchestrationから呼び出せるscript枠を設け、runtime dependency、npm publish設定、未宣言subpathを持たない状態にする。
@@ -14,7 +14,7 @@
   - _Requirements: 7.1, 7.4, 7.8_
   - _Boundary: PackagePublicEntries_
 
-- [ ] 2. Platform-independentなlocal data coreを実装する
+- [x] 2. Platform-independentなlocal data coreを実装する
 - [x] 2.1 製品非依存のResult、port、root policy契約を実装する
   - root decode/migrate、revision、request record、mutation、repair、maintenance controlをconsumerが型付きで設定できる契約を定義する。
   - storage、exclusive lock、capacity、transaction、replacementの公開入力・成功結果・安定errorを定義し、Chrome型、PC型、schema vendor、製品errorを含めない。
@@ -70,7 +70,7 @@
   - _Boundary: ReplacementCoordinator_
   - _Depends: 2.6_
 
-- [ ] 3. Chrome platform adapter subpathを実装する
+- [x] 3. Chrome platform adapter subpathを実装する
 - [x] 3.1 Chrome storage・quota・change adapterを実装する
   - consumerから渡されたroot/control keyだけを対象にread/write、bytes、platform quota、`TRUSTED_CONTEXTS`、change eventをgeneric portへ適合させる。
   - Promise rejection、不正response、実writeのquota rejection、access restriction failureを保存値や例外objectを含まない安定codeへ正規化する。
@@ -95,7 +95,7 @@
   - _Boundary: PackagePublicEntries, ChromeStorageAdapter, ChromeLocksAdapter_
   - _Depends: 3.1, 3.2_
 
-- [ ] 4. Generic backup orchestration subpathを実装する
+- [x] 4. Generic backup orchestration subpathを実装する
 - [x] 4.1 artifact作成とrestore preflightを実装する
   - snapshot reader、codec、artifact policy、replacement assessmentを注入し、backup artifact作成とuntrusted restore inputのdecode、version変換、mapping、assessmentを順序付ける。
   - previewとopaque restore ticketだけを返し、candidate、raw root、lock、fence、製品metadataを公開しない。
@@ -112,7 +112,7 @@
   - _Boundary: BackupOrchestrator_
   - _Depends: 2.7, 4.1_
 
-- [ ] 5. 公開境界と検証経路を確定する
+- [x] 5. 公開境界と検証経路を確定する
 - [x] 5.1 3つの公開entry consumer fixtureを追加する
   - root core、Chrome、backupの各declared entryだけを使うstrict consumer fixtureとruntime smoke testを追加する。
   - 各fixtureはclean build済みJavaScript/declarationだけを解決し、package sourceをroot appのTypeScript projectへ混在させない。
