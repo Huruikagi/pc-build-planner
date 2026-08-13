@@ -71,7 +71,7 @@
   - _Depends: 2.6_
 
 - [ ] 3. Chrome platform adapter subpathを実装する
-- [ ] 3.1 Chrome storage・quota・change adapterを実装する
+- [x] 3.1 Chrome storage・quota・change adapterを実装する
   - consumerから渡されたroot/control keyだけを対象にread/write、bytes、platform quota、`TRUSTED_CONTEXTS`、change eventをgeneric portへ適合させる。
   - Promise rejection、不正response、実writeのquota rejection、access restriction failureを保存値や例外objectを含まない安定codeへ正規化する。
   - 独立したstorage adapter testで対象外key非干渉、10MB platform quota、quota rejection後のroot保持、access成功前handle非公開、変更購読解除、logが安定codeだけであることを観測できれば完了とする。
