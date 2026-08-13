@@ -457,7 +457,7 @@
   - _Requirements: 9.1, 9.2_
   - _Boundary: ProductLocalDataAdapter_
 
-- [ ] 10.2 package errorを既存FoundationErrorへ意味不変で適合する
+- [x] 10.2 package errorを既存FoundationErrorへ意味不変で適合する
   - packageのgeneric error分類を、既存`FoundationError`の種類、payload、利用側判定contextへ決定的に適合する。
   - 未知または不完全な境界値を既知errorへ推測で畳み込まず、validation段階でfail closedに拒否する。
   - 完了時、全既存variantの種類・意味・粒度が変わらず、欠落mappingを型検査またはcontract testが検出する。

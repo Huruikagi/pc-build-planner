@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { LocalDataPolicy } from "@pc-build-planner/local-data";
+import type {
+  CoreErrorCode,
+  LocalDataPolicy,
+} from "@pc-build-planner/local-data";
 
 import type {
+  FoundationError,
   LocalDataRoot,
   MaintenanceState,
 } from "../../src/domain/public.js";
 import {
+  adaptCoreError,
   productLocalDataAdapter,
   productLocalDataPolicy,
   productLocalDataStorageScope,
@@ -22,6 +27,88 @@ const ids = {
   candidate: "20000000-0000-4000-8000-000000000001",
   build: "30000000-0000-4000-8000-000000000001",
 } as const;
+
+test("product adapter maps every package error to the meaning-equivalent FoundationError", () => {
+  const expected = {
+    validation: "validation",
+    migration: "migration-failed",
+    repair: "repair-failed",
+    "revision-conflict": "revision-conflict",
+    "request-conflict": "request-conflict",
+    "maintenance-active": "maintenance-active",
+    "recovery-active": "recovery-active",
+    "stale-fence": "stale-fence",
+    "stale-assessment": "stale-assessment",
+    "stale-recovery-state": "stale-recovery-state",
+    "precommit-cleanup-pending": "precommit-cleanup-pending",
+    "quota-exceeded": "quota-exceeded",
+    "access-denied": "access-denied",
+    "lock-unavailable": "lock-unavailable",
+    "storage-unavailable": "storage-unavailable",
+  } satisfies Record<CoreErrorCode, FoundationError["code"]>;
+
+  for (const [code, foundationCode] of Object.entries(expected)) {
+    assert.deepEqual(adaptCoreError({ code }), {
+      ok: true,
+      value: { code: foundationCode },
+    });
+  }
+
+  const throwingGet = new Proxy(
+    { code: "migration" },
+    {
+      get: () => {
+        throw new Error("must not reread an untrusted property");
+      },
+    },
+  );
+  assert.deepEqual(adaptCoreError(throwingGet), {
+    ok: true,
+    value: { code: "migration-failed" },
+  });
+});
+
+test("product adapter fails closed for unknown or incomplete runtime errors", () => {
+  const accessorError = {};
+  Object.defineProperty(accessorError, "code", {
+    enumerable: true,
+    get: () => {
+      throw new Error("must not inspect an untrusted accessor");
+    },
+  });
+  const throwingOwnKeys = new Proxy(
+    {},
+    {
+      ownKeys: () => {
+        throw new Error("must contain an untrusted ownKeys trap");
+      },
+    },
+  );
+  const throwingDescriptor = new Proxy(
+    { code: "validation" },
+    {
+      getOwnPropertyDescriptor: () => {
+        throw new Error("must contain an untrusted descriptor trap");
+      },
+    },
+  );
+  for (const input of [
+    undefined,
+    null,
+    {},
+    { code: "unknown" },
+    { code: "validation", unexpected: true },
+    { code: 1 },
+    accessorError,
+    throwingOwnKeys,
+    throwingDescriptor,
+  ]) {
+    assert.deepEqual(adaptCoreError(input), {
+      ok: false,
+      error: { code: "validation" },
+    });
+  }
+});
 
 const referencedRoot = (): LocalDataRoot =>
   ({

@@ -1,4 +1,5 @@
 import type {
+  CoreErrorCode,
   LocalDataPolicy,
   PersistentControlPolicy,
   RequestRecord,
@@ -33,6 +34,58 @@ export type ProductLocalDataPolicy = LocalDataPolicy<
   MaintenanceState,
   FoundationError
 >;
+
+type FoundationErrorAdaptationResult =
+  | { readonly ok: true; readonly value: FoundationError }
+  | {
+      readonly ok: false;
+      readonly error: Extract<FoundationError, { readonly code: "validation" }>;
+    };
+
+const foundationCodeByCoreCode = {
+  validation: "validation",
+  migration: "migration-failed",
+  repair: "repair-failed",
+  "revision-conflict": "revision-conflict",
+  "request-conflict": "request-conflict",
+  "maintenance-active": "maintenance-active",
+  "recovery-active": "recovery-active",
+  "stale-fence": "stale-fence",
+  "stale-assessment": "stale-assessment",
+  "stale-recovery-state": "stale-recovery-state",
+  "precommit-cleanup-pending": "precommit-cleanup-pending",
+  "quota-exceeded": "quota-exceeded",
+  "access-denied": "access-denied",
+  "lock-unavailable": "lock-unavailable",
+  "storage-unavailable": "storage-unavailable",
+} as const satisfies Record<CoreErrorCode, FoundationError["code"]>;
+
+const parseCoreErrorCode = (input: unknown): CoreErrorCode | undefined => {
+  if (typeof input !== "object" || input === null) return undefined;
+  try {
+    if (Array.isArray(input)) return undefined;
+    const keys = Reflect.ownKeys(input);
+    if (keys.length !== 1 || keys[0] !== "code") return undefined;
+    const code = Object.getOwnPropertyDescriptor(input, "code")?.value;
+    return typeof code === "string" &&
+      Object.hasOwn(foundationCodeByCoreCode, code)
+      ? (code as CoreErrorCode)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const adaptCoreError = (
+  input: unknown,
+): FoundationErrorAdaptationResult => {
+  const code = parseCoreErrorCode(input);
+  if (code === undefined) return { ok: false, error: { code: "validation" } };
+  return {
+    ok: true,
+    value: { code: foundationCodeByCoreCode[code] },
+  };
+};
 
 const migrationRegistry = createMigrationRegistry(
   CURRENT_SCHEMA_VERSION,
