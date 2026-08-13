@@ -6,7 +6,7 @@
 - **In-scope trace**: Tasks 1–2がgeneric型・format・resolver/descriptor factory・parity primitive、Task 3.1がpackage公開入口、Task 3.2がpackage単独検証、Task 3.3がworkspace link・build・deep import gate・read-only consumer fixture、Tasks 4.1–4.2がgeneric package検証を扱う。
 - **Out-of-scope preservation**: configured app adapter、ja/en catalog、release固有parity合成、React binding、製品runtime wiring、製品表示回帰を実装taskまたは検証taskへ含めない。
 
-- [ ] 1. Workspace package基盤を確立する
+- [x] 1. Workspace package基盤を確立する
 - [x] 1.1 最小のprivate workspace package scaffoldを追加する
   - `packages/*`をworkspaceへ登録し、typed messages coreのprivate package metadataとstrictなESM build設定を用意する。
   - package単独のbuild、typecheck、testを後続実装から呼び出せるscript枠を設ける。この段階ではroot orchestration、公開export surface、core実装を確定しない。
@@ -29,7 +29,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 3.2, 3.4, 3.5_
   - _Boundary: MessageContracts_
 
-- [ ] 2. Package coreの純粋mechanismを実装する
+- [x] 2. Package coreの純粋mechanismを実装する
 - [x] 2.1 (P) 決定的なmessage formatterを実装する
   - plain文字列、string/number interpolation、single pluralのzero/one/other選択、multi pluralのselector順combination選択を実装する。
   - 専用form、selector、parameterが不足する場合は`other`と未解決placeholderへ安全にfallbackし、例外を送出しない。
@@ -72,7 +72,7 @@
   - _Boundary: ResolverFactory_
   - _Depends: 2.1, 2.2, 2.3_
 
-- [ ] 3. Package公開面とread-only consumerを統合する
+- [x] 3. Package公開面とread-only consumerを統合する
 - [x] 3.1 package root exportを確定する
   - packageの唯一のpublic entryから型、formatter、normalizer、resolver、descriptor、parityのconsumer向けsymbolだけをnamed exportする。
   - export mapの`.`をbuild済みESM JavaScriptとdeclarationへ対応させ、source、test、内部subpathを公開しない。
@@ -101,7 +101,7 @@
   - _Boundary: WorkspaceValidation_
   - _Depends: 3.2_
 
-- [ ] 4. Generic packageの検証境界を確定する
+- [x] 4. Generic packageの検証境界を確定する
 - [x] 4.1 core変更用の検証scriptを確立する
   - 既存のpackage単独command、read-only consumer contract、boundary gateをcore contract/runtime変更用の一つの集約scriptから順に呼び出す。
   - product catalog、release rule、configured adapter、表示回帰の検証はこのscriptへ取り込まず、`ui-message-catalog`の製品ownerへ委譲する。
