@@ -4,6 +4,7 @@ import type {
   CoreResult,
   ExclusiveLockPort,
   LocalDataPolicy,
+  PersistentControlPolicy,
   StoragePort,
   TransactionPort,
 } from "./contracts.js";
@@ -17,6 +18,7 @@ export interface TransactionEngineDependencies<Root, Operation, Control> {
   readonly digest: (operation: Operation) => string;
   readonly now: () => number;
   readonly fencing: FencingPolicy<Root>;
+  readonly persistentControl: PersistentControlPolicy;
 }
 
 const failure = (code: CoreError["code"]): CoreResult<never, CoreError> => ({
@@ -54,6 +56,20 @@ export const createTransactionEngine = <Root, Operation, Control>(
           "validation",
         );
         if (!decoded.ok) return decoded;
+
+        const persistentControl = await dependencies.storage
+          .readControl()
+          .catch(() => failure("storage-unavailable"));
+        if (!persistentControl.ok) return persistentControl;
+        const persistentAuthorized = runPolicyStage(
+          () =>
+            dependencies.persistentControl.authorizeMutation(
+              persistentControl.value,
+              dependencies.now(),
+            ),
+          "stale-fence",
+        );
+        if (!persistentAuthorized.ok) return persistentAuthorized;
 
         const digest = runPolicyStage(
           () => ({ ok: true, value: dependencies.digest(command.operation) }),
@@ -232,6 +248,19 @@ export const createTransactionEngine = <Root, Operation, Control>(
           "stale-fence",
         );
         if (!commitFence.ok) return commitFence;
+        const latestPersistentControl = await dependencies.storage
+          .readControl()
+          .catch(() => failure("storage-unavailable"));
+        if (!latestPersistentControl.ok) return latestPersistentControl;
+        const latestPersistentAuthorized = runPolicyStage(
+          () =>
+            dependencies.persistentControl.authorizeMutation(
+              latestPersistentControl.value,
+              dependencies.now(),
+            ),
+          "stale-fence",
+        );
+        if (!latestPersistentAuthorized.ok) return latestPersistentAuthorized;
 
         let committed;
         try {

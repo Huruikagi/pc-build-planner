@@ -62,7 +62,7 @@
   - _Boundary: ReplacementCoordinator_
   - _Depends: 2.5_
 
-- [ ] 2.7 assessment ticketのatomic commitとfinalization lifecycleを実装する
+- [x] 2.7 assessment ticketのatomic commitとfinalization lifecycleを実装する
   - commit直前にcandidateとpersistent stateを再照合し、normal/recovery両modeを同じlock、single write、fence規則で処理する。
   - pre-commit cleanup pendingはroot未変更のfailure、root write後cleanup未完了はcommitted-finalization-requiredとして区別する。
   - same-ticket commit retryとfinalize-only retryのcontract testでcommit成功が最大一回、finalize時のroot writeが0件、正常終了後だけ後続mutationが再開すれば完了とする。

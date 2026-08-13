@@ -35,12 +35,15 @@ const root = (value = "before"): SyntheticRoot => ({
 const createHarness = (
   failure?: string,
   beforeRead?: (readCount: number, current: SyntheticRoot) => SyntheticRoot,
+  beforeControlRead?: (readCount: number) => void,
 ) => {
   let stored: unknown = root();
   let writes = 0;
   const events: string[] = [];
   let decodeCalls = 0;
   let readCount = 0;
+  let controlReadCount = 0;
+  let persistentControl: unknown = { active: false, generation: 0 };
 
   const storage: StoragePort<SyntheticRoot, Control> = {
     async readRoot() {
@@ -71,8 +74,13 @@ const createHarness = (
       if (failure === "quota-throw") throw "private quota failure";
       return 1_000;
     },
-    async readControl() { return { ok: true, value: undefined }; },
-    async writeControl() { return { ok: true, value: undefined }; },
+    async readControl() {
+      events.push("control-read");
+      controlReadCount += 1;
+      beforeControlRead?.(controlReadCount);
+      return { ok: true, value: persistentControl };
+    },
+    async writeControl(value) { persistentControl = value; return { ok: true, value: undefined }; },
     async restrictToTrustedContexts() { return { ok: true, value: undefined }; },
   };
 
@@ -169,6 +177,16 @@ const createHarness = (
       read: (candidate) => candidate.control,
       write: (candidate, control) => ({ ...candidate, control }),
     }),
+    persistentControl: {
+      authorizeMutation(value: unknown) {
+        if (typeof value !== "object" || value === null) return { ok: false as const, error: { code: "stale-fence" as const } };
+        const control = value as Record<string, unknown>;
+        if (control.active === false) return { ok: true as const, value: undefined };
+        if (control.active === true && control.kind === "maintenance") return { ok: false as const, error: { code: "maintenance-active" as const } };
+        if (control.active === true && control.kind === "recovery") return { ok: false as const, error: { code: "recovery-active" as const } };
+        return { ok: false as const, error: { code: "stale-fence" as const } };
+      },
+    },
   };
   return {
     engine: createTransactionEngine(dependencies),
@@ -176,6 +194,8 @@ const createHarness = (
     events,
     getStored: () => stored,
     getWrites: () => writes,
+    getControlReads: () => controlReadCount,
+    setPersistentControl: (value: unknown) => { persistentControl = value; },
   };
 };
 
@@ -208,8 +228,8 @@ test("latest root is validated, mutated, repaired, revalidated, revisioned, reco
   });
   assert.equal(harness.getWrites(), 1);
   assert.deepEqual(harness.events, [
-    "lock", "read", "decode", "apply", "repair", "validate",
-    "bytes", "quota", "capacity", "read", "validate", "write",
+    "lock", "read", "decode", "control-read", "apply", "repair", "validate",
+    "bytes", "quota", "capacity", "read", "validate", "control-read", "write",
   ]);
 });
 
@@ -339,6 +359,34 @@ test("precommit latest-state checks reject revision, request, and fence races wi
       name,
     );
     assert.equal(harness.getWrites(), 0, name);
+  }
+});
+
+test("persistent maintenance or recovery activated before commit rejects after mutation without writing", async () => {
+  for (const kind of ["maintenance", "recovery"] as const) {
+    let harness: ReturnType<typeof createHarness>;
+    harness = createHarness(undefined, undefined, (readCount) => {
+      if (readCount === 2) {
+        harness.setPersistentControl({
+          active: true,
+          kind,
+          owner: `${kind}-owner`,
+          generation: 1,
+          leaseExpiresAt: 200,
+          revision: 4,
+        });
+      }
+    });
+    const before = structuredClone(harness.getStored());
+
+    assert.deepEqual(
+      await harness.engine.execute({ requestId: kind, expectedRevision: 4, operation: { value: "after" } }),
+      { ok: false, error: { code: `${kind}-active` } },
+    );
+    assert.equal(harness.events.filter((event) => event === "apply").length, 1);
+    assert.equal(harness.getControlReads(), 2);
+    assert.equal(harness.getWrites(), 0);
+    assert.deepEqual(harness.getStored(), before);
   }
 });
 

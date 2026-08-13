@@ -62,6 +62,13 @@ export interface ExclusiveLockPort {
   ): Promise<CoreResult<T, LockError>>;
 }
 
+export interface PersistentControlPolicy {
+  authorizeMutation(
+    control: unknown,
+    now: number,
+  ): CoreResult<void, CoreError>;
+}
+
 export interface LocalDataPolicy<Root, Operation, Control, PolicyError> {
   decodeAndMigrate(input: unknown): CoreResult<Root, PolicyError>;
   apply(root: Root, operation: Operation): CoreResult<Root, PolicyError>;
@@ -121,6 +128,12 @@ export interface ReplacementAssessment<Preview> {
 
 export interface FinalizationTicket {
   readonly __opaqueFinalizationTicket: unique symbol;
+}
+
+export interface ReplacementReceipt<Root> {
+  readonly root: Root;
+  readonly revision: number;
+  readonly capacity: CapacityStatus;
 }
 
 export type ReplacementMode = "normal" | "recovery";
