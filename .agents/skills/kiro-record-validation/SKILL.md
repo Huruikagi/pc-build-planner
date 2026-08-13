@@ -1,6 +1,6 @@
 ---
 name: kiro-record-validation
-description: Record a successful Kiro validation checkpoint in `.kiro/steering/roadmap.md` for either a spec implementation or a direct roadmap item. Use immediately after `$kiro-validate-impl` returns GO or `$kiro-impl-direct` produces its committed-state GO report; an optional work-item name is only an explicit target override.
+description: Record a successful Kiro validation checkpoint in `.kiro/steering/roadmap.md` for either a spec implementation or a direct roadmap item. Called automatically by `$kiro-validate-impl` after GO and by `$kiro-impl-direct` after its committed-state GO report; an optional work-item name is only an explicit target override.
 ---
 
 # Record Implementation Validation
@@ -9,7 +9,7 @@ description: Record a successful Kiro validation checkpoint in `.kiro/steering/r
 
 ## 1. Resolve target and type
 
-- Derive the target from the single most-recent qualifying validation report in the current conversation.
+- Derive the target from the single most-recent qualifying validation report in the current conversation, or from the finalized report produced earlier in the current controller execution when that controller invokes this skill immediately.
 - Accept `$1` only when it exactly matches that report's work item.
 - For a spec report, require `.kiro/specs/<name>/spec.json` and set `Type=spec`.
 - For a direct report, require `TYPE: direct`, `CLASSIFICATION: DIRECT_CONFIRMED`, `REVIEW: APPROVED`, and exactly one matching roadmap entry under `## Direct Implementation Candidates`; set `Type=direct`.
@@ -24,7 +24,7 @@ description: Record a successful Kiro validation checkpoint in `.kiro/steering/r
 - Require review approval, direct classification confirmation, required validation commands, commit, and smoke status for a direct report.
 - For a direct report, resolve its `COMMIT` and require it to equal the current `HEAD`; also require a clean pre-record worktree.
 - Refuse unsuccessful, partial, conflicting, stale, or unverifiable evidence.
-- Stop if a file-changing action occurred after the report. Do not re-run validation from this skill.
+- Stop if a file-changing action occurred after the report was finalized and before this skill began. Do not re-run validation from this skill.
 
 ## 3. Capture the checkpoint
 

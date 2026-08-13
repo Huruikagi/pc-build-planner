@@ -81,7 +81,7 @@ Create report in the language specified in spec.json covering:
 
 **No Validation History**:
 - **Behavior**: When the roadmap has no `## Implementation Validation History` section, or no row matches this spec, report validation as not recorded for this milestone
-- **Action**: Do not treat this as an error; suggest `/kiro-validate-impl` then `/kiro-record-validation` when tasks are complete
+- **Action**: Do not treat this as an error; suggest `/kiro-validate-impl` when tasks are complete because a successful GO checkpoint is recorded automatically
 
 **Incomplete Spec**:
 - **Warning**: Identify which files are missing

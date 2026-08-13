@@ -1,6 +1,6 @@
 ---
 name: kiro-validate-impl
-description: Validate feature-level integration after all tasks are implemented. Checks cross-task consistency, full test suite, and overall spec coverage.
+description: Validate feature-level integration after all tasks are implemented, then automatically record successful GO checkpoints in the roadmap. Checks cross-task consistency, full test suite, and overall spec coverage.
 ---
 
 
@@ -150,6 +150,7 @@ Provide summary in the language specified in spec.json:
 
 ```
 ## Validation Report
+- WORK_ITEM: <feature-name>
 - DECISION: GO | NO-GO | MANUAL_VERIFY_REQUIRED
 - MECHANICAL_RESULTS:
   - Tests: PASS | FAIL (command and exit code)
@@ -175,6 +176,23 @@ Provide summary in the language specified in spec.json:
 
 If NO-GO, REMEDIATION is mandatory — identify the exact issue and what needs to change.
 
+### 5. Record a successful checkpoint
+
+If and only if the finalized report has `DECISION: GO` and the feature-level
+`kiro-verify-completion` result is `VERIFIED`:
+
+1. Treat that finalized report as the most-recent qualifying spec validation report.
+2. Read and follow `.agents/skills/kiro-record-validation/SKILL.md` immediately,
+   passing the exact `WORK_ITEM` value as its explicit target.
+3. Complete the roadmap record before returning the final response.
+4. Return both the validation report and the record result, including the recorded
+   timestamp, commit marker, and evidence.
+
+Do not invoke the recording skill for `NO-GO`, `MANUAL_VERIFY_REQUIRED`, or an
+unverified completion claim. If recording fails, preserve the validation decision,
+report `RECORDING: FAILED` with the exact reason, and do not claim that the checkpoint
+was persisted.
+
 ## Important Constraints
 - **Strict Final Gate**: Return `GO` only when all integration checks passed; return `NO-GO` for concrete failures and `MANUAL_VERIFY_REQUIRED` when mandatory validation could not be completed
 - **Boundary integrity over convenience**: Do not return `GO` if the feature only works by smearing responsibilities across boundaries, even when tests pass
@@ -190,7 +208,8 @@ If NO-GO, REMEDIATION is mandatory — identify the exact issue and what needs t
 ### Next Steps Guidance
 
 **If GO Decision**:
-- Feature validated end-to-end and ready for deployment or next feature
+- If recording succeeded, the feature was validated end-to-end, its checkpoint was automatically recorded, and it is ready for deployment or the next feature
+- If recording failed, report the persistence failure separately and retry recording only after resolving its stated cause
 
 **If NO-GO Decision**:
 - Address integration issues listed
@@ -198,7 +217,7 @@ If NO-GO, REMEDIATION is mandatory — identify the exact issue and what needs t
 - Re-validate with `$kiro-validate-impl [feature]`
 
 **Session Interrupted**:
-- Safe to re-run — validation is read-only and idempotent
+- Inspect `## Implementation Validation History` before resuming. Re-running validation is safe, but each newly completed `GO` run appends a separate checkpoint event
 
 **If MANUAL_VERIFY_REQUIRED**:
 - Do not treat the feature as complete
