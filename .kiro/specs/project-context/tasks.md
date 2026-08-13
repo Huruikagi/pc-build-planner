@@ -202,7 +202,7 @@
 
 - [ ] 7. project lifecycle state と既存表示契約を提供する
 
-- [ ] 7.1 framework-independent lifecycle state と削除確認を実装する
+- [x] 7.1 framework-independent lifecycle state と削除確認を実装する
   - name input、rename target、delete confirmation target、pending、field/error、refresh-only recovery を candidate state から独立した state として保持する。
   - delete request は catalog 上の project ID と表示名を一つの confirmation snapshot へ固定し、cancel では service、preference、generation を変更しない。
   - command または後続 refresh 中は UI control を無効化し、service の single-flight rejectionを表示可能にする。commit 済み refresh failure 後は mutation control を再送せず retry だけを許可する。
