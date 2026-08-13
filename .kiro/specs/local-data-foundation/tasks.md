@@ -482,6 +482,7 @@
   - _Depends: 10.2_
   - _Requirements: 3.10, 7.15, 7.16, 7.17, 9.3, 9.8_
   - _Boundary: RuntimeContributionFactory_
+  - _Blocked: upstream `local-data-library-boundaries` の package factory が consumer-owned error/control policy を受け取れず、`FoundationError` と canonical PC recovery control を意味不変で構成できない。上流公開契約を修復してから再実行する。_
 
 - [ ] 11.3 下流consumer migration contractを固定する
   - candidate-management、current-build、compatibility、candidate-source、source-price-refreshが共有`AppDataError`を、backup-restoreが用途限定capabilityを公開入口から利用できるtype fixtureを追加する。
