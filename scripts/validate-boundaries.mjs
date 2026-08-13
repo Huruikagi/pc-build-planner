@@ -602,11 +602,46 @@ const PROJECT_CONTEXT_INPUT_SHAPE =
   /(?:Dependencies|Source|Port|Options|Input)$/;
 
 /** @param {string} specifier */
-const isForbiddenProjectContextDependency = (specifier) => {
+/** @param {string} specifier @param {string} sourcePath */
+const isForbiddenProjectContextDependency = (specifier, sourcePath) => {
   const normalized = specifier.replaceAll("\\", "/");
   // owner-local module だけは相対 sibling import を許す。
   if (/^\.\/[^/]+$/.test(normalized)) return false;
+  if (
+    normalized === "../persistence/public.js" &&
+    /(?:^|\/)src\/project-context\/lifecycle-data-port\.ts$/.test(
+      sourcePath.replaceAll("\\", "/"),
+    )
+  )
+    return false;
   return !PROJECT_CONTEXT_ALLOWED_MODULES.has(normalized);
+};
+
+/**
+ * @param {import("typescript/unstable/ast").SourceFile} sourceFile
+ * @param {string} sourcePath
+ */
+const importsFoundationPublicOutsideLifecycleAdapter = (
+  sourceFile,
+  sourcePath,
+) => {
+  if (
+    /(?:^|\/)src\/project-context\/lifecycle-data-port\.ts$/.test(
+      sourcePath.replaceAll("\\", "/"),
+    )
+  )
+    return false;
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (violation) return;
+    if (
+      isImportDeclaration(node) ||
+      (isExportDeclaration(node) && node.moduleSpecifier !== undefined)
+    )
+      violation =
+        staticModuleText(node.moduleSpecifier) === "../persistence/public.js";
+  });
+  return violation;
 };
 
 /**
@@ -630,8 +665,14 @@ const declaresLegacySelectionInput = (declaration) => {
   return found;
 };
 
-/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
-const violatesProjectContextLegacySelectionAuthority = (sourceFile) => {
+/**
+ * @param {import("typescript/unstable/ast").SourceFile} sourceFile
+ * @param {string} sourcePath
+ */
+const violatesProjectContextLegacySelectionAuthority = (
+  sourceFile,
+  sourcePath,
+) => {
   let violation = false;
   walkAst(sourceFile, (node) => {
     if (violation) return;
@@ -642,7 +683,7 @@ const violatesProjectContextLegacySelectionAuthority = (sourceFile) => {
       const specifier = staticModuleText(node.moduleSpecifier);
       violation =
         specifier === undefined ||
-        isForbiddenProjectContextDependency(specifier);
+        isForbiddenProjectContextDependency(specifier, sourcePath);
       return;
     }
     if (
@@ -652,7 +693,7 @@ const violatesProjectContextLegacySelectionAuthority = (sourceFile) => {
       const specifier = staticModuleText(node.arguments[0]);
       violation =
         specifier === undefined ||
-        isForbiddenProjectContextDependency(specifier);
+        isForbiddenProjectContextDependency(specifier, sourcePath);
       return;
     }
     if (isImportTypeNode(node)) {
@@ -662,7 +703,7 @@ const violatesProjectContextLegacySelectionAuthority = (sourceFile) => {
         : undefined;
       violation =
         specifier === undefined ||
-        isForbiddenProjectContextDependency(specifier);
+        isForbiddenProjectContextDependency(specifier, sourcePath);
       return;
     }
     if (isInterfaceDeclaration(node) || isTypeAliasDeclaration(node))
@@ -1291,9 +1332,15 @@ export const findBoundaryViolations = (sources) => {
         if (
           PROJECT_CONTEXT_SOURCE.test(normalizedPath) &&
           ast !== undefined &&
-          violatesProjectContextLegacySelectionAuthority(ast)
+          violatesProjectContextLegacySelectionAuthority(ast, normalizedPath)
         )
           rules.add("project-context-no-legacy-selection-authority");
+        if (
+          PROJECT_CONTEXT_SOURCE.test(normalizedPath) &&
+          ast !== undefined &&
+          importsFoundationPublicOutsideLifecycleAdapter(ast, normalizedPath)
+        )
+          rules.add("project-context-foundation-adapter-only");
         if (
           isCandidateSourceCatalog &&
           ast !== undefined &&

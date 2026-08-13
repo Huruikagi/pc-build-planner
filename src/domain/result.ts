@@ -26,8 +26,14 @@ export type FoundationErrorCode =
   | "storage-unavailable";
 
 export type FoundationError = {
-  readonly [Code in FoundationErrorCode]: {
-    readonly code: Code;
-    readonly message?: string;
-  };
+  readonly [Code in FoundationErrorCode]: Code extends "validation"
+    ? {
+        readonly code: Code;
+        readonly reason?: "entity-already-exists" | "entity-not-found";
+        readonly message?: string;
+      }
+    : {
+        readonly code: Code;
+        readonly message?: string;
+      };
 }[FoundationErrorCode];

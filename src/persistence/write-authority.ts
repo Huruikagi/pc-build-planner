@@ -135,6 +135,10 @@ const pipelineFailure = (code: string): FoundationError => {
       return { code: "quota-exceeded" };
     case "repair-failed":
       return { code: "repair-failed" };
+    case "entity-already-exists":
+      return { code: "validation", reason: "entity-already-exists" };
+    case "entity-not-found":
+      return { code: "validation", reason: "entity-not-found" };
     default:
       return { code: "validation" };
   }

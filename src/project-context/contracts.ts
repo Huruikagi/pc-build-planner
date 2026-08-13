@@ -1,4 +1,52 @@
-import type { ProjectId, Result, UtcTimestamp } from "../domain/public.js";
+import type {
+  Project,
+  ProjectId,
+  RequestId,
+  Result,
+  Revision,
+  UtcTimestamp,
+} from "../domain/public.js";
+
+/** 最新の永続 revision と一つの request identity に固定された lifecycle mutation context。 */
+export interface ProjectLifecycleMutationContext {
+  readonly requestId: RequestId;
+  readonly expectedRevision: Revision;
+}
+
+/** project-context が foundation へ要求できる lifecycle mutation の全体。 */
+export type ProjectLifecycleMutation =
+  | { readonly kind: "create"; readonly project: Project }
+  | { readonly kind: "update"; readonly project: Project }
+  | { readonly kind: "delete"; readonly projectId: ProjectId };
+
+/** project 名・ID・保存値・vendor exception を保持しない安定した data error。 */
+export type ProjectLifecycleDataError =
+  | { readonly kind: "not-found" }
+  | { readonly kind: "conflict" }
+  | { readonly kind: "maintenance" }
+  | { readonly kind: "storage" }
+  | { readonly kind: "quota" }
+  | { readonly kind: "unsupported-data" };
+
+/** foundation receiptから安全に射影した、保存値やcapacity detailを含まないcommit結果。 */
+export interface ProjectLifecycleCommitResult {
+  readonly revision: Revision;
+  readonly replayed: boolean;
+}
+
+/** project lookup と一回の atomic mutation だけを公開する lifecycle data boundary。 */
+export interface ProjectLifecycleDataPort {
+  createMutationContext(): Promise<
+    Result<ProjectLifecycleMutationContext, ProjectLifecycleDataError>
+  >;
+  find(
+    projectId: ProjectId,
+  ): Promise<Result<Project | undefined, ProjectLifecycleDataError>>;
+  mutate(
+    operation: ProjectLifecycleMutation,
+    context: ProjectLifecycleMutationContext,
+  ): Promise<Result<ProjectLifecycleCommitResult, ProjectLifecycleDataError>>;
+}
 
 /**
  * project context が公開する最小 project projection（要件 1.1、1.6）。

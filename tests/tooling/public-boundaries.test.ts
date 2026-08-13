@@ -13,6 +13,36 @@ import {
 } from "../../scripts/validate-boundaries.mjs";
 import { validateUiTextRoots } from "../../scripts/validate-ui-text.mjs";
 
+test("foundation public import is limited to the project lifecycle adapter", () => {
+  const violations = findBoundaryViolations([
+    {
+      path: "src/project-context/lifecycle-data-port.ts",
+      source:
+        'import type { FoundationScopedDataPort } from "../persistence/public.js";',
+    },
+    {
+      path: "src/project-context/unrelated-service.ts",
+      source:
+        'import type { FoundationScopedDataPort } from "../persistence/public.js";',
+    },
+  ]);
+
+  assert.equal(
+    violations.some(
+      ({ path, rule }) =>
+        path === "src/project-context/unrelated-service.ts" &&
+        rule === "project-context-foundation-adapter-only",
+    ),
+    true,
+  );
+  assert.equal(
+    violations.some(({ path }) =>
+      path.endsWith("project-context/lifecycle-data-port.ts"),
+    ),
+    false,
+  );
+});
+
 test("typed messages package境界はdeep importとappへの逆依存を拒否する", () => {
   const violations = findBoundaryViolations([
     {

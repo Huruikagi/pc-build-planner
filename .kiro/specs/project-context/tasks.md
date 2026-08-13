@@ -173,7 +173,7 @@
 
 - [ ] 6. canonical project lifecycle の contract と service を追加する
 
-- [ ] 6.1 project lifecycle contract と最小 data port を確立する
+- [x] 6.1 project lifecycle contract と最小 data port を確立する
   - project の作成・更新・削除だけを表す mutation、lookup、最新 revision に結び付く mutation context、安定した lifecycle error、commit result の契約を project-context に定義する。
   - foundation adapter は project mutation だけを一回委譲し、root shape、candidate/current-build collection、reference repair policy、Chrome storage を公開しない。
   - project 削除が foundation の既存 atomic transaction を通り、所属 candidate/current-build 参照を中間状態なしで修復する positive contract と、repair algorithm を project-context が再実装しない boundary test を追加する。
