@@ -15,6 +15,7 @@ import type {
 import { createProjectLifecycleService } from "../../src/project-context/lifecycle-service.js";
 
 const A = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const B = "22222222-2222-4222-8222-222222222222" as ProjectId;
 const requestId = "99999999-9999-4999-8999-999999999999" as RequestId;
 const createdAt = "2026-08-13T01:00:00.000Z" as UtcTimestamp;
 const renamedAt = "2026-08-13T02:00:00.000Z" as UtcTimestamp;
@@ -214,6 +215,154 @@ test("mutation failureはrefreshせず同じcommandを再送しない", async ()
   });
   assert.equal(calls, 1);
   assert.equal(h.refreshes, 0);
+});
+
+test("confirmed deleteはdata portへ一回委譲し成功後のcontext snapshotを解釈せず返す", async () => {
+  const original: Project = {
+    id: A,
+    name: "Deleted",
+    createdAt,
+    updatedAt: createdAt,
+  };
+  const h = harness(original);
+  const fallback: ProjectContextSnapshot = {
+    status: "ready",
+    generation: 2,
+    catalog: [{ id: B, name: "First remaining", updatedAt: renamedAt }],
+    selectedProjectId: B,
+  };
+  const service = createProjectLifecycleService({
+    data: h.data,
+    context: {
+      async refresh() {
+        return { ok: true, value: fallback };
+      },
+    },
+    createProjectId: () => A,
+    now: () => createdAt,
+  });
+
+  assert.deepEqual(await service.delete(A), {
+    ok: true,
+    value: { projectId: A, snapshot: fallback },
+  });
+  assert.deepEqual(h.mutations, [{ kind: "delete", projectId: A }]);
+});
+
+test("non-current deleteはcontext refreshが維持したcurrentをそのまま返す", async () => {
+  const current: Project = {
+    id: A,
+    name: "Current",
+    createdAt,
+    updatedAt: createdAt,
+  };
+  const maintained = snapshot(current);
+  const h = harness(current);
+  const service = createProjectLifecycleService({
+    data: h.data,
+    context: {
+      async refresh() {
+        return { ok: true, value: maintained };
+      },
+    },
+    createProjectId: () => A,
+    now: () => createdAt,
+  });
+
+  assert.deepEqual(await service.delete(B), {
+    ok: true,
+    value: { projectId: B, snapshot: maintained },
+  });
+  assert.deepEqual(h.mutations, [{ kind: "delete", projectId: B }]);
+});
+
+test("delete mutation failureはrefreshせず、失敗値を安定したerrorとして返す", async () => {
+  let refreshes = 0;
+  let mutations = 0;
+  const h = harness();
+  const service = createProjectLifecycleService({
+    data: {
+      ...h.data,
+      async mutate() {
+        mutations += 1;
+        return { ok: false, error: { kind: "conflict" } };
+      },
+    },
+    context: {
+      async refresh() {
+        refreshes += 1;
+        return h.context.refresh();
+      },
+    },
+    createProjectId: () => A,
+    now: () => createdAt,
+  });
+
+  assert.deepEqual(await service.delete(A), {
+    ok: false,
+    error: { kind: "conflict" },
+  });
+  assert.equal(mutations, 1);
+  assert.equal(refreshes, 0);
+});
+
+test("delete commit後のrefresh failureはdeleteを再送せずrefresh-only retryでemptyへ回復する", async () => {
+  const h = harness();
+  let refreshes = 0;
+  let releaseRetry: (() => void) | undefined;
+  const service = createProjectLifecycleService({
+    data: h.data,
+    context: {
+      async refresh() {
+        refreshes += 1;
+        if (refreshes === 1)
+          return { ok: false, error: { kind: "context-unavailable" } };
+        await new Promise<void>((resolve) => {
+          releaseRetry = resolve;
+        });
+        return {
+          ok: true,
+          value: {
+            status: "empty",
+            generation: 2,
+            catalog: [],
+            selectedProjectId: null,
+          },
+        };
+      },
+    },
+    createProjectId: () => A,
+    now: () => createdAt,
+  });
+
+  assert.deepEqual(await service.delete(A), {
+    ok: false,
+    error: { kind: "committed-refresh-failed" },
+  });
+  assert.deepEqual(h.mutations, [{ kind: "delete", projectId: A }]);
+  assert.deepEqual(await service.delete(A), {
+    ok: false,
+    error: { kind: "operation-in-progress" },
+  });
+
+  const retry = service.retryRefresh();
+  await Promise.resolve();
+  assert.deepEqual(await service.retryRefresh(), {
+    ok: false,
+    error: { kind: "operation-in-progress" },
+  });
+  assert.ok(releaseRetry);
+  releaseRetry();
+  assert.deepEqual(await retry, {
+    ok: true,
+    value: {
+      status: "empty",
+      generation: 2,
+      catalog: [],
+      selectedProjectId: null,
+    },
+  });
+  assert.deepEqual(h.mutations, [{ kind: "delete", projectId: A }]);
 });
 
 test("commit後refresh failureはretry成功までcommandを封鎖しrefreshだけを再試行する", async () => {

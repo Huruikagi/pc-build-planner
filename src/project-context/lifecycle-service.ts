@@ -40,6 +40,9 @@ export interface ProjectLifecycleService {
     projectId: ProjectId,
     name: string,
   ): Promise<Result<ProjectLifecycleCommandResult, ProjectLifecycleError>>;
+  delete(
+    projectId: ProjectId,
+  ): Promise<Result<ProjectLifecycleCommandResult, ProjectLifecycleError>>;
   retryRefresh(): Promise<
     Result<ProjectContextSnapshot, ProjectLifecycleRefreshError>
   >;
@@ -145,6 +148,10 @@ export const createProjectLifecycleService = (input: {
           updatedAt: input.now(),
         };
         return commit(projectId, { kind: "update", project });
+      }),
+    delete: (projectId) =>
+      runLifecycleCommand(async () => {
+        return commit(projectId, { kind: "delete", projectId });
       }),
     retryRefresh: () =>
       runSingleFlight(async () => {

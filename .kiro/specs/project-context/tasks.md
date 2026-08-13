@@ -191,7 +191,7 @@
   - _Boundary: ProjectLifecycleService_
   - _Depends: 6.1_
 
-- [ ] 6.3 project 削除と post-commit recovery を実装する
+- [x] 6.3 project 削除と post-commit recovery を実装する
   - 確認済み project ID の delete mutation を data port へ一回だけ要求し、削除 cascade や reference repair の内容を service 内で解釈しない。
   - 保存失敗では context refresh と generation 更新を行わず、保存成功後だけ最新 catalog を再検証する。
   - current project 削除後は残る先頭 project または empty、非 current project 削除後は current selection 維持へ既存 fallback 規則で収束させる。
