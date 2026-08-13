@@ -129,7 +129,7 @@
   - _Boundary: ReadOnlyAppContract_
   - _Depends: 5.1_
 
-- [ ] 5.3 deep import・逆依存・ownership gateを実装する
+- [x] 5.3 deep import・逆依存・ownership gateを実装する
   - 未宣言subpath、`src`/`dist` deep import、coreからChrome/backup/productへの逆依存、Chromeからproductへの依存、backupからChrome/DOM/React/productへの依存を機械的に拒否する。
   - package source/testが`ProductLocalDataAdapter`、`ProductBackupAdapter`、製品composition、E2Eを所有する変更も境界違反として検出する。
   - positive graphが成功し、各negative fixtureが狙った違反一件だけでgateを失敗させ、他の診断へ依存しなければ完了とする。
