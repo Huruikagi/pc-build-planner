@@ -7,13 +7,16 @@ import {
   type UtcTimestamp,
 } from "../../src/domain/public.js";
 import { createProjectCatalogProjection } from "../../src/project-context/catalog.js";
+import type { ProjectLifecycleMessageDescriptor } from "../../src/project-context/lifecycle-message-descriptors.js";
 import { createInMemoryProjectPreferencePort } from "../../src/project-context/preference-store.js";
 import { createProjectContextPublicApi } from "../../src/project-context/public.js";
 import { createProjectContextService } from "../../src/project-context/service.js";
 import {
   collectProjectContextSnapshotViolations,
+  collectProjectLifecycleDownstreamContractViolations,
   collectReplacementContractViolations,
   collectUnavailableRecoveryContractViolations,
+  projectLifecycleDescriptorContract,
 } from "./project-context-contract-kit.js";
 
 const A = "11111111-1111-4111-8111-111111111111" as ProjectId;
@@ -172,4 +175,123 @@ test("要件8.7: unavailableでない状態で観測した契約はprecondition�
       "recovery.precondition: subject must be observed while context is unavailable",
     ],
   );
+});
+
+test("8.4 downstream lifecycle kitはhost locator、capability注入、descriptor、旧UI撤去後期待値を固定する", () => {
+  const descriptors: ProjectLifecycleMessageDescriptor[] = [];
+  const host = {
+    lifecycle: {
+      create: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      rename: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      delete: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      retryRefresh: async () => ({
+        ok: false as const,
+        error: { kind: "context-unavailable" as const },
+      }),
+    },
+    messages: {
+      resolve(descriptor: ProjectLifecycleMessageDescriptor) {
+        descriptors.push(descriptor);
+        return descriptor.intent;
+      },
+    },
+    hostLocator: "[data-project-lifecycle-host='true']",
+    presentationLocator: "[data-project-lifecycle='presentation']",
+    legacyCandidateProjectUiCount: 0,
+    revalidationTrigger: "ui-message-catalog+project-candidate-management",
+    descriptorIntents: projectLifecycleDescriptorContract.map(
+      ({ intent }) => intent,
+    ),
+  };
+  assert.deepEqual(
+    collectProjectLifecycleDownstreamContractViolations(host),
+    [],
+  );
+  assert.equal(
+    host.messages.resolve({ intent: "project-list" }),
+    "project-list",
+  );
+  assert.deepEqual(descriptors, [{ intent: "project-list" }]);
+  assert.deepEqual(
+    projectLifecycleDescriptorContract.map(({ intent }) => intent),
+    [
+      "project-list",
+      "create-project",
+      "rename-project",
+      "confirm-delete",
+      "name-required",
+      "operation-pending",
+      "operation-failed",
+      "retry-refresh",
+      "confirm-delete-action",
+      "cancel-delete",
+      "cancel-rename",
+      "create-project-action",
+      "save-project-name-action",
+    ],
+  );
+});
+
+test("8.4 downstream lifecycle kitは各migration contract違反を個別に拒否する", () => {
+  const valid = {
+    lifecycle: {
+      create: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      rename: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      delete: async () => ({
+        ok: false as const,
+        error: { kind: "storage" as const },
+      }),
+      retryRefresh: async () => ({
+        ok: false as const,
+        error: { kind: "context-unavailable" as const },
+      }),
+    },
+    messages: { resolve: () => "synthetic" },
+    hostLocator: "[data-project-lifecycle-host='true']",
+    presentationLocator: "[data-project-lifecycle='presentation']",
+    legacyCandidateProjectUiCount: 0,
+    revalidationTrigger: "ui-message-catalog+project-candidate-management",
+    descriptorIntents: projectLifecycleDescriptorContract.map(
+      ({ intent }) => intent,
+    ),
+  };
+  const violations = (patch: Record<string, unknown>) =>
+    collectProjectLifecycleDownstreamContractViolations({
+      ...valid,
+      ...patch,
+    } as typeof valid);
+  assert.deepEqual(
+    violations({ lifecycle: { ...valid.lifecycle, delete: undefined } }),
+    ["lifecycle.capability: delete must be injected"],
+  );
+  assert.deepEqual(violations({ hostLocator: "" }), [
+    "lifecycle.host: stable host locator changed",
+  ]);
+  assert.deepEqual(violations({ presentationLocator: "" }), [
+    "lifecycle.presentation: stable presentation locator changed",
+  ]);
+  assert.deepEqual(violations({ legacyCandidateProjectUiCount: 1 }), [
+    "lifecycle.migration: legacy candidate project UI remains",
+  ]);
+  assert.deepEqual(violations({ revalidationTrigger: "" }), [
+    "lifecycle.revalidation: downstream trigger changed",
+  ]);
+  assert.deepEqual(violations({ descriptorIntents: ["project-list"] }), [
+    "lifecycle.descriptors: semantic descriptor contract changed",
+  ]);
 });

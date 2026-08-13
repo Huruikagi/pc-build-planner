@@ -258,7 +258,7 @@
   - _Boundary: ProjectLifecycle Contract and DOM Validation_
   - _Depends: 8.1_
 
-- [ ] 8.4 core browser E2E と downstream migration contract を提供する
+- [x] 8.4 core browser E2E と downstream migration contract を提供する
   - test-only browser harness へ synthetic な日英 resolver を注入し、create、rename、所属候補への影響を示すdelete確認/取消、delete後fallback/empty、mutation failure、refresh-only recovery を日本語・英語と keyboard で操作する。
   - project lifecycle host の locator、capability injection、message descriptor、旧 candidate project UI 撤去後の期待値を downstream `ui-message-catalog` と `project-candidate-management` が再利用できる contract kit にする。
   - production candidate/application-shell の具体 wiring、layout/CSS、candidate editor/list を core harness に取り込まず、downstream 接続後の横断 E2E revalidation trigger を固定する。

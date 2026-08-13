@@ -1,7 +1,99 @@
 import type {
+  ProjectLifecycleMessageDescriptor,
+  ProjectLifecycleMessageResolver,
+} from "../../src/project-context/lifecycle-message-descriptors.js";
+import type {
   ProjectContextPublicApi,
   ProjectContextReplacementGuardPort,
+  ProjectLifecyclePort,
 } from "../../src/project-context/public.js";
+
+export const PROJECT_LIFECYCLE_DOWNSTREAM_CONTRACT = Object.freeze({
+  hostLocator: "[data-project-lifecycle-host='true']",
+  presentationLocator: "[data-project-lifecycle='presentation']",
+  legacyCandidateProjectUiCount: 0,
+  revalidationTrigger: "ui-message-catalog+project-candidate-management",
+} as const);
+
+export interface ProjectLifecycleDownstreamContractSubject {
+  readonly lifecycle: ProjectLifecyclePort;
+  readonly messages: ProjectLifecycleMessageResolver;
+  readonly hostLocator: string;
+  readonly presentationLocator: string;
+  readonly legacyCandidateProjectUiCount: number;
+  readonly revalidationTrigger: string;
+  readonly descriptorIntents: readonly ProjectLifecycleMessageDescriptor["intent"][];
+}
+
+/**
+ * Migration seam reused by the catalog owner and candidate host owner. It
+ * describes injected capabilities and stable host expectations only; it does
+ * not import either downstream implementation or a physical message catalog.
+ */
+export const collectProjectLifecycleDownstreamContractViolations = (
+  subject: ProjectLifecycleDownstreamContractSubject,
+): readonly string[] => {
+  const expected = PROJECT_LIFECYCLE_DOWNSTREAM_CONTRACT;
+  const violations: string[] = [];
+  for (const capability of [
+    "create",
+    "rename",
+    "delete",
+    "retryRefresh",
+  ] as const)
+    if (typeof subject.lifecycle[capability] !== "function")
+      violations.push(`lifecycle.capability: ${capability} must be injected`);
+  if (typeof subject.messages.resolve !== "function")
+    violations.push("lifecycle.messages: semantic resolver must be injected");
+  if (subject.hostLocator !== expected.hostLocator)
+    violations.push("lifecycle.host: stable host locator changed");
+  if (subject.presentationLocator !== expected.presentationLocator)
+    violations.push(
+      "lifecycle.presentation: stable presentation locator changed",
+    );
+  if (
+    subject.legacyCandidateProjectUiCount !==
+    expected.legacyCandidateProjectUiCount
+  )
+    violations.push("lifecycle.migration: legacy candidate project UI remains");
+  if (subject.revalidationTrigger !== expected.revalidationTrigger)
+    violations.push("lifecycle.revalidation: downstream trigger changed");
+  if (
+    subject.descriptorIntents.length !==
+      projectLifecycleDescriptorContract.length ||
+    subject.descriptorIntents.some(
+      (intent, index) =>
+        intent !== projectLifecycleDescriptorContract[index]?.intent,
+    )
+  )
+    violations.push(
+      "lifecycle.descriptors: semantic descriptor contract changed",
+    );
+  return violations;
+};
+
+/** Descriptor fixtures are key/value independent and safe for both locale owners. */
+export const projectLifecycleDescriptorContract = Object.freeze<
+  readonly ProjectLifecycleMessageDescriptor[]
+>([
+  { intent: "project-list" },
+  { intent: "create-project" },
+  { intent: "rename-project", projectName: "Synthetic project" },
+  {
+    intent: "confirm-delete",
+    projectName: "Synthetic project",
+    impact: "owned-candidates",
+  },
+  { intent: "name-required" },
+  { intent: "operation-pending", operation: "create" },
+  { intent: "operation-failed", reason: "storage" },
+  { intent: "retry-refresh" },
+  { intent: "confirm-delete-action" },
+  { intent: "cancel-delete" },
+  { intent: "cancel-rename" },
+  { intent: "create-project-action" },
+  { intent: "save-project-name-action" },
+]);
 
 export interface ProjectContextSnapshotExpectation {
   readonly status: "ready" | "empty" | "unavailable";
