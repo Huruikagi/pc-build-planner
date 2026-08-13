@@ -466,7 +466,7 @@
   - _Boundary: ProductLocalDataAdapter, FoundationErrorAdapter_
 
 - [ ] 11. 共有AppDataErrorと用途別公開capabilityを確立する
-- [ ] 11.1 (P) 共有AppDataError vocabularyと公開mappingを追加する
+- [x] 11.1 (P) 共有AppDataError vocabularyと公開mappingを追加する
   - candidate-managementから独立した共有data operation errorを定義し、全`FoundationError` variantのcode、payload、判定contextを一対一で保持する。
   - feature固有のvalidation・workflow errorを吸収せず、domain公開入口だけから型とexhaustive mapperを利用可能にする。
   - unknownなruntime error入力を境界validatorで検証し、不完全・未知値を既知variantへ変換せず観測可能なtyped validation failureとして返す。

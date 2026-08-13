@@ -1,3 +1,11 @@
+export type {
+  AppDataError,
+  AppDataErrorValidationFailure,
+} from "./app-data-error.js";
+export {
+  mapFoundationError,
+  validateAppDataError,
+} from "./app-data-error.js";
 export * from "./identifiers.js";
 export * from "./model.js";
 export * from "./normalized-attributes.js";
