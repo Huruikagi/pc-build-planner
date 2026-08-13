@@ -171,7 +171,7 @@
   - _Boundary: ProjectContext Final Validation_
   - _Depends: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 6. canonical project lifecycle の contract と service を追加する
+- [x] 6. canonical project lifecycle の contract と service を追加する
 
 - [x] 6.1 project lifecycle contract と最小 data port を確立する
   - project の作成・更新・削除だけを表す mutation、lookup、最新 revision に結び付く mutation context、安定した lifecycle error、commit result の契約を project-context に定義する。
@@ -200,7 +200,7 @@
   - _Boundary: ProjectLifecycleService Delete and Recovery_
   - _Depends: 6.2_
 
-- [ ] 7. project lifecycle state と既存表示契約を提供する
+- [x] 7. project lifecycle state と既存表示契約を提供する
 
 - [x] 7.1 framework-independent lifecycle state と削除確認を実装する
   - name input、rename target、delete confirmation target、pending、field/error、refresh-only recovery を candidate state から独立した state として保持する。
@@ -229,7 +229,7 @@
   - _Boundary: ProjectLifecyclePresentation_
   - _Depends: 7.1, 7.2_
 
-- [ ] 8. lifecycle capability、boundary、横断検証を統合する
+- [x] 8. lifecycle capability、boundary、横断検証を統合する
 
 - [x] 8.1 public/runtime facade へ project lifecycle capability を統合する
   - lifecycle port を read、selection command、guard registration、replacement guard と別の frozen capability として公開する。
@@ -267,7 +267,7 @@
   - _Boundary: ProjectLifecycle Core Browser E2E and Downstream Contract Kit_
   - _Depends: 8.2, 8.3_
 
-- [ ] 9. Change Brief v0.5.0-boundary-reconciliation の完全 validation と downstream readiness を確定する
+- [x] 9. Change Brief v0.5.0-boundary-reconciliation の完全 validation と downstream readiness を確定する
   - lifecycle data/service/state/presentation/semantic message descriptor、public/runtime、boundary、contract、DOM、core E2E の focused test を先に実行し、失敗 boundary を特定する。
   - typecheck、public consumer typecheck、lint、unit/contract/DOM test、boundary、fixture、UI text、production build、Playwright E2E の既存 validation flow を通す。
   - Change Brief `v0.5.0-boundary-reconciliation` の全 In-scope item と Requirement 9–10 の traceabilityを再確認し、ja/en 物理 catalog/key/value/aggregation/parityを含む全 Out-of-scope item、`v0.5.0` lifecycle behavior、既存 Task 1–5 の承認済み behaviorが保たれていることを差分検査する。

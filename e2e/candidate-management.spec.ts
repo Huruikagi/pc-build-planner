@@ -148,7 +148,7 @@ test("shared project selection keeps candidate state consistent through dirty co
   const select = projectContextSelect(selector);
   await expect(selector).toBeVisible();
   await expect(select).toBeDisabled();
-  await expect(projectContextStatus(selector)).not.toBeEmpty();
+  await expect(projectContextStatus(page)).not.toBeEmpty();
 
   await navItem(page, "candidate-management").click();
   const management = featureRoot(page, "candidate-management");
