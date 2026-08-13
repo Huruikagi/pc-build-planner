@@ -239,7 +239,7 @@
   - _Boundary: ProjectContextPublicApi and Runtime_
   - _Depends: 6.3, 7.3_
 
-- [ ] 8.2 lifecycle import と data ownership の negative boundary gate を追加する
+- [x] 8.2 lifecycle import と data ownership の negative boundary gate を追加する
   - project-context の lifecycle implementation が許可された domain、runtime validation、foundation public adapter、ui-language、ui-messages、React 以外へ依存しないことを検査する。
   - candidate-management 内部、foundation repair policy/root shape、Chrome storage、別 feature、application-shell への deep import と、通常 consumer への lifecycle data/service instance 公開を negative fixture で拒否する。
   - lifecycle implementation から ja/en catalog file、具体 `MessageKey`、catalog aggregation への import と、project-context 内での descriptor-to-key mapping を negative fixture で拒否する。

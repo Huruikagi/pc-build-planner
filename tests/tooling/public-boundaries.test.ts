@@ -111,6 +111,137 @@ const allBoundaryViolations = (sources) => [
   ...findStorageAccessViolations(sources),
 ];
 
+test("project lifecycle の依存・data ownership・message ownership を専用 gate で閉じる", () => {
+  const sources = [
+    {
+      path: "src/project-context/lifecycle-service.ts",
+      source:
+        'import { candidateState } from "../features/candidate-management/state.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-data-port.ts",
+      source:
+        'import { repairProjectReferences } from "../persistence/reference-repair-policy.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-state.ts",
+      source: "export const read = () => chrome.storage.local.get();",
+    },
+    {
+      path: "src/project-context/lifecycle-presentation.tsx",
+      source:
+        'import { shellSlot } from "../application-shell/composition-root.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-message-descriptors.ts",
+      source: 'import { ja } from "../ui-messages/catalog/ja.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-message-descriptors.ts",
+      source: 'import type { MessageKey } from "../ui-messages/public.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-message-descriptors.ts",
+      source: 'import { catalog } from "../ui-messages/catalog.js";',
+    },
+    {
+      path: "src/project-context/lifecycle-message-descriptors.ts",
+      source: [
+        "declare const descriptor: ProjectLifecycleMessageDescriptor;",
+        'const descriptorToKey = { [descriptor.intent]: "projectContext.lifecycle.list" };',
+      ].join("\n"),
+    },
+    {
+      path: "src/project-context/lifecycle-message-descriptors.ts",
+      source: [
+        "type ProjectLifecycleMessageDescriptor = { intent: string };",
+        "const translateIntent = (value: ProjectLifecycleMessageDescriptor) =>",
+        '  value.intent === "create" ? "projectContext.lifecycle.create" : "projectContext.lifecycle.error";',
+      ].join("\n"),
+    },
+    {
+      path: "src/features/mock/project-lifecycle-consumer.ts",
+      source:
+        'import type { ProjectLifecycleService } from "../../project-context/public.js";',
+    },
+    {
+      path: "src/features/mock/project-lifecycle-consumer.ts",
+      source:
+        'import type { ProjectLifecycleDataPort } from "../../project-context/public.js";',
+    },
+    {
+      path: "src/features/mock/project-lifecycle-consumer.ts",
+      source:
+        'type Service = import("../../project-context/public.js").ProjectLifecycleService;',
+    },
+    {
+      path: "src/features/mock/project-lifecycle-consumer.ts",
+      source: [
+        'import type * as Context from "../../project-context/public.js";',
+        "type State = Context.ProjectLifecycleState;",
+      ].join("\n"),
+    },
+  ];
+  const violations = findBoundaryViolations(sources).filter(({ rule }) =>
+    rule.startsWith("project-context-lifecycle-"),
+  );
+
+  assert.deepEqual(
+    violations.map(({ path, rule }) => `${path}: ${rule}`),
+    [
+      "src/project-context/lifecycle-service.ts: project-context-lifecycle-dependencies-only",
+      "src/project-context/lifecycle-data-port.ts: project-context-lifecycle-dependencies-only",
+      "src/project-context/lifecycle-state.ts: project-context-lifecycle-dependencies-only",
+      "src/project-context/lifecycle-presentation.tsx: project-context-lifecycle-dependencies-only",
+      "src/project-context/lifecycle-message-descriptors.ts: project-context-lifecycle-message-semantics-only",
+      "src/project-context/lifecycle-message-descriptors.ts: project-context-lifecycle-message-semantics-only",
+      "src/project-context/lifecycle-message-descriptors.ts: project-context-lifecycle-message-semantics-only",
+      "src/project-context/lifecycle-message-descriptors.ts: project-context-lifecycle-message-semantics-only",
+      "src/project-context/lifecycle-message-descriptors.ts: project-context-lifecycle-message-semantics-only",
+      "src/features/mock/project-lifecycle-consumer.ts: project-context-lifecycle-capability-only",
+      "src/features/mock/project-lifecycle-consumer.ts: project-context-lifecycle-capability-only",
+      "src/features/mock/project-lifecycle-consumer.ts: project-context-lifecycle-capability-only",
+      "src/features/mock/project-lifecycle-consumer.ts: project-context-lifecycle-capability-only",
+    ],
+  );
+
+  assert.deepEqual(
+    findBoundaryViolations([
+      {
+        path: "src/project-context/lifecycle-data-port.ts",
+        source:
+          'import type { ProjectMutationPort } from "../persistence/public.js";',
+      },
+      {
+        path: "src/project-context/lifecycle-service.ts",
+        source: [
+          'import type { ProjectId } from "../domain/public.js";',
+          'import type { ProjectLifecycleDataPort } from "./lifecycle-data-port.js";',
+        ].join("\n"),
+      },
+      {
+        path: "src/features/mock/project-lifecycle-consumer.ts",
+        source:
+          'import type { ProjectLifecyclePort } from "../../project-context/public.js";',
+      },
+      {
+        path: "src/features/mock/local-domain.ts",
+        source:
+          "interface ProjectLifecycleService { run(): void }\nexport const useLocal = (service: ProjectLifecycleService) => service.run();",
+      },
+      {
+        path: "src/features/mock/project-lifecycle-consumer.ts",
+        source: [
+          'import type { ProjectLifecyclePort as Lifecycle } from "../../project-context/public.js";',
+          'import type * as Context from "../../project-context/public.js";',
+          "type Allowed = Lifecycle | Context.ProjectLifecyclePort;",
+        ].join("\n"),
+      },
+    ]),
+    [],
+  );
+});
+
 test("domain と persistence の公開入口は許可された契約だけを公開する", async () => {
   const domainPublic = await readFile("src/domain/public.ts", "utf8");
   const persistencePublic = await readFile("src/persistence/public.ts", "utf8");

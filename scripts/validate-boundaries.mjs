@@ -644,6 +644,166 @@ const importsFoundationPublicOutsideLifecycleAdapter = (
   return violation;
 };
 
+const PROJECT_CONTEXT_LIFECYCLE_SOURCE =
+  /(?:^|\/)src\/project-context\/lifecycle-(?:data-port|service|state|message-descriptors|presentation)(?:\.tsx?)?$/;
+const PROJECT_CONTEXT_LIFECYCLE_MESSAGE_SOURCE =
+  /(?:^|\/)src\/project-context\/lifecycle-message-descriptors\.ts$/;
+const PROJECT_CONTEXT_LIFECYCLE_PRIVATE_CAPABILITIES = new Set([
+  "ProjectLifecycleDataPort",
+  "ProjectLifecycleService",
+  "ProjectLifecycleState",
+]);
+
+/** @param {string} specifier @param {string} sourcePath */
+const isForbiddenProjectLifecycleDependency = (specifier, sourcePath) => {
+  const normalized = specifier.replaceAll("\\", "/");
+  if (/^\.\/[^/]+$/.test(normalized)) return false;
+  if (
+    normalized === "../persistence/public.js" &&
+    /\/lifecycle-data-port\.ts$/.test(sourcePath.replaceAll("\\", "/"))
+  )
+    return false;
+  return !PROJECT_CONTEXT_ALLOWED_MODULES.has(normalized);
+};
+
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile @param {string} sourcePath */
+const violatesProjectLifecycleDependencies = (sourceFile, sourcePath) => {
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (violation) return;
+    if (
+      isImportDeclaration(node) ||
+      (isExportDeclaration(node) && node.moduleSpecifier !== undefined)
+    ) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectLifecycleDependency(specifier, sourcePath);
+    } else if (
+      isCallExpression(node) &&
+      node.expression.kind === AstSyntaxKind.ImportKeyword
+    ) {
+      const specifier = staticModuleText(node.arguments[0]);
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectLifecycleDependency(specifier, sourcePath);
+    } else if (isImportTypeNode(node)) {
+      const specifier = isLiteralTypeNode(node.argument)
+        ? staticModuleText(node.argument.literal)
+        : undefined;
+      violation =
+        specifier === undefined ||
+        isForbiddenProjectLifecycleDependency(specifier, sourcePath);
+    }
+  });
+  return violation;
+};
+
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
+const violatesProjectLifecycleMessageOwnership = (sourceFile) => {
+  let hasDescriptorContract = false;
+  let hasConcreteKey = false;
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (isIdentifier(node)) {
+      if (node.text === "MessageKey") violation = true;
+      if (node.text === "ProjectLifecycleMessageDescriptor")
+        hasDescriptorContract = true;
+    }
+    if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node)) {
+      const value = node.text.replaceAll("\\", "/");
+      if (
+        /(?:ui-messages\/catalog|_locales\/(?:ja|en)|catalog\/(?:ja|en))/.test(
+          value,
+        )
+      )
+        violation = true;
+      if (
+        /^(?:projectContext|project-context)\.[\w.-]*lifecycle[\w.-]*$/i.test(
+          value,
+        )
+      )
+        hasConcreteKey = true;
+    }
+  });
+  return violation || (hasDescriptorContract && hasConcreteKey);
+};
+
+/** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
+const exposesProjectLifecyclePrivateCapability = (sourceFile) => {
+  const namespaceImports = new Set();
+  let violation = false;
+  walkAst(sourceFile, (node) => {
+    if (violation) return;
+    if (isImportDeclaration(node)) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      if (
+        !specifier
+          ?.replaceAll("\\", "/")
+          .match(/project-context\/public(?:\.js|\.ts)?$/)
+      )
+        return;
+      const named = node.importClause?.namedBindings;
+      if (named?.kind === AstSyntaxKind.NamespaceImport) {
+        namespaceImports.add(named.name.text);
+        return;
+      }
+      if (!named || !isNamedImports(named)) return;
+      violation = named.elements.some((element) =>
+        PROJECT_CONTEXT_LIFECYCLE_PRIVATE_CAPABILITIES.has(
+          element.propertyName?.text ?? element.name.text,
+        ),
+      );
+    } else if (
+      isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined
+    ) {
+      const specifier = staticModuleText(node.moduleSpecifier);
+      if (
+        !specifier
+          ?.replaceAll("\\", "/")
+          .match(/project-context\/public(?:\.js|\.ts)?$/)
+      )
+        return;
+      const clause = node.exportClause;
+      if (!clause || !isNamedExports(clause)) return;
+      violation = clause.elements.some((element) =>
+        PROJECT_CONTEXT_LIFECYCLE_PRIVATE_CAPABILITIES.has(
+          element.propertyName?.text ?? element.name.text,
+        ),
+      );
+    } else if (isImportTypeNode(node)) {
+      const specifier = isLiteralTypeNode(node.argument)
+        ? staticModuleText(node.argument.literal)
+        : undefined;
+      if (
+        !specifier
+          ?.replaceAll("\\", "/")
+          .match(/project-context\/public(?:\.js|\.ts)?$/)
+      )
+        return;
+      let qualifier = node.qualifier;
+      while (qualifier?.kind === AstSyntaxKind.QualifiedName)
+        qualifier = qualifier.right;
+      violation =
+        qualifier !== undefined &&
+        isIdentifier(qualifier) &&
+        PROJECT_CONTEXT_LIFECYCLE_PRIVATE_CAPABILITIES.has(qualifier.text);
+    } else if (node.kind === AstSyntaxKind.QualifiedName) {
+      const qualified =
+        /** @type {import("typescript/unstable/ast").QualifiedName} */ (node);
+      violation =
+        isIdentifier(qualified.left) &&
+        namespaceImports.has(qualified.left.text) &&
+        isIdentifier(qualified.right) &&
+        PROJECT_CONTEXT_LIFECYCLE_PRIVATE_CAPABILITIES.has(
+          qualified.right.text,
+        );
+    }
+  });
+  return violation;
+};
+
 /**
  * @param {import("typescript/unstable/ast").InterfaceDeclaration
  *   | import("typescript/unstable/ast").TypeAliasDeclaration} declaration
@@ -1341,6 +1501,29 @@ export const findBoundaryViolations = (sources) => {
           importsFoundationPublicOutsideLifecycleAdapter(ast, normalizedPath)
         )
           rules.add("project-context-foundation-adapter-only");
+        if (
+          PROJECT_CONTEXT_LIFECYCLE_SOURCE.test(normalizedPath) &&
+          !(
+            PROJECT_CONTEXT_LIFECYCLE_MESSAGE_SOURCE.test(normalizedPath) &&
+            ast !== undefined &&
+            violatesProjectLifecycleMessageOwnership(ast)
+          ) &&
+          (ast === undefined ||
+            violatesProjectLifecycleDependencies(ast, normalizedPath) ||
+            /\bchrome\.storage\b/.test(source))
+        )
+          rules.add("project-context-lifecycle-dependencies-only");
+        if (
+          PROJECT_CONTEXT_LIFECYCLE_MESSAGE_SOURCE.test(normalizedPath) &&
+          (ast === undefined || violatesProjectLifecycleMessageOwnership(ast))
+        )
+          rules.add("project-context-lifecycle-message-semantics-only");
+        if (
+          !PROJECT_CONTEXT_SOURCE.test(normalizedPath) &&
+          ast !== undefined &&
+          exposesProjectLifecyclePrivateCapability(ast)
+        )
+          rules.add("project-context-lifecycle-capability-only");
         if (
           isCandidateSourceCatalog &&
           ast !== undefined &&
