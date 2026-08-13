@@ -1,6 +1,8 @@
 import type {
   CoreResult,
+  FinalizationTicket,
   ReplacementAssessment,
+  ReplacementMode,
   RootReplacementPort,
 } from "../contracts.js";
 
@@ -44,11 +46,35 @@ export interface BackupPreflight<Preview> {
   readonly ticket: RestoreTicket;
 }
 
-export interface BackupOrchestrator<RestoreInput, Artifact, Preview, Error> {
+export type BackupCommitResult<Summary> =
+  | { readonly kind: "committed"; readonly summary: Summary }
+  | {
+      readonly kind: "committed-finalization-required";
+      readonly summary: Summary;
+      readonly finalization: FinalizationTicket;
+    };
+
+export interface BackupOrchestrator<
+  RestoreInput,
+  Artifact,
+  Preview,
+  Summary,
+  Error,
+> {
   create(): Promise<CoreResult<Artifact, Error>>;
   preflight(
     input: RestoreInput,
   ): Promise<CoreResult<Readonly<BackupPreflight<Preview>>, Error>>;
+  reassess(
+    ticket: RestoreTicket,
+  ): Promise<CoreResult<Readonly<BackupPreflight<Preview>>, Error>>;
+  commit(
+    ticket: RestoreTicket,
+  ): Promise<CoreResult<BackupCommitResult<Summary>, Error>>;
+  findPendingFinalization(): Promise<
+    CoreResult<FinalizationTicket | null, Error>
+  >;
+  finalize(ticket: FinalizationTicket): Promise<CoreResult<Summary, Error>>;
 }
 
 export interface BackupOrchestratorDependencies<
@@ -76,6 +102,8 @@ export interface BackupOrchestratorDependencies<
     Error
   >;
   readonly artifactPolicy: BackupArtifactPolicy<ArtifactPayload, Artifact, Error>;
+  /** Product policy selects normal replacement or recovery before assessment. */
+  readonly replacementMode: (root: Root) => ReplacementMode;
   readonly replacement: RootReplacementPort<
     Root,
     ReplacementAssessment<AssessmentPreview>,

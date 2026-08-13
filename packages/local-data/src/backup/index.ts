@@ -1,5 +1,6 @@
 export type {
   BackupArtifactPolicy,
+  BackupCommitResult,
   BackupCodec,
   BackupOrchestrator,
   BackupOrchestratorDependencies,

@@ -5,7 +5,12 @@ import {
   createBackupOrchestrator,
   type BackupCodec,
 } from "../../src/backup/index.js";
-import type { CoreResult, ReplacementAssessment } from "../../src/index.js";
+import type {
+  CoreResult,
+  FinalizationTicket,
+  ReplacementAssessment,
+  ReplacementMode,
+} from "../../src/index.js";
 
 type Failure = { readonly code: string };
 type Root = Readonly<{ revision: number; values: readonly string[] }>;
@@ -81,6 +86,7 @@ const createFixture = (failureAt?: string) => {
           : ok({ name: "fictional-backup.json", payload });
       },
     },
+    replacementMode: () => "normal",
     replacement: {
       async assess(candidate: unknown) {
         calls.push("assess");
@@ -110,6 +116,88 @@ const createFixture = (failureAt?: string) => {
     },
   });
   return { orchestrator, calls, get rootWrites() { return rootWrites; } };
+};
+
+const createLifecycleFixture = (mode: ReplacementMode = "normal") => {
+  const calls: string[] = [];
+  let rootWrites = 0;
+  let commitAttempt = 0;
+  let assessmentNumber = 0;
+  const finalization = Object.freeze({}) as FinalizationTicket;
+  const pending = Object.freeze({}) as FinalizationTicket;
+  const codec: BackupCodec<
+    Root,
+    string,
+    { version: number; values: readonly string[] },
+    { version: 1; values: readonly string[] },
+    Candidate,
+    string,
+    Readonly<{ count: number }>,
+    Failure
+  > = {
+    create: () => ok("unused"),
+    decode: (input) =>
+      ok(JSON.parse(input) as { version: number; values: readonly string[] }),
+    version: (decoded) => ok({ version: 1, values: decoded.values }),
+    map: (versioned) => ok({ values: versioned.values }),
+    toRoot: (candidate) => ok({ revision: 0, values: candidate.values }),
+    preview: (candidate) => ({ count: candidate.values.length }),
+  };
+  const assess = async (candidate: unknown) => {
+    assessmentNumber += 1;
+    calls.push(`assess:${mode}:${assessmentNumber}`);
+    return ok<ReplacementAssessment<Readonly<{ mode: ReplacementMode }>>>({
+      preview: { mode },
+      ticket: Object.freeze({}) as never,
+    });
+  };
+  const orchestrator = createBackupOrchestrator({
+    snapshot: { read: async () => failed("unused") },
+    codec,
+    artifactPolicy: { create: () => failed("unused") },
+    replacementMode: () => mode,
+    replacement: {
+      assess: mode === "normal" ? assess : async () => failed("wrong-mode"),
+      assessRecovery:
+        mode === "recovery" ? assess : async () => failed("wrong-mode"),
+      async commit(input) {
+        commitAttempt += 1;
+        calls.push(`commit:${input.mode}:${commitAttempt}`);
+        if (commitAttempt === 1)
+          return failed("precommit-cleanup-pending");
+        rootWrites += 1;
+        return mode === "normal"
+          ? ok({
+              kind: "committed-finalization-required" as const,
+              receipt: { committed: true as const },
+              finalization,
+            })
+          : ok({
+              kind: "committed" as const,
+              receipt: { committed: true as const },
+            });
+      },
+      async findPendingFinalization() {
+        calls.push("find-pending");
+        return ok(pending);
+      },
+      async finalize(ticket) {
+        calls.push(
+          ticket === finalization ? "finalize:commit" : "finalize:pending",
+        );
+        return ok({ committed: true as const });
+      },
+    },
+  });
+  return {
+    orchestrator,
+    calls,
+    finalization,
+    pending,
+    get rootWrites() {
+      return rootWrites;
+    },
+  };
 };
 
 test("creates a stable artifact through the injected snapshot, codec, and policy", async () => {
@@ -173,3 +261,65 @@ for (const stage of ["decode", "version", "map", "toRoot", "assess"] as const) {
     assert.equal(fixture.rootWrites, 0);
   });
 }
+
+for (const mode of ["normal", "recovery"] as const) {
+  test(`confirmed ${mode} ticket retries precommit cleanup with the same private binding`, async () => {
+    const fixture = createLifecycleFixture(mode);
+    const preflight = await fixture.orchestrator.preflight(
+      '{"version":1,"values":["fictional"]}',
+    );
+    assert.equal(preflight.ok, true);
+    if (!preflight.ok) return;
+
+    assert.deepEqual(await fixture.orchestrator.commit(preflight.value.ticket), {
+      ok: false,
+      error: { code: "precommit-cleanup-pending" },
+    });
+    assert.equal(fixture.rootWrites, 0);
+
+    const committed = await fixture.orchestrator.commit(preflight.value.ticket);
+    assert.equal(committed.ok, true);
+    assert.equal(
+      committed.ok && committed.value.kind,
+      mode === "normal" ? "committed-finalization-required" : "committed",
+    );
+    assert.equal(fixture.rootWrites, 1);
+    assert.deepEqual(fixture.calls.slice(0, 3), [
+      `assess:${mode}:1`,
+      `commit:${mode}:1`,
+      `commit:${mode}:2`,
+    ]);
+  });
+}
+
+test("stale ticket reassessment creates a new confirmed ticket in the original mode", async () => {
+  const fixture = createLifecycleFixture("recovery");
+  const preflight = await fixture.orchestrator.preflight(
+    '{"version":1,"values":["fictional"]}',
+  );
+  assert.equal(preflight.ok, true);
+  if (!preflight.ok) return;
+
+  const reassessed = await fixture.orchestrator.reassess(preflight.value.ticket);
+  assert.equal(reassessed.ok, true);
+  if (!reassessed.ok) return;
+  assert.notEqual(reassessed.value.ticket, preflight.value.ticket);
+  assert.deepEqual(reassessed.value.preview, { count: 1 });
+  assert.deepEqual(fixture.calls, ["assess:recovery:1", "assess:recovery:2"]);
+  assert.equal(fixture.rootWrites, 0);
+});
+
+test("pending discovery and finalize-only delegate without another commit or root write", async () => {
+  const fixture = createLifecycleFixture();
+
+  assert.deepEqual(await fixture.orchestrator.findPendingFinalization(), {
+    ok: true,
+    value: fixture.pending,
+  });
+  assert.deepEqual(await fixture.orchestrator.finalize(fixture.pending), {
+    ok: true,
+    value: { committed: true },
+  });
+  assert.deepEqual(fixture.calls, ["find-pending", "finalize:pending"]);
+  assert.equal(fixture.rootWrites, 0);
+});

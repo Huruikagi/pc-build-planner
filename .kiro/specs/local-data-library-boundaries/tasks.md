@@ -104,7 +104,7 @@
   - _Boundary: BackupOrchestrator_
   - _Depends: 2.6_
 
-- [ ] 4.2 confirmed commit・reassessment・finalization retryを実装する
+- [x] 4.2 confirmed commit・reassessment・finalization retryを実装する
   - confirmed ticketのcommit、stale ticketのreassessment、same-ticket pre-commit cleanup retry、pending finalization discovery、finalize-only retryを提供する。
   - commit前failureとcommit済みfinalization待ちを判別共用体で区別し、成功を取り消したりrootを再置換したりしない。
   - contract testでpre-commit retryまでのroot write 0件、commit成功最大一回、finalize-only retryの追加root write 0件を観測できれば完了とする。
