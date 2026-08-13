@@ -9,6 +9,12 @@ import {
   localDataValidationRoutes,
   runLocalDataValidationRoute,
 } from "../../scripts/validate-local-data-workspace.mjs";
+import {
+  localDataProductOwnerGates,
+  localDataWorkspaceGates,
+  runLocalDataChangedValidation,
+  runLocalDataWorkspaceGates,
+} from "../../scripts/validate-local-data-workspace-final.mjs";
 
 const flattened = (route: keyof typeof localDataValidationRoutes) =>
   localDataValidationRoutes[route].map((gate) => gate.join(" "));
@@ -105,4 +111,96 @@ test("実boundary runnerの違反をroute failureとして伝播する", async (
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("changed-scope entrypointはgenericとunknownをfull gateへ安全側分類する", () => {
+  for (const changedPaths of [
+    ["packages/local-data/src/contracts.ts"],
+    ["scripts/validate-local-data-workspace-final.mjs"],
+    ["docs/unknown-shared-contract.md"],
+    [],
+  ]) {
+    const calls: string[] = [];
+    assert.equal(
+      runLocalDataChangedValidation(changedPaths, (command, args) => {
+        calls.push([command, ...args].join(" "));
+        return { status: 0 };
+      }),
+      0,
+    );
+    assert.deepEqual(
+      calls,
+      localDataWorkspaceGates.map((gate) => gate.join(" ")),
+    );
+  }
+});
+
+test("changed-scope entrypointはproduct-only変更をowner validationへ委譲する", async () => {
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const calls: string[] = [];
+  const status = runLocalDataChangedValidation(
+    [
+      "src/domain/schema.ts",
+      "src/persistence/product-local-data-adapter.ts",
+      "src/features/backup-restore/exchange.ts",
+      "src/application-shell/application-composition.ts",
+    ],
+    (command, args) => {
+      calls.push([command, ...args].join(" "));
+      return { status: calls.length === 2 ? 23 : 0 };
+    },
+  );
+  assert.equal(status, 23);
+  assert.deepEqual(
+    calls,
+    localDataProductOwnerGates.slice(0, 2).map((gate) => gate.join(" ")),
+  );
+  assert.deepEqual(calls, ["pnpm typecheck", "pnpm test"]);
+  assert.equal(
+    manifest.scripts["validate:local-data:changed"],
+    "node scripts/validate-local-data-workspace-final.mjs --changed",
+  );
+});
+
+test("root local-data gateはfresh packageからconsumer、boundary、topological buildを順に実行する", async () => {
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  assert.deepEqual(
+    localDataWorkspaceGates.map((gate) => gate.join(" ")),
+    [
+      "pnpm --filter @pc-build-planner/local-data validate",
+      "pnpm validate:local-data-public-consumers",
+      "pnpm validate:local-data-read-only-app-contract",
+      "pnpm validate:local-data-boundaries",
+      "pnpm build",
+    ],
+  );
+  assert.equal(
+    manifest.scripts["validate:local-data"],
+    "node scripts/validate-local-data-workspace-final.mjs",
+  );
+  assert.match(manifest.scripts["validate:ci"] ?? "", /validate:local-data/u);
+  assert.doesNotMatch(
+    localDataWorkspaceGates.flat().join(" "),
+    /playwright|e2e|composition/iu,
+  );
+});
+
+test("root local-data gateは最初のfailureを伝播し後続gateを停止する", () => {
+  const calls: string[] = [];
+  const status = runLocalDataWorkspaceGates(
+    localDataWorkspaceGates,
+    (command, args) => {
+      calls.push([command, ...args].join(" "));
+      return { status: calls.length === 3 ? 29 : 0 };
+    },
+  );
+  assert.equal(status, 29);
+  assert.deepEqual(
+    calls,
+    localDataWorkspaceGates.slice(0, 3).map((gate) => gate.join(" ")),
+  );
 });

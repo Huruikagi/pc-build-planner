@@ -145,7 +145,7 @@
   - _Boundary: WorkspaceValidation_
   - _Depends: 5.3_
 
-- [ ] 5.5 root topological buildと変更scope統合を確定する
+- [x] 5.5 root topological buildと変更scope統合を確定する
   - root buildがtyped messages coreとlocal data packageをconsumerより先にbuildし、app側がbuild済みpublic exportだけを解決する順序を固定する。
   - 製品schema、migration、repair、交換形式、adapter、composition、UIだけの変更はpublic contractへ影響しない限り下流ownerの検証へ委譲し、package経路はgeneric contract変更時だけ要求する。
   - fresh package build/typecheck/test、3 consumer、read-only app contract、boundary gate、topological buildが成功し、いずれかのfailureがroot commandへ伝播する一方、製品composition/E2Eを本specのgateへ吸収しなければ完了とする。

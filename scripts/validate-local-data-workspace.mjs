@@ -102,10 +102,12 @@ export function runLocalDataValidationRoute(route, runGate = spawnGate) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const route = process.argv[2];
-  if (!(route in localDataValidationRoutes)) {
+  if (route === undefined || !(route in localDataValidationRoutes)) {
     process.stderr.write("local-data-validation invalid-route exit-2\n");
     process.exitCode = 2;
   } else {
-    process.exitCode = runLocalDataValidationRoute(route);
+    process.exitCode = runLocalDataValidationRoute(
+      /** @type {keyof typeof localDataValidationRoutes} */ (route),
+    );
   }
 }
