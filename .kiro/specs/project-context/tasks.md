@@ -181,7 +181,7 @@
   - _Requirements: 9.1, 9.2, 9.6, 9.10_
   - _Boundary: ProjectLifecycleDataPort_
 
-- [ ] 6.2 project の作成・改名 service を実装する
+- [x] 6.2 project の作成・改名 service を実装する
   - project 名を trim して空白だけの入力を field validation failure とし、保存と refresh を行わない。
   - 作成時の ID・日時と改名時の更新日時を project-context が決定し、data port へ一回だけ mutation を要求する。
   - 保存成功後に context refresh を一回実行し、empty からの作成では作成 project、改名では同じ project ID が最新名で公開されることを固定する。
