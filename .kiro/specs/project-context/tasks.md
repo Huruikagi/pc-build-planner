@@ -220,7 +220,7 @@
   - _Boundary: ProjectLifecycleMessageDescriptors_
   - _Depends: 7.1_
 
-- [ ] 7.3 lifecycle presentation と host-neutral mount contract を実装する
+- [x] 7.3 lifecycle presentation と host-neutral mount contract を実装する
   - lifecycle state と read/lifecycle port だけを使い、既存の project nav、create/rename form、対象名と所属候補も削除される影響を明示する delete confirmation の role・label・操作順を再現する。
   - keyboard、focus、pending status、field error、confirm/cancel、refresh retry、resolver 差し替えによる日英切替を提供し、descriptor parameter の project 名と解決済み message を text child として描画する。
   - layout class と CSS rule、独立管理画面、candidate 一覧/editor の構造を追加せず、既存 host container へ mount/unmount できる contribution にする。

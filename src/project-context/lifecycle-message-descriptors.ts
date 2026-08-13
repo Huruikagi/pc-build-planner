@@ -26,7 +26,12 @@ export type ProjectLifecycleMessageDescriptor =
       readonly intent: "operation-failed";
       readonly reason: ProjectLifecycleError["kind"];
     }
-  | { readonly intent: "retry-refresh" };
+  | { readonly intent: "retry-refresh" }
+  | { readonly intent: "confirm-delete-action" }
+  | { readonly intent: "cancel-delete" }
+  | { readonly intent: "cancel-rename" }
+  | { readonly intent: "create-project-action" }
+  | { readonly intent: "save-project-name-action" };
 
 export interface ProjectLifecycleMessageResolver {
   resolve(descriptor: ProjectLifecycleMessageDescriptor): string;

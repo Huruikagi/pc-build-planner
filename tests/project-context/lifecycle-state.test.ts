@@ -146,6 +146,16 @@ test("delete request fixes current catalog id/name and cancel calls no service",
   assert.deepEqual(h.calls, []);
 });
 
+test("rename cancel clears only lifecycle draft and target without service calls", () => {
+  const h = harness();
+  assert.deepEqual(h.state.beginRename(A), { ok: true, value: undefined });
+  h.state.setNameInput("discarded rename");
+  h.state.cancelRename();
+  assert.equal(h.state.getSnapshot().editingProjectId, null);
+  assert.equal(h.state.getSnapshot().nameInput, "");
+  assert.deepEqual(h.calls, []);
+});
+
 test("stale rename/delete targets are rejected from the current catalog", () => {
   const h = harness();
   h.setContext({

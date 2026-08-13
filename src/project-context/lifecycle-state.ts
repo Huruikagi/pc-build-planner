@@ -26,6 +26,7 @@ export interface ProjectLifecycleState {
   beginRename(
     projectId: ProjectId,
   ): Result<void, { readonly kind: "project-not-found" }>;
+  cancelRename(): void;
   requestDelete(
     projectId: ProjectId,
   ): Result<void, { readonly kind: "project-not-found" }>;
@@ -155,6 +156,15 @@ export const createProjectLifecycleState = (_dependencies: {
         error: null,
       });
       return { ok: true, value: undefined };
+    },
+    cancelRename() {
+      if (snapshot.pending || recoveryRequired) return;
+      update({
+        nameInput: "",
+        editingProjectId: null,
+        fieldError: null,
+        error: null,
+      });
     },
     requestDelete(projectId) {
       if (!canMutate())

@@ -4,6 +4,7 @@ import type { ProjectId, UtcTimestamp } from "../../src/domain/public.js";
 import type { ProjectCatalogItem } from "../../src/project-context/contracts.js";
 import {
   describeProjectLifecycleMessages,
+  type ProjectLifecycleMessageDescriptor,
   type ProjectLifecycleMessageResolver,
 } from "../../src/project-context/lifecycle-message-descriptors.js";
 import type { ProjectLifecycleStateSnapshot } from "../../src/project-context/lifecycle-state.js";
@@ -144,4 +145,18 @@ test("resolver consumer port receives the semantic descriptor unchanged", () => 
   assert.deepEqual(received, [
     { intent: "operation-pending", operation: "refresh" },
   ]);
+});
+
+test("presentation action intents keep confirm/cancel and create/rename actions semantically distinct", () => {
+  const descriptors: ProjectLifecycleMessageDescriptor[] = [
+    { intent: "confirm-delete-action" },
+    { intent: "cancel-delete" },
+    { intent: "cancel-rename" },
+    { intent: "create-project-action" },
+    { intent: "save-project-name-action" },
+  ];
+  assert.equal(
+    new Set(descriptors.map(({ intent }) => intent)).size,
+    descriptors.length,
+  );
 });
