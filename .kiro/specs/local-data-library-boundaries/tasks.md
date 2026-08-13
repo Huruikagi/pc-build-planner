@@ -7,7 +7,7 @@
 - **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eをtask boundaryへ含めない。
 
 - [ ] 1. Workspace package基盤を確立する
-- [ ] 1.1 private local data package scaffoldと公開entry枠を追加する
+- [x] 1.1 private local data package scaffoldと公開entry枠を追加する
   - typed messages coreで確立したworkspace運用へlocal data packageを登録し、root core、Chrome、backupの3つの宣言済みentryを持つstrictなESM設定を用意する。
   - package単独build、typecheck、testをroot orchestrationから呼び出せるscript枠を設け、runtime dependency、npm publish設定、未宣言subpathを持たない状態にする。
   - clean build後、3 entryのJavaScriptとdeclarationが生成され、package managerとmodule resolverが宣言済みentryだけを解決できれば完了とする。
