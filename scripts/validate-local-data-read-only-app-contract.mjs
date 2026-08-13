@@ -10,6 +10,14 @@ export const localDataReadOnlyAppContractGates = Object.freeze([
 ]);
 
 /** @typedef {{ status: number | null, stdout?: unknown, stderr?: unknown }} GateResult */
+/**
+ * @typedef {{
+ *   runNegative?: (
+ *     command: string,
+ *     args: readonly string[],
+ *   ) => GateResult | Promise<GateResult>
+ * }} LocalDataReadOnlyAppContractOptions
+ */
 
 /**
  * @param {string} command
@@ -150,6 +158,7 @@ const declarationFiles = async (directory) => {
 /**
  * @param {readonly (readonly string[])[]} gates
  * @param {(command: string, args: readonly string[]) => Promise<GateResult>} [runGate]
+ * @param {LocalDataReadOnlyAppContractOptions} [options]
  */
 export async function runLocalDataReadOnlyAppContractGates(
   gates,
