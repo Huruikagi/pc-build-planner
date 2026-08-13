@@ -9,9 +9,11 @@ import {
   type CoreResult,
   type ExclusiveLockPort,
   type FenceControlState,
+  type FencingPolicy,
   createFencingPolicy,
   type LocalDataPolicy,
   type StoragePort,
+  type TransactionStoragePort,
 } from "../src/index.js";
 
 interface SyntheticRoot {
@@ -184,7 +186,7 @@ const createHarness = (
       read: (candidate) => candidate.control,
       write: (candidate, control) => ({ ...candidate, control }),
     }),
-    persistentControl: {
+    recovery: {
       authorizeMutation(value: unknown) {
         if (typeof value !== "object" || value === null) return { ok: false as const, error: { code: "stale-fence" as const } };
         const control = value as Record<string, unknown>;
@@ -396,6 +398,98 @@ test("persistent maintenance or recovery activated before commit rejects after m
     assert.equal(harness.getWrites(), 0);
     assert.deepEqual(harness.getStored(), before);
   }
+});
+
+test("transaction keeps root maintenance and persistent recovery controls incompatible", async () => {
+  type RootMaintenanceControl = { readonly maintenanceToken: string };
+  type PersistentRecoveryControl = { readonly recoveryEpoch: number; readonly blocked: boolean };
+  type OwnerError = { readonly kind: "owner-recovery"; readonly payload: { readonly epoch: number; readonly phase: "before" | "commit" } };
+  type SeparateRoot = Omit<SyntheticRoot, "control"> & { readonly control: RootMaintenanceControl };
+  let stored: SeparateRoot = { ...root("before"), control: { maintenanceToken: "clear" } };
+  let recovery: PersistentRecoveryControl = { recoveryEpoch: 7, blocked: false };
+  let writes = 0;
+  let authorizations = 0;
+  let rootReads = 0;
+  let blockAtCommit = false;
+  let phase: OwnerError["payload"]["phase"] = "before";
+  const storage: TransactionStoragePort<SeparateRoot, PersistentRecoveryControl> = {
+    async readRoot() {
+      rootReads += 1;
+      if (blockAtCommit && rootReads === 2) {
+        phase = "commit";
+        recovery = { recoveryEpoch: 9, blocked: true };
+      }
+      return { ok: true, value: stored };
+    },
+    async writeRoot(value) { writes += 1; stored = value; return { ok: true, value: undefined }; },
+    async readControl() { return { ok: true, value: recovery }; },
+    async writeControl(value) { recovery = value; return { ok: true, value: undefined }; },
+    async bytesInUse() { return { ok: true, value: 100 }; },
+    quotaBytes: () => 1_000,
+    async restrictToTrustedContexts() { return { ok: true, value: undefined }; },
+  };
+  const policy: LocalDataPolicy<SeparateRoot, Operation, RootMaintenanceControl, CoreError> = {
+    decodeAndMigrate() { return { ok: true, value: stored }; },
+    apply(current, operation) { return { ok: true, value: { ...current, value: operation.value } }; },
+    repair(candidate) { return { ok: true, value: candidate }; },
+    revision: (candidate) => candidate.revision,
+    withRevision: (candidate, revision) => ({ ...candidate, revision }),
+    requestRecord: (candidate, requestId) => candidate.requests[requestId],
+    withRequestRecord: (candidate, record) => ({ ...candidate, requests: { ...candidate.requests, [record.requestId]: record } }),
+    control: (candidate) => candidate.control,
+    withControl: (candidate, control) => ({ ...candidate, control }),
+  };
+  const engine = createTransactionEngine({
+    storage,
+    lock: { async runExclusive(operation) { return { ok: true, value: await operation() }; } },
+    policy,
+    errors: {
+      fromPolicy: (_stage, error) => ({ ok: true, value: { kind: "owner-recovery", payload: { epoch: -1, phase: "before" } } satisfies OwnerError }),
+      fromCore: () => ({ ok: true, value: { kind: "owner-recovery", payload: { epoch: -2, phase: "before" } } satisfies OwnerError }),
+    },
+    capacity: { assess: (beforeBytes, candidate, quotaBytes) => ({ ok: true, value: { beforeBytes, afterBytes: candidate.value.length, warningThresholdBytes: 800, quotaBytes, warning: false } }) },
+    digest: (operation: Operation) => operation.value,
+    now: () => 100,
+    fencing: {
+      acquire: () => ({ ok: false, error: { code: "stale-fence" } }),
+      renew: () => ({ ok: false, error: { code: "stale-fence" } }),
+      release: () => ({ ok: false, error: { code: "stale-fence" } }),
+      abort: () => ({ ok: false, error: { code: "stale-fence" } }),
+      authorizeMutation: () => ({ ok: true, value: undefined }),
+    } satisfies FencingPolicy<SeparateRoot>,
+    recovery: {
+      authorizeMutation(control) {
+        authorizations += 1;
+        if (typeof control !== "object" || control === null || !("blocked" in control)) {
+          return { ok: false, error: { kind: "owner-recovery" as const, payload: { epoch: -1, phase } } };
+        }
+        return control.blocked
+          ? { ok: false, error: { kind: "owner-recovery" as const, payload: { epoch: recovery.recoveryEpoch, phase } } }
+          : { ok: true, value: undefined };
+      },
+    },
+  });
+  assert.equal((await engine.execute({ requestId: "separate", expectedRevision: 4, operation: { value: "after" } })).ok, true);
+  assert.equal(authorizations, 2);
+  assert.equal(writes, 1);
+  recovery = { recoveryEpoch: 8, blocked: true };
+  assert.deepEqual(
+    await engine.execute({ requestId: "blocked", expectedRevision: 5, operation: { value: "blocked" } }),
+    { ok: false, error: { kind: "owner-recovery", payload: { epoch: 8, phase: "before" } } },
+  );
+  assert.equal(authorizations, 3);
+  assert.equal(writes, 1);
+
+  stored = { ...root("before"), control: { maintenanceToken: "clear" } };
+  recovery = { recoveryEpoch: 7, blocked: false };
+  rootReads = 0;
+  blockAtCommit = true;
+  const commitError = { kind: "owner-recovery", payload: { epoch: 9, phase: "commit" } } as const;
+  assert.deepEqual(
+    await engine.execute({ requestId: "commit-blocked", expectedRevision: 4, operation: { value: "blocked" } }),
+    { ok: false, error: commitError },
+  );
+  assert.equal(writes, 1);
 });
 
 test("digest callback exceptions are normalized without leaking operation or writing", async () => {

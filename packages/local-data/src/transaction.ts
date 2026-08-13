@@ -6,21 +6,29 @@ import type {
   ExclusiveLockPort,
   LocalDataPolicy,
   PersistentControlPolicy,
+  StorageError,
   StoragePort,
   TransactionPort,
 } from "./contracts.js";
 import type { FencingPolicy } from "./fencing.js";
 
-export interface TransactionEngineDependencies<Root, Operation, Control, PolicyError, OutputError> {
-  readonly storage: StoragePort<Root, Control>;
+export type TransactionStoragePort<Root, PersistentRecoveryControl> = Omit<
+  StoragePort<Root, PersistentRecoveryControl>,
+  "readControl"
+> & {
+  readControl(): Promise<CoreResult<PersistentRecoveryControl | undefined, StorageError>>;
+};
+
+export interface TransactionEngineDependencies<Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, PolicyError, OutputError> {
+  readonly storage: TransactionStoragePort<Root, PersistentRecoveryControl>;
   readonly lock: ExclusiveLockPort;
-  readonly policy: LocalDataPolicy<Root, Operation, Control, PolicyError>;
+  readonly policy: LocalDataPolicy<Root, Operation, RootMaintenanceControl, PolicyError>;
   readonly errors: ErrorAdapter<PolicyError, OutputError>;
   readonly capacity: CapacityPolicy<Root>;
   readonly digest: (operation: Operation) => string;
   readonly now: () => number;
   readonly fencing: FencingPolicy<Root>;
-  readonly persistentControl: PersistentControlPolicy;
+  readonly recovery: PersistentControlPolicy<PersistentRecoveryControl, OutputError>;
 }
 
 class ConsumerAdapterError {
@@ -45,8 +53,8 @@ const runPolicyStage = <Value>(
   }
 };
 
-export const createTransactionEngine = <Root, Operation, Control, PolicyError = CoreError, OutputError = CoreError>(
-  dependencies: TransactionEngineDependencies<Root, Operation, Control, PolicyError, OutputError>,
+export const createTransactionEngine = <Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, PolicyError = CoreError, OutputError = CoreError>(
+  dependencies: TransactionEngineDependencies<Root, Operation, RootMaintenanceControl, PersistentRecoveryControl, PolicyError, OutputError>,
 ): TransactionPort<Operation, Root, OutputError> => {
   const coreFailure = (error: CoreError): CoreResult<never, OutputError> => {
     let adapted;
@@ -71,6 +79,18 @@ export const createTransactionEngine = <Root, Operation, Control, PolicyError = 
     const stage = fallback === "validation" ? fallback : dependencies.policy.decodeFailureStage?.(result.error) ?? "decode";
     return policyStage(stage, () => result);
   };
+  const authorizeRecovery = (
+    control: PersistentRecoveryControl | undefined,
+  ): CoreResult<void, CoreError> | PolicyFailure<OutputError> => {
+    try {
+      const authorized = dependencies.recovery.authorizeMutation(control, dependencies.now());
+      return authorized.ok
+        ? authorized
+        : { ok: false, policyFailure: true, error: authorized.error };
+    } catch {
+      return failure("stale-fence");
+    }
+  };
   const executeCore = async (command: Parameters<TransactionPort<Operation, Root, OutputError>["execute"]>[0]): Promise<CoreResult<import("./contracts.js").TransactionReceipt<Root>, CoreError | OutputError> | PolicyFailure<OutputError>> => {
     try {
       const locked = await dependencies.lock.runExclusive(async () => {
@@ -82,7 +102,7 @@ export const createTransactionEngine = <Root, Operation, Control, PolicyError = 
 
         const persistentControl = await dependencies.storage.readControl().catch(() => failure("storage-unavailable"));
         if (!persistentControl.ok) return persistentControl;
-        const persistentAuthorized = runPolicyStage(() => dependencies.persistentControl.authorizeMutation(persistentControl.value, dependencies.now()), "stale-fence");
+        const persistentAuthorized = authorizeRecovery(persistentControl.value);
         if (!persistentAuthorized.ok) return persistentAuthorized;
         const digest = runPolicyStage(() => ({ ok: true as const, value: dependencies.digest(command.operation) }), "validation");
         if (!digest.ok) return digest;
@@ -139,7 +159,7 @@ export const createTransactionEngine = <Root, Operation, Control, PolicyError = 
         if (!commitFence.ok) return commitFence;
         const latestControl = await dependencies.storage.readControl().catch(() => failure("storage-unavailable"));
         if (!latestControl.ok) return latestControl;
-        const latestAuthorized = runPolicyStage(() => dependencies.persistentControl.authorizeMutation(latestControl.value, dependencies.now()), "stale-fence");
+        const latestAuthorized = authorizeRecovery(latestControl.value);
         if (!latestAuthorized.ok) return latestAuthorized;
         let committed;
         try { committed = await dependencies.storage.writeRoot(validated.value); } catch { return failure("storage-unavailable"); }

@@ -11,7 +11,7 @@ import {
   type FenceControlState,
   type LocalDataPolicy,
   type RequestRecord,
-  type StoragePort,
+  type TransactionStoragePort,
 } from "../src/index.js";
 
 const MEBIBYTE = 1024 * 1024;
@@ -80,7 +80,7 @@ test("10MB近傍synthetic rootの実transaction baselineを記録・検査する
   let stored: unknown = nearQuotaRoot();
   let writes = 0;
   let decodeCalls = 0;
-  const storage: StoragePort<SyntheticRoot, FenceControlState> = {
+  const storage: TransactionStoragePort<SyntheticRoot, FenceControlState> = {
     async readRoot() {
       return { ok: true, value: stored };
     },
@@ -162,6 +162,7 @@ test("10MB近傍synthetic rootの実transaction baselineを記録・検査する
   const engine = createTransactionEngine<
     SyntheticRoot,
     Operation,
+    FenceControlState,
     FenceControlState
   >({
     storage,
@@ -185,7 +186,7 @@ test("10MB近傍synthetic rootの実transaction baselineを記録・検査する
       read: (root) => root.control,
       write: (root, control) => ({ ...root, control }),
     }),
-    persistentControl: {
+    recovery: {
       authorizeMutation: () => ok(undefined),
     },
     errors: {

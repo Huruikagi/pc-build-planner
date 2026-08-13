@@ -63,11 +63,11 @@ export interface RequestRecord {
   readonly revision: number;
 }
 
-export interface StoragePort<Root, Control> {
+export interface StoragePort<Root, PersistentRecoveryControl> {
   readRoot(): Promise<CoreResult<unknown | undefined, StorageError>>;
   writeRoot(root: Root): Promise<CoreResult<void, StorageError>>;
   readControl(): Promise<CoreResult<unknown | undefined, StorageError>>;
-  writeControl(control: Control): Promise<CoreResult<void, StorageError>>;
+  writeControl(control: PersistentRecoveryControl): Promise<CoreResult<void, StorageError>>;
   bytesInUse(): Promise<CoreResult<number, StorageError>>;
   quotaBytes(): number;
   restrictToTrustedContexts(): Promise<CoreResult<void, StorageError>>;
@@ -79,11 +79,11 @@ export interface ExclusiveLockPort {
   ): Promise<CoreResult<T, LockError>>;
 }
 
-export interface PersistentControlPolicy {
+export interface PersistentControlPolicy<PersistentRecoveryControl, OutputError = CoreError> {
   authorizeMutation(
-    control: unknown,
+    control: PersistentRecoveryControl | undefined,
     now: number,
-  ): CoreResult<void, CoreError>;
+  ): CoreResult<void, OutputError>;
 }
 
 export interface LocalDataPolicy<Root, Operation, Control, PolicyError> {

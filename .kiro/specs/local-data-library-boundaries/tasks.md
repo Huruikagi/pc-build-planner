@@ -162,7 +162,7 @@
   - _Requirements: 1.5, 1.7, 1.8, 2.1, 2.6, 4.1, 4.2, 4.7_
   - _Boundary: ConsumerErrorAdapter, TransactionEngine, ReplacementCoordinator_
 
-- [ ] 6.2 root maintenanceとpersistent recovery controlをtransaction factoryで分離する
+- [x] 6.2 root maintenanceとpersistent recovery controlをtransaction factoryで分離する
   - root policyが扱うmaintenance controlとstorage側persistent recovery controlを非互換な別genericとして構成し、mutation前・commit直前の両方でowner protocolのauthorizationを呼ぶ。
   - revision、dedupe、single write、固定exclusive lockの順序を維持し、control間のcastまたは共通field前提を導入しない。
   - 非互換なsynthetic control型でtransaction factoryが型検査・実行され、active recovery拒否と成功時write一回が観測できれば完了とする。
@@ -251,3 +251,4 @@
 
 - **Fresh task-graph sanity review (2026-08-13 final spec remediation round 2)**: historical Tasks 2.3/2.6の完了記録を維持しつつ、persistent recovery ownershipを6.3–6.4へsupersedeした。Task 6.1はtransaction/replacement両factoryのerror adapterを同じcore contract変更として完結し、Task 7.3がreplacement payload/contextとadapter failure/throwのroot write 0件を独立fixtureで検証する。主経路はpackage 7.4 → `local-data-foundation` 11.2 `validate:local-data-product-contract` → 8.1 → 9.1 → 9.2、下流経路はpackage 7.4/Foundation 11.2 → backup 7.1–7.3、library 9.2 + backup 7.3 → backup 7.4 → application-shell 12.1–12.3で非循環となる。61 ACのtask/design trace、各新規taskのobservable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。
 - **Task 6.1**: decode/migration stageの分類はopaqueなpolicy errorをpackage側で解釈せずconsumer-owned classifierへ委譲し、transaction・replacementのcurrent root・candidate assessment・commit再照合で同じhelperを通す。
+- **Task 6.2**: transactionのroot maintenance controlとpersistent recovery controlは別genericとし、storageから読んだpersistent controlを同型のowner authorizationへ渡す。owner `OutputError`は`fromCore`へ再変換せず、mutation前・commit直前の拒否をそのまま返す。

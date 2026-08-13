@@ -7,6 +7,7 @@ import {
   createTransactionEngine,
   createReplacementCoordinator,
   type CoreError,
+  type CoreResult,
   type ErrorAdapter,
   type CapacityStatus,
   type FenceControlState,
@@ -114,8 +115,8 @@ const createHarness = (
       read: (value) => value.control,
       write: (value, next) => ({ ...value, control: next }),
     }),
-    persistentControl: {
-      authorizeMutation(value: unknown) {
+    recovery: {
+      authorizeMutation(value: unknown): CoreResult<void, CoreError> {
         if (typeof value !== "object" || value === null) return { ok: false as const, error: { code: "stale-fence" as const } };
         const current = value as Record<string, unknown>;
         if (current.active === false) return { ok: true as const, value: undefined };

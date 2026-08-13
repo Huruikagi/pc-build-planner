@@ -44,7 +44,7 @@ export type {
 } from "./fencing.js";
 
 export { createTransactionEngine } from "./transaction.js";
-export type { TransactionEngineDependencies } from "./transaction.js";
+export type { TransactionEngineDependencies, TransactionStoragePort } from "./transaction.js";
 
 export { createReplacementCoordinator } from "./replacement.js";
 export type {
