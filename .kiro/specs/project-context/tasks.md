@@ -211,7 +211,7 @@
   - _Boundary: ProjectLifecycleState_
   - _Depends: 6.3_
 
-- [ ] 7.2 project lifecycle の semantic message descriptor を追加する
+- [x] 7.2 project lifecycle の semantic message descriptor を追加する
   - project 一覧、作成、改名、対象名と所属候補も削除される影響を示す削除確認、validation、mutation failure、pending、refresh retry を区別する key 非依存の intent と必要 parameter を定義する。
   - lifecycle state と command result の各遷移を descriptor へ写像し、locale や物理 `MessageKey` に依存せず同じ意味・発火条件を保つ。
   - presentation が descriptor を渡す resolver consumer port を提供し、ja/en catalog file、具体 key/value、descriptor-to-key mapping、aggregation、parity を project-context へ追加しない。
