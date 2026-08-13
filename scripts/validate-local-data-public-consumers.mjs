@@ -8,6 +8,10 @@ export const localDataPublicConsumerGates = Object.freeze([
   Object.freeze(["pnpm", "typecheck:local-data-public-consumers"]),
   Object.freeze([
     "node",
+    "scripts/validate-local-data-transaction-public-contract.mjs",
+  ]),
+  Object.freeze([
+    "node",
     "--import",
     "tsx",
     "tests/tooling/local-data-core-consumer.ts",

@@ -196,7 +196,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 6.4, 6.8, 7.1, 7.2, 7.3, 7.4, 7.8_
   - _Boundary: CoreContracts, PackagePublicEntries_
 
-- [ ] 7.2 transaction public consumer fixtureを独立error/control型へ更新する
+- [x] 7.2 transaction public consumer fixtureを独立error/control型へ更新する
   - 架空のpolicy error、output error、root maintenance control、persistent recovery controlを互いに代入不能な型としてfactoryへ接続するpositive fixtureを追加する。
   - error adapter欠落とcontrol generic混同が狙った型診断で失敗するnegative fixtureを追加し、runtime contractで各stageのpolicy error identity/payloadがadapter入力まで保持されることを検証する。
   - build済みJavaScript/declarationだけを使うpositive/negative fixtureとruntime contractが期待どおり成功・失敗すれば完了とする。
@@ -257,3 +257,4 @@
 - **Task 6.4 contract repair (2026-08-14 approved)**: `prepareCommit`はpersistent controlへ束縛したowner-defined `FinalizationCapability`をpendingとともに返し、protocol・commit state・replacement public portまで独立genericとして通す。packageはroot write成功後のcleanup failure時だけcapabilityを公開し、再生成後のdiscoveryと妥当性判定はactual current rootを使うowner protocolへ委譲する。
 - **Task 6.4**: `FinalizationCapability`はbackup subpathまで同じowner genericで伝播する。commit経路はpost-root observation/classificationを行わず、root write失敗はprecommit、cleanup failureだけをcommitted-finalization-requiredとして扱う。persistent ticket検証はcloneされたcontrolと入力capabilityをowner protocolへ渡して行う。
 - **Task 7.1**: build済みroot/backup declarationだけを解決する専用consumer gateをclean build直後に実行し、owner error/control/finalization capabilityのpublic genericと3-entry export mapをsource aliasなしで固定する。
+- **Task 7.2**: transaction public contractはbuild済みroot entryだけを使い、positive fixture、adapter欠落/control混同の狙ったnegative診断、decode/migration/mutation/repair/validationのruntime identityを一つのfail-closed validator routeで検証する。
