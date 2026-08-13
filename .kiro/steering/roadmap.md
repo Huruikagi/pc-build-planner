@@ -68,3 +68,4 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 | Work Item | Type | Result | Validated at | Commit | Evidence |
 |---|---|---|---|---|---|
 | runtime-license-notices | direct | GO | 2026-08-13T06:19:17+09:00 | `102d87602919` | `pnpm build` exit 0; `pnpm validate:artifacts` exit 0; `pnpm validate:final-build` exit 0; notice positive/negative test 18/18 pass, exit 0; smoke PASS; review APPROVED; classification DIRECT_CONFIRMED |
+| local-data-library-boundaries | spec | GO | 2026-08-13T13:34:33+09:00 | `02f8ce947d44` | `pnpm validate:local-data` exit 0, package tests 70/70 pass; `pnpm validate:ci` exit 0; `pnpm build` exit 0; `pnpm validate:local-data-public-consumers` exit 0; `pnpm validate:final-build` exit 0; public runtime consumers and built artifact smoke PASS; requirements 52/52 mapped; integration and design checks GO; blocked tasks 0 |
