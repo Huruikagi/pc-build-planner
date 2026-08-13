@@ -5,11 +5,23 @@
  * ProjectContextBoundaryGate）。
  */
 
+import type { ProjectId, RequestId, UtcTimestamp } from "../domain/public.js";
 import { createProjectCatalogProjection } from "./catalog.js";
 import type {
   ProjectCatalogSource,
   ProjectPreferencePort,
 } from "./contracts.js";
+import {
+  createFoundationProjectLifecycleDataPort,
+  type ProjectLifecycleFoundationPort,
+} from "./lifecycle-data-port.js";
+import {
+  createProjectLifecyclePresentationContribution,
+  type ProjectLifecyclePresentationContribution,
+  type ProjectLifecyclePresentationMessageResolver,
+} from "./lifecycle-presentation.js";
+import { createProjectLifecycleService } from "./lifecycle-service.js";
+import { createProjectLifecycleState } from "./lifecycle-state.js";
 import {
   createChromeProjectPreferencePortIfAvailable,
   createInMemoryProjectPreferencePort,
@@ -20,6 +32,7 @@ import {
 } from "./presentation-contribution.js";
 import {
   createProjectContextPublicApi,
+  type ProjectContextCorePublicApi,
   type ProjectContextPublicApi,
 } from "./public.js";
 import {
@@ -48,10 +61,68 @@ export const createProductionProjectPreferencePort =
     createInMemoryProjectPreferencePort();
 
 export interface ProductionProjectContext {
-  readonly api: ProjectContextPublicApi;
+  readonly api: ProjectContextCorePublicApi;
   readonly presentation: ProjectContextPresentationContribution;
   initialize(): ReturnType<ProjectContextService["initialize"]>;
 }
+
+export interface ProjectContextRuntimeDependencies {
+  readonly catalog: ProjectCatalogSource;
+  readonly preference: ProjectPreferencePort;
+  readonly foundation: ProjectLifecycleFoundationPort;
+  readonly messages: ProjectLifecyclePresentationMessageResolver;
+  readonly createProjectId: () => ProjectId;
+  readonly createRequestId: () => RequestId;
+  readonly now: () => UtcTimestamp;
+}
+
+export interface ProjectContextRuntime {
+  readonly api: ProjectContextPublicApi;
+  readonly presentation: ProjectContextPresentationContribution;
+  readonly lifecyclePresentation: ProjectLifecyclePresentationContribution;
+  initialize(): ReturnType<ProjectContextService["initialize"]>;
+}
+
+/** 注入済み adapter だけを組み立て、instance の生成・保持は呼び出し側へ残す。 */
+export const createProjectContextRuntime = (
+  dependencies: ProjectContextRuntimeDependencies,
+): ProjectContextRuntime => {
+  const service = createProjectContextService({
+    catalog: createProjectCatalogProjection(dependencies.catalog),
+    preference: dependencies.preference,
+  });
+  const lifecycleService = createProjectLifecycleService({
+    data: createFoundationProjectLifecycleDataPort(
+      dependencies.foundation,
+      dependencies.createRequestId,
+    ),
+    context: { refresh: () => service.refresh() },
+    createProjectId: dependencies.createProjectId,
+    now: dependencies.now,
+  });
+  const api = createProjectContextPublicApi({
+    service,
+    lifecycle: lifecycleService,
+  });
+  const state = createProjectLifecycleState({
+    read: api.read,
+    lifecycle: lifecycleService,
+  });
+  return Object.freeze({
+    api,
+    presentation: createProjectContextPresentationContribution({
+      read: api.read,
+      commands: api.commands,
+    }),
+    lifecyclePresentation: createProjectLifecyclePresentationContribution({
+      read: api.read,
+      lifecycle: lifecycleService,
+      state,
+      messages: dependencies.messages,
+    }),
+    initialize: () => service.initialize(),
+  });
+};
 
 /** shell composition専用のproduction project-context assembly。 */
 export const createProductionProjectContext = (

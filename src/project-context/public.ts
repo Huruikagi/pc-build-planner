@@ -9,6 +9,12 @@ import type {
   ProjectReplacementPermit,
 } from "./guard-coordinator.js";
 import type {
+  ProjectLifecycleCommandResult,
+  ProjectLifecycleError,
+  ProjectLifecycleRefreshError,
+  ProjectLifecycleService,
+} from "./lifecycle-service.js";
+import type {
   ProjectContextCommandError,
   ProjectContextService,
   ProjectSelectionOutcome,
@@ -21,6 +27,11 @@ export type {
   ProjectContextChangeIntent,
   ProjectContextSnapshot,
 } from "./contracts.js";
+export type {
+  ProjectLifecycleCommandResult,
+  ProjectLifecycleError,
+  ProjectLifecycleRefreshError,
+} from "./lifecycle-service.js";
 export type {
   ProjectContextCommandError,
   ProjectSelectionOutcome,
@@ -80,22 +91,50 @@ export interface ProjectContextPublicApi {
   readonly commands: ProjectContextCommandPort;
   readonly guards: ProjectContextChangeGuardRegistrationPort;
   readonly replacementGuard: ProjectContextReplacementGuardPort;
+  readonly lifecycle: ProjectLifecyclePort;
+}
+
+export interface ProjectContextCorePublicApi
+  extends Omit<ProjectContextPublicApi, "lifecycle"> {}
+
+export interface ProjectLifecyclePort {
+  create(
+    name: string,
+  ): Promise<Result<ProjectLifecycleCommandResult, ProjectLifecycleError>>;
+  rename(
+    projectId: ProjectId,
+    name: string,
+  ): Promise<Result<ProjectLifecycleCommandResult, ProjectLifecycleError>>;
+  delete(
+    projectId: ProjectId,
+  ): Promise<Result<ProjectLifecycleCommandResult, ProjectLifecycleError>>;
+  retryRefresh(): Promise<
+    Result<ProjectContextSnapshot, ProjectLifecycleRefreshError>
+  >;
 }
 
 export interface ProjectContextPublicDependencies {
   readonly service: ProjectContextService;
+  readonly lifecycle: ProjectLifecycleService;
 }
 
 /** 通常 consumer へ必要な capability だけを immutable な facade として渡す。 */
-export const createProjectContextPublicApi = (
+export function createProjectContextPublicApi(
+  dependencies: Pick<ProjectContextPublicDependencies, "service">,
+): ProjectContextCorePublicApi;
+export function createProjectContextPublicApi(
   dependencies: ProjectContextPublicDependencies,
-): ProjectContextPublicApi => {
+): ProjectContextPublicApi;
+export function createProjectContextPublicApi(
+  dependencies: Pick<ProjectContextPublicDependencies, "service"> &
+    Partial<Pick<ProjectContextPublicDependencies, "lifecycle">>,
+): ProjectContextCorePublicApi | ProjectContextPublicApi {
   if (dependencies.service === undefined)
     throw new TypeError(
       "Project context public API requires a service dependency.",
     );
   const service = dependencies.service;
-  return Object.freeze({
+  const core: ProjectContextCorePublicApi = {
     read: Object.freeze({
       getSnapshot: () => service.getSnapshot(),
       subscribe: (listener: (snapshot: ProjectContextSnapshot) => void) =>
@@ -123,5 +162,17 @@ export const createProjectContextPublicApi = (
         outcome: "succeeded" | "failed" | "cancelled",
       ) => service.completeReplacement(permitId, outcome),
     }),
+  };
+  if (dependencies.lifecycle === undefined) return Object.freeze(core);
+  const lifecycle = dependencies.lifecycle;
+  return Object.freeze({
+    ...core,
+    lifecycle: Object.freeze({
+      create: (name: string) => lifecycle.create(name),
+      rename: (projectId: ProjectId, name: string) =>
+        lifecycle.rename(projectId, name),
+      delete: (projectId: ProjectId) => lifecycle.delete(projectId),
+      retryRefresh: () => lifecycle.retryRefresh(),
+    }),
   });
-};
+}

@@ -231,7 +231,7 @@
 
 - [ ] 8. lifecycle capability、boundary、横断検証を統合する
 
-- [ ] 8.1 public/runtime facade へ project lifecycle capability を統合する
+- [x] 8.1 public/runtime facade へ project lifecycle capability を統合する
   - lifecycle port を read、selection command、guard registration、replacement guard と別の frozen capability として公開する。
   - runtime seam は最小 foundation adapter、lifecycle service/state、注入された message resolver consumer port を使う presentation を組み立てる factory を公開し、singleton の生成・保持、物理 catalog adapter の生成、production host wiring は downstream application shell に残す。candidate-management や application-shell の具体 module を import しない。
   - capability consumer test で read-only、selection、replacement、lifecycle の各 owner が不要な service/data/preference capability へ到達できず、lifecycle refresh error が busy と context refresh failure を型安全に区別できる状態を完了とする。

@@ -54,6 +54,8 @@ import type {
   ProjectContextPublicApi,
   ProjectContextReadPort,
   ProjectContextReplacementGuardPort,
+  ProjectLifecyclePort,
+  ProjectLifecycleRefreshError,
 } from "../../src/project-context/public.js";
 import {
   LanguageProvider,
@@ -115,6 +117,33 @@ export const rejectProjectContextInternals = (
   void context.read.select;
   // @ts-expect-error replacement owner cannot reach the selection port.
   void context.replacementGuard.commands;
+};
+
+export const consumeProjectLifecycle = async (
+  lifecycle: ProjectLifecyclePort,
+) => {
+  const result = await lifecycle.retryRefresh();
+  if (result.ok) return result.value.status;
+  const error: ProjectLifecycleRefreshError = result.error;
+  return error.kind === "operation-in-progress"
+    ? "busy"
+    : "context-refresh-failed";
+};
+
+export const rejectProjectContextCapabilityEscalation = (
+  read: ProjectContextReadPort,
+  commands: ProjectContextCommandPort,
+  replacement: ProjectContextReplacementGuardPort,
+  lifecycle: ProjectLifecyclePort,
+) => {
+  // @ts-expect-error read owners cannot select projects
+  void read.select;
+  // @ts-expect-error selection owners cannot reach preferences
+  void commands.preference;
+  // @ts-expect-error replacement owners cannot reach lifecycle data
+  void replacement.data;
+  // @ts-expect-error lifecycle owners cannot reach the context service
+  void lifecycle.service;
 };
 
 export interface MockFoundationConsumer {

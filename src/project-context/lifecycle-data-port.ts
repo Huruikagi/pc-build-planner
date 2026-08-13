@@ -18,6 +18,9 @@ import type {
   ProjectLifecycleMutationContext,
 } from "./contracts.js";
 
+/** Runtime composition が受け取る foundation の最小 capability。 */
+export type ProjectLifecycleFoundationPort = FoundationScopedDataPort;
+
 const dataError = (error: FoundationError): ProjectLifecycleDataError => {
   if (error.code === "validation") {
     if (error.reason === "entity-not-found") return { kind: "not-found" };
@@ -73,7 +76,7 @@ const foundationOperation = (operation: ProjectLifecycleMutation) => {
 };
 
 export const createFoundationProjectLifecycleDataPort = (
-  foundation: FoundationScopedDataPort,
+  foundation: ProjectLifecycleFoundationPort,
   newRequestId: () => RequestId = createRequestId,
 ): ProjectLifecycleDataPort => {
   return Object.freeze({
