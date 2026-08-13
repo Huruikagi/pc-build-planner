@@ -16,7 +16,7 @@ test("all declared public entries resolve from built package output", async () =
       "createTransactionEngine",
     ],
     ["createChromeExclusiveLockAdapter", "createChromeStorageAdapter"],
-    [],
+    ["createBackupOrchestrator"],
   ]);
 });
 

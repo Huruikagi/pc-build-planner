@@ -96,7 +96,7 @@
   - _Depends: 3.1, 3.2_
 
 - [ ] 4. Generic backup orchestration subpathを実装する
-- [ ] 4.1 artifact作成とrestore preflightを実装する
+- [x] 4.1 artifact作成とrestore preflightを実装する
   - snapshot reader、codec、artifact policy、replacement assessmentを注入し、backup artifact作成とuntrusted restore inputのdecode、version変換、mapping、assessmentを順序付ける。
   - previewとopaque restore ticketだけを返し、candidate、raw root、lock、fence、製品metadataを公開しない。
   - synthetic codec contractでartifactとpreflightが成功し、decode/map/assessment失敗時のroot writeが0件、Chrome、File、DOM、React、project-context依存が0件なら完了とする。
