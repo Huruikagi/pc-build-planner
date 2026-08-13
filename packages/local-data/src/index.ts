@@ -34,3 +34,6 @@ export type {
   FencingPolicy,
   FencingProjection,
 } from "./fencing.js";
+
+export { createTransactionEngine } from "./transaction.js";
+export type { TransactionEngineDependencies } from "./transaction.js";

@@ -9,7 +9,7 @@ test("all declared public entries resolve from built package output", async () =
   ]);
 
   assert.deepEqual(entries.map(Object.keys), [
-    ["createFencingPolicy"],
+    ["createFencingPolicy", "createTransactionEngine"],
     [],
     [],
   ]);

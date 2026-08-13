@@ -47,6 +47,7 @@ test("the root declaration stays product and platform independent", async () => 
     "contracts.d.ts",
     "fencing.d.ts",
     "index.d.ts",
+    "transaction.d.ts",
   ]);
   const declaration = declarations.join("\n");
 

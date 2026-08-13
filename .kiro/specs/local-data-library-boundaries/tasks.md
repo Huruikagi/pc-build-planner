@@ -38,7 +38,7 @@
   - _Boundary: FencingPolicy_
   - _Depends: 2.1_
 
-- [ ] 2.4 transactionのlatest-read・validation・single-write pipelineを実装する
+- [x] 2.4 transactionのlatest-read・validation・single-write pipelineを実装する
   - exclusive lock取得後にlatest rootをdecode/migrateし、mutation、repair、再validation、capacity評価を経て一度だけcommitするpipelineを構成する。
   - decode、migration、repair、validation、capacity、lock、storageの各pre-commit failureをtyped failureとして返し、既存rootとcommit回数を保持する。
   - synthetic contractで成功時のroot writeが一回、全pre-commit failureで0回となり、未知の例外値やroot内容を結果・logへ出さなければ完了とする。
