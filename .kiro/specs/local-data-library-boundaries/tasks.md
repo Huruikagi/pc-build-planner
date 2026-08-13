@@ -137,7 +137,7 @@
   - _Boundary: WorkspaceValidation_
   - _Depends: 5.2_
 
-- [ ] 5.4 core・Chrome・backup・contractのpackage検証経路を分離する
+- [x] 5.4 core・Chrome・backup・contractのpackage検証経路を分離する
   - core変更用にbuild/typecheck/unit/consumer/boundary、Chrome変更用にadapter contract、backup変更用にorchestrator contract、公開型変更用にread-only app contractを構成する。
   - 10MB近傍のsynthetic rootでcore処理のbaselineを記録し、package testのfixture・diagnostic・logが保存内容、商品値、URL、例外objectを出さず安定codeだけを使うことを検査する。
   - 各変更種別のtooling testが必要gate集合と失敗伝播を再現し、package単独実行でapp source、Chrome実体、DOM、E2Eを起動しなければ完了とする。

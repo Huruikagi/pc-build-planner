@@ -33,6 +33,9 @@ test("package scaffold declares exactly three private public entries", async () 
       'node --eval "require(\'node:fs\').rmSync(\'dist\', { recursive: true, force: true })"',
     build: "tsc -p tsconfig.build.json",
     typecheck: "tsc --noEmit -p tsconfig.json",
+    "test:core": "node --import tsx --test tests/*.test.ts",
+    "test:chrome": "node --import tsx --test tests/chrome/*.test.ts",
+    "test:backup": "node --import tsx --test tests/backup/*.test.ts",
     "test:unit": "node --import tsx --test tests/**/*.test.ts",
     test: "pnpm run build && pnpm run test:unit",
     validate:
