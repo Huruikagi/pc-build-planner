@@ -79,7 +79,7 @@
   - _Boundary: ChromeStorageAdapter_
   - _Depends: 2.1, 2.2, 2.4_
 
-- [ ] 3.2 Chrome exclusive Web Locks adapterを実装する
+- [x] 3.2 Chrome exclusive Web Locks adapterを実装する
   - consumerが渡す一つのlock identityについてexclusive callbackだけを実行し、callback完了・失敗時にlockを解放する。
   - 同名のtab/worker相当clientを直列化し、別名lockやnested lockをtransaction correctnessへ持ち込まない。
   - 独立したlock adapter testで同時holderが最大一件、callback throw後に次requestが進行し、platform failureが例外objectを含まないtyped errorになれば完了とする。
