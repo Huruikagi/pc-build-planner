@@ -166,6 +166,19 @@ historical Task 2.3の完了記録は変更しない。ただし、そのowner/g
 - **Build vs Adopt**: 新規依存は導入しない。既存Result、factory、opaque ticket、workspace command routingを拡張する。
 - **Simplification**: package内の製品field parserとpending marker ownershipを削除し、owner protocol一つへ置換する。製品contract複製やpackage側product fixtureは追加しない。
 
+### Decision: finalization capabilityをprepare時にownerが発行する
+
+- **Context**: Task 6.4実装レビューで、root write後のreleaseまたはcontrol保存が失敗した場合にowner-issued `FinalizationTicket`が必要だが、従来の`prepareCommit`は`PendingCommit`しか返さず、ticket取得のためのpost-commit `observeCurrent` / `classifyCurrent`自体が失敗するとcommitted successとowner errorを既存unionで同時に表現できない矛盾が判明した。
+- **Alternatives Considered**:
+  1. root write前のcandidateをcurrent rootとして分類し、postcommit ticketを予測する。
+  2. packageがticketを生成する、または`PendingCommit`をticketへcastする。
+  3. committed resultへticketなしvariantまたはreceipt付きerrorを追加する。
+  4. owner protocolが`prepareCommit`時にpendingとfinalization capabilityを同じpersistent controlへ束縛して返す。
+- **Selected Approach**: 4を採用する。owner-defined `FinalizationCapability`をprotocol、commit state、replacement public portまで独立genericとして通し、package-owned brandやwrapperへ変換しない。packageはcapabilityをroot write成功後のcleanup failure時だけ公開し、root write失敗時はprecommit cleanup/reassessmentへ戻す。
+- **Rationale**: actual current rootの意味とcommit pointを保ち、post-commitのfallible classificationをcommit経路から除去しながら、owner-only ticket生成、worker再生成、finalize-only retryを両立できる。
+- **Trade-offs**: owner protocol実装はprepare時に将来のfinalization capabilityを永続controlへ束縛し、そのopaque型をpublic replacement portまで提供する必要がある。ただしpackageはcapabilityのfieldや保存表現を解釈せず、unsafe cast、package wrapper、公開result unionのvariant追加も不要になる。
+- **Follow-up**: synthetic storage fixtureはcontrol read/writeごとにcloneして参照同一性依存を排除する。`findPendingFinalization`はactual persisted rootを分類し、`finalize`は入力ticketをowner protocolへそのまま渡す。下流`local-data-foundation` Task 11.2で製品controlの対応を実行検証する。
+
 ## Risks & Mitigations
 
 - policy hookの組合せが矛盾する — package contract kitでrevision、dedupe、repair、fenceを一つのsynthetic policyとして検証し、app characterizationで現行結果と比較する。

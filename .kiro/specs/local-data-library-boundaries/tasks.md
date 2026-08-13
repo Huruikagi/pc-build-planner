@@ -179,9 +179,10 @@
   - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
 
 - [ ] 6.4 protocol-owned releaseとfinalization lifecycleをreplacementへ統合する
-  - pre-commit cleanup、root commit後release、pending finalization discovery、finalize-only retryをowner protocolのopaque capabilityとstate classificationだけで進める。
+  - `prepareCommit`がpersistent controlへ束縛したowner-issued finalization capabilityをpendingとともに保持し、pre-commit cleanup、root commit後release、pending finalization discovery、finalize-only retryをowner protocolのopaque capabilityとstate classificationだけで進める。
   - pre-commit failureではroot write 0件、commit済みfailureでは成功を取り消さず、finalizeではroot write capabilityへ到達しない。
-  - same-ticket retry、worker再生成後のpending discovery、release/finalize failureを含むcontractでcommit最大一回とfinalize追加write 0件が観測できれば完了とする。
+  - consumer ownerが定義した`FinalizationCapability`をprotocol、commit state、replacement public portまで独立genericとして保持する。packageはcandidateをactual current rootとして事前分類せず、finalization ticketを生成・cast・wrapper化したりJavaScript参照同一性で検証したりしない。root write失敗ではowner capabilityをcommittedとして公開せず、same-ticket cleanupと全binding再評価を行う。
+  - same-ticket retry、worker再生成後のactual current rootによるpending discovery、serializationを跨ぐticket検証、release/control保存/finalize failureを含むcontractで、owner error identity、commit最大一回、finalize追加write 0件が観測できれば完了とする。
   - _Depends: 6.3_
   - _Requirements: 4.2, 4.3, 4.4, 4.5, 4.6, 4.9, 4.10, 4.11, 5.4, 5.5, 5.6, 5.7_
   - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
@@ -253,3 +254,4 @@
 - **Task 6.1**: decode/migration stageの分類はopaqueなpolicy errorをpackage側で解釈せずconsumer-owned classifierへ委譲し、transaction・replacementのcurrent root・candidate assessment・commit再照合で同じhelperを通す。
 - **Task 6.2**: transactionのroot maintenance controlとpersistent recovery controlは別genericとし、storageから読んだpersistent controlを同型のowner authorizationへ渡す。owner `OutputError`は`fromCore`へ再変換せず、mutation前・commit直前の拒否をそのまま返す。
 - **Task 6.3**: replacement ticketはowner protocolが返すopaque acquired control/fenceのexact pairをprivateに保持し、latest persistent stateを分類した後も`prepareCommit`へそのpairを渡す。protocol failureはmechanism errorへ再変換しない。root `typecheck`の`src/persistence/product-local-data-adapter.ts`追随は下流`local-data-foundation` Task 11.2所有で、本spec Task 8.1の前提となる。
+- **Task 6.4 contract repair (2026-08-14 approved)**: `prepareCommit`はpersistent controlへ束縛したowner-defined `FinalizationCapability`をpendingとともに返し、protocol・commit state・replacement public portまで独立genericとして通す。packageはroot write成功後のcleanup failure時だけcapabilityを公開し、再生成後のdiscoveryと妥当性判定はactual current rootを使うowner protocolへ委譲する。

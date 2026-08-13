@@ -211,13 +211,13 @@ stateDiagram-v2
     Committing --> Assessed: stale reassess
     Committing --> CleanupPending: precommit cleanup pending
     CleanupPending --> Committing: same ticket retry
-    Committing --> Finalizing: root committed cleanup pending
+    Committing --> Finalizing: root committed owner ticket retained
     Committing --> Completed: root committed cleanup complete
     Finalizing --> Completed: finalize only
     Completed --> [*]
 ```
 
-`CleanupPending`ではroot未変更、`Finalizing`ではroot変更済みである。このcommit pointを判別共用体で保持し、前者だけがcommit retry、後者だけがfinalize-only retryへ進む。
+`CleanupPending`ではroot未変更、`Finalizing`ではroot変更済みである。owner protocolは`prepareCommit`時にpendingとfinalization capabilityを同じpersistent controlへ束縛し、packageはroot write成功後のreleaseまたはcontrol保存が失敗した場合だけそのticketを公開する。このcommit pointを判別共用体で保持し、前者だけがcommit retry、後者だけがfinalize-only retryへ進む。worker再生成後はactual current rootとpersistent controlの分類からownerが同じ意味のticketを再構成し、packageはJavaScript参照同一性でticketを判定しない。
 
 ## Requirements Traceability
 
@@ -363,10 +363,6 @@ export interface ReplacementAssessmentTicket {
   readonly __opaqueReplacementTicket: unique symbol;
 }
 
-export interface FinalizationTicket {
-  readonly __opaqueFinalizationTicket: unique symbol;
-}
-
 export interface ReplacementBinding {
   readonly mode: ReplacementMode;
   readonly candidateIdentity: string;
@@ -374,13 +370,13 @@ export interface ReplacementBinding {
   readonly targetRevision: number;
 }
 
-export type RecoveryCommitState<PendingCommit> =
+export type RecoveryCommitState<PendingCommit, FinalizationCapability> =
   | { readonly kind: "clear" }
   | { readonly kind: "precommit-pending"; readonly pending: PendingCommit }
   | {
       readonly kind: "postcommit-finalization";
       readonly pending: PendingCommit;
-      readonly ticket: FinalizationTicket;
+      readonly ticket: FinalizationCapability;
     };
 
 export interface PersistentRecoveryProtocol<
@@ -388,7 +384,8 @@ export interface PersistentRecoveryProtocol<
   ProtocolError,
   RecoveryFence = unknown,
   PendingCommit = unknown,
-  CurrentAnomalyState = unknown
+  CurrentAnomalyState = unknown,
+  FinalizationCapability = unknown
 > {
   authorizeMutation(control: unknown): CoreResult<void, ProtocolError>;
   observeCurrent(rawRoot: unknown): CoreResult<CurrentAnomalyState, ProtocolError>;
@@ -401,23 +398,27 @@ export interface PersistentRecoveryProtocol<
     control: unknown,
     fence: RecoveryFence,
     binding: ReplacementBinding,
-  ): CoreResult<Readonly<{ control: PersistentRecoveryControl; pending: PendingCommit }>, ProtocolError>;
+  ): CoreResult<Readonly<{
+    control: PersistentRecoveryControl;
+    pending: PendingCommit;
+    finalization: FinalizationCapability;
+  }>, ProtocolError>;
   classifyCurrent(
     control: unknown,
     current: CurrentAnomalyState,
-  ): CoreResult<RecoveryCommitState<PendingCommit>, ProtocolError>;
+  ): CoreResult<RecoveryCommitState<PendingCommit, FinalizationCapability>, ProtocolError>;
   release(
     control: unknown,
     capability: RecoveryFence | PendingCommit,
   ): CoreResult<PersistentRecoveryControl, ProtocolError>;
   finalize(
     control: unknown,
-    ticket: FinalizationTicket,
+    ticket: FinalizationCapability,
     current: CurrentAnomalyState,
   ): CoreResult<PersistentRecoveryControl, ProtocolError>;
 }
 
-export interface RootReplacementPort<Root, Assessment, Receipt, Error> {
+export interface RootReplacementPort<Root, Assessment, Receipt, Error, FinalizationCapability> {
   assess(candidate: unknown): Promise<CoreResult<Assessment, Error>>;
   assessRecovery(candidate: unknown): Promise<CoreResult<Assessment, Error>>;
   commit(input: Readonly<{
@@ -426,11 +427,11 @@ export interface RootReplacementPort<Root, Assessment, Receipt, Error> {
     ticket: ReplacementAssessmentTicket;
   }>): Promise<CoreResult<
     | { readonly kind: "committed"; readonly receipt: Receipt }
-    | { readonly kind: "committed-finalization-required"; readonly receipt: Receipt; readonly finalization: FinalizationTicket },
+    | { readonly kind: "committed-finalization-required"; readonly receipt: Receipt; readonly finalization: FinalizationCapability },
     Error
   >>;
-  findPendingFinalization(): Promise<CoreResult<FinalizationTicket | null, Error>>;
-  finalize(ticket: FinalizationTicket): Promise<CoreResult<Receipt, Error>>;
+  findPendingFinalization(): Promise<CoreResult<FinalizationCapability | null, Error>>;
+  finalize(ticket: FinalizationCapability): Promise<CoreResult<Receipt, Error>>;
 }
 
 export interface ReplacementCoordinatorDependencies<
@@ -443,7 +444,8 @@ export interface ReplacementCoordinatorDependencies<
   Preview,
   RecoveryFence,
   PendingCommit,
-  CurrentAnomalyState
+  CurrentAnomalyState,
+  FinalizationCapability
 > {
   readonly storage: StoragePort<Root, PersistentRecoveryControl>;
   readonly policy: LocalDataPolicy<Root, Operation, RootMaintenanceControl, PolicyError>;
@@ -453,17 +455,19 @@ export interface ReplacementCoordinatorDependencies<
     OutputError,
     RecoveryFence,
     PendingCommit,
-    CurrentAnomalyState
+    CurrentAnomalyState,
+    FinalizationCapability
   >;
   readonly capacity: CapacityPolicy<Root>;
 }
 ```
 
 - assessmentはcandidate digest、revision、raw fingerprintとowner protocolが返すopaque fence capabilityをticket内部に保持し、公開previewへ出さない。
-- `RecoveryFence`、`PendingCommit`、`CurrentAnomalyState`はowner protocolのopaque capabilityであり、packageはfield、owner、generation、lease、pending markerを読まない。公開factory実装では具体型を保持し、既定`unknown`へ縮退させない。
+- `RecoveryFence`、`PendingCommit`、`CurrentAnomalyState`、`FinalizationCapability`はowner protocolのopaque capabilityであり、packageはfield、owner、generation、lease、pending markerを読まない。公開factory実装では具体型を保持し、既定`unknown`へ縮退させない。`FinalizationCapability`自体がpublic replacement portのopaque ticketであり、package-owned brandで包み直さない。
 - `ReplacementBinding`と`RecoveryCommitState`はcandidate identity、commit point、finalization可否だけをprotocolへ伝えるpackage-owned lifecycle contractで、製品control fieldを含まない。
+- `prepareCommit`が返す`finalization`はconsumer ownerが定義した`FinalizationCapability`であり、`pending`と同じprepared controlへroot write前に束縛される。packageは生成・cast・wrapper化せず、root write前には公開しない。root write後のreleaseまたはreleased control保存が失敗したcommitted outcomeにだけ同じcapabilityを載せる。root writeが失敗した場合は同じassessment ticketによるpre-commit cleanup/reassessmentへ戻り、finalization capabilityをcommittedとして公開しない。
 - pre-commit cleanup未完了はerror、root write後cleanup未完了はcommitted outcomeにする。
-- finalizationはprotocolの`classifyCurrent`と`finalize`だけを呼び、root write capabilityを持たない。replacementはprotocolが返したcontrolを不透明値として保存する。
+- finalizationはprotocolの`classifyCurrent`と`finalize`だけを呼び、root write capabilityを持たない。`findPendingFinalization`はactual current rootとpersistent controlからowner capabilityを取得し、`finalize`は入力capabilityをそのままowner protocolへ渡して妥当性を判定させる。packageはticketを生成・wrapper化せず、参照同一性でも比較しない。replacementはprotocolが返したcontrolを不透明値として保存する。
 
 ### Platform Adapter
 
@@ -486,17 +490,17 @@ export interface BackupCodec<Root, RestoreInput, Candidate, Artifact, Preview, C
   toRoot(candidate: Candidate): CoreResult<Root, CodecError>;
 }
 
-export interface BackupOrchestrator<RestoreInput, Artifact, Preview, RestoreTicket, Summary, Error> {
+export interface BackupOrchestrator<RestoreInput, Artifact, Preview, RestoreTicket, Summary, Error, FinalizationCapability> {
   create(): Promise<CoreResult<Artifact, Error>>;
   preflight(input: RestoreInput): Promise<CoreResult<Readonly<{ preview: Preview; ticket: RestoreTicket }>, Error>>;
   reassess(ticket: RestoreTicket): Promise<CoreResult<Readonly<{ preview: Preview; ticket: RestoreTicket }>, Error>>;
   commit(ticket: RestoreTicket): Promise<CoreResult<
     | { readonly kind: "committed"; readonly summary: Summary }
-    | { readonly kind: "committed-finalization-required"; readonly summary: Summary; readonly finalization: FinalizationTicket },
+    | { readonly kind: "committed-finalization-required"; readonly summary: Summary; readonly finalization: FinalizationCapability },
     Error
   >>;
-  findPendingFinalization(): Promise<CoreResult<FinalizationTicket | null, Error>>;
-  finalize(ticket: FinalizationTicket): Promise<CoreResult<Summary, Error>>;
+  findPendingFinalization(): Promise<CoreResult<FinalizationCapability | null, Error>>;
+  finalize(ticket: FinalizationCapability): Promise<CoreResult<Summary, Error>>;
 }
 ```
 
@@ -539,7 +543,7 @@ classDiagram
     class PersistentRecoveryProtocol
     class ReplacementTicket
     class RestoreTicket
-    class FinalizationTicket
+    class FinalizationCapability
     LocalDataPolicy --> ConsumerRoot
     LocalDataPolicy --> RootMaintenanceControl
     PersistentRecoveryProtocol --> ReplacementTicket
@@ -547,11 +551,11 @@ classDiagram
     TransactionReceipt --> ConsumerRoot
     ReplacementTicket --> ConsumerRoot
     RestoreTicket --> ReplacementTicket
-    FinalizationTicket --> ConsumerRoot
+    FinalizationCapability --> ConsumerRoot
 ```
 
 - `ConsumerRoot`はpackageが所有しないgeneric型で、保存schemaはconsumer ownerに残る。
-- `ReplacementTicket`、`RestoreTicket`、`FinalizationTicket`はruntime-only opaque capabilityでありJSON交換形式へ含めない。
+- `ReplacementTicket`、`RestoreTicket`、owner-defined `FinalizationCapability`はruntime-only opaque capabilityでありJSON交換形式へ含めない。backup subpathはcore replacement portから受け取った`FinalizationCapability`を同じgenericのままcommit、pending discovery、finalizeへ通す。
 - root maintenanceの具体配置はroot policyが、persistent recovery controlの保存shapeとtransitionはconsumer protocolが決める。packageは両者を同一型にせず、製品keyやfieldを認識しない。
 
 ### Data Contracts & Integration
