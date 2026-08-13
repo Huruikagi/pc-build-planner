@@ -448,7 +448,7 @@
   - _Boundary: Recovery and Schema Final Validation_
 
 - [ ] 10. package公開portへPC product policyを接続する
-- [ ] 10.1 product local-data adapterを確立する
+- [x] 10.1 product local-data adapterを確立する
   - `local-data-library-boundaries`の公開entry consumer fixture（5.1）とroot topological build・変更scope最終gate（5.5）が完了してから着手する。
   - `@pc-build-planner/local-data`のworkspace依存と宣言済みroot/Chrome exportを製品consumerへ固定し、PC root、schema正規値、validator、migration、reference repair、mutation operation、worker policyを設定する。
   - package内部moduleへのdeep import、独自transaction・lock・Chrome adapter・generic backup orchestrationの再実装を行わない。
