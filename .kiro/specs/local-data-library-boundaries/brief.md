@@ -83,3 +83,37 @@ generic core、Chrome adapter、backup orchestrationの境界に加え、PC固�
 ### Source
 
 - v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。
+
+## Change Brief: product-runtime-contract-repair
+
+### Problem
+
+`local-data-foundation`の実装者は、製品固有errorと回復controlの意味を保ったままpackage公開factoryへ`ProductLocalDataAdapter`を接続できない。現行factoryはpolicy errorを`CoreError`へ固定し、root内maintenance controlとroot外recovery controlを一つの型とfield解釈へ結合しているため、下流task 11.2が安全に開始できない。
+
+### Current State
+
+generic transaction・replacement・Chrome adapter・backup orchestrationと3つの公開entryは実装済みである。一方、transaction/replacement factoryはconsumer-owned policy errorを保持できず、replacement coreがpersistent controlの`kind`、`owner`、数値lease、pending fieldを直接解釈する。read-only app contractは製品型aliasの接続だけを確認し、実`ProductLocalDataAdapter`を使うruntime composition不整合を検出しなかった。
+
+### Desired Outcome
+
+package公開factoryがconsumer-owned policy errorを明示adapterで出力errorへ意味不変に変換でき、root内maintenance controlとroot外persistent recovery controlを別契約として扱える。replacementはowner-provided protocolを通してfence、pending commit、release、finalization、current anomalyを扱い、製品fieldを解釈しない。下流ownerが実`ProductLocalDataAdapter`を接続するexecutable contractを所有し、上流validationがそのcontractを再現可能に実行する。
+
+### Scope
+
+- **In**: transaction/replacement factoryのconsumer error adapter、root maintenance controlとpersistent recovery controlの型分離、owner-provided recovery protocol、opaque ticketとsingle-write/finalization semanticsの維持、synthetic package contract、公開consumer/declaration更新、下流所有executable product contractを呼ぶvalidation routing。
+- **Out**: `FoundationError`やPC control型のpackage所有、`ProductLocalDataAdapter`実装、製品schema・migration・repair、backup交換形式・UI、task 11.2以降の下流runtime composition実装、保存形式や利用者向け挙動の変更。
+
+### Boundary Impact
+
+- **Extends**: generic factoryをconsumer-owned errorとcontrol policyで実構成可能にし、公開契約の接続可能性を実行時contractまで検証する。
+- **Preserves**: 3つの公開entry、packageの製品非依存、単一write authority、固定Web Lock、revision・dedupe、atomic replacement、pre/post-commit cleanup、opaque ticket、既存root保持、MV3/CSP、架空package fixture。
+- **Adjacent**: `local-data-foundation`が`ProductLocalDataAdapter`と製品executable contractを所有し、`backup-restore`が製品backup adapterとrestore lifecycleを所有する。上流validationはそれらを再実装せず、下流contractを呼び出す。
+
+### Dependencies
+
+- **Upstream**: none。
+- **Downstream**: `spec:local-data-foundation` task 11.2以降、`spec:backup-restore`のreplacement/recovery/finalization seam、application-shellのproduction composition。
+
+### Source
+
+- `local-data-foundation` task 11.2の`kiro-debug`結果（2026-08-13）。

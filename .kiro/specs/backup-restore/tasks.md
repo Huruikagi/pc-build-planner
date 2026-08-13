@@ -232,37 +232,39 @@
 
 - [ ] 7. Product backup adapter境界へ更新する
 - [ ] 7.1 package backup public contractのconsumer境界を固定する
-  - `local-data-library-boundaries`のgeneric backup orchestration（4.2）、公開entry consumer fixture（5.1）、root topological build・変更scope最終gate（5.5）が完了してから着手する
-  - `@pc-build-planner/local-data/backup`の公開subpathから`BackupOrchestrator`、`BackupCodec`、factoryだけを利用するcompile fixtureを追加する
-  - package内部moduleのdeep importと汎用create/preflight/reassess/commit/finalize protocolのfeature内再実装をnegative ownership gateで拒否する
-  - generic contractの型・runtime surfaceがadapter構成に必要な最小能力だけであるconsumer testが成功すれば完了とする
-  - _Depends: local-data-library-boundaries 4.2, local-data-library-boundaries 5.1, local-data-library-boundaries 5.5_
+  - `local-data-library-boundaries` task 7.4の修復済みpublic declaration、replacement/backup synthetic contract、ownership gateが完了してから着手する
+  - `@pc-build-planner/local-data/backup`の公開subpathから`BackupOrchestrator`、`BackupCodec`、factoryだけを利用し、consumer-owned error adapter、分離control generic、owner protocolがpackage root公開契約の背後で型安全に構成可能であることを前提にするcompile fixtureを追加する
+  - package内部moduleのdeep import、汎用create/preflight/reassess/commit/findPendingFinalization/finalize protocol、`ErrorAdapter`、control分離、owner recovery protocol、`ProductLocalDataAdapter`のfeature内再実装をnegative ownership gateで拒否する
+  - unsafe castやerror code縮退なしで、修復済みpackage backup contractの型・runtime surfaceがadapter構成に必要な最小能力だけであるconsumer testが成功すれば完了とする
+  - _Depends: local-data-library-boundaries 7.4_
   - _Requirements: 7.1, 7.3, 7.7_
   - _Boundary: Package backup public consumer contract_
 
 - [ ] 7.2 ProductBackupAdapterへPC codec・mapping・policyとFoundation capabilityを接続する
-  - `ProductBackupAdapter`を単一構成点として追加し、既存ExchangeValidator/Migration/Mapper、artifact命名、容量policy、製品error mappingを`BackupCodec`へまとめる
-  - Foundationのbackup専用root読取・assessment・replacement・recovery・finalization capabilityだけをgeneric orchestratorへ渡し、通常CRUD、raw storage、lock、authorityへ到達しない
-  - 既存`BackupService`/`RestoreService`をadapter facadeへ委譲し、交換形式、preview、error粒度、precommit cleanup、finalization再試行の結果を変更しないcontract testが成功すれば完了とする
+  - `ProductBackupAdapter`を単一構成点として追加し、既存ExchangeValidator/Migration/Mapper、artifact命名、容量policy、製品backup error mappingを`BackupCodec`へまとめるが、Foundation factory用`ErrorAdapter`、control generic、owner recovery protocol、`ProductLocalDataAdapter`は構成しない
+  - `local-data-foundation` task 11.2が公開するbackup専用root読取・assessment・replacement・recovery・finalization capabilityだけをgeneric orchestratorへ渡し、通常CRUD、raw storage、lock、authority、control fieldへ到達しない
+  - `FoundationError` payload、`precommit-cleanup-pending`、committed outcome、opaque finalization ticketをunsafe castや一般errorへの縮退なしで既存facade結果へ保持する
+  - 既存`BackupService`/`RestoreService`をadapter facadeへ委譲し、create/preflight/reassess/commit/findPendingFinalization/finalize、交換形式、preview、error粒度、precommit cleanup、finalization再試行の結果を変更しないcontract testが成功すれば完了とする
   - _Depends: 7.1, local-data-foundation 11.2_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.6, 5.1, 5.2, 5.3, 5.4, 7.2, 7.4, 7.5, 7.7_
   - _Boundary: ProductBackupAdapter, PC BackupCodec_
 
 - [ ] 7.3 確認・guard・refresh・file UIをadapterへ統合する
   - stateが有効previewと明示確認を得る前にcommitせず、project-context guardのconfirm/begin後だけadapter commitを呼ぶ既存順序を維持する
-  - 取消、guard拒否、stale、commit前失敗ではfile/ticket/preview/root/selectionを保持し、committed後はfinalize-only、続いてrefresh-onlyだけを再試行する
-  - section factoryは`ProductBackupAdapter`とproject-context public portsを受け取る公開契約だけを提供し、application-shell composition fileを変更しない
+  - 取消、guard拒否、stale、commit前失敗ではfile/ticket/preview/root/selectionを保持し、`precommit-cleanup-pending`は同じticketと新permitだけで再開する。committed後はpending finalization discoveryを含むfinalize-only、続いてrefresh-onlyだけを再試行する
+  - owner protocolのcontrol/fence/pending capabilityをstateへ露出せず、`findPendingFinalization`と`finalize`はadapter facadeのopaque ticketだけで駆動する
+  - section factoryは`ProductBackupAdapter`とproject-context public portsを受け取る公開契約だけを提供し、`ProductLocalDataAdapter`やapplication-shell composition fileを変更しない
   - settingsのfile選択、警告、preview、処理中fencing、回復、日英診断のDOM/contract testが既存結果のまま成功すれば完了とする
   - _Depends: 7.2, project-context 2.2, project-context 2.5_
   - _Requirements: 1.3, 1.5, 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 7.5, 7.6, 7.8_
   - _Boundary: Backup restore product lifecycle and section contract_
 
 - [ ] 7.4 全contract・UI・E2Eと所有境界gateを完了する
-  - adapter consumer/contract、全交換fixture、Foundation capability integration、guard/refresh lifecycle、UI、通常・失敗回復・破損root回復E2Eを共通検証flowで実行する
-  - 明示確認、atomic replacement、競合fencing、失敗時の既存データ保持、precommit cleanup、finalization/refresh-only retry、settings到達性がgeneric orchestration移行前後で一致することを確認する
-  - package generic owner、Foundation root/capability owner、application-shell composition owner、本specのProductBackupAdapter/codec/file UI ownerが重複せず、deep importとproduction shell file編集がないことを監査する
+  - `local-data-library-boundaries` task 9.2のpackage・public・downstream executable contract・topological final validation完了後、adapter consumer/contract、全交換fixture、Foundation capability integration、guard/refresh lifecycle、UI、通常・失敗回復・破損root回復E2Eを共通検証flowで実行する
+  - consumer-owned error payload保持、相互非互換control分離、owner protocol経由のprecommit cleanup・committed finalization・pending discovery・finalize-only retryに加え、明示確認、atomic replacement、競合fencing、失敗時の既存データ保持、refresh-only retry、settings到達性がgeneric orchestration移行前後で一致することを確認する
+  - package generic owner、Foundationの`ProductLocalDataAdapter`・root/capability owner、application-shell composition owner、本specのProductBackupAdapter/codec/file UI ownerが重複せず、unsafe cast、error縮退、control field解釈、deep import、production shell file編集がないことを監査する
   - 52件のAcceptance Criteria、Change BriefのIn/Out、全file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする
-  - _Depends: 7.3_
+  - _Depends: 7.3, local-data-library-boundaries 9.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
   - _Boundary: Backup restore final ownership and regression validation_
 
@@ -271,7 +273,7 @@
 - 実装順はruntime schema gate → 上流公開portのconsumer gate → 交換・容量・I/O → restore service → context/state/view → section/degraded integration → E2Eとする。上流契約が未提供の状態で暫定port、deep import、inactive stubを追加しない。
 - application-shellのproduction compositionは下流owner taskで扱い、本specでは提供済みrecovery契約のconsumer gateとproduction-shaped integration contractだけを所有する。
 - `v0.5.0-boundary-reconciliation`以後は過去task 5.1のwiring例外を再利用せず、production compositionのcanonical ownerをapplication-shellへ固定する。
-- **Fresh task-graph sanity review (2026-08-12 dependency remediation)**: update-batch fallbackによりTasksをRequirements/Designから独立した観点で再監査した。task 7.1→7.2→7.3→7.4は一方向で循環せず、7.1は`local-data-library-boundaries 4.2/5.1/5.5`、7.2以降は`local-data-foundation 11.2`と`project-context 2.2/2.5`を待つ。各taskは一つの境界または検証成果へ閉じ、package generic、Foundation canonical root/capability、application-shell compositionを編集対象に含めない。52 AC、Change Brief In/Out、明示確認・atomicity・fencing・failure preservation・recoveryの非回帰traceに欠落はなく、hidden prerequisite・requirements/design矛盾なしでPASSとした。
+- **Fresh task-graph sanity review (2026-08-13 public protocol remediation)**: Requirements/Designと既存完了記録から独立してTasks 7.1–7.4を再監査した。7.1→7.2→7.3→7.4は一方向で、7.1は`local-data-library-boundaries 7.4`、7.2は`local-data-foundation 11.2`、7.3は`project-context 2.2/2.5`、最終7.4は`local-data-library-boundaries 9.2`を待つ。package 9.2はFoundation 11.2後段なので7.1開始gateにせず、最終workspace evidenceとしてだけ待つ。各taskはpackage consumer、product adapter、UI lifecycle、最終検証の一境界へ閉じ、packageのerror/control/protocol、Foundationの`ProductLocalDataAdapter`・canonical root/capability、application-shell compositionを編集対象に含めない。application-shellはbackup 7.4依存により全上流gateを推移的に待つ。52 AC、Change Brief In/Out、明示確認・atomicity・fencing・failure preservation・pre/post cleanup・pending discovery・recoveryの非回帰traceに欠落はなく、hidden prerequisite・循環・requirements/design矛盾なしでPASSとした。
 - 16 MiBは復元入力ファイルの安全上限、10 MiBは変換後rootのFoundation保存上限として別々に判定する。容量超過した同一入力の復元再実行を許可しない。
 - fixtureは架空データだけを使用し、商品値、完全URL、file本文、raw root、fingerprintを診断出力しない。
 - guard lifecycleは`context-lifecycle.ts`のowner-local adapterが所有し、permitのbegin成功かつ未closeだけをFoundation commitの前提とする。commit後のsucceeded通知は同adapterが一度だけに閉じ、notification失敗で復元成功を取り消さない。

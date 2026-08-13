@@ -229,3 +229,12 @@
 - **Alternatives Considered**: pre-commit cleanup専用opaque ticketと専用stateを追加する案、cleanup失敗を一般storage errorへ潰す案。前者は不要な公開状態を増やし、後者は回復可能性を表現できないため不採用とした。
 - **Risks & Mitigations**: 別ticketによるcontrol奪取はowner/generation照合で拒否する。worker再生成後も永続controlだけを根拠に再開する。ticket喪失時はlease失効後に新しいassessmentとgenerationを要求し、古いownerを暗黙再利用しない。
 - **Synthesis**: 新しいcommit outcomeやUI phaseを増やさず、既存の未commit ticket保持とretry policyを拡張するのが最小の安全な設計である。
+
+### 2026-08-13 repaired package public protocol dependency remediation
+
+- **Context**: `local-data-foundation` task 11.2は、package factoryが`CoreError`と単一control形状へ固定され、`FoundationError` payloadとPC recovery fencingを意味不変に接続できないため停止した。上流`local-data-library-boundaries`はconsumer error adapter、root maintenance/persistent recovery control分離、owner-provided recovery protocolを追加するChange Briefを統合した。
+- **Sources Consulted**: `local-data-library-boundaries`の最新brief、requirements 4.8–4.11・6.5–6.8・7.8–7.13、designの`ErrorAdapter`・`PersistentRecoveryProtocol`・backup public contract、tasks 6.1–9.2、および本specのapproved requirements/design/tasks。
+- **Findings**: package task 7.4で修復後のpublic declaration、synthetic replacement/backup contract、ownership gateが揃うため、下流consumer開始条件として十分である。package task 9.2は`local-data-foundation` 11.2を呼ぶ下流executable contract routeの後段にあり、backup Task 7.1の開始条件にすると不要な待ちになるが、最終workspace互換性の証拠としてbackup最終gateでは待てる。`ProductBackupAdapter`はpackage root factory用のerror adapter/control/protocolを構成せず、Foundationが公開する完成済み`BackupRestoreDataPort`をgeneric orchestratorへ渡すだけでよい。
+- **Selected Approach**: backup Task 7.1は`local-data-library-boundaries` 7.4へ明示依存し、Task 7.2は`local-data-foundation` 11.2を待つ。Task 7.4は`local-data-library-boundaries` 9.2を最終gateとして待つ。backup側は`FoundationError` payload、precommit分類、committed finalization、pending discoveryをcast・縮退なしでfacade/stateへ保持し、generic protocolまたは`ProductLocalDataAdapter`を所有しない。
+- **Alternatives Rejected**: backup内で`ErrorAdapter`やPC recovery protocolを構成する案はFoundationとの二重所有になる。package 9.2をTask 7.1へ課す案は9.2がFoundation 11.2後段であるため開始可能なconsumer contract作業まで遅延させる。package 9.2を完全に無視する案はroot validation routeとtopological buildの最終証拠をbackup完了前に確認できない。
+- **Downstream implication**: application-shellはbackup Task 7.4へ依存するため、package 7.4、Foundation 11.2、package 9.2を推移的に待つ。production composition ownershipはapplication-shellに残り、本specはshell fileを変更しない。

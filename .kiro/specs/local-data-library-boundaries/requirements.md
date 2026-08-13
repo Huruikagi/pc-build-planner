@@ -6,15 +6,15 @@ local data library boundariesは、複数のローカルファースト製品で
 
 ## Boundary Context
 
-- **In scope**: generic storage・lock port、revision・request dedupe・transaction contract、migration・validation・repair hook、容量とplatform errorの正規化、atomic root replacement、maintenance/recovery fencing、Chrome storage・Web Locks・quota adapter、generic backup artifactとpreflight・confirm・commit・finalize orchestration、workspace公開境界、package単独検証、read-only app contract、deep import gate、変更種別別の検証範囲。
+- **In scope**: generic storage・lock port、revision・request dedupe・transaction contract、consumer-owned policy error adapter、migration・validation・repair hook、容量とplatform errorの正規化、root内maintenance controlとroot外persistent recovery controlの分離、owner-provided recovery protocolによるatomic root replacement、Chrome storage・Web Locks・quota adapter、generic backup artifactとpreflight・confirm・commit・finalize orchestration、workspace公開境界、package単独検証、synthetic public contract、下流所有executable product contractを呼ぶvalidation routing、deep import gate、変更種別別の検証範囲。
 - **Out of scope**: `LocalDataRoot`の具体schemaと意味、PCドメイン操作、具体migration・reference repair・worker認可・製品固有error、backup metadata・交換形式・file I/O・UI・project-context lifecycle、保存schemaや交換形式の意味変更、Chrome以外のproduction adapter、npm公開、stable API宣言。
-- **Adjacent expectations**: `local-data-foundation`はPC固有root、validator、migration、repair、error mapping、`ProductLocalDataAdapter`、runtime capability compositionを保持し、`backup-restore`はPC固有交換形式、codec・mapping・policy、`ProductBackupAdapter`、file I/O、利用者確認、UI、project-context連携を保持する。本specは製品compositionとE2Eを変更しない。`runtime-schema-validation`のcanonical Result変換、owner-local schema、jitless契約を維持し、schema vendorを本libraryの公開契約へ露出しない。
+- **Adjacent expectations**: `local-data-foundation`はPC固有root、validator、migration、repair、error mapping、root外persistent recovery control、`ProductLocalDataAdapter`、task 11.2のexecutable product contract command `validate:local-data-product-contract`、runtime capability compositionを保持する。`backup-restore` tasks 7.1–7.4はPC固有交換形式、codec・mapping・policy、`ProductBackupAdapter`、replacement/recovery/finalization、file I/O、利用者確認、UI、project-context連携を保持し、`application-shell` tasks 12.1–12.3はproduction compositionと横断E2Eを保持する。本specは製品adapterまたは下流実装を所有せず、Foundationの公開commandをvalidationから呼び、後続owner gateが本spec tasks 7.4/9.2の公開契約修復・final validation milestoneを待つことだけを検査する。`runtime-schema-validation`のcanonical Result変換、owner-local schema、jitless契約を維持し、schema vendorを本libraryの公開契約へ露出しない。
 
 ## Change Integration
 
-- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In-scope trace**: generic storage/lock/transaction/replacement contractはRequirements 1–4、Chrome adapterはRequirement 6、generic backup orchestrationはRequirement 5、公開export・package test・read-only app contract・deep import gateはRequirement 7で扱う。
-- **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eは本requirementsの実装対象へ含めず、既存canonical ownerへ委譲する。
+- **Integrated Change Brief**: `product-runtime-contract-repair`
+- **In-scope trace**: consumer-owned policy error adapterとtransaction/replacement両factoryへの適用は1.5、1.7、1.8、2.1、2.6、4.1、4.2、4.7、root maintenanceとpersistent recoveryの分離およびowner-provided protocolは4.3–4.11、synthetic/public declaration更新は6.5–6.8と7.1–7.9、下流所有executable product contractを呼ぶvalidation routingは7.9–7.13で扱う。
+- **Out-of-scope preservation**: `FoundationError`とPC control型、`ProductLocalDataAdapter`、製品schema/migration/repair、backup交換形式・UI、下流task 11.2以降のruntime composition、保存形式・利用者向け挙動の変更を本requirementsの実装対象へ含めない。3つの公開entry、packageの製品非依存、単一write authority、固定Web Lock、revision・dedupe、atomic replacement、opaque ticket、pre/post-commit cleanup、既存root保持、backup orchestration semanticsは維持する。
 
 ## Requirements
 
@@ -28,8 +28,10 @@ local data library boundariesは、複数のローカルファースト製品で
 2. The local data library shall 保存対象の具体field、PCパーツカテゴリ、製品固有識別子、または製品固有schema versionを汎用契約へ固定しない
 3. The local data library shall platform固有のstorage値、lock値、quota例外を公開結果へ漏らさず、安定した汎用成功結果またはerror分類として返す
 4. The local data library shall schema vendorのinstance、error class、locale、または動的検証設定を公開契約へ含めない
-5. When consumerが製品固有errorを必要とする, the local data library shall 汎用error分類からconsumer側で決定的に写像できる情報だけを返す
+5. When consumerが製品固有errorを必要とする, the local data library shall consumerが明示したerror adapterを通してpolicy errorの種類、payload、判定contextを出力errorへ意味不変に写像できる
 6. If consumerが未検証の保存値を読み取る, the local data library shall consumerが設定した検証と移行を通過するまで正常なrootとして公開しない
+7. If policy errorがdecode、migration、mutation、repair、またはvalidationで返される, the local data library shall そのerrorをstage名だけの汎用分類へ縮退させずconsumerのerror adapterへ渡す
+8. If consumerのerror adapterがpolicy errorを出力errorへ写像できない, the local data library shall 成功または別の既知errorとして処理を継続しない
 
 ### Requirement 2: 競合に強い原子的transaction
 
@@ -66,11 +68,15 @@ local data library boundariesは、複数のローカルファースト製品で
 
 1. When root置換候補が渡される, the local data library shall 永続状態を変更せず、検証、移行、参照policy、容量を適用した評価結果とopaque ticketを返す
 2. When 有効な評価ticketによる置換が確定される, the local data library shall 候補root全体を単一の成功または失敗としてcommitする
-3. If 評価後に候補、保存状態、maintenance owner、generation、または期待revisionが変化する, the local data library shall staleな置換を拒否し既存rootを変更しない
+3. If 評価後に候補、保存状態、root内maintenance判定、期待revision、またはowner-provided recovery protocolのopaque capabilityが無効になる, the local data library shall staleな置換を拒否し既存rootを変更しない
 4. While maintenanceまたはrecovery fenceがactiveである, the local data library shall fence所有者以外のmutationと競合する置換を一貫して拒否する
-5. If runtime processが再生成される, the local data library shall 永続化されたowner、generation、lease、revisionに基づいてactive fenceを再判定する
+5. If runtime processが再生成される, the local data library shall process memoryへ依存せず、consumerが永続状態から再構成したopaque recovery capabilityと保存済みrevisionに基づいてactive fenceを再判定する
 6. When maintenanceが正常終了または明示的に中止される, the local data library shall 後続mutationが再開できる状態を返す
 7. If 現行rootが破損または未対応版である, the local data library shall 現行rootを正常値として公開せず、明示された回復候補だけを副作用なしで評価可能にする
+8. The local data library shall root内maintenance controlとroot外persistent recovery controlを同じ保存型または同じfield解釈へ固定しない
+9. When normal置換またはrecovery置換が進行する, the local data library shall consumerが提供したpersistent recovery protocolへfence取得・照合、pending記録、release、finalization、current anomaly判定を委譲する
+10. The local data library shall persistent recovery controlの製品field名、owner表現、lease表現、pending表現、またはcurrent anomalyの判定規則を解釈しない
+11. If owner-provided recovery protocolがstale、pre-commit pending、post-commit finalization pending、またはcurrent anomaly不一致を返す, the local data library shall protocolの分類とcommit pointを保持した結果を返し、rootを重複置換しない
 
 ### Requirement 5: 再利用可能なbackup orchestration
 
@@ -97,9 +103,10 @@ local data library boundariesは、複数のローカルファースト製品で
 2. When Chrome runtimeで排他が要求される, the Chrome adapter shall 同じ保存rootを扱う全writerを共通のexclusive lock identityで直列化する
 3. If Chrome APIが例外または不正な応答を返す, the Chrome adapter shall platform値を漏らさず汎用storage、capacity、access、またはlock errorへ正規化する
 4. The platform-independent local data core shall Chrome API、DOM、React、runtime message、PCドメイン型へruntime依存または型依存を持たない
-5. When read-only app contractがpackage rootを検証する, the workspace shall PCドメイン型を入力に使えても製品root、製品error、製品adapter実装をpackage成果物へ取り込まない
-6. When read-only app contractがbackup subpathを検証する, the workspace shall 製品codecの型をconsumer側入力として接続できても製品交換形式、mapping、policy、adapter実装をpackage成果物へ取り込まない
+5. When synthetic public contractがpackage rootを検証する, the workspace shall consumer-owned root、policy error、出力error、root maintenance control、persistent recovery controlを別々の型としてfactoryへ接続できることを確認する
+6. When synthetic public contractがbackup subpathを検証する, the workspace shall 製品codecに相当するconsumer型を入力として接続できても製品交換形式、mapping、policy、adapter実装をpackage成果物へ取り込まない
 7. If package sourceまたはpackage testが製品composition、製品adapter、またはE2Eを直接所有しようとする, the workspace validation shall 境界違反として成功させない
+8. When package declarationが生成される, the workspace shall transaction・replacement factoryの独立したerror/control genericとowner-provided recovery protocolを3つの宣言済みentryだけから解決できるようにする
 
 ### Requirement 7: Private workspace公開境界と変更影響検証
 
@@ -115,6 +122,8 @@ local data library boundariesは、複数のローカルファースト製品で
 6. When Chrome adapterが単独検証される, the workspace shall Chrome実体を起動せずstorage、quota、access制限、変更通知、lockのcontractを決定的に検証する
 7. When backup orchestrationが単独検証される, the workspace shall 製品交換形式やUIを必要とせずpreflight、ticket、commit、cleanup、finalizationを架空fixtureだけで検証する
 8. When workspaceのtopological buildが実行される, the workspace shall library成果物をconsumerより先にbuildし、consumerが公開成果物だけを解決できる状態にする
-9. When generic contractまたはruntime mechanismが変更される, the workspace validation shall package単独検証、公開consumer contract、read-only app contract、boundary gateを実行する
+9. When generic contractまたはruntime mechanismが変更される, the workspace validation shall package単独検証、公開consumer contract、synthetic app contract、boundary gateを実行する
 10. When PC Build Planner固有schema、migration、repair、交換形式、adapter、composition、またはUIだけが変更される, the workspace validation shall package公開契約へ影響しない限り製品ownerの検証へ委譲できる
-11. If package単独検証、consumer contract、read-only app contract、topological build、またはboundary gateのいずれかが失敗する, the workspace validation shall 成功として完了しない
+11. If package単独検証、consumer contract、synthetic app contract、downstream executable contract、topological build、またはboundary gateのいずれかが失敗する, the workspace validation shall 成功として完了しない
+12. When generic transactionまたはreplacement contractが変更される, the workspace validation shall `local-data-foundation`が所有する実`ProductLocalDataAdapter` executable contractを再実装せずに呼び出す
+13. If 下流所有executable product contractが製品error payload、root内maintenance、root外recovery、single write、固定Web Lock、またはfinalization semanticsの不一致を検出する, the workspace validation shall package変更を成功として完了しない

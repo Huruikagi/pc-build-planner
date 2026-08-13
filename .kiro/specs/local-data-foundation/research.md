@@ -237,3 +237,20 @@
 - **Rationale**: PC root/schema/migration/repairとcanonical Result/`FoundationError`を既に所有する境界であり、errorの意味を変えず一対一mappingできる。下流featureは共有error consumerに限定できる。
 - **Trade-offs**: package error分類または`FoundationError`変更時はcandidate/current-build/compatibility/candidate-source/source-price-refresh/backup-restoreのconsumer contract再検証が必要になる。
 - **Follow-up**: 全variant mapping、package deep import禁止、用途別capability非露出、製品変更/package変更別validationをcontract gateへ固定する。
+
+### 2026-08-13 product runtime contract repairのlight discovery
+
+- **Context**: task 11.2の実装調査で、旧package factoryがpolicy errorを`CoreError`へ固定し、root内maintenance controlとroot外recovery controlを同じ形状として解釈していたため、実`ProductLocalDataAdapter`を意味不変にcompositionできないことが判明した。上流`local-data-library-boundaries`はconsumer error adapter、分離control generic、owner recovery protocolを追加するChange Briefへ更新された。
+- **Sources Consulted**: `local-data-library-boundaries`の最新brief/requirements/design/tasks、本specのrequirements/design/tasks、task 11.2 blocked annotation、`tech.md`、`structure.md`、`security.md`。
+- **Findings**: 新package契約は`LocalDataPolicy<Root, Operation, RootMaintenanceControl, PolicyError>`、`ErrorAdapter<PolicyError, OutputError>`、独立した`PersistentRecoveryControl`とopaque capabilityを持つ`PersistentRecoveryProtocol`を公開する。packageは製品control fieldを解釈せず、実製品接続のexecutable contractを下流ownerへ委譲し、上流task 8.1/9.2はそのcommandを呼ぶ。
+- **Implications**: foundationは`MaintenanceState`と`RecoveryControl`を別genericへ、`FoundationError`をpolicy/output adapterへ、既存`RecoveryControlPolicy`をowner protocolへ設定する。実adapterのproduction相当compositionを検証するroot command `validate:local-data-product-contract`もfoundationが所有し、上流は製品sourceをimportせず終了statusだけを伝播する。
+- **Synthesis**: Generalizationはpackageが要求するerror/control/protocol adapter surfaceへ限定する。Build vs. Adoptでは上流factoryと既存PC policyを採用し、transaction/replacementを再実装しない。Simplificationとしてpackage synthetic fixtureと製品contractを統合せず、製品ownerの一commandだけを上流routeへ公開する。
+
+### Decision: 実製品runtime contractをfoundation所有commandにする
+
+- **Context**: 型aliasだけのconsumer fixtureでは、実`FoundationError` payload、PC control semantics、production capability compositionの不整合を検出できなかった。
+- **Alternatives Considered**: package testへ製品fixtureを置く、application-shell E2Eだけで検出する、foundationの実行可能contractを上流から呼ぶ。
+- **Selected Approach**: foundationが実`ProductLocalDataAdapter`、PC policy/worker policy、`MaintenanceState`、`RecoveryControlPolicy`を使うproduction相当contractとroot command `validate:local-data-product-contract`を所有する。上流validationはcommandを一回呼び、終了statusとdiagnosticをそのまま伝播する。
+- **Rationale**: 製品意味のcanonical ownerを維持しつつ、generic contract変更時にsingle write、固定Web Lock、recovery/finalization、access restriction fail-closedまで実行時に検出できる。
+- **Trade-offs**: package final validationが下流commandの存在と成功へ依存するため、task 11.2は上流package contract task 7.4完了後に実装し、上流task 8.1/9.2はその後に再開する必要がある。
+- **Follow-up**: command ownership、failure propagation、重複実行防止をtooling contractへ固定する。

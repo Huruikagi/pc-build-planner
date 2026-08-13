@@ -24,7 +24,7 @@
 ## Change Integration
 
 - **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In-scope trace**: product adapter・PC policy injectionは`ProductLocalDataAdapter`、共有error vocabulary/mapping/public exportは`AppDataErrorMapper`と`src/domain/public.ts`、用途別runtime capabilityは`RuntimeContributionFactory`、characterization/contractと変更種別別検証はTesting Strategyとtask 10–12へ反映する。
+- **In-scope trace**: product adapter・PC policy injectionは`ProductLocalDataAdapter`、共有error vocabulary/mapping/public exportは`AppDataErrorMapper`と`src/domain/public.ts`、用途別runtime capabilityは`RuntimeContributionFactory`、実製品composition contractとcanonical commandは`ProductRuntimeExecutableContract`、characterization/contractと変更種別別検証はTesting Strategyとtask 10–12へ反映する。
 - **Out-of-scope preservation**: packageが所有するgeneric core・Chrome adapter・backup orchestrationを本specのfile planへ取り込まない。保存schema、schema version、data意味、`FoundationError`の種類・意味・粒度、single write authority、atomicity、maintenance/recovery fencing、repair、worker認可、raw root非公開を維持する。
 
 ## Boundary Commitments
@@ -42,6 +42,7 @@
 - 正常root置換と異常root回復のcommit point、opaque finalization ticket、finalize-only retryを束ね、通常CRUDと内部primitiveを公開しない`BackupRestoreDataPort`
 - 信頼済みconsumer向けの検証済みread-only maintenance snapshot/subscribe portと変更検出adapter
 - packageの公開core/Chrome portとcanonical PC runtime policyをfoundation内で構成し、用途別data port、maintenance source、worker registrationを一度だけ組み立てる引数なしproduction runtime contribution factory
+- 実`ProductLocalDataAdapter`とproduction相当graphを使い、製品error/control semanticsとruntime invariantを検証する`ProductRuntimeExecutableContract`、およびroot command `validate:local-data-product-contract`
 
 ### Out of Boundary
 - `src/index.ts`、`src/runtime/service-worker.ts`、side panel host、feature registryのcomposition（`application-shell`所有）
@@ -60,6 +61,7 @@
 - Node.js 26、pnpm 11、Biome 2、および実装開始時に互換性確認して固定するTypeScript/build/test/Chrome typings
 - `application-shell`はfoundationのproduction runtime contribution factoryだけを公開入口から利用し、返されたworker registrationとmaintenance sourceをcompositionする。foundationからshellへimportしない
 - production factoryはpackage `./chrome`の公開factoryからstorage/change/lock portを取得し、application-shellからplatform primitiveを構築・注入させない
+- packageの`LocalDataPolicy<Root, Operation, RootMaintenanceControl, PolicyError>`、`ErrorAdapter<PolicyError, OutputError>`、`PersistentRecoveryProtocol<PersistentRecoveryControl, OutputError, RecoveryFence, PendingCommit, CurrentAnomalyState>`だけを製品adapterの上流契約として利用し、各genericを`unknown`やunsafe castへ縮退させない
 - featureは公開portだけを利用し、`chrome.storage`、adapter内部、他feature内部へ直接依存しない
 - 通常UI featureは`FoundationScopedDataPort`だけを受け取る。`BackupRestoreDataPort`はbackup-restore compositionだけへ注入し、正常/異常rootの評価、commit point付き置換、opaque ticketによるfinalize-only retryだけを公開する。通常CRUD、raw root、Storage、lock、fence、Repository、内部write authorityを公開しない
 - **明示的な例外**: `src/ui-language/preference-store.ts`（`ui-internationalization`所有）は`chrome.storage.local`の専用キー`uiLanguage`1つに限定して直接読み書きしてよい。表示言語はプロジェクト・候補パーツ・現在構成のいずれにも属さないドメイン外の利用者設定であり、`localDataRoot`へは一切触れず、単一write authorityが統制する対象（バージョン付きroot、参照整合性、maintenance fencing、交換形式、容量監視）に加わらない。この例外は到達点を2ファイル（本adapterと`preference-store.ts`）に限定する機械検査（`ui-internationalization`が追加する`scripts/validate-boundaries.mjs`のStorageAccessGuard規則）で固定され、それ以外からの`chrome.storage`直接利用は引き続き拒否される
@@ -74,8 +76,10 @@
 - recovery control key、raw root fingerprint、回復owner/generation、回復用評価cursor、commit outcomeまたはfinalization ticketの変更
 - `chrome.storage`直接到達を許可される例外ファイルの追加・変更（現在は`src/persistence/chrome-storage-adapter.ts`と`src/ui-language/preference-store.ts`の2ファイルに限定）、またはドメイン外設定が`localDataRoot`・交換形式・容量監視の対象へ混入する変更提案
 - packageの`LocalDataPolicy`、公開error分類、Chrome port、replacement ticket、export mapの変更
+- packageのconsumer error adapter、root maintenance generic、persistent recovery generic、owner recovery protocol lifecycleの変更
 - `FoundationError`または`AppDataError`の種類・意味・粒度・一対一mappingの変更
 - `ProductLocalDataAdapter`の公開capability shape変更。この場合はcandidate/current-build/compatibility/candidate-source/source-price-refresh/backup-restoreを再検証する
+- `validate:local-data-product-contract`のcommand名、実行前提、failure propagation変更。この場合は上流`local-data-library-boundaries` task 8.1と9.2のrouteを再検証する
 
 ## Architecture
 
@@ -110,7 +114,7 @@ graph LR
 ```
 
 - **Selected pattern**: product policy adapter over generic ports。PC domain policyと共有app errorを製品境界に残し、generic transactionとChrome platform能力をpackage公開portへ委譲する。
-- **Dependency direction**: `PC domain types → PC validation/migration/repair/error mapping → ProductLocalDataAdapter → @pc-build-planner/local-data public entries → RuntimeContributionFactory → Shell composition`。packageからroot `src/`への逆依存と製品adapterからpackage内部へのdeep importを禁止する。
+- **Dependency direction**: `PC domain types → PC validation/migration/repair/error mapping/recovery protocol → ProductLocalDataAdapter → @pc-build-planner/local-data public entries → RuntimeContributionFactory → ProductRuntimeExecutableContract / Shell composition`。packageからroot `src/`への逆依存と製品adapterからpackage内部へのdeep importを禁止する。上流validationはroot commandをprocessとして呼ぶだけで、製品source/testをimportしない。
 - **Root ownership**: foundationは登録factoryを公開し、application shellだけが具体service workerへ登録する。
 - **Linearization boundary**: package mechanismが全writerを同一名のexclusive Web Lockで直列化する。製品adapterはPC policyを設定するだけで、独自lock、queue、transaction runner、Chrome adapterを再実装しない。
 - **Restart boundary**: Web Lockはworker終了時に失われる一時的な排他である。generation、owner、lease、revisionを含む永続rootだけを再生成後の認可根拠とし、新workerはlock取得後に必ずrootを再読込する。
@@ -142,18 +146,22 @@ src/
     ├── schema.ts                              # CURRENT_SCHEMA_VERSION、root/control key
     ├── migration-registry.ts                  # PC固有NからN+1 migration
     ├── reference-repair-policy.ts             # CurrentBuild修復とproject削除cascade
-    ├── product-local-data-adapter.ts           # package public portへのPC policy設定
+    ├── product-local-data-adapter.ts           # package public factoryへのPC policy/error/recovery protocol設定
     ├── runtime-contribution.ts                 # 製品adapterから用途別runtime handleを構成
     ├── worker-registration.ts                  # shell向けworker認可とhandler registration
     └── public.ts                              # 通常data portとbackup用途限定capability
 tests/
 ├── domain/app-data-error.test.ts              # FoundationErrorとの全種類一対一mapping
-├── persistence/product-local-data-adapter.contract.test.ts # PC policyとpackage public portの接続
+├── persistence/product-local-data-adapter.contract.test.ts # PC policy/error/controlとpackage public factoryの接続
+├── persistence/product-local-data-runtime.contract.test.ts # 実adapterのproduction相当runtime composition
 ├── persistence/foundation-characterization.test.ts # schema・repair・atomicity・fencing保持
 ├── persistence/runtime-contribution.test.ts   # 用途別capabilityとworker認可
 └── tooling/
     ├── local-data-product-consumer.ts          # 製品公開contract fixture
+    ├── local-data-product-contract-command.test.ts # canonical commandの終了status/failure伝播
     └── public-boundaries.test.ts               # package deep import・raw capability・旧error owner拒否
+scripts/
+└── validate-local-data-product-contract.mjs    # foundation所有contract testだけを実行するroot command本体
 packages/local-data/                             # upstream所有、参照は宣言済みpackage exportのみ
 ├── src/index.ts                                 # `@pc-build-planner/local-data`
 ├── src/contracts.ts                             # generic storage/lock/policy/error port
@@ -168,11 +176,13 @@ packages/local-data/                             # upstream所有、参照は宣
 ```
 
 ### Modified Files
-- `package.json` — `@pc-build-planner/local-data`を`workspace:*`で参照し、製品characterization/contract validationを既存検証flowへ追加する。
+- `package.json` — `@pc-build-planner/local-data`を`workspace:*`で参照し、foundation所有の`validate:local-data-product-contract`を製品characterization/contract validationへ追加する。
 - `scripts/validate-boundaries.mjs`、`tests/tooling/public-api-consumer.ts` — package deep import、製品adapterのpackage側所有、candidate-owned data error、backup専用portからの通常CRUD・raw root・内部adapter到達を拒否する。
 - 既存`src/persistence`のgeneric storage・lock・transaction・capacity・replacement・Chrome adapter実装は上流package taskの移管対象であり、本specはその複製を残さない。製品所有fileからpackage内部moduleへimportしない。
 
 `src/index.ts`と`src/runtime/service-worker.ts`は本仕様では作成・変更しない。worker registrationの実体compositionは`application-shell`のfile boundaryで行う。
+
+`validate:local-data-product-contract`のscript、対象test、fixture、diagnosticは本specがcanonical ownerとなる。上流`local-data-library-boundaries` task 8.1はこのroot commandだけを呼び、task 9.2はその終了statusをfinal validationへ伝播する。package source/testは製品adapter、`FoundationError`、`MaintenanceState`、`RecoveryControl`をimportまたは再実装しない。
 
 ## System Flows
 
@@ -316,6 +326,8 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | 9.8 | backup用途限定capability | RuntimeContributionFactory、BackupRestoreDataPort | backupRestoreDataPort | replacement flow |
 | 9.9 | 製品変更の局所検証 | ProductCharacterizationSuite | product contract | validation flow |
 | 9.10 | package変更時の下流再検証 | BoundaryGate、ProductConsumerContract | validation scripts | validation flow |
+| 9.11 | 実製品compositionのruntime invariant検証 | ProductRuntimeExecutableContract | real adapter composition | product contract flow |
+| 9.12 | foundation所有の再現可能な実行入口 | ProductRuntimeExecutableContract、WorkspaceValidation | `validate:local-data-product-contract` | upstream validation route |
 
 ## Components and Interfaces
 
@@ -335,7 +347,8 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 | MaintenancePolicy | Persistence | generation/owner/leaseの純粋状態遷移と認可 | 7.4–7.7 | SchemaValidator P0 | Service、State |
 | MaintenanceSnapshotSource | Persistence adapter | 検証済みmaintenance cursorをread-onlyで公開 | 7.8 | LocalDataRepository P0、Storage change P1 | Service、State |
 | RuntimeContributionFactory | Composition adapter | product adapterとpackage公開portから用途別foundation handleを一度だけ生成 | 1.1, 1.3, 3.1, 3.10, 6.1, 7.8, 7.10–7.17, 9.3, 9.8 | ProductLocalDataAdapter P0、package Chrome entry P0 | Service |
-| ProductLocalDataAdapter | Product adapter | package公開portへPC root/schema/migration/repair/error policyを設定 | 3.1–3.11, 4.1–4.7, 9.1–9.3, 9.9–9.10 | `@pc-build-planner/local-data` P0 | Service |
+| ProductLocalDataAdapter | Product adapter | package公開factoryへPC root/operation/maintenance/recovery/error policyを設定 | 3.1–3.11, 4.1–4.7, 9.1–9.3, 9.9–9.12 | `@pc-build-planner/local-data` P0 | Service |
+| ProductRuntimeExecutableContract | Tooling / Integration | 実製品adapterのproduction相当compositionとruntime invariantを一つのroot commandで検証 | 6.1, 7.4–7.17, 9.3, 9.5–9.6, 9.8–9.12 | ProductLocalDataAdapter P0、RuntimeContributionFactory P0 | Batch |
 | PackageTransactionPort | Upstream package | 協調writerのread-check-write、容量、revision、dedupeを実行 | 1.3, 3.1–3.8, 5.1–5.3, 7.4–7.7 | package root export P0 | Service |
 | PackageReplacementPort | Upstream package | 正常・回復候補の評価、fencing、単一commitを実行 | 7.1–7.17 | package root export P0 | Service |
 | BackupRestoreDataPort | Public capability | commit point付き正常置換・異常root回復とfinalize-only retryをbackupへ公開 | 7.1–7.17 | WriteAuthority P0、RecoveryCoordinator P0 | Service |
@@ -406,9 +419,39 @@ function validateCandidatePartDraft(
 
 #### ProductLocalDataAdapter
 
-`src/persistence/product-local-data-adapter.ts`は`@pc-build-planner/local-data`のroot公開entryと`./chrome`だけをimportし、`LocalDataRoot`初期値、現行schema validator、MigrationRegistry、ReferenceRepairPolicy、PC mutation operation、schema key、`FoundationError` mappingを`LocalDataPolicy<LocalDataRoot, FoundationError>`へ設定する。packageのtransaction、capacity、replacement、fencing、Chrome storage、Web Locksを再実装しない。
+`src/persistence/product-local-data-adapter.ts`は`@pc-build-planner/local-data`のroot公開entryと`./chrome`だけをimportし、packageの独立genericへ次の製品型を設定する。従来のroot/errorだけを取る2 generic形状は使用しない。
 
-adapterが返す通常data port、maintenance source、worker registration、backup用途限定replacement capabilityは既存runtime shapeを保つ。generic errorは既存`FoundationError`へ決定的に適合し、その後`AppDataErrorMapper`が共有consumer errorへ一対一写像する。raw root、generic StoragePort、ExclusiveLockPort、transaction runner、package内部ticketを公開handleへ載せない。
+```typescript
+type ProductLocalDataPolicy = LocalDataPolicy<
+  LocalDataRoot,
+  RootMutationOperation,
+  MaintenanceState,
+  FoundationError
+>;
+
+type ProductErrorAdapter = ErrorAdapter<FoundationError, FoundationError>;
+
+type ProductRecoveryProtocol = PersistentRecoveryProtocol<
+  RecoveryControl,
+  FoundationError,
+  RecoveryFence,
+  PendingRecoveryCommit,
+  CurrentRootAnomaly
+>;
+
+interface ProductLocalDataAdapterContract {
+  readonly policy: ProductLocalDataPolicy;
+  readonly errors: ProductErrorAdapter;
+  readonly recovery: ProductRecoveryProtocol;
+  readonly workerPolicy: DataWorkerAuthorizationPolicy;
+}
+```
+
+`RootMutationOperation`はPC mutation command、`MaintenanceState`はroot内maintenance projection、`RecoveryControl`はroot外persistent controlであり、互いに代入可能とは扱わない。`RecoveryFence`、`PendingRecoveryCommit`、`CurrentRootAnomaly`はfoundation所有のopaque capabilityとして具体型を保持し、package既定の`unknown`へ縮退させない。`ProductErrorAdapter.fromPolicy`はdecode/migration/mutation/repair/validation stageと元の`FoundationError` payload/contextを保持し、`fromCore`はpackage mechanism errorを既存`FoundationError`へ決定的に適合する。欠落mappingまたはadapter例外ではroot write前にfail closedとする。
+
+`ProductRecoveryProtocol`は`RecoveryControlPolicy`の既存規則をpackage owner protocolへ適合し、mutation認可、current anomaly観測、owner/generation/leaseを含むfence取得、candidate/raw identityを束縛するpending commit、pre/post-commit分類、release、finalizationを所有する。packageへcontrol field解釈を渡さず、packageから渡される`ReplacementBinding`と`RecoveryCommitState`だけでcommit pointを共有する。`MaintenanceState`と`RecoveryControl`は保存場所、状態遷移、認可意味を分離したまま同じ固定名Web Lock内で検証する。
+
+adapterがpackage公開factoryへ渡すPC初期root、現行schema validator、MigrationRegistry、ReferenceRepairPolicy、operation、error adapter、recovery protocolとworker policyから、通常data port、maintenance source、worker registration、backup用途限定replacement capabilityを構成する。既存runtime shapeを保ち、packageのtransaction、capacity、replacement、fencing、Chrome storage、Web Locksを再実装しない。generic errorを既存`FoundationError`へ適合した後にだけ`AppDataErrorMapper`を適用する。raw root、generic StoragePort、ExclusiveLockPort、transaction runner、package内部ticketを公開handleへ載せない。
 
 #### MigrationRegistry
 
@@ -669,6 +712,20 @@ factoryは`ProductLocalDataAdapter`へpackage Chrome portとPC policyを渡し�
 
 factoryは`chrome.runtime`、DOM、React、application-shell型へ依存しない。runtime message target、sender metadataからのcaller classification、listener start/stopはapplication-shellが提供する。global property参照を含むplatform解決・shape検証を先に完了し、不足時は`invalid-platform`を返す。Storage access restriction、購読登録、handler生成、Repository生成はその後にだけ行う。解決中のglobal getter例外も`invalid-platform`へ正規化し、foundation側の観測可能な副作用を開始しない。同じ永続Storageを使用して再初期化した場合、revisionとactive maintenance fenceはRepositoryから再読込され、process memoryを正しさの根拠にしない。
 
+#### ProductRuntimeExecutableContract
+
+root `package.json`の`validate:local-data-product-contract`は`scripts/validate-local-data-product-contract.mjs`だけを起動し、`tests/persistence/product-local-data-runtime.contract.test.ts`のproduction相当graphを実行するfoundation所有commandである。contractはsynthetic product aliasではなく実`ProductLocalDataAdapter`、実PC policy/worker policy、package root/`./chrome`公開factoryを使う。Chrome APIは決定的adapter fixtureへ置換するが、production factoryと同じkey scope、固定Web Lock identity、access restriction順序、用途別handle compositionを通る。
+
+contractは少なくとも次をruntimeで検証する。
+
+- policy errorのvariant、payload、判定contextが`ProductErrorAdapter`を通して`FoundationError`へ意味不変に到達し、未知・不完全値、mapping失敗、adapter throwがroot write前にfail closedとなる。
+- root内`MaintenanceState`とroot外`RecoveryControl`が別generic・別保存意味として接続され、packageがowner/generation/lease/pending fieldを解釈しない。
+- 通常mutation、正常置換、異常root回復が同じ固定Web Lock identityと単一write authorityを使い、各commitでroot writeが最大一回、stale fenceでは0回となる。
+- recoveryのpre-commit cleanup、post-commit finalization discovery、finalize-only retryをowner protocolで駆動し、finalize中のroot writeが0回、通常/backup handleのcapability分離が維持される。
+- `restrictToTrustedContexts`失敗時はdata port、backup port、maintenance source、worker registrationのいずれも公開せず、後続のread/write/registration side effectを開始しない。
+
+commandは成功時0、contract failureまたは初期化例外時non-zeroを返し、安定したtest diagnosticをそのまま伝播する。上流`local-data-library-boundaries` task 8.1のvalidation routeはcommandを一回だけ呼び、task 9.2のfinal validationはこの終了statusを必須gateとして扱う。上流routeは製品error/controlを解釈せず、foundation側commandの内部test選択やfixtureを複製しない。
+
 #### WriteAuthority and WorkerRegistration
 
 ```typescript
@@ -743,7 +800,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - 同じStorageへfactory graphを再生成し、active maintenance fenceとrevisionを再読込してowner外writeを拒否することを検証する（1.3, 7.4–7.8）。
 
 ### Contract and Integration Tests
-- `ProductLocalDataAdapter`がpackage root/Chrome公開entryだけからPC root、schema、migration、repair、operation、error policyを設定し、schema 1、revision、repair、atomicity、fencing、worker認可のcharacterization結果を維持する（9.1–9.3, 9.9）。
+- `ProductLocalDataAdapter`がpackage root/Chrome公開entryだけから`Root=LocalDataRoot`、`Operation=RootMutationOperation`、`RootMaintenanceControl=MaintenanceState`、`PersistentRecoveryControl=RecoveryControl`、`PolicyError/OutputError=FoundationError`のadapter、owner recovery protocol、worker policyを設定し、schema 1、revision、repair、atomicity、fencing、worker認可のcharacterization結果を維持する（9.1–9.3, 9.9, 9.11）。
 - `AppDataErrorMapper`で全`FoundationError` variantのcode/payload/contextが一対一で保持され、欠落variantでexhaustivenessまたはboundary validationが失敗することを確認する（9.4–9.7）。
 - public consumer contractでcandidate/current-build/compatibility/candidate-source/source-price-refreshが`src/domain/public.ts`の`AppDataError`を利用でき、`ManagementError`再定義やproduct adapter/deep importを必要としないことを確認する（9.7, 9.10）。
 - `MutationPipeline`でCRUD候補、reference repair、project削除カスケード、候補root検証、capacity warning・拒否をI/Oなしで検証する（3.1, 3.2, 3.7, 3.9, 5.1–5.3）。
@@ -759,6 +816,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - `BackupRestoreDataPort` contractで正常/異常rootのassessmentとcommitを同じcanonical graphから実行し、各経路が既存fence・cursorを迂回しないことを検証する。control取得後かつroot write前のcleanup失敗は`precommit-cleanup-pending`となり、同じassessment ticketだけがworker再生成後もowner/generationを照合してcleanupをroot write 0件で再開し、別ticketを拒否することを固定する。cleanup後の再assessmentがstaleなら古いticketを終了し、新規assessmentだけを許可する。root write後のcleanup失敗は`committed-finalization-required`となり、新しいconsumer instanceが`findPendingFinalization`でticketを再発見でき、finalize retry中のroot writeが0件であることも固定する（7.15, 7.17）。
 - `WorkerRegistration`でunknown payload、unauthorized caller、content-script直接accessなし、access restriction失敗時のfail-closedを検証する（6.1–6.4）。
 - 公開maintenance sourceがread-onlyであり、Storage primitiveやlease/write操作をconsumerへ公開しないことをcontract testで検証する（7.8）。
+- `ProductRuntimeExecutableContract`は実`ProductLocalDataAdapter`のproduction相当graphでerror payload/context、`MaintenanceState`/`RecoveryControl`分離、single write、固定Web Lock、pre/post-commit recovery/finalization、capability分離、access restriction fail-closedを一度に検証する（7.4–7.17, 9.3, 9.5–9.6, 9.8, 9.11–9.12）。
 
 ### Fixture and Public Port Regression
 - fixture builderは全12category、欠損値、元表記・確認値、参照整合root、破損rootを架空値だけで生成し、実サイトHTML、画像、商品dataを含まないことを独立検査する（8.1, 8.3）。
@@ -776,6 +834,7 @@ Chrome例外、未信頼payload、完全URL、商品値、保存rootをログへ
 - 公開import境界、固定lock名の迂回、直接`chrome.storage`利用、fixture assetをartifact gateで検査し、typecheck、Biome、全test、build、artifact scanを一つの最終commandで実行する（5.4, 6.3, 8.1–8.3）。
 - package内部deep import、package側の`ProductLocalDataAdapter`所有、candidate-owned共有data error、通常consumerへのbackup capability、backup consumerへの通常CRUD/raw root/internal adapter露出をnegative gateで拒否する（9.2, 9.7, 9.8, 9.10）。
 - 製品adapter/PC policyだけの変更はfoundation characterization・consumer contract、package公開契約変更はpackage gateに加えて全下流consumer contractを実行する変更種別別scriptを検証する（9.9, 9.10）。
+- root `validate:local-data-product-contract`が対象contractだけを再現可能に実行し、成功0・任意のcontract failure非0を返すこと、上流routeがcommandを一回だけ呼び終了statusを変更せず伝播することをtooling testで固定する（9.10–9.12）。
 
 ## Security Considerations
 

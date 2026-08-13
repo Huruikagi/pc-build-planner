@@ -26,7 +26,7 @@
 
 - **Change Brief**: `v0.5.0-boundary-reconciliation`
 - **In scope**: `ProductBackupAdapter`、PC交換形式codec・mapping・policy、file UI、確認、project-context guard・refresh、consumer contract、UI、E2E。
-- **Out of scope**: packageの汎用オーケストレーター/public port、FoundationのPC root・置換能力、application shell composition、交換形式や保存schemaの意味変更、自動バックアップ、UI layout。
+- **Out of scope**: packageのconsumer error adapter・分離control generic・owner-provided recovery protocol・汎用オーケストレーター/public port、Foundationの`ProductLocalDataAdapter`・PC root・置換能力、application shell composition、交換形式や保存schemaの意味変更、自動バックアップ、UI layout。
 - **Preserved behavior**: 明示確認、atomic replacement、競合fencing、commit前cleanup、失敗時の既存データ保持、破損・未対応rootからの回復、finalization/refresh再試行を変更しない。
 
 ## Boundary Commitments
@@ -46,6 +46,8 @@
 
 ### Out of Boundary
 - `@pc-build-planner/local-data/backup`の汎用`BackupOrchestrator`、`BackupCodec`、factoryおよびpublic port定義
+- `@pc-build-planner/local-data`の`ErrorAdapter`、root maintenance/persistent recovery control generic、`PersistentRecoveryProtocol`、replacement/finalization mechanism
+- `local-data-foundation`が所有する`ProductLocalDataAdapter`、PC固有error/control mapping、persistent recovery protocol実装とexecutable product contract
 - FoundationのPC root/schema/migration/repair、`BackupRestoreDataPort`のcanonical定義と実装
 - application shellのproduction compositionと最終port wiring（本specは公開adapter/section契約だけを提供する）
 - `Project`、`CandidatePart`、`CurrentBuild`の所有権と業務規則
@@ -58,8 +60,8 @@
 - 破損・未対応rootを検出したside panelのdegraded startupと`recovery`操作分類（application-shell owner）
 
 ### Allowed Dependencies
-- `@pc-build-planner/local-data/backup`が公開する`BackupOrchestrator`、`BackupCodec`、factory。package内部moduleへdeep importしない
-- Foundationの`LocalDataRoot`、`Result`、エラー契約。export用の`BackupSnapshotReadPort`と、commit point、同一assessment ticketによるpre-commit cleanup再開、永続controlからのpending finalization再発見を提供する`BackupRestoreDataPort`
+- `local-data-library-boundaries` task 7.4でownership gateを通過した`@pc-build-planner/local-data/backup`公開`BackupOrchestrator`、`BackupCodec`、factory。package内部module、core factory、control/protocol実装へdeep importしない
+- `local-data-foundation` task 11.2で修復済みpackage protocolへPC固有error/controlを接続した`LocalDataRoot`、`Result`、`FoundationError`契約。export用の`BackupSnapshotReadPort`と、commit point、同一assessment ticketによるpre-commit cleanup再開、永続controlからのpending finalization再発見を提供する`BackupRestoreDataPort`
 - runtime-schema-validationのconfigured Zod Mini入口、strict plain object・JSON safety primitive、owner error/path変換helper。Zod packageや他feature schemaをdeep importしない
 - ui-messagesの公開`MessageKey`・`MessageResolver`・`useMessages()`。利用者向け案内とerror policyは日本語・英語カタログで完全性を保ち、言語別カタログ実装へdeep importしない
 - project-contextの`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort.refresh`。guard registry、draft、selection stateへdeep importしない
@@ -70,7 +72,7 @@
 - application shellの`FeatureMountContext`、`FeatureMountHandle`、operation policy
 - application shellの`recovery` operation kindと、`corrupt-data | unsupported-version`時にもsettingsをmountするdegraded startup契約
 
-依存方向は`Domain contracts → Configured runtime-schema primitives → Owner-local PC codec / mapper / policy → package backup public port + Foundation backup capability → ProductBackupAdapter → Backup and Restore facades → State → View and File gateway → Section mount adapter`とし、右側は左側だけへ依存する。Product側はpackage内部の汎用protocolを再実装せず、File gatewayはFoundation portへ直接アクセスせず、settingsは公開section adapterより内側へ依存しない。
+依存方向は`Domain contracts → Configured runtime-schema primitives → Owner-local PC codec / mapper / policy → repaired package backup public port + Foundation backup capability → ProductBackupAdapter → Backup and Restore facades → State → View and File gateway → Section mount adapter`とし、右側は左側だけへ依存する。packageのconsumer error adapter・分離control generic・owner protocolはFoundation capabilityの背後に留め、backup側は`FoundationError` payloadやcontrolをcast・縮退せず公開結果として受け取る。Product側はpackage内部の汎用protocolを再実装せず、File gatewayはFoundation portへ直接アクセスせず、settingsは公開section adapterより内側へ依存しない。
 
 ### Revalidation Triggers
 - `LocalDataRoot`、カテゴリ、候補所属、現在構成参照、read-only root queryまたはRepositoryエラーの形状変更
@@ -85,6 +87,8 @@
 - application shellのdegraded startup、`recovery`操作可否、正常snapshot復帰通知の変更
 - ui-messagesの`MessageKey`、placeholder、日英catalog parity、言語切替時のProvider契約の変更
 - package backup public contractまたは`ProductBackupAdapter`のconsumer contract、codec設定点の変更
+- packageのconsumer error adapter、root maintenance/persistent recovery control分離、owner-provided recovery protocol、commit point分類、`findPendingFinalization`/`finalize`契約の変更
+- `local-data-foundation`の`ProductLocalDataAdapter` executable contractまたは`FoundationError` payload保持規則の変更
 
 ## Architecture
 
@@ -92,7 +96,7 @@
 
 Foundationは`LocalDataRoot`を単一キーで保存し、読取・保存時にスキーマと参照を検証する。Candidate managementはプロジェクトと候補、Current build managementは構成参照と数量を所有し、どちらもRepositoryを介して保存する。本仕様はこれらの公開保存値だけを入力とし、業務サービスやStorage APIへ直接依存しない。
 
-Foundationは`BackupRestoreDataPort`から、正常rootと破損/未対応rootのassessment、commit pointを判別する置換、opaque ticketによるfinalize-only retryを用途限定で提供する。packageのbackup subpathはcodec注入型の汎用`BackupOrchestrator`を提供する。`ProductBackupAdapter`は両方のpublic contractとPC codec/policyを構成し、feature facadeへ既存のcreate/preflight/reassess/commit/finalize操作を公開する。内部の`WriteAuthority`、Web Lock、raw root、Storage、fence、通常CRUD、およびpackageの汎用protocolへは到達しない。project-contextはcatalog全体置換用permitとsuccess/failure completion、置換後refreshを能力別portで提供し、feature stateが利用者確認を含むlifecycleを汎用orchestratorの外側で順序付ける。
+Foundationは修復済みpackage public factoryへconsumer-owned error adapter、相互非互換なroot maintenance/persistent recovery control、owner-provided recovery protocolを接続し、その結果を`BackupRestoreDataPort`として用途限定で公開する。このportは正常rootと破損/未対応rootのassessment、commit pointを判別する置換、opaque ticketによるfinalize-only retryを提供し、`FoundationError` payloadとowner protocolの分類を意味不変に保持する。packageのbackup subpathはcodec注入型の汎用`BackupOrchestrator`を提供する。`ProductBackupAdapter`は完成済みの両public contractとPC codec/policyを構成し、feature facadeへ既存のcreate/preflight/reassess/commit/findPendingFinalization/finalize操作を公開する。backup側は`ErrorAdapter`、control generic、`PersistentRecoveryProtocol`、`ProductLocalDataAdapter`を構成・複製せず、内部の`WriteAuthority`、Web Lock、raw root、Storage、fence、通常CRUDへ到達しない。project-contextはcatalog全体置換用permitとsuccess/failure completion、置換後refreshを能力別portで提供し、feature stateが利用者確認を含むlifecycleを汎用orchestratorの外側で順序付ける。
 
 破損・未対応rootでは通常のmaintenance snapshotを構築できない。application shellはこの二つのtyped failureだけを`recovery-required`へ写像し、通常mutationをfail closedで抑止したままsettingsをmountする。backup-restoreのcommitは`recovery` operationとして許可され、その他のstartup failureでは従来どおりglobal startup errorに留まる。Foundationから最初の正常snapshotを受信した時点でshellは通常projectionへ復帰する。
 
@@ -174,9 +178,9 @@ tests/ui-messages/catalog-parity.test.ts            # backup日英key・placehol
 e2e/backup-restore.spec.ts                         # settings経由のexport→改変→復元→再起動
 ```
 
-既存実装へ`product-backup-adapter.ts`と対応consumer test/fixtureを追加し、`service.ts`を既存UI向けfacadeとしてadapterへ委譲する。`backup-schema.ts`、`capacity-policy.ts`、`context-lifecycle.ts`、exchange/file/UI/stateと既存testは責務を維持する。`ProductBackupAdapter`だけがpackage backup public portとFoundation capabilityの両方を受け取り、PC codec/mapping/policyを設定する。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、shell composition fileは本specの変更対象に含めない。
+既存実装へ`product-backup-adapter.ts`と対応consumer test/fixtureを追加し、`service.ts`を既存UI向けfacadeとしてadapterへ委譲する。`backup-schema.ts`、`capacity-policy.ts`、`context-lifecycle.ts`、exchange/file/UI/stateと既存testは責務を維持する。`ProductBackupAdapter`だけがpackage backup public portと完成済みFoundation capabilityの両方を受け取り、PC codec/mapping/policyを設定するが、package root factory用のerror adapter/control/protocolや`ProductLocalDataAdapter`は受け取らない。`operation-kind.ts`はshellのcanonical `read | recovery`だけを参照し、shell composition fileは本specの変更対象に含めない。
 
-`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) package backup public contract、(2) Foundationの用途限定`BackupRestoreDataPort`、(3) project-context public ports、(4) 本specの`ProductBackupAdapter`とfeature/UI、(5) application-shell ownerによるproduction compositionとする。本specは手順4までを所有し、shell fileを編集しない。
+`project-context`の内部ロジックは変更せず、公開された`ProjectContextReplacementGuardPort`と`ProjectContextCommandPort`だけを消費する。実装順は、(1) `local-data-library-boundaries` task 7.4で修復後のpublic declaration・synthetic consumer・ownership gateを確定、(2) `local-data-foundation` task 11.2で`ProductLocalDataAdapter`と用途限定`BackupRestoreDataPort`を確定、(3) project-context public ports、(4) 本specの`ProductBackupAdapter`とfeature/UI、(5) `local-data-library-boundaries` task 9.2を含むworkspace最終gate、(6) application-shell ownerによるproduction compositionとする。package task 9.2はFoundation 11.2を待つためTask 7.1の開始条件にはせず、本specの最終検証Task 7.4で待つ。本specは手順4までの実装と手順5のconsumer側検証を所有し、shell fileを編集しない。application-shellは本spec Task 7.4へ依存するため、package 7.4、Foundation 11.2、package 9.2を推移的に待つ。
 
 過去task 5.1でDEF-011を解消するため行ったproduction wiringは履歴として残るが、`v0.5.0-boundary-reconciliation`以後のcanonical所有者はapplication-shellである。本変更は既存wiringの意味や挙動を変更せず、今後のcomposition実装を本specへ再導入しない。
 
@@ -347,7 +351,7 @@ interface ProductBackupAdapter {
 }
 ```
 
-factoryは`@pc-build-planner/local-data/backup`の公開subpathからだけ受け取り、PC codecへ`ExchangeValidator`、`ExchangeMigration`、`ExchangeMapper`、artifact命名、容量policy、製品error mappingを閉じ込める。Foundation capabilityは汎用orchestratorが要求するroot assessment/replacement/finalization portへ狭めて渡す。明示確認とproject-context guard/refreshは製品UI lifecycleに残し、汎用orchestratorへ利用者操作やshell stateを持ち込まない。adapterはpackage protocolを複製せず、既存`BackupService`/`RestoreService`形状をfacadeとして公開する。
+factoryは`@pc-build-planner/local-data/backup`の公開subpathからだけ受け取り、PC codecへ`ExchangeValidator`、`ExchangeMigration`、`ExchangeMapper`、artifact命名、容量policy、製品backup error mappingを閉じ込める。Foundation capabilityは汎用orchestratorが要求するroot assessment/replacement/finalization portへ狭めて渡すが、Foundation factory用の`ErrorAdapter`やpersistent recovery protocolを再構成せず、`FoundationError` payloadとcommit point分類をcast・code縮退なしでfacade結果へ写像する。明示確認とproject-context guard/refreshは製品UI lifecycleに残し、汎用orchestratorへ利用者操作やshell stateを持ち込まない。adapterはpackage protocolを複製せず、既存`BackupService`/`RestoreService`形状をfacadeとして公開する。
 
 #### BackupService
 
@@ -404,7 +408,7 @@ interface RestoreInput {
 
 `preflight`は交換層の検証後、正常assessmentを試す。current anomalyだけを表す`corrupt-data | unsupported-version`ではrecovery assessmentへ切り替え、candidate rejection、quota、storage failureでは切り替えない。assessmentの必要bytesとcurrent anomaly分類だけをpreview/ticketへ写し、fingerprint、cursor、fenceは保持しない。`reassess`は保持済みcandidateを同じ分岐へ戻して新しいassessment ticketとpreviewを発行し、古いticketを破棄する。stateは新しいpreviewを表示して置換確認から再開する。
 
-`commit`はcandidateと期待mode、assessment ticketをFoundationへ渡す。Foundationはmode別protocolを実行し、root write前の失敗だけをerrorとして返す。`precommit-cleanup-pending`では元のrestore ticketを保持し、利用者の再試行時に新しいguard permitを得て同じticketを再送する。Foundationは一致する未完了controlのcleanupを先に再開し、root write 0件のままcleanupを完了してから再assessmentとcommitへ進む。`stale-assessment`では`reassess`以外を許可しない。root write後は必ずcommitted outcomeとなり、cleanup未完了時は値やfenceを含まないopaque `RestoreFinalizationTicket`へ写像する。`findPendingFinalization`はFoundationの用途限定queryからactiveなpost-commit ticketだけを復元し、candidate、raw root、control情報を取得しない。`finalize`はこのticketでcleanupと通常query確認だけを再試行し、root write、guard prepare、利用者の置換確認を繰り返さない。再mount後にsummaryがない場合はfinalize成功後に`BackupSnapshotReadPort`から検証済みrootの件数を再構築する。失敗時は元のrestore ticketまたはfinalization ticketを状態に応じて保持する。
+`commit`はcandidateと期待mode、assessment ticketをFoundationへ渡す。Foundationはowner-provided recovery protocolを内部で実行し、root write前の失敗だけを`FoundationError` payloadを保持したerrorとして返す。`precommit-cleanup-pending`では元のrestore ticketを保持し、利用者の再試行時に新しいguard permitを得て同じticketを再送する。Foundationは一致するopaque protocol capabilityで未完了cleanupを先に再開し、root write 0件のままcleanupを完了してから再assessmentとcommitへ進む。`stale-assessment`では`reassess`以外を許可しない。root write後は必ずcommitted outcomeとなり、cleanup未完了時は値やfence/controlを含まないopaque `RestoreFinalizationTicket`へ写像する。`findPendingFinalization`はFoundationの用途限定queryからowner protocolがpost-commitと分類したticketだけを復元し、candidate、raw root、control情報を取得しない。`finalize`はこのticketでprotocol-owned cleanupとcommit済み状態の確認だけを再試行し、root write、assessment、guard prepare、利用者の置換確認を繰り返さない。再mount後にsummaryがない場合はfinalize成功後に`BackupSnapshotReadPort`から検証済みrootの件数を再構築する。失敗時は元のrestore ticketまたはfinalization ticketを状態に応じて保持する。
 
 #### RestoreContextLifecycle
 
@@ -441,7 +445,7 @@ interface BackupRestoreDataPort {
 }
 ```
 
-`BackupRestoreAssessment`はpreview用のmode・必要bytes・current anomalyとopaque ticketだけを公開し、root revision、raw fingerprint、candidate digest、cursorを公開しない。`BackupRestoreCommitCommand`はcandidate、expected mode、assessment ticketを必須とする。`BackupRestoreCommitOutcome`は`committed | committed-finalization-required`の判別共用体であり、Foundationだけがroot writeのcommit pointを判定する。root write前にcontrol cleanupが未完了となった場合は値を含まない`precommit-cleanup-pending` errorを返し、同じassessment ticketの再送だけでcleanupを冪等再開する。再開はroot write 0件、同じowner/generationの照合、cleanup後の最新root再assessmentを必須とし、別ticket、stale owner、期限切れleaseを暗黙継続しない。再assessmentがstaleなら同ticketを終了させ、consumerに新規assessmentを要求する。finalization ticketは対応するcommitとcleanup世代へ結び付くopaque値で、`finalize`はrootを再置換できない。Foundationの内部controlはcandidate digestと期待commit revisionをroot write前から永続保持し、現在rootが両方へ一致した場合だけpost-commitと分類する。`findPendingFinalization`はこの永続判定が成立したactive controlからだけ同じopaque ticketを再構築し、pre-commit control、digest、revision、raw root、owner、generationを公開しない。このportは通常query、mutate、raw root、Storage、lock、Repository、fence、authority factoryを公開しない。正常/回復の両経路は同じWeb Lock、validation、capacity、assessment ticket再照合、owner/generation再検証、単一root writeを使用する。
+`BackupRestoreAssessment`はpreview用のmode・必要bytes・current anomalyとopaque ticketだけを公開し、root revision、raw fingerprint、candidate digest、cursorを公開しない。`BackupRestoreCommitCommand`はcandidate、expected mode、assessment ticketを必須とする。`BackupRestoreCommitOutcome`は`committed | committed-finalization-required`の判別共用体であり、Foundationだけがroot writeのcommit pointを判定する。Foundation内部ではroot内maintenance controlとroot外persistent recovery controlを相互非互換な型として扱い、consumer-owned `ErrorAdapter`とowner-provided recovery protocolを構成するが、このportはそれらをbackupへ公開しない。policy failureは`FoundationError` payloadへ意味不変に写像され、backup側はcast、一般storage errorへの縮退、control field解釈を行わない。root write前にprotocol-owned cleanupが未完了となった場合は値を含まない`precommit-cleanup-pending` errorを返し、同じassessment ticketの再送だけでcleanupを冪等再開する。再開はroot write 0件、opaque owner capabilityの照合、cleanup後の最新root再assessmentを必須とし、別ticketまたはstale capabilityを暗黙継続しない。再assessmentがstaleなら同ticketを終了させ、consumerに新規assessmentを要求する。finalization ticketは対応するcommitとpending cleanupへ結び付くopaque値で、`finalize`はrootを再置換できない。`findPendingFinalization`はowner protocolがpost-commit finalization pendingと分類したactive stateからだけ同じopaque ticketを再構築し、pre-commit state、digest、revision、raw root、owner、generation、control fieldを公開しない。このportは通常query、mutate、raw root、Storage、lock、Repository、fence、authority factoryを公開しない。正常/回復の両経路は同じWeb Lock、validation、capacity、assessment ticket再照合、owner protocol authorization、単一root writeを使用する。
 
 composition ownerは`FoundationScopedDataPort.query`だけをfrozen `BackupSnapshotReadPort`へ狭め、`BackupRestoreDataPort`とproject-contextのreplacement/command capabilityとともに本機能のsection factoryへ供給する。settingsには`BackupRestoreSectionMount`だけを渡し、read/data/context port、finalization ticket、stateを露出しない。
 

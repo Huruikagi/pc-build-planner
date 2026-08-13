@@ -48,6 +48,7 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 - [x] product-page-capture -- 商品同一性normalizerの公開ownershipを手放し、取得・manufacturer補完・candidate handoffへ責務を限定する。 Dependencies: spec:duplicate-product-merge
 - [x] backup-restore -- product backup adapterを単独所有し、generic orchestrationをcoreの公開port上へ委譲する。 Dependencies: spec:local-data-library-boundaries, spec:local-data-foundation, spec:project-context
 - [x] application-shell -- owner確定後の公開portだけをcompositionし、project・source・identityの遅延proxyと旧wiringを撤去する。 Dependencies: spec:ui-message-catalog, spec:project-context, spec:project-candidate-management, spec:current-build-management, spec:compatibility-checking, spec:candidate-source-bookmarks, spec:source-price-refresh, spec:duplicate-product-merge, spec:product-page-capture, spec:backup-restore
+- [x] local-data-library-boundaries -- consumer-owned error/control policyをpackage公開factoryへ意味不変で接続し、下流所有の実product contractでruntime composition可能性を検証する。 Dependencies: none
 
 ## Direct Implementation Candidates
 

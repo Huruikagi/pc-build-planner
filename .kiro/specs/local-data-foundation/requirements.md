@@ -13,7 +13,7 @@
 ## Change Integration
 
 - **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In-scope trace**: product adapterとPC policy injectionは9.1–9.3、共有`AppDataError` vocabulary・一対一mapping・公開exportは9.4–9.6、用途別runtime capabilityとpackage公開API限定compositionは9.7–9.8、characterization・contract・変更種別別検証は9.9–9.10で扱う。
+- **In-scope trace**: product adapterとPC policy injectionは9.1–9.3、共有`AppDataError` vocabulary・一対一mapping・公開exportは9.4–9.6、用途別runtime capabilityとpackage公開API限定compositionは9.7–9.8、characterization・contract・変更種別別検証は9.9–9.12で扱う。
 - **Out-of-scope preservation**: generic core、Chrome adapter、generic backup orchestration、保存schemaの意味、`FoundationError`の種類・意味・粒度、raw rootと内部adapterの非公開、single write authority、atomicity、maintenance/recovery fencing、reference repair、worker認可を変更しない。
 
 ## Requirements
@@ -132,3 +132,5 @@
 8. When backup-restoreが保存rootの評価、置換、回復、またはfinalizationを要求する, the ローカルデータ基盤 shall 通常CRUDとraw rootと内部adapterを含まない用途限定runtime capabilityを提供する
 9. When product local-data adapterまたはPC policyだけが変更される, the ローカルデータ基盤 shall 汎用packageの公開契約を変更せず製品ownerのcharacterization・consumer contractで影響を検証可能にする
 10. If 汎用packageの公開契約またはgeneric error分類が変更される, the ローカルデータ基盤 shall product adapter、`AppDataError` mapping、候補管理、現在構成、互換性、candidate source、価格更新、backup-restoreの接続を再検証対象として識別する
+11. When 実際の製品adapterを使う実行可能contractを検証する, the ローカルデータ基盤 shall 製品errorの種類・payload・判定context、root内maintenance状態とroot外recovery controlの意味分離、single write、共通排他identity、回復・finalization、および保存access制限失敗時のfail-closedをproduction相当のruntime compositionで確認可能にする
+12. When 汎用transactionまたはreplacement contractの上流検証が製品接続を確認する, the ローカルデータ基盤 shall 製品adapterと製品controlを上流へ再実装させず、foundationが所有する一つの再現可能な実行入口から成功・失敗を伝播可能にする

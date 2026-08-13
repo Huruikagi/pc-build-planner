@@ -2,9 +2,9 @@
 
 ## Change Integration
 
-- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In-scope trace**: generic storage/lock/transaction/replacement contractはTasks 2.1–2.7、Chrome adapterはTasks 3.1–3.3、generic backup orchestrationはTasks 4.1–4.2、公開export・package test・read-only app contract・deep import gateはTasks 1.1および5.1–5.5で実装する。
-- **Out-of-scope preservation**: PC root/schema/migration/repair/error mapping、`ProductLocalDataAdapter`、製品backup codec/mapping/policy、`ProductBackupAdapter`、製品composition/E2Eをtask boundaryへ含めない。
+- **Integrated Change Brief**: `product-runtime-contract-repair`
+- **In-scope trace**: transaction/replacement両factoryのconsumer-owned error adapterと分離control genericはTasks 6.1–6.2、owner-provided recovery protocolとreplacement lifecycleはTasks 6.3–6.4、synthetic/public declaration更新はTasks 7.1–7.4、下流所有executable product contract routingはTask 8.1、workspace gateはTasks 9.1–9.2で実装する。backup-restoreとapplication-shellはdesignのRevalidation Triggersに従い各ownerが再検証する。
+- **Out-of-scope preservation**: `FoundationError`とPC control型、`ProductLocalDataAdapter`、製品schema/migration/repair、製品backup codec/mapping/policy、`ProductBackupAdapter`、下流task 11.2以降のruntime composition、保存形式・利用者向け挙動をtask boundaryへ含めない。既存Tasks 1–5.5の3 entry、製品非依存、single write、固定Web Lock、revision/dedupe、atomic replacement、opaque ticket、pre/post cleanup、既存root保持、backup semanticsを維持する。
 
 - [x] 1. Workspace package基盤を確立する
 - [x] 1.1 private local data package scaffoldと公開entry枠を追加する
@@ -34,6 +34,7 @@
   - owner、generation、lease、revisionを用いるacquire、renew、release、abort、stale拒否をroot/controlの具体fieldに依存しないpure policyとして実装する。
   - process memoryを共有しない再生成fixtureでもactive fenceを再読込し、owner外mutationとstale owner/generationを拒否する。
   - normal終了・abort後だけ後続mutationが再開し、同時acquireの成功が一件に限定されるcontract testが成功すれば完了とする。
+  - historical完了記録として`[x]`を保持する。persistent recoveryのowner/generation/lease state machine部分はTasks 6.3–6.4がsupersedeし、planned end stateの`FencingPolicy`はroot内maintenance transitionだけを保持する。
   - _Requirements: 2.7, 4.3, 4.4, 4.5, 4.6, 4.7_
   - _Boundary: FencingPolicy_
   - _Depends: 2.1_
@@ -55,9 +56,9 @@
   - _Depends: 2.4_
 
 - [x] 2.6 normal・recovery rootの副作用なしassessmentを実装する
-  - candidateをdecode/migrate/repair/validate/capacity評価し、candidate digest、revision、raw fingerprint、owner/generationを公開しないopaque ticketへ束ねる。
+  - candidateをdecode/migrate/repair/validate/capacity評価し、candidate digest、revision、raw fingerprint、owner protocolから受け取るopaque recovery capabilityを公開しないopaque ticketへ束ねる。
   - normalと破損・未対応rootのrecoveryを別modeで評価し、assessment中はroot/controlを一度も書き換えない。
-  - stale candidate、revision、owner、generationを識別できるfixtureと、全assessmentでroot write 0件のtestが成功すれば完了とする。
+  - stale candidate、revision、root maintenance判定、opaque recovery capabilityを識別できるfixtureと、全assessmentでroot write 0件のtestが成功すれば完了とする。packageはcapability内のowner、generation、lease fieldを解釈しない。
   - _Requirements: 4.1, 4.3, 4.5, 4.7, 5.3_
   - _Boundary: ReplacementCoordinator_
   - _Depends: 2.5_
@@ -152,3 +153,100 @@
   - _Requirements: 7.8, 7.9, 7.10, 7.11_
   - _Boundary: WorkspaceValidation_
   - _Depends: 5.4_
+
+- [ ] 6. 公開factoryのerror/control境界を修復する
+- [ ] 6.1 consumer-owned policy error adapterをtransaction・replacement両factoryへ統合する
+  - transactionとreplacementのpolicy error/output errorを別genericとして受け、decode、migration、mutation、repair、validation、assessment、replacement validationの各failureを元payloadと判定contextのまま明示adapterへ渡す。
+  - mechanism errorだけをcore error mappingへ渡し、policy failureをstage codeへ縮退したり未知値を既知errorへ推測変換したりしない。
+  - synthetic policyの識別可能なerror種類・payload・判定contextがtransaction/replacement両factoryの各stageから同一内容でoutput errorへ到達し、adapterがfail-closed resultを返す場合とthrowする場合のどちらも成功・別の既知errorへ縮退せずroot writeが0件なら完了とする。
+  - _Requirements: 1.5, 1.7, 1.8, 2.1, 2.6, 4.1, 4.2, 4.7_
+  - _Boundary: ConsumerErrorAdapter, TransactionEngine, ReplacementCoordinator_
+
+- [ ] 6.2 root maintenanceとpersistent recovery controlをtransaction factoryで分離する
+  - root policyが扱うmaintenance controlとstorage側persistent recovery controlを非互換な別genericとして構成し、mutation前・commit直前の両方でowner protocolのauthorizationを呼ぶ。
+  - revision、dedupe、single write、固定exclusive lockの順序を維持し、control間のcastまたは共通field前提を導入しない。
+  - 非互換なsynthetic control型でtransaction factoryが型検査・実行され、active recovery拒否と成功時write一回が観測できれば完了とする。
+  - _Depends: 6.1_
+  - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.7, 4.4, 4.5, 4.8, 6.8_
+  - _Boundary: CoreContracts, TransactionEngine_
+
+- [ ] 6.3 owner-provided persistent recovery protocolをreplacementへ統合する
+  - replacement assessment/commitがfence取得・照合、pending準備、current anomaly分類をowner protocolへ委譲し、package側のcontrol field parserと独自pending markerを除去する。
+  - normal/recoveryのcandidate、raw fingerprint、revision、capacity、opaque ticket再照合とroot write一回を維持する。
+  - fieldを公開しないsynthetic protocolでnormal/recovery assessmentとcommitが成功し、stale protocol capabilityでは既存rootが保持されれば完了とする。
+  - _Depends: 6.2_
+  - _Requirements: 4.1, 4.2, 4.3, 4.7, 4.8, 4.9, 4.10, 4.11_
+  - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
+
+- [ ] 6.4 protocol-owned releaseとfinalization lifecycleをreplacementへ統合する
+  - pre-commit cleanup、root commit後release、pending finalization discovery、finalize-only retryをowner protocolのopaque capabilityとstate classificationだけで進める。
+  - pre-commit failureではroot write 0件、commit済みfailureでは成功を取り消さず、finalizeではroot write capabilityへ到達しない。
+  - same-ticket retry、worker再生成後のpending discovery、release/finalize failureを含むcontractでcommit最大一回とfinalize追加write 0件が観測できれば完了とする。
+  - _Depends: 6.3_
+  - _Requirements: 4.2, 4.3, 4.4, 4.5, 4.6, 4.9, 4.10, 4.11, 5.4, 5.5, 5.6, 5.7_
+  - _Boundary: PersistentRecoveryProtocol, ReplacementCoordinator_
+
+- [ ] 7. 公開declarationとsynthetic consumer contractを更新する
+- [ ] 7.1 root公開entryへ分離genericとowner protocol contractを公開する
+  - transaction/replacement factory、error adapter、root maintenance、persistent recovery、opaque protocol capabilityの型をroot entryからbuild済みdeclarationとして解決可能にする。
+  - `.`、`./chrome`、`./backup`の3 entryだけを維持し、Chrome、製品型、schema vendor、内部moduleをroot declarationへ混入させない。
+  - clean package build後にpublic declarationがunsafe castなしでconsumerへ解決され、未宣言subpathは引き続き失敗すれば完了とする。
+  - _Depends: 6.4_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 6.4, 6.8, 7.1, 7.2, 7.3, 7.4, 7.8_
+  - _Boundary: CoreContracts, PackagePublicEntries_
+
+- [ ] 7.2 transaction public consumer fixtureを独立error/control型へ更新する
+  - 架空のpolicy error、output error、root maintenance control、persistent recovery controlを互いに代入不能な型としてfactoryへ接続するpositive fixtureを追加する。
+  - error adapter欠落とcontrol generic混同が狙った型診断で失敗するnegative fixtureを追加し、runtime contractで各stageのpolicy error identity/payloadがadapter入力まで保持されることを検証する。
+  - build済みJavaScript/declarationだけを使うpositive/negative fixtureとruntime contractが期待どおり成功・失敗すれば完了とする。
+  - _Depends: 7.1_
+  - _Requirements: 1.5, 1.7, 1.8, 4.8, 6.5, 6.7, 6.8, 7.1, 7.5, 7.9, 7.11_
+  - _Boundary: SyntheticPublicContract_
+
+- [ ] 7.3 replacement・backup synthetic contractを更新する
+  - owner protocolのopaque fence/pending/anomaly型でassessment、commit、pre/post cleanup、find/finalizeを実行するfixtureを追加し、backup orchestrationの既存ticket semanticsを同じ公開port上で再検証する。
+  - replacement policy errorの種類・payload・判定contextが明示adapter入力とoutput errorまで保持され、adapterがfail-closed resultを返す場合またはthrowする場合はroot write 0件となるruntime fixtureを追加する。
+  - normal/recovery、stale、precommit cleanup、committed finalization、finalize-only retryをprotocol結果だけで駆動する。
+  - replacement/backup runtime contractでroot commit最大一回とfinalize root write 0件が観測できれば完了とする。
+  - _Depends: 7.2_
+  - _Requirements: 1.5, 1.7, 1.8, 2.6, 4.9, 4.10, 4.11, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.6, 6.7, 7.2, 7.3, 7.7, 7.11_
+  - _Boundary: SyntheticPublicContract, BackupOrchestrator_
+
+- [ ] 7.4 package ownership boundary gateを更新する
+  - package source/testによる製品adapter、製品control field、数値lease、generic/protocolを迂回するunsafe cast、独自pending markerの所有をboundary gateで拒否する。
+  - error/control/protocolのsynthetic fixtureは許可し、製品識別子や単なる型安全な変換を誤検出しないnegative/positive tooling testを追加する。
+  - 各negative fixtureが狙った所有違反一件で失敗し、3 public entryと製品非依存のpositive graphが成功すれば完了とする。
+  - _Depends: 7.3_
+  - _Requirements: 4.8, 4.9, 4.10, 6.7, 6.8, 7.2, 7.3, 7.11_
+  - _Boundary: WorkspaceValidation_
+
+- [ ] 8. 下流所有executable product contractをvalidationへ接続する
+- [ ] 8.1 local-data-foundation所有contractを上流validation routeから呼ぶ
+  - `local-data-foundation` task 11.2でownerが提供する実`ProductLocalDataAdapter` executable contract command `validate:local-data-product-contract`を、package source/testへ取り込まずroot validation routeから呼ぶ。command本体と製品fixtureはFoundation ownerに残す。
+  - 上流routeは製品error/controlを解釈・再実装せず、command、終了status、安定diagnosticだけを伝播する。
+  - 実product contractの成功がroute成功へ、payload/control/runtime composition不整合がroute失敗へそのまま反映されれば完了とする。
+  - _Depends: local-data-foundation 11.2_
+  - _Requirements: 6.7, 7.9, 7.10, 7.11, 7.12, 7.13_
+  - _Boundary: DownstreamExecutableContractRoute_
+
+- [ ] 9. 修復後のworkspace validationを統合する
+- [ ] 9.1 validation routingとfailure propagationのtooling contractを更新する
+  - core、contracts、backup、downstream product executable contractのroute順、重複実行防止、最初のfailure propagationを架空runnerで検証する。
+  - package-only routeは製品sourceを実行せず、generic public contract変更を含むroot routeだけが下流executable contractsを要求する変更scopeを維持する。
+  - tooling testで期待gate集合と各failure positionの終了statusが再現され、未定義routeがfail closedになれば完了とする。
+  - _Depends: 8.1_
+  - _Requirements: 7.5, 7.6, 7.7, 7.9, 7.10, 7.11, 7.12, 7.13_
+  - _Boundary: WorkspaceValidation_
+
+- [ ] 9.2 package・public・downstream・topological final validationを完了する
+  - fresh package build/typecheck/core・Chrome・backup tests、3 consumer、synthetic contract、boundary gate、Foundation task 11.2が所有する`validate:local-data-product-contract`、topological buildを順に実行する。
+  - single write、固定Web Lock、revision/dedupe、atomic replacement、opaque ticket、pre/post cleanup、既存root保持、MV3/CSPの回帰を各ownerのcontract evidenceで確認する。
+  - `backup-restore` tasks 7.1–7.3が本spec task 7.4とFoundation task 11.2を必要箇所で待ち、backup task 7.4と`application-shell` tasks 12.1–12.3が本spec task 9.2を直接またはbackup gate経由で待つ依存になっていることを検査する。これらの下流実装・UI・E2Eは本taskへ吸収しない。
+  - 全gateが成功し、package source/testに製品adapter/control、generic/protocolを迂回するunsafe cast、製品fixtureがなく、任意のgate failureが最終commandへ伝播すれば完了とする。
+  - _Depends: 9.1_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11, 7.12, 7.13_
+  - _Boundary: WorkspaceValidation_
+
+## Implementation Notes
+
+- **Fresh task-graph sanity review (2026-08-13 final spec remediation round 2)**: historical Tasks 2.3/2.6の完了記録を維持しつつ、persistent recovery ownershipを6.3–6.4へsupersedeした。Task 6.1はtransaction/replacement両factoryのerror adapterを同じcore contract変更として完結し、Task 7.3がreplacement payload/contextとadapter failure/throwのroot write 0件を独立fixtureで検証する。主経路はpackage 7.4 → `local-data-foundation` 11.2 `validate:local-data-product-contract` → 8.1 → 9.1 → 9.2、下流経路はpackage 7.4/Foundation 11.2 → backup 7.1–7.3、library 9.2 + backup 7.3 → backup 7.4 → application-shell 12.1–12.3で非循環となる。61 ACのtask/design trace、各新規taskのobservable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。

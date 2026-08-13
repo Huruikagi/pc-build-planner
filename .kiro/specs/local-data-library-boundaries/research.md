@@ -3,12 +3,14 @@
 ## Summary
 
 - **Feature**: `local-data-library-boundaries`
-- **Discovery Scope**: Complex Integration
+- **Discovery Scope**: Extension / Integration-focused discovery
 - **Key Findings**:
   - 現行実装は必要な安全性をすでに持つが、`StoragePort`、transaction、replacement、recovery、backup protocolが`LocalDataRoot`と`FoundationError`へ結合している。抽出は挙動追加ではなく、既存characterizationを保った依存反転として行う必要がある。
   - package数を3つへ先に増やさず、単一private package内のroot core export、明示的なChrome subpath、明示的なbackup subpathで依存方向を分ける構成が最小である。宣言済みsubpathは公開API、その他の内部pathはdeep importとして拒否する。
   - Chrome Storageは10MB quota、`getBytesInUse`、`setAccessLevel`、`onChanged`を提供し、Web Locksはtab・worker間で同名exclusive lockを直列化する。platform-native能力を薄いadapterへ閉じ込め、coreにChrome型を入れない設計を維持できる。
-  - `v0.5.0-boundary-reconciliation`により、製品adapter実装は`local-data-foundation`と`backup-restore`へ委譲し、本specのapp接点はpublic portを型検査するread-only contractだけへ縮小する。
+  - `v0.5.0-boundary-reconciliation`により製品adapter実装は`local-data-foundation`と`backup-restore`へ委譲された。最新Change Briefでは、従来のread-only contractをsynthetic package contractとして残しつつ、実製品接続はFoundation所有executable contractを上流routeから呼んで補完する。
+  - `product-runtime-contract-repair`のintegration-focused discoveryでは、package factoryがpolicy errorを`CoreError`へ固定し、同一`Control` genericをroot maintenanceとpersistent recoveryに共有し、replacementがcontrol fieldと独自pending markerを解釈しているため、実product adapterを意味不変に構成できないことを確認した。
+  - 修復はconsumer error adapter、分離control generic、owner-provided recovery protocolへ限定し、実`ProductLocalDataAdapter` executable contractは下流ownerに残したままroot validation routeから呼ぶ。
 
 ## Research Log
 
@@ -51,6 +53,31 @@
   - local storageは既定でcontent scriptから到達可能なため、`TRUSTED_CONTEXTS`への明示制限が必要である。
   - Web Locksの同名exclusive requestはtab・workerをまたいで単一holderに直列化され、callback完了時にreleaseされる。
 - **Implications**: Chrome adapterはquota値を注入せずplatformから読み、access restriction成功前にproduction contributionを公開しない。lockは一つのresource identityだけを使い、nested lockを導入しない。
+
+### Change Brief product-runtime-contract-repair のintegration-focused discovery
+
+- **Context**: `local-data-foundation` task 11.2が、製品error/controlをpackage factoryへ意味不変に接続できず停止したため、公開契約の不足を切り分けた。
+- **Sources Consulted**: `packages/local-data/src/contracts.ts`、`transaction.ts`、`replacement.ts`、public exports、synthetic fixtures、workspace validation routing、`local-data-foundation` design/tasks、`backup-restore` replacement契約、`application-shell` production composition契約。
+- **Findings**:
+  - transaction/replacement dependenciesの`LocalDataPolicy`が`PolicyError = CoreError`に固定され、policy payloadと判定contextを保持するadapter seamがない。
+  - root policyのmaintenance projectionとstorage側persistent recovery controlが同じ`Control` genericを共有する。
+  - replacementがpersistent valueからactive state、mode、owner、generation、pending commitを直接読み書きし、数値表現と独自markerをpackage semanticsにしている。
+  - read-only app contractは型aliasの接続だけで、実`ProductLocalDataAdapter`を用いるruntime compositionを実行しないため不整合を検出できなかった。
+  - historical Task 2.3はowner、generation、leaseを扱うpackage `FencingPolicy`を完了済みとして記録しているが、これは修復前のpersistent recovery state machineである。planned end stateではTasks 6.3–6.4がこの部分をsupersedeし、package `FencingPolicy`はroot内maintenance transitionだけを保持する。
+- **Implications**:
+  - factoryは`PolicyError`と`OutputError`を分離し、明示`ErrorAdapter`へ全policy errorを元payloadのまま渡す。
+  - root maintenanceとpersistent recoveryを別genericにし、persistent lifecycleはowner protocolがfence、pending、release、finalization、current anomalyを判定する。
+  - package testsは非互換なsynthetic型だけを使い、製品adapter/controlを所有しない。実製品contractは下流ownerに置き、上流routeはcommandを呼ぶだけとする。
+
+### Integration risks and revalidation
+
+- **Context**: 公開factory修復は既存consumerとrestore lifecycleへ波及するため、implementation順と再検証範囲を固定した。
+- **Sources Consulted**: `local-data-foundation` tasks 10.1、10.2、11.2以降、`backup-restore` design、`application-shell` design、workspace scripts。
+- **Findings**:
+  - 上流factory/public declarationを先に修復しないと下流executable contractをcastなしで書けない。
+  - Foundation task 11.2のexecutable product contract成立後に、`backup-restore` tasks 7.1–7.4のreplacement/recovery/finalizationと`application-shell` tasks 12.1–12.3のproduction compositionを各owner gateで再検証する必要がある。
+  - 既存3 entry、固定Web Lock、single write、revision/dedupe、atomic replacement、opaque ticket、pre/post cleanup、既存root保持は変更対象ではない。
+- **Implications**: 実装順をpackage core → public/synthetic contracts → Foundation task 11.2のdownstream-owned `validate:local-data-product-contract` → 上流routing/final validationとし、backup/application-shellの実装は吸収せず、各ownerの後続gateが修復milestoneを待つことを検査する。
 
 ## Architecture Pattern Evaluation
 
@@ -107,13 +134,45 @@
 - **Trade-offs**: package spec単独ではproduction wiringを完了しない。接続の実行可能性は公開型contractで固定し、実装・integration/E2Eは下流waveで検証する。
 - **Follow-up**: public port変更時は両下流specを再検証し、製品adapter実装を本specへ戻さない。
 
+### Decision: policy errorとmechanism errorを明示adapterで合流する
+
+- **Context**: stage codeだけでは`FoundationError`のpayload/contextを復元できない。
+- **Alternatives Considered**:
+  1. policy errorを既存`CoreError`へ縮退する。
+  2. consumer側でunsafe castしてfactoryへ渡す。
+  3. `PolicyError`と`OutputError`を別genericにし、consumer-owned adapterで写像する。
+- **Selected Approach**: 3を採用し、policy failureはstageと元errorをadapterへ渡し、mechanism failureだけをcore error adapterへ渡す。
+- **Rationale**: packageの製品非依存を維持しながら、下流canonical errorの意味とpayloadを保持できる。
+- **Trade-offs**: factory genericは増えるが、synthetic declaration contractで推論可能性とexhaustivenessを固定する。
+- **Follow-up**: 下流executable contractで全policy stageとcore failureの意味不変mappingを実行検証する。
+
+### Decision: persistent recovery lifecycleをowner protocolへ委譲する
+
+- **Context**: packageがcontrol fieldを解釈すると、root内maintenanceとroot外recoveryの保存意味が結合する。
+- **Alternatives Considered**:
+  1. package共通control schemaへ製品を移行する。
+  2. field accessor群だけを注入しpackageがstate machineを所有する。
+  3. owner protocolがcontrol decode、fence、pending、release、finalization、current anomaly transitionを所有する。
+- **Selected Approach**: 3を採用し、packageはopaque capabilityとprotocol resultだけでreplacement commit pointを制御する。
+- **Rationale**: 保存形式を変えず、数値lease、owner field、独自pending marker、製品anomaly ruleをpackageから排除できる。
+- **Trade-offs**: protocol contractはlifecycleを明示する必要があるが、packageは製品state machineを再実装しない。
+- **Follow-up**: normal/recovery、precommit cleanup、postcommit finalization、worker再生成をsynthetic package testと下流executable contractの両方で検証する。
+
+historical Task 2.3の完了記録は変更しない。ただし、そのowner/generation/lease state machineはTasks 6.3–6.4でsupersedeされる移行元であり、planned end stateのpackage `FencingPolicy`はroot内maintenanceだけを所有する。persistent recoveryの保存表現とtransitionはowner protocolが単独所有する。
+
+### Synthesis: 最小修復境界
+
+- **Generalization**: transactionとreplacementに共通するpolicy failure合流を一つの`ErrorAdapter<PolicyError, OutputError>`へ一般化する。controlは一般化せず、root maintenanceとpersistent recoveryを別責務として分離する。
+- **Build vs Adopt**: 新規依存は導入しない。既存Result、factory、opaque ticket、workspace command routingを拡張する。
+- **Simplification**: package内の製品field parserとpending marker ownershipを削除し、owner protocol一つへ置換する。製品contract複製やpackage側product fixtureは追加しない。
+
 ## Risks & Mitigations
 
 - policy hookの組合せが矛盾する — package contract kitでrevision、dedupe、repair、fenceを一つのsynthetic policyとして検証し、app characterizationで現行結果と比較する。
 - package内subpath間の逆依存 — TypeScript AST boundary gateで`core <- chrome`、`core <- backup`の一方向だけを許可する。
 - root write後の失敗をpre-commit失敗として扱う — commit outcomeを判別共用体にし、finalize-only testでroot write 0件を固定する。
 - Chrome adapterがcontent scriptへstorageを露出する — `TRUSTED_CONTEXTS`成功前はproduction handleを返さずnegative contractを維持する。
-- pending Existing Spec Updatesとの重複 — 本specのapp作業をread-only contractへ限定し、製品adapter、schema・error、exchange、composition、UI、lifecycle、E2Eを各canonical ownerのChange Briefへ残す。
+- pending Existing Spec Updatesとの重複 — 本specのapp作業をsynthetic contractとFoundation所有commandのroutingへ限定し、製品adapter、schema・error、exchange、composition、UI、lifecycle、E2Eを各canonical ownerのChange Briefへ残す。
 
 ## References
 
