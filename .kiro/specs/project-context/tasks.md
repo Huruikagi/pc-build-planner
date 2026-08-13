@@ -249,7 +249,7 @@
   - _Boundary: ProjectContextBoundaryGate Lifecycle_
   - _Depends: 8.1_
 
-- [ ] 8.3 (P) lifecycle contract と DOM integration test を完成する
+- [x] 8.3 (P) lifecycle contract と DOM integration test を完成する
   - synthetic data port で create/rename/delete、delete cancel、foundation repair 済み delete result、mutation failure、refresh failure/retry、public lifecycle port の並行呼出し rejection を一つの contract harness で検証する。
   - lifecycle presentation を testing-library と user-event で操作し、所属候補も削除される影響 warning、既存 role/label、keyboard、focus、pending、semantic descriptor の発火条件・parameter、synthetic resolver consumption、安全な text rendering を固定する。
   - selection/preference/guard/replacement の既存 contract suite と組み合わせても generation、fallback、forced notification、subscriber isolation が退行しないことを確認する。
