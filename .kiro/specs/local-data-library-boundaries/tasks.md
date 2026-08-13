@@ -30,7 +30,7 @@
   - _Boundary: CapacityPolicy_
   - _Depends: 2.1_
 
-- [ ] 2.3 (P) persistent maintenance・recovery fencing policyを実装する
+- [x] 2.3 (P) persistent maintenance・recovery fencing policyを実装する
   - owner、generation、lease、revisionを用いるacquire、renew、release、abort、stale拒否をroot/controlの具体fieldに依存しないpure policyとして実装する。
   - process memoryを共有しない再生成fixtureでもactive fenceを再読込し、owner外mutationとstale owner/generationを拒否する。
   - normal終了・abort後だけ後続mutationが再開し、同時acquireの成功が一件に限定されるcontract testが成功すれば完了とする。

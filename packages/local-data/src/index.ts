@@ -22,3 +22,15 @@ export type {
   TransactionPort,
   TransactionReceipt,
 } from "./contracts.js";
+
+export { createFencingPolicy } from "./fencing.js";
+export type {
+  AcquireFenceInput,
+  Fence,
+  FenceCompletion,
+  FenceControlState,
+  FenceKind,
+  FenceTransition,
+  FencingPolicy,
+  FencingProjection,
+} from "./fencing.js";

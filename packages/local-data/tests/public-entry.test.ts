@@ -8,7 +8,11 @@ test("all declared public entries resolve from built package output", async () =
     import("@pc-build-planner/local-data/backup"),
   ]);
 
-  assert.deepEqual(entries.map(Object.keys), [[], [], []]);
+  assert.deepEqual(entries.map(Object.keys), [
+    ["createFencingPolicy"],
+    [],
+    [],
+  ]);
 });
 
 test("undeclared package subpaths are not exported", async () => {

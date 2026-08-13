@@ -43,7 +43,11 @@ test("the root declaration stays product and platform independent", async () => 
     }
   }
 
-  assert.deepEqual([...visited].sort(), ["contracts.d.ts", "index.d.ts"]);
+  assert.deepEqual([...visited].sort(), [
+    "contracts.d.ts",
+    "fencing.d.ts",
+    "index.d.ts",
+  ]);
   const declaration = declarations.join("\n");
 
   for (const forbiddenName of [
