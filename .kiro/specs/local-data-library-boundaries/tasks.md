@@ -113,7 +113,7 @@
   - _Depends: 2.7, 4.1_
 
 - [ ] 5. 公開境界と検証経路を確定する
-- [ ] 5.1 3つの公開entry consumer fixtureを追加する
+- [x] 5.1 3つの公開entry consumer fixtureを追加する
   - root core、Chrome、backupの各declared entryだけを使うstrict consumer fixtureとruntime smoke testを追加する。
   - 各fixtureはclean build済みJavaScript/declarationだけを解決し、package sourceをroot appのTypeScript projectへ混在させない。
   - 3つのpositive fixtureがclean outputから成功し、未宣言subpathではmodule resolutionが失敗すれば完了とする。
