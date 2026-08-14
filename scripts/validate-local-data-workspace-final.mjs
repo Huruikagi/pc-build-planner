@@ -15,12 +15,20 @@ export const localDataWorkspaceGates = Object.freeze([
 ]);
 
 export const localDataProductOwnerGates = Object.freeze([
-  Object.freeze(["pnpm", "typecheck"]),
-  Object.freeze(["pnpm", "test"]),
+  Object.freeze(["pnpm", "validate:local-data-product-contract"]),
+  Object.freeze(["pnpm", "validate:local-data-product-consumers"]),
+]);
+
+export const localDataPackageImpactGates = Object.freeze([
+  ...localDataWorkspaceGates,
+  ...localDataProductOwnerGates,
 ]);
 
 const productOwnerPath =
   /^(?:src\/(?:application-shell|domain|features|persistence|project-context|ui-language)\/|tests\/(?:application-shell|domain|features|persistence|project-context|ui-language)\/)/u;
+
+const packagePublicContractPath =
+  /^packages\/local-data\/(?:src\/|package\.json$)/u;
 
 /** @param {string} command @param {readonly string[]} args */
 const spawnGate = (command, args) => {
@@ -60,8 +68,15 @@ export function runLocalDataChangedValidation(
     changedPaths.every((path) =>
       productOwnerPath.test(path.replaceAll("\\", "/")),
     );
+  const packagePublicImpact = changedPaths.some((path) =>
+    packagePublicContractPath.test(path.replaceAll("\\", "/")),
+  );
   return runLocalDataWorkspaceGates(
-    productOnly ? localDataProductOwnerGates : localDataWorkspaceGates,
+    productOnly
+      ? localDataProductOwnerGates
+      : packagePublicImpact
+        ? localDataPackageImpactGates
+        : localDataWorkspaceGates,
     runGate,
   );
 }

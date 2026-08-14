@@ -494,7 +494,7 @@
   - _Requirements: 9.2, 9.4, 9.5, 9.6, 9.7, 9.8, 9.10_
   - _Boundary: AppDataErrorContract, ProductConsumerContract_
 
-- [ ] 12. package変更と製品変更を分ける検証routingを完成する
+- [x] 12. package変更と製品変更を分ける検証routingを完成する
   - product-local runtime・PC policyだけの変更はfoundation characterizationとproduct consumer contractを実行する。
   - package公開契約変更はpackage単独gateで検証し、product-local runtimeの公開data/error/capability契約へ影響する場合だけfoundation characterizationと下流consumer seamを再検証する。package-only migrationを完了条件にしない。
   - foundation所有commandが現行runtimeのcharacterizationを一回だけ実行し、その終了statusと安定diagnosticを変更せず伝播するtooling contractを固定する。

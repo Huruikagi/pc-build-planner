@@ -10,6 +10,7 @@ import {
   runLocalDataValidationRoute,
 } from "../../scripts/validate-local-data-workspace.mjs";
 import {
+  localDataPackageImpactGates,
   localDataProductOwnerGates,
   localDataWorkspaceGates,
   runLocalDataChangedValidation,
@@ -115,7 +116,7 @@ test("実boundary runnerの違反をroute failureとして伝播する", async (
 
 test("changed-scope entrypointはgenericとunknownをfull gateへ安全側分類する", () => {
   for (const changedPaths of [
-    ["packages/local-data/src/contracts.ts"],
+    ["packages/local-data/tests/transaction.test.ts"],
     ["scripts/validate-local-data-workspace-final.mjs"],
     ["docs/unknown-shared-contract.md"],
     [],
@@ -157,10 +158,69 @@ test("changed-scope entrypointはproduct-only変更をowner validationへ委譲�
     calls,
     localDataProductOwnerGates.slice(0, 2).map((gate) => gate.join(" ")),
   );
-  assert.deepEqual(calls, ["pnpm typecheck", "pnpm test"]);
+  assert.deepEqual(calls, [
+    "pnpm validate:local-data-product-contract",
+    "pnpm validate:local-data-product-consumers",
+  ]);
   assert.equal(
     manifest.scripts["validate:local-data:changed"],
     "node scripts/validate-local-data-workspace-final.mjs --changed",
+  );
+});
+
+test("package公開契約変更はpackage gate後に影響するproduct contractだけを再検証する", () => {
+  for (const changedPath of [
+    "packages/local-data/src/contracts.ts",
+    "packages/local-data/package.json",
+  ]) {
+    const calls: string[] = [];
+    const status = runLocalDataChangedValidation(
+      [changedPath],
+      (command, args) => {
+        calls.push([command, ...args].join(" "));
+        return { status: 0 };
+      },
+    );
+
+    assert.equal(status, 0);
+    assert.deepEqual(
+      calls,
+      localDataPackageImpactGates.map((gate) => gate.join(" ")),
+    );
+    assert.equal(
+      calls.filter(
+        (gate) => gate === "pnpm validate:local-data-product-contract",
+      ).length,
+      1,
+    );
+    assert.equal(
+      calls.filter(
+        (gate) => gate === "pnpm validate:local-data-product-consumers",
+      ).length,
+      1,
+    );
+  }
+});
+
+test("package公開契約後のproduct gate失敗を変更せず伝播し後続を停止する", () => {
+  const calls: string[] = [];
+  const productContractIndex = localDataPackageImpactGates.findIndex(
+    (gate) => gate.join(" ") === "pnpm validate:local-data-product-contract",
+  );
+  const status = runLocalDataChangedValidation(
+    ["packages/local-data/src/public.ts"],
+    (command, args) => {
+      calls.push([command, ...args].join(" "));
+      return { status: calls.length === productContractIndex + 1 ? 31 : 0 };
+    },
+  );
+
+  assert.equal(status, 31);
+  assert.deepEqual(
+    calls,
+    localDataPackageImpactGates
+      .slice(0, productContractIndex + 1)
+      .map((gate) => gate.join(" ")),
   );
 });
 
