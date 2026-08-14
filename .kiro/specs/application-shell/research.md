@@ -18,6 +18,13 @@
 
 ## 調査ログ
 
+### Change Brief mvp-local-data-simplification のintegration-focused discovery
+- **背景**: package-backed product runtime全面移行を延期し、application-shellのMVP完了条件を現行product-local runtime contributionと既存backup専用capabilityのcompositionへ戻す。
+- **参照元**: 全steering、roadmap、`application-shell`全spec文書、承認済み`local-data-library-boundaries`・`local-data-foundation`・`backup-restore`のrequirements/design/tasks/spec metadata。
+- **所見**: packageは抽出済みgeneric primitiveと3公開entryの検証を所有する一方、local-data-foundationが現行product-local runtimeと用途別capabilityを、backup-restoreが製品restore workflowとbackup section contributionを所有する。shellがpackage factory、storage/lock、consumer固有fence、generic recovery/finalization resumptionを知る必要はない。
+- **影響**: `application-composition.ts`は現行foundation contributionを一度だけ初期化し、通常consumerへ通常用途capability、backup sectionへbackup専用capabilityだけを注入する。既存navigation、startup/degraded startup、maintenance/recovery-required、settings到達、project selector、feature lifecycle、cleanup順を変更しない。
+- **Synthesis**: 第二consumerの実証前に新しいgeneric seamを一般化しない。既存のproduction contribution interfaceを維持し、MVP taskはcapability identityと非漏洩を検証する最小composition差分へ限定する。
+
 ### 既存構造と統合点
 - **背景**: 共有runtime入口の所有権競合を解消する必要がある。
 - **参照元**: `brief.md`、`.kiro/steering/roadmap.md`、リポジトリのファイル構造。

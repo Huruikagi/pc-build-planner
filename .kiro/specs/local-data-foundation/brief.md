@@ -169,3 +169,37 @@ product local-data adapterとcross-feature data operation errorのcanonical owne
 ### Source
 
 - v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。
+
+## Change Brief: mvp-local-data-simplification
+
+### Problem
+
+実product runtimeをgeneric package factoryへ完全移行するtask 11.2は、package側にconsumer固有maintenance fenceとrecovery resumptionを追加しない限り既存のowner認可意味を維持できず、MVPに対して過剰な抽象化を要求している。
+
+### Current State
+
+現行product-local runtimeは単一root transaction、固定Web Lock、revision、maintenance/recovery fencing、通常featureとbackupのcapability分離を既に提供している。共有`AppDataError`とproduct policy adapterも独立して実装可能だが、task 11.2以降は同じ挙動をpackage graphへ再構成することを必須にしている。
+
+### Desired Outcome
+
+現行product-local runtimeをMVPのcanonical実装として維持し、task 11.2は既存挙動と用途別capability分離をcharacterization commandで固定する。package-backed full composition、generic maintenance fence、generic recovery/finalization resumptionは将来の複数consumer検証まで延期する。
+
+### Scope
+
+- **In**: 現行product-local transaction/replacement/recovery runtimeのcharacterization、通常/backup capability分離、共有`AppDataError`、PC root/schema/validation/migration/repair、既存worker認可とfail-closed挙動の維持。
+- **Out**: runtimeのpackage factory全面移行、`TransactionCommand`公開契約変更、generic recovery protocolの完成、保存schema/error種類/利用者挙動の変更。
+
+### Boundary Impact
+
+- **Extends**: 新規runtime抽象化ではなく、現行product-local実装を明示的なMVP canonical ownerとして固定する。
+- **Preserves**: single write authority、固定Web Lock、atomicity、revision/dedupe、maintenance/recovery fencing、raw root非公開、通常/backup capability分離、共有error公開入口。
+- **Adjacent**: `local-data-library-boundaries`は抽出済みprimitiveだけを所有し、`backup-restore`は既存backup専用capabilityを消費し、`application-shell`は現行product contributionをcompositionする。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-library-boundaries`の同Change Brief revision。
+- **Downstream**: `spec:backup-restore`、`spec:application-shell`の同Change Brief revision。candidate/current-build/compatibility/source consumersの公開data/error契約は変更しない。
+
+### Source
+
+- task 11.2の実装・review・debug結果と、利用者によるMVP複雑性縮小判断（2026-08-14）。

@@ -191,6 +191,16 @@
 - `.kiro/specs/project-candidate-management/design.md` — プロジェクト・候補所有境界。
 - `.kiro/specs/current-build-management/design.md` — 現在構成と候補参照契約。
 
+### 2026-08-14 MVP local data simplification
+
+- **Change Brief**: `mvp-local-data-simplification`
+- **Context**: package-backed product compositionとgeneric recovery/finalization resumptionを前提にした旧revisionが、MVP縮小後のFoundation完了条件と循環するため再評価した。
+- **Sources Consulted**: 全steering、roadmap、`backup-restore`全spec文書、承認済み`local-data-library-boundaries`・`local-data-foundation`・`project-context`のrequirements/design/tasks/spec.json。
+- **Findings**: Foundationは現行product-local single-root runtimeと、通常CRUDを含まないbackup専用capabilityをcanonical ownerとして維持する。既存capabilityは正常置換、異常root回復、pending finalization discovery/finalizeを既に提供する。package specは抽出済みgeneric primitiveとsynthetic contractを完成形とし、実product compositionとconsumer固有recovery resumptionをMVP gateから明示的に除外している。
+- **Selected Approach**: backup-restoreはFoundationの`BackupSnapshotReadPort`と`BackupRestoreDataPort`を直接利用し、交換形式、preview、明示確認、file lifecycle、project-context guard/refreshをfeature内に維持する。通常CRUD、raw root、storage/lock、内部control fieldは公開しない。
+- **Alternatives Rejected**: package-backed `ProductBackupAdapter`への移行継続は上流が明示的に延期した完了条件を復活させる。generic recovery/finalization protocolを本specで所有する案はFoundationとpackageの境界を重複させる。
+- **Validation implication**: product-local capabilityのpositive/negative consumer contract、normal/recovery/finalization、UI、E2Eを検証する。2番目の実consumerが現れるまで汎用化を再開しない。
+
 ### 2026-08-12 v0.5.0 boundary reconciliation light discovery
 
 - **Change Brief**: `v0.5.0-boundary-reconciliation`

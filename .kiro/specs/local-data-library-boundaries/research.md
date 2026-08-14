@@ -7,6 +7,20 @@
 - **Key Findings**:
   - 現行実装は必要な安全性をすでに持つが、`StoragePort`、transaction、replacement、recovery、backup protocolが`LocalDataRoot`と`FoundationError`へ結合している。抽出は挙動追加ではなく、既存characterizationを保った依存反転として行う必要がある。
   - package数を3つへ先に増やさず、単一private package内のroot core export、明示的なChrome subpath、明示的なbackup subpathで依存方向を分ける構成が最小である。宣言済みsubpathは公開API、その他の内部pathはdeep importとして拒否する。
+  - MVPで実際に再利用される境界は、抽出済みprimitive、3公開entry、synthetic contract、package単独validationである。唯一のproduct runtimeをpackage factoryへ全面移行するためのconsumer固有fence/recovery/finalization一般化は、2番目の実consumer evidenceが得られるまで延期する。
+
+### Change Brief mvp-local-data-simplification のintegration-focused discovery
+
+- **Context**: task 11.2の実装・review・debugで、実product compositionをpackage completion gateにするとconsumer固有maintenance fence、recovery cleanup、finalization resumptionまで公開契約へ一般化する必要があると判明した。
+- **Sources Consulted**: 最新Change Brief、roadmap Approach Decision、`tech.md`、現行package公開entry、synthetic consumer、package validation、`local-data-foundation`・`backup-restore`・`application-shell`のownership境界。
+- **Findings**:
+  - transaction、capacity、replacement、Chrome adapter、backup orchestration、3公開entry、synthetic contract、deep-import gate、package単独validationは既に独立した成果として成立している。
+  - 実product runtimeは一つだけであり、consumer固有control lifecycleを今generic protocolへ固定しても再利用性を実証できない。
+  - product-local runtimeとbackup専用capabilityを現行ownerに残せば、MVPの利用者向け挙動とデータ保全契約を変えずにpackage境界を閉じられる。
+- **Implications**:
+  - 下流product contract routingとproduct compositionをpackage completion gateから外す。
+  - 先行revisionで完了したpackage修復履歴は保持するが、それを新しいstable APIやproduct migration requirementへ拡張しない。
+  - 2番目の実consumerが現れた時点で、共通するfence/recovery semanticsだけを実例から再発見する。
   - Chrome Storageは10MB quota、`getBytesInUse`、`setAccessLevel`、`onChanged`を提供し、Web Locksはtab・worker間で同名exclusive lockを直列化する。platform-native能力を薄いadapterへ閉じ込め、coreにChrome型を入れない設計を維持できる。
   - `v0.5.0-boundary-reconciliation`により製品adapter実装は`local-data-foundation`と`backup-restore`へ委譲された。最新Change Briefでは、従来のread-only contractをsynthetic package contractとして残しつつ、実製品接続はFoundation所有executable contractを上流routeから呼んで補完する。
   - `product-runtime-contract-repair`のintegration-focused discoveryでは、package factoryがpolicy errorを`CoreError`へ固定し、同一`Control` genericをroot maintenanceとpersistent recoveryに共有し、replacementがcontrol fieldと独自pending markerを解釈しているため、実product adapterを意味不変に構成できないことを確認した。
@@ -165,6 +179,23 @@ historical Task 2.3の完了記録は変更しない。ただし、そのowner/g
 - **Generalization**: transactionとreplacementに共通するpolicy failure合流を一つの`ErrorAdapter<PolicyError, OutputError>`へ一般化する。controlは一般化せず、root maintenanceとpersistent recoveryを別責務として分離する。
 - **Build vs Adopt**: 新規依存は導入しない。既存Result、factory、opaque ticket、workspace command routingを拡張する。
 - **Simplification**: package内の製品field parserとpending marker ownershipを削除し、owner protocol一つへ置換する。製品contract複製やpackage側product fixtureは追加しない。
+
+### Synthesis: MVP package境界の縮小
+
+- **Generalization**: 新たな一般化を行わない。複数consumerで実証済みの契約だけを将来の共通化候補とする。
+- **Build vs Adopt**: 既に抽出済みのpackage primitive、3公開entry、synthetic test、boundary gateを採用し、product runtime移行用protocolは追加しない。
+- **Simplification**: 下流product contract routing、consumer固有fence command、recovery cleanup/finalization resumptionをMVP completion graphから除外する。product-local runtimeとbackup capabilityは現行ownerに残す。
+
+### Decision: 実product compositionを第二consumerまで延期する
+
+- **Context**: 唯一のproduct runtimeをgeneric factoryへ完全移行するための追加抽象化が、MVPのpackage再利用価値を超える設計・検証コストを生んだ。
+- **Alternatives Considered**:
+  1. 下流product contractを上流gateへ接続し、consumer固有recovery lifecycleをpackage APIとして完成させる。
+  2. 抽出済みprimitiveとsynthetic contractをpackage完成形とし、実product compositionは現行ownerに残す。
+- **Selected Approach**: 2を採用する。
+- **Rationale**: 実際に独立検証できるpackage価値を維持しながら、未実証のfuture abstractionとproduct ownershipの逆流を避けられる。
+- **Trade-offs**: package単独ではPC Build Plannerのproduction compositionを実証しない。これはMVPでは意図した境界であり、product runtime自体の検証は`local-data-foundation`、`backup-restore`、`application-shell`が担う。
+- **Follow-up**: 2番目の実consumerが現れたら、両consumerに共通するmaintenance/recovery/finalization semanticsと相違点を比較し、必要最小限の公開contractを新しいChange Briefで再設計する。
 
 ### Decision: finalization capabilityをprepare時にownerが発行する
 

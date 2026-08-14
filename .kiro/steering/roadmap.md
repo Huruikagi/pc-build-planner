@@ -8,6 +8,7 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 
 ## Approach Decision
 
+- **MVP simplification (2026-08-14)**: `@pc-build-planner/local-data`への実product runtime全面移行は延期する。抽出済みgeneric primitiveとpackage検証は維持し、現行product-local single-root runtimeとbackup専用capabilityをMVPのcanonical実装とする。consumer固有maintenance fenceとrecovery/finalization resumptionの一般化は、2番目の実consumer evidenceが得られた時点で再評価する。
 - **Chosen**: 責務境界で分ける混合構成。generic package境界は既存の2新規specへ限定し、製品adapter、共有データ操作error、catalog、composition、consumer移行は既存canonical ownerのChange Briefで扱う。配布notice修正だけをDirect Candidateとする。
 - **Why**: package specが製品adapterまで所有する重複を解消し、`ui-message-catalog`、`local-data-foundation`、`backup-restore`、`application-shell`など既存ownerの履歴と受け入れ契約を保てる。共有errorは新規core specを増やさず、canonical `Result`と`FoundationError`を持つlocal data foundationの製品domain境界へ置く。
 - **Rejected alternatives**: app共有errorだけの新規specは既存`src/domain`と責務が重なるため不採用。横断移行をapplication shellへ集約する案はshellへ業務error・catalog・data policyを漏らすため不採用。core、Chrome adapter、backupを最初から別package specへ分割する案もpackage構成を早期固定しすぎるため不採用。
@@ -25,7 +26,7 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 - 各packageを単独でtypecheck・test可能にし、topological buildとapp consumer contractを再現可能なscriptへ置く。
 - package内部へのdeep importをexport mapと機械的gateで禁止する。
 - Chrome API、React、PCドメイン型、製品カタログをgeneric coreへ漏らさない。
-- Manifest V3、CSP、単一write authority、原子的replacement、maintenance fencing、架空fixtureのみという既存契約を維持する。
+- Manifest V3、CSP、product-local単一write authority、原子的replacement、maintenance fencing、通常/backup capability分離、架空fixtureのみという既存契約を維持する。これらをMVPでgeneric package protocolへ再抽象化することは要求しない。
 
 ## Boundary Strategy
 
@@ -49,6 +50,10 @@ v0.5.0では、PC Build Plannerで実証済みのうちドメイン非依存で�
 - [x] backup-restore -- product backup adapterを単独所有し、generic orchestrationをcoreの公開port上へ委譲する。 Dependencies: spec:local-data-library-boundaries, spec:local-data-foundation, spec:project-context
 - [x] application-shell -- owner確定後の公開portだけをcompositionし、project・source・identityの遅延proxyと旧wiringを撤去する。 Dependencies: spec:ui-message-catalog, spec:project-context, spec:project-candidate-management, spec:current-build-management, spec:compatibility-checking, spec:candidate-source-bookmarks, spec:source-price-refresh, spec:duplicate-product-merge, spec:product-page-capture, spec:backup-restore
 - [x] local-data-library-boundaries -- consumer-owned error/control policyをpackage公開factoryへ意味不変で接続し、下流所有の実product contractでruntime composition可能性を検証する。 Dependencies: none
+- [x] local-data-library-boundaries -- 抽出済みgeneric primitiveとsynthetic package contractを完成形とし、実product compositionとgeneric recovery-resumptionをMVP gateから外す。 Dependencies: none
+- [x] local-data-foundation -- 現行product-local runtimeをcanonical実装としてcharacterizationし、package factory全面移行を延期する。 Dependencies: spec:local-data-library-boundaries
+- [x] backup-restore -- 現行product-local backup capabilityを直接利用し、package-backed product compositionへの依存を外す。 Dependencies: spec:local-data-foundation, spec:project-context
+- [x] application-shell -- 現行product runtime contributionとbackup専用capabilityのcompositionを維持し、内部package移行を完了条件から外す。 Dependencies: spec:local-data-foundation, spec:backup-restore
 
 ## Direct Implementation Candidates
 

@@ -2,9 +2,9 @@
 
 ## Change Integration
 
-- **Integrated Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In-scope trace**: product adapter・PC policy injectionは10.1–10.2、共有`AppDataError`と公開exportは11.1、用途別runtime capabilityと実製品executable contractは11.2、下流consumer migration seamは11.3、characterization・error contract・capability boundary・変更種別別検証は12.1–12.4で扱う。
-- **Out-of-scope preservation**: generic core、Chrome adapter、generic backup orchestration、下流feature実装、保存schema/error semanticsの変更をtaskへ含めない。既完了task 1–9とImplementation Notesは履歴として保持する。
+- **Integrated Change Brief**: `mvp-local-data-simplification`
+- **In-scope trace**: 完了済み10.1–10.2と11.1のproduct policy/error成果は履歴として保持する。現行product-local runtimeと用途別capabilityのcharacterizationは11.2、下流consumer公開契約は11.3、schema・error・capability・変更影響gateは12.1–12.4で扱う。
+- **Out-of-scope preservation**: package factory全面移行、`TransactionCommand`変更、generic maintenance fence、generic recovery cleanup/finalization resumption、下流feature実装、保存schema/error semanticsの変更をtaskへ含めない。既完了task 1–10.2、11.1とImplementation Notesは履歴として保持する。
 
 - [x] 1. TypeScript拡張プロジェクトと検証基盤を整える
 - [x] 1.1 厳密な型検査、ビルド、テストを実行できる開発環境を構成する
@@ -447,7 +447,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 2.8, 4.6, 4.7, 5.4, 5.5, 6.3, 7.9, 7.10, 7.12, 7.14, 8.1, 8.2, 8.3_
   - _Boundary: Recovery and Schema Final Validation_
 
-- [ ] 10. package公開portへPC product policyを接続する
+- [x] 10. package公開portへPC product policyを接続する（先行revisionの完了履歴）
 - [x] 10.1 product local-data adapterを確立する
   - `local-data-library-boundaries`の公開entry consumer fixture（5.1）とroot topological build・変更scope最終gate（5.5）が完了してから着手する。
   - `@pc-build-planner/local-data`のworkspace依存と宣言済みroot/Chrome exportを製品consumerへ固定し、PC root、schema正規値、validator、migration、reference repair、mutation operation、worker policyを設定する。
@@ -475,64 +475,40 @@
   - _Requirements: 9.4, 9.5, 9.6_
   - _Boundary: AppDataErrorMapper, DomainPublicApi_
 
-- [ ] 11.2 (P) 実product adapterのruntime compositionとexecutable contractを確立する
-  - package公開factoryへ実`ProductLocalDataAdapter`のPC root/operation policy、`FoundationError`のpolicy/output error adapter、`MaintenanceState`と`RecoveryControl`を分離したowner recovery protocol、worker policyを接続する。
-  - 通常feature向けquery/mutation、read-only maintenance、worker registration、backup向けreplacement/recovery/finalizationを同じproduction相当graphの用途別handleへ接続し、通常handleへbackup能力を、backup handleへ通常CRUD・raw root・package storage/lock・内部adapterを公開しない。
-  - foundation所有のroot command `validate:local-data-product-contract`を追加し、実adapter graphでerror payload/context、control semantics、single write、固定Web Lock、recovery/finalization、access restriction失敗時のfail-closedをruntime検証する。
-  - commandは成功時0、任意のcontract failure時non-zeroを返し、上流`local-data-library-boundaries` task 8.1が製品契約を再実装せず呼び、task 9.2がfinal gateへ終了statusを伝播できる公開seamとする。
+- [x] 11.2 現行product-local runtimeのcharacterization contractを固定する
+  - 既存のPC root/schema/validation/migration/repair、single-root transaction、正常置換、異常root回復を現行production graphのまま検証し、package factoryへの移行や新しいgeneric fencing seamを追加しない。
+  - 通常feature向けquery/mutationとbackup向けreplacement/recovery/finalizationの用途別handleを検証し、通常handleへbackup能力を、backup handleへ通常CRUD・raw root・storage/lock・内部adapterを公開しない。
+  - foundation所有のroot command `validate:local-data-product-contract`を現行runtimeのcharacterization入口として固定し、error payload/context、root内maintenanceとroot外recovery controlの分離、single write、固定Web Lock、revision/dedupe、recovery/finalization、access restriction失敗時のfail-closedを検証する。
+  - commandは成功時0、任意のcontract failure時non-zeroを返す。package-only validationからの呼出しや上流package completion gateへの逆依存は作らない。
   - 完了時、両handleのpositive/negative runtime shape、各commitのroot write最大一回、finalizeのroot write 0件、access restriction失敗後のcapability公開0件が同じcommandで観測できる。
-  - _Depends: local-data-library-boundaries 7.4_
-  - _Requirements: 3.10, 7.4, 7.5, 7.6, 7.8, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 9.3, 9.5, 9.6, 9.8, 9.11, 9.12_
-  - _Boundary: RuntimeContributionFactory, ProductRuntimeExecutableContract_
-  - _Blocked: upstream `local-data-library-boundaries`のconsumer-owned error/control genericとowner recovery protocolが未実装である間は、実`FoundationError`とcanonical PC controlを意味不変に構成できない。task 7.4までの公開契約・declaration・boundary gate完了後に再実行する。_
-
-- [ ] 11.3 下流consumer migration contractを固定する
-  - candidate-management、current-build、compatibility、candidate-source、source-price-refreshが共有`AppDataError`を、backup-restoreが用途限定capabilityを公開入口から利用できるtype fixtureを追加する。
-  - 下流実装ファイルは変更せず、candidate-owned共有error、`FoundationError`直接依存、product adapter再定義、package deep importをnegative fixtureで拒否する。
-  - 完了時、全consumer seamのpositive fixtureが型検査され、各negative fixtureが狙った所有権違反で失敗する。
-  - _Depends: 11.1, 11.2_
-  - _Requirements: 9.7, 9.8, 9.10_
-  - _Boundary: ProductConsumerContract_
-
-- [ ] 12. 製品境界のcharacterizationと変更影響gateを統合する
-- [ ] 12.1 product adapterのcharacterization回帰を追加する
-  - 架空fixtureだけでPC schema/migration/repair、revision、atomicity、worker再生成・fencing・認可をpackage公開port経由で検証する。
-  - 移管前の既存receiptと失敗結果をfixture化し、保存schema・error semantics・repair規則を変更しない。
-  - 完了時、product adapterのcharacterization suiteが既存の成功・失敗・data保全結果と一致する。
-  - _Depends: 11.3_
-  - _Requirements: 8.1, 8.2, 8.3, 9.1, 9.3, 9.9_
-  - _Boundary: ProductLocalDataValidation_
-
-- [ ] 12.2 (P) AppDataError mapping contractを追加する
-  - 全`FoundationError` variantのcode/payload/context一対一mappingと、公開consumerでのexhaustive判定を架空値で検証する。
-  - unknown・不完全なruntime値が既知errorへ縮退せずtyped validation failureとなることをnegative testで固定する。
-  - 完了時、mapping欠落、variant統合、payload欠落の各fixtureが狙ったcontract違反として失敗する。
   - _Depends: 11.1_
-  - _Requirements: 9.4, 9.5, 9.6, 9.7_
-  - _Boundary: AppDataErrorContract_
+  - _Requirements: 3.10, 7.4, 7.5, 7.6, 7.8, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 9.3, 9.5, 9.6, 9.8, 9.11, 9.12_
+  - _Boundary: RuntimeContributionFactory, ProductRuntimeCharacterization_
 
-- [ ] 12.3 (P) runtime capabilityとimport ownershipのnegative gateを追加する
-  - 通常/backup capability分離、raw root/internal adapter非露出、package deep import、candidate-owned共有error、製品adapterのpackage側所有を個別negative fixtureで拒否する。
-  - 各negative fixtureは一つの違反だけを持ち、positive public consumer fixtureは宣言済み入口だけで型検査する。
-  - `validate:local-data-product-contract`が実adapter以外のsynthetic alias、package内部import、control generic混同、固定lock名の差し替えで成功しないnegative fixtureを追加する。
-  - 完了時、通常・backupのpositive runtime shapeと全ownership negative gateが決定的に成功する。
-  - _Depends: 11.2, 11.3_
-  - _Requirements: 9.2, 9.7, 9.8, 9.11, 9.12_
-  - _Boundary: RuntimeCapabilityBoundaryGate_
+- [ ] 11.3 (P) 下流consumer migration contractを固定する
+  - 全`FoundationError` variantのcode/payload/context一対一mappingと、unknown・不完全値のfail-closedを共有`AppDataError` contractで固定する。
+  - candidate-management、current-build、compatibility、candidate-source、source-price-refreshが共有`AppDataError`を、backup-restoreが用途限定capabilityを公開入口から利用できるtype fixtureを追加する。
+  - 下流実装ファイルは変更せず、candidate-owned共有error、`FoundationError`直接依存、product adapter再定義、package deep import、通常/backup capability混同を個別negative fixtureで拒否する。
+  - 完了時、全variant mapping、全consumer seamのpositive fixture、各negative fixtureが決定的に期待結果を返す。
+  - _Depends: 11.1_
+  - _Requirements: 9.2, 9.4, 9.5, 9.6, 9.7, 9.8, 9.10_
+  - _Boundary: AppDataErrorContract, ProductConsumerContract_
 
-- [ ] 12.4 package変更と製品変更を分ける検証routingを完成する
-  - product adapter・PC policyだけの変更はfoundation characterizationとproduct consumer contractを実行する。
-  - package公開契約・generic error/control/protocol変更はpackage gateに加え、foundation所有`validate:local-data-product-contract`、product adapter、AppDataError mapper、candidate-management、current-build、compatibility、candidate-source、source-price-refresh、backup-restore seamを実行する再現可能なscriptへ統合する。
-  - 上流`local-data-library-boundaries` task 8.1/9.2からの呼出しが同じcanonical commandを一回だけ実行し、その終了statusと安定diagnosticを変更せず伝播するtooling contractを固定する。
+- [ ] 12. package変更と製品変更を分ける検証routingを完成する
+  - product-local runtime・PC policyだけの変更はfoundation characterizationとproduct consumer contractを実行する。
+  - package公開契約変更はpackage単独gateで検証し、product-local runtimeの公開data/error/capability契約へ影響する場合だけfoundation characterizationと下流consumer seamを再検証する。package-only migrationを完了条件にしない。
+  - foundation所有commandが現行runtimeのcharacterizationを一回だけ実行し、その終了statusと安定diagnosticを変更せず伝播するtooling contractを固定する。
   - package内部import、export map不整合、mapping欠落、downstream seam不整合のいずれかがあれば成功扱いにしない。
   - 完了時、製品変更とpackage変更のpositive/negative検証fixtureが期待する範囲を実行し、共通validation flowが成功する。
-  - _Depends: 12.1, 12.2, 12.3_
-  - _Requirements: 9.2, 9.9, 9.10, 9.11, 9.12_
+  - _Depends: 11.2, 11.3_
+  - _Requirements: 8.1, 8.2, 8.3, 9.1, 9.2, 9.3, 9.9, 9.10, 9.11, 9.12_
   - _Boundary: WorkspaceValidation_
 
 ## Implementation Notes
 
-- **Fresh task-graph sanity review (2026-08-13 product runtime contract remediation)**: task 11.2は`RuntimeContributionFactory, ProductRuntimeExecutableContract`の明示的integration boundaryとして、順序上の10.2完了と明示依存`local-data-library-boundaries 7.4`を開始条件に持つ。11.3→12.1/12.3→12.4の後続依存と、上流8.1→9.1→9.2が11.2のcanonical commandを呼ぶ逆向きvalidation seamを区別した。既存blocked annotation、完了済みtask、Implementation Notesと71 AC traceを保持し、hidden prerequisite・循環実装依存・ownership重複なしでPASSとした。
+- **Fresh task-graph sanity review (2026-08-14 MVP simplification, repair pass)**: 完了済みtask 1–10.2と11.1を履歴として保持した。未完了graphは11.1→11.2/11.3→12で閉じる。11.2は現行runtimeのbehavioral characterization、11.3は共有error/consumer/import boundary contract、12は変更種別別routingだけを所有し、検証責務を重複させない。package factory移行、generic maintenance fence、generic recovery/finalization resumption、上流package completion gateへの逆依存を含まない。71 AC trace、observable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。
+
+- **Superseded historical task-graph review (2026-08-13 product runtime contract remediation)**: task 11.2は当時`RuntimeContributionFactory, ProductRuntimeExecutableContract`のintegration boundaryとして上流package契約を開始条件に持っていた。この依存と逆向きvalidation seamは最新`mvp-local-data-simplification`で廃止され、上記2026-08-14 reviewに置き換わった。完了済みtaskと71 AC traceを監査した履歴として保持する。
 
 - **Fresh task-graph sanity review (2026-08-12 dependency remediation)**: task 10.1の開始条件と`_Depends`が`local-data-library-boundaries 5.1/5.5`で一致し、5.5から5.1へ至るupstream chainは下流specへ逆依存しない。task 10.1→10.2→11→12の既存順序、単一boundary、observable completion、69 AC traceを再監査し、hidden prerequisite・循環・requirements/design矛盾なしでPASSとした。
 

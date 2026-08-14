@@ -117,3 +117,37 @@ package公開factoryがconsumer-owned policy errorを明示adapterで出力error
 ### Source
 
 - `local-data-foundation` task 11.2の`kiro-debug`結果（2026-08-13）。
+
+## Change Brief: mvp-local-data-simplification
+
+### Problem
+
+PC Build Plannerでまだ一つしかないproduct runtimeをgeneric package factoryへ完全移行しようとした結果、consumer-owned maintenance fence、recovery cleanup、finalizationまでpackage公開契約へ一般化する必要が生じ、MVPの利用者価値に対して設計・検証コストが過大になっている。
+
+### Current State
+
+packageにはtransaction、Chrome adapter、backup orchestrationなど再利用可能なprimitiveが抽出済みである。一方、最新revisionは実product composition、generic recovery-resumption protocol、下流所有`validate:local-data-product-contract`の実行までpackage completion gateに含めている。
+
+### Desired Outcome
+
+本specは抽出済みの製品非依存primitive、3公開entry、synthetic package contract、deep-import gate、package単独検証を完成形とする。実product runtime compositionとconsumer固有maintenance/recovery protocolの一般化は、2番目の実consumerが現れた時点まで延期する。
+
+### Scope
+
+- **In**: 既存generic transaction・capacity・replacement primitive、Chrome adapter、backup orchestration、公開export、synthetic contract、package単独validationの維持と完了条件の縮小。
+- **Out**: 実`ProductLocalDataAdapter` composition、consumer-owned maintenance fenceのpackage command化、generic recovery cleanup/finalization resumption、下流product contractの上流gate化、新しいpackage API追加。
+
+### Boundary Impact
+
+- **Extends**: 新しい責務は追加せず、既に抽出済みで独立検証可能なpackage境界を安定させる。
+- **Preserves**: packageの製品非依存、公開entry、transaction/Chrome/backup primitive、既存package consumer、MV3/CSP、deep-import禁止。
+- **Adjacent**: `local-data-foundation`が現行product-local runtimeをcanonical ownerとして維持し、`backup-restore`が既存backup専用capabilityを利用する。将来のgeneric fencing/recovery抽象化は新しいconsumer evidenceを前提に再発見する。
+
+### Dependencies
+
+- **Upstream**: none。
+- **Downstream**: `spec:local-data-foundation`、`spec:backup-restore`、`spec:application-shell`の同Change Brief revision。
+
+### Source
+
+- task 11.2の実装・review・debug結果と、利用者によるMVP複雑性縮小判断（2026-08-14）。

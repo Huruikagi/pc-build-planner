@@ -150,3 +150,37 @@ product backup adapterの実装ownerがgeneric package specと本specで重複�
 ### Source
 
 - v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。
+
+## Change Brief: mvp-local-data-simplification
+
+### Problem
+
+現行revisionはFoundation 11.2のpackage-backed product compositionとpackage所有generic recovery/finalization resumptionを前提にしており、MVP縮小後もその依存を残すと実装不能な待ち関係になる。
+
+### Current State
+
+backup-restoreは製品交換形式、file I/O、利用者確認、project lifecycleを所有し、Foundationの用途限定backup capabilityを利用する。既存product-local capabilityは正常置換、異常root回復、finalizationを既に提供する。
+
+### Desired Outcome
+
+backup-restoreは現行product-local backup capabilityを直接利用し、通常CRUD/raw root/internal adapterへ到達できない分離を維持する。package-backed product adapterとgeneric recovery protocolへの移行は要求しない。
+
+### Scope
+
+- **In**: 既存backup専用capability、正常復元・異常root回復・利用者確認・file lifecycle・failure preservationの維持、依存gateの簡素化。
+- **Out**: generic recovery/finalization protocolの所有、package product composition、交換形式/schema/UI挙動の変更、通常CRUDの公開。
+
+### Boundary Impact
+
+- **Extends**: 新しい責務は追加せず、既存product-local backup seamをMVPの正式依存として固定する。
+- **Preserves**: 通常/backup capability分離、明示確認、atomic replacement、失敗時root保持、pending finalizationの既存製品挙動。
+- **Adjacent**: `local-data-foundation`がbackup capabilityとproduct recovery semanticsを所有し、`application-shell`は完成済みcapabilityだけをbackup sectionへ注入する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-foundation`の同Change Brief revision、`spec:project-context`。
+- **Downstream**: `spec:application-shell`の同Change Brief revision。
+
+### Source
+
+- task 11.2の実装・review・debug結果と、利用者によるMVP複雑性縮小判断（2026-08-14）。

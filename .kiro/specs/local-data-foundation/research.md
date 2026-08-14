@@ -254,3 +254,10 @@
 - **Rationale**: 製品意味のcanonical ownerを維持しつつ、generic contract変更時にsingle write、固定Web Lock、recovery/finalization、access restriction fail-closedまで実行時に検出できる。
 - **Trade-offs**: package final validationが下流commandの存在と成功へ依存するため、task 11.2は上流package contract task 7.4完了後に実装し、上流task 8.1/9.2はその後に再開する必要がある。
 - **Follow-up**: command ownership、failure propagation、重複実行防止をtooling contractへ固定する。
+## MVP Local Data Simplification (2026-08-14)
+
+- **Change Brief**: `mvp-local-data-simplification`
+- **Finding**: 現行product-local runtimeはsingle-root transaction、固定Web Lock、revision/dedupe、root内maintenanceとroot外recovery fencing、正常/backup capability分離を既に提供する。実runtimeをpackage factoryへ移すにはconsumer固有controlとrecovery/finalization resumptionをgeneric公開契約へ固定する必要があり、唯一の実consumerしかないMVPでは抽象化根拠が不足する。
+- **Decision**: 現行product-local runtimeをcanonical compositionとして維持し、`validate:local-data-product-contract`はそのcharacterization commandとする。抽出済みpackage primitive、3公開entry、synthetic contractは上流成果として維持するが、package-only migrationまたは下流product contractの上流gate化を完了条件にしない。
+- **Preserved contracts**: PC root/schema/validation/migration/repair、`FoundationError`と`AppDataError`の意味、single write authority、固定Web Lock、atomicity、revision/dedupe、maintenance/recovery fencing、raw root非公開、通常/backup capability分離、worker認可、fail-closed初期化。
+- **Deferred**: `TransactionCommand`変更、generic consumer-owned maintenance fence、generic recovery cleanup/finalization resumption、package-backed full product composition。2番目の実consumer evidenceが得られた時点で再評価する。

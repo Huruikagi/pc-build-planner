@@ -310,7 +310,7 @@
   - producer suiteとE2Eを実行し、一過性起動失敗・失効、権限再付与、新世代起動、handoff再試行、settings両区画、loading/startup hintが公開`MessageKey`または`MessageDescriptor`だけでja/en表示されることを受け入れ検証する
   - Providerによる言語切り替え、安全なtext描画、文言非依存locatorを確認し、driftがあれば該当producer ownerへ差し戻す
   - 完了条件: catalog側の公開consumer検証と各producerの既存受入suiteが成功し、本spec所有外のコード差分がない
-  - _Depends: application-shell 7.1, product-page-capture 5.4, settings-screen 4.2, ui-internationalization 9.1, 9.3, 7.2_
+  - _Depends: application-shell 7.1, product-page-capture 5.4, settings-screen 4.2, ui-internationalization 9.1, 9.3, 7.1_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.3, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
   - _Boundary: UiMessagesPublicEntry, CrossSpecAcceptance_
 

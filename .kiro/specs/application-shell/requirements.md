@@ -6,16 +6,16 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 
 ## 境界コンテキスト
 
-- **対象内**: side panel host、常設featureナビゲーション、現在プロジェクトの共通表示領域、一過性featureを含む登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance/recovery-required表示、設定画面への到達・回復案内、typed message configured resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、project lifecycle descriptor/catalog、各確定feature public portのproduction composition、obsolete proxy撤去、root公開API合成。
+- **対象内**: side panel host、常設featureナビゲーション、現在プロジェクトの共通表示領域、一過性featureを含む登録済みfeatureのmount/unmount、型付きfeature activationの配送、利用可能状態、共通loading/error/maintenance/recovery-required表示、設定画面への到達・回復案内、typed message configured resolver、local-data-foundationの現行product-local runtime contribution、backup-restoreの既存backup専用capability、project lifecycle descriptor/catalog、各確定feature public portのproduction composition、obsolete proxy撤去、root公開API合成。
 - **対象外**: feature固有の業務ロジック・state・view、canonical dataの正常性評価、assessment ticket、復元の事前検証・確認・commit、永続化、maintenance lease管理、project CRUD・選択規則・fallback、商品抽出、互換性判定、表示言語の意味・保存・解決。
-- **隣接する期待**: local-data-foundationは`ProductLocalDataAdapter`、用途別capability、共有`AppDataError`を、backup-restoreは`ProductBackupAdapter`を、ui-messagesはconfigured resolverを、project-contextはlifecycle descriptor/catalogと能力別portを提供する。source/identity/candidate/current-build/compatibility/price/duplicate/captureの各ownerは確定public port/contributionを提供する。application shellはこれらをrootで一度だけ合成するが、core/domain/feature固有の値、error意味、判断結果を解釈しない。
+- **隣接する期待**: local-data-foundationは現行product-local runtime contribution、通常用途とbackup用途を分けたcapability、共有`AppDataError`を、backup-restoreは既存backup section contributionを、ui-messagesはconfigured resolverを、project-contextはlifecycle descriptor/catalogと能力別portを提供する。source/identity/candidate/current-build/compatibility/price/duplicate/captureの各ownerは確定public port/contributionを提供する。application shellはこれらをrootで一度だけ合成するが、package内部、generic storage/lock/fencing/recovery/finalization、core/domain/feature固有の値、error意味、判断結果を解釈しない。
 
 ## Change Integration
 
-- **Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In scope trace**: owner移管後のproduction side-panel/worker composition、typed message resolver、product adapters、共有error consumer、project lifecycle、全確定feature public ports、obsolete proxy撤去、public-boundary/E2Eを要件3、6、9〜11へ統合する。
-- **Out of scope preservation**: package/core/domain、canonical error/message/source/identity/project/candidate/build/compatibility/captureの意味・実装、feature state/UI/業務処理、data mutation、backup codec/protocolを変更しない。
-- **Non-regression**: startup/rollback/cleanup、recovery-required、settings到達、project selector、persistent/transient lifecycle、worker/UI graph分離、feature isolation、表示言語と安全なtext表示を維持する。
+- **Change Brief**: `mvp-local-data-simplification`
+- **In scope trace**: 現行product-local runtime contributionの一回限りcomposition、既存backup専用capabilityの用途限定注入、feature lifecycle、capability非漏洩を要件3、6、11へ統合する。
+- **Out of scope preservation**: package-backed product adapterへの全面移行、package factoryをproduction rootにすること、generic maintenance/recovery/finalization seam、data policy/schema/error ownership、UI layout変更を要求しない。先行`v0.5.0-boundary-reconciliation`で統合済みのowner public portとobsolete proxy撤去は維持する。
+- **Non-regression**: navigation、startup/degraded startup、rollback/cleanup、maintenance/recovery-required、settings/backup到達、project selector、persistent/transient lifecycle、worker/UI graph分離、feature isolation、表示言語と安全なtext表示を維持する。
 
 ## 要件
 
@@ -137,16 +137,16 @@ application shellは、PC build plannerのside panelにおける共有ホスト�
 5. The application shell shall 保存データの正常性、復元対象、回復の成功可否を独自に判定しない
 
 ### 要件11: owner移管後のproduction composition
-**目的:** 開発者として、確定したproduct adapterとfeature public portを一つのrootへ直接合成したい。それにより遅延proxyと旧owner依存を撤去し、production経路を公開境界だけで完結できる。
+**目的:** 開発者として、現行product-local runtime contribution、backup専用capability、確定feature public portを一つのrootへ直接合成したい。それにより利用者向け挙動を変えず、production経路を公開境界だけで完結できる。
 
 #### 受け入れ基準
-1. When production side panelを構成するとき, the application shell shall ui-messagesのconfigured resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、project lifecycle descriptor/catalogを各ownerの公開入口から一度だけ初期化する
+1. When production side panelを構成するとき, the application shell shall ui-messagesのconfigured resolver、local-data-foundationの現行product-local runtime contribution、backup-restoreの既存backup section contribution、project lifecycle descriptor/catalogを各ownerの公開入口から一度だけ初期化する
 2. When feature contributionsを構成するとき, the application shell shall project、candidate、source、identity、current-build、compatibility、price refresh、duplicate merge、product capture、settings、backupの確定public portだけを必要なconsumerへ注入する
 3. When data operation errorをfeatureへ渡す, the application shell shall 共有`AppDataError`を解釈、変換、再定義またはcandidate-owned errorへaliasせずownerの公開契約のまま接続する
 4. The application shell shall owner移管前のproject catalog source、late-bound project command/guard、candidate source、product identity、manufacturer domain、source refresh proxyをproduction graphから撤去する
 5. The application shell shall 必須public portが未提供または初期化失敗した場合に旧proxy、空adapter、no-op resolverまたは内部moduleへfallbackせず、既存startup/degraded startup規則に従う
 6. When service workerを構成するとき, the application shell shall worker-safe registrationだけを合成し、side panel UI、DOM、React、configured UI resolverをworker bundleへ取り込まない
-7. The application shell shall product adapter、backup adapter、project/source/identity/candidate/build/compatibility/price/duplicate/captureのcore/domain/feature behaviorを再実装しない
+7. The application shell shall package factoryへの全面移行またはgeneric maintenance/recovery/finalization seamをMVP完了条件にせず、product-local runtime、backup、project/source/identity/candidate/build/compatibility/price/duplicate/captureのcore/domain/feature behaviorを再実装しない
 8. When production compositionを停止またはrollbackするとき, the application shell shall 新しいadapter、descriptor、subscription、registrationを既存の逆依存順・best-effort・冪等規則で解放する
 9. When root公開APIが構成される, the application shell shall 確定feature public contractsから型を導出し、旧公開portまたは遅延proxyを公開しない
 10. When owner移管後のcompositionを検証するとき, the application shell shall public consumer、side-panel/worker boundary、startup/recovery/settings/lifecycle、横断E2Eを架空fixtureで再現可能にする

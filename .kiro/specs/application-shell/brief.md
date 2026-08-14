@@ -122,3 +122,37 @@ shellは確定した各`public.ts`/`feature-contribution.ts`だけをcomposition
 ### Source
 
 - v0.5.0 `$kiro-spec-update-batch` final review（2026-08-12）。
+
+## Change Brief: mvp-local-data-simplification
+
+### Problem
+
+application-shellの現行revisionは新しいpackage-backed `ProductLocalDataAdapter`と`ProductBackupAdapter`の完成を前提にしており、product runtimeのgeneric package全面移行を延期すると不要なcomposition migrationが残る。
+
+### Current State
+
+shellはfeature contributionとproduct-local foundation runtimeをcompositionし、backup sectionへ用途限定capabilityを渡している。利用者向けfeatureはruntime内部がpackage-backedかどうかへ依存しない。
+
+### Desired Outcome
+
+shellは現行product-local runtime contributionと既存backup専用capabilityをcompositionし続け、package内部やgeneric storage/lockを認識しない。将来のruntime内部移行をshellのMVP完了条件にしない。
+
+### Scope
+
+- **In**: 現行公開contributionのcomposition、backup専用注入、feature lifecycle、capability非漏洩、既存shell挙動の維持。
+- **Out**: package-backed product adapterへの移行、generic fencing/recoveryのcomposition、data policy/schema/error ownership、UI layout変更。
+
+### Boundary Impact
+
+- **Extends**: 新規composition責務は追加せず、公開product contributionだけを配線する既存shell境界を維持する。
+- **Preserves**: composition-only ownership、通常/backup capability分離、feature registry/lifecycle、package deep import禁止、利用者向け挙動。
+- **Adjacent**: `local-data-foundation`がproduct runtimeを、`backup-restore`が製品restore workflowを所有し、shellは両者の公開portだけを接続する。
+
+### Dependencies
+
+- **Upstream**: `spec:local-data-foundation`、`spec:backup-restore`の同Change Brief revision。その他既存feature spec依存は維持する。
+- **Downstream**: none。
+
+### Source
+
+- task 11.2の実装・review・debug結果と、利用者によるMVP複雑性縮小判断（2026-08-14）。

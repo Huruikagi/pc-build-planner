@@ -2,9 +2,9 @@
 
 ## Change Integration
 
-- **Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In scope**: `ProductBackupAdapter`、PC交換形式codec・mapping・policy、Foundation backup capability接続、file UI、確認、project-context guard/refresh、consumer contract、UI、E2Eをtask 7へ割り当てる。
-- **Out of scope**: package汎用オーケストレーター/public port、FoundationのPC root・置換能力、application-shell composition、交換形式・保存schema・安全意味・UI layoutの変更。
+- **Change Brief**: `mvp-local-data-simplification`
+- **In scope**: 現行product-local backup専用capabilityの直接利用、通常/backup能力分離、正常復元・異常root回復・pending finalization、file UI、確認、project-context guard/refreshの非回帰をtask 7へ割り当てる。
+- **Out of scope**: package-backed product composition、generic maintenance/recovery/finalization protocol、FoundationのPC root・置換能力、application-shell composition、交換形式・保存schema・安全意味・UI layoutの変更。
 - **History preservation**: task 1〜6の完了履歴は維持し、Change Brief差分だけを未完了taskとして追加する。
 
 - [x] 1. 上流公開契約とruntime prerequisiteを固定する
@@ -230,50 +230,67 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11_
   - _Boundary: Backup restore final validation_
 
-- [ ] 7. Product backup adapter境界へ更新する
-- [ ] 7.1 package backup public contractのconsumer境界を固定する
-  - `local-data-library-boundaries` task 7.4の修復済みpublic declaration、replacement/backup synthetic contract、ownership gateが完了してから着手する
-  - `@pc-build-planner/local-data/backup`の公開subpathから`BackupOrchestrator`、`BackupCodec`、factoryだけを利用し、consumer-owned error adapter、分離control generic、owner protocolがpackage root公開契約の背後で型安全に構成可能であることを前提にするcompile fixtureを追加する
-  - package内部moduleのdeep import、汎用create/preflight/reassess/commit/findPendingFinalization/finalize protocol、`ErrorAdapter`、control分離、owner recovery protocol、`ProductLocalDataAdapter`のfeature内再実装をnegative ownership gateで拒否する
-  - unsafe castやerror code縮退なしで、修復済みpackage backup contractの型・runtime surfaceがadapter構成に必要な最小能力だけであるconsumer testが成功すれば完了とする
-  - _Depends: local-data-library-boundaries 7.4_
-  - _Requirements: 7.1, 7.3, 7.7_
-  - _Boundary: Package backup public consumer contract_
+- [ ] 7. Product-local backup capability境界をMVP契約として固定する
+- [ ] 7.1 Foundationのbackup専用consumer境界を固定する
+  - `local-data-foundation` task 11.2がcharacterizationする現行product-local runtimeの`BackupSnapshotReadPort`と`BackupRestoreDataPort`だけをconsumer fixtureへ接続する
+  - root読取、normal/recovery assessment、commit、pending finalization discovery、finalizeを利用できる一方、通常CRUD、raw root、storage/lock、write authority、内部control fieldへ到達できないpositive/negative contractを追加する
+  - package factory、package-backed product adapter、generic recovery/finalization protocolを開始条件またはruntime dependencyへ追加しない
+  - capability shapeとruntime結果が既存serviceを構成する最小能力だけであり、能力漏出時にgateが失敗すれば完了とする
+  - _Depends: local-data-foundation 11.2_
+  - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.7_
+  - _Boundary: Product-local backup capability consumer contract_
 
-- [ ] 7.2 ProductBackupAdapterへPC codec・mapping・policyとFoundation capabilityを接続する
-  - `ProductBackupAdapter`を単一構成点として追加し、既存ExchangeValidator/Migration/Mapper、artifact命名、容量policy、製品backup error mappingを`BackupCodec`へまとめるが、Foundation factory用`ErrorAdapter`、control generic、owner recovery protocol、`ProductLocalDataAdapter`は構成しない
-  - `local-data-foundation` task 11.2が公開するbackup専用root読取・assessment・replacement・recovery・finalization capabilityだけをgeneric orchestratorへ渡し、通常CRUD、raw storage、lock、authority、control fieldへ到達しない
-  - `FoundationError` payload、`precommit-cleanup-pending`、committed outcome、opaque finalization ticketをunsafe castや一般errorへの縮退なしで既存facade結果へ保持する
-  - 既存`BackupService`/`RestoreService`をadapter facadeへ委譲し、create/preflight/reassess/commit/findPendingFinalization/finalize、交換形式、preview、error粒度、precommit cleanup、finalization再試行の結果を変更しないcontract testが成功すれば完了とする
-  - _Depends: 7.1, local-data-foundation 11.2_
-  - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.6, 5.1, 5.2, 5.3, 5.4, 7.2, 7.4, 7.5, 7.7_
-  - _Boundary: ProductBackupAdapter, PC BackupCodec_
+- [ ] 7.2 BackupServiceのread/export統合をproduct-local capabilityへ固定する
+  - 既存ExchangeMapper、artifact命名、容量policy、製品backup error mappingを`BackupService`に維持し、Foundationの用途限定snapshot readへ直接接続する
+  - 通常CRUD、raw storage、lock、authority、control fieldへ到達せず、空rootを含む既存artifact・交換形式・自己復元可能性を変更しない
+  - read、mapping、serialization、capacity failureをunsafe castや一般errorへの縮退なしで既存`BackupError`へ保持する
+  - createのsuccess/error contractとdownload前不変条件が既存結果のまま成功すれば完了とする
+  - _Depends: 7.1_
+  - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.7, 2.1, 2.2, 2.3, 7.1, 7.2, 7.3, 7.5, 7.7_
+  - _Boundary: BackupService_
 
-- [ ] 7.3 確認・guard・refresh・file UIをadapterへ統合する
-  - stateが有効previewと明示確認を得る前にcommitせず、project-context guardのconfirm/begin後だけadapter commitを呼ぶ既存順序を維持する
+- [ ] 7.3 RestoreServiceのassessment・commit・finalization統合を固定する
+  - 既存ExchangeValidator/Migration/Mapperと容量・error policyを維持し、正常rootの評価・置換と破損/未対応rootの回復を同じbackup専用capabilityからmode別に利用する
+  - `FoundationError`、commit前失敗、committed outcome、opaque finalization ticketをunsafe castや一般errorへの縮退なしで既存facade結果へ保持する
+  - preflight/reassess/commit/findPendingFinalization/finalizeのpreview、failure preservation、pending finalization再試行を変更しない
+  - normal/recovery両modeとcommit前後のroot write回数を含むservice contractが既存結果のまま成功すれば完了とする
+  - _Depends: 7.2_
+  - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.2, 7.3, 7.4, 7.5, 7.7_
+  - _Boundary: RestoreService_
+
+- [ ] 7.4 確認・guard・finalization・refresh lifecycleを統合する
+  - stateが有効previewと明示確認を得る前にcommitせず、project-context guardのconfirm/begin後だけservice commitを呼ぶ既存順序を維持する
   - 取消、guard拒否、stale、commit前失敗ではfile/ticket/preview/root/selectionを保持し、`precommit-cleanup-pending`は同じticketと新permitだけで再開する。committed後はpending finalization discoveryを含むfinalize-only、続いてrefresh-onlyだけを再試行する
-  - owner protocolのcontrol/fence/pending capabilityをstateへ露出せず、`findPendingFinalization`と`finalize`はadapter facadeのopaque ticketだけで駆動する
-  - section factoryは`ProductBackupAdapter`とproject-context public portsを受け取る公開契約だけを提供し、`ProductLocalDataAdapter`やapplication-shell composition fileを変更しない
-  - settingsのfile選択、警告、preview、処理中fencing、回復、日英診断のDOM/contract testが既存結果のまま成功すれば完了とする
-  - _Depends: 7.2, project-context 2.2, project-context 2.5_
-  - _Requirements: 1.3, 1.5, 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 7.5, 7.6, 7.8_
-  - _Boundary: Backup restore product lifecycle and section contract_
+  - Foundationのcontrol/fence/pending内部状態をstateへ露出せず、`findPendingFinalization`と`finalize`はservice facadeのopaque ticketだけで駆動する
+  - guard・state command列とfinalize-only/refresh-only時の追加root write 0件が既存integration testで確認できれば完了とする
+  - _Depends: 7.3, project-context 2.2, project-context 2.5_
+  - _Requirements: 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 4.8, 5.1, 5.2, 5.4, 5.5, 5.6, 5.7, 6.6, 6.9, 6.10, 6.11, 7.4, 7.8_
+  - _Boundary: RestoreContextLifecycle, BackupRestoreState_
 
-- [ ] 7.4 全contract・UI・E2Eと所有境界gateを完了する
-  - `local-data-library-boundaries` task 9.2のpackage・public・downstream executable contract・topological final validation完了後、adapter consumer/contract、全交換fixture、Foundation capability integration、guard/refresh lifecycle、UI、通常・失敗回復・破損root回復E2Eを共通検証flowで実行する
-  - consumer-owned error payload保持、相互非互換control分離、owner protocol経由のprecommit cleanup・committed finalization・pending discovery・finalize-only retryに加え、明示確認、atomic replacement、競合fencing、失敗時の既存データ保持、refresh-only retry、settings到達性がgeneric orchestration移行前後で一致することを確認する
-  - package generic owner、Foundationの`ProductLocalDataAdapter`・root/capability owner、application-shell composition owner、本specのProductBackupAdapter/codec/file UI ownerが重複せず、unsafe cast、error縮退、control field解釈、deep import、production shell file編集がないことを監査する
+- [ ] 7.5 Section factoryとfile UIの公開契約を統合する
+  - section factoryはbackup専用capabilityとproject-context public portsを受け取る公開契約だけを提供し、package factoryやapplication-shell composition fileを変更しない
+  - settingsのfile選択、警告、preview、処理中fencing、回復、日英診断を既存Viewへ反映し、通常/backup能力や内部ticketをDOMへ露出しない
+  - mount/unmount、file lifecycle、recovery-required時の到達性、通常maintenance時のcommit拒否を既存section/DOM contractで維持する
+  - settings区画のDOM/contract testが既存操作・表示・cleanup結果のまま成功すれば完了とする
+  - _Depends: 7.2, 7.4_
+  - _Requirements: 1.3, 1.5, 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.4, 4.5, 4.6, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 7.3, 7.6, 7.8_
+  - _Boundary: BackupRestoreSectionMount, BackupRestoreView, FileGateway_
+
+- [ ] 7.6 全contract・UI・E2Eと所有境界gateを完了する
+  - capability consumer/contract、全交換fixture、Foundation integration、guard/refresh lifecycle、UI、通常・失敗回復・破損root回復E2Eを共通検証flowで実行する
+  - 明示確認、preview、atomic replacement、競合fencing、commit前失敗時の既存root保持、committed finalization、pending discovery、finalize-only retry、refresh-only retry、settings到達性が現行product-local runtimeで維持されることを確認する
+  - Foundationのproduct-local runtime/capability owner、application-shell composition owner、本specのcodec/file UI/flow ownerが重複せず、package-backed product composition、unsafe cast、error縮退、control field解釈、通常CRUD漏出、production shell file編集がないことを監査する
   - 52件のAcceptance Criteria、Change BriefのIn/Out、全file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする
-  - _Depends: 7.3, local-data-library-boundaries 9.2_
+  - _Depends: 7.5_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
-  - _Boundary: Backup restore final ownership and regression validation_
+  - _Boundary: Backup restore product-local capability and regression validation_
 
 ## Implementation Notes
 
 - 実装順はruntime schema gate → 上流公開portのconsumer gate → 交換・容量・I/O → restore service → context/state/view → section/degraded integration → E2Eとする。上流契約が未提供の状態で暫定port、deep import、inactive stubを追加しない。
 - application-shellのproduction compositionは下流owner taskで扱い、本specでは提供済みrecovery契約のconsumer gateとproduction-shaped integration contractだけを所有する。
 - `v0.5.0-boundary-reconciliation`以後は過去task 5.1のwiring例外を再利用せず、production compositionのcanonical ownerをapplication-shellへ固定する。
-- **Fresh task-graph sanity review (2026-08-13 public protocol remediation)**: Requirements/Designと既存完了記録から独立してTasks 7.1–7.4を再監査した。7.1→7.2→7.3→7.4は一方向で、7.1は`local-data-library-boundaries 7.4`、7.2は`local-data-foundation 11.2`、7.3は`project-context 2.2/2.5`、最終7.4は`local-data-library-boundaries 9.2`を待つ。package 9.2はFoundation 11.2後段なので7.1開始gateにせず、最終workspace evidenceとしてだけ待つ。各taskはpackage consumer、product adapter、UI lifecycle、最終検証の一境界へ閉じ、packageのerror/control/protocol、Foundationの`ProductLocalDataAdapter`・canonical root/capability、application-shell compositionを編集対象に含めない。application-shellはbackup 7.4依存により全上流gateを推移的に待つ。52 AC、Change Brief In/Out、明示確認・atomicity・fencing・failure preservation・pre/post cleanup・pending discovery・recoveryの非回帰traceに欠落はなく、hidden prerequisite・循環・requirements/design矛盾なしでPASSとした。
+- **Fresh task-graph sanity review (2026-08-14 MVP simplification, repair pass)**: 初回reviewの`NEEDS_FIXES`を受け、BackupService、RestoreService、context/state lifecycle、section/UI、最終gateをTasks 7.2–7.6へ分割した。graphは7.1→7.2→7.3→7.4→7.5→7.6の明示的な逐次順で閉じ、7.1だけが`local-data-foundation 11.2`のproduct-local characterizationを待ち、7.4は承認済みproject-context 2.2/2.5を利用する。package factory、generic maintenance/recovery/finalization protocol、package completion gateへの逆依存はない。各taskは単一または明示的integration boundary、1–3時間の検証可能な成果へ閉じる。52 AC、Change Brief In/Out、preview・明示確認・atomicity・fencing・failure preservation・pending finalization・recoveryの非回帰trace、observable completion、hidden prerequisiteを再監査した。
 - 16 MiBは復元入力ファイルの安全上限、10 MiBは変換後rootのFoundation保存上限として別々に判定する。容量超過した同一入力の復元再実行を許可しない。
 - fixtureは架空データだけを使用し、商品値、完全URL、file本文、raw root、fingerprintを診断出力しない。
 - guard lifecycleは`context-lifecycle.ts`のowner-local adapterが所有し、permitのbegin成功かつ未closeだけをFoundation commitの前提とする。commit後のsucceeded通知は同adapterが一度だけに閉じ、notification失敗で復元成功を取り消さない。

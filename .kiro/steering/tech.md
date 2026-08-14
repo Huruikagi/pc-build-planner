@@ -99,7 +99,7 @@ CIとリリースの責務は分離している。検証CI（`.github/workflows/
 
 - application shellだけがside panel host、feature registration、typed navigation、service-worker composition、root公開API、共通maintenance表示を組み立てる。
 - application shellはReact runtime導入、shell root、feature mount container、共通error boundaryの統合規約を所有する。各featureは自身のReact componentとroot adapterを所有し、他featureのcomponentを直接importしない。
-- local data foundationだけが共通結果型、保存検証・移行、単一write authority、原子的root mutation、参照修復、maintenance fencing、実行時schema primitiveを所有する。
+- local data foundationだけが共通結果型、保存検証・移行、product-local単一write authority、原子的root mutation、参照修復、maintenance/recovery fencing、実行時schema primitiveを所有する。`@pc-build-planner/local-data`は抽出済みgeneric primitiveとplatform/backup adapterを提供するが、MVPでは実product runtimeの全面composition、consumer固有fence、recovery/finalization resumptionのcanonical ownerにしない。これらの再抽象化は2番目の実consumer evidenceが得られた時点で再評価する。
 - 共有コアモジュールがそれぞれ単一の横断責務を所有する。UIメッセージカタログと解決、表示言語の決定と永続化、現在選択プロジェクトのcontract・選択transaction・切替guard・共通selectorを、featureごとに再実装しない。
 - UI文言はカタログを唯一のsource of truthとし、componentへ直接自然言語を書かない。ロケール固有の取り込み支援データは表示文言ではなく、カタログの外にロケール別データとして置く。
 - featureは `public.ts`、登録モジュール、必要なruntime registration portを公開し、共有runtime入口を直接編集しない。

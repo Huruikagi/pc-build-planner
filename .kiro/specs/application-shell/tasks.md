@@ -2,10 +2,10 @@
 
 ## Change Integration
 
-- **Change Brief**: `v0.5.0-boundary-reconciliation`
-- **In scope**: configured message resolver、ProductLocalDataAdapter、ProductBackupAdapter、AppDataError consumers、project lifecycle descriptor/catalog、全確定feature public portsのproduction/root API composition、obsolete proxy撤去、boundary/E2Eをtask 12へ割り当てる。
-- **Out of scope**: canonical core/domain/error/message/catalog/data policy、feature behavior/state/UI、data mutation、backup codec/protocol。
-- **History preservation**: task 1〜11の完了履歴を維持し、owner reconciliation差分だけを未完了taskとして追加する。
+- **Change Brief**: `mvp-local-data-simplification`
+- **In scope**: 現行product-local runtime contribution、既存backup section contributionとbackup専用capability、configured message resolver、AppDataError consumers、project lifecycle descriptor/catalog、全確定feature public portsのproduction/root API composition、capability非漏洩、boundary/E2Eをtask 12へ割り当てる。
+- **Out of scope**: package factory全面移行、package-backed product adapter、generic maintenance/recovery/finalization seam、canonical core/domain/error/message/catalog/data policy、feature behavior/state/UI、data mutation、backup codec/protocol、UI layout変更。
+- **History preservation**: task 1〜11の完了履歴と先行owner reconciliation判断を維持し、最新Change Brief差分だけを未完了task 12へ統合する。
 
 - [x] 1. Shell基盤と型付き契約を整備する
 - [x] 1.1 TypeScript、Reactとruntime test基盤を構成する
@@ -347,7 +347,7 @@
   - 起動、途中失敗、停止で回復登録と購読を逆依存順かつbest-effort、冪等に解放する
   - recovery-requiredでもsettingsとbackup回復面を利用可能に保ち、他の通常mutation featureを利用不能として合成する
   - 完了時、production-shaped fixtureで回復操作だけが許可され、未登録操作が拒否され、停止後にresourceが残らないことを観測できる
-  - _Depends: backup-restore 6.8, settings-screen 4.2_
+  - _Depends: backup-restore 5.1, settings-screen 4.2_
   - _Requirements: 3.1, 3.9, 5.8, 5.9, 5.10, 8.5, 10.2, 10.4, 10.5_
   - _Boundary: ApplicationComposition, SidePanelFeatureContributions_
 
@@ -407,40 +407,65 @@
   - _Requirements: 3.9, 6.1, 6.2, 6.3, 6.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5_
   - _Boundary: ApplicationShellE2E, ApplicationShellArtifactValidation_
 
-- [ ] 12. owner移管後のproduction compositionを完結する
+- [ ] 12. product-local contributionによるproduction compositionを完結する
 
 - [ ] 12.1 全owner public contractとroot composition inputを固定する
-  - configured message resolver、`ProductLocalDataAdapter`、`ProductBackupAdapter`、共有`AppDataError`、project lifecycle descriptor/catalogを各owner公開entryから組み立てるconsumer fixtureを追加する。
+  - configured message resolver、現行product-local runtime contribution、既存backup section contributionとbackup専用capability、共有`AppDataError`、project lifecycle descriptor/catalogを各owner公開entryから組み立てるconsumer fixtureを追加する。
   - project、candidate、source、identity、current-build、compatibility、price refresh、duplicate merge、product capture、settings、backupの`public.ts`/`feature-contribution.ts`/必要な`worker-public.ts`だけでside-panel/worker/root APIを型検査する。
   - 旧ManagementError、project/source/identity/manufacturer/refresh proxy、内部module、空adapter、no-op resolverをnegative fixtureで拒否する。
-  - `product-page-capture`を含む全upstream metadataがtasks-generated/approved/readyで、必要public contractが利用可能なことを実装開始条件として検査する。
-  - _Depends: ui-message-catalog 9.3, local-data-foundation 12.4, project-context 9, project-candidate-management 16.2, current-build-management 11.3, compatibility-checking 9.5, candidate-source-bookmarks 12.3, source-price-refresh 7.3, duplicate-product-merge 6.3, product-page-capture 14.3, backup-restore 7.4_
+  - package factory、package-backed product adapter、generic maintenance/recovery/finalization seamをconsumer fixture、runtime dependency、実装開始条件へ追加せず、2番目の実consumerまで汎用化を延期する。
+  - `product-page-capture`を含む既存feature public contractに加え、`local-data-foundation` task 11.2と`backup-restore` task 7.6で確定する同Change Briefのproduct-local capability contractが利用可能なことを実装開始条件として検査する。
+  - _Depends: ui-message-catalog 9.3, local-data-foundation 11.2, project-context 9, project-candidate-management 16.2, current-build-management 11.3, compatibility-checking 9.5, candidate-source-bookmarks 12.3, source-price-refresh 7.3, duplicate-product-merge 6.3, product-page-capture 14.3, settings-screen 4.4, backup-restore 7.6_
   - _Requirements: 3.1, 3.2, 3.5, 3.6, 3.7, 3.8, 11.1, 11.2, 11.3, 11.5, 11.6, 11.7, 11.9_
   - _Boundary: ProductionCompositionInputs, RootPublicApi consumer contracts_
 
-- [ ] 12.2 side-panel/worker production wiringとobsolete proxy撤去を実装する
-  - side-panel rootでconfigured resolver、Product adapters、project lifecycle、feature contributionsを一度だけ初期化し、各consumerへ必要最小capabilityを直接注入する。
+- [ ] 12.2 side-panel/root production wiringとobsolete proxy撤去を実装する
+  - side-panel rootでconfigured resolver、現行product-local runtime contribution、project lifecycle、feature contributionsを一度だけ初期化し、通常consumerへ通常用途capabilityだけ、backup sectionへ既存backup専用capabilityだけを直接注入する。
   - project catalog source、late-bound project command/guard、candidate source/identity、manufacturer domain、source refreshの旧proxyと旧root API exportを撤去し、欠落時はstartup/degraded startup規則へfail closedにする。
-  - worker-safe registrationだけをproduction worker compositionへ接続し、UI/DOM/React/configured UI resolver/ProductBackupAdapterをworker graphへ混入させない。
-  - start失敗、stop、concurrent start/stopで新resourceを既存の逆依存順・best-effort・冪等規則によりcleanupする。
+  - 完了時、side-panel/root consumer fixtureは各公開contributionを一度だけ解決し、旧proxy・旧export・package/generic capabilityなしで型検査とstartup contractに成功する。
   - _Depends: 12.1_
-  - _Requirements: 3.1, 3.3, 3.5, 3.6, 3.7, 3.8, 3.9, 5.6, 6.3, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9_
-  - _Boundary: ApplicationComposition, ProductionWorkerComposition, SidePanelContributions, RootPublicApi_
+  - _Requirements: 3.1, 3.3, 3.5, 3.7, 3.8, 3.9, 11.1, 11.2, 11.3, 11.4, 11.5, 11.7, 11.9_
+  - _Boundary: ApplicationComposition, SidePanelContributions, RootPublicApi_
 
-- [ ] 12.3 startup・recovery・settings・lifecycleと横断E2Eを完成する
-  - one-shot dependency identity、root API shape、worker/UI bundle分離、obsolete proxy 0件、deep import 0件をpublic consumer/boundary/artifact gateで固定する。
+- [ ] 12.3 worker production wiringとartifact分離を実装する
+  - worker-safe registrationだけをproduction worker compositionへ接続し、UI/DOM/React/configured UI resolver/backup section contribution/backup専用capabilityをworker graphへ混入させない。
+  - worker public consumerとartifact scanで、side-panel専用module、package内部、generic storage/lock/fenceへの到達が0件であることを固定する。
+  - 完了時、worker bundleはDOM/React非依存でbuildでき、既知worker registrationだけを一度ずつ開始・解除できる。
+  - _Depends: 12.1_
+  - _Requirements: 3.1, 3.6, 6.3, 11.1, 11.2, 11.5, 11.6, 11.7_
+  - _Boundary: ProductionWorkerComposition, WorkerPublicApi, WorkerArtifactValidation_
+
+- [ ] 12.4 composition lifecycleのfailureとcleanupを固定する
+  - side-panel/root/workerのstart失敗、stop、concurrent start/stopで新resourceを既存の逆依存順・best-effort・冪等規則によりcleanupする。
+  - 一部cleanup失敗では未解放resourceの所有権を保持し、次のstopで再試行して二重解除しない既存規則を維持する。
+  - 完了時、各fault injection pointで開始済みresourceだけが逆順解放され、cleanup failure後の再試行が決定的に成功する。
+  - _Depends: 12.2, 12.3_
+  - _Requirements: 3.1, 3.3, 3.5, 6.4, 11.5, 11.8_
+  - _Boundary: ApplicationCompositionLifecycle, ProductionWorkerCompositionLifecycle_
+
+- [ ] 12.5 startup・recovery・settings・feature lifecycleを統合検証する
+  - one-shot dependency identity、通常/backup capability分離、root API shape、worker/UI bundle分離、obsolete proxy 0件、package/generic capability漏洩 0件、deep import 0件をpublic consumer/boundary/artifact gateで固定する。
   - normal startup、project ready/empty/unavailable、maintenance、recovery-required、backup recovery、settings言語変更、persistent/transient activation、capture handoff、停止/rollbackをproduction-shaped fixtureで回帰する。
+  - 完了時、既存navigation/startup/error/state contractとbackup settings到達が現行product-local contributionで再現され、通常/backup capabilityが混線しない。
+  - _Depends: 12.4_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10_
+  - _Boundary: ApplicationShellProductionIntegration_
+
+- [ ] 12.6 横断Chrome E2Eと最終trace gateを完成する
   - candidate/current-build/compatibility/source/price/duplicate/captureの架空E2Eを確定public port経由で接続し、feature UI/error semanticsをshellが解釈しないことを確認する。
   - 77件のAcceptance Criteria、Change Brief In/Out、dependency/file/owner boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
-  - _Depends: 12.2_
+  - 完了時、Chrome 116+のunpacked extensionで主要feature間のnavigation、settings/backup recovery、typed handoffが成功し、最終coverage表に未対応IDがない。
+  - _Depends: 12.5_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3, 10.4, 10.5, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10_
-  - _Boundary: ApplicationShellFinalCompositionValidation_
+  - _Boundary: ApplicationShellChromeE2E, ApplicationShellFinalCompositionValidation_
 
 ## Implementation Notes
 
 - 2026-08-12 fresh independent task-graph sanity reviewでは、初回指摘の古いupstream readiness参照を各ownerの最終gate（`ui-message-catalog` 9.3、`project-context` 9、`current-build-management` 11.3、`candidate-source-bookmarks` 12.3）へ修正した。修正後の再reviewは、全77 AC、upstream → 12.1 → 12.2 → 12.3の非循環順序、composition-only境界、startup/recovery/settings/project lifecycleを含む非回帰を確認してPASS、残存指摘なしと判定した。
 
-- `v0.5.0-boundary-reconciliation`以後、shellはconfigured resolver、Product adapters、project lifecycleとfeature public contributionsのcomposition-only ownerであり、core/domain/feature behaviorとAppDataErrorの意味を所有しない。
+- 2026-08-14 fresh task-graph sanity reviewの初回`NEEDS_FIXES`を受け、旧12.2/12.3をpublic contract、side-panel/root、worker、failure/cleanup、production-shaped integration、Chrome E2E/final gateへ分割し、`settings-screen 4.4`を明示依存へ追加した。修正後の再reviewは、upstream owner final gates → 12.1 → 12.2/12.3 → 12.4 → 12.5 → 12.6の非循環順序、各taskのobservable completion、composition-only ownership、Change Brief In/Outを確認して`PASS`、残存指摘なしと判定した。
+
+- `mvp-local-data-simplification`では、shellはconfigured resolver、現行product-local runtime contribution、backup専用capability、project lifecycleとfeature public contributionsのcomposition-only ownerであり、package factory全面移行、generic maintenance/recovery/finalization seam、core/domain/feature behavior、AppDataErrorの意味を所有しない。
 
 - 2026-08-12 validation remediation: project selector cleanupは成功済みresourceだけを手放し、unsubscribeまたはunmount失敗を次回`stop()`で再試行する。project snapshotは`ProjectContextShellAdapter` callbackから単調read bindingへfan-outし、catalog sourceはside-panel contributionが公開する型付きadapterで注入してfeature keyとpublic API shapeの動的探索を廃止した。
 
