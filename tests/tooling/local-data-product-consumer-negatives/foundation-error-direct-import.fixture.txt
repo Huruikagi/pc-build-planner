@@ -1,0 +1,4 @@
+import type { FoundationError } from "../../../src/domain/public.js";
+
+declare const error: FoundationError;
+void error;

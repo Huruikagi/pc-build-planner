@@ -485,7 +485,7 @@
   - _Requirements: 3.10, 7.4, 7.5, 7.6, 7.8, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 9.3, 9.5, 9.6, 9.8, 9.11, 9.12_
   - _Boundary: RuntimeContributionFactory, ProductRuntimeCharacterization_
 
-- [ ] 11.3 (P) 下流consumer migration contractを固定する
+- [x] 11.3 (P) 下流consumer migration contractを固定する
   - 全`FoundationError` variantのcode/payload/context一対一mappingと、unknown・不完全値のfail-closedを共有`AppDataError` contractで固定する。
   - candidate-management、current-build、compatibility、candidate-source、source-price-refreshが共有`AppDataError`を、backup-restoreが用途限定capabilityを公開入口から利用できるtype fixtureを追加する。
   - 下流実装ファイルは変更せず、candidate-owned共有error、`FoundationError`直接依存、product adapter再定義、package deep import、通常/backup capability混同を個別negative fixtureで拒否する。

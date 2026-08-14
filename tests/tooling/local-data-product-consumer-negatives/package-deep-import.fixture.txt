@@ -1,0 +1,4 @@
+import type { StoragePort } from "@pc-build-planner/local-data/core/internal.js";
+
+declare const storage: StoragePort<unknown>;
+void storage;
