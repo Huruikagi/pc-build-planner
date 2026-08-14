@@ -213,7 +213,7 @@
   - _Requirements: 1.5, 1.7, 1.8, 2.6, 4.9, 4.10, 4.11, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.6, 6.7, 7.2, 7.3, 7.7, 7.11_
   - _Boundary: SyntheticPublicContract, BackupOrchestrator_
 
-- [ ] 7.4 package ownership boundary gateを更新する
+- [x] 7.4 package ownership boundary gateを更新する
   - package source/testによる製品adapter、製品control field、数値lease、generic/protocolを迂回するunsafe cast、独自pending markerの所有をboundary gateで拒否する。
   - error/control/protocolのsynthetic fixtureは許可し、製品識別子や単なる型安全な変換を誤検出しないnegative/positive tooling testを追加する。
   - 各negative fixtureが狙った所有違反一件で失敗し、3 public entryと製品非依存のpositive graphが成功すれば完了とする。
@@ -259,3 +259,4 @@
 - **Task 7.1**: build済みroot/backup declarationだけを解決する専用consumer gateをclean build直後に実行し、owner error/control/finalization capabilityのpublic genericと3-entry export mapをsource aliasなしで固定する。
 - **Task 7.2**: transaction public contractはbuild済みroot entryだけを使い、positive fixture、adapter欠落/control混同の狙ったnegative診断、decode/migration/mutation/repair/validationのruntime identityを一つのfail-closed validator routeで検証する。
 - **Task 7.3**: replacement/backup public runtime contractはcloneされるsynthetic storageとruntime validatorを使い、unsafe castや参照同一性に依存せず、全replacement policy stage、same-ticket cleanup、reassessment、再生成finalizationをcanonical public consumer routeで検証する。
+- **Task 7.4**: ownership gateはinterface・type alias・classのdirect instance memberだけを正規化し、括弧付き型、任意長のlocal alias chain、lexical shadowing、generic type parameterを参照位置と宣言位置に基づくtype/value別bindingで解決する。cycleはbinding identityで停止し、method-local・static・synthetic・型安全な変換を誤検出しない。
