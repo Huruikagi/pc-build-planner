@@ -1,7 +1,11 @@
 import type { LocalDataRoot, MaintenanceState } from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 import type { SchemaValidator, ValidationError } from "../domain/validation.js";
-import type { CapacityWarning } from "./capacity-policy.js";
+import {
+  type CapacityWarning,
+  projectedStorageBytes,
+  serializedRootStorageBytes,
+} from "./capacity-policy.js";
 import type {
   MigrationError,
   MigrationRegistry,
@@ -9,7 +13,6 @@ import type {
 import { CURRENT_SCHEMA_VERSION } from "./schema.js";
 
 const DEFAULT_WARNING_RATIO = 0.8;
-const STORAGE_KEY = "localDataRoot";
 
 declare const replacementTokenBrand: unique symbol;
 export type ReplacementToken = string & {
@@ -18,6 +21,7 @@ export type ReplacementToken = string & {
 
 export interface ReplacementEvaluationInput {
   readonly currentBytes: number;
+  readonly currentRootBytes: number;
   readonly quotaBytes: number;
   readonly revision: number;
   readonly maintenance: MaintenanceState;
@@ -115,18 +119,22 @@ const readSourceSchemaVersion = (input: unknown): number | undefined => {
   return Number.isSafeInteger(value) ? (value as number) : undefined;
 };
 
-const requiredBytes = (root: LocalDataRoot): number =>
-  new TextEncoder().encode(JSON.stringify({ [STORAGE_KEY]: root })).byteLength;
-
-const validEvaluation = (input: ReplacementEvaluationInput): boolean =>
-  Number.isSafeInteger(input.currentBytes) &&
-  input.currentBytes >= 0 &&
-  Number.isSafeInteger(input.quotaBytes) &&
-  input.quotaBytes >= 0 &&
-  Number.isSafeInteger(input.revision) &&
-  input.revision >= 0 &&
-  typeof input.maintenance === "object" &&
-  input.maintenance !== null;
+const validEvaluation = (input: ReplacementEvaluationInput): boolean => {
+  const currentRootBytes = input.currentRootBytes ?? input.currentBytes;
+  return (
+    Number.isSafeInteger(input.currentBytes) &&
+    input.currentBytes >= 0 &&
+    Number.isSafeInteger(currentRootBytes) &&
+    currentRootBytes >= 0 &&
+    currentRootBytes <= input.currentBytes &&
+    Number.isSafeInteger(input.quotaBytes) &&
+    input.quotaBytes >= 0 &&
+    Number.isSafeInteger(input.revision) &&
+    input.revision >= 0 &&
+    typeof input.maintenance === "object" &&
+    input.maintenance !== null
+  );
+};
 
 const exactCommitCandidate = (
   root: LocalDataRoot,
@@ -172,13 +180,20 @@ export const createReplacementCoordinator = (
 
     const exact = exactCommitCandidate(validated.value, evaluation, validator);
     if (!exact.ok) return exact;
-    const bytes = requiredBytes(exact.value);
-    if (bytes > evaluation.quotaBytes)
+    const rootBytes = serializedRootStorageBytes(exact.value);
+    const afterBytes = projectedStorageBytes(
+      evaluation.currentBytes,
+      evaluation.currentRootBytes ?? evaluation.currentBytes,
+      exact.value,
+    );
+    if (afterBytes === undefined)
+      return { ok: false, error: { code: "invalid-capacity-input" } };
+    if (afterBytes > evaluation.quotaBytes)
       return { ok: false, error: { code: "quota-exceeded" } };
     const cursor: ReplacementCursor = {
       sourceSchemaVersion: sourceSchemaVersion ?? validated.value.schemaVersion,
       targetSchemaVersion: CURRENT_SCHEMA_VERSION,
-      requiredBytes: bytes,
+      requiredBytes: rootBytes,
       revision: evaluation.revision,
     };
     const candidateDigest = await sha256(
@@ -196,9 +211,9 @@ export const createReplacementCoordinator = (
         sourceSchemaVersion: cursor.sourceSchemaVersion,
         targetSchemaVersion: cursor.targetSchemaVersion,
         beforeBytes: evaluation.currentBytes,
-        requiredBytes: bytes,
+        requiredBytes: rootBytes,
         warnings:
-          bytes >= warningThresholdBytes
+          afterBytes >= warningThresholdBytes
             ? [
                 {
                   code: "capacity-warning",

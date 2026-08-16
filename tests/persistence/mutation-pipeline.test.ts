@@ -187,3 +187,23 @@ test("runtime quotaからwarningを返し、超過時は候補rootを返さな�
   });
   assert.deepEqual(rejected, { ok: false, error: { code: "quota-exceeded" } });
 });
+
+test("root外controlの保持bytesをmutation後総量へ加える", () => {
+  const operation = {
+    kind: "update",
+    entity: "project",
+    value: { ...project, name: "更新" },
+  };
+  const beforeRootBytes = bytes(root());
+  const candidateRoot = { ...root(), projects: [{ ...project, name: "更新" }] };
+  const candidateRootBytes = bytes(candidateRoot);
+  const retainedControlBytes = 60;
+
+  const result = pipeline.apply(root(), operation, {
+    currentBytes: beforeRootBytes + retainedControlBytes,
+    currentRootBytes: beforeRootBytes,
+    quotaBytes: candidateRootBytes + retainedControlBytes - 1,
+  });
+
+  assert.deepEqual(result, { ok: false, error: { code: "quota-exceeded" } });
+});

@@ -4,6 +4,7 @@ import type { StorageError, StoragePort } from "./repository.js";
 
 const DEFAULT_WARNING_RATIO = 0.8;
 const STORAGE_KEY = "localDataRoot";
+const RECOVERY_CONTROL_KEY = "foundationRecoveryControl";
 
 export interface CapacityWarning {
   readonly code: "capacity-warning";
@@ -27,8 +28,42 @@ export interface CapacityPolicy {
   assess(root: LocalDataRoot): Promise<Result<CapacityStatus, CapacityError>>;
 }
 
-const serializedRootBytes = (root: LocalDataRoot): number =>
+export const serializedRootStorageBytes = (root: unknown): number =>
   new TextEncoder().encode(JSON.stringify({ [STORAGE_KEY]: root })).byteLength;
+
+export const serializedLocalDataStorageBytes = (
+  root: unknown,
+  recoveryControl: unknown | undefined,
+): number =>
+  new TextEncoder().encode(
+    JSON.stringify({
+      [STORAGE_KEY]: root,
+      ...(recoveryControl === undefined
+        ? {}
+        : { [RECOVERY_CONTROL_KEY]: recoveryControl }),
+    }),
+  ).byteLength;
+
+export const projectedStorageBytes = (
+  currentBytes: number,
+  currentRootBytes: number,
+  nextRoot: LocalDataRoot,
+): number | undefined => {
+  if (
+    !Number.isSafeInteger(currentBytes) ||
+    currentBytes < 0 ||
+    !Number.isSafeInteger(currentRootBytes) ||
+    currentRootBytes < 0 ||
+    currentRootBytes > currentBytes
+  )
+    return undefined;
+  return currentBytes - currentRootBytes + serializedRootStorageBytes(nextRoot);
+};
+
+export const currentRootStorageBytes = (
+  currentBytes: number,
+  root: unknown,
+): number => Math.min(currentBytes, serializedRootStorageBytes(root));
 const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
 const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
@@ -44,9 +79,24 @@ export const createCapacityPolicy = (
     async assess(root) {
       const before = await storage.bytesInUse();
       if (!before.ok) return err(before.error);
+      const currentRoot = await storage.readRoot();
+      if (!currentRoot.ok) return err(currentRoot.error);
 
       const quotaBytes = storage.quotaBytes();
-      const requiredBytes = serializedRootBytes(root);
+      let requiredBytes: number | undefined;
+      try {
+        requiredBytes = projectedStorageBytes(
+          before.value,
+          currentRoot.value === undefined
+            ? 0
+            : serializedRootStorageBytes(currentRoot.value),
+          root,
+        );
+      } catch {
+        return err({ code: "storage-unavailable" });
+      }
+      if (requiredBytes === undefined)
+        return err({ code: "storage-unavailable" });
       if (requiredBytes > quotaBytes) return err({ code: "quota-exceeded" });
 
       const warningThresholdBytes = quotaBytes * warningRatio;

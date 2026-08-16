@@ -9,6 +9,7 @@ import type {
 } from "../domain/model.js";
 import type { Result } from "../domain/result.js";
 import type { SchemaValidator, ValidationError } from "../domain/validation.js";
+import { projectedStorageBytes } from "./capacity-policy.js";
 import type {
   ReferenceRepairPolicy,
   RepairError,
@@ -16,10 +17,10 @@ import type {
 } from "./reference-repair-policy.js";
 
 const DEFAULT_WARNING_RATIO = 0.8;
-const STORAGE_KEY = "localDataRoot";
 
 export interface CapacityInput {
   readonly currentBytes: number;
+  readonly currentRootBytes: number;
   readonly quotaBytes: number;
 }
 
@@ -128,22 +129,29 @@ const rootChangeFor = (
   return { kind: "unrelated" };
 };
 
-const requiredBytes = (root: LocalDataRoot): number =>
-  new TextEncoder().encode(JSON.stringify({ [STORAGE_KEY]: root })).byteLength;
-
 const assessCapacity = (
   root: LocalDataRoot,
   input: CapacityInput,
   warningRatio: number,
 ): Result<MutationCapacityStatus, MutationPipelineError> => {
+  const currentRootBytes = input.currentRootBytes ?? input.currentBytes;
   if (
     !Number.isSafeInteger(input.currentBytes) ||
     input.currentBytes < 0 ||
+    !Number.isSafeInteger(currentRootBytes) ||
+    currentRootBytes < 0 ||
+    currentRootBytes > input.currentBytes ||
     !Number.isSafeInteger(input.quotaBytes) ||
     input.quotaBytes < 0
   )
     return { ok: false, error: { code: "invalid-capacity-input" } };
-  const afterBytes = requiredBytes(root);
+  const afterBytes = projectedStorageBytes(
+    input.currentBytes,
+    currentRootBytes,
+    root,
+  );
+  if (afterBytes === undefined)
+    return { ok: false, error: { code: "invalid-capacity-input" } };
   if (afterBytes > input.quotaBytes)
     return { ok: false, error: { code: "quota-exceeded" } };
   const warningThresholdBytes = input.quotaBytes * warningRatio;

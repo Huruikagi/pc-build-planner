@@ -1,6 +1,7 @@
 import type { FoundationError, Result } from "../domain/result.js";
 import type { ValidationError } from "../domain/validation.js";
 import type { CapacityError } from "./capacity-policy.js";
+import { currentRootStorageBytes } from "./capacity-policy.js";
 import type {
   MigrationError,
   MigrationRegistry,
@@ -140,6 +141,7 @@ export const createRecoveryCoordinator = (
     if (!bytes.ok) return bytes;
     const assessed = await replacement.assessReplacement(candidate, {
       currentBytes: bytes.value,
+      currentRootBytes: currentRootStorageBytes(bytes.value, raw.value),
       quotaBytes: storage.quotaBytes(),
       revision: 0,
       maintenance: { generation: 0 as never, active: false },

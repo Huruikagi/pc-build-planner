@@ -25,5 +25,6 @@
     "tests/**/*.mjs",
     "tests/**/*.ts",
     "tests/**/*.tsx"
-  ]
+  ],
+  "exclude": ["tests/tooling/*.negative.ts"]
 }

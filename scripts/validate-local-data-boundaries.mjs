@@ -122,8 +122,18 @@ const walkAst = (root, visitor) => {
 
 /** @param {import("typescript/unstable/ast").SourceFile} sourceFile */
 const ownershipShapes = (sourceFile) => {
+  /**
+   * @typedef {{
+   *   readonly declaration: import("typescript/unstable/ast").Node,
+   *   readonly kind: "alias-target" | "stop",
+   *   readonly target: import("typescript/unstable/ast").Node | undefined,
+   * }} LocalBinding
+   */
+  /** @type {Map<import("typescript/unstable/ast").Node, Map<string, LocalBinding[]>>} */
   const typeBindings = new Map();
+  /** @type {Map<import("typescript/unstable/ast").Node, Map<string, LocalBinding[]>>} */
   const valueBindings = new Map();
+  /** @param {import("typescript/unstable/ast").Node} node */
   const isLexicalScope = (node) =>
     [
       AstSyntaxKind.SourceFile,
@@ -140,12 +150,21 @@ const ownershipShapes = (sourceFile) => {
       AstSyntaxKind.TypeAliasDeclaration,
       AstSyntaxKind.ClassDeclaration,
     ].includes(node.kind);
+  /** @param {import("typescript/unstable/ast").Node} node */
   const containingScope = (node) => {
     let current = node.parent;
     while (current !== undefined && !isLexicalScope(current))
       current = current.parent;
     return current ?? sourceFile;
   };
+  /**
+   * @param {Map<import("typescript/unstable/ast").Node, Map<string, LocalBinding[]>>} index
+   * @param {string} name
+   * @param {import("typescript/unstable/ast").Node} declaration
+   * @param {LocalBinding["kind"]} kind
+   * @param {import("typescript/unstable/ast").Node | undefined} target
+   * @param {import("typescript/unstable/ast").Node} [scope]
+   */
   const registerBinding = (
     index,
     name,
@@ -173,7 +192,9 @@ const ownershipShapes = (sourceFile) => {
         node.type,
       );
     if (isLexicalScope(node) && "typeParameters" in node)
-      for (const parameter of node.typeParameters ?? [])
+      for (const parameter of /** @type {{ typeParameters?: readonly import("typescript/unstable/ast").TypeParameterDeclaration[] }} */ (
+        node
+      ).typeParameters ?? [])
         if (isIdentifier(parameter.name))
           registerBinding(
             typeBindings,
@@ -197,6 +218,11 @@ const ownershipShapes = (sourceFile) => {
         node.initializer,
       );
   });
+  /**
+   * @param {Map<import("typescript/unstable/ast").Node, Map<string, LocalBinding[]>>} index
+   * @param {string} name
+   * @param {import("typescript/unstable/ast").Node} context
+   */
   const findBinding = (index, name, context) => {
     let scope = isLexicalScope(context) ? context : containingScope(context);
     while (scope !== undefined) {
@@ -241,7 +267,11 @@ const ownershipShapes = (sourceFile) => {
       if (isStringLiteral(current)) return current.text;
       if (!isIdentifier(current)) return undefined;
       const binding = findBinding(valueBindings, current.text, context);
-      if (binding === undefined || seen.has(binding.declaration))
+      if (
+        binding === undefined ||
+        binding.target === undefined ||
+        seen.has(binding.declaration)
+      )
         return undefined;
       seen.add(binding.declaration);
       return resolveLocalConstString(binding.target, binding.declaration, seen);

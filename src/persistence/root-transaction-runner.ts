@@ -6,6 +6,10 @@ import type {
 import type { LocalDataRoot, MaintenanceOwnerId } from "../domain/model.js";
 import type { FoundationError, Result } from "../domain/result.js";
 import type { SchemaValidator } from "../domain/validation.js";
+import {
+  currentRootStorageBytes,
+  serializedLocalDataStorageBytes,
+} from "./capacity-policy.js";
 import type {
   MaintenanceFence,
   MaintenancePolicy,
@@ -87,6 +91,7 @@ const requestPayloadDigest = async (value: RequestPayload): Promise<string> => {
 export interface RootTransactionContext {
   readonly snapshot: LocalDataRoot;
   readonly currentBytes: number;
+  readonly currentRootBytes: number;
   readonly quotaBytes: number;
 }
 
@@ -541,6 +546,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       return { ok: false, error: { code: "validation" } };
     const assessed = await replacement.assessReplacement(candidate, {
       currentBytes: bytes.value,
+      currentRootBytes: currentRootStorageBytes(bytes.value, current.value),
       quotaBytes,
       revision: current.value.revision,
       maintenance: current.value.maintenance,
@@ -583,6 +589,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       command.assessment,
       {
         currentBytes: bytes.value,
+        currentRootBytes: currentRootStorageBytes(bytes.value, snapshot),
         quotaBytes,
         revision: snapshot.revision,
         maintenance: snapshot.maintenance,
@@ -639,6 +646,10 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       command.assessment,
     );
     if (!verifiedAssessment.ok) return verifiedAssessment;
+    const rawRoot = await this.#deps.storage.readRoot();
+    if (!rawRoot.ok) return rawRoot;
+    if (rawRoot.value === undefined)
+      return { ok: false, error: { code: "corrupt-data" } };
     const bytes = await this.#deps.storage.bytesInUse();
     if (!bytes.ok) return bytes;
     let quotaBytes: number;
@@ -652,6 +663,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       verifiedAssessment.value,
       {
         currentBytes: bytes.value,
+        currentRootBytes: currentRootStorageBytes(bytes.value, rawRoot.value),
         quotaBytes,
         revision: 0,
         maintenance: { generation: 0 as never, active: false },
@@ -670,6 +682,17 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     );
     if (!bound.ok)
       return { ok: false, error: recoveryControlFailure(bound.error) };
+    let commitBytes: number;
+    try {
+      commitBytes = serializedLocalDataStorageBytes(
+        candidate.value,
+        bound.value,
+      );
+    } catch {
+      return { ok: false, error: { code: "validation" } };
+    }
+    if (commitBytes > quotaBytes)
+      return { ok: false, error: { code: "quota-exceeded" } };
     const controlCommitted = await this.#deps.storage.writeRecoveryControl(
       bound.value,
     );
@@ -681,7 +704,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
           value: {
             revision: candidate.value.revision,
             beforeBytes: bytes.value,
-            afterBytes: verifiedAssessment.value.requiredBytes,
+            afterBytes: commitBytes,
           },
         }
       : committed;
@@ -806,6 +829,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       command.assessment,
       {
         currentBytes: bytes.value,
+        currentRootBytes: currentRootStorageBytes(bytes.value, current.value),
         quotaBytes,
         revision: current.value.revision,
         maintenance: current.value.maintenance,
@@ -824,6 +848,17 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
     );
     if (!bound.ok)
       return { ok: false, error: recoveryControlFailure(bound.error) };
+    let commitBytes: number;
+    try {
+      commitBytes = serializedLocalDataStorageBytes(
+        candidate.value,
+        bound.value,
+      );
+    } catch {
+      return { ok: false, error: { code: "validation" } };
+    }
+    if (commitBytes > quotaBytes)
+      return { ok: false, error: { code: "quota-exceeded" } };
     const controlCommitted = await this.#deps.storage.writeRecoveryControl(
       bound.value,
     );
@@ -835,7 +870,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
           value: {
             revision: candidate.value.revision,
             beforeBytes: bytes.value,
-            afterBytes: command.assessment.requiredBytes,
+            afterBytes: commitBytes,
           },
         }
       : committed;
@@ -1081,6 +1116,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       proposed = await operation.execute({
         snapshot,
         currentBytes: bytes.value,
+        currentRootBytes: currentRootStorageBytes(bytes.value, snapshot),
         quotaBytes,
       });
     } catch {
@@ -1159,6 +1195,7 @@ class DefaultRootTransactionRunner implements RootTransactionRunner {
       proposed = await operation.execute({
         snapshot,
         currentBytes: bytes.value,
+        currentRootBytes: currentRootStorageBytes(bytes.value, snapshot),
         quotaBytes,
       });
     } catch {

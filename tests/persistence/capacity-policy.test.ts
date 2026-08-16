@@ -55,3 +55,20 @@ test("実行時quotaを1 byteでも超える見込みを識別可能に拒否す
   assert.deepEqual(result, { ok: false, error: { code: "quota-exceeded" } });
   assert.equal((await storage.readRoot()).value, undefined);
 });
+
+test("root外のRecoveryControlを保存後総量へ含める", async () => {
+  const root = createInitialRoot();
+  const rootBytes = encodedBytes(root);
+  const state = createInMemoryStorageState({ quotaBytes: rootBytes + 1 });
+  state.entries.set("localDataRoot", structuredClone(root));
+  state.entries.set("foundationRecoveryControl", {
+    generation: 0,
+    active: false,
+  });
+
+  const result = await createCapacityPolicy(
+    createInMemoryStorageAdapter(state),
+  ).assess(root);
+
+  assert.deepEqual(result, { ok: false, error: { code: "quota-exceeded" } });
+});

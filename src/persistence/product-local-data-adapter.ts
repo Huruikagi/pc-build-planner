@@ -15,7 +15,10 @@ import type { FoundationError } from "../domain/result.js";
 import { schemaValidator } from "../domain/validation.js";
 import { createMigrationRegistry } from "./migration-registry.js";
 import type { RootOperation } from "./mutation-pipeline.js";
-import { validateRecoveryControl } from "./recovery-control.js";
+import {
+  type RecoveryControl,
+  validateRecoveryControl,
+} from "./recovery-control.js";
 import {
   type RootChange,
   referenceRepairPolicy,
@@ -222,7 +225,10 @@ export const productLocalDataStorageScope: ChromeStorageKeyScope = {
   control: RECOVERY_CONTROL_STORAGE_KEY,
 };
 
-export const productWorkerPolicy: PersistentControlPolicy = {
+export const productWorkerPolicy: PersistentControlPolicy<
+  RecoveryControl,
+  FoundationError
+> = {
   authorizeMutation(control) {
     const validated = validateRecoveryControl(control);
     if (!validated.ok) return { ok: false, error: { code: "stale-fence" } };

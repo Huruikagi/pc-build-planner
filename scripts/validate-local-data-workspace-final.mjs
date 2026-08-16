@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-export const localDataWorkspaceGates = Object.freeze([
+const localDataPackageGates = Object.freeze([
   Object.freeze([
     "pnpm",
     "--filter",
@@ -19,10 +19,12 @@ export const localDataProductOwnerGates = Object.freeze([
   Object.freeze(["pnpm", "validate:local-data-product-consumers"]),
 ]);
 
-export const localDataPackageImpactGates = Object.freeze([
-  ...localDataWorkspaceGates,
+export const localDataWorkspaceGates = Object.freeze([
+  ...localDataPackageGates,
   ...localDataProductOwnerGates,
 ]);
+
+export const localDataPackageImpactGates = localDataWorkspaceGates;
 
 const productOwnerPath =
   /^(?:src\/(?:application-shell|domain|features|persistence|project-context|ui-language)\/|tests\/(?:application-shell|domain|features|persistence|project-context|ui-language)\/)/u;

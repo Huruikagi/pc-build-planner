@@ -187,11 +187,11 @@ class DefaultWriteAuthority implements FoundationDataPort {
         ...(command.maintenance === undefined
           ? {}
           : { maintenance: command.maintenance }),
-        execute: ({ snapshot, currentBytes, quotaBytes }) => {
+        execute: ({ snapshot, currentBytes, currentRootBytes, quotaBytes }) => {
           const candidate = this.#deps.pipeline.apply(
             snapshot,
             command.operation,
-            { currentBytes, quotaBytes },
+            { currentBytes, currentRootBytes, quotaBytes },
           );
           if (!candidate.ok)
             return {

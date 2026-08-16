@@ -149,3 +149,21 @@ test("移行・全体検証・容量評価は候補も永続状態も変更し�
   });
   assert.deepEqual(overQuota, { ok: false, error: { code: "quota-exceeded" } });
 });
+
+test("root外controlの保持bytesを置換後総量とtokenへ含める", async () => {
+  const candidate = root();
+  const currentRootBytes = new TextEncoder().encode(
+    JSON.stringify({ localDataRoot: candidate }),
+  ).byteLength;
+  const retainedControlBytes = 60;
+  const evaluation = {
+    ...cursor,
+    currentBytes: currentRootBytes + retainedControlBytes,
+    currentRootBytes,
+    quotaBytes: currentRootBytes + retainedControlBytes - 1,
+  };
+
+  const result = await coordinator().assessReplacement(candidate, evaluation);
+
+  assert.deepEqual(result, { ok: false, error: { code: "quota-exceeded" } });
+});

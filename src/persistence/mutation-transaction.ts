@@ -52,9 +52,10 @@ export const createMutationTransaction =
       ...(command.maintenance === undefined
         ? {}
         : { maintenance: command.maintenance }),
-      execute({ snapshot, currentBytes, quotaBytes }) {
+      execute({ snapshot, currentBytes, currentRootBytes, quotaBytes }) {
         const candidate = pipeline.apply(snapshot, command.operation, {
           currentBytes,
+          currentRootBytes,
           quotaBytes,
         });
         if (!candidate.ok)

@@ -151,13 +151,13 @@ src/
     └── public.ts                              # 通常data portとbackup用途限定capability
 tests/
 ├── domain/app-data-error.test.ts              # FoundationErrorとの全種類一対一mapping
-├── persistence/product-local-data-adapter.contract.test.ts # PC policy/error/controlとpackage public factoryの接続
-├── persistence/product-local-data-runtime.contract.test.ts # 現行production runtimeのcharacterization
-├── persistence/foundation-characterization.test.ts # schema・repair・atomicity・fencing保持
+├── persistence/product-local-data-adapter.test.ts # package公開型へのPC policy適合
+├── persistence/production-runtime-contribution.test.ts # 現行production runtimeのcharacterization
+├── persistence/root-transaction-runner.contract.test.ts # schema・atomicity・fencing保持
 ├── persistence/runtime-contribution.test.ts   # 用途別capabilityとworker認可
 └── tooling/
-    ├── local-data-product-consumer.ts          # 製品公開contract fixture
-    ├── local-data-product-contract-command.test.ts # canonical commandの終了status/failure伝播
+    ├── local-data-product-consumer-contract.ts # 製品公開contract fixture
+    ├── local-data-product-contract-validation.test.ts # canonical commandの終了status/failure伝播
     └── public-boundaries.test.ts               # package deep import・raw capability・旧error owner拒否
 scripts/
 └── validate-local-data-product-contract.mjs    # foundation所有contract testだけを実行するroot command本体
@@ -171,7 +171,7 @@ packages/local-data/                             # upstream所有、参照は宣
 └── src/chrome/
     ├── index.ts                                 # `@pc-build-planner/local-data/chrome`
     ├── storage-adapter.ts                       # PackageChromeAdapter
-    └── web-locks-adapter.ts                     # PackageExclusiveLockPort adapter
+    └── locks-adapter.ts                         # PackageExclusiveLockPort adapter
 ```
 
 ### Modified Files
@@ -363,7 +363,7 @@ assessment tokenは候補rootのdigest、target schema、必要bytes、評価時
 
 `src/domain/app-data-error.ts`は候補管理featureから独立した共有`AppDataError`を所有する。各variantは既存`FoundationError`のcode、payload、利用側が判定するcontextを一対一で保持し、複数codeの統合、message文字列への縮退、粒度変更を行わない。`mapFoundationError`はtyped `FoundationError`に対するexhaustive mappingとする。境界で未知・不完全な値を受けた場合はmapping前の検証失敗としてfail closedにし、既知の`AppDataError`へ推測しない。`src/domain/public.ts`だけが型とmapperを公開する。
 
-candidate-management、current-build、compatibility、candidate-source、source-price-refreshはこの公開入口をconsumer migration contractとして利用し、`ManagementError`または同等unionをdata operation errorのownerとして残さない。各feature固有のvalidationやworkflow errorは各ownerに残り、`AppDataError`へ吸収しない。
+candidate-management、current-build、compatibility、candidate-source、source-price-refreshはこの公開入口をconsumer migration contractとして利用可能になる。本specはpositive/negative fixtureで移行先契約を固定し、各consumer実装のimport置換は更新済み隣接specが所有する。移行後は`ManagementError`または同等unionをdata operation errorのownerとして残さない。各feature固有のvalidationやworkflow errorは各ownerに残り、`AppDataError`へ吸収しない。
 
 ```typescript
 type AppDataError = FoundationError extends infer E
@@ -430,29 +430,21 @@ type ProductLocalDataPolicy = LocalDataPolicy<
   FoundationError
 >;
 
-type ProductErrorAdapter = ErrorAdapter<FoundationError, FoundationError>;
-
-type ProductRecoveryProtocol = PersistentRecoveryProtocol<
-  RecoveryControl,
-  FoundationError,
-  RecoveryFence,
-  PendingRecoveryCommit,
-  CurrentRootAnomaly
->;
-
 interface ProductLocalDataAdapterContract {
+  readonly createInitialRoot: () => LocalDataRoot;
+  readonly schemaVersion: typeof CURRENT_SCHEMA_VERSION;
   readonly policy: ProductLocalDataPolicy;
-  readonly errors: ProductErrorAdapter;
-  readonly recovery: ProductRecoveryProtocol;
-  readonly workerPolicy: DataWorkerAuthorizationPolicy;
+  readonly storageScope: ChromeStorageKeyScope;
+  readonly workerPolicy: PersistentControlPolicy<
+    RecoveryControl,
+    FoundationError
+  >;
 }
 ```
 
-`RootMutationOperation`はPC mutation command、`MaintenanceState`はroot内maintenance projection、`RecoveryControl`はroot外persistent controlであり、互いに代入可能とは扱わない。`RecoveryFence`、`PendingRecoveryCommit`、`CurrentRootAnomaly`はfoundation所有のopaque capabilityとして具体型を保持し、package既定の`unknown`へ縮退させない。`ProductErrorAdapter.fromPolicy`はdecode/migration/mutation/repair/validation stageと元の`FoundationError` payload/contextを保持し、`fromCore`はpackage mechanism errorを既存`FoundationError`へ決定的に適合する。欠落mappingまたはadapter例外ではroot write前にfail closedとする。
+`RootMutationOperation`はPC mutation command、`MaintenanceState`はroot内maintenance projection、`RecoveryControl`はroot外persistent controlであり、互いに代入可能とは扱わない。`workerPolicy`はpackage公開`PersistentControlPolicy`へ製品controlと`FoundationError`を明示し、未知・不完全なcontrolをroot write前にfail closedとする。package mechanism errorから既存`FoundationError`への決定的な単体適合は`adaptCoreError`が所有し、production graphのerror mappingは現行product-local runtimeと`AppDataErrorMapper`が所有する。
 
-`ProductRecoveryProtocol`は`RecoveryControlPolicy`の既存規則をpackage owner protocolへ適合し、mutation認可、current anomaly観測、owner/generation/leaseを含むfence取得、candidate/raw identityを束縛するpending commit、pre/post-commit分類、release、finalizationを所有する。packageへcontrol field解釈を渡さず、packageから渡される`ReplacementBinding`と`RecoveryCommitState`だけでcommit pointを共有する。`MaintenanceState`と`RecoveryControl`は保存場所、状態遷移、認可意味を分離したまま同じ固定名Web Lock内で検証する。
-
-adapter単体はPC初期root、現行schema validator、MigrationRegistry、ReferenceRepairPolicy、operation、error adapter、recovery protocolとworker policyの型適合を検証する。runtime compositionは現行product-local transaction、capacity、replacement、fencing、Chrome storage、Web Locksを継続利用し、adapterからpackage factoryへ全面移行しない。`AppDataErrorMapper`は既存`FoundationError`へ適用し、raw root、StoragePort、RootWriteLock、transaction runnerを公開handleへ載せない。
+adapter単体はPC初期root、現行schema validator、MigrationRegistry、ReferenceRepairPolicy、operation、storage key scope、worker policyの型適合を検証する。consumer固有recovery protocolはこのadapterへ追加せず、runtime compositionは現行product-local transaction、capacity、replacement、fencing、Chrome storage、Web Locksを継続利用する。adapterからpackage factoryへ全面移行せず、raw root、StoragePort、RootWriteLock、transaction runnerを公開handleへ載せない。
 
 #### MigrationRegistry
 

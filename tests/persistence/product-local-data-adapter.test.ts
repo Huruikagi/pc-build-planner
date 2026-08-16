@@ -256,7 +256,7 @@ test("worker policy rejects active or invalid recovery control", () => {
     ),
     { ok: false, error: { code: "recovery-active" } },
   );
-  assert.deepEqual(productWorkerPolicy.authorizeMutation({}, 0), {
+  assert.deepEqual(productWorkerPolicy.authorizeMutation({} as never, 0), {
     ok: false,
     error: { code: "stale-fence" },
   });

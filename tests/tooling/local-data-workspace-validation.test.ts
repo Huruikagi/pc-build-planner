@@ -133,6 +133,8 @@ test("changed-scope entrypointはgenericとunknownをfull gateへ安全側分類
       calls,
       localDataWorkspaceGates.map((gate) => gate.join(" ")),
     );
+    assert.ok(calls.includes("pnpm validate:local-data-product-contract"));
+    assert.ok(calls.includes("pnpm validate:local-data-product-consumers"));
   }
 });
 
@@ -236,6 +238,8 @@ test("root local-data gateはfresh packageからconsumer、boundary、topologica
       "pnpm validate:local-data-read-only-app-contract",
       "pnpm validate:local-data-boundaries",
       "pnpm build",
+      "pnpm validate:local-data-product-contract",
+      "pnpm validate:local-data-product-consumers",
     ],
   );
   assert.equal(

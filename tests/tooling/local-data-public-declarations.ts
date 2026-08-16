@@ -12,9 +12,9 @@ import {
   type TransactionPort,
 } from "@pc-build-planner/local-data";
 import {
-  createBackupOrchestrator,
   type BackupOrchestrator,
   type BackupOrchestratorDependencies,
+  createBackupOrchestrator,
 } from "@pc-build-planner/local-data/backup";
 
 interface ConsumerRoot {
@@ -89,8 +89,11 @@ declare const replacementDependencies: ReplacementCoordinatorDependencies<
   FinalizationCapability
 >;
 
-const transaction: TransactionPort<ConsumerOperation, ConsumerRoot, OutputError> =
-  createTransactionEngine(transactionDependencies);
+const transaction: TransactionPort<
+  ConsumerOperation,
+  ConsumerRoot,
+  OutputError
+> = createTransactionEngine(transactionDependencies);
 const replacement: ReplacementCoordinator<
   ConsumerRoot,
   Preview,

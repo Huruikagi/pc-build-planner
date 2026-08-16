@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 
 const tsc = "node_modules/typescript/bin/tsc";
 
+/** @param {readonly string[]} args */
 const run = (args) => spawnSync(process.execPath, args, { encoding: "utf8" });
 
 const positive = run([
@@ -15,7 +16,8 @@ if (positive.status !== 0) {
   process.exit(positive.status ?? 1);
 }
 
-for (const [config, expected] of [
+/** @type {readonly (readonly [string, string])[]} */
+const negativeCases = [
   [
     "tsconfig.local-data-transaction-missing-error-adapter.negative.json",
     "Property 'errors' is missing",
@@ -24,7 +26,9 @@ for (const [config, expected] of [
     "tsconfig.local-data-transaction-control-confusion.negative.json",
     "PersistentRecoveryControl",
   ],
-]) {
+];
+
+for (const [config, expected] of negativeCases) {
   const negative = run([tsc, "--noEmit", "-p", config, "--pretty", "false"]);
   const diagnostic = negative.stdout + negative.stderr;
   if (negative.status === 0 || !diagnostic.includes(expected)) {

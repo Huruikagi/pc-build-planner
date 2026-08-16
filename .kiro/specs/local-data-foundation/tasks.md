@@ -465,7 +465,7 @@
   - _Requirements: 3.4, 9.3, 9.5, 9.6_
   - _Boundary: ProductLocalDataAdapter, FoundationErrorAdapter_
 
-- [ ] 11. 共有AppDataErrorと用途別公開capabilityを確立する
+- [x] 11. 共有AppDataErrorと用途別公開capabilityを確立する
 - [x] 11.1 (P) 共有AppDataError vocabularyと公開mappingを追加する
   - candidate-managementから独立した共有data operation errorを定義し、全`FoundationError` variantのcode、payload、判定contextを一対一で保持する。
   - feature固有のvalidation・workflow errorを吸収せず、domain公開入口だけから型とexhaustive mapperを利用可能にする。
@@ -506,6 +506,7 @@
 
 ## Implementation Notes
 
+- **Validation remediation (2026-08-16)**: root外`foundationRecoveryControl`を保持するmutation/replacement/recoveryの容量予測をstorage全体bytesに統一し、commit直前に結合後controlを含めてquotaを再検証するcontract testを追加した。`validate:local-data:changed`のfull routeはpackageとproduct owner gateをすべて実行し、root typecheckとnegative fixtureの責務分離も復旧した。
 - **Fresh task-graph sanity review (2026-08-14 MVP simplification, repair pass)**: 完了済みtask 1–10.2と11.1を履歴として保持した。未完了graphは11.1→11.2/11.3→12で閉じる。11.2は現行runtimeのbehavioral characterization、11.3は共有error/consumer/import boundary contract、12は変更種別別routingだけを所有し、検証責務を重複させない。package factory移行、generic maintenance fence、generic recovery/finalization resumption、上流package completion gateへの逆依存を含まない。71 AC trace、observable completion、boundary、hidden prerequisiteを再監査し、PASSと判定した。
 
 - **Superseded historical task-graph review (2026-08-13 product runtime contract remediation)**: task 11.2は当時`RuntimeContributionFactory, ProductRuntimeExecutableContract`のintegration boundaryとして上流package契約を開始条件に持っていた。この依存と逆向きvalidation seamは最新`mvp-local-data-simplification`で廃止され、上記2026-08-14 reviewに置き換わった。完了済みtaskと71 AC traceを監査した履歴として保持する。
