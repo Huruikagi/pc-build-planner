@@ -4,18 +4,11 @@ export const candidate = {
   projectsNav: "Projects",
   categoryNav: "Category",
   allCategories: "All",
-  renameProject: "Rename",
-  projectFormTitle: "Edit Project",
-  newProjectNameLabel: "New project name",
-  projectNameLabel: "Project name",
-  createProjectAction: "Create project",
   projectRequiredTitle: "Choose a project to continue",
   projectRequiredReason:
     "A project is needed before this extracted part can be edited and saved.",
   projectRequiredContextReason:
     "No project is selected right now, or the current one is unavailable. Choose or create a project to resume editing the extracted part as it is.",
-  projectRequiredSelectTitle: "Choose an existing project",
-  projectRequiredCreateTitle: "Create a new project",
   projectRequiredExtractedSummary: "Extracted part",
   captureDiagnosticsTitle: "Fields that could not be imported",
   captureDiagnostic: "{field}: {reason}",
@@ -35,8 +28,6 @@ export const candidate = {
     invalidFormat: "The format is invalid",
     unresolvable: "The value could not be interpreted",
   },
-  saveProjectNameAction: "Save project name",
-  projectNameRequiredError: "Enter a project name",
   createCandidateAction: "Add part",
   candidateListLabel: "Parts",
   categoryFieldLabel: "Category",
@@ -50,9 +41,6 @@ export const candidate = {
   deleteCandidateAction: "Delete {name}",
   deleteConfirmationTitle: "Confirm Deletion",
   deleteConfirmationHeading: "Confirm deletion",
-  deleteProjectMessage: 'This also deletes the parts in project "{name}".',
-  deleteProjectUnsavedDraftWarning:
-    "This project has unsaved changes. Your input will be kept after deletion, but it cannot be saved.",
   deleteCandidateMessage: 'This deletes part "{name}".',
   confirmDeleteAction: "Delete",
   editorFormTitle: "Edit Part",
@@ -137,8 +125,6 @@ export const candidate = {
   },
   errors: {
     projectRequired: "Choose or recover the current project, then try again.",
-    contextRefreshFailed:
-      "The project was saved, but the current project could not be verified. Recover it, then try again.",
     projectChangedWithDraft:
       "The current project changed while you were editing. Your input is still bound to the previous project and cannot be saved. Cancel it, then start again in the new project.",
     unsupportedData:

@@ -58,7 +58,7 @@ test("表示言語は同一profileのブラウザプロセス再起動後も復�
     await navItem(restartedPage, "candidate-management").click();
     await expect(
       featureRoot(restartedPage, "candidate-management"),
-    ).toContainText(expectedTextFor("en")("candidate.createProjectAction"));
+    ).toContainText(expectedTextFor("en")("candidate.allCategories"));
   } finally {
     await restartedContext.close();
   }

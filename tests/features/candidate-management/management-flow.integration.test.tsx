@@ -29,12 +29,11 @@ import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
 import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 
 const createCandidateFeatureRegistration = actWrappedRegistrationFactory(
   createCandidateFeatureRegistrationImpl,
 );
-
-import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 
 const storageKey = "localDataRoot";
 const timestamp = "2026-07-22T00:00:00.000Z" as UtcTimestamp;
@@ -73,12 +72,18 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const service = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
     createCandidateId: () =>
       "30000000-0000-4000-8000-000000000061" as Uuid as never,
   });
-  let revision = 0;
-  let currentProjectId: ProjectId | null = null;
+  const projectLifecycle = createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  });
+  const projectCreated = await projectLifecycle.create("架空統合プロジェクト");
+  assert.equal(projectCreated.ok, true);
+  let revision = 1;
+  let currentProjectId: ProjectId | null = projectId;
   const currentProject = {
     getCurrentProject: () =>
       currentProjectId === null
@@ -125,12 +130,6 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
     reportError: () => {},
   });
 
-  await act(async () => state.createProject("架空統合プロジェクト"));
-  revision = 1;
-  await act(async () =>
-    state.renameProject(projectId, "改名した架空統合プロジェクト"),
-  );
-  revision = 2;
   await act(async () => state.selectProject(projectId));
   const uncategorized: CandidateDraft = {
     projectId,
@@ -155,7 +154,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   };
   await act(async () => state.beginCreate(uncategorized));
   await act(async () => state.saveEditor());
-  revision = 3;
+  revision = 2;
   assert.match(container.textContent ?? "", /SYN-CANDIDATE/);
 
   const candidateId = state.value.candidates[0]?.id;
@@ -171,7 +170,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
     }),
   );
   await act(async () => state.saveEditor());
-  revision = 4;
+  revision = 3;
   await act(async () => state.selectCategory("cpu"));
   assert.match(container.textContent ?? "", /CPU/);
   const buildEligible = await service.listBuildEligible(projectId);
@@ -211,24 +210,12 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
     reportError: () => {},
   });
   await act(async () => reopenedState.load());
-  assert.match(
-    reopenedContainer.textContent ?? "",
-    /改名した架空統合プロジェクト/,
-  );
   assert.match(reopenedContainer.textContent ?? "", /SYN-CANDIDATE/);
   await act(async () =>
-    reopenedState.requestDeletion({ kind: "project", projectId }),
-  );
-  assert.match(
-    reopenedContainer.textContent ?? "",
-    new RegExp(
-      defaultMessageResolver("candidate.deleteProjectMessage", {
-        name: "改名した架空統合プロジェクト",
-      }),
-    ),
+    reopenedState.requestDeletion({ kind: "candidate", candidateId }),
   );
   await act(async () => reopenedState.confirmDeletion());
-  revision = 5;
+  revision = 4;
   await act(async () => reopenedHandle.unmount());
 
   const finalState = createManagementState({
@@ -241,7 +228,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
     currentProject,
   });
   await finalState.load();
-  assert.equal(finalState.value.projects.length, 0);
+  assert.equal(finalState.value.projects.length, 1);
   assert.equal(finalState.value.candidates.length, 0);
   assert.equal(storageState.entries.has(storageKey), true);
 });

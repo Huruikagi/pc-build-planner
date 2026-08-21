@@ -354,7 +354,7 @@
   - _Depends: duplicate-product-merge 6.1_
 
 - [ ] 14. 移管済み責務をcandidate境界から撤去する
-- [ ] 14.1 旧project lifecycle実装を共通hostへ置き換える
+- [x] 14.1 旧project lifecycle実装を共通hostへ置き換える
   - 共通presentationのhost contractが利用可能になってから、candidate-owned project service、state、form、削除確認、message発火を同じ変更で撤去する。
   - candidate draft guard、current project binding、project-required、既存host containerと操作順を維持し、旧command authorityとの共存期間を作らない。
   - 完了時、project操作は共通lifecycleへ一回だけ到達し、候補管理内に重複form・確認・message・refresh処理が存在しない。

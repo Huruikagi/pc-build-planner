@@ -1,4 +1,3 @@
-import type { FormEvent } from "react";
 import { useReducer, useState, useSyncExternalStore } from "react";
 
 import {
@@ -113,7 +112,6 @@ const errorMessageKeys = {
   validation: "persistenceError.validation",
   "snapshot-restore-failed": "persistenceError.snapshotRestoreFailed",
   "project-required": "candidate.errors.projectRequired",
-  "context-refresh-failed": "candidate.errors.contextRefreshFailed",
   "project-changed-with-draft": "candidate.errors.projectChangedWithDraft",
 } as const satisfies Record<ManagementDisplayError["code"], MessageKey>;
 
@@ -994,13 +992,7 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
 }
 
 /** Renders feature-owned state without moving domain state into React hooks. */
-export function ManagementView({
-  state,
-  projectLifecycleOwnedExternally = false,
-}: {
-  readonly state: ManagementState;
-  readonly projectLifecycleOwnedExternally?: boolean;
-}) {
+export function ManagementView({ state }: { readonly state: ManagementState }) {
   const messages = useMessages();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   useSyncExternalStore(
@@ -1008,38 +1000,10 @@ export function ManagementView({
     () => state.value,
     () => state.value,
   );
-  const [projectName, setProjectName] = useState("");
-  const [editingProjectId, setEditingProjectId] = useState<
-    (typeof state.value.projects)[number]["id"] | null
-  >(null);
-  const [projectNameError, setProjectNameError] = useState<string | null>(null);
   const value = state.value;
 
   const selectCategory = async (category: PartCategory | null) => {
     await state.selectCategory(category);
-    rerender();
-  };
-  const beginRenameProject = (project: (typeof value.projects)[number]) => {
-    setEditingProjectId(project.id);
-    setProjectName(project.name);
-    setProjectNameError(null);
-  };
-  const saveProject = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (projectName.trim().length === 0) {
-      setProjectNameError(messages("candidate.projectNameRequiredError"));
-      return;
-    }
-    setProjectNameError(null);
-    if (editingProjectId === null) {
-      await state.createProject(projectName);
-    } else {
-      await state.renameProject(editingProjectId, projectName);
-    }
-    if (state.value.displayError === null) {
-      setProjectName("");
-      setEditingProjectId(null);
-    }
     rerender();
   };
   const confirmDeletion = async () => {
@@ -1053,19 +1017,6 @@ export function ManagementView({
   const deletionTarget = (() => {
     const deletion = value.deletion;
     if (deletion === null) return null;
-    if (deletion.kind === "project") {
-      if (projectLifecycleOwnedExternally) return null;
-      const project = value.projects.find(
-        (item) => item.id === deletion.projectId,
-      );
-      return project === undefined
-        ? null
-        : {
-            kind: "project" as const,
-            projectId: project.id,
-            name: project.name,
-          };
-    }
     const candidate = value.candidates.find(
       (item) => item.id === deletion.candidateId,
     );
@@ -1130,59 +1081,17 @@ export function ManagementView({
               </ul>
             </section>
           )}
-          {projectLifecycleOwnedExternally ? null : (
-            <form onSubmit={(event) => void saveProject(event)}>
-              <h3>{messages("candidate.projectRequiredCreateTitle")}</h3>
-              <label>
-                {messages("candidate.newProjectNameLabel")}
-                <input
-                  aria-describedby={
-                    projectNameError === null
-                      ? undefined
-                      : "pending-project-name-error"
-                  }
-                  aria-invalid={projectNameError === null ? undefined : true}
-                  disabled={value.isSaving || value.mutationsDisabled}
-                  name="project-name"
-                  onChange={(event) => {
-                    setProjectName(event.target.value);
-                    setProjectNameError(null);
-                  }}
-                  value={projectName}
-                />
-              </label>
-              {projectNameError === null ? null : (
-                <p id="pending-project-name-error" role="alert">
-                  {projectNameError}
-                </p>
-              )}
-              {value.displayError === null ? null : (
-                <p role="alert">
-                  {errorMessage(value.displayError.code, messages)}
-                </p>
-              )}
-              <button
-                data-create-pending-project
-                disabled={value.isSaving || value.mutationsDisabled}
-                type="submit"
-              >
-                {messages("candidate.createProjectAction")}
-              </button>
-              <button
-                data-cancel-pending-pre-edit
-                disabled={value.isSaving}
-                onClick={() => {
-                  state.cancelPendingPreEdit();
-                  setProjectName("");
-                  setProjectNameError(null);
-                  rerender();
-                }}
-                type="button"
-              >
-                {messages("common.cancel")}
-              </button>
-            </form>
-          )}
+          <button
+            data-cancel-pending-pre-edit
+            disabled={value.isSaving}
+            onClick={() => {
+              state.cancelPendingPreEdit();
+              rerender();
+            }}
+            type="button"
+          >
+            {messages("common.cancel")}
+          </button>
         </section>
       </section>
     );
@@ -1193,102 +1102,10 @@ export function ManagementView({
       aria-label={messages("candidate.title")}
       className="candidate-management"
     >
-      {projectLifecycleOwnedExternally ? null : (
-        <>
-          <nav
-            aria-label={messages("candidate.projectsNav")}
-            data-region="projects"
-          >
-            {value.projects.map((project) => (
-              <span key={project.id}>
-                {project.id === value.selectedProjectId ? (
-                  <span data-current-project>{project.name}</span>
-                ) : null}
-                <button
-                  data-rename-project-id={project.id}
-                  disabled={value.isSaving || value.mutationsDisabled}
-                  onClick={() => beginRenameProject(project)}
-                  type="button"
-                >
-                  {messages("candidate.renameProject")}
-                </button>
-                <button
-                  data-delete-project-id={project.id}
-                  disabled={value.isSaving || value.mutationsDisabled}
-                  onClick={() => {
-                    state.requestDeletion({
-                      kind: "project",
-                      projectId: project.id,
-                    });
-                    rerender();
-                  }}
-                  type="button"
-                >
-                  {messages("common.delete")}
-                </button>
-              </span>
-            ))}
-          </nav>
-          <form
-            aria-label={messages("candidate.projectFormTitle")}
-            data-region="project-form"
-            onSubmit={(event) => void saveProject(event)}
-          >
-            <label>
-              {messages(
-                editingProjectId === null
-                  ? "candidate.newProjectNameLabel"
-                  : "candidate.projectNameLabel",
-              )}
-              <input
-                aria-describedby={
-                  projectNameError === null ? undefined : "project-name-error"
-                }
-                aria-invalid={projectNameError === null ? undefined : true}
-                disabled={value.isSaving || value.mutationsDisabled}
-                name="project-name"
-                onChange={(event) => {
-                  setProjectName(event.target.value);
-                  setProjectNameError(null);
-                }}
-                value={projectName}
-              />
-            </label>
-            {projectNameError === null ? null : (
-              <p id="project-name-error" role="alert">
-                {projectNameError}
-              </p>
-            )}
-            {value.displayError === null ? null : (
-              <p role="alert">
-                {errorMessage(value.displayError.code, messages)}
-              </p>
-            )}
-            <button
-              disabled={value.isSaving || value.mutationsDisabled}
-              type="submit"
-            >
-              {messages(
-                editingProjectId === null
-                  ? "candidate.createProjectAction"
-                  : "candidate.saveProjectNameAction",
-              )}
-            </button>
-            {editingProjectId === null ? null : (
-              <button
-                disabled={value.isSaving}
-                onClick={() => {
-                  setEditingProjectId(null);
-                  setProjectName("");
-                  setProjectNameError(null);
-                }}
-                type="button"
-              >
-                {messages("common.cancel")}
-              </button>
-            )}
-          </form>
-        </>
+      {value.displayError === null ||
+      value.editor !== null ||
+      value.deletion !== null ? null : (
+        <p role="alert">{errorMessage(value.displayError.code, messages)}</p>
       )}
       <nav aria-label={messages("candidate.categoryNav")}>
         <button
@@ -1355,26 +1172,11 @@ export function ManagementView({
           role="dialog"
         >
           <h2>{messages("candidate.deleteConfirmationHeading")}</h2>
-          {deletionTarget.kind === "project" ? (
-            <>
-              <p>
-                {messages("candidate.deleteProjectMessage", {
-                  name: deletionTarget.name,
-                })}
-              </p>
-              {state.projectDeletionAffectsDraft(deletionTarget.projectId) ? (
-                <p data-project-deletion-draft-warning>
-                  {messages("candidate.deleteProjectUnsavedDraftWarning")}
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p>
-              {messages("candidate.deleteCandidateMessage", {
-                name: deletionTarget.name,
-              })}
-            </p>
-          )}
+          <p>
+            {messages("candidate.deleteCandidateMessage", {
+              name: deletionTarget.name,
+            })}
+          </p>
           {value.displayError === null ? null : (
             <p role="alert">
               {errorMessage(value.displayError.code, messages)}

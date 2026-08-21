@@ -28,6 +28,7 @@ import { createInMemoryRootWriteLock } from "../../../src/persistence/root-write
 import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
 import { detachedProjectContextDependencies } from "../../fixtures/project-context-ports.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
@@ -87,13 +88,13 @@ test("既存side panel host上でproject選択から採用・数量変更・解�
   const seedService = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
     createCandidateId: () => candidateId,
   });
-  const created = await seedService.createProject(
-    { name: "架空統合PC構成" },
-    { requestId: nextRequest(), expectedRevision: 0 as Revision },
-  );
+  const created = await createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  }).create("架空統合PC構成");
   assert.equal(created.ok, true);
   const candidateCreated = await seedService.createCandidate(
     {

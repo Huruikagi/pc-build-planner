@@ -41,7 +41,6 @@ export type ManagementDisplayError = {
     | ManagementError["kind"]
     | "snapshot-restore-failed"
     | "project-required"
-    | "context-refresh-failed"
     | "project-changed-with-draft";
 };
 
@@ -84,9 +83,10 @@ export type CandidateEditor =
       readonly draft: CandidateDraft;
     };
 
-export type DeletionConfirmation =
-  | { readonly kind: "project"; readonly projectId: ProjectId }
-  | { readonly kind: "candidate"; readonly candidateId: CandidatePartId };
+export type DeletionConfirmation = {
+  readonly kind: "candidate";
+  readonly candidateId: CandidatePartId;
+};
 
 export type PendingPreEdit = UnresolvedCandidateEditorPrefill;
 
@@ -415,27 +415,6 @@ export class ManagementState {
     });
   }
 
-  public async createProject(name: string): Promise<void> {
-    if (this.#value.isSaving || this.#mutationsDisabled()) return;
-    const pendingAtStart = this.#value.pendingPreEdit;
-    this.#set({
-      isSaving: true,
-      displayError: null,
-      fieldErrors: emptyFieldErrors,
-    });
-    const result = await this.dependencies.service.createProject(
-      { name },
-      await this.dependencies.createMutationContext(),
-    );
-    if (!result.ok && this.#value.pendingPreEdit !== pendingAtStart) {
-      this.#set({ isSaving: false });
-      return;
-    }
-    if (!result.ok) return this.#mutationFailure(result.error);
-    this.#set({ isSaving: false });
-    await this.#refreshAfterProjectMutation();
-  }
-
   /**
    * The only save-target authority. A missing port, a throwing port, or an
    * unselected/unavailable context all resolve to `unresolved`: the catalog
@@ -558,22 +537,6 @@ export class ManagementState {
   /** Called only after a newer pre-edit has been accepted into the editor. */
   public clearPendingPreEditForActivation(): void {
     this.#set({ pendingPreEdit: null });
-  }
-
-  public async renameProject(id: ProjectId, name: string): Promise<void> {
-    if (this.#value.isSaving || this.#mutationsDisabled()) return;
-    this.#set({
-      isSaving: true,
-      displayError: null,
-      fieldErrors: emptyFieldErrors,
-    });
-    const result = await this.dependencies.service.renameProject(
-      { id, name },
-      await this.dependencies.createMutationContext(),
-    );
-    if (!result.ok) return this.#mutationFailure(result.error);
-    this.#set({ isSaving: false });
-    await this.#refreshAfterProjectMutation();
   }
 
   public beginCreate(
@@ -733,14 +696,6 @@ export class ManagementState {
     return this.#value.editor !== null || this.#value.pendingPreEdit !== null;
   }
 
-  /** Project deletion needs an explicit draft warning only when it can affect current work. */
-  public projectDeletionAffectsDraft(projectId: ProjectId): boolean {
-    return (
-      this.#value.pendingPreEdit !== null ||
-      this.#value.editor?.projectId === projectId
-    );
-  }
-
   /** Applies only after project-context has committed a user-confirmed switch. */
   public discardDraftForConfirmedSwitch(from: ProjectId, to: ProjectId): void {
     if (!this.hasDirtyProjectDraft()) return;
@@ -839,20 +794,13 @@ export class ManagementState {
       fieldErrors: emptyFieldErrors,
     });
     const context = await this.dependencies.createMutationContext();
-    const result =
-      deletion.kind === "project"
-        ? await this.dependencies.service.deleteProject(
-            deletion.projectId,
-            context,
-          )
-        : await this.dependencies.service.deleteCandidate(
-            deletion.candidateId,
-            context,
-          );
+    const result = await this.dependencies.service.deleteCandidate(
+      deletion.candidateId,
+      context,
+    );
     if (!result.ok) return this.#mutationFailure(result.error);
     this.#set({ deletion: null, isSaving: false });
-    if (deletion.kind === "project") await this.#refreshAfterProjectMutation();
-    else await this.load();
+    await this.load();
   }
 
   public hasCandidateReference(
@@ -875,37 +823,6 @@ export class ManagementState {
         candidate.projectId === projectId &&
         (category === null || candidate.category === category),
     );
-  }
-
-  /** A persisted project mutation is never replayed when context refresh fails. */
-  async #refreshAfterProjectMutation(): Promise<void> {
-    const refresh = this.dependencies.currentProject?.refresh;
-    if (refresh === undefined) {
-      this.#set({ displayError: { code: "context-refresh-failed" } });
-      return;
-    }
-    if (refresh !== undefined) {
-      const result = await refresh();
-      if (!result.ok) {
-        this.#set({ displayError: { code: "context-refresh-failed" } });
-        return;
-      }
-    }
-    await this.load();
-    if (this.dependencies.currentProject !== undefined)
-      this.#syncCurrentProject();
-  }
-
-  /** Retries only context revalidation after the project mutation already committed. */
-  public async retryContextRefresh(): Promise<void> {
-    if (
-      this.#value.isSaving ||
-      this.#value.displayError?.code !== "context-refresh-failed"
-    )
-      return;
-    this.#set({ isSaving: true });
-    await this.#refreshAfterProjectMutation();
-    this.#set({ isSaving: false });
   }
 
   /** Keeps the draft and the previously loaded list untouched on failure. */

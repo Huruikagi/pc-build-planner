@@ -34,7 +34,7 @@ const en = expectedTextFor("en");
 const FEATURE_CHECKS = [
   {
     featureId: "candidate-management",
-    key: "candidate.createProjectAction",
+    key: "candidate.allCategories",
   },
   { featureId: "currentBuild", key: "category.storage" },
   { featureId: "settings", key: "backup.noticeUninstall" },
@@ -89,6 +89,6 @@ test("英語へ切り替えた後にサイドパネルを開き直しても英�
 
   await navItem(reopened, "candidate-management").click();
   await expect(featureRoot(reopened, "candidate-management")).toContainText(
-    en("candidate.createProjectAction"),
+    en("candidate.allCategories"),
   );
 });

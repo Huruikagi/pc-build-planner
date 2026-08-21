@@ -39,6 +39,7 @@ import {
   resolverFor,
 } from "../../../src/ui-messages/public.js";
 import { detachedProjectContextDependencies } from "../../fixtures/project-context-ports.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 import {
   unattachedContextDependencies,
@@ -107,13 +108,14 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
   const seedService = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
     createCandidateId: () => candidateId,
   });
-  const created = await seedService.createProject(
-    { name: "架空バックアップ統合構成" },
-    { requestId: nextRequest(), expectedRevision: 0 as Revision },
-  );
+  const lifecycle = createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  });
+  const created = await lifecycle.create("架空バックアップ統合構成");
   assert.equal(created.ok, true);
   const candidateCreated = await seedService.createCandidate(
     {
@@ -186,9 +188,9 @@ test("実foundationを共有する settings 構成で言語変更を挟んでも
     assert.match(exportedJson ?? "", /SYN-MEMORY/);
 
     // Simulate the user changing local data after taking the backup.
-    const renamed = await seedService.renameProject(
-      { id: projectId, name: "架空バックアップ統合構成（変更後）" },
-      { requestId: nextRequest(), expectedRevision: 2 as Revision },
+    const renamed = await lifecycle.rename(
+      projectId,
+      "架空バックアップ統合構成（変更後）",
     );
     assert.equal(renamed.ok, true);
 

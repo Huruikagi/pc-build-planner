@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { LocalDataRoot } from "../../../src/domain/public.js";
 import { err, ok } from "../../../src/domain/public.js";
@@ -7,6 +8,37 @@ import { createProjectLifecycleHostAdapter } from "../../../src/features/candida
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
 import type { ProjectContextSnapshot } from "../../../src/project-context/public.js";
 import { sourceRoot } from "../../fixtures/candidate-source-root.js";
+
+test("14.1: candidate boundary contains no project lifecycle authority", async () => {
+  const files = [
+    "contracts.ts",
+    "service.ts",
+    "state.ts",
+    "view.tsx",
+    "styles.css",
+  ];
+  const forbidden = [
+    /\bcreateProject\b/,
+    /\brenameProject\b/,
+    /\bdeleteProject\b/,
+    /data-region=["']project-form["']/,
+    /data-delete-project-id/,
+    /deleteProjectMessage/,
+    /context-refresh-failed/,
+  ];
+
+  for (const file of files) {
+    const source = await readFile(
+      new URL(
+        `../../../src/features/candidate-management/${file}`,
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const pattern of forbidden)
+      assert.doesNotMatch(source, pattern, `${file} still owns ${pattern}`);
+  }
+});
 
 test("13.2: common lifecycle presentation mounts in the candidate host and unmounts once", () => {
   const container = document.createElement("section");

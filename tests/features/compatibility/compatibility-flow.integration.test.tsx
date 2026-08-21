@@ -29,6 +29,7 @@ import { createInitialRoot } from "../../../src/persistence/schema.js";
 import { createWriteAuthority } from "../../../src/persistence/write-authority.js";
 import { defaultMessageResolver } from "../../../src/ui-messages/public.js";
 import { detachedProjectContextDependencies } from "../../fixtures/project-context-ports.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 import { idleTransientSurface } from "../../fixtures/transient-surface.js";
 
 const timestamp = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
@@ -81,14 +82,14 @@ test("現在構成を変更して互換性画面を再表示すると、選択�
   const seedService = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
     createCandidateId: nextCandidateId,
   });
 
-  const created = await seedService.createProject(
-    { name: "架空統合PC構成" },
-    { requestId: nextRequest(), expectedRevision: 0 as Revision },
-  );
+  const created = await createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  }).create("架空統合PC構成");
   assert.equal(created.ok, true);
 
   const cpu = await seedService.createCandidate(
@@ -319,14 +320,14 @@ test("現在構成recordが空ならempty-buildを示し、上流保存値を変
   const seedService = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
     createCandidateId: nextCandidateId,
   });
 
-  const created = await seedService.createProject(
-    { name: "架空統合PC構成（未選択）" },
-    { requestId: nextRequest(), expectedRevision: 0 as Revision },
-  );
+  const created = await createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  }).create("架空統合PC構成（未選択）");
   assert.equal(created.ok, true);
 
   const cpu = await seedService.createCandidate(

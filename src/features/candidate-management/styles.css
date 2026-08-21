@@ -53,17 +53,7 @@
   align-items: center;
 }
 
-/* Each project keeps its own action buttons visually grouped. */
-.candidate-management [data-region="projects"] > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, CanvasText 6%, Canvas);
-}
-
-/* Forms stack by default; the compact project editor sits on one wrapping row. */
+/* Forms stack by default. */
 .candidate-management form {
   display: flex;
   flex-direction: column;
@@ -78,15 +68,6 @@
   gap: 0.25rem;
   width: 100%;
   max-width: 24rem;
-}
-
-.candidate-management [data-region="project-form"] {
-  flex-flow: row wrap;
-  align-items: end;
-}
-
-.candidate-management [data-region="project-form"] label {
-  flex: 1 1 12rem;
 }
 
 /* Primary call to action stands apart from the filter buttons above it. */

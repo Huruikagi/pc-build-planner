@@ -101,28 +101,18 @@ const createQuery = (failure?: ManagementError): CandidateQuery => ({
 
 const createService = (
   overrides: Partial<CandidateManagementService> = {},
-): CandidateManagementService =>
-  ({
-    async createProject() {
-      throw new Error("not used");
-    },
-    async renameProject() {
-      throw new Error("not used");
-    },
-    async deleteProject() {
-      throw new Error("not used");
-    },
-    async createCandidate() {
-      return { ok: false as const, error: { kind: "storage" } };
-    },
-    async updateCandidate() {
-      throw new Error("not used");
-    },
-    async deleteCandidate() {
-      throw new Error("not used");
-    },
-    ...overrides,
-  }) as CandidateManagementService;
+): CandidateManagementService => ({
+  async createCandidate() {
+    return { ok: false as const, error: { kind: "storage" } };
+  },
+  async updateCandidate() {
+    throw new Error("not used");
+  },
+  async deleteCandidate() {
+    throw new Error("not used");
+  },
+  ...overrides,
+});
 
 test("読込時に先頭projectと候補一覧を復元し、カテゴリ選択で一覧を絞り込む", async () => {
   const state = createManagementState({
@@ -200,38 +190,6 @@ test("forced切替は旧projectのdraftを保持し新projectへのmutationを�
   assert.equal(state.value.displayError?.code, "project-changed-with-draft");
   assert.equal(state.value.mutationsDisabled, true);
   assert.equal(creates, 0);
-});
-
-test("project 作成は失敗時に pending pre-edit を保持し成功時だけ破棄する", async () => {
-  let shouldFail = true;
-  const state = createManagementState({
-    query: createQuery(),
-    service: createService({
-      async createProject() {
-        if (shouldFail)
-          return { ok: false as const, error: { kind: "storage" as const } };
-        return {
-          ok: true as const,
-          value: {
-            id: projectId,
-            name: "架空プロジェクト",
-            createdAt: "2026-07-22T00:00:00.000Z" as never,
-            updatedAt: "2026-07-22T00:00:00.000Z" as never,
-          },
-        };
-      },
-    }),
-    createMutationContext: () => context,
-    currentProject,
-  });
-  state.holdPendingPreEdit(pendingPreEdit);
-
-  await state.createProject("架空プロジェクト");
-  assert.deepEqual(state.value.pendingPreEdit, pendingPreEdit);
-
-  shouldFail = false;
-  await state.createProject("架空プロジェクト");
-  assert.equal(state.value.pendingPreEdit, null);
 });
 
 test("候補保存の失敗では入力と一覧を保持し、同一操作の二重送信を抑止する", async () => {

@@ -5,8 +5,6 @@ import {
   type CandidateSourceState,
   createUtcTimestamp,
   createUuid,
-  type Project,
-  type ProjectId,
   type Result,
   type UtcTimestamp,
   validateCandidatePartContent,
@@ -23,11 +21,9 @@ import type {
   CandidateSourceMutationError,
   CandidateSourceService,
   CandidateSummary,
-  CreateProjectInput,
   ManagementError,
   MutationContext,
   PatchCandidateSourcePriceInput,
-  RenameProjectInput,
   UpdateCandidateInput,
 } from "./contracts.js";
 import { candidateSourcePolicy } from "./source-collection.js";
@@ -40,18 +36,10 @@ import {
 export interface CandidateManagementServiceDependencies {
   readonly data: FoundationScopedDataPort;
   readonly now?: () => UtcTimestamp;
-  readonly createProjectId?: () => ProjectId;
   readonly createCandidateId?: () => CandidatePartId;
   readonly classifier?: SourceKindClassifier;
   readonly sourceData?: CandidateSourceDataPort;
 }
-
-const normalizeName = (name: string): Result<string, ManagementError> => {
-  const normalized = name.trim();
-  return normalized.length === 0
-    ? { ok: false, error: { kind: "validation", fields: { name: "required" } } }
-    : { ok: true, value: normalized };
-};
 
 const managementError = (
   code: string,
@@ -177,8 +165,6 @@ export const createCandidateManagementService = (
   CandidateManagementQuery &
   CandidateSourceService => {
   const now = dependencies.now ?? createUtcTimestamp;
-  const newProjectId =
-    dependencies.createProjectId ?? (() => createUuid() as ProjectId);
   const newCandidateId =
     dependencies.createCandidateId ?? (() => createUuid() as CandidatePartId);
   const classifier: SourceKindClassifier = dependencies.classifier ?? {
@@ -301,19 +287,6 @@ export const createCandidateManagementService = (
           >,
         };
 
-  const mutateProject = async (
-    project: Project,
-    kind: "create" | "update",
-    context: MutationContext,
-  ): Promise<Result<Project, ManagementError>> => {
-    const mutation = await dependencies.data.mutate(
-      commandFor({ kind, entity: "project", value: project }, context),
-    );
-    return mutation.ok
-      ? { ok: true, value: project }
-      : { ok: false, error: managementError(mutation.error.code, "project") };
-  };
-
   const mutateCandidate = async (
     candidate: CandidatePart,
     kind: "create" | "update",
@@ -402,48 +375,6 @@ export const createCandidateManagementService = (
           : { ok: false, error: ruleFailure(result.error.kind) };
       });
     },
-    async createProject(input: CreateProjectInput, context: MutationContext) {
-      const name = normalizeName(input.name);
-      if (!name.ok) return name;
-      const createdAt = now();
-      return mutateProject(
-        {
-          id: newProjectId(),
-          name: name.value,
-          createdAt,
-          updatedAt: createdAt,
-        },
-        "create",
-        context,
-      );
-    },
-
-    async renameProject(input: RenameProjectInput, context: MutationContext) {
-      const name = normalizeName(input.name);
-      if (!name.ok) return name;
-      const existing = await dependencies.data.query((root) =>
-        root.projects.find((project) => project.id === input.id),
-      );
-      if (!existing.ok)
-        return { ok: false, error: managementError(existing.error.code) };
-      if (existing.value === undefined)
-        return { ok: false, error: { kind: "not-found", entity: "project" } };
-      return mutateProject(
-        { ...existing.value, name: name.value, updatedAt: now() },
-        "update",
-        context,
-      );
-    },
-
-    async deleteProject(id, context) {
-      const mutation = await dependencies.data.mutate(
-        commandFor({ kind: "delete", entity: "project", id }, context),
-      );
-      return mutation.ok
-        ? { ok: true, value: undefined }
-        : { ok: false, error: managementError(mutation.error.code, "project") };
-    },
-
     async createCandidate(input: CandidateDraft, context: MutationContext) {
       const validated = candidateValidation(input);
       if (!validated.ok) return validated;

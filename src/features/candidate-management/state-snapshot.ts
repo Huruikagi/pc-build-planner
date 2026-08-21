@@ -260,16 +260,11 @@ const isEditorEnvelope = (value: unknown): boolean =>
   schemaAccepts(createEditorSchema, value) ||
   schemaAccepts(editEditorSchema, value);
 
-const projectDeletionSchema = plainObject({
-  kind: z.literal("project"),
-  projectId: uuid<ProjectId>(),
-});
 const candidateDeletionSchema = plainObject({
   kind: z.literal("candidate"),
   candidateId: uuid(),
 });
 const isDeletion = (value: unknown): value is DeletionConfirmation =>
-  schemaAccepts(projectDeletionSchema, value) ||
   schemaAccepts(candidateDeletionSchema, value);
 
 const invalid = <S extends Parameters<typeof tagged>[0]>(schema: S): S =>
@@ -332,11 +327,9 @@ const hasValidReferences = (
   const deletion = snapshot.deletion;
   if (
     deletion !== null &&
-    !(deletion.kind === "project"
-      ? hasReference(state, deletion.projectId)
-      : state.value.projects.some((project) =>
-          state.hasCandidateReference(deletion.candidateId, project.id),
-        ))
+    !state.value.projects.some((project) =>
+      state.hasCandidateReference(deletion.candidateId, project.id),
+    )
   )
     return false;
 

@@ -8,7 +8,6 @@ import type {
   CandidateSourceKind,
   NormalizedAttributes,
   PartCategory,
-  Project,
   ProjectId,
   RequestId,
   Result,
@@ -103,15 +102,6 @@ export interface CaptureDiagnostic {
   readonly reason: CaptureDiagnosticReason;
 }
 
-export interface CreateProjectInput {
-  readonly name: string;
-}
-
-export interface RenameProjectInput {
-  readonly id: ProjectId;
-  readonly name: string;
-}
-
 export interface UpdateCandidateInput {
   readonly id: CandidatePartId;
   readonly draft: CandidateDraft;
@@ -147,7 +137,7 @@ export interface CandidateListQuery {
 export interface ProjectSummary {
   readonly id: ProjectId;
   readonly name: string;
-  readonly updatedAt: Project["updatedAt"];
+  readonly updatedAt: import("../../domain/public.js").UtcTimestamp;
 }
 
 export interface CandidateSummary {
@@ -187,18 +177,6 @@ export type CandidateSourceMutationError =
   | { readonly kind: "precondition-failed" };
 
 export interface CandidateManagementService {
-  createProject(
-    input: CreateProjectInput,
-    context: MutationContext,
-  ): Promise<Result<Project, ManagementError>>;
-  renameProject(
-    input: RenameProjectInput,
-    context: MutationContext,
-  ): Promise<Result<Project, ManagementError>>;
-  deleteProject(
-    id: ProjectId,
-    context: MutationContext,
-  ): Promise<Result<void, ManagementError>>;
   createCandidate(
     input: CandidateDraft,
     context: MutationContext,

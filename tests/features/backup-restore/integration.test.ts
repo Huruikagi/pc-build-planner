@@ -43,6 +43,7 @@ import {
   createWriteAuthority,
 } from "../../../src/persistence/write-authority.js";
 import { buildFoundationRoot } from "../../fixtures/foundation.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 
 const timestamp = "2026-07-25T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000101" as Uuid as ProjectId;
@@ -96,12 +97,12 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
   const candidateService = createCandidateManagementService({
     data,
     now: () => timestamp,
-    createProjectId: () => projectId,
   });
-  const created = await candidateService.createProject(
-    { name: "架空全カテゴリ構成" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  const created = await createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => timestamp,
+  }).create("架空全カテゴリ構成");
   assert.equal(created.ok, true);
 
   const fixtureRoot = buildFoundationRoot();
@@ -204,17 +205,12 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
   assert.equal(artifact.ok, true);
   if (!artifact.ok) return;
 
-  // Simulate changing local data after taking the backup. A fresh service
-  // (no fixed createProjectId) is used so the new project gets its own id
-  // instead of colliding with the seeded `projectId`.
-  const mutatingCandidateService = createCandidateManagementService({
+  // Simulate changing local data after taking the backup.
+  const afterExportProject = await createProjectLifecycleFixture({
     data,
+    projectId: "10000000-0000-4000-8000-000000000102" as Uuid as ProjectId,
     now: () => timestamp,
-  });
-  const afterExportProject = await mutatingCandidateService.createProject(
-    { name: "架空バックアップ後追加プロジェクト" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  }).create("架空バックアップ後追加プロジェクト");
   assert.equal(afterExportProject.ok, true);
 
   const restoreService = createRestoreService({ data: backupPortFor(data) });
@@ -278,17 +274,11 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
     );
   }
 
-  const restartedCandidateService = createCandidateManagementService({
+  const normalCrudAfterRestore = await createProjectLifecycleFixture({
     data: restarted,
+    projectId: "10000000-0000-4000-8000-000000000103" as Uuid as ProjectId,
     now: () => timestamp,
-  });
-  const normalCrudAfterRestore = await restartedCandidateService.createProject(
-    { name: "架空復元後追加プロジェクト" },
-    {
-      requestId: nextRequest(),
-      expectedRevision: await currentRevision(restarted),
-    },
-  );
+  }).create("架空復元後追加プロジェクト");
   assert.equal(normalCrudAfterRestore.ok, true);
 
   const rebackupService = createBackupService({
@@ -302,15 +292,11 @@ test("全12カテゴリ候補と現在構成の往復、再起動後照会、通
 test("不正JSON・旧開発形式・将来版・孤立参照の各経路でpreflightが復元前データを変更しない", async () => {
   const storageState = createInMemoryStorageState({ quotaBytes: 10_000_000 });
   const data = createFoundationPortOn(storageState);
-  const candidateService = createCandidateManagementService({
+  await createProjectLifecycleFixture({
     data,
+    projectId,
     now: () => timestamp,
-    createProjectId: () => projectId,
-  });
-  await candidateService.createProject(
-    { name: "架空保護対象構成" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  }).create("架空保護対象構成");
 
   const restoreService = createRestoreService({ data: backupPortFor(data) });
   const beforeSnapshot = await data.query((root) => root);
@@ -405,15 +391,11 @@ test("不正JSON・旧開発形式・将来版・孤立参照の各経路でpref
 test("容量境界を超える復元はwriteなしで拒否され既存データを保持する", async () => {
   const storageState = createInMemoryStorageState({ quotaBytes: 2_000 });
   const data = createFoundationPortOn(storageState);
-  const candidateService = createCandidateManagementService({
+  await createProjectLifecycleFixture({
     data,
+    projectId,
     now: () => timestamp,
-    createProjectId: () => projectId,
-  });
-  await candidateService.createProject(
-    { name: "架空容量境界構成" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  }).create("架空容量境界構成");
 
   const beforeSnapshot = await data.query((root) => root);
   assert.equal(beforeSnapshot.ok, true);
@@ -468,10 +450,6 @@ test("容量境界を超える復元はwriteなしで拒否され既存データ
 test("復元中はFoundationの保守acquireにより他featureのmutationが拒否されread-only照会は継続し、終了後に再開する", async () => {
   const storageState = createInMemoryStorageState({ quotaBytes: 10_000_000 });
   const data = createFoundationPortOn(storageState);
-  const candidateService = createCandidateManagementService({
-    data,
-    now: () => timestamp,
-  });
   const candidateQuery = {
     async listProjects() {
       return data.query((root) =>
@@ -483,10 +461,12 @@ test("復元中はFoundationの保守acquireにより他featureのmutationが拒
     },
   };
 
-  const beforeAcquire = await candidateService.createProject(
-    { name: "架空保守前プロジェクト" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  const lifecycle = createProjectLifecycleFixture({
+    data,
+    projectId: "10000000-0000-4000-8000-000000000204" as Uuid as ProjectId,
+    now: () => timestamp,
+  });
+  const beforeAcquire = await lifecycle.create("架空保守前プロジェクト");
   assert.equal(beforeAcquire.ok, true);
 
   const ownerId =
@@ -513,10 +493,11 @@ test("復元中はFoundationの保守acquireにより他featureのmutationが拒
     assert.equal(competingAcquire.error.code, "maintenance-active");
 
   // Other features' mutations are rejected while maintenance is active...
-  const mutationDuringMaintenance = await candidateService.createProject(
-    { name: "架空保守中プロジェクト" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  const mutationDuringMaintenance = await createProjectLifecycleFixture({
+    data,
+    projectId: "10000000-0000-4000-8000-000000000205" as Uuid as ProjectId,
+    now: () => timestamp,
+  }).create("架空保守中プロジェクト");
   assert.equal(mutationDuringMaintenance.ok, false);
   if (!mutationDuringMaintenance.ok)
     assert.equal(mutationDuringMaintenance.error.kind, "maintenance");
@@ -534,9 +515,10 @@ test("復元中はFoundationの保守acquireにより他featureのmutationが拒
   assert.equal(aborted.ok, true);
 
   // Mutations resume once the maintenance generation ends.
-  const afterAbort = await candidateService.createProject(
-    { name: "架空保守後プロジェクト" },
-    { requestId: nextRequest(), expectedRevision: await currentRevision(data) },
-  );
+  const afterAbort = await createProjectLifecycleFixture({
+    data,
+    projectId: "10000000-0000-4000-8000-000000000206" as Uuid as ProjectId,
+    now: () => timestamp,
+  }).create("架空保守後プロジェクト");
   assert.equal(afterAbort.ok, true);
 });

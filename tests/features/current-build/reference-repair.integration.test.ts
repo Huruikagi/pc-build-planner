@@ -40,6 +40,7 @@ import {
   createScopedDataPort,
   createWriteAuthority,
 } from "../../../src/persistence/write-authority.js";
+import { createProjectLifecycleFixture } from "../../fixtures/project-lifecycle-service.js";
 
 const now = "2026-07-23T00:00:00.000Z" as UtcTimestamp;
 const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
@@ -154,7 +155,7 @@ const harness = async () => {
     assert.equal(read.ok, true);
     return read.value as LocalDataRoot;
   };
-  return { candidateService, buildQuery, writes, stored };
+  return { candidateService, buildQuery, data, writes, stored };
 };
 
 const context = (expectedRevision: number): MutationContext => ({
@@ -251,9 +252,13 @@ test("未分類化は同じ候補変更commitで現在構成から除外し他�
 });
 
 test("project削除は同じcommitでその現在構成ごと除去し正常な空結果を返す", async () => {
-  const { candidateService, buildQuery, writes, stored } = await harness();
+  const { data, buildQuery, writes, stored } = await harness();
 
-  const deleted = await candidateService.deleteProject(projectId, context(0));
+  const deleted = await createProjectLifecycleFixture({
+    data,
+    projectId,
+    now: () => now,
+  }).delete(projectId);
 
   assert.equal(deleted.ok, true);
   const root = await stored();

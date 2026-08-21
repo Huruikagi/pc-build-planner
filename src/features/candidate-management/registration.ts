@@ -146,11 +146,7 @@ const mountManagementView =
     }
     const releaseLifecyclePresentation =
       lifecycleHost?.ok === true ? lifecycleHost.value : () => {};
-    const root = mountManagementReactRoot(
-      managementContainer,
-      state,
-      projectLifecyclePresentation !== undefined,
-    );
+    const root = mountManagementReactRoot(managementContainer, state);
     let unmounted = false;
     const cleanup = () => {
       if (unmounted) return;

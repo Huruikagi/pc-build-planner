@@ -8,18 +8,11 @@ export const candidate = {
   projectsNav: "プロジェクト",
   categoryNav: "カテゴリ",
   allCategories: "すべて",
-  renameProject: "名前を変更",
-  projectFormTitle: "プロジェクト編集",
-  newProjectNameLabel: "新しいプロジェクト名",
-  projectNameLabel: "プロジェクト名",
-  createProjectAction: "プロジェクトを作成",
   projectRequiredTitle: "続行するにはプロジェクトを選んでください",
   projectRequiredReason:
     "抽出したパーツを編集して保存するには、所属するプロジェクトが必要です。",
   projectRequiredContextReason:
     "現在のプロジェクトが未選択か、いま利用できません。プロジェクトを選ぶか作成すると、抽出した内容のまま編集を再開できます。",
-  projectRequiredSelectTitle: "既存のプロジェクトから選ぶ",
-  projectRequiredCreateTitle: "新しいプロジェクトを作る",
   projectRequiredExtractedSummary: "抽出済みのパーツ",
   captureDiagnosticsTitle: "取り込めなかった項目",
   captureDiagnostic: "{field}: {reason}",
@@ -39,8 +32,6 @@ export const candidate = {
     invalidFormat: "形式が正しくありません",
     unresolvable: "値を解釈できません",
   },
-  saveProjectNameAction: "プロジェクト名を保存",
-  projectNameRequiredError: "プロジェクト名を入力してください",
   createCandidateAction: "パーツを追加",
   candidateListLabel: "パーツ一覧",
   categoryFieldLabel: "カテゴリ",
@@ -56,10 +47,6 @@ export const candidate = {
   deleteCandidateAction: "{name}を削除",
   deleteConfirmationTitle: "削除確認",
   deleteConfirmationHeading: "削除を確認",
-  /** 「プロジェクト「{name}」と所属する候補も削除します。」のJSX子要素列を1つの文へ再設計。 */
-  deleteProjectMessage: "プロジェクト「{name}」と所属するパーツも削除します。",
-  deleteProjectUnsavedDraftWarning:
-    "このプロジェクトには未保存の編集があります。削除後も入力は保持されますが、保存はできません。",
   /** 「候補「{name}」を削除します。」の再設計。 */
   deleteCandidateMessage: "パーツ「{name}」を削除します。",
   confirmDeleteAction: "削除する",
@@ -147,8 +134,6 @@ export const candidate = {
   errors: {
     projectRequired:
       "現在のプロジェクトを選択または回復してから、もう一度お試しください。",
-    contextRefreshFailed:
-      "プロジェクトは保存されましたが、現在のプロジェクトを確認できませんでした。回復してから再試行してください。",
     projectChangedWithDraft:
       "編集中に現在のプロジェクトが変更されました。入力は元のプロジェクト用のまま保持されています。保存せず、取り消してから新しいプロジェクトで編集をやり直してください。",
     unsupportedData:

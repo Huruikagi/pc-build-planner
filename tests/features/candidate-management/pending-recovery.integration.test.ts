@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
-  Project,
   ProjectId,
   RequestId,
   Revision,
@@ -13,7 +12,6 @@ import type {
   CandidateManagementQuery,
   CandidateManagementService,
   CurrentProjectPort,
-  ManagementError,
   MutationContext,
   UnresolvedCandidateEditorPrefill,
 } from "../../../src/features/candidate-management/contracts.js";
@@ -23,8 +21,6 @@ const recoveredProjectId =
   "10000000-0000-4000-8000-000000000041" as Uuid as ProjectId;
 const chosenProjectId =
   "10000000-0000-4000-8000-000000000042" as Uuid as ProjectId;
-const createdProjectId =
-  "10000000-0000-4000-8000-000000000043" as Uuid as ProjectId;
 const timestamp = "2026-08-10T00:00:00.000Z" as UtcTimestamp;
 const context: MutationContext = {
   requestId: "20000000-0000-4000-8000-000000000041" as Uuid as RequestId,
@@ -61,16 +57,7 @@ const query: CandidateManagementQuery = {
   },
 };
 
-const service = (
-  createProject: CandidateManagementService["createProject"],
-): CandidateManagementService => ({
-  createProject,
-  async renameProject() {
-    throw new Error("not used");
-  },
-  async deleteProject() {
-    throw new Error("not used");
-  },
+const service: CandidateManagementService = {
   async createCandidate() {
     throw new Error("not used");
   },
@@ -80,10 +67,6 @@ const service = (
   async deleteCandidate() {
     throw new Error("not used");
   },
-});
-
-const unusedCreate: CandidateManagementService["createProject"] = async () => {
-  throw new Error("回復経路で project を作成してはならない");
 };
 
 const currentContext = (initial: ProjectId | null) => {
@@ -128,13 +111,10 @@ const currentContext = (initial: ProjectId | null) => {
   };
 };
 
-const createState = (
-  currentProject: CurrentProjectPort,
-  createProject: CandidateManagementService["createProject"] = unusedCreate,
-) =>
+const createState = (currentProject: CurrentProjectPort) =>
   createManagementState({
     query,
-    service: service(createProject),
+    service,
     createMutationContext: () => context,
     currentProject,
   });
@@ -209,44 +189,6 @@ test("binding 済み project は以降の context 変更でも置換されない
 
   assert.equal(state.value.editor?.projectId, chosenProjectId);
   assert.equal(state.value.editor?.draft.projectId, chosenProjectId);
-  state.releaseCurrentProject();
-});
-
-test("作成成功後もservice返却IDではなくrefresh済みcurrent contextへbindingする", async () => {
-  const context = currentContext(null);
-  context.setRefreshTarget(recoveredProjectId);
-  let attempts = 0;
-  const state = createState(context.port, async ({ name }) => {
-    attempts += 1;
-    return attempts === 1
-      ? { ok: false, error: { kind: "storage" } satisfies ManagementError }
-      : {
-          ok: true,
-          value: {
-            id: createdProjectId,
-            name,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          } satisfies Project,
-        };
-  });
-  await state.load();
-  state.attachCurrentProject();
-  const pending = prefill("架空の作成候補");
-  state.holdPendingPreEdit(pending);
-
-  await state.createProject("失敗する作成");
-  assert.equal(state.value.pendingPreEdit, pending);
-  assert.deepEqual(state.value.displayError, { code: "storage" });
-  assert.equal(state.value.editor === null, true);
-
-  await state.createProject("成功する作成");
-  assert.equal(state.value.pendingPreEdit, null);
-  assert.equal(state.value.editor?.projectId, recoveredProjectId);
-
-  // A later context change must not rebind the already-open editor.
-  context.change(chosenProjectId);
-  assert.equal(state.value.editor?.projectId, recoveredProjectId);
   state.releaseCurrentProject();
 });
 

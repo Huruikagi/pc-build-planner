@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   type AppDataError,
+  type ProjectId,
   type RequestId,
   type Revision,
   type Uuid,
@@ -14,6 +15,7 @@ import { createManagementState } from "../../../src/features/candidate-managemen
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
 
 const requestId = "20000000-0000-4000-8000-000000000001" as Uuid as RequestId;
+const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 
 const characterization = [
   [
@@ -63,9 +65,19 @@ test("共有data errorの全variant・payloadと既存service/state表示結果�
         requestId,
         expectedRevision: 0 as Revision,
       }),
+      currentProject: {
+        getCurrentProject: () => ({ status: "resolved", projectId }),
+        subscribe: () => () => {},
+      },
     });
 
-    await state.createProject("架空プロジェクト");
+    state.beginCreate({
+      projectId,
+      category: "uncategorized",
+      product: { name: { original: "架空候補" } },
+      normalizedAttributes: { category: "uncategorized" },
+    });
+    await state.saveEditor();
 
     assert.deepEqual(state.value.displayError, { code: expectedCode });
   }
