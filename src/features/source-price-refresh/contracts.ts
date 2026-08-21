@@ -14,7 +14,6 @@ import type {
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
-  ManagementError,
 } from "../candidate-management/public.js";
 import type {
   PagePriceExtractionError,
@@ -63,18 +62,13 @@ export interface SourcePriceRefreshReceipt {
 }
 
 /** Storage failures this feature surfaces without redefining upstream errors. */
-export type SourcePriceRefreshStorageError = Extract<
-  ManagementError,
-  {
-    readonly kind:
-      | "validation"
-      | "conflict"
-      | "maintenance"
-      | "storage"
-      | "quota"
-      | "unsupported-data";
-  }
->;
+export type SourcePriceRefreshStorageError =
+  | { readonly kind: "validation" }
+  | { readonly kind: "conflict" }
+  | { readonly kind: "maintenance" }
+  | { readonly kind: "storage" }
+  | { readonly kind: "quota" }
+  | { readonly kind: "unsupported-data" };
 
 export type SourcePriceRefreshError =
   | SourceUrlIdentityError

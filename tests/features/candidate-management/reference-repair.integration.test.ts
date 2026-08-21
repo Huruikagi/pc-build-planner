@@ -190,7 +190,11 @@ test("削除失敗時は既存rootとCurrentBuild参照をそのまま保持す�
   const conflicted = await service.deleteCandidate(adoptedId, context(7));
 
   assert.equal(conflicted.ok, false);
-  if (!conflicted.ok) assert.equal(conflicted.error.kind, "conflict");
+  if (!conflicted.ok) {
+    assert.equal("code" in conflicted.error, true);
+    if ("code" in conflicted.error)
+      assert.equal(conflicted.error.code, "revision-conflict");
+  }
   const root = await stored();
   assert.equal(root.revision, 0);
   assert.equal(root.candidateParts.length, 2);

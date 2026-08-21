@@ -497,7 +497,7 @@ test("期待revision取得後の別root mutationは既存conflictでpatch commit
     price: refreshedPrice,
     capturedAt: refreshedAt,
   });
-  assert.deepEqual(result, { ok: false, error: { kind: "conflict" } });
+  assert.deepEqual(result, { ok: false, error: { code: "revision-conflict" } });
   // The only increment is the deliberately injected competing mutation.
   assert.equal(probe.rootCommits(), commitsBefore + 1);
 });

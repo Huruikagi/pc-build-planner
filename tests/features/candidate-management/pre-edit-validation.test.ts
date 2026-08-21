@@ -216,7 +216,7 @@ test("空名はpre-editだけで受理され、既存の保存serviceでは拒�
     {
       ok: false,
       error: {
-        kind: "validation",
+        kind: "candidate-validation",
         fields: { "product.name": "required" },
       },
     },

@@ -7,8 +7,8 @@ import type {
 import { candidateSourceMatchScope } from "../source-price-refresh/public.js";
 import type {
   AddCandidateSourceInput,
+  CandidateOperationError,
   CandidateSourceMutationPort,
-  ManagementError,
 } from "./contracts.js";
 
 export type DuplicateUrlRouteReceipt =
@@ -23,7 +23,7 @@ export type DuplicateUrlRouteError =
       readonly kind: "source-refresh";
       readonly cause: SourcePriceRefreshError;
     }
-  | { readonly kind: "source-add"; readonly cause: ManagementError };
+  | { readonly kind: "source-add"; readonly cause: CandidateOperationError };
 
 export interface DuplicateUrlRouter {
   route(

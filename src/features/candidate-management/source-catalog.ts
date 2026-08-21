@@ -1,28 +1,13 @@
-import type { CandidatePart } from "../../domain/public.js";
+import type { AppDataError, CandidatePart } from "../../domain/public.js";
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceReference,
-  ManagementError,
 } from "./contracts.js";
 import type { CandidateSourceDataPort } from "./source-data-port.js";
 
 export interface CandidateSourceCatalogDependencies {
   readonly data: Pick<CandidateSourceDataPort, "query">;
 }
-
-const readError = (code: string): ManagementError => {
-  switch (code) {
-    case "maintenance-active":
-    case "stale-fence":
-      return { kind: "maintenance" };
-    case "corrupt-data":
-    case "unsupported-version":
-    case "migration-failed":
-      return { kind: "unsupported-data" };
-    default:
-      return { kind: "storage" };
-  }
-};
 
 const reference = (
   candidate: CandidatePart,
@@ -55,10 +40,17 @@ export const createCandidateSourceCatalog = (
         ),
       };
     });
-    if (!result.ok) return { ok: false, error: readError(result.error.code) };
+    if (!result.ok) return result;
     return result.value.candidateFound
       ? { ok: true, value: result.value.references }
-      : { ok: false, error: { kind: "not-found", entity: "candidate" } };
+      : {
+          ok: false,
+          error: {
+            code: "validation",
+            reason: "entity-not-found",
+            message: "candidate",
+          } satisfies AppDataError,
+        };
   },
 
   async getSourceReference(input) {
@@ -77,11 +69,25 @@ export const createCandidateSourceCatalog = (
             : reference(candidate, source),
       };
     });
-    if (!result.ok) return { ok: false, error: readError(result.error.code) };
+    if (!result.ok) return result;
     if (!result.value.candidateFound)
-      return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+      return {
+        ok: false,
+        error: {
+          code: "validation",
+          reason: "entity-not-found",
+          message: "candidate",
+        },
+      };
     return result.value.value === undefined
-      ? { ok: false, error: { kind: "not-found", entity: "source" } }
+      ? {
+          ok: false,
+          error: {
+            code: "validation",
+            reason: "entity-not-found",
+            message: "source",
+          },
+        }
       : { ok: true, value: result.value.value };
   },
 });

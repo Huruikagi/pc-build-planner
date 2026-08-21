@@ -947,8 +947,7 @@ test("source catalog公開consumerは公開facetだけを利用する", () => {
       {
         path: "tests/tooling/source-price-refresh-consumer.ts",
         source:
-          'import type { Result } from "../../src/domain/public.js";\n' +
-          'import type { CandidateSourceCatalogPort as Catalog, CandidateSourceReference, ManagementError } from "../../src/features/candidate-management/public.js";\n' +
+          'import type { CandidateSourceCatalogPort as Catalog, CandidateSourceReference } from "../../src/features/candidate-management/public.js";\n' +
           'import type { PagePriceExtractionError } from "../../src/features/product-capture/public.js";',
       },
     ]),

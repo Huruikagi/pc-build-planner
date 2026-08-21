@@ -1,10 +1,12 @@
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceReference,
-  ManagementError,
 } from "../../src/features/candidate-management/public.js";
 
-type CatalogFailure = Exclude<ManagementError, { readonly kind: "not-found" }>;
+type CatalogFailure = Extract<
+  Awaited<ReturnType<CandidateSourceCatalogPort["listSourceReferences"]>>,
+  { readonly ok: false }
+>["error"];
 
 export type RefreshTargetListResult =
   | {
@@ -24,7 +26,11 @@ export const listRefreshTargets = async (
     candidateId === undefined ? {} : { candidateId },
   );
   if (result.ok) return { kind: "ready", references: result.value };
-  if (result.error.kind === "not-found") return { kind: "candidate-not-found" };
+  if (
+    result.error.code === "validation" &&
+    result.error.reason === "entity-not-found"
+  )
+    return { kind: "candidate-not-found" };
   return { kind: "catalog-unavailable", error: result.error };
 };
 
@@ -69,6 +75,10 @@ export const resolveRefreshTarget = async (
 ): Promise<RefreshTargetResult> => {
   const result = await catalog.getSourceReference(target);
   if (result.ok) return { kind: "ready", reference: result.value };
-  if (result.error.kind === "not-found") return { kind: "stale-target" };
+  if (
+    result.error.code === "validation" &&
+    result.error.reason === "entity-not-found"
+  )
+    return { kind: "stale-target" };
   return { kind: "catalog-unavailable", error: result.error };
 };

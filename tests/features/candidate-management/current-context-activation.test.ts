@@ -56,7 +56,11 @@ const query: CandidateManagementQuery = {
   async getCandidateDraft() {
     return {
       ok: false,
-      error: { kind: "not-found", entity: "candidate" },
+      error: {
+        code: "validation",
+        reason: "entity-not-found",
+        message: "candidate",
+      },
     };
   },
 };

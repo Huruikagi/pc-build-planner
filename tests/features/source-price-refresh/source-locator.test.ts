@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  type AppDataError,
   type CandidatePartId,
   type CandidateSourceId,
   err,
@@ -10,7 +11,6 @@ import {
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceReference,
-  ManagementError,
 } from "../../../src/features/candidate-management/public.js";
 import type {
   MatchedCandidateSource,
@@ -44,14 +44,14 @@ interface StubCatalog {
  */
 const createStubCatalog = (
   references: readonly CandidateSourceReference[],
-  listFailure?: ManagementError,
+  listFailure?: AppDataError,
 ): StubCatalog => {
   const listCalls: ListCall[] = [];
   const referenceCalls: unknown[] = [];
   const port: CandidateSourceCatalogPort = {
     async listSourceReferences(
       input,
-    ): Promise<Result<readonly CandidateSourceReference[], ManagementError>> {
+    ): Promise<Result<readonly CandidateSourceReference[], AppDataError>> {
       listCalls.push(input);
       if (listFailure !== undefined) return err(listFailure);
       const { candidateId } = input;
@@ -65,9 +65,13 @@ const createStubCatalog = (
     },
     async getSourceReference(
       input,
-    ): Promise<Result<CandidateSourceReference, ManagementError>> {
+    ): Promise<Result<CandidateSourceReference, AppDataError>> {
       referenceCalls.push(input);
-      return err({ kind: "not-found", entity: "source" });
+      return err({
+        code: "validation",
+        reason: "entity-not-found",
+        message: "source",
+      });
     },
   };
   return { port, listCalls, referenceCalls };
@@ -373,28 +377,29 @@ test("照合対象ページのURLが受理できない場合はcatalogを読ま�
 });
 
 test("catalog読み取り失敗のmanagement errorを握り潰さず伝播する", async () => {
-  const failures: readonly ManagementError[] = [
-    { kind: "maintenance" },
-    { kind: "storage" },
-    { kind: "quota" },
-    { kind: "conflict" },
-    { kind: "unsupported-data" },
-  ];
+  const failures = [
+    [{ code: "maintenance-active" }, { kind: "maintenance" }],
+    [{ code: "storage-unavailable" }, { kind: "storage" }],
+    [{ code: "quota-exceeded" }, { kind: "quota" }],
+    [{ code: "revision-conflict" }, { kind: "conflict" }],
+    [{ code: "unsupported-version" }, { kind: "unsupported-data" }],
+  ] as const;
 
-  for (const failure of failures) {
+  for (const [failure, outputFailure] of failures) {
     const catalog = createStubCatalog([], failure);
     const result = await createStoredSourceLocator({
       catalog: catalog.port,
     }).matchStoredSource({ scope: { kind: "catalog" }, pageUrl });
 
-    assert.deepEqual(result, { ok: false, error: failure });
+    assert.deepEqual(result, { ok: false, error: outputFailure });
   }
 });
 
 test("candidate scopeで候補が存在しない not-found は no-match として提示する", async () => {
   const catalog = createStubCatalog([], {
-    kind: "not-found",
-    entity: "candidate",
+    code: "validation" as const,
+    reason: "entity-not-found" as const,
+    message: "candidate",
   });
 
   expectError(

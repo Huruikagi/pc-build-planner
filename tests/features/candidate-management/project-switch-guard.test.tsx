@@ -104,7 +104,11 @@ test("10.2: dirty候補は共通確認の取消で保持され、確定時だけ
       async getCandidateDraft() {
         return {
           ok: false as const,
-          error: { kind: "not-found" as const, entity: "candidate" as const },
+          error: {
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "candidate",
+          },
         };
       },
     },
@@ -270,14 +274,21 @@ test("10.3: catalog置換forced通知は旧project draftを保持して保存を
       async getCandidateDraft() {
         return {
           ok: false as const,
-          error: { kind: "not-found" as const, entity: "candidate" as const },
+          error: {
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "candidate",
+          },
         };
       },
     },
     service: {
       async createCandidate() {
         mutations += 1;
-        return { ok: false as const, error: { kind: "storage" as const } };
+        return {
+          ok: false as const,
+          error: { code: "storage-unavailable" as const },
+        };
       },
     } as never,
     createMutationContext: () => ({

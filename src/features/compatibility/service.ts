@@ -1,8 +1,11 @@
-import { err, ok, type ProjectId, type Result } from "../../domain/public.js";
-import type {
-  CandidateQuery,
-  ManagementError,
-} from "../candidate-management/public.js";
+import {
+  type AppDataError,
+  err,
+  ok,
+  type ProjectId,
+  type Result,
+} from "../../domain/public.js";
+import type { CandidateQuery } from "../candidate-management/public.js";
 import type { BuildError, CurrentBuildQuery } from "../current-build/public.js";
 import { resultAggregator } from "./aggregator.js";
 import type {
@@ -32,11 +35,13 @@ const buildErrorToCompatibilityError = (
   }
 };
 
-const managementErrorToCompatibilityError = (
-  error: ManagementError,
+const appDataErrorToCompatibilityError = (
+  error: AppDataError,
 ): CompatibilityError => {
-  switch (error.kind) {
-    case "unsupported-data":
+  switch (error.code) {
+    case "corrupt-data":
+    case "unsupported-version":
+    case "migration-failed":
       return { kind: "unsupported-data" };
     default:
       return { kind: "read-failed" };
@@ -74,7 +79,7 @@ export const createCompatibilityService = (
     const candidatesResult =
       await dependencies.candidateQuery.listBuildEligible(projectId);
     if (!candidatesResult.ok) {
-      return err(managementErrorToCompatibilityError(candidatesResult.error));
+      return err(appDataErrorToCompatibilityError(candidatesResult.error));
     }
 
     const targetsResult = targetExpander.expand(

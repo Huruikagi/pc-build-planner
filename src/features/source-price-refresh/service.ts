@@ -1,5 +1,6 @@
 import type { ActivationId } from "../../application-shell/public.js";
 import {
+  type AppDataError,
   err,
   type MoneyValue,
   ok,
@@ -10,7 +11,6 @@ import type {
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSourceReference,
-  ManagementError,
 } from "../candidate-management/public.js";
 import type {
   PagePriceExtractionPort,
@@ -26,6 +26,7 @@ import type {
   SourcePriceRefreshPort,
   SourcePriceRefreshReceipt,
 } from "./contracts.js";
+import { sourcePriceRefreshDataError } from "./data-error.js";
 import { createStoredSourceLocator } from "./source-locator.js";
 // Type-only: the workflow implements `SourcePriceRefreshStateDependencies.
 // runRefresh`, so it reuses that contract's input shape rather than restating
@@ -50,8 +51,20 @@ const noMatch: SourcePriceRefreshError = { kind: "no-match" };
  * own read failures. Every other management error is preserved unchanged so the
  * recovery guidance stays stable.
  */
-const managementError = (error: ManagementError): SourcePriceRefreshError =>
-  error.kind === "not-found" ? noMatch : error;
+const operationError = (
+  error:
+    | AppDataError
+    | { readonly kind: "candidate-validation" }
+    | { readonly kind: "precondition-failed" },
+): SourcePriceRefreshError => {
+  if ("kind" in error)
+    return error.kind === "precondition-failed"
+      ? staleTarget
+      : { kind: "validation" };
+  return error.code === "validation" && error.reason === "entity-not-found"
+    ? noMatch
+    : sourcePriceRefreshDataError(error);
+};
 
 /**
  * A price is usable only when the observation carries a confirmed amount and
@@ -132,7 +145,7 @@ export const createSourcePriceRefreshService = (
         candidateId: input.target.candidateId,
         sourceId: input.target.sourceId,
       });
-      if (!current.ok) return err(managementError(current.error));
+      if (!current.ok) return err(operationError(current.error));
 
       const reference = current.value;
       if (!stillTargets(reference, input.target, observed.value))
@@ -148,9 +161,10 @@ export const createSourcePriceRefreshService = (
       });
       if (!updated.ok)
         return err(
-          updated.error.kind === "precondition-failed"
+          "kind" in updated.error &&
+            updated.error.kind === "precondition-failed"
             ? staleTarget
-            : managementError(updated.error),
+            : operationError(updated.error),
         );
 
       return ok({

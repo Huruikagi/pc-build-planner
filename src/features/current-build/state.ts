@@ -30,7 +30,7 @@ import type {
   BuildProjectSwitch,
   CurrentBuildProjectContextAdapter,
 } from "./project-context-adapter.js";
-import { managementErrorToBuildError } from "./service.js";
+import { appDataErrorToBuildError } from "./service.js";
 
 /** 切替確認中に保持する、確認一件分のowner-localな文脈（要件 7.2、7.8）。 */
 export interface BuildSwitchConfirmation {
@@ -657,7 +657,7 @@ export class BuildState {
     // 遅れて完了した旧 project・旧 generation の結果は表示 state へ適用しない。
     if (this.#isStaleLoad(token, generation)) return;
     if (!eligible.ok) {
-      this.#readFailure(managementErrorToBuildError(eligible.error));
+      this.#readFailure(appDataErrorToBuildError(eligible.error));
       return;
     }
     if (!snapshot.ok) {

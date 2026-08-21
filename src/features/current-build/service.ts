@@ -1,4 +1,5 @@
 import {
+  type AppDataError,
   type BuildItem,
   type CandidatePart,
   type CandidatePartId,
@@ -12,7 +13,6 @@ import {
   type UtcTimestamp,
 } from "../../domain/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
-import type { ManagementError } from "../candidate-management/public.js";
 import { type CategoryPolicy, isValidQuantity } from "./category-policy.js";
 import type {
   BuildCommand,
@@ -28,7 +28,7 @@ export interface BuildServiceDependencies {
   readonly candidates: {
     listBuildEligible(
       projectId: ProjectId,
-    ): Promise<Result<readonly CandidatePart[], ManagementError>>;
+    ): Promise<Result<readonly CandidatePart[], AppDataError>>;
   };
   readonly query: CurrentBuildQuery;
   readonly now?: () => UtcTimestamp;
@@ -39,27 +39,30 @@ type EligibleCandidates = ReadonlyMap<CandidatePartId, CandidatePart>;
 
 const corruptData: BuildError = { kind: "corrupt-data" };
 
-export const managementErrorToBuildError = (
-  error: ManagementError,
-): BuildError => {
-  switch (error.kind) {
+export const appDataErrorToBuildError = (error: AppDataError): BuildError => {
+  switch (error.code) {
     case "validation":
-      return { kind: "validation", fields: error.fields };
-    case "not-found":
-      return {
-        kind: "not-found",
-        entity: error.entity === "source" ? "candidate" : error.entity,
-      };
-    case "conflict":
+      return error.reason === "entity-not-found"
+        ? { kind: "not-found", entity: "candidate" }
+        : { kind: "validation", fields: {} };
+    case "revision-conflict":
+    case "request-conflict":
       return { kind: "conflict" };
-    case "maintenance":
+    case "maintenance-active":
+    case "stale-fence":
       return { kind: "maintenance" };
-    case "storage":
+    case "access-denied":
+    case "lock-unavailable":
+    case "storage-unavailable":
       return { kind: "storage" };
-    case "quota":
+    case "quota-exceeded":
       return { kind: "quota" };
-    case "unsupported-data":
+    case "corrupt-data":
+    case "unsupported-version":
+    case "migration-failed":
       return { kind: "unsupported-data" };
+    default:
+      return { kind: "validation", fields: {} };
   }
 };
 
@@ -279,7 +282,7 @@ export const createBuildService = (
       if (!eligibleResult.ok) {
         return {
           ok: false,
-          error: managementErrorToBuildError(eligibleResult.error),
+          error: appDataErrorToBuildError(eligibleResult.error),
         };
       }
       const eligible: EligibleCandidates = new Map(

@@ -59,7 +59,14 @@ const catalog = (): CandidateSourceCatalogPort => ({
         reference.sourceId === input.sourceId,
     );
     return value === undefined
-      ? { ok: false, error: { kind: "not-found", entity: "source" } }
+      ? {
+          ok: false,
+          error: {
+            code: "validation",
+            reason: "entity-not-found",
+            message: "source",
+          },
+        }
       : { ok: true, value };
   },
 });

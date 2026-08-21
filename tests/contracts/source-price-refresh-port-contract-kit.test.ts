@@ -143,7 +143,11 @@ const createProbe = () => {
         (entry) => entry.id === input.sourceId,
       );
       if (currentDraft === undefined || currentSource === undefined)
-        return err({ kind: "not-found", entity: "source" });
+        return err({
+          code: "validation",
+          reason: "entity-not-found",
+          message: "source",
+        });
       return ok({
         candidateId: input.candidateId,
         sourceId: currentSource.id,
@@ -160,7 +164,7 @@ const createProbe = () => {
 
   const mutations: CandidateSourceMutationPort = {
     async addSource() {
-      return err({ kind: "unsupported-data" });
+      return err({ code: "unsupported-version" });
     },
     async updateSource(input) {
       const currentDraft = drafts.get(input.candidateId);
@@ -172,7 +176,11 @@ const createProbe = () => {
         index === undefined ||
         index < 0
       )
-        return err({ kind: "not-found", entity: "source" });
+        return err({
+          code: "validation",
+          reason: "entity-not-found",
+          message: "source",
+        });
       const replacement = [...sources];
       replacement[index] = structuredClone(input.source);
       drafts.set(input.candidateId, { ...currentDraft, sources: replacement });
@@ -189,7 +197,11 @@ const createProbe = () => {
         index === undefined ||
         index < 0
       )
-        return err({ kind: "not-found", entity: "source" });
+        return err({
+          code: "validation",
+          reason: "entity-not-found",
+          message: "source",
+        });
       const current = sources[index];
       if (
         current?.pageUrl !== input.expectedPageUrl ||
@@ -207,10 +219,10 @@ const createProbe = () => {
       return ok(undefined);
     },
     async removeSource() {
-      return err({ kind: "unsupported-data" });
+      return err({ code: "unsupported-version" });
     },
     async setPrimarySource() {
-      return err({ kind: "unsupported-data" });
+      return err({ code: "unsupported-version" });
     },
   };
 

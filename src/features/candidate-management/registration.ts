@@ -13,6 +13,7 @@ import {
   createCandidateActivation,
 } from "./activation.js";
 import type {
+  CandidateCreatePort,
   CandidateManagementQuery,
   CandidateQuery,
   CandidateSourceCatalogPort,
@@ -43,6 +44,7 @@ export type CandidateManagementMount = (
 export interface CandidateFeatureRegistrationDependencies {
   readonly data: FoundationScopedDataPort;
   readonly query: CandidateManagementQuery;
+  readonly create: CandidateCreatePort;
   readonly publicQuery?: CandidateQuery;
   readonly sources?: {
     readonly catalog: CandidateSourceCatalogPort;
@@ -70,13 +72,13 @@ const unavailableSources = {
     async listSourceReferences() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
     async getSourceReference() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
   },
@@ -84,31 +86,31 @@ const unavailableSources = {
     async addSource() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
     async updateSource() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
     async patchSourcePrice() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
     async removeSource() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
     async setPrimarySource() {
       return {
         ok: false as const,
-        error: { kind: "unsupported-data" as const },
+        error: { code: "storage-unavailable" as const },
       };
     },
   },
@@ -233,13 +235,14 @@ export const createCandidateFeatureRegistration = (
   const subscribeAvailability =
     dependencies.subscribeAvailability ?? (() => () => {});
   const publicApi = createCandidateManagementPublicApi({
+    create: dependencies.create,
     query: dependencies.publicQuery ?? {
       listProjects: () => dependencies.query.listProjects(),
       listCandidates: (input) => dependencies.query.listCandidates(input),
       listBuildEligible: (projectId) =>
         dependencies.query.listBuildEligible(projectId),
       async getCandidateDraft() {
-        return { ok: false, error: { kind: "unsupported-data" } };
+        return { ok: false, error: { code: "storage-unavailable" } };
       },
     },
     sources: dependencies.sources ?? unavailableSources,

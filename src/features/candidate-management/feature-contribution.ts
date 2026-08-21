@@ -213,6 +213,10 @@ export const createCandidateManagementContribution = (
   const registration = createCandidateFeatureRegistration({
     data: context.data,
     query: service,
+    create: {
+      createCandidate: (draft, mutationContext) =>
+        service.createCandidate(draft, mutationContext),
+    },
     publicQuery: service,
     sources: {
       catalog,

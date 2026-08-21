@@ -5,6 +5,7 @@ import { act } from "react";
 
 import { createFeatureRegistry } from "../../../src/application-shell/feature-registry.js";
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CurrentBuild,
@@ -16,10 +17,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ManagementError,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCompatibilityContribution } from "../../../src/features/compatibility/feature-contribution.js";
 import type {
   BuildError,
@@ -96,7 +94,7 @@ const candidateQuery: CandidateQuery = {
     return { ok: true, value: [] };
   },
   async listBuildEligible(): Promise<
-    Result<readonly CandidatePart[], ManagementError>
+    Result<readonly CandidatePart[], AppDataError>
   > {
     return { ok: true, value: parts };
   },

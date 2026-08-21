@@ -361,7 +361,7 @@
   - _Depends: 13.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
   - _Boundary: ProjectLifecycleHostAdapter, ManagementState, ManagementView_
-- [ ] 14.2 共有data errorのimportとCandidateCreatePort実装へ移行する
+- [x] 14.2 共有data errorのimportとCandidateCreatePort実装へ移行する
   - 候補service、query、stateのdata operation failureをfoundation公開入口の`AppDataError`へ差し替え、旧`ManagementError`定義・`FoundationError` mapping・公開exportを撤去する。
   - 13.1で固定した`CandidateCreatePort`を共有`AppDataError`対応済みの既存candidate create serviceへ接続し、`CandidateManagementPublicApi`のlive create facet、registration必須依存、production contributionからserviceへの直接委譲を同じ変更で追加して、matchなし・明示新規保存の一回だけcreateを実行する。queryとtyped editor intentの既存実装は変更しない。
   - 候補固有field validationだけをowner-local errorとして残し、data errorの種類・粒度・表示・入力と一覧の保持を変更しない。

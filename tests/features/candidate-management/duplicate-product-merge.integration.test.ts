@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CandidateSourceId,
@@ -12,9 +13,9 @@ import type {
 } from "../../../src/domain/public.js";
 import type {
   CandidateDraft,
+  CandidateOperationError,
   CandidateQuery,
   CandidateSummary,
-  ManagementError,
   MutationContext,
 } from "../../../src/features/candidate-management/contracts.js";
 import { createDuplicateCandidateMatcher } from "../../../src/features/candidate-management/duplicate-matcher.js";
@@ -106,9 +107,9 @@ const summaryOf = (candidate: CandidatePart): CandidateSummary => {
 };
 
 interface HarnessOptions {
-  readonly queryError?: ManagementError;
-  readonly createError?: ManagementError;
-  readonly addError?: ManagementError;
+  readonly queryError?: AppDataError;
+  readonly createError?: CandidateOperationError;
+  readonly addError?: CandidateOperationError;
   readonly matchError?: SourcePriceRefreshError;
   readonly refreshError?: SourcePriceRefreshError;
 }
@@ -144,7 +145,14 @@ function createHarness(options: HarnessOptions = {}) {
       return { ok: true, value: [] };
     },
     async getCandidateDraft() {
-      return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+      return {
+        ok: false,
+        error: {
+          code: "validation",
+          reason: "entity-not-found",
+          message: "candidate",
+        },
+      };
     },
   };
   const sourceMutations: CandidateSourceMutationPort = {
@@ -330,11 +338,11 @@ test("matchなしと明示新規保存はcreateだけを一度実行する", asy
 });
 
 test("query・管理・URL照合・価格欠損の全失敗でdraft、match、既存candidateを保持する", async () => {
-  const queryFailures: readonly ManagementError[] = [
-    { kind: "conflict" },
-    { kind: "maintenance" },
-    { kind: "storage" },
-    { kind: "quota" },
+  const queryFailures: readonly AppDataError[] = [
+    { code: "revision-conflict" },
+    { code: "maintenance-active" },
+    { code: "storage-unavailable" },
+    { code: "quota-exceeded" },
   ];
   for (const queryError of queryFailures) {
     const harness = createHarness({ queryError });
@@ -355,12 +363,12 @@ test("query・管理・URL照合・価格欠損の全失敗でdraft、match、�
     });
   }
 
-  const managementFailures: readonly ManagementError[] = [
-    { kind: "validation", fields: { source: "invalid-source" } },
-    { kind: "conflict" },
-    { kind: "maintenance" },
-    { kind: "storage" },
-    { kind: "quota" },
+  const managementFailures: readonly CandidateOperationError[] = [
+    { kind: "candidate-validation", fields: { source: "invalid-source" } },
+    { code: "revision-conflict" },
+    { code: "maintenance-active" },
+    { code: "storage-unavailable" },
+    { code: "quota-exceeded" },
   ];
   for (const addError of managementFailures) {
     const harness = createHarness({ addError });
@@ -441,7 +449,9 @@ test("同じmerge判断の二重送信はsourceを一件だけ追加し機微情
     assert.equal(success.stored[0]?.sources?.length, 2);
     assert.equal(success.calls.addCalls, 1);
 
-    const failure = createHarness({ queryError: { kind: "storage" } });
+    const failure = createHarness({
+      queryError: { code: "storage-unavailable" },
+    });
     await failure.state.evaluate(incoming());
     assert.equal(failure.state.value.status, "failed");
     assert.deepEqual(logged, []);

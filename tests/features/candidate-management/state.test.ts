@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AppDataError,
   CandidatePartId,
   ProjectId,
   RequestId,
@@ -12,7 +13,6 @@ import type {
   CandidateDraft,
   CandidateManagementService,
   CandidateQuery,
-  ManagementError,
   MutationContext,
 } from "../../../src/features/candidate-management/contracts.js";
 import type { DuplicateMergeCoordinator } from "../../../src/features/candidate-management/duplicate-merge.js";
@@ -56,7 +56,7 @@ const currentProject = {
   },
 };
 
-const createQuery = (failure?: ManagementError): CandidateQuery => ({
+const createQuery = (failure?: AppDataError): CandidateQuery => ({
   async listProjects() {
     return failure === undefined
       ? {
@@ -94,7 +94,11 @@ const createQuery = (failure?: ManagementError): CandidateQuery => ({
   async getCandidateDraft() {
     return {
       ok: false as const,
-      error: { kind: "not-found" as const, entity: "candidate" as const },
+      error: {
+        code: "validation" as const,
+        reason: "entity-not-found" as const,
+        message: "candidate",
+      },
     };
   },
 });
@@ -103,7 +107,7 @@ const createService = (
   overrides: Partial<CandidateManagementService> = {},
 ): CandidateManagementService => ({
   async createCandidate() {
-    return { ok: false as const, error: { kind: "storage" } };
+    return { ok: false as const, error: { code: "storage-unavailable" } };
   },
   async updateCandidate() {
     throw new Error("not used");
@@ -172,7 +176,10 @@ test("forced切替は旧projectのdraftを保持し新projectへのmutationを�
     service: createService({
       async createCandidate() {
         creates += 1;
-        return { ok: false as const, error: { kind: "storage" as const } };
+        return {
+          ok: false as const,
+          error: { code: "storage-unavailable" as const },
+        };
       },
     }),
     createMutationContext: () => context,
@@ -204,7 +211,7 @@ test("候補保存の失敗では入力と一覧を保持し、同一操作の�
       async createCandidate() {
         calls += 1;
         await delayed;
-        return { ok: false as const, error: { kind: "storage" } };
+        return { ok: false as const, error: { code: "storage-unavailable" } };
       },
     }),
     createMutationContext: () => context,
@@ -247,7 +254,7 @@ test("create 保存は重複 coordinator へ委譲し、edit 保存は既存 upd
     service: createService({
       async createCandidate() {
         createdDirectly += 1;
-        return { ok: false, error: { kind: "storage" } };
+        return { ok: false, error: { code: "storage-unavailable" } };
       },
       async updateCandidate() {
         updated += 1;
@@ -338,7 +345,7 @@ test("重複判断の全commit経路は成功時だけeditorを閉じ、validati
           error: {
             kind: "management",
             cause: {
-              kind: "validation",
+              kind: "candidate-validation",
               fields: { "product.name": "required" },
             },
           },
@@ -392,7 +399,7 @@ test("重複判断の全commit経路は成功時だけeditorを閉じ、validati
             cause: {
               kind: "source-add",
               cause: {
-                kind: "validation",
+                kind: "candidate-validation",
                 fields: { "source.pageUrl": "invalid-url" },
               },
             },
@@ -420,7 +427,7 @@ test("候補削除の失敗では確認対象と一覧を維持して再試行�
     query: createQuery(),
     service: createService({
       async deleteCandidate() {
-        return { ok: false as const, error: { kind: "conflict" } };
+        return { ok: false as const, error: { code: "revision-conflict" } };
       },
     }),
     createMutationContext: () => context,
@@ -436,11 +443,11 @@ test("候補削除の失敗では確認対象と一覧を維持して再試行�
 });
 
 for (const error of [
-  { kind: "unsupported-data" },
-  { kind: "storage" },
-  { kind: "quota" },
-] as const satisfies readonly ManagementError[]) {
-  test(`初期読込が ${error.kind} なら保存データを変更せず更新操作を停止する`, async () => {
+  { code: "unsupported-version" },
+  { code: "storage-unavailable" },
+  { code: "quota-exceeded" },
+] as const satisfies readonly AppDataError[]) {
+  test(`初期読込が ${error.code} なら保存データを変更せず更新操作を停止する`, async () => {
     const state = createManagementState({
       query: createQuery(error),
       service: createService(),
@@ -452,7 +459,12 @@ for (const error of [
     await state.saveEditor();
 
     assert.equal(state.value.mutationsDisabled, true);
-    assert.deepEqual(state.value.displayError, { code: error.kind });
+    const expected = {
+      "unsupported-version": "unsupported-data",
+      "storage-unavailable": "storage",
+      "quota-exceeded": "quota",
+    } as const;
+    assert.deepEqual(state.value.displayError, { code: expected[error.code] });
     assert.equal(state.value.editor, null);
   });
 }

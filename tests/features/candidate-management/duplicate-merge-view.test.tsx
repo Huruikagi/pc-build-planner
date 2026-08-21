@@ -277,7 +277,7 @@ for (const language of ["ja", "en"] as const)
               cause: {
                 kind: "source-add",
                 cause: {
-                  kind: "validation",
+                  kind: "candidate-validation",
                   fields: { "source.pageUrl": "invalid-url" },
                 },
               },

@@ -46,7 +46,14 @@ const consumerPorts = (
       return { ok: true, value: [] };
     },
     async getSourceReference() {
-      return { ok: false, error: { kind: "not-found", entity: "source" } };
+      return {
+        ok: false,
+        error: {
+          code: "validation",
+          reason: "entity-not-found",
+          message: "source",
+        },
+      };
     },
   };
   const mutations: CandidateSourceMutationPort = {
@@ -248,7 +255,7 @@ test("公開error unionの全kindが一意の回復案内へ判別される", ()
     { kind: "tab-changed" },
     { kind: "injection-failed" },
     { kind: "invalid-payload" },
-    { kind: "validation", fields: {} },
+    { kind: "validation" },
     { kind: "conflict" },
     { kind: "maintenance" },
     { kind: "storage" },

@@ -2,6 +2,7 @@ import {
   type CandidatePartId,
   PART_CATEGORIES,
   type Result,
+  validateAppDataError,
 } from "../../domain/public.js";
 import {
   decodeWithProfile,
@@ -264,30 +265,11 @@ const isMatch = (value: unknown): value is DuplicateCandidateMatch => {
 };
 const matchSchema = z.custom<DuplicateCandidateMatch>(isMatch);
 const validationErrorSchema = plainObject({
-  kind: z.literal("validation"),
+  kind: z.literal("candidate-validation"),
   fields: z.record(z.string(), z.string()),
 });
-const notFoundErrorSchema = plainObject({
-  kind: z.literal("not-found"),
-  entity: z.custom<"project" | "candidate" | "source">((value) =>
-    ["project", "candidate", "source"].includes(value as string),
-  ),
-});
-const simpleManagementErrorSchema = plainObject({
-  kind: z.custom((value) =>
-    [
-      "conflict",
-      "maintenance",
-      "storage",
-      "quota",
-      "unsupported-data",
-    ].includes(value as string),
-  ),
-});
-const isManagementError = (value: unknown): boolean =>
-  schemaAccepts(validationErrorSchema, value) ||
-  schemaAccepts(notFoundErrorSchema, value) ||
-  schemaAccepts(simpleManagementErrorSchema, value);
+const isCandidateOperationError = (value: unknown): boolean =>
+  schemaAccepts(validationErrorSchema, value) || validateAppDataError(value).ok;
 const refreshSimpleKinds = [
   "invalid-url",
   "no-match",
@@ -310,15 +292,16 @@ const simpleRefreshErrorSchema = plainObject({
   ),
 });
 const isRefreshError = (value: unknown): boolean =>
-  schemaAccepts(simpleRefreshErrorSchema, value) || isManagementError(value);
+  schemaAccepts(simpleRefreshErrorSchema, value) ||
+  isCandidateOperationError(value);
 const staleErrorSchema = plainObject({ kind: z.literal("stale-decision") });
 const managementCauseSchema = plainObject({
   kind: z.literal("management"),
-  cause: z.custom(isManagementError),
+  cause: z.custom(isCandidateOperationError),
 });
 const sourceAddCauseSchema = plainObject({
   kind: z.literal("source-add"),
-  cause: z.custom(isManagementError),
+  cause: z.custom(isCandidateOperationError),
 });
 const sourceRefreshCauseSchema = plainObject({
   kind: z.literal("source-refresh"),

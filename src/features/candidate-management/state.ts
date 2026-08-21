@@ -1,5 +1,6 @@
 import type { OperationPolicy } from "../../application-shell/public.js";
 import {
+  type AppDataError,
   type CandidatePartId,
   type CandidateSource,
   type CandidateSourceId,
@@ -13,10 +14,10 @@ import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
+  CandidateOperationError,
   CandidateSummary,
   CurrentProjectPort,
   CurrentProjectResolution,
-  ManagementError,
   MutationContext,
   ProjectSummary,
   UnresolvedCandidateEditorPrefill,
@@ -38,7 +39,13 @@ import type {
 
 export type ManagementDisplayError = {
   readonly code:
-    | ManagementError["kind"]
+    | "validation"
+    | "not-found"
+    | "conflict"
+    | "maintenance"
+    | "storage"
+    | "quota"
+    | "unsupported-data"
     | "snapshot-restore-failed"
     | "project-required"
     | "project-changed-with-draft";
@@ -127,21 +134,66 @@ export interface ManagementStateDependencies {
   readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }
 
-const isTerminalReadError = (error: ManagementError): boolean =>
-  error.kind === "storage" ||
-  error.kind === "quota" ||
-  error.kind === "unsupported-data";
+const appDataDisplayCode = (
+  error: AppDataError,
+): ManagementDisplayError["code"] => {
+  switch (error.code) {
+    case "validation":
+      return error.reason === "entity-not-found" ? "not-found" : "validation";
+    case "corrupt-data":
+    case "unsupported-version":
+    case "migration-failed":
+      return "unsupported-data";
+    case "revision-conflict":
+    case "request-conflict":
+      return "conflict";
+    case "maintenance-active":
+    case "stale-fence":
+      return "maintenance";
+    case "quota-exceeded":
+      return "quota";
+    case "access-denied":
+    case "lock-unavailable":
+    case "storage-unavailable":
+      return "storage";
+    case "repair-failed":
+    case "recovery-active":
+    case "stale-recovery-state":
+    case "stale-assessment":
+    case "precommit-cleanup-pending":
+      return "validation";
+    default: {
+      const exhaustive: never = error;
+      return exhaustive;
+    }
+  }
+};
 
-const displayError = (error: ManagementError): ManagementDisplayError => ({
-  code: error.kind,
+const isTerminalReadError = (error: CandidateOperationError): boolean =>
+  "code" in error &&
+  [
+    "access-denied",
+    "lock-unavailable",
+    "storage-unavailable",
+    "quota-exceeded",
+    "corrupt-data",
+    "unsupported-version",
+    "migration-failed",
+  ].includes(error.code);
+
+const displayError = (
+  error: CandidateOperationError,
+): ManagementDisplayError => ({
+  code: "kind" in error ? "validation" : appDataDisplayCode(error),
 });
 
-const fieldErrorsOf = (error: ManagementError): ManagementFieldErrors =>
-  error.kind === "validation" ? error.fields : emptyFieldErrors;
+const fieldErrorsOf = (
+  error: CandidateOperationError,
+): ManagementFieldErrors => ("kind" in error ? error.fields : emptyFieldErrors);
 
 const duplicateManagementFailure = (
   decision: DuplicateDecisionState,
-): ManagementError | undefined => {
+): CandidateOperationError | undefined => {
   if (decision.status !== "failed") return undefined;
   if (decision.error.kind === "management") return decision.error.cause;
   return decision.error.kind === "source-route" &&
@@ -151,9 +203,9 @@ const duplicateManagementFailure = (
 };
 
 const duplicateFieldErrorsOf = (
-  error: ManagementError | undefined,
+  error: CandidateOperationError | undefined,
 ): ManagementFieldErrors => {
-  if (error?.kind !== "validation") return emptyFieldErrors;
+  if (error === undefined || !("kind" in error)) return emptyFieldErrors;
   return Object.fromEntries(
     Object.entries(error.fields).map(([field, code]) => {
       if (field === "source" || field === "source.pageUrl")
@@ -826,7 +878,7 @@ export class ManagementState {
   }
 
   /** Keeps the draft and the previously loaded list untouched on failure. */
-  #mutationFailure(error: ManagementError): void {
+  #mutationFailure(error: CandidateOperationError): void {
     this.#set({
       isSaving: false,
       displayError: displayError(error),
@@ -834,7 +886,7 @@ export class ManagementState {
     });
   }
 
-  #readFailure(error: ManagementError): void {
+  #readFailure(error: CandidateOperationError): void {
     this.#readBlocked = isTerminalReadError(error);
     this.#set({
       isLoading: false,

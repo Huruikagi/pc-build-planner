@@ -65,14 +65,28 @@ test("catalogはcandidate/source not-foundとsourceなし空配列を区別す�
     await catalog.listSourceReferences({
       candidateId: "20000000-0000-4000-8000-000000000099" as CandidatePartId,
     }),
-    { ok: false, error: { kind: "not-found", entity: "candidate" } },
+    {
+      ok: false,
+      error: {
+        code: "validation",
+        reason: "entity-not-found",
+        message: "candidate",
+      },
+    },
   );
   assert.deepEqual(
     await catalog.getSourceReference({
       candidateId,
       sourceId: "30000000-0000-4000-8000-000000000099" as CandidateSourceId,
     }),
-    { ok: false, error: { kind: "not-found", entity: "source" } },
+    {
+      ok: false,
+      error: {
+        code: "validation",
+        reason: "entity-not-found",
+        message: "source",
+      },
+    },
   );
 });
 

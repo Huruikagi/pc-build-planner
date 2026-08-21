@@ -217,7 +217,10 @@ test("商品名が空の候補は項目エラーとしてmutation前に拒否す
 
   assert.deepEqual(result, {
     ok: false,
-    error: { kind: "validation", fields: { "product.name": "required" } },
+    error: {
+      kind: "candidate-validation",
+      fields: { "product.name": "required" },
+    },
   });
   assert.equal(commands.length, 0);
 });

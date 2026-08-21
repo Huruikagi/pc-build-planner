@@ -89,7 +89,14 @@ const query = (
     return { ok: true, value: [] };
   },
   async getCandidateDraft() {
-    return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+    return {
+      ok: false,
+      error: {
+        code: "validation",
+        reason: "entity-not-found",
+        message: "candidate",
+      },
+    };
   },
 });
 
@@ -217,7 +224,7 @@ test("stale target, project contamination and port failures return typed errors 
     matcher: { match: () => [match] },
     createCandidate: async () => {
       writes += 1;
-      return { ok: false, error: { kind: "quota" } };
+      return { ok: false, error: { code: "quota-exceeded" } };
     },
     router: {
       async route() {
@@ -235,7 +242,7 @@ test("stale target, project contamination and port failures return typed errors 
 
   assert.deepEqual(await coordinator.evaluate(draft, context), {
     ok: false,
-    error: { kind: "management", cause: { kind: "unsupported-data" } },
+    error: { kind: "management", cause: { code: "corrupt-data" } },
   });
   assert.equal(writes, 0);
   assert.deepEqual(
@@ -340,7 +347,10 @@ test("query and create failures stay typed and do not enter another write path",
   let createCalls = 0;
   let routeCalls = 0;
   const queryFailureCoordinator = createDuplicateMergeCoordinator({
-    query: query(async () => ({ ok: false, error: { kind: "storage" } })),
+    query: query(async () => ({
+      ok: false,
+      error: { code: "storage-unavailable" },
+    })),
     matcher: {
       match() {
         matcherCalls += 1;
@@ -361,7 +371,7 @@ test("query and create failures stay typed and do not enter another write path",
 
   assert.deepEqual(await queryFailureCoordinator.evaluate(draft, context), {
     ok: false,
-    error: { kind: "management", cause: { kind: "storage" } },
+    error: { kind: "management", cause: { code: "storage-unavailable" } },
   });
   assert.deepEqual([matcherCalls, createCalls, routeCalls], [0, 0, 0]);
 
@@ -370,7 +380,7 @@ test("query and create failures stay typed and do not enter another write path",
     matcher: { match: () => [] },
     createCandidate: async () => {
       createCalls += 1;
-      return { ok: false, error: { kind: "quota" } };
+      return { ok: false, error: { code: "quota-exceeded" } };
     },
     router: {
       async route() {
@@ -382,7 +392,7 @@ test("query and create failures stay typed and do not enter another write path",
 
   assert.deepEqual(await createFailureCoordinator.evaluate(draft, context), {
     ok: false,
-    error: { kind: "management", cause: { kind: "quota" } },
+    error: { kind: "management", cause: { code: "quota-exceeded" } },
   });
   assert.deepEqual([createCalls, routeCalls], [1, 0]);
 });

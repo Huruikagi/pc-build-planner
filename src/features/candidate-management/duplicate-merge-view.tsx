@@ -56,13 +56,18 @@ const errorKey = (error: DuplicateMergeError) => {
       return "candidate.duplicate.errors.ambiguous" as const;
     return "candidate.duplicate.errors.source" as const;
   }
-  switch (error.cause.kind) {
-    case "conflict":
+  if ("kind" in error.cause)
+    return "candidate.duplicate.errors.unexpected" as const;
+  switch (error.cause.code) {
+    case "revision-conflict":
+    case "request-conflict":
       return "candidate.duplicate.errors.conflict" as const;
-    case "storage":
-    case "quota":
+    case "access-denied":
+    case "lock-unavailable":
+    case "storage-unavailable":
+    case "quota-exceeded":
       return "candidate.duplicate.errors.storage" as const;
-    case "not-found":
+    case "validation":
       return "candidate.duplicate.errors.query" as const;
     default:
       return "candidate.duplicate.errors.unexpected" as const;

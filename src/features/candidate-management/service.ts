@@ -18,10 +18,10 @@ import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
+  CandidateOperationError,
   CandidateSourceMutationError,
   CandidateSourceService,
   CandidateSummary,
-  ManagementError,
   MutationContext,
   PatchCandidateSourcePriceInput,
   UpdateCandidateInput,
@@ -41,36 +41,6 @@ export interface CandidateManagementServiceDependencies {
   readonly sourceData?: CandidateSourceDataPort;
 }
 
-const managementError = (
-  code: string,
-  entity?: "project" | "candidate",
-): ManagementError => {
-  switch (code) {
-    case "entity-not-found":
-      return entity === undefined
-        ? { kind: "validation", fields: {} }
-        : { kind: "not-found", entity };
-    case "revision-conflict":
-    case "request-conflict":
-      return { kind: "conflict" };
-    case "maintenance-active":
-    case "stale-fence":
-      return { kind: "maintenance" };
-    case "quota-exceeded":
-      return { kind: "quota" };
-    case "corrupt-data":
-    case "unsupported-version":
-    case "migration-failed":
-      return { kind: "unsupported-data" };
-    case "access-denied":
-    case "lock-unavailable":
-    case "storage-unavailable":
-      return { kind: "storage" };
-    default:
-      return { kind: "validation", fields: {} };
-  }
-};
-
 const hasProductName = (draft: CandidateDraft): boolean => {
   const name = draft.product?.name;
   return (
@@ -83,18 +53,24 @@ const hasProductName = (draft: CandidateDraft): boolean => {
 export const draftFieldKey = (path: string): string =>
   path.replace(/^\$\.?/, "") || "product.name";
 
-const validationFailure = (path: string, code: string): ManagementError => ({
-  kind: "validation",
+const validationFailure = (
+  path: string,
+  code: string,
+): CandidateOperationError => ({
+  kind: "candidate-validation",
   fields: { [draftFieldKey(path)]: code },
 });
 
 const candidateValidation = (
   draft: CandidateDraft,
-): Result<CandidateDraft, ManagementError> => {
+): Result<CandidateDraft, CandidateOperationError> => {
   if (!hasProductName(draft))
     return {
       ok: false,
-      error: { kind: "validation", fields: { "product.name": "required" } },
+      error: {
+        kind: "candidate-validation",
+        fields: { "product.name": "required" },
+      },
     };
   const content = validateCandidatePartContent({
     ...draft,
@@ -198,16 +174,22 @@ export const createCandidateManagementService = (
       Pick<CandidatePart, "sources" | "primarySourceId">,
       ChangeError
     >,
-  ): Promise<Result<CandidatePart, ManagementError | ChangeError>> => {
+  ): Promise<Result<CandidatePart, CandidateOperationError | ChangeError>> => {
     if (sourceData === undefined)
-      return { ok: false, error: { kind: "unsupported-data" } };
+      return { ok: false, error: { code: "storage-unavailable" } };
     const existing = await sourceData.query((snapshot) =>
       snapshot.candidateParts.find((candidate) => candidate.id === candidateId),
     );
-    if (!existing.ok)
-      return { ok: false, error: managementError(existing.error.code) };
+    if (!existing.ok) return existing;
     if (existing.value === undefined)
-      return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+      return {
+        ok: false,
+        error: {
+          code: "validation",
+          reason: "entity-not-found",
+          message: "candidate",
+        },
+      };
     const candidate = existing.value;
     const changed = change(candidate);
     if (!changed.ok) return changed;
@@ -232,7 +214,7 @@ export const createCandidateManagementService = (
       ? { ok: true, value: updated }
       : {
           ok: false,
-          error: managementError(mutation.error.code, "candidate"),
+          error: mutation.error,
         };
   };
 
@@ -269,10 +251,10 @@ export const createCandidateManagementService = (
       };
     });
 
-  const ruleFailure = (kind: string): ManagementError =>
+  const ruleFailure = (kind: string): CandidateOperationError =>
     kind === "source-not-found"
-      ? { kind: "not-found", entity: "source" }
-      : { kind: "validation", fields: { sources: kind } };
+      ? { code: "validation", reason: "entity-not-found", message: "source" }
+      : { kind: "candidate-validation", fields: { sources: kind } };
 
   const sourceStateOf = (candidate: CandidatePart): CandidateSourceState =>
     candidate.sources.length === 0
@@ -291,13 +273,13 @@ export const createCandidateManagementService = (
     candidate: CandidatePart,
     kind: "create" | "update",
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>> => {
+  ): Promise<Result<CandidatePart, CandidateOperationError>> => {
     const mutation = await dependencies.data.mutate(
       commandFor({ kind, entity: "candidatePart", value: candidate }, context),
     );
     return mutation.ok
       ? { ok: true, value: candidate }
-      : { ok: false, error: managementError(mutation.error.code, "candidate") };
+      : { ok: false, error: mutation.error };
   };
 
   return {
@@ -309,7 +291,7 @@ export const createCandidateManagementService = (
         return {
           ok: false,
           error: {
-            kind: "validation",
+            kind: "candidate-validation",
             fields: { "source.pageUrl": "invalid-url" },
           },
         };
@@ -318,7 +300,7 @@ export const createCandidateManagementService = (
         return {
           ok: false,
           error: {
-            kind: "validation",
+            kind: "candidate-validation",
             fields: { "source.pageUrl": "invalid-url" },
           },
         };
@@ -416,7 +398,7 @@ export const createCandidateManagementService = (
           ? { ok: true, value: candidate }
           : {
               ok: false,
-              error: managementError(mutation.error.code, "candidate"),
+              error: mutation.error,
             };
       }
       return mutateCandidate(candidate, "create", context);
@@ -430,10 +412,16 @@ export const createCandidateManagementService = (
       const existing = await dependencies.data.query((root) =>
         root.candidateParts.find((candidate) => candidate.id === input.id),
       );
-      if (!existing.ok)
-        return { ok: false, error: managementError(existing.error.code) };
+      if (!existing.ok) return existing;
       if (existing.value === undefined)
-        return { ok: false, error: { kind: "not-found", entity: "candidate" } };
+        return {
+          ok: false,
+          error: {
+            code: "validation",
+            reason: "entity-not-found",
+            message: "candidate",
+          },
+        };
       /**
        * A category change must not drop the shared fields, but it must not
        * discard edits confirmed in the same submission either: the draft is the
@@ -489,7 +477,7 @@ export const createCandidateManagementService = (
         ? { ok: true, value: undefined }
         : {
             ok: false,
-            error: managementError(mutation.error.code, "candidate"),
+            error: mutation.error,
           };
     },
     async listProjects() {
@@ -500,9 +488,7 @@ export const createCandidateManagementService = (
           updatedAt,
         })),
       );
-      return result.ok
-        ? result
-        : { ok: false as const, error: managementError(result.error.code) };
+      return result.ok ? result : result;
     },
     async listCandidates(input) {
       const data = sourceData ?? dependencies.data;
@@ -516,18 +502,22 @@ export const createCandidateManagementService = (
           )
           .map(candidateSummary),
       );
-      return result.ok
-        ? result
-        : { ok: false as const, error: managementError(result.error.code) };
+      return result.ok ? result : result;
     },
     async getCandidateDraft(id) {
       const result = await dependencies.data.query((root) =>
         root.candidateParts.find((candidate) => candidate.id === id),
       );
-      if (!result.ok)
-        return { ok: false, error: managementError(result.error.code) };
+      if (!result.ok) return result;
       return result.value === undefined
-        ? { ok: false, error: { kind: "not-found", entity: "candidate" } }
+        ? {
+            ok: false,
+            error: {
+              code: "validation",
+              reason: "entity-not-found",
+              message: "candidate",
+            },
+          }
         : { ok: true, value: draftFromCandidate(result.value) };
     },
     async listBuildEligible(projectId) {
@@ -538,9 +528,7 @@ export const createCandidateManagementService = (
             candidate.category !== "uncategorized",
         ),
       );
-      return result.ok
-        ? result
-        : { ok: false as const, error: managementError(result.error.code) };
+      return result.ok ? result : result;
     },
   };
 };

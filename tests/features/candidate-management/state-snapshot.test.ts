@@ -85,7 +85,11 @@ const query: CandidateQuery = {
   async getCandidateDraft() {
     return {
       ok: false as const,
-      error: { kind: "not-found" as const, entity: "candidate" as const },
+      error: {
+        code: "validation" as const,
+        reason: "entity-not-found" as const,
+        message: "candidate",
+      },
     };
   },
 };

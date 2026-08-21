@@ -18,8 +18,8 @@ import type {
   CandidateDraft,
   CandidateManagementQuery,
   CandidateManagementService,
+  CandidateOperationError,
   CandidateSummary,
-  ManagementError,
   MutationContext,
   UpdateCandidateInput,
 } from "../../../src/features/candidate-management/contracts.js";
@@ -99,7 +99,7 @@ const query = (draftReads: CandidatePartId[]): CandidateManagementQuery => ({
 });
 
 const renderView = async (options?: {
-  readonly saveFailure?: ManagementError;
+  readonly saveFailure?: CandidateOperationError;
   readonly operationPolicy?: OperationPolicy;
   readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }): Promise<Harness> => {
@@ -357,7 +357,7 @@ test("カテゴリ変更後は新カテゴリの属性を編集でき共通項�
 test("項目検証の失敗は該当欄へ対応付けられ入力内容と一覧を保持する", async () => {
   const harness = await renderView({
     saveFailure: {
-      kind: "validation",
+      kind: "candidate-validation",
       fields: { "sources[0].pageUrl": "invalid-url" },
     },
   });
@@ -387,13 +387,13 @@ test("項目検証の失敗は該当欄へ対応付けられ入力内容と一�
 });
 
 test("破損・非対応、容量不足、利用不能を利用者が区別できる表示へ分ける", async () => {
-  const messages = new Map<ManagementError["kind"], string>();
+  const messages = new Map<string, string>();
   for (const failure of [
-    { kind: "unsupported-data" },
-    { kind: "quota" },
-    { kind: "storage" },
-    { kind: "maintenance" },
-    { kind: "conflict" },
+    { code: "unsupported-version" },
+    { code: "quota-exceeded" },
+    { code: "storage-unavailable" },
+    { code: "maintenance-active" },
+    { code: "revision-conflict" },
   ] as const) {
     const state = createManagementState({
       query: {
@@ -411,10 +411,13 @@ test("破損・非対応、容量不足、利用不能を利用者が区別で�
     const root = createRoot(container);
     await act(() => root.render(<ManagementView state={state} />));
     const alert = container.querySelector("[role='alert']");
-    assert.ok(alert, `${failure.kind} の案内が表示されません`);
-    messages.set(failure.kind, alert.textContent ?? "");
+    assert.ok(alert, `${failure.code} の案内が表示されません`);
+    messages.set(failure.code, alert.textContent ?? "");
     // Terminal read failures must also stop mutation entry points.
-    if (failure.kind !== "maintenance" && failure.kind !== "conflict") {
+    if (
+      failure.code !== "maintenance-active" &&
+      failure.code !== "revision-conflict"
+    ) {
       const create = container.querySelector(
         "[data-create-candidate]",
       ) as HTMLButtonElement | null;
@@ -427,15 +430,15 @@ test("破損・非対応、容量不足、利用不能を利用者が区別で�
 
   assert.equal(new Set(messages.values()).size, messages.size);
   assert.match(
-    messages.get("unsupported-data") ?? "",
+    messages.get("unsupported-version") ?? "",
     new RegExp(defaultMessageResolver("candidate.errors.unsupportedData")),
   );
   assert.match(
-    messages.get("quota") ?? "",
+    messages.get("quota-exceeded") ?? "",
     new RegExp(defaultMessageResolver("persistenceError.quota")),
   );
   assert.match(
-    messages.get("storage") ?? "",
+    messages.get("storage-unavailable") ?? "",
     new RegExp(defaultMessageResolver("candidate.errors.storage")),
   );
 });

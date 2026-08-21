@@ -5,6 +5,7 @@ import type {
   TargetTabId,
 } from "../../../src/application-shell/public.js";
 import {
+  type AppDataError,
   type CandidatePartId,
   type CandidateSource,
   type CandidateSourceId,
@@ -19,7 +20,6 @@ import type {
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSourceReference,
-  ManagementError,
   PatchCandidateSourcePriceInput,
 } from "../../../src/features/candidate-management/public.js";
 import type {
@@ -134,7 +134,7 @@ interface StoredCandidate {
 }
 
 interface FakeStoreOptions {
-  readonly mutationFailure?: ManagementError;
+  readonly mutationFailure?: AppDataError;
   /**
    * Makes `patchSourcePrice` violate its `Result` contract by throwing, after the
    * call has been recorded. Lets a test observe both the containment and the
@@ -188,33 +188,41 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
   const catalog: CandidateSourceCatalogPort = {
     async listSourceReferences(
       input,
-    ): Promise<Result<readonly CandidateSourceReference[], ManagementError>> {
+    ): Promise<Result<readonly CandidateSourceReference[], AppDataError>> {
       if (input.candidateId !== undefined && input.candidateId !== candidate.id)
         return ok([]);
       return ok(candidate.sources.map(reference));
     },
     async getSourceReference(
       input,
-    ): Promise<Result<CandidateSourceReference, ManagementError>> {
+    ): Promise<Result<CandidateSourceReference, AppDataError>> {
       if (input.candidateId !== candidate.id)
-        return err({ kind: "not-found", entity: "candidate" });
+        return err({
+          code: "validation",
+          reason: "entity-not-found",
+          message: "candidate",
+        });
       const source = candidate.sources.find(
         (item) => item.id === input.sourceId,
       );
       return source === undefined
-        ? err({ kind: "not-found", entity: "source" })
+        ? err({
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "source",
+          })
         : ok(reference(source));
     },
   };
 
-  const unsupported = async (): Promise<Result<void, ManagementError>> =>
-    err({ kind: "unsupported-data" });
+  const unsupported = async (): Promise<Result<void, AppDataError>> =>
+    err({ code: "unsupported-version" });
 
   const mutations: CandidateSourceMutationPort = {
     addSource: unsupported,
     removeSource: unsupported,
     setPrimarySource: unsupported,
-    async patchSourcePrice(input): Promise<Result<void, ManagementError>> {
+    async patchSourcePrice(input): Promise<Result<void, AppDataError>> {
       updateInputs.push(input);
       if (options.mutationThrows === true)
         throw new Error("mutation port contract violated");
@@ -223,7 +231,12 @@ const createFakeStore = (options: FakeStoreOptions = {}): FakeStore => {
       const index = candidate.sources.findIndex(
         (item) => item.id === input.sourceId,
       );
-      if (index < 0) return err({ kind: "not-found", entity: "source" });
+      if (index < 0)
+        return err({
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "source",
+        });
       candidate.sources = candidate.sources.map((current, currentIndex) =>
         currentIndex === index
           ? { ...current, price: input.price, capturedAt: input.capturedAt }
@@ -478,7 +491,9 @@ test("価格を取得できない観測は永続化せず price-unavailable に�
 });
 
 test("照合と更新の失敗をtyped failureのまま伝え保存状態を変えない", async () => {
-  const harness = createHarness({ mutationFailure: { kind: "maintenance" } });
+  const harness = createHarness({
+    mutationFailure: { code: "maintenance-active" },
+  });
   const before = harness.store.snapshot();
   const settled = harness.runRefresh({
     activationId: activationOf("a"),
@@ -531,7 +546,9 @@ test("上流portが型付き失敗を返す全経路でrejectせずResultとし�
     );
   });
 
-  const storageFailure = createHarness({ mutationFailure: { kind: "quota" } });
+  const storageFailure = createHarness({
+    mutationFailure: { code: "quota-exceeded" },
+  });
   const storageSettled = storageFailure.runRefresh({
     activationId: activationOf("a"),
     tabId: targetTab,

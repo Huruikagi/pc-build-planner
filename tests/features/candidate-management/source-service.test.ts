@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
+  AppDataError,
   CandidatePartId,
   CandidateSourceId,
   LocalDataRoot,
@@ -23,7 +24,7 @@ const context = {
   expectedRevision: 1,
 };
 
-const harness = (failure?: string) => {
+const harness = (failure?: AppDataError["code"]) => {
   let root = sourceRoot();
   const commands: RootMutationCommand[] = [];
   const data = {
@@ -153,7 +154,10 @@ test("初期source付き候補の保存失敗は部分的な候補を残さな�
     },
     context,
   );
-  assert.deepEqual(result, { ok: false, error: { kind: "storage" } });
+  assert.deepEqual(result, {
+    ok: false,
+    error: { code: "storage-unavailable" },
+  });
   assert.deepEqual(h.root().candidateParts, before);
 });
 
@@ -212,10 +216,10 @@ test("明示kindを上書きせずprimary価格だけをsummaryへ投影する",
 });
 
 for (const [code, expected] of [
-  ["revision-conflict", "conflict"],
-  ["maintenance-active", "maintenance"],
-  ["quota-exceeded", "quota"],
-  ["storage-unavailable", "storage"],
+  ["revision-conflict", "revision-conflict"],
+  ["maintenance-active", "maintenance-active"],
+  ["quota-exceeded", "quota-exceeded"],
+  ["storage-unavailable", "storage-unavailable"],
 ] as const) {
   test(`${code}では保存済みsourceを変更しない`, async () => {
     const h = harness(code);
@@ -231,7 +235,14 @@ for (const [code, expected] of [
       },
       context,
     );
-    assert.equal(result.ok ? "ok" : result.error.kind, expected);
+    assert.equal(
+      result.ok
+        ? "ok"
+        : "kind" in result.error
+          ? result.error.kind
+          : result.error.code,
+      expected,
+    );
     assert.deepEqual(h.root().candidateParts[0], before);
   });
 }
@@ -419,7 +430,7 @@ test("条件付き価格patchのrevision競合は既存conflictとして返す",
     },
     context,
   );
-  assert.deepEqual(result, { ok: false, error: { kind: "conflict" } });
+  assert.deepEqual(result, { ok: false, error: { code: "revision-conflict" } });
 });
 
 test("schema 2 validation失敗はmutationせず旧候補を維持する", async () => {
@@ -439,7 +450,14 @@ test("schema 2 validation失敗はmutationせず旧候補を維持する", async
     },
     context,
   );
-  assert.equal(result.ok ? "ok" : result.error.kind, "validation");
+  assert.equal(
+    result.ok
+      ? "ok"
+      : "kind" in result.error
+        ? result.error.kind
+        : result.error.code,
+    "candidate-validation",
+  );
   assert.equal(h.commands.length, 0);
   assert.deepEqual(h.root().candidateParts[0], before);
 });

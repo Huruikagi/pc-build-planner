@@ -1,4 +1,5 @@
 import type {
+  AppDataError,
   CandidatePart,
   LocalDataRoot,
   Result,
@@ -7,20 +8,16 @@ import type {
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
 import type { MutationContext } from "./contracts.js";
 
-export interface CandidateSourceDataError {
-  readonly code: string;
-}
-
 /** Canonical candidate source seam over the production foundation. */
 export interface CandidateSourceDataPort {
   query<T>(
     project: (snapshot: LocalDataRoot) => T,
-  ): Promise<Result<T, CandidateSourceDataError>>;
+  ): Promise<Result<T, AppDataError>>;
   mutateCandidate(
     candidate: CandidatePart,
     context: MutationContext,
     kind: "create" | "update",
-  ): Promise<Result<void, CandidateSourceDataError>>;
+  ): Promise<Result<void, AppDataError>>;
 }
 
 /** Adapts the canonical scoped foundation port without exposing storage internals. */

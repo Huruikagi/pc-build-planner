@@ -93,7 +93,11 @@ const createState = (
       async getCandidateDraft() {
         return {
           ok: false as const,
-          error: { kind: "not-found" as const, entity: "candidate" as const },
+          error: {
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "candidate",
+          },
         };
       },
     } satisfies CandidateQuery,
@@ -107,6 +111,11 @@ const createRegistration = (state: ReturnType<typeof createState>) =>
   createCandidateFeatureRegistration({
     data: {} as FoundationDataPort,
     query: {} as CandidateQuery,
+    create: {
+      async createCandidate() {
+        throw new Error("not used by activation tests");
+      },
+    },
     state,
   });
 

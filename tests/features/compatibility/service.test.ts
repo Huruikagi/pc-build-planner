@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CandidateSourceId,
@@ -12,10 +13,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ManagementError,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import { createCompatibilityService } from "../../../src/features/compatibility/service.js";
 import type {
   BuildError,
@@ -153,7 +151,7 @@ const buildQueryReturning = (
 };
 
 const candidateQueryReturning = (
-  result: Result<readonly CandidatePart[], ManagementError>,
+  result: Result<readonly CandidatePart[], AppDataError>,
 ): CandidateQuery & { calls: number } => {
   const query = {
     calls: 0,
@@ -191,7 +189,7 @@ const dynamicBuildQuery = (
 });
 
 const dynamicCandidateQuery = (
-  read: () => Result<readonly CandidatePart[], ManagementError>,
+  read: () => Result<readonly CandidatePart[], AppDataError>,
 ): CandidateQuery => ({
   async listProjects(): Promise<never> {
     throw new Error("not used by service tests");
@@ -326,7 +324,7 @@ test("候補読取が非対応データならunsupported-dataへ写像する", a
     }),
     candidateQuery: candidateQueryReturning({
       ok: false,
-      error: { kind: "unsupported-data" },
+      error: { code: "unsupported-version" },
     }),
   });
 
@@ -346,7 +344,7 @@ test("候補読取のその他失敗はread-failedへ写像する", async () => 
     }),
     candidateQuery: candidateQueryReturning({
       ok: false,
-      error: { kind: "storage" },
+      error: { code: "storage-unavailable" },
     }),
   });
 

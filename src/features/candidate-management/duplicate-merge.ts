@@ -7,8 +7,8 @@ import type { SourcePriceRefreshReceipt } from "../source-price-refresh/public.j
 import type {
   CandidateDraft,
   CandidateManagementService,
+  CandidateOperationError,
   CandidateQuery,
-  ManagementError,
   MutationContext,
 } from "./contracts.js";
 import type {
@@ -42,7 +42,7 @@ export type DuplicateCommitReceipt =
 type SavedNewReceipt = Extract<DuplicateCommitReceipt, { kind: "saved-new" }>;
 
 export type DuplicateMergeError =
-  | { readonly kind: "management"; readonly cause: ManagementError }
+  | { readonly kind: "management"; readonly cause: CandidateOperationError }
   | { readonly kind: "source-route"; readonly cause: DuplicateUrlRouteError }
   | { readonly kind: "stale-decision" };
 
@@ -66,7 +66,7 @@ export interface DuplicateMergeCoordinatorDependencies {
   readonly createCandidate: CandidateManagementService["createCandidate"];
 }
 
-const managementFailure = (cause: ManagementError) => ({
+const managementFailure = (cause: CandidateOperationError) => ({
   ok: false as const,
   error: { kind: "management" as const, cause },
 });
@@ -96,7 +96,7 @@ export const createDuplicateMergeCoordinator = (
     if (
       listed.value.some((candidate) => candidate.projectId !== draft.projectId)
     )
-      return managementFailure({ kind: "unsupported-data" });
+      return managementFailure({ code: "corrupt-data" });
 
     const matches = dependencies.matcher.match(draft, listed.value);
     if (matches.length > 0)
@@ -120,7 +120,7 @@ export const createDuplicateMergeCoordinator = (
     if (
       listed.value.some((candidate) => candidate.projectId !== draft.projectId)
     )
-      return managementFailure({ kind: "unsupported-data" });
+      return managementFailure({ code: "corrupt-data" });
     const currentMatches = dependencies.matcher.match(draft, listed.value);
     if (
       !currentMatches.some(
@@ -138,7 +138,7 @@ export const createDuplicateMergeCoordinator = (
           cause: {
             kind: "source-add",
             cause: {
-              kind: "validation",
+              kind: "candidate-validation",
               fields: { source: "invalid-source" },
             },
           },

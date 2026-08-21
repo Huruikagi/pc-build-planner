@@ -20,7 +20,7 @@ const projectId = "10000000-0000-4000-8000-000000000001" as Uuid as ProjectId;
 const characterization = [
   [
     { code: "validation", reason: "entity-not-found", message: "candidate" },
-    "validation",
+    "not-found",
   ],
   [{ code: "corrupt-data", message: "corrupt" }, "unsupported-data"],
   [{ code: "unsupported-version", message: "future" }, "unsupported-data"],

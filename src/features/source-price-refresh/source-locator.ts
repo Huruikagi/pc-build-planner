@@ -1,8 +1,12 @@
-import { err, ok, type Result } from "../../domain/public.js";
+import {
+  type AppDataError,
+  err,
+  ok,
+  type Result,
+} from "../../domain/public.js";
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceReference,
-  ManagementError,
 } from "../candidate-management/public.js";
 import type {
   MatchedCandidateSource,
@@ -10,6 +14,7 @@ import type {
   NormalizedSourcePageUrl,
   SourcePriceRefreshError,
 } from "./contracts.js";
+import { sourcePriceRefreshDataError } from "./data-error.js";
 import { normalizeSourcePageUrl } from "./url-identity.js";
 
 export interface StoredSourceLocatorDependencies {
@@ -35,8 +40,10 @@ const ineligibleSource: SourcePriceRefreshError = { kind: "ineligible-source" };
  * source for this read-only use case, so it stays a `no-match` instead of
  * leaking an upstream entity error. Every other management error is preserved.
  */
-const readError = (error: ManagementError): SourcePriceRefreshError =>
-  error.kind === "not-found" ? noMatch : error;
+const readError = (error: AppDataError): SourcePriceRefreshError =>
+  error.code === "validation" && error.reason === "entity-not-found"
+    ? noMatch
+    : sourcePriceRefreshDataError(error);
 
 /** Only an explicit retail source may have its captured price refreshed. */
 const isRetail = (reference: CandidateSourceReference): boolean =>

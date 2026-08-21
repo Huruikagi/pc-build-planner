@@ -121,6 +121,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const registration = createCandidateFeatureRegistration({
     data,
     query: service,
+    create: service,
     state,
   });
   const container = document.createElement("div");
@@ -203,6 +204,7 @@ test("架空Foundation・shell・UIを通じて候補管理の作成、分類補
   const reopenedHandle = await createCandidateFeatureRegistration({
     data,
     query: service,
+    create: service,
     state: reopenedState,
   }).mount({
     container: reopenedContainer,

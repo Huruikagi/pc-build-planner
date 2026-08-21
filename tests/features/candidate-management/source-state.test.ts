@@ -70,7 +70,7 @@ const query: CandidateQuery = {
 };
 const service = {
   async updateCandidate() {
-    return { ok: false, error: { kind: "storage" } };
+    return { ok: false, error: { code: "storage-unavailable" } };
   },
 } as unknown as CandidateManagementService;
 

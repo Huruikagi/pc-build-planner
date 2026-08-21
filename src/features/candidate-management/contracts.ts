@@ -155,56 +155,40 @@ export interface CandidateSummary {
   readonly updatedAt: CandidatePart["updatedAt"];
 }
 
-/** Errors are normalized by the feature so consumers can choose a recovery action. */
-export type ManagementError =
-  | {
-      readonly kind: "validation";
-      readonly fields: Readonly<Record<string, string>>;
-    }
-  | {
-      readonly kind: "not-found";
-      readonly entity: "project" | "candidate" | "source";
-    }
-  | { readonly kind: "conflict" }
-  | { readonly kind: "maintenance" }
-  | { readonly kind: "storage" }
-  | { readonly kind: "quota" }
-  | { readonly kind: "unsupported-data" };
-
 /** The selected source no longer has the identity observed by the caller. */
 export type CandidateSourceMutationError =
-  | ManagementError
+  | CandidateOperationError
   | { readonly kind: "precondition-failed" };
 
 export interface CandidateManagementService {
   createCandidate(
     input: CandidateDraft,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
   updateCandidate(
     input: UpdateCandidateInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
   deleteCandidate(
     id: CandidatePartId,
     context: MutationContext,
-  ): Promise<Result<void, ManagementError>>;
+  ): Promise<Result<void, CandidateOperationError>>;
 }
 
 interface CandidateQueryBase {
-  listProjects(): Promise<Result<readonly ProjectSummary[], ManagementError>>;
+  listProjects(): Promise<Result<readonly ProjectSummary[], AppDataError>>;
   listCandidates(
     input: CandidateListQuery,
-  ): Promise<Result<readonly CandidateSummary[], ManagementError>>;
+  ): Promise<Result<readonly CandidateSummary[], AppDataError>>;
   listBuildEligible(
     projectId: ProjectId,
-  ): Promise<Result<readonly CandidatePart[], ManagementError>>;
+  ): Promise<Result<readonly CandidatePart[], AppDataError>>;
 }
 
 export interface CandidateQuery extends CandidateQueryBase {
   getCandidateDraft(
     id: CandidatePartId,
-  ): Promise<Result<CandidateDraft, ManagementError>>;
+  ): Promise<Result<CandidateDraft, AppDataError>>;
 }
 
 export interface CandidateManagementQuery extends CandidateQueryBase {
@@ -215,7 +199,7 @@ export interface CandidateManagementQuery extends CandidateQueryBase {
    */
   getCandidateDraft(
     id: CandidatePartId,
-  ): Promise<Result<CandidateDraft, ManagementError>>;
+  ): Promise<Result<CandidateDraft, AppDataError>>;
 }
 
 export interface CandidateSourceReference {
@@ -229,11 +213,11 @@ export interface CandidateSourceReference {
 export interface CandidateSourceCatalogPort {
   listSourceReferences(input: {
     readonly candidateId?: CandidatePartId;
-  }): Promise<Result<readonly CandidateSourceReference[], ManagementError>>;
+  }): Promise<Result<readonly CandidateSourceReference[], AppDataError>>;
   getSourceReference(input: {
     readonly candidateId: CandidatePartId;
     readonly sourceId: CandidateSourceId;
-  }): Promise<Result<CandidateSourceReference, ManagementError>>;
+  }): Promise<Result<CandidateSourceReference, AppDataError>>;
 }
 
 export interface AddCandidateSourceInput {
@@ -270,19 +254,19 @@ export interface SetPrimarySourceInput {
 export interface CandidateSourceMutationPort {
   addSource(
     input: AddCandidateSourceInput,
-  ): Promise<Result<void, ManagementError>>;
+  ): Promise<Result<void, CandidateOperationError>>;
   updateSource(
     input: UpdateCandidateSourceInput,
-  ): Promise<Result<void, ManagementError>>;
+  ): Promise<Result<void, CandidateOperationError>>;
   patchSourcePrice(
     input: PatchCandidateSourcePriceInput,
   ): Promise<Result<void, CandidateSourceMutationError>>;
   removeSource(
     input: RemoveCandidateSourceInput,
-  ): Promise<Result<void, ManagementError>>;
+  ): Promise<Result<void, CandidateOperationError>>;
   setPrimarySource(
     input: SetPrimarySourceInput,
-  ): Promise<Result<void, ManagementError>>;
+  ): Promise<Result<void, CandidateOperationError>>;
 }
 
 /** Feature-internal mutation contract; public facade supplies the context. */
@@ -290,11 +274,11 @@ export interface CandidateSourceService {
   addSource(
     input: AddCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
   updateSource(
     input: UpdateCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
   patchSourcePrice(
     input: PatchCandidateSourcePriceInput,
     context: MutationContext,
@@ -302,9 +286,9 @@ export interface CandidateSourceService {
   removeSource(
     input: RemoveCandidateSourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
   setPrimarySource(
     input: SetPrimarySourceInput,
     context: MutationContext,
-  ): Promise<Result<CandidatePart, ManagementError>>;
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
 }

@@ -165,7 +165,7 @@ const recoverableByKind: Record<SourcePriceRefreshError["kind"], boolean> = {
 const errorSamples: readonly SourcePriceRefreshError[] = [
   { kind: "no-match" },
   { kind: "ambiguous-match" },
-  { kind: "validation", fields: {} },
+  { kind: "validation" },
   { kind: "unsupported-data" },
   { kind: "unexpected" },
   { kind: "invalid-url" },

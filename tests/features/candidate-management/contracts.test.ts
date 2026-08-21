@@ -3,10 +3,10 @@ import test from "node:test";
 import type {
   CandidateDraft,
   CandidateEditorPrefill,
+  CandidateOperationError,
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
   CandidateSummary,
-  ManagementError,
 } from "../../../src/features/candidate-management/public.js";
 import {
   type CandidateManagementPublicDependencies,
@@ -22,7 +22,11 @@ const sources = {
     async getSourceReference() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "source" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "source",
+        },
       };
     },
   } satisfies CandidateSourceCatalogPort,
@@ -58,14 +62,25 @@ const query = {
   async getCandidateDraft() {
     return {
       ok: false as const,
-      error: { kind: "not-found" as const, entity: "candidate" as const },
+      error: {
+        code: "validation" as const,
+        reason: "entity-not-found" as const,
+        message: "candidate",
+      },
     };
   },
 } satisfies CandidateQuery;
 
+const create = {
+  async createCandidate() {
+    throw new Error("not used by contract shape tests");
+  },
+};
+
 test("公開入口はcanonical query・intent・sources facetを公開する", () => {
   const api = createCandidateManagementPublicApi({
     query,
+    create,
     sources,
   });
 
@@ -79,6 +94,7 @@ test("公開入口はcanonical query・intent・sources facetを公開する", (
 test("公開入口はtyped editor intentを生成する", () => {
   const api = createCandidateManagementPublicApi({
     query,
+    create,
     sources,
   });
   const prefill = {
@@ -108,7 +124,7 @@ test("公開入口は照会とsources契約がなければ組み立てを拒否�
       createCandidateManagementPublicApi({
         query: {} as CandidateQuery,
       } as CandidateManagementPublicDependencies),
-    /query and sources/,
+    /query, create, and sources/,
   );
 });
 
@@ -130,12 +146,18 @@ test("複数sourceのdraft・summary・公開portを型付きで表現する", (
   } as CandidateSummary;
   const catalog = {} as CandidateSourceCatalogPort;
   const mutations = {} as CandidateSourceMutationPort;
-  const missing: ManagementError = { kind: "not-found", entity: "source" };
+  const missing: CandidateOperationError = {
+    code: "validation",
+    reason: "entity-not-found",
+    message: "source",
+  };
 
   assert.deepEqual(draft.sources, []);
   assert.equal(summary.primarySource, undefined);
   assert.equal(summary.price, undefined);
   assert.equal(typeof catalog, "object");
   assert.equal(typeof mutations, "object");
-  assert.equal(missing.entity, "source");
+  assert.equal(missing.code, "validation");
+  if (missing.code === "validation")
+    assert.equal(missing.reason, "entity-not-found");
 });

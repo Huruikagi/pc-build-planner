@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import { cleanup, render } from "@testing-library/react";
 import { act } from "react";
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CurrentBuild,
@@ -13,10 +14,7 @@ import type {
   UtcTimestamp,
   Uuid,
 } from "../../../src/domain/public.js";
-import type {
-  CandidateQuery,
-  ManagementError,
-} from "../../../src/features/candidate-management/public.js";
+import type { CandidateQuery } from "../../../src/features/candidate-management/public.js";
 import type { CompatibilityQuery } from "../../../src/features/compatibility/contracts.js";
 import { createCompatibilityFeatureRegistration } from "../../../src/features/compatibility/registration.js";
 import { createCompatibilityService } from "../../../src/features/compatibility/service.js";
@@ -129,7 +127,7 @@ const buildQueryReturning = (
 });
 
 const candidateQueryReturning = (
-  result: Result<readonly CandidatePart[], ManagementError>,
+  result: Result<readonly CandidatePart[], AppDataError>,
 ): CandidateQuery => ({
   async listProjects(): Promise<never> {
     throw new Error("not used by acceptance tests");
@@ -244,7 +242,7 @@ test("構成なし・不正参照・読取失敗のいずれも誤った互換�
     }),
     candidateQuery: candidateQueryReturning({
       ok: false,
-      error: { kind: "storage" },
+      error: { code: "storage-unavailable" },
     }),
   });
   const readFailedState = createCompatibilityState({
@@ -378,7 +376,7 @@ test("読取失敗・評価失敗時にパーツ名・URL・属性値をログ�
       }),
       candidateQuery: candidateQueryReturning({
         ok: false,
-        error: { kind: "storage" },
+        error: { code: "storage-unavailable" },
       }),
     });
     await evaluateCurrentProject(

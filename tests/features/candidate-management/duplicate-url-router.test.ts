@@ -276,7 +276,7 @@ test("refresh and source-add failures are returned without a second write path",
   });
   assert.equal(addCalls, 0);
 
-  const managementError = { kind: "quota" } as const;
+  const operationError = { code: "quota-exceeded" } as const;
   let refreshCalls = 0;
   const addRouter = createDuplicateUrlRouter({
     refresh: {
@@ -290,13 +290,13 @@ test("refresh and source-add failures are returned without a second write path",
     },
     sourceMutations: sourceMutations(async () => ({
       ok: false,
-      error: managementError,
+      error: operationError,
     })),
   });
 
   assert.deepEqual(await addRouter.route(candidateId, input), {
     ok: false,
-    error: { kind: "source-add", cause: managementError },
+    error: { kind: "source-add", cause: operationError },
   });
   assert.equal(refreshCalls, 0);
 });

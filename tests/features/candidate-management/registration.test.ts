@@ -21,6 +21,7 @@ import type {
 } from "../../../src/features/candidate-management/contracts.js";
 import type { DuplicateMergeCoordinator } from "../../../src/features/candidate-management/duplicate-merge.js";
 import { createProjectContextAdapter } from "../../../src/features/candidate-management/project-context-adapter.js";
+import type { CandidateFeatureRegistrationDependencies } from "../../../src/features/candidate-management/registration.js";
 import { createCandidateFeatureRegistration as createCandidateFeatureRegistrationImpl } from "../../../src/features/candidate-management/registration.js";
 import { createManagementState } from "../../../src/features/candidate-management/state.js";
 import type { FoundationScopedDataPort } from "../../../src/persistence/public.js";
@@ -28,8 +29,21 @@ import type { ProjectContextSnapshot } from "../../../src/project-context/public
 import { actWrappedRegistrationFactory } from "../../act-wrapped-registration.js";
 import { collectFeatureContractViolations } from "../../contracts/application-shell-contract-kit.js";
 
+const createCalls: Array<readonly [CandidateDraft, unknown]> = [];
+const createHandler = async () => {
+  throw new Error("create is not exercised by registration tests");
+};
 const createCandidateFeatureRegistration = actWrappedRegistrationFactory(
-  createCandidateFeatureRegistrationImpl,
+  (dependencies: Omit<CandidateFeatureRegistrationDependencies, "create">) =>
+    createCandidateFeatureRegistrationImpl({
+      ...dependencies,
+      create: {
+        async createCandidate(draft, context) {
+          createCalls.push([draft, context]);
+          return createHandler();
+        },
+      },
+    }),
 );
 
 test("候補管理registrationはshell契約へmount依存とoperation policyを注入する", async () => {
@@ -82,7 +96,7 @@ test("候補管理registrationはshell契約へmount依存とoperation policyを
   );
   assert.deepEqual(
     await registration.publicApi.sources.catalog.listSourceReferences({}),
-    { ok: false, error: { kind: "unsupported-data" } },
+    { ok: false, error: { code: "storage-unavailable" } },
   );
   const violations = await collectFeatureContractViolations(registration, {
     emitAvailability: () => {
@@ -206,7 +220,11 @@ test("React rootはopaque snapshotを復元し、captureとunmountを一度だ�
     async getCandidateDraft() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "candidate" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        },
       };
     },
   } satisfies CandidateQuery;
@@ -428,7 +446,11 @@ test("snapshotなしの再mountは前回の未保存draftと削除確認を持�
     async getCandidateDraft() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "candidate" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        },
       };
     },
   } satisfies CandidateQuery;
@@ -492,7 +514,11 @@ test("capture handoffのpending pre-editは同一panel sessionで保持し、新
     async getCandidateDraft() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "candidate" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        },
       };
     },
   } satisfies CandidateQuery;
@@ -651,7 +677,11 @@ test("mount中のactivation拒否だけをfeature診断へ安定コードで通�
     async getCandidateDraft() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "candidate" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        },
       };
     },
   } satisfies CandidateQuery;
@@ -722,7 +752,11 @@ test("mount した panel session だけが current context 回復で pending pre
     async getCandidateDraft() {
       return {
         ok: false as const,
-        error: { kind: "not-found" as const, entity: "candidate" as const },
+        error: {
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        },
       };
     },
   } satisfies CandidateQuery;

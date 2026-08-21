@@ -104,7 +104,11 @@ const createState = (
       async getCandidateDraft() {
         return {
           ok: false as const,
-          error: { kind: "not-found" as const, entity: "candidate" as const },
+          error: {
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "candidate",
+          },
         };
       },
     } satisfies CandidateQuery,
@@ -294,7 +298,10 @@ test("候補フォームは共通項目・カテゴリ属性・読み取り専�
 test("候補の無効入力と保存失敗では編集draftを画面に保持する", async () => {
   const service = {
     async createCandidate() {
-      return { ok: false as const, error: { kind: "storage" as const } };
+      return {
+        ok: false as const,
+        error: { code: "storage-unavailable" as const },
+      };
     },
   } as unknown as CandidateManagementService;
   const state = createState(service);
@@ -342,7 +349,10 @@ test("候補削除の取消は保存を行わず、失敗時は候補と確認�
   const service = {
     async deleteCandidate() {
       deleteCalls += 1;
-      return { ok: false as const, error: { kind: "storage" as const } };
+      return {
+        ok: false as const,
+        error: { code: "storage-unavailable" as const },
+      };
     },
   } as unknown as CandidateManagementService;
   const rendered = await renderView(service);

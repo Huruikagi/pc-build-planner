@@ -20,6 +20,7 @@ import { createSidePanelFeatureContributions } from "../../../src/application-sh
 import { createSidePanelHost } from "../../../src/application-shell/side-panel-host.js";
 import { createTransientSurfaceController } from "../../../src/application-shell/transient-surface-controller.js";
 import {
+  type AppDataError,
   type CandidatePartId,
   type CandidateSourceId,
   err,
@@ -30,7 +31,6 @@ import {
 import type {
   CandidateSourceCatalogPort,
   CandidateSourceMutationPort,
-  ManagementError,
 } from "../../../src/features/candidate-management/public.js";
 import type { PagePriceExtractionPort } from "../../../src/features/product-capture/public.js";
 import type {
@@ -612,20 +612,21 @@ test("常設面の選択で一過性面を終了する", async () => {
 });
 
 test("contribution factoryはnavigationを持たないUI registrationだけを公開する", () => {
-  const managementError: ManagementError = {
-    kind: "not-found",
-    entity: "candidate",
+  const dataError: AppDataError = {
+    code: "validation",
+    reason: "entity-not-found",
+    message: "candidate",
   };
   const catalog: CandidateSourceCatalogPort = {
-    listSourceReferences: async () => err(managementError),
-    getSourceReference: async () => err(managementError),
+    listSourceReferences: async () => err(dataError),
+    getSourceReference: async () => err(dataError),
   };
   const mutations: CandidateSourceMutationPort = {
-    addSource: async () => err(managementError),
-    updateSource: async () => err(managementError),
-    patchSourcePrice: async () => err(managementError),
-    removeSource: async () => err(managementError),
-    setPrimarySource: async () => err(managementError),
+    addSource: async () => err(dataError),
+    updateSource: async () => err(dataError),
+    patchSourcePrice: async () => err(dataError),
+    removeSource: async () => err(dataError),
+    setPrimarySource: async () => err(dataError),
   };
   const pagePriceExtraction: PagePriceExtractionPort = {
     extractPrice: async () => err({ kind: "tab-unavailable" }),

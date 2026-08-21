@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  type AppDataError,
   type CandidatePartId,
   type CandidateSource,
   type CandidateSourceId,
@@ -16,7 +17,6 @@ import type {
   CandidateSourceMutationError,
   CandidateSourceMutationPort,
   CandidateSourceReference,
-  ManagementError,
   PatchCandidateSourcePriceInput,
 } from "../../../src/features/candidate-management/public.js";
 import type {
@@ -56,7 +56,7 @@ interface StoredCandidate {
 }
 
 interface FakeCandidateStoreOptions {
-  readonly referenceFailure?: ManagementError;
+  readonly referenceFailure?: AppDataError;
   readonly mutationFailure?: CandidateSourceMutationError;
   /**
    * Models a catalog that answers with a different entity than the one asked
@@ -115,7 +115,7 @@ const createFakeCandidateStore = (
   const catalog: CandidateSourceCatalogPort = {
     async listSourceReferences(
       input,
-    ): Promise<Result<readonly CandidateSourceReference[], ManagementError>> {
+    ): Promise<Result<readonly CandidateSourceReference[], AppDataError>> {
       record("listSourceReferences");
       const scoped =
         input.candidateId === undefined
@@ -131,7 +131,7 @@ const createFakeCandidateStore = (
     },
     async getSourceReference(
       input,
-    ): Promise<Result<CandidateSourceReference, ManagementError>> {
+    ): Promise<Result<CandidateSourceReference, AppDataError>> {
       record("getSourceReference");
       if (options.referenceFailure !== undefined)
         return err(options.referenceFailure);
@@ -139,18 +139,26 @@ const createFakeCandidateStore = (
         return ok(options.referenceOverride);
       const candidate = find(input.candidateId);
       if (candidate === undefined)
-        return err({ kind: "not-found", entity: "candidate" });
+        return err({
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        });
       const source = candidate.sources.find(
         (item) => item.id === input.sourceId,
       );
       return source === undefined
-        ? err({ kind: "not-found", entity: "source" })
+        ? err({
+            code: "validation" as const,
+            reason: "entity-not-found" as const,
+            message: "source",
+          })
         : ok(reference(candidate, source));
     },
   };
 
-  const unsupported = async (): Promise<Result<void, ManagementError>> =>
-    err({ kind: "unsupported-data" });
+  const unsupported = async (): Promise<Result<void, AppDataError>> =>
+    err({ code: "unsupported-version" });
 
   const mutations: CandidateSourceMutationPort = {
     addSource: unsupported,
@@ -165,11 +173,20 @@ const createFakeCandidateStore = (
         return err(options.mutationFailure);
       const candidate = find(input.candidateId);
       if (candidate === undefined)
-        return err({ kind: "not-found", entity: "candidate" });
+        return err({
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "candidate",
+        });
       const index = candidate.sources.findIndex(
         (item) => item.id === input.sourceId,
       );
-      if (index < 0) return err({ kind: "not-found", entity: "source" });
+      if (index < 0)
+        return err({
+          code: "validation" as const,
+          reason: "entity-not-found" as const,
+          message: "source",
+        });
       const current = candidate.sources[index];
       if (
         current?.pageUrl !== input.expectedPageUrl ||
@@ -514,7 +531,11 @@ test("再読込が別の候補IDまたはsource IDを返した場合はmutation�
 
 test("再読込の not-found は no-match として提示する", async () => {
   const store = primaryTargetStore({
-    referenceFailure: { kind: "not-found", entity: "source" },
+    referenceFailure: {
+      code: "validation" as const,
+      reason: "entity-not-found" as const,
+      message: "source",
+    },
   });
   const before = store.snapshot();
 
@@ -574,44 +595,50 @@ test("追跡queryや末尾slashだけが異なるobserved URLは同一sourceと�
 });
 
 test("再読込のmanagement errorを安定mappingし保存状態を変更しない", async () => {
-  const failures: readonly ManagementError[] = [
-    { kind: "validation", fields: { "source.price": "invalid" } },
-    { kind: "conflict" },
-    { kind: "maintenance" },
-    { kind: "quota" },
-    { kind: "storage" },
-    { kind: "unsupported-data" },
-  ];
+  const failures = [
+    [
+      { code: "validation", message: "source.price invalid" },
+      { kind: "validation" },
+    ],
+    [{ code: "revision-conflict" }, { kind: "conflict" }],
+    [{ code: "maintenance-active" }, { kind: "maintenance" }],
+    [{ code: "quota-exceeded" }, { kind: "quota" }],
+    [{ code: "storage-unavailable" }, { kind: "storage" }],
+    [{ code: "unsupported-version" }, { kind: "unsupported-data" }],
+  ] as const;
 
-  for (const referenceFailure of failures) {
+  for (const [referenceFailure, outputFailure] of failures) {
     const store = primaryTargetStore({ referenceFailure });
     const before = store.snapshot();
 
     const result = await refresh(store);
 
-    assert.deepEqual(result, { ok: false, error: referenceFailure });
+    assert.deepEqual(result, { ok: false, error: outputFailure });
     assert.deepEqual(store.calls, ["getSourceReference"]);
     assert.equal(store.snapshot(), before);
   }
 });
 
 test("mutationのmanagement errorを安定mappingし部分更新を残さない", async () => {
-  const failures: readonly ManagementError[] = [
-    { kind: "validation", fields: { "source.price": "invalid" } },
-    { kind: "conflict" },
-    { kind: "maintenance" },
-    { kind: "quota" },
-    { kind: "storage" },
-    { kind: "unsupported-data" },
-  ];
+  const failures = [
+    [
+      { code: "validation", message: "source.price invalid" },
+      { kind: "validation" },
+    ],
+    [{ code: "revision-conflict" }, { kind: "conflict" }],
+    [{ code: "maintenance-active" }, { kind: "maintenance" }],
+    [{ code: "quota-exceeded" }, { kind: "quota" }],
+    [{ code: "storage-unavailable" }, { kind: "storage" }],
+    [{ code: "unsupported-version" }, { kind: "unsupported-data" }],
+  ] as const;
 
-  for (const mutationFailure of failures) {
+  for (const [mutationFailure, outputFailure] of failures) {
     const store = primaryTargetStore({ mutationFailure });
     const before = store.snapshot();
 
     const result = await refresh(store);
 
-    assert.deepEqual(result, { ok: false, error: mutationFailure });
+    assert.deepEqual(result, { ok: false, error: outputFailure });
     assert.equal(store.snapshot(), before);
     assert.deepEqual(store.representativePrice(candidateA), oldPrice);
   }
@@ -619,7 +646,11 @@ test("mutationのmanagement errorを安定mappingし部分更新を残さない"
 
 test("mutationの not-found は no-match として提示し保存状態を変更しない", async () => {
   const store = primaryTargetStore({
-    mutationFailure: { kind: "not-found", entity: "source" },
+    mutationFailure: {
+      code: "validation" as const,
+      reason: "entity-not-found" as const,
+      message: "source",
+    },
   });
   const before = store.snapshot();
 

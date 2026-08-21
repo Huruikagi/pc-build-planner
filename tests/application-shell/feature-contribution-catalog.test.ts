@@ -192,7 +192,7 @@ test("side panel contributionは合成contextから実featureを組み立てる"
   assert.deepEqual(Object.keys(productCapture).sort(), ["key", "registration"]);
   assert.deepEqual(
     Object.keys(candidateManagement.registration.publicApi).sort(),
-    ["createCandidateEditorIntent", "query", "sources"],
+    ["create", "createCandidateEditorIntent", "query", "sources"],
   );
   assert.deepEqual(
     Object.keys(candidateManagement.registration.publicApi.sources).sort(),
