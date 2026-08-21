@@ -56,6 +56,8 @@ export interface CandidateManagementContributionDependencies {
       "refresh"
     >;
     readonly guards?: import("../../project-context/public.js").ProjectContextChangeGuardRegistrationPort;
+    /** Host-neutral lifecycle UI assembled by the canonical project-context owner. */
+    readonly lifecyclePresentation?: import("../../project-context/public.js").ProjectLifecyclePresentationContribution;
   };
 }
 
@@ -220,6 +222,12 @@ export const createCandidateManagementContribution = (
     ...(projectContextAdapter === undefined
       ? {}
       : { lifecycle: projectContextAdapter }),
+    ...(dependencies.projectContext?.lifecyclePresentation === undefined
+      ? {}
+      : {
+          projectLifecyclePresentation:
+            dependencies.projectContext.lifecyclePresentation,
+        }),
   });
 
   return {

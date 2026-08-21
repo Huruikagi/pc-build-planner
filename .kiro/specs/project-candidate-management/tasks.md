@@ -329,7 +329,7 @@
   - _Depends: local-data-foundation 11.1, 11.3_
   - _Requirements: 1.8, 2.5, 4.5, 5.4, 6.2, 6.10_
   - _Boundary: CandidateManagementPublicApi, CandidateCreatePort, CandidateOperationError_
-- [ ] 13.2 project lifecycle presentationのhost seamを追加する
+- [x] 13.2 project lifecycle presentationのhost seamを追加する
   - 共通project lifecycle portとhost-neutral presentation contributionを既存project操作領域へ接続し、候補管理内でcommand、validation、削除確認、refresh、messageを再実装しない。
   - current project購読、候補draft guard、forced切替保護を既存adapterに残し、lifecycle成功snapshotだけから候補一覧とpending pre-editを更新する。
   - 完了時、共通presentationが既存領域でmount/unmountされ、dirty取消ではlifecycle mutationが始まらず、commit後refresh失敗では共通のrefresh-only回復だけが利用できる。

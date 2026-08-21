@@ -13,6 +13,7 @@ export interface ManagementReactRoot {
 export const mountManagementReactRoot = (
   container: HTMLElement,
   state: ManagementState,
+  projectLifecycleOwnedExternally = false,
 ): ManagementReactRoot => {
   const root: Root = createRoot(container);
   let unmounted = false;
@@ -20,7 +21,7 @@ export const mountManagementReactRoot = (
     createElement(
       LanguageProvider,
       null,
-      createElement(ManagementView, { state }),
+      createElement(ManagementView, { state, projectLifecycleOwnedExternally }),
     ),
   );
   return {

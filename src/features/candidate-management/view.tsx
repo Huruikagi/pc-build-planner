@@ -994,7 +994,13 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
 }
 
 /** Renders feature-owned state without moving domain state into React hooks. */
-export function ManagementView({ state }: { readonly state: ManagementState }) {
+export function ManagementView({
+  state,
+  projectLifecycleOwnedExternally = false,
+}: {
+  readonly state: ManagementState;
+  readonly projectLifecycleOwnedExternally?: boolean;
+}) {
   const messages = useMessages();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   useSyncExternalStore(
@@ -1048,6 +1054,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
     const deletion = value.deletion;
     if (deletion === null) return null;
     if (deletion.kind === "project") {
+      if (projectLifecycleOwnedExternally) return null;
       const project = value.projects.find(
         (item) => item.id === deletion.projectId,
       );
@@ -1123,15 +1130,119 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               </ul>
             </section>
           )}
-          <form onSubmit={(event) => void saveProject(event)}>
-            <h3>{messages("candidate.projectRequiredCreateTitle")}</h3>
+          {projectLifecycleOwnedExternally ? null : (
+            <form onSubmit={(event) => void saveProject(event)}>
+              <h3>{messages("candidate.projectRequiredCreateTitle")}</h3>
+              <label>
+                {messages("candidate.newProjectNameLabel")}
+                <input
+                  aria-describedby={
+                    projectNameError === null
+                      ? undefined
+                      : "pending-project-name-error"
+                  }
+                  aria-invalid={projectNameError === null ? undefined : true}
+                  disabled={value.isSaving || value.mutationsDisabled}
+                  name="project-name"
+                  onChange={(event) => {
+                    setProjectName(event.target.value);
+                    setProjectNameError(null);
+                  }}
+                  value={projectName}
+                />
+              </label>
+              {projectNameError === null ? null : (
+                <p id="pending-project-name-error" role="alert">
+                  {projectNameError}
+                </p>
+              )}
+              {value.displayError === null ? null : (
+                <p role="alert">
+                  {errorMessage(value.displayError.code, messages)}
+                </p>
+              )}
+              <button
+                data-create-pending-project
+                disabled={value.isSaving || value.mutationsDisabled}
+                type="submit"
+              >
+                {messages("candidate.createProjectAction")}
+              </button>
+              <button
+                data-cancel-pending-pre-edit
+                disabled={value.isSaving}
+                onClick={() => {
+                  state.cancelPendingPreEdit();
+                  setProjectName("");
+                  setProjectNameError(null);
+                  rerender();
+                }}
+                type="button"
+              >
+                {messages("common.cancel")}
+              </button>
+            </form>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-label={messages("candidate.title")}
+      className="candidate-management"
+    >
+      {projectLifecycleOwnedExternally ? null : (
+        <>
+          <nav
+            aria-label={messages("candidate.projectsNav")}
+            data-region="projects"
+          >
+            {value.projects.map((project) => (
+              <span key={project.id}>
+                {project.id === value.selectedProjectId ? (
+                  <span data-current-project>{project.name}</span>
+                ) : null}
+                <button
+                  data-rename-project-id={project.id}
+                  disabled={value.isSaving || value.mutationsDisabled}
+                  onClick={() => beginRenameProject(project)}
+                  type="button"
+                >
+                  {messages("candidate.renameProject")}
+                </button>
+                <button
+                  data-delete-project-id={project.id}
+                  disabled={value.isSaving || value.mutationsDisabled}
+                  onClick={() => {
+                    state.requestDeletion({
+                      kind: "project",
+                      projectId: project.id,
+                    });
+                    rerender();
+                  }}
+                  type="button"
+                >
+                  {messages("common.delete")}
+                </button>
+              </span>
+            ))}
+          </nav>
+          <form
+            aria-label={messages("candidate.projectFormTitle")}
+            data-region="project-form"
+            onSubmit={(event) => void saveProject(event)}
+          >
             <label>
-              {messages("candidate.newProjectNameLabel")}
+              {messages(
+                editingProjectId === null
+                  ? "candidate.newProjectNameLabel"
+                  : "candidate.projectNameLabel",
+              )}
               <input
                 aria-describedby={
-                  projectNameError === null
-                    ? undefined
-                    : "pending-project-name-error"
+                  projectNameError === null ? undefined : "project-name-error"
                 }
                 aria-invalid={projectNameError === null ? undefined : true}
                 disabled={value.isSaving || value.mutationsDisabled}
@@ -1144,7 +1255,7 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               />
             </label>
             {projectNameError === null ? null : (
-              <p id="pending-project-name-error" role="alert">
+              <p id="project-name-error" role="alert">
                 {projectNameError}
               </p>
             )}
@@ -1154,127 +1265,31 @@ export function ManagementView({ state }: { readonly state: ManagementState }) {
               </p>
             )}
             <button
-              data-create-pending-project
               disabled={value.isSaving || value.mutationsDisabled}
               type="submit"
             >
-              {messages("candidate.createProjectAction")}
+              {messages(
+                editingProjectId === null
+                  ? "candidate.createProjectAction"
+                  : "candidate.saveProjectNameAction",
+              )}
             </button>
-            <button
-              data-cancel-pending-pre-edit
-              disabled={value.isSaving}
-              onClick={() => {
-                state.cancelPendingPreEdit();
-                setProjectName("");
-                setProjectNameError(null);
-                rerender();
-              }}
-              type="button"
-            >
-              {messages("common.cancel")}
-            </button>
+            {editingProjectId === null ? null : (
+              <button
+                disabled={value.isSaving}
+                onClick={() => {
+                  setEditingProjectId(null);
+                  setProjectName("");
+                  setProjectNameError(null);
+                }}
+                type="button"
+              >
+                {messages("common.cancel")}
+              </button>
+            )}
           </form>
-        </section>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      aria-label={messages("candidate.title")}
-      className="candidate-management"
-    >
-      <nav
-        aria-label={messages("candidate.projectsNav")}
-        data-region="projects"
-      >
-        {value.projects.map((project) => (
-          <span key={project.id}>
-            {project.id === value.selectedProjectId ? (
-              <span data-current-project>{project.name}</span>
-            ) : null}
-            <button
-              data-rename-project-id={project.id}
-              disabled={value.isSaving || value.mutationsDisabled}
-              onClick={() => beginRenameProject(project)}
-              type="button"
-            >
-              {messages("candidate.renameProject")}
-            </button>
-            <button
-              data-delete-project-id={project.id}
-              disabled={value.isSaving || value.mutationsDisabled}
-              onClick={() => {
-                state.requestDeletion({
-                  kind: "project",
-                  projectId: project.id,
-                });
-                rerender();
-              }}
-              type="button"
-            >
-              {messages("common.delete")}
-            </button>
-          </span>
-        ))}
-      </nav>
-      <form
-        aria-label={messages("candidate.projectFormTitle")}
-        data-region="project-form"
-        onSubmit={(event) => void saveProject(event)}
-      >
-        <label>
-          {messages(
-            editingProjectId === null
-              ? "candidate.newProjectNameLabel"
-              : "candidate.projectNameLabel",
-          )}
-          <input
-            aria-describedby={
-              projectNameError === null ? undefined : "project-name-error"
-            }
-            aria-invalid={projectNameError === null ? undefined : true}
-            disabled={value.isSaving || value.mutationsDisabled}
-            name="project-name"
-            onChange={(event) => {
-              setProjectName(event.target.value);
-              setProjectNameError(null);
-            }}
-            value={projectName}
-          />
-        </label>
-        {projectNameError === null ? null : (
-          <p id="project-name-error" role="alert">
-            {projectNameError}
-          </p>
-        )}
-        {value.displayError === null ? null : (
-          <p role="alert">{errorMessage(value.displayError.code, messages)}</p>
-        )}
-        <button
-          disabled={value.isSaving || value.mutationsDisabled}
-          type="submit"
-        >
-          {messages(
-            editingProjectId === null
-              ? "candidate.createProjectAction"
-              : "candidate.saveProjectNameAction",
-          )}
-        </button>
-        {editingProjectId === null ? null : (
-          <button
-            disabled={value.isSaving}
-            onClick={() => {
-              setEditingProjectId(null);
-              setProjectName("");
-              setProjectNameError(null);
-            }}
-            type="button"
-          >
-            {messages("common.cancel")}
-          </button>
-        )}
-      </form>
+        </>
+      )}
       <nav aria-label={messages("candidate.categoryNav")}>
         <button
           aria-current={value.selectedCategory === null ? "page" : undefined}

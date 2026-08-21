@@ -6,6 +6,7 @@ import type {
   PersistentApplicationFeatureRegistration,
 } from "../../application-shell/public.js";
 import type { FoundationScopedDataPort } from "../../persistence/public.js";
+import type { ProjectLifecyclePresentationContribution } from "../../project-context/public.js";
 import {
   type CandidateActivationPrefill,
   candidateManagementFeatureId,
@@ -18,6 +19,7 @@ import type {
   CandidateSourceMutationPort,
 } from "./contracts.js";
 import { createDuplicateMergeStateSnapshotCodec } from "./duplicate-merge-state.js";
+import { createProjectLifecycleHostAdapter } from "./project-lifecycle-host-adapter.js";
 import {
   type CandidateManagementPublicApi,
   createCandidateManagementPublicApi,
@@ -59,6 +61,8 @@ export interface CandidateFeatureRegistrationDependencies {
       | { readonly ok: true; readonly value: () => void }
       | { readonly ok: false; readonly error: unknown };
   };
+  /** Canonical project lifecycle UI; candidate management only owns its host. */
+  readonly projectLifecyclePresentation?: ProjectLifecyclePresentationContribution;
 }
 
 const unavailableSources = {
@@ -114,17 +118,62 @@ const unavailableSources = {
 };
 
 const mountManagementView =
-  (state: ManagementState): CandidateManagementMount =>
+  (
+    state: ManagementState,
+    projectLifecyclePresentation?: ProjectLifecyclePresentationContribution,
+  ): CandidateManagementMount =>
   async ({ container, operationPolicy, restoredState }) => {
     state.attachOperationPolicy(operationPolicy);
     /** A mount starts from persisted data; only a snapshot may restore a screen. */
     state.resetTransientState();
     /** Context recovery is observed for the mounted panel session only. */
     state.attachCurrentProject();
-    const root = mountManagementReactRoot(container, state);
+    const lifecycleContainer = document.createElement("section");
+    lifecycleContainer.dataset.region = "project-lifecycle-host";
+    const managementContainer = document.createElement("div");
+    container.replaceChildren(lifecycleContainer, managementContainer);
+    const lifecycleHost =
+      projectLifecyclePresentation === undefined
+        ? undefined
+        : createProjectLifecycleHostAdapter(projectLifecyclePresentation).mount(
+            lifecycleContainer,
+          );
+    if (lifecycleHost !== undefined && !lifecycleHost.ok) {
+      state.releaseOperationPolicy();
+      state.releaseCurrentProject();
+      container.replaceChildren();
+      throw new Error("Project lifecycle presentation could not mount.");
+    }
+    const releaseLifecyclePresentation =
+      lifecycleHost?.ok === true ? lifecycleHost.value : () => {};
+    const root = mountManagementReactRoot(
+      managementContainer,
+      state,
+      projectLifecyclePresentation !== undefined,
+    );
     let unmounted = false;
+    const cleanup = () => {
+      if (unmounted) return;
+      unmounted = true;
+      try {
+        root.unmount();
+      } finally {
+        try {
+          releaseLifecyclePresentation();
+        } finally {
+          state.releaseCurrentProject();
+          state.releaseOperationPolicy();
+          container.replaceChildren();
+        }
+      }
+    };
 
-    await state.load();
+    try {
+      await state.load();
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
     const codec = createManagementStateSnapshotCodec(
       state,
       createDuplicateMergeStateSnapshotCodec(),
@@ -146,11 +195,7 @@ const mountManagementView =
         return { ok: true, value: codec.capture(state) };
       },
       async unmount() {
-        if (unmounted) return;
-        unmounted = true;
-        state.releaseOperationPolicy();
-        state.releaseCurrentProject();
-        root.unmount();
+        cleanup();
       },
     };
   };
@@ -183,7 +228,10 @@ export const createCandidateFeatureRegistration = (
     dependencies.mount ??
     (dependencies.state === undefined
       ? mountUnavailable
-      : mountManagementView(dependencies.state));
+      : mountManagementView(
+          dependencies.state,
+          dependencies.projectLifecyclePresentation,
+        ));
   const getAvailability =
     dependencies.getAvailability ?? (() => ({ status: "available" as const }));
   const subscribeAvailability =
