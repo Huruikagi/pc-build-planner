@@ -320,11 +320,12 @@
   - _Boundary: CandidateFeatureRegistration, ProjectContextAdapter, Production Candidate Management E2E_
 
 - [ ] 13. Candidate-onlyの移行seamを確立する
-- [ ] 13.1 candidate公開契約と共有data errorのconsumer seamを固定する
-  - 既存の候補queryとtyped editor intentを非回帰で維持し、重複商品workflowがmatchなしまたは明示新規保存を一度だけ委譲するcreate-only `CandidateCreatePort`をcanonical public entryへ追加する。
+- [x] 13.1 candidate公開契約と共有data errorのconsumer seamを固定する
+  - 既存の候補queryとtyped editor intentを非回帰で維持し、重複商品workflowがmatchなしまたは明示新規保存を一度だけ委譲するcreate-only `CandidateCreatePort`の型をcanonical public entryへ追加する。
   - `CandidateCreatePort`はcandidate draftとmutation contextを受ける作成だけを公開し、update/delete、project lifecycle、source match/add/conditional mutation、共有data errorのownershipを公開面へ含めない。
   - 候補固有の項目検証と共有`AppDataError`を区別し、既存data errorのvariant、payload、表示結果をcharacterization fixtureで固定する。
-  - 完了時、query・`CandidateCreatePort`・typed editor intentを正しい公開入口から使うconsumerが型検査され、旧`ManagementError`、candidate-owned mapper/exportまたはcandidate-owned source portを使うfixtureが所有権違反として失敗する。
+  - 本taskでは契約型、consumer fixture、所有権gateだけを固定し、`CandidateManagementPublicApi`のlive create facet、registration必須依存、production contributionからserviceへの配線は14.2でservice error移行と同時に追加する。
+  - 完了時、query・`CandidateCreatePort`型・typed editor intentを正しい公開入口から使うconsumerが型検査され、旧`ManagementError`、candidate-owned mapper/exportまたはcandidate-owned source portを使うfixtureが所有権違反として失敗する。
   - _Depends: local-data-foundation 11.1, 11.3_
   - _Requirements: 1.8, 2.5, 4.5, 5.4, 6.2, 6.10_
   - _Boundary: CandidateManagementPublicApi, CandidateCreatePort, CandidateOperationError_
@@ -362,7 +363,7 @@
   - _Boundary: ProjectLifecycleHostAdapter, ManagementState, ManagementView_
 - [ ] 14.2 共有data errorのimportとCandidateCreatePort実装へ移行する
   - 候補service、query、stateのdata operation failureをfoundation公開入口の`AppDataError`へ差し替え、旧`ManagementError`定義・`FoundationError` mapping・公開exportを撤去する。
-  - 13.1で固定した`CandidateCreatePort`を共有`AppDataError`対応済みの既存candidate create serviceへ接続し、matchなし・明示新規保存の一回だけcreateを実行する。queryとtyped editor intentの既存実装は変更しない。
+  - 13.1で固定した`CandidateCreatePort`を共有`AppDataError`対応済みの既存candidate create serviceへ接続し、`CandidateManagementPublicApi`のlive create facet、registration必須依存、production contributionからserviceへの直接委譲を同じ変更で追加して、matchなし・明示新規保存の一回だけcreateを実行する。queryとtyped editor intentの既存実装は変更しない。
   - 候補固有field validationだけをowner-local errorとして残し、data errorの種類・粒度・表示・入力と一覧の保持を変更しない。
   - 完了時、全data pathと`CandidateCreatePort`が共有variantをexhaustiveに扱い、旧mapperやcandidate-owned共有errorへの参照が0件で、既存の各失敗表示、query、typed editor intentが同じ利用者・consumer結果になる。
   - _Depends: 13.1_

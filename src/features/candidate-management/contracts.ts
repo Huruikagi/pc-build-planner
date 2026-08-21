@@ -1,4 +1,5 @@
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CandidateProductValues,
@@ -119,6 +120,23 @@ export interface UpdateCandidateInput {
 export interface MutationContext {
   readonly requestId: RequestId;
   readonly expectedRevision: number;
+}
+
+/** Candidate-owned field validation remains distinct from shared data failures. */
+export interface CandidateValidationError {
+  readonly kind: "candidate-validation";
+  readonly fields: Readonly<Record<string, string>>;
+}
+
+/** Candidate operations preserve the foundation-owned AppDataError unchanged. */
+export type CandidateOperationError = CandidateValidationError | AppDataError;
+
+/** Minimal create-only capability consumed by the duplicate-product workflow. */
+export interface CandidateCreatePort {
+  createCandidate(
+    input: CandidateDraft,
+    context: MutationContext,
+  ): Promise<Result<CandidatePart, CandidateOperationError>>;
 }
 
 export interface CandidateListQuery {

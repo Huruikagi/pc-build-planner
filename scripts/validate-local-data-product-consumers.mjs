@@ -22,6 +22,20 @@ const violations = Object.freeze([
     pattern: /\bManagementError\b/u,
   }),
   Object.freeze({
+    code: "candidate-owned-data-error-export",
+    pattern:
+      /import[^;]*\bAppDataError\b[^;]*candidate-management\/public\.js/u,
+  }),
+  Object.freeze({
+    code: "candidate-owned-data-error-mapper",
+    pattern:
+      /import[^;]*\bmapFoundationError\b[^;]*candidate-management\/public\.js/u,
+  }),
+  Object.freeze({
+    code: "candidate-owned-source-port",
+    pattern: /\bCandidateSource(?:Catalog|Mutation)Port\b/u,
+  }),
+  Object.freeze({
     code: "foundation-error-direct-import",
     pattern: /\bFoundationError\b/u,
   }),

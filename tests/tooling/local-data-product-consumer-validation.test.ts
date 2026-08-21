@@ -36,6 +36,18 @@ test("consumer contractは所有権違反を一件ずつ決定的に拒否する
       code: "candidate-owned-data-error",
     },
     {
+      file: "candidate-owned-data-error-export.fixture.txt",
+      code: "candidate-owned-data-error-export",
+    },
+    {
+      file: "candidate-owned-data-error-mapper.fixture.txt",
+      code: "candidate-owned-data-error-mapper",
+    },
+    {
+      file: "candidate-owned-source-port.fixture.txt",
+      code: "candidate-owned-source-port",
+    },
+    {
       file: "foundation-error-direct-import.fixture.txt",
       code: "foundation-error-direct-import",
     },

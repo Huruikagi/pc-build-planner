@@ -1,0 +1,3 @@
+import { mapFoundationError } from "../../../src/features/candidate-management/public.js";
+
+void mapFoundationError;

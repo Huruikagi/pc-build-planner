@@ -9,14 +9,17 @@ import type {
 
 export type {
   AddCandidateSourceInput,
+  CandidateCreatePort,
   CandidateDraft,
   CandidateListQuery,
+  CandidateOperationError,
   CandidateQuery,
   CandidateSourceCatalogPort,
   CandidateSourceMutationError,
   CandidateSourceMutationPort,
   CandidateSourceReference,
   CandidateSummary,
+  CandidateValidationError,
   CreateProjectInput,
   ManagementError,
   MutationContext,
