@@ -346,6 +346,19 @@ test("模擬feature consumerの公開importだけを許可する", () => {
   assert.deepEqual(findBoundaryViolations(sources), []);
 });
 
+test("feature host は lifecycle presentation contract を public entry から参照できる", () => {
+  const sources = [
+    {
+      path: "src/features/mock/project-lifecycle-host.ts",
+      source:
+        'import type { ProjectLifecyclePresentationContribution, ProjectLifecyclePresentationHandle } from "../../project-context/public.js";\n' +
+        "export type LifecycleHostContract = ProjectLifecyclePresentationContribution | ProjectLifecyclePresentationHandle;",
+    },
+  ];
+
+  assert.deepEqual(findBoundaryViolations(sources), []);
+});
+
 test("owner schema は共通validation入口と設定済みvendor moduleだけを許可する", () => {
   assert.deepEqual(
     findBoundaryViolations([

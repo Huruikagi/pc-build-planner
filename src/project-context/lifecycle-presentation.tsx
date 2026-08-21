@@ -7,7 +7,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { err, ok, type Result } from "../domain/public.js";
+import { err, ok } from "../domain/public.js";
 import type {
   ProjectLifecycleMessageDescriptor,
   ProjectLifecycleMessageResolver,
@@ -15,7 +15,10 @@ import type {
 } from "./lifecycle-message-descriptors.js";
 import type { ProjectLifecycleService } from "./lifecycle-service.js";
 import type { ProjectLifecycleState } from "./lifecycle-state.js";
-import type { ProjectContextReadPort } from "./public.js";
+import type {
+  ProjectContextReadPort,
+  ProjectLifecyclePresentationContribution,
+} from "./public.js";
 
 export interface ProjectLifecyclePresentationMessageResolver
   extends ProjectLifecycleMessageResolver {
@@ -23,24 +26,11 @@ export interface ProjectLifecyclePresentationMessageResolver
   subscribe?(listener: () => void): () => void;
 }
 
-export interface ProjectLifecyclePresentationHandle {
-  unmount(): void;
-}
-
 export interface ProjectLifecyclePresentationDependencies {
   readonly read: ProjectContextReadPort;
   readonly lifecycle: ProjectLifecycleService;
   readonly state: ProjectLifecycleState;
   readonly messages: ProjectLifecyclePresentationMessageResolver;
-}
-
-export interface ProjectLifecyclePresentationContribution {
-  mount(
-    container: HTMLElement,
-  ): Result<
-    ProjectLifecyclePresentationHandle,
-    { readonly kind: "presentation-failed" }
-  >;
 }
 
 function ProjectLifecycleView({

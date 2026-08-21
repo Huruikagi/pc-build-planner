@@ -17,7 +17,6 @@ import {
 } from "./lifecycle-data-port.js";
 import {
   createProjectLifecyclePresentationContribution,
-  type ProjectLifecyclePresentationContribution,
   type ProjectLifecyclePresentationMessageResolver,
 } from "./lifecycle-presentation.js";
 import { createProjectLifecycleService } from "./lifecycle-service.js";
@@ -34,6 +33,7 @@ import {
   createProjectContextPublicApi,
   type ProjectContextCorePublicApi,
   type ProjectContextPublicApi,
+  type ProjectLifecyclePresentationContribution,
 } from "./public.js";
 import {
   createProjectContextService,

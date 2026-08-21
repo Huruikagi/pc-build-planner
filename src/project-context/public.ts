@@ -113,6 +113,19 @@ export interface ProjectLifecyclePort {
   >;
 }
 
+export interface ProjectLifecyclePresentationHandle {
+  unmount(): void;
+}
+
+export interface ProjectLifecyclePresentationContribution {
+  mount(
+    container: HTMLElement,
+  ): Result<
+    ProjectLifecyclePresentationHandle,
+    { readonly kind: "presentation-failed" }
+  >;
+}
+
 export interface ProjectContextPublicDependencies {
   readonly service: ProjectContextService;
   readonly lifecycle: ProjectLifecycleService;

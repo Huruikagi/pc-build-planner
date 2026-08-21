@@ -55,6 +55,8 @@ import type {
   ProjectContextReadPort,
   ProjectContextReplacementGuardPort,
   ProjectLifecyclePort,
+  ProjectLifecyclePresentationContribution,
+  ProjectLifecyclePresentationHandle,
   ProjectLifecycleRefreshError,
 } from "../../src/project-context/public.js";
 import {
@@ -129,6 +131,17 @@ export const consumeProjectLifecycle = async (
     ? "busy"
     : "context-refresh-failed";
 };
+
+/** Feature hosts consume the lifecycle mount contract without importing React implementation. */
+export const mountProjectLifecyclePresentation = (
+  presentation: ProjectLifecyclePresentationContribution,
+  container: HTMLElement,
+): ReturnType<ProjectLifecyclePresentationContribution["mount"]> =>
+  presentation.mount(container);
+
+export const unmountProjectLifecyclePresentation = (
+  handle: ProjectLifecyclePresentationHandle,
+): void => handle.unmount();
 
 export const rejectProjectContextCapabilityEscalation = (
   read: ProjectContextReadPort,
