@@ -6,7 +6,9 @@ import {
   type CandidateSourcePublicError,
   type CandidateSourceReference,
   type CandidateSourceScope,
+  type CandidateSourceUrlIdentity,
   candidateSourcePolicy,
+  identifyCandidateSourceUrl,
   projectAppDataError,
   type RemoveCandidateSourceInput,
   type SourceMatchResult,
@@ -55,6 +57,14 @@ export const removeInput: RemoveCandidateSourceInput = {
 };
 
 export const policyConsumer = candidateSourcePolicy;
+
+export const sourceUrlIdentity: CandidateSourceUrlIdentity = (() => {
+  const result = identifyCandidateSourceUrl(
+    "https://fictional-shop.invalid/item?sku=synthetic",
+  );
+  if (!result.ok) throw new Error(result.error.reason);
+  return result.value;
+})();
 
 declare const appDataError: AppDataError;
 export const projectedDataError: CandidateSourcePublicError =

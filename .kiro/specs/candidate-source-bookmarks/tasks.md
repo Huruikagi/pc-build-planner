@@ -256,7 +256,7 @@
   - _Boundary: AppDataErrorProjection, CandidateSourcePublicError_
   - _Depends: local-data-foundation 11.1_
 
-- [ ] 9.3 (P) HTTP/HTTPS source URL identityを実装する
+- [x] 9.3 (P) HTTP/HTTPS source URL identityを実装する
   - 標準`URL`でHTTP/HTTPSだけを解析し、scheme/host/default port/pathの決定的な正規化を利用してfragmentとuserinfoをidentityから除外する。
   - queryはsource URLの一部として保持し、tracking parameter削除、SKU抽出、domain別商品規則、queryの意味的並べ替えを行わない。
   - 欠損、不正、unsafe scheme、identity化不能をsource validationとしてfail closedし、完全URLまたはuserinfoをlogへ出さない。

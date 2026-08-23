@@ -30,3 +30,5 @@ export type {
   UpdateCandidateSourceInput,
 } from "./model.js";
 export { candidateSourcePolicy } from "./policy.js";
+export type { CandidateSourceUrlIdentity } from "./url-identity.js";
+export { identifyCandidateSourceUrl } from "./url-identity.js";
