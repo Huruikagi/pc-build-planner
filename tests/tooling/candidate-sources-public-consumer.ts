@@ -3,11 +3,13 @@ import {
   type CandidatePartId,
   type CandidateSourceId,
   type CandidateSourceKind,
+  type CandidateSourceMatcherPort,
   type CandidateSourcePublicError,
   type CandidateSourceReference,
   type CandidateSourceScope,
   type CandidateSourceUrlIdentity,
   candidateSourcePolicy,
+  createCandidateSourceMatcher,
   identifyCandidateSourceUrl,
   projectAppDataError,
   type RemoveCandidateSourceInput,
@@ -37,6 +39,14 @@ export const sourceMatch: SourceMatchResult = {
   kind: "unique",
   reference: sourceReference,
 };
+
+export const matcherConsumer: CandidateSourceMatcherPort =
+  createCandidateSourceMatcher({
+    listSourceReferences: async () => ({
+      ok: true,
+      value: [sourceReference],
+    }),
+  });
 
 export const addInput: AddCandidateSourceInput = {
   candidateId,

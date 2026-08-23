@@ -14,6 +14,11 @@ export type {
 } from "./app-data-error-projection.js";
 export { projectAppDataError } from "./app-data-error-projection.js";
 export type {
+  CandidateSourceMatcherPort,
+  CandidateSourceReferenceSnapshotPort,
+} from "./matcher.js";
+export { createCandidateSourceMatcher } from "./matcher.js";
+export type {
   AddCandidateSourceInput,
   CandidateSourceEntity,
   CandidateSourceEntityInput,

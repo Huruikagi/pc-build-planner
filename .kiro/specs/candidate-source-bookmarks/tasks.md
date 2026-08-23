@@ -264,7 +264,7 @@
   - _Requirements: 5.4, 9.1, 9.2, 9.3, 9.8_
   - _Boundary: CandidateSourceUrlIdentity_
 
-- [ ] 9.4 明示scopeの0件・一意・曖昧matcherを実装する
+- [x] 9.4 明示scopeの0件・一意・曖昧matcherを実装する
   - `all-candidates`またはcandidate ID限定scopeのcatalog snapshotを9.3と同じidentity規則で線形照合する。
   - 0件を`no-match`、1件を`unique`、複数件を全reference付き`ambiguous-match`として返し、primary、保存順、kind、priceで暗黙選択しない。
   - matcherはretail eligibility、価格抽出、商品identity、duplicate判断を返さず、invalid保存URLを誤一致させない。
