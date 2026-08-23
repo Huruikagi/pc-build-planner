@@ -40,6 +40,11 @@ export type {
   SourceMatchResult,
   UpdateCandidateSourceInput,
 } from "./model.js";
+export type {
+  CandidateSourceMutationDependencies,
+  CandidateSourceMutationPort,
+} from "./mutations.js";
+export { createCandidateSourceMutationService } from "./mutations.js";
 export { candidateSourcePolicy } from "./policy.js";
 export type { CandidateSourceUrlIdentity } from "./url-identity.js";
 export { identifyCandidateSourceUrl } from "./url-identity.js";

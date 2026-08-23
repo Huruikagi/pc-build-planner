@@ -284,7 +284,7 @@
   - _Boundary: CandidateSourceCatalogPort_
   - _Depends: 9.1, 9.2_
 
-- [ ] 10.2 source mutation serviceを独立coreへ移す
+- [x] 10.2 source mutation serviceを独立coreへ移す
   - add/update/remove/setPrimaryを9.1のpolicyへ委譲し、foundation scoped data port上でcandidate aggregateを一回だけcommitする。
   - 新規sourceのkind未指定時だけ注入済みmanufacturer-domain classifierを使用し、利用者上書きと既存表示名称を維持する。
   - validation、primary-required、data operation失敗では旧candidateを保持し、部分更新と暗黙retryを残さない。

@@ -6,6 +6,7 @@ import {
   type CandidateSourceId,
   type CandidateSourceKind,
   type CandidateSourceMatcherPort,
+  type CandidateSourceMutationDependencies,
   type CandidateSourcePublicError,
   type CandidateSourceReference,
   type CandidateSourceScope,
@@ -13,6 +14,7 @@ import {
   candidateSourcePolicy,
   createCandidateSourceCatalog,
   createCandidateSourceMatcher,
+  createCandidateSourceMutationService,
   identifyCandidateSourceUrl,
   projectAppDataError,
   type RemoveCandidateSourceInput,
@@ -64,6 +66,10 @@ export const catalogReferenceById = catalogConsumer.getSourceReference({
   candidateId,
   sourceId,
 });
+
+declare const mutationDependencies: CandidateSourceMutationDependencies;
+export const mutationConsumer =
+  createCandidateSourceMutationService(mutationDependencies);
 
 export const addInput: AddCandidateSourceInput = {
   candidateId,
