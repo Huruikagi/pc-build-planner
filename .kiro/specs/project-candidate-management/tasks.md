@@ -369,7 +369,7 @@
   - _Depends: 13.1_
   - _Requirements: 2.5, 4.5, 5.4, 6.2, 6.10_
   - _Boundary: CandidateManagementService, CandidateQuery, CandidateCreatePort, ManagementState_
-- [ ] 14.3 candidate source editorをcanonical portへ接続する
+- [x] 14.3 candidate source editorをcanonical portへ接続する
   - **実装開始条件**: 13.3のconsumer seamと`candidate-source-bookmarks` 10.4のcanonical source public entryが利用可能であること。未完了なら旧内部coreへの暫定seamを追加しない。
   - feature contributionと既存source editor state/viewを13.3のadapterへ接続し、catalog/mutationの成功結果を表示へ反映する。
   - canonical port未注入または失敗時は候補draftと既存source表示を保持し、旧source coreをfallbackとして呼び出さない。

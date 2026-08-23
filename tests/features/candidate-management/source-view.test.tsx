@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { render, screen, within } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import type {
@@ -129,7 +129,7 @@ async function setup(language: "ja" | "en" = "ja") {
   return { ...rendered, opened, state, user };
 }
 
-test("source操作、種別上書き、primary切替、削除へDOMから到達できる", async () => {
+test("canonical port未注入時のkind変更試行は既存retail sourceを変更せずDOMにもretailを表示する", async () => {
   const { container, opened, state, user } = await setup();
   const sourceRegion = container.querySelector(
     '[data-region="candidate-sources"]',
@@ -141,44 +141,26 @@ test("source操作、種別上書き、primary切替、削除へDOMから到達�
     }),
     "manufacturer",
   );
-  await user.click(within(sourceSections[1] as HTMLElement).getByRole("radio"));
-  await user.click(within(sourceSections[0] as HTMLElement).getByRole("radio"));
   await user.click(
     within(sourceSections[1] as HTMLElement).getByRole("button", {
       name: /ソースを開く/,
     }),
   );
   assert.equal(state.value.editor?.draft.primarySourceId, sourceA);
-  assert.equal(state.value.editor?.draft.sources?.[0]?.kind, "manufacturer");
-  assert.deepEqual(opened, ["https://maker.invalid/item"]);
-
-  const removePrimary = within(sourceSections[0] as HTMLElement).getByRole(
-    "button",
-    { name: /ソースを削除/ },
-  );
-  await user.click(removePrimary);
-  assert.match(screen.getByRole("alert").textContent ?? "", /代わりのソース/);
-  await user.selectOptions(
-    within(sourceSections[0] as HTMLElement).getByRole("combobox", {
-      name: /プライマリ/,
-    }),
-    sourceB,
-  );
-  await user.click(removePrimary);
-  assert.equal(state.value.editor?.draft.sources?.length, 1);
-  assert.equal(state.value.editor?.draft.primarySourceId, sourceB);
-  await user.click(screen.getByRole("button", { name: /ソースを削除/ }));
-  assert.equal(state.value.editor?.draft.sources?.length, 0);
-  await user.click(screen.getByRole("button", { name: /ソースを追加/ }));
-  assert.equal(state.value.editor?.draft.sources?.length, 1);
+  assert.equal(state.value.editor?.draft.sources?.[0]?.kind, "retail");
   assert.equal(
-    state.value.editor?.draft.sources?.[0]?.kind,
-    undefined,
-    "新規手動sourceは利用者が種別を選ぶまで自動判定可能な状態を保つ",
+    (
+      within(sourceSections[0] as HTMLElement).getByRole("combobox", {
+        name: /販売ページ/,
+      }) as HTMLSelectElement
+    ).value,
+    "retail",
+    "canonical port未注入のfail-closed結果を既存値の再表示として利用者が確認できる",
   );
+  assert.deepEqual(opened, ["https://maker.invalid/item"]);
 });
 
-test("不正価格・URLと保存前一覧を保持し、一覧とeditorを日英で安全に描画する", async () => {
+test("canonical port未注入時のunsafe URL試行は既存safe URLを保持して日英DOMへ再表示する", async () => {
   for (const language of ["ja", "en"] as const) {
     const { container, opened, state, unmount, user } = await setup(language);
     const source = container.querySelector(
@@ -211,13 +193,14 @@ test("不正価格・URLと保存前一覧を保持し、一覧とeditorを日�
     });
     await user.clear(url);
     await user.type(url, "javascript:alert(1)");
-    assert.equal((url as HTMLInputElement).value, "javascript:alert(1)");
-    assert.equal(url.getAttribute("aria-invalid"), "true");
-    const describedBy = url.getAttribute("aria-describedby");
-    assert.notEqual(describedBy, null);
-    assert.match(
-      container.querySelector(`#${describedBy}`)?.textContent ?? "",
-      /URL|http/i,
+    assert.equal(
+      state.value.editor?.draft.sources?.[0]?.pageUrl,
+      draft.sources?.[0]?.pageUrl,
+    );
+    assert.equal(
+      (url as HTMLInputElement).value,
+      draft.sources?.[0]?.pageUrl,
+      "canonical port未注入のfail-closed結果を既存safe URLの再表示として利用者が確認できる",
     );
     assert.match(
       container.querySelector('[data-region="candidate-list"]')?.textContent ??

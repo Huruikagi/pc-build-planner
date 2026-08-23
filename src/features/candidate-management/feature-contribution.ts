@@ -2,6 +2,10 @@ import type {
   FeatureCompositionContext,
   FeatureContribution,
 } from "../../application-shell/public.js";
+import type {
+  CandidateSourceCatalogPort as CanonicalCandidateSourceCatalogPort,
+  CandidateSourceMutationPort as CanonicalCandidateSourceMutationPort,
+} from "../../candidate-sources/public.js";
 import { createUuid, type RequestId } from "../../domain/public.js";
 import type { ProductIdentityNormalizer } from "../product-capture/public.js";
 import type { SourcePriceRefreshPort } from "../source-price-refresh/public.js";
@@ -45,6 +49,10 @@ export type CandidateManagementContribution = FeatureContribution<
 >;
 
 export interface CandidateManagementContributionDependencies {
+  readonly sourceEditor?: {
+    readonly catalog: CanonicalCandidateSourceCatalogPort;
+    readonly mutations: CanonicalCandidateSourceMutationPort;
+  };
   readonly sourceData?: CandidateSourceDataPort;
   readonly classifier?: SourceKindClassifier;
   readonly sourcePage?: SourcePagePort;
@@ -205,6 +213,9 @@ export const createCandidateManagementContribution = (
     ...(dependencies.sourcePage === undefined
       ? {}
       : { sourcePage: dependencies.sourcePage }),
+    ...(dependencies.sourceEditor === undefined
+      ? {}
+      : { sourceEditor: dependencies.sourceEditor }),
     ...(duplicateMergeCoordinator === undefined
       ? {}
       : { duplicateMergeCoordinator }),

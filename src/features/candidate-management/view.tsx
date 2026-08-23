@@ -943,7 +943,8 @@ function CandidateEditorForm({ state }: { readonly state: ManagementState }) {
         >
           {messages("candidate.sources.add")}
         </button>
-        {state.value.sourceOperationError?.kind === "replacement-required" ? (
+        {state.value.sourceOperationError?.kind === "replacement-required" ||
+        state.value.sourceEditorError?.kind === "primary-required" ? (
           <p role="alert">
             {messages("candidate.sources.errors.replacementRequired")}
           </p>

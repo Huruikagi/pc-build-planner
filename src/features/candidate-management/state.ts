@@ -1,4 +1,5 @@
 import type { OperationPolicy } from "../../application-shell/public.js";
+import type { CandidateSourcePublicError } from "../../candidate-sources/public.js";
 import {
   type AppDataError,
   type CandidatePartId,
@@ -9,6 +10,11 @@ import {
   type PartCategory,
   type ProjectId,
 } from "../../domain/public.js";
+import type { CandidateSourceEditorPorts } from "./candidate-source-editor-adapter.js";
+import {
+  beginCandidateSourceEditorSave,
+  loadCandidateSourceEditor,
+} from "./candidate-source-editor-adapter.js";
 import { resolvePreEditDraft } from "./category-draft.js";
 import type {
   CandidateDraft,
@@ -111,6 +117,7 @@ export interface ManagementStateValue extends CandidatePreEditState {
   readonly displayError: ManagementDisplayError | null;
   readonly fieldErrors: ManagementFieldErrors;
   readonly sourceOperationError: CandidateSourceRuleError | null;
+  readonly sourceEditorError: CandidateSourcePublicError | null;
   readonly sourceOpenError: SourcePageOpenError | null;
   readonly isLoading: boolean;
   readonly isSaving: boolean;
@@ -131,6 +138,8 @@ export interface ManagementStateDependencies {
   /** Sole save-target authority; absence means the current project is unresolved. */
   readonly currentProject?: CurrentProjectPort;
   readonly sourcePage?: SourcePagePort;
+  /** Canonical source owner consumed only by the existing editor adapter. */
+  readonly sourceEditor?: CandidateSourceEditorPorts;
   readonly duplicateMergeCoordinator?: DuplicateMergeCoordinator;
 }
 
@@ -223,6 +232,9 @@ export class ManagementState {
   #allCandidates: readonly CandidateSummary[] = [];
   #listeners = new Set<() => void>();
   #readBlocked = false;
+  #sourceLoadGeneration = 0;
+  #sourceCommandGeneration = 0;
+  #sourceDisplayError: ManagementDisplayError | null = null;
   #value: ManagementStateValue = {
     projects: [],
     candidates: [],
@@ -234,6 +246,7 @@ export class ManagementState {
     displayError: null,
     fieldErrors: emptyFieldErrors,
     sourceOperationError: null,
+    sourceEditorError: null,
     sourceOpenError: null,
     isLoading: false,
     isSaving: false,
@@ -598,6 +611,7 @@ export class ManagementState {
     >,
   ): void {
     if (this.#mutationsDisabled()) return;
+    this.#sourceCommandGeneration += 1;
     this.#set({
       editor: {
         mode: "create",
@@ -607,15 +621,20 @@ export class ManagementState {
       },
       displayError: null,
       fieldErrors: emptyFieldErrors,
+      sourceEditorError: null,
+      isSaving: false,
     });
   }
 
   public beginEdit(candidateId: CandidatePartId, draft: CandidateDraft): void {
     if (this.#mutationsDisabled()) return;
+    this.#sourceCommandGeneration += 1;
     this.#set({
       editor: { mode: "edit", projectId: draft.projectId, candidateId, draft },
       displayError: null,
       fieldErrors: emptyFieldErrors,
+      sourceEditorError: null,
+      isSaving: false,
     });
   }
 
@@ -641,6 +660,182 @@ export class ManagementState {
       return;
     }
     this.beginEdit(candidateId, draft.value);
+    const sourceLoadGeneration = ++this.#sourceLoadGeneration;
+    const loaded = await loadCandidateSourceEditor(
+      this.dependencies.sourceEditor,
+      candidateId,
+      {
+        draft: draft.value,
+        sources: draft.value.sources ?? [],
+        fieldErrors: this.#value.fieldErrors,
+        saving: false,
+      },
+    );
+    const currentEditor = this.#value.editor;
+    if (
+      sourceLoadGeneration !== this.#sourceLoadGeneration ||
+      currentEditor?.mode !== "edit" ||
+      currentEditor.candidateId !== candidateId
+    )
+      return;
+    if (loaded.kind === "ready")
+      this.#applyCanonicalEditorSources(
+        loaded.snapshot.sources,
+        loaded.snapshot.primarySourceId,
+      );
+    else if (loaded.kind === "failed")
+      this.#applyCanonicalSourceFailure(loaded.error);
+  }
+
+  #applyCanonicalSourceFailure(
+    error: CandidateSourcePublicError,
+    fieldErrors: ManagementFieldErrors = emptyFieldErrors,
+  ): void {
+    switch (error.kind) {
+      case "data":
+        this.#setCanonicalSourceDisplayError(
+          error,
+          appDataDisplayCode(error.error),
+        );
+        return;
+      case "not-found":
+        this.#setCanonicalSourceDisplayError(error, "not-found");
+        return;
+      case "precondition-failed":
+        this.#setCanonicalSourceDisplayError(error, "conflict");
+        return;
+      case "source-validation":
+        this.#setCanonicalSourceDisplayError(error, "validation", fieldErrors);
+        return;
+      case "source-identity-failure":
+        this.#setCanonicalSourceDisplayError(error, "validation", fieldErrors);
+        return;
+      case "primary-required":
+        this.#set({
+          sourceEditorError: error,
+          fieldErrors: { replacementPrimarySourceId: error.kind },
+          ...(this.#value.displayError === this.#sourceDisplayError
+            ? { displayError: null }
+            : {}),
+        });
+        this.#sourceDisplayError = null;
+        return;
+    }
+  }
+
+  #setCanonicalSourceDisplayError(
+    error: CandidateSourcePublicError,
+    code: ManagementDisplayError["code"],
+    fieldErrors?: ManagementFieldErrors,
+  ): void {
+    const ownedDisplayError: ManagementDisplayError = { code };
+    this.#sourceDisplayError = ownedDisplayError;
+    this.#set({
+      sourceEditorError: error,
+      displayError: ownedDisplayError,
+      ...(fieldErrors === undefined ? {} : { fieldErrors }),
+    });
+  }
+
+  #applyCanonicalEditorSources(
+    sources: readonly CandidateSource[],
+    canonicalPrimarySourceId?: CandidateSourceId,
+  ): void {
+    const editor = this.#value.editor;
+    if (editor === null) return;
+    const primarySourceId =
+      canonicalPrimarySourceId !== undefined &&
+      sources.some((source) => source.id === canonicalPrimarySourceId)
+        ? canonicalPrimarySourceId
+        : editor.draft.primarySourceId !== undefined &&
+            sources.some((source) => source.id === editor.draft.primarySourceId)
+          ? editor.draft.primarySourceId
+          : sources[0]?.id;
+    const { primarySourceId: _oldPrimarySourceId, ...draft } = editor.draft;
+    const clearsOwnedDisplayError =
+      this.#sourceDisplayError !== null &&
+      this.#value.displayError === this.#sourceDisplayError;
+    this.#set({
+      editor: {
+        ...editor,
+        draft: {
+          ...draft,
+          sources,
+          ...(primarySourceId === undefined ? {} : { primarySourceId }),
+        } as CandidateDraft,
+      },
+      fieldErrors: emptyFieldErrors,
+      sourceOperationError: null,
+      sourceEditorError: null,
+      ...(clearsOwnedDisplayError ? { displayError: null } : {}),
+    });
+    this.#sourceDisplayError = null;
+  }
+
+  #applyCanonicalEditorSnapshot(
+    snapshot: import("./candidate-source-editor-adapter.js").CandidateSourceEditorSnapshot,
+  ): void {
+    const editor = this.#value.editor;
+    if (editor?.mode !== "edit") return;
+    const { primarySourceId: _oldPrimarySourceId, ...draft } = editor.draft;
+    this.#set({
+      editor: {
+        ...editor,
+        draft: {
+          ...draft,
+          sources: snapshot.sources,
+          ...(snapshot.primarySourceId === undefined
+            ? {}
+            : { primarySourceId: snapshot.primarySourceId }),
+        } as CandidateDraft,
+      },
+      fieldErrors: snapshot.fieldErrors,
+      isSaving: snapshot.saving,
+    });
+  }
+
+  async #applyCanonicalSourceCommand(
+    command: import("./candidate-source-editor-adapter.js").CandidateSourceEditorCommand,
+  ): Promise<boolean> {
+    const editor = this.#value.editor;
+    if (editor?.mode !== "edit") return false;
+    if (this.dependencies.sourceEditor === undefined) return true;
+    if (this.#value.isSaving) return true;
+    const candidateId = editor.candidateId;
+    const sourceCommandGeneration = ++this.#sourceCommandGeneration;
+    const operation = beginCandidateSourceEditorSave(
+      this.dependencies.sourceEditor,
+      {
+        draft: editor.draft,
+        sources: editor.draft.sources ?? [],
+        fieldErrors: this.#value.fieldErrors,
+        saving: this.#value.isSaving,
+      },
+      command,
+    );
+    this.#applyCanonicalEditorSnapshot(operation.started);
+    const completed = await operation.completed;
+    const currentEditor = this.#value.editor;
+    if (
+      sourceCommandGeneration !== this.#sourceCommandGeneration ||
+      currentEditor?.mode !== "edit" ||
+      currentEditor.candidateId !== candidateId
+    )
+      return true;
+    if (completed.kind === "ready")
+      this.#applyCanonicalEditorSources(
+        completed.snapshot.sources,
+        completed.snapshot.primarySourceId,
+      );
+    else if (completed.kind === "failed") {
+      this.#applyCanonicalEditorSnapshot(completed.snapshot);
+      this.#applyCanonicalSourceFailure(
+        completed.error,
+        completed.snapshot.fieldErrors,
+      );
+    }
+    this.#set({ isSaving: false });
+    return true;
   }
 
   public updateEditorDraft(draft: CandidateDraft): void {
@@ -695,28 +890,73 @@ export class ManagementState {
     this.#applyEditorSourceState(result.value);
   }
 
-  public addEditorSource(source: CandidateSource): void {
+  public async addEditorSource(source: CandidateSource): Promise<void> {
+    const editor = this.#value.editor;
+    if (
+      editor?.mode === "edit" &&
+      (await this.#applyCanonicalSourceCommand({
+        kind: "add",
+        candidateId: editor.candidateId,
+        source: source as CandidateSource & { readonly pageUrl: string },
+      }))
+    )
+      return;
     this.#updateEditorSources((state) =>
       candidateSourcePolicy.add(state, source),
     );
   }
 
-  public updateEditorSource(source: CandidateSource): void {
+  public async updateEditorSource(source: CandidateSource): Promise<void> {
+    const editor = this.#value.editor;
+    if (
+      editor?.mode === "edit" &&
+      (await this.#applyCanonicalSourceCommand({
+        kind: "update",
+        candidateId: editor.candidateId,
+        source,
+      }))
+    )
+      return;
     this.#updateEditorSources((state) =>
       candidateSourcePolicy.update(state, source),
     );
   }
 
-  public removeEditorSource(
+  public async removeEditorSource(
     sourceId: CandidateSourceId,
     replacementPrimarySourceId?: CandidateSourceId,
-  ): void {
+  ): Promise<void> {
+    const editor = this.#value.editor;
+    if (
+      editor?.mode === "edit" &&
+      (await this.#applyCanonicalSourceCommand({
+        kind: "remove",
+        candidateId: editor.candidateId,
+        sourceId,
+        ...(replacementPrimarySourceId === undefined
+          ? {}
+          : { replacementPrimarySourceId }),
+      }))
+    )
+      return;
     this.#updateEditorSources((state) =>
       candidateSourcePolicy.remove(state, sourceId, replacementPrimarySourceId),
     );
   }
 
-  public setEditorPrimarySource(sourceId: CandidateSourceId): void {
+  public async setEditorPrimarySource(
+    sourceId: CandidateSourceId,
+  ): Promise<void> {
+    const editor = this.#value.editor;
+    if (
+      editor?.mode === "edit" &&
+      (await this.#applyCanonicalSourceCommand({
+        kind: "set-primary",
+        candidateId: editor.candidateId,
+        sourceId,
+      }))
+    )
+      return;
     this.#updateEditorSources((state) =>
       candidateSourcePolicy.setPrimary(state, sourceId),
     );
@@ -908,6 +1148,11 @@ export class ManagementState {
   }
 
   #set(update: Partial<ManagementStateValue>): void {
+    if (
+      "displayError" in update &&
+      update.displayError !== this.#sourceDisplayError
+    )
+      this.#sourceDisplayError = null;
     this.#value = { ...this.#value, ...update };
     for (const listener of this.#listeners) listener();
   }

@@ -2,17 +2,20 @@ import type {
   AddCandidateSourceInput,
   CandidatePartId,
   CandidateSourceCatalogPort,
+  CandidateSourceEntity,
+  CandidateSourceId,
   CandidateSourceMutationPort,
   CandidateSourcePublicError,
-  CandidateSourceReference,
   RemoveCandidateSourceInput,
   SetPrimarySourceInput,
   UpdateCandidateSourceInput,
 } from "../../candidate-sources/public.js";
+import { candidateSourcePageUrlPath } from "../../domain/public.js";
 
 export interface CandidateSourceEditorSnapshot {
-  readonly draft: Readonly<Record<string, unknown>>;
-  readonly sources: readonly CandidateSourceReference[];
+  readonly draft: object;
+  readonly sources: readonly CandidateSourceEntity[];
+  readonly primarySourceId?: CandidateSourceId;
   readonly fieldErrors: Readonly<Record<string, string>>;
   readonly saving: boolean;
 }
@@ -45,6 +48,85 @@ const stopped = (snapshot: CandidateSourceEditorSnapshot) => ({
   saving: false,
 });
 
+const withDraftPrimarySource = (
+  snapshot: CandidateSourceEditorSnapshot,
+): CandidateSourceEditorSnapshot => {
+  if (snapshot.primarySourceId !== undefined) return snapshot;
+  const primarySourceId =
+    "primarySourceId" in snapshot.draft &&
+    typeof snapshot.draft.primarySourceId === "string"
+      ? (snapshot.draft.primarySourceId as CandidateSourceId)
+      : undefined;
+  return primarySourceId === undefined
+    ? snapshot
+    : { ...snapshot, primarySourceId };
+};
+
+const stagedSnapshot = (
+  current: CandidateSourceEditorSnapshot,
+  command: CandidateSourceEditorCommand,
+): CandidateSourceEditorSnapshot => {
+  switch (command.kind) {
+    case "add":
+      return { ...current, sources: [...current.sources, command.source] };
+    case "update":
+      return {
+        ...current,
+        sources: current.sources.map((source) =>
+          source.id === command.source.id ? command.source : source,
+        ),
+      };
+    case "remove":
+      return {
+        ...current,
+        sources: current.sources.filter(
+          (source) => source.id !== command.sourceId,
+        ),
+      };
+    case "set-primary":
+      return { ...current, primarySourceId: command.sourceId };
+  }
+};
+
+const targetSourceId = (
+  command: CandidateSourceEditorCommand,
+): CandidateSourceId | undefined =>
+  command.kind === "add" || command.kind === "update"
+    ? command.source.id
+    : command.kind === "remove" || command.kind === "set-primary"
+      ? command.sourceId
+      : undefined;
+
+const targetPageUrlPath = (
+  snapshot: CandidateSourceEditorSnapshot,
+  command: CandidateSourceEditorCommand,
+): string | undefined => {
+  const sourceId = targetSourceId(command);
+  if (sourceId === undefined) return undefined;
+  const index = snapshot.sources.findIndex((source) => source.id === sourceId);
+  return index < 0 ? undefined : candidateSourcePageUrlPath(index);
+};
+
+const fieldErrors = (
+  error: CandidateSourcePublicError,
+  snapshot: CandidateSourceEditorSnapshot,
+  command: CandidateSourceEditorCommand,
+): Readonly<Record<string, string>> => {
+  const pageUrlPath = targetPageUrlPath(snapshot, command);
+  if (error.kind === "source-identity-failure" && pageUrlPath !== undefined)
+    return { [pageUrlPath]: error.reason };
+  if (error.kind === "source-validation") {
+    const isPageUrl =
+      error.path === "source.pageUrl" ||
+      /(?:^|\.)sources(?:\[\d+\]|\.\d+)\.pageUrl$/u.test(error.path);
+    if (isPageUrl && pageUrlPath !== undefined)
+      return { [pageUrlPath]: error.reason };
+  }
+  if (error.kind === "primary-required")
+    return { replacementPrimarySourceId: error.kind };
+  return {};
+};
+
 const mutationSnapshot = (
   current: CandidateSourceEditorSnapshot,
   candidate: Awaited<
@@ -52,25 +134,13 @@ const mutationSnapshot = (
   > & { readonly ok: true },
 ): CandidateSourceEditorSnapshot => ({
   ...current,
-  sources: candidate.value.sources.map((source) => ({
-    candidateId: candidate.value.id,
-    sourceId: source.id,
-    ...(source.pageUrl === undefined ? {} : { pageUrl: source.pageUrl }),
-    ...(source.kind === undefined ? {} : { kind: source.kind }),
-    isPrimary: source.id === candidate.value.primarySourceId,
-  })),
+  sources: candidate.value.sources,
+  ...(candidate.value.primarySourceId === undefined
+    ? {}
+    : { primarySourceId: candidate.value.primarySourceId }),
   fieldErrors: {},
   saving: false,
 });
-
-const fieldErrors = (
-  error: CandidateSourcePublicError,
-): Readonly<Record<string, string>> => {
-  if (error.kind === "source-validation") return { [error.path]: error.kind };
-  if (error.kind === "primary-required")
-    return { replacementPrimarySourceId: error.kind };
-  return {};
-};
 
 export const loadCandidateSourceEditor = async (
   ports: CandidateSourceEditorPorts | undefined,
@@ -81,10 +151,29 @@ export const loadCandidateSourceEditor = async (
   const listed = await ports.catalog.listSourceReferences({
     scope: { kind: "candidate", candidateId },
   });
+  const primarySourceId = listed.ok
+    ? listed.value.find((reference) => reference.isPrimary)?.sourceId
+    : undefined;
   return listed.ok
     ? {
         kind: "ready",
-        snapshot: { ...current, sources: listed.value, fieldErrors: {} },
+        snapshot: {
+          ...current,
+          sources: listed.value.map((reference) => {
+            const existing = current.sources.find(
+              (source) => source.id === reference.sourceId,
+            );
+            return {
+              ...(existing ?? { id: reference.sourceId }),
+              ...(reference.pageUrl === undefined
+                ? {}
+                : { pageUrl: reference.pageUrl }),
+              ...(reference.kind === undefined ? {} : { kind: reference.kind }),
+            };
+          }),
+          ...(primarySourceId === undefined ? {} : { primarySourceId }),
+          fieldErrors: {},
+        },
       }
     : { kind: "failed", snapshot: current, error: listed.error };
 };
@@ -112,21 +201,26 @@ export const beginCandidateSourceEditorSave = (
 ): {
   readonly started: CandidateSourceEditorSnapshot;
   readonly completed: Promise<CandidateSourceEditorResult>;
-} => ({
-  started: { ...current, fieldErrors: {}, saving: true },
-  completed:
-    ports === undefined
-      ? Promise.resolve({ kind: "unavailable", snapshot: current })
-      : mutate(ports.mutations, command).then((result) =>
-          result.ok
-            ? { kind: "ready", snapshot: mutationSnapshot(current, result) }
-            : {
-                kind: "failed",
-                snapshot: {
-                  ...stopped(current),
-                  fieldErrors: fieldErrors(result.error),
+} => {
+  const preserved = withDraftPrimarySource(current);
+  const staged = stagedSnapshot(preserved, command);
+  const started = { ...staged, fieldErrors: {}, saving: true };
+  return {
+    started,
+    completed:
+      ports === undefined
+        ? Promise.resolve({ kind: "unavailable", snapshot: preserved })
+        : mutate(ports.mutations, command).then((result) =>
+            result.ok
+              ? { kind: "ready", snapshot: mutationSnapshot(staged, result) }
+              : {
+                  kind: "failed",
+                  snapshot: {
+                    ...stopped(preserved),
+                    fieldErrors: fieldErrors(result.error, staged, command),
+                  },
+                  error: result.error,
                 },
-                error: result.error,
-              },
-        ),
-});
+          ),
+  };
+};

@@ -79,6 +79,7 @@ const createState = async (
     ok: true as const,
     value: undefined,
   }),
+  localInput = false,
 ) => {
   const state = createManagementState({
     query,
@@ -94,12 +95,13 @@ const createState = async (
     }),
   });
   await state.load();
-  state.beginEdit(candidateId, draft);
+  if (localInput) state.beginCreate(draft);
+  else state.beginEdit(candidateId, draft);
   return state;
 };
 
 test("source追加・編集・primary選択をdraftだけへ反映する", async () => {
-  const state = await createState();
+  const state = await createState(undefined, true);
   state.addEditorSource({
     id: sourceB,
     pageUrl: "https://maker.invalid/b",
@@ -123,7 +125,7 @@ test("source追加・編集・primary選択をdraftだけへ反映する", async
 });
 
 test("primary削除はreplacementを要求し、最後のsourceはreplacementなしで削除する", async () => {
-  const state = await createState();
+  const state = await createState(undefined, true);
   state.addEditorSource({ id: sourceB, pageUrl: "https://maker.invalid/b" });
   state.removeEditorSource(sourceA);
   assert.deepEqual(state.value.sourceOperationError, {
