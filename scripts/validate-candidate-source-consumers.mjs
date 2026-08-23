@@ -22,6 +22,7 @@ import { withTypeScriptAsts } from "./typescript-ast.mjs";
 export const candidateSourceConsumerScanRoots = Object.freeze([
   "src/candidate-sources",
   "src/features/candidate-management/public.ts",
+  "tests/tooling/candidate-source-editor-consumer.ts",
   "tests/tooling/source-price-candidate-sources-consumer.ts",
   "tests/tooling/duplicate-product-candidate-sources-consumer.ts",
 ]);

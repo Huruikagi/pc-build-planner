@@ -314,7 +314,7 @@
 
 - [ ] 11. candidate editor向けconsumer migration seamを固定する
 
-- [ ] 11.1 source editor adapter向けconsumer contractを固定する
+- [x] 11.1 source editor adapter向けconsumer contractを固定する
   - Task 10.4のcatalog/mutation public shapeを使い、candidate editor adapterが一覧、field error、primary replacement、保存中stateへ適合できるpositive type fixtureを追加する。
   - port未注入または失敗時にdraftとsource表示を保持し、旧candidate-owned coreへfallbackしない期待resultをcontract fixtureで固定する。
   - source entity・URL identity・mutation、candidate CRUD/state/viewを本taskで実装せず、実adapterは`project-candidate-management` Task 13.3が所有する。

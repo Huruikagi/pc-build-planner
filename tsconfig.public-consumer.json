@@ -15,6 +15,7 @@
     "tests/tooling/source-price-refresh-public-consumer.ts",
     "tests/tooling/source-price-refresh-upstream-consumer.ts",
     "tests/tooling/candidate-sources-public-consumer.ts",
+    "tests/tooling/candidate-source-editor-consumer.ts",
     "tests/tooling/source-price-candidate-sources-consumer.ts",
     "tests/tooling/duplicate-product-candidate-sources-consumer.ts"
   ]
