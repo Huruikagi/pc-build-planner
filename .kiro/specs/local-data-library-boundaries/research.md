@@ -89,7 +89,7 @@
 - **Sources Consulted**: `local-data-foundation` tasks 10.1、10.2、11.2以降、`backup-restore` design、`application-shell` design、workspace scripts。
 - **Findings**:
   - 上流factory/public declarationを先に修復しないと下流executable contractをcastなしで書けない。
-  - Foundation task 11.2のexecutable product contract成立後に、`backup-restore` tasks 7.1–7.4のreplacement/recovery/finalizationと`application-shell` tasks 12.1–12.3のproduction compositionを各owner gateで再検証する必要がある。
+  - Foundation task 11.2のexecutable product contract成立後に、`backup-restore` tasks 7.1–7.4のreplacement/recovery/finalizationと`application-shell` tasks 12.2–12.4の全owner production compositionを各owner gateで再検証する必要がある。
   - 既存3 entry、固定Web Lock、single write、revision/dedupe、atomic replacement、opaque ticket、pre/post cleanup、既存root保持は変更対象ではない。
 - **Implications**: 実装順をpackage core → public/synthetic contracts → Foundation task 11.2のdownstream-owned `validate:local-data-product-contract` → 上流routing/final validationとし、backup/application-shellの実装は吸収せず、各ownerの後続gateが修復milestoneを待つことを検査する。
 

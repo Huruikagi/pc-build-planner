@@ -161,7 +161,7 @@
   - 架空ページE2Eでcandidate件数を増やさないsource統合、same-source price route、matchなし・明示新規保存を通し、既存UI/error semanticsが一致することを確認する。
   - 本specのidentity core/duplicate workflow owner、candidate-sourceのURL identity/catalog/matcher/mutation owner、Foundation error owner、application-shell composition ownerが重複せず、旧import/proxy/deep import/shell file変更がないことを監査する。
   - 全Acceptance Criteria、Change Brief In/Out、file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
-  - _Depends: 6.2_
+  - _Depends: 6.2; project-candidate-management 14.5_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
   - _Boundary: Duplicate product merge final ownership and regression validation_
 

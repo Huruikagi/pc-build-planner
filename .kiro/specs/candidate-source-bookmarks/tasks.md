@@ -324,13 +324,13 @@
   - _Depends: 10.4_
 
 - [ ] 11.2 candidate側owner撤去後の公開境界を検証する
-  - **実装開始条件**: `project-candidate-management` Task 13.3と14.3が完了し、candidate editor adapterがcanonical portへ移行済みであること。
+  - **実装開始条件**: `project-candidate-management` Task 13.3、14.3、14.5が完了し、candidate editor adapterがcanonical portへ移行済みでcandidate-owned source coreが撤去済みであること。
   - candidate editor state/view/page-open adapterがconsumerとして残り、candidate public APIがcandidate queryとtyped editor intentへ限定されたshapeをcontract testで検証する。
-  - candidate-management側のsource catalog/mutation/URL identity撤去そのものは隣接ownerのTask 14.3へ委ね、本taskではそのfileを実装または削除しない。
+  - candidate-management側のsource catalog/mutation/URL identity撤去そのものは隣接ownerのTask 14.5へ委ね、本taskではそのfileを実装または削除しない。
   - 旧`ManagementError`、source facet/re-export、source deep import、暗黙fallback、二重ownerをnegative fixtureで拒否する。
   - _Requirements: 3.8, 7.2, 8.1, 8.5_
   - _Boundary: CandidateSourceEditorAdapter, CandidateSourcesPublicApi_
-  - _Depends: 11.1; project-candidate-management 13.3, 14.3_
+  - _Depends: 11.1; project-candidate-management 13.3, 14.3, 14.5_
 
 - [ ] 11.3 既存source editorと安全な再訪を回帰する
   - 一覧、追加、編集、削除、primary replacement、種別上書き、field error、保存失敗時入力保持を既存DOM操作で検証する。
@@ -365,6 +365,8 @@
   - _Depends: 11.3, 12.1, 12.2_
 
 ## Implementation Notes
+
+- **2026-08-24 source task graph repair**: candidate側のcanonical editor接続を`project-candidate-management` 14.3、全consumer移行後の旧source owner撤去を14.5に分離した。本spec 11.2は両taskと13.3の完了後に公開境界を検証し、他ownerの撤去を代行しない。
 
 - 8.1: validation remediationで `patchSourcePrice` を公開source mutationへ追加した。commit時に最新sourceのraw URL・retail kindをprecondition検証し、後発`siteName`を保持してprice/capturedAtだけを1 root mutationで更新する。実foundation contractでkind変更・source削除・revision競合はいずれもpatch由来0commitになることを固定し、source-price-refresh 6.1から再利用する。
 

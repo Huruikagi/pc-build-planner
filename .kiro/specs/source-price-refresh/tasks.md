@@ -229,7 +229,7 @@
   - production activation transport後段のPlaywrightと既存native menu証跡を再検証し、価格workflow移行後も明示操作からtransient結果までの利用者結果が一致することを確認する。
   - source owner、Foundation error owner、application-shell composition owner、本specのprice workflow/UI ownerが重複せず、循環proxy、deep import、旧`ManagementError`、production shell file変更がないことを監査する。
   - 45件のAcceptance Criteria、Change Brief In/Out、file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
-  - _Depends: 7.2_
+  - _Depends: 7.2; project-candidate-management 14.5_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
   - _Boundary: Source price refresh final ownership and regression validation_
 

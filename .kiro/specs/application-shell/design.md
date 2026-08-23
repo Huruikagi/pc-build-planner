@@ -96,7 +96,7 @@ application shellは、Chrome extensionのside panelをfeature-neutralなhostと
 - `src/domain/`と`src/persistence/`にはstrict TypeScriptのlocal data foundation、canonical `Result<T, E>`、永続maintenance state、query/mutation portが実装済みである。
 - `manifest.json`、esbuildによるChrome 116 target、Node test、Playwright、artifact/boundary検査は既存基盤として維持する。
 - application shell task 3.4までにcontracts、registry、maintenance projection、mutation gate、ShellView、ReactShellRoot、SidePanelHost、composition root、runtime bootstrapと対応testが実装済みである。
-- `src/runtime/side-panel.ts`はproduction side panel compositionとbootstrapへ接続済みであり、仮maintenance sourceやnoop observerを持たない。残るproduction gapは、全owner公開contractの開始条件固定、side-panel/rootとworkerのproduct-local contribution wiring、obsolete proxy撤去、cleanup、統合検証、Chrome E2Eであり、task 12.1–12.6が担当する。
+- `src/runtime/side-panel.ts`はproduction side panel compositionとbootstrapへ接続済みであり、仮maintenance sourceやnoop observerを持たない。残るproduction gapは、source限定の先行wiring、全owner公開contractの開始条件固定、side-panel/rootとworkerのproduct-local contribution wiring、obsolete proxy撤去、cleanup、統合検証、Chrome E2Eであり、task 12.1–12.7が担当する。
 - 現行composition rootとSidePanelHostは一つのcontainerをfeature mountへ渡す。shell React rootも同じcontainerを所有するため、task 4.1ではshell専用rootとfeature専用outletを分離する必要がある。
 - foundationの基礎runtime contributionは`src/persistence/public.ts`から引数なしproduction factoryとして実装済みで、read-only `MaintenanceSnapshotSource`、単数の`DataWorkerRegistration`、冪等`dispose`を返す。同Change Briefのtask 11.2が通常用途とbackup用途を分けたproduct-local capability contractを最終characterizationする。application-shellはその承認済み公開contributionだけを利用し、Storage実装またはpackage factoryへdeep importしない。
 
@@ -194,6 +194,8 @@ tests/
 `project-context-shell-adapter.ts`はproject-contextのpresentation contributionをshellの専用slotへ一度だけmountし、停止時に解除する。snapshotの`ready | empty | unavailable`を業務判断へ変換せず、`unavailable`時はproject依存featureのavailabilityだけを理由付きで閉じる。settingsとbackup recoveryはproject非依存として起動を継続する。
 
 #### v0.5 owner reconciliation composition
+
+candidate sourceは全owner最終compositionより先に、source-price、duplicate、captureのconsumer移行後の限定seamでproduction wiringする。`side-panel-contributions.ts`は`createCandidateSourceCatalog`、`createCandidateSourceMatcher`、`createCandidateSourceMutationService`を各1回だけ呼び、生成した各port instanceを必要なconsumer間で共有する。この先行seamはproject、identity、manufacturer、refreshの他proxyを撤去せず、candidate-owned source core撤去の開始条件だけを提供する。
 
 `application-composition.ts`はowner公開entryからconfigured message resolver、現行product-local runtime contribution、既存backup section contribution、project lifecycle descriptor/catalogを初期化し、通常consumerへ通常用途capabilityだけ、backup sectionへ既存backup専用capabilityだけを渡す。candidate/source/identity/current-build/compatibility/price/duplicate/captureのfeature contributionへも必要なportだけを直接渡し、共有`AppDataError`は値・variantを検査せずconsumer間を型付きで接続する。package factoryへの全面移行、package内部のstorage/lock、generic maintenance/recovery/finalization seamはこのcompositionに追加しない。
 
