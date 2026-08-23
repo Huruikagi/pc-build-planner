@@ -40,6 +40,26 @@ test("14.1: candidate boundary contains no project lifecycle authority", async (
   }
 });
 
+test("15.2: lifecycle host adapterはcontextやsnapshot authorityを逆流させない", async () => {
+  const source = await readFile(
+    new URL(
+      "../../../src/features/candidate-management/project-lifecycle-host-adapter.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  for (const forbidden of [
+    /ProjectContext(Read|Command|Snapshot)/,
+    /ManagementStateSnapshot/,
+    /\brefresh\b/,
+    /\bgetSnapshot\b/,
+  ]) {
+    assert.doesNotMatch(source, forbidden);
+  }
+  assert.match(source, /ProjectLifecyclePresentationContribution/);
+});
+
 test("13.2: common lifecycle presentation mounts in the candidate host and unmounts once", () => {
   const container = document.createElement("section");
   let mountedContainer: HTMLElement | undefined;

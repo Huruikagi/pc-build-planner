@@ -392,7 +392,7 @@
   - _Depends: 14.2_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.4, 6.5, 6.6, 6.10_
   - _Boundary: CandidateManagementService, CandidateQuery, ManagementState, ManagementView_
-- [ ] 15.2 pre-edit・draft guard・snapshot契約を回帰する
+- [x] 15.2 pre-edit・draft guard・snapshot契約を回帰する
   - readyへのpre-edit binding、empty/unavailableのpending、共通lifecycle成功後の継続、通常/強制切替時のdraft保護を検証する。
   - snapshot version 3/shape、project IDの非権威性、pendingのsession限定寿命を維持し、lifecycle hostがcontextやsnapshot authorityを逆流させないことを確認する。
   - 完了時、activation、guard、forced notification、snapshotの全既存分岐が成功し、draftが暗黙破棄・再binding・永続化されない。
@@ -444,3 +444,4 @@
 - 2026-08-11の境界再修正で、context未注入時のproject作成結果IDへのdirect bindingとsnapshot一致検査免除を除去し、pending再開を検証済みcurrent contextだけへ限定した。
 - 2026-08-11のfeature validation remediationで、project-free prefillとlegacy project情報破棄をrequirements・design・tasksへ同期し、application shellの必須project refresh注入を任意guardから分離した。
 - Task 15.1: UI導線のproject制約だけに依存せず保存直前にも検証済みcurrent project・editor・draftの3者一致をfenceし、共有`AppDataError`はquery/mutationのResult identityごと変更せず伝播する。
+- Task 15.2: `pendingPreEdit`は同一document sessionのstateだけに保持してversion 3 snapshotのexact shapeへ混入させず、共通lifecycle hostはpresentationのmount/unmount以外のcontext・snapshot authorityを受け取らない。

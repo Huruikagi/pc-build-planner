@@ -139,6 +139,39 @@ test("未保存の編集・選択・削除確認・表示エラーだけをversi
   assert.equal("isSaving" in snapshot, false);
 });
 
+test("15.2: pending pre-editはsession限定でversion 3 snapshotへ永続化しない", async () => {
+  const state = await createState();
+  state.holdPendingPreEdit({
+    draft: {
+      category: "uncategorized",
+      product: { name: { original: "session限定の架空候補" } },
+      normalizedAttributes: { category: "uncategorized" },
+    },
+  });
+  const codec = createManagementStateSnapshotCodec(
+    state,
+    createDuplicateMergeStateSnapshotCodec(),
+  );
+
+  const snapshot = codec.capture(state);
+
+  assert.deepEqual(Object.keys(snapshot).sort(), [
+    "deletion",
+    "displayError",
+    "duplicateDecision",
+    "editor",
+    "selectedCategory",
+    "selectedProjectId",
+    "version",
+  ]);
+  assert.equal(snapshot.version, 3);
+  assert.equal("pendingPreEdit" in snapshot, false);
+  assert.equal(
+    JSON.stringify(snapshot).includes("session限定の架空候補"),
+    false,
+  );
+});
+
 test("snapshot restore失敗の表示状態もcaptureとrestoreをround-tripできる", async () => {
   const state = await createState();
   state.rejectSnapshotRestore();
