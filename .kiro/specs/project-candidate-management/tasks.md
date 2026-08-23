@@ -385,7 +385,7 @@
   - _Boundary: CandidateIdentityConsumer_
 
 - [ ] 15. Candidate管理の非回帰を境界別に検証する
-- [ ] 15.1 候補CRUD・照会・error表示を回帰する
+- [x] 15.1 候補CRUD・照会・error表示を回帰する
   - 欠損・未分類を許容する作成、カテゴリ別照会、完全draft編集、カテゴリ変更、候補削除を共有`AppDataError` consumer化後も検証する。
   - current project以外への表示・保存、保存失敗時のdraft消失、data error variant統合が起きないことを架空fixtureで確認する。
   - 完了時、候補CRUDと一覧・項目error・保存errorのunit/DOM/integration suiteが移行前と同じ利用者結果で成功する。
@@ -443,3 +443,4 @@
 - 2026-08-11のfeature validation remediationで、project create・rename・delete失敗時にcontext refreshが0回で既存表示を保持する統合証跡を追加し、共有coreの公開依存と現行テスト配置をdesignへ同期した。
 - 2026-08-11の境界再修正で、context未注入時のproject作成結果IDへのdirect bindingとsnapshot一致検査免除を除去し、pending再開を検証済みcurrent contextだけへ限定した。
 - 2026-08-11のfeature validation remediationで、project-free prefillとlegacy project情報破棄をrequirements・design・tasksへ同期し、application shellの必須project refresh注入を任意guardから分離した。
+- Task 15.1: UI導線のproject制約だけに依存せず保存直前にも検証済みcurrent project・editor・draftの3者一致をfenceし、共有`AppDataError`はquery/mutationのResult identityごと変更せず伝播する。

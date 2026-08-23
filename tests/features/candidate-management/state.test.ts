@@ -135,6 +135,45 @@ test("読込時に先頭projectと候補一覧を復元し、カテゴリ選択�
   assert.equal(state.value.candidates.length, 1);
 });
 
+test("照会fixtureが別project候補を混在させてもcurrent projectの一覧に表示しない", async () => {
+  const query = createQuery();
+  const state = createManagementState({
+    query: {
+      ...query,
+      async listCandidates() {
+        const listed = await query.listCandidates({ projectId });
+        if (!listed.ok) return listed;
+        return {
+          ok: true as const,
+          value: [
+            ...listed.value,
+            {
+              ...listed.value[0]!,
+              id: "30000000-0000-4000-8000-000000000099" as Uuid as CandidatePartId,
+              projectId: otherProjectId,
+              name: { original: "別projectの架空候補" },
+            },
+          ],
+        };
+      },
+    },
+    service: createService(),
+    createMutationContext: () => context,
+    currentProject,
+  });
+
+  await state.load();
+
+  assert.deepEqual(
+    state.value.candidates.map(({ projectId: owner }) => owner),
+    [projectId],
+  );
+  assert.equal(
+    state.value.candidates.some(({ name }) => name?.original === "別projectの架空候補"),
+    false,
+  );
+});
+
 test("pending pre-edit は reset と load では失われず明示取消だけで破棄できる", async () => {
   const state = createManagementState({
     query: createQuery(),
@@ -233,6 +272,35 @@ test("候補保存の失敗では入力と一覧を保持し、同一操作の�
   assert.equal(state.value.candidates.length, 1);
   assert.deepEqual(state.value.displayError, { code: "storage" });
   assert.equal(state.value.isSaving, false);
+});
+
+test("保存時のcurrent projectと異なるdraftは永続化せず入力と一覧を保持する", async () => {
+  let creates = 0;
+  const otherProjectDraft = { ...draft, projectId: otherProjectId };
+  const state = createManagementState({
+    query: createQuery(),
+    service: createService({
+      async createCandidate() {
+        creates += 1;
+        return { ok: true as const, value: {} as never };
+      },
+    }),
+    createMutationContext: () => context,
+    currentProject,
+  });
+  await state.load();
+  state.beginCreate(otherProjectDraft);
+
+  await state.saveEditor();
+
+  assert.equal(creates, 0);
+  assert.deepEqual(state.value.editor, {
+    mode: "create",
+    projectId: otherProjectId,
+    draft: otherProjectDraft,
+  });
+  assert.equal(state.value.candidates.length, 1);
+  assert.deepEqual(state.value.displayError, { code: "project-required" });
 });
 
 test("create 保存は重複 coordinator へ委譲し、edit 保存は既存 update を維持する", async () => {

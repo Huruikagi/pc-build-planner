@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AppDataError,
   CandidatePart,
   CandidatePartId,
   CandidateSourceId,
@@ -529,4 +530,44 @@ test("候補照会はproject・category境界を守り、欠損を捏造しな�
     ok: true,
     value: [candidate()],
   });
+});
+
+test("候補照会と保存はfoundation所有のAppDataError variantを統合せずそのまま返す", async () => {
+  const queryError = {
+    code: "corrupt-data",
+    message: "架空rootの検証失敗",
+  } as const satisfies AppDataError;
+  const mutationError = {
+    code: "quota-exceeded",
+  } as const satisfies AppDataError;
+  const data = {
+    async query() {
+      return { ok: false as const, error: queryError };
+    },
+    async mutate() {
+      return { ok: false as const, error: mutationError };
+    },
+  } as unknown as FoundationDataPort;
+  const service = createCandidateManagementService({
+    data,
+    now: () => timestamp,
+    createCandidateId: () => candidateId,
+  });
+  const context = { requestId, expectedRevision: 0 as Revision };
+
+  const projects = await service.listProjects();
+  const candidates = await service.listCandidates({ projectId });
+  const draftResult = await service.getCandidateDraft(candidateId);
+  const eligible = await service.listBuildEligible(projectId);
+  const created = await service.createCandidate(draft(), context);
+  const deleted = await service.deleteCandidate(candidateId, context);
+
+  for (const result of [projects, candidates, draftResult, eligible]) {
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, queryError);
+  }
+  for (const result of [created, deleted]) {
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, mutationError);
+  }
 });

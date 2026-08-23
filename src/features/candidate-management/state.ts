@@ -813,6 +813,17 @@ export class ManagementState {
     const editor = this.#value.editor;
     if (editor === null || this.#value.isSaving || this.#mutationsDisabled())
       return;
+    if (this.dependencies.currentProject !== undefined) {
+      const current = this.resolveCurrentProject();
+      if (
+        current.status !== "resolved" ||
+        current.projectId !== editor.projectId ||
+        current.projectId !== editor.draft.projectId
+      ) {
+        this.#set({ displayError: { code: "project-required" } });
+        return;
+      }
+    }
     if (editor.mode === "create" && this.#duplicateMerge !== null) {
       this.#set({ displayError: null, fieldErrors: emptyFieldErrors });
       await this.#duplicateMerge.evaluate(editor.draft);
