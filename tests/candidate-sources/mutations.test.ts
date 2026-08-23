@@ -162,6 +162,16 @@ const realFoundationHarness = async () => {
     }),
     data,
     commits: () => commits,
+    serviceWithData(override: FoundationScopedDataPort) {
+      return createCandidateSourceMutationService({
+        data: override,
+        manufacturerDomains: {
+          findManufacturer: () => ({ ok: true, value: undefined }),
+        },
+        createRequestId: () =>
+          "90000000-0000-4000-8000-000000000099" as RequestId,
+      });
+    },
   };
 };
 
@@ -207,6 +217,168 @@ test("実foundation scoped data portでも全mutationがaggregate単位で一回
     );
     assert.equal(stored.value.revision, 5);
   }
+});
+
+test("Task 10.3: canonical mutationは条件付き価格patch契約を公開する", () => {
+  const probe = harness();
+  assert.equal(typeof probe.service.patchSourcePrice, "function");
+});
+
+test("条件付き価格patchは最新siteNameを保持してprice/capturedAtだけを1回commitする", async () => {
+  const probe = await realFoundationHarness();
+  const renamed = await probe.service.updateSource({
+    candidateId,
+    source: { id: primaryId, siteName: "架空並行更新店" },
+  });
+  assert.equal(renamed.ok, true);
+  const commitsBefore = probe.commits();
+
+  const patched = await probe.service.patchSourcePrice({
+    candidateId,
+    sourceId: primaryId,
+    expectedPageUrl: "https://catalog.example.invalid/synthetic-part-1",
+    expectedKind: "retail",
+    price: {
+      original: "42,420 JPY",
+      confirmed: { amount: 42420, currency: "JPY" },
+    },
+    capturedAt: "2026-08-24T01:02:03.000Z" as never,
+  });
+
+  assert.equal(patched.ok, true);
+  assert.equal(probe.commits(), commitsBefore + 1);
+  const stored = await probe.data.query(
+    (root) => root.candidateParts[0]?.sources[0],
+  );
+  assert.equal(stored.ok, true);
+  if (stored.ok) {
+    assert.equal(stored.value?.siteName, "架空並行更新店");
+    assert.equal(stored.value?.capturedAt, "2026-08-24T01:02:03.000Z");
+    assert.deepEqual(stored.value?.price, {
+      original: "42,420 JPY",
+      confirmed: { amount: 42420, currency: "JPY" },
+    });
+  }
+});
+
+test("source削除・raw URL変更・kind変更は専用preconditionとなりpatch由来commitを残さない", async (t) => {
+  const cases = [
+    [
+      "source削除",
+      async (probe: Awaited<ReturnType<typeof realFoundationHarness>>) =>
+        probe.service.removeSource({
+          candidateId,
+          sourceId: primaryId,
+          replacementPrimarySourceId: addedId,
+        }),
+    ],
+    [
+      "raw URL変更",
+      async (probe: Awaited<ReturnType<typeof realFoundationHarness>>) =>
+        probe.service.updateSource({
+          candidateId,
+          source: {
+            id: primaryId,
+            pageUrl: "https://shop.example.invalid/products/changed",
+          },
+        }),
+    ],
+    [
+      "kind変更",
+      async (probe: Awaited<ReturnType<typeof realFoundationHarness>>) =>
+        probe.service.updateSource({
+          candidateId,
+          source: { id: primaryId, kind: "manufacturer" },
+        }),
+    ],
+  ] as const;
+
+  for (const [name, change] of cases) {
+    await t.test(name, async () => {
+      const probe = await realFoundationHarness();
+      if (name === "source削除") {
+        await probe.service.addSource({
+          candidateId,
+          source: {
+            id: addedId,
+            pageUrl: "https://shop.example.invalid/products/other",
+            kind: "retail",
+          },
+        });
+      }
+      assert.equal((await change(probe)).ok, true);
+      const commitsBefore = probe.commits();
+      const result = await probe.service.patchSourcePrice({
+        candidateId,
+        sourceId: primaryId,
+        expectedPageUrl: "https://catalog.example.invalid/synthetic-part-1",
+        expectedKind: "retail",
+        price: {
+          original: "42,420 JPY",
+          confirmed: { amount: 42420, currency: "JPY" },
+        },
+        capturedAt: "2026-08-24T01:02:03.000Z" as never,
+      });
+      assert.deepEqual(result, {
+        ok: false,
+        error: { kind: "precondition-failed" },
+      });
+      assert.equal(probe.commits(), commitsBefore);
+    });
+  }
+});
+
+test("revision競合はAppDataError conflictとして投影しpatchをcommitしない", async () => {
+  const probe = await realFoundationHarness();
+  let injected = false;
+  const conflictingData: FoundationScopedDataPort = {
+    query: probe.data.query,
+    async mutate(command) {
+      if (!injected) {
+        injected = true;
+        const current = await probe.data.query((root) => ({
+          revision: root.revision,
+          candidate: root.candidateParts[0],
+        }));
+        assert.equal(current.ok, true);
+        if (current.ok && current.value.candidate) {
+          const candidate = {
+            ...current.value.candidate,
+            updatedAt: "2026-08-24T00:00:01.000Z" as never,
+          };
+          const competing = await probe.data.mutate({
+            requestId: "90000000-0000-4000-8000-000000000098" as RequestId,
+            expectedRevision: current.value.revision,
+            operation: {
+              kind: "update",
+              entity: "candidatePart",
+              value: candidate,
+            },
+          });
+          assert.equal(competing.ok, true);
+        }
+      }
+      return probe.data.mutate(command);
+    },
+  };
+  const service = probe.serviceWithData(conflictingData);
+  const commitsBefore = probe.commits();
+  const result = await service.patchSourcePrice({
+    candidateId,
+    sourceId: primaryId,
+    expectedPageUrl: "https://catalog.example.invalid/synthetic-part-1",
+    expectedKind: "retail",
+    price: {
+      original: "42,420 JPY",
+      confirmed: { amount: 42420, currency: "JPY" },
+    },
+    capturedAt: "2026-08-24T01:02:03.000Z" as never,
+  });
+  assert.deepEqual(result, {
+    ok: false,
+    error: { kind: "data", error: { code: "revision-conflict" } },
+  });
+  assert.equal(probe.commits(), commitsBefore + 1);
 });
 
 test("add/update/remove/setPrimaryはpolicyを通してcandidate aggregateを各1回だけ更新する", async () => {

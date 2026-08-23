@@ -16,9 +16,11 @@ import {
   createCandidateSourceMatcher,
   createCandidateSourceMutationService,
   identifyCandidateSourceUrl,
+  type PatchCandidateSourcePriceInput,
   projectAppDataError,
   type RemoveCandidateSourceInput,
   type SourceMatchResult,
+  type SourcePricePatchContract,
   type UpdateCandidateSourceInput,
 } from "../../src/candidate-sources/public.js";
 import type { AppDataError } from "../../src/domain/public.js";
@@ -70,6 +72,7 @@ export const catalogReferenceById = catalogConsumer.getSourceReference({
 declare const mutationDependencies: CandidateSourceMutationDependencies;
 export const mutationConsumer =
   createCandidateSourceMutationService(mutationDependencies);
+export const pricePatchConsumer: SourcePricePatchContract = mutationConsumer;
 
 export const addInput: AddCandidateSourceInput = {
   candidateId,
@@ -88,6 +91,19 @@ export const removeInput: RemoveCandidateSourceInput = {
   candidateId,
   sourceId,
 };
+
+export const patchInput: PatchCandidateSourcePriceInput = {
+  candidateId,
+  sourceId,
+  expectedPageUrl: "https://fictional-shop.invalid/item",
+  expectedKind: "retail",
+  price: {
+    original: "12345 JPY",
+    confirmed: { amount: 12_345, currency: "JPY" },
+  },
+  capturedAt: "2026-08-24T01:02:03.000Z" as never,
+};
+export const patchedPrice = pricePatchConsumer.patchSourcePrice(patchInput);
 
 export const policyConsumer = candidateSourcePolicy;
 

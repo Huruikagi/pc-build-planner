@@ -43,6 +43,7 @@ export type {
 export type {
   CandidateSourceMutationDependencies,
   CandidateSourceMutationPort,
+  SourcePricePatchContract,
 } from "./mutations.js";
 export { createCandidateSourceMutationService } from "./mutations.js";
 export { candidateSourcePolicy } from "./policy.js";

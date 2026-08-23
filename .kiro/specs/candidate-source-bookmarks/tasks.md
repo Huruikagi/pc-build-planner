@@ -293,7 +293,7 @@
   - _Boundary: CandidateSourceMutationPort, CandidateSourceMutationService_
   - _Depends: 9.1, 9.2, 10.1_
 
-- [ ] 10.3 条件付き価格patchをcanonical mutationへ統合する
+- [x] 10.3 条件付き価格patchをcanonical mutationへ統合する
   - candidate/source ID、期待raw URL、期待kind=`retail`をcommit時の最新sourceへ照合し、price/capturedAtだけを一回のmutationで更新する。
   - 並行siteName変更を保持し、source/URL/kind不一致を専用precondition、revision競合を`AppDataError`の既存conflictとして区別する。
   - source削除、URL/kind変更、revision競合、並行siteName変更、成功1commitを実stack contractで固定する。

@@ -16,13 +16,20 @@ import {
 } from "./app-data-error-projection.js";
 import type {
   AddCandidateSourceInput,
+  PatchCandidateSourcePriceInput,
   RemoveCandidateSourceInput,
   SetPrimarySourceInput,
   UpdateCandidateSourceInput,
 } from "./model.js";
 import { candidateSourcePolicy } from "./policy.js";
 
-export interface CandidateSourceMutationPort {
+export interface SourcePricePatchContract {
+  patchSourcePrice(
+    input: PatchCandidateSourcePriceInput,
+  ): Promise<Result<CandidatePart, CandidateSourcePublicError>>;
+}
+
+export interface CandidateSourceMutationPort extends SourcePricePatchContract {
   addSource(
     input: AddCandidateSourceInput,
   ): Promise<Result<CandidatePart, CandidateSourcePublicError>>;
@@ -120,6 +127,52 @@ export const createCandidateSourceMutationService = (
         };
   };
 
+  const patchSourcePrice = async (
+    input: PatchCandidateSourcePriceInput,
+  ): Promise<Result<CandidatePart, CandidateSourcePublicError>> => {
+    const snapshot = await dependencies.data.query((root: LocalDataRoot) => ({
+      revision: root.revision,
+      candidate: root.candidateParts.find(
+        (candidate) => candidate.id === input.candidateId,
+      ),
+    }));
+    if (!snapshot.ok)
+      return { ok: false, error: projectAppDataError(snapshot.error) };
+
+    const current = snapshot.value.candidate;
+    const source = current?.sources.find(({ id }) => id === input.sourceId);
+    if (
+      current === undefined ||
+      source === undefined ||
+      source.pageUrl !== input.expectedPageUrl ||
+      source.kind !== input.expectedKind
+    )
+      return { ok: false, error: { kind: "precondition-failed" } };
+
+    const candidate = {
+      ...current,
+      sources: current.sources.map((item) =>
+        item.id === input.sourceId
+          ? { ...item, price: input.price, capturedAt: input.capturedAt }
+          : item,
+      ),
+    } as unknown as CandidatePart;
+    const invalid = validationError(candidate);
+    if (invalid !== undefined) return { ok: false, error: invalid };
+
+    const committed = await dependencies.data.mutate({
+      requestId: (dependencies.createRequestId ?? defaultRequestId)(),
+      expectedRevision: snapshot.value.revision as Revision,
+      operation: { kind: "update", entity: "candidatePart", value: candidate },
+    });
+    return committed.ok
+      ? { ok: true, value: candidate }
+      : {
+          ok: false,
+          error: projectAppDataError(committed.error as AppDataError),
+        };
+  };
+
   return Object.freeze({
     addSource(input: AddCandidateSourceInput) {
       if (input.source.kind === undefined) {
@@ -172,5 +225,6 @@ export const createCandidateSourceMutationService = (
         candidateSourcePolicy.setPrimary(candidate, input.sourceId),
       );
     },
+    patchSourcePrice,
   });
 };
