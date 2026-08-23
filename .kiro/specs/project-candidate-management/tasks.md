@@ -336,7 +336,7 @@
   - _Depends: project-context 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 8.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 3.1, 3.6, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
   - _Boundary: ProjectLifecycleHostAdapter, ProjectContextAdapter_
-- [ ] 13.3 (P) source editorのconsumer seamを追加する
+- [x] 13.3 (P) source editorのconsumer seamを追加する
   - **実装開始条件**: `candidate-source-bookmarks` 10.4のcanonical source public entryとconsumer contractが利用可能であること。未完了なら旧内部coreへ接続する暫定seamを追加しない。
   - 取得元ownerのcatalog/mutation portを既存source editor stateへ適合する依存境界を追加する。
   - source entity・URL identity・mutationを実装、再公開、複製せず、canonical port未注入時は旧内部coreへfallbackしない。
