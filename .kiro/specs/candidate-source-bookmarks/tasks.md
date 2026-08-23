@@ -275,7 +275,7 @@
 
 - [ ] 10. catalogとmutationをcanonical source ownerへ移す
 
-- [ ] 10.1 read-only catalogを独立coreへ移す
+- [x] 10.1 read-only catalogを独立coreへ移す
   - 全候補または指定候補を一回の検証済みsnapshotから列挙し、candidate/source ID、任意URL、任意kind、primary状態だけを投影する。
   - sourceなしを空配列、未知candidateとcandidate内の未知sourceをentity別not-foundとして返し、重複referenceを除去しない。
   - foundation root、revision、candidate draft、price、capturedAt、product identityを公開せず、data operation失敗は9.2のprojectionを通す。

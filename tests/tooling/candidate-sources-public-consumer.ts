@@ -1,6 +1,8 @@
 import {
   type AddCandidateSourceInput,
   type CandidatePartId,
+  type CandidateSourceCatalogPort,
+  type CandidateSourceCatalogSnapshotPort,
   type CandidateSourceId,
   type CandidateSourceKind,
   type CandidateSourceMatcherPort,
@@ -9,6 +11,7 @@ import {
   type CandidateSourceScope,
   type CandidateSourceUrlIdentity,
   candidateSourcePolicy,
+  createCandidateSourceCatalog,
   createCandidateSourceMatcher,
   identifyCandidateSourceUrl,
   projectAppDataError,
@@ -47,6 +50,20 @@ export const matcherConsumer: CandidateSourceMatcherPort =
       value: [sourceReference],
     }),
   });
+
+declare const catalogSnapshots: CandidateSourceCatalogSnapshotPort;
+export const catalogConsumer: CandidateSourceCatalogPort =
+  createCandidateSourceCatalog({ data: catalogSnapshots });
+export const allCatalogReferences = catalogConsumer.listSourceReferences({
+  scope: { kind: "all-candidates" },
+});
+export const scopedCatalogReferences = catalogConsumer.listSourceReferences({
+  scope: candidateScope,
+});
+export const catalogReferenceById = catalogConsumer.getSourceReference({
+  candidateId,
+  sourceId,
+});
 
 export const addInput: AddCandidateSourceInput = {
   candidateId,

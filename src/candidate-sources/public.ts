@@ -14,6 +14,12 @@ export type {
 } from "./app-data-error-projection.js";
 export { projectAppDataError } from "./app-data-error-projection.js";
 export type {
+  CandidateSourceCatalogDependencies,
+  CandidateSourceCatalogPort,
+  CandidateSourceCatalogSnapshotPort,
+} from "./catalog.js";
+export { createCandidateSourceCatalog } from "./catalog.js";
+export type {
   CandidateSourceMatcherPort,
   CandidateSourceReferenceSnapshotPort,
 } from "./matcher.js";
