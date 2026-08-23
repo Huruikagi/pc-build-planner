@@ -1,0 +1,2 @@
+import type { CandidateManagementService } from "../../../src/features/candidate-management/service.js";
+export type Forbidden = CandidateManagementService;

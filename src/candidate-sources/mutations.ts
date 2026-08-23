@@ -8,7 +8,6 @@ import type {
   Revision,
 } from "../domain/public.js";
 import { validateCandidatePartValue } from "../domain/public.js";
-import type { ManufacturerDomainLookup } from "../features/product-capture/public.js";
 import type { FoundationScopedDataPort } from "../persistence/public.js";
 import {
   type CandidateSourcePublicError,
@@ -46,7 +45,13 @@ export interface CandidateSourceMutationPort extends SourcePricePatchContract {
 
 export interface CandidateSourceMutationDependencies {
   readonly data: FoundationScopedDataPort;
-  readonly manufacturerDomains: ManufacturerDomainLookup;
+  readonly manufacturerDomains: {
+    readonly findManufacturer: (
+      pageUrl: string,
+    ) =>
+      | { readonly ok: true; readonly value: unknown | undefined }
+      | { readonly ok: false; readonly error: unknown };
+  };
   readonly createRequestId?: () => RequestId;
 }
 

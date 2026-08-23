@@ -302,7 +302,7 @@
   - _Boundary: CandidateSourceMutationPort, SourcePricePatchContract_
   - _Depends: 10.2_
 
-- [ ] 10.4 source public entryとconsumer contractを固定する
+- [x] 10.4 source public entryとconsumer contractを固定する
   - catalog、mutations、matcher、source公開型を`candidate-sources/public.ts`からだけexportし、candidate-management公開APIへsource coreを再exportしない。
   - source-price-refreshがmatcherとconditional patchを、duplicate-product-mergeがcandidate限定matcher、source reference、`addSource`と必要なconditional mutationを同じ公開入口から利用できるpositive fixtureを追加する。
   - duplicate fixtureでno-match→add、一意match→conditional mutation、ambiguous→無変更のrouteを公開型だけで構成でき、read-only referenceだけへ能力を狭めた契約では型検査が失敗することを完了条件とする。

@@ -36,6 +36,7 @@
     "validate:local-data-product-contract": "node scripts/validate-local-data-product-contract.mjs",
     "validate:local-data-product-consumers": "node scripts/validate-local-data-product-consumers.mjs",
     "validate:boundaries": "node scripts/validate-boundaries.mjs packages/typed-messages-core/src tests/tooling/typed-messages-consumer.ts src/features src/candidate-sources src/application-shell src/runtime src/ui-language src/project-context src/persistence src/domain tests/tooling/public-api-consumer.ts tests/tooling/candidate-sources-public-consumer.ts tests/tooling/source-price-refresh-consumer.ts tests/tooling/source-price-refresh-public-consumer.ts tests/tooling/source-price-refresh-upstream-consumer.ts tests/tooling/source-price-refresh-duplicate-product-merge-consumer.ts",
+    "validate:candidate-source-consumers": "node scripts/validate-candidate-source-consumers.mjs src/candidate-sources src/features/candidate-management/public.ts tests/tooling/source-price-candidate-sources-consumer.ts tests/tooling/duplicate-product-candidate-sources-consumer.ts",
     "validate:typed-messages-boundaries": "node scripts/validate-boundaries.mjs packages/typed-messages-core/src tests/tooling/typed-messages-consumer.ts",
     "validate:typed-messages-core": "node scripts/validate-typed-messages-core.mjs",
     "validate:fixtures": "node --import tsx scripts/validate-fixture-assets.mjs tests/fixtures tests/fixtures/source-fixture-registry.ts",
@@ -43,7 +44,7 @@
     "validate:final-build": "node scripts/validate-final-gate.mjs dist",
     "validate:runtime-schema": "node scripts/validate-runtime-schema-csp.mjs",
     "validate:ui-text": "node scripts/validate-ui-text.mjs src/features src/application-shell src/project-context",
-    "validate:ci": "pnpm validate:typed-messages-core && pnpm validate:local-data && pnpm build && pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm validate:boundaries && pnpm validate:runtime-schema && pnpm validate:fixtures && pnpm validate:final-build && pnpm validate:ui-text && pnpm test",
+    "validate:ci": "pnpm validate:typed-messages-core && pnpm validate:local-data && pnpm build && pnpm typecheck && pnpm typecheck:public-consumer && pnpm lint && pnpm validate:boundaries && pnpm validate:candidate-source-consumers && pnpm validate:runtime-schema && pnpm validate:fixtures && pnpm validate:final-build && pnpm validate:ui-text && pnpm test",
     "validate": "pnpm validate:ci && playwright test",
     "package": "pnpm build && node scripts/package.mjs"
   },

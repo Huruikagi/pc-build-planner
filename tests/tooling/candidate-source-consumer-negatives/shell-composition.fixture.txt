@@ -1,0 +1,2 @@
+import { composeApplication } from "../../../src/application-shell/application-composition.js";
+export const forbidden = composeApplication;

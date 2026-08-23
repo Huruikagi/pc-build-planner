@@ -1,0 +1,2 @@
+// candidate-sources/model.js is documentation, not a module edge.
+export const migrationNote = "candidate-sources/public.js remains independently owned";
