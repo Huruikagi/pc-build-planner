@@ -13,6 +13,7 @@
     "tests/tooling/source-price-refresh-consumer.ts",
     "tests/tooling/source-price-refresh-duplicate-product-merge-consumer.ts",
     "tests/tooling/source-price-refresh-public-consumer.ts",
-    "tests/tooling/source-price-refresh-upstream-consumer.ts"
+    "tests/tooling/source-price-refresh-upstream-consumer.ts",
+    "tests/tooling/candidate-sources-public-consumer.ts"
   ]
 }

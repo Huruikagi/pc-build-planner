@@ -238,7 +238,7 @@
 
 - [ ] 9. 独立source coreの公開契約を確立する
 
-- [ ] 9.1 source共有型・policy・公開入口を追加する
+- [x] 9.1 source共有型・policy・公開入口を追加する
   - `src/candidate-sources/`にsource entity input、read-only reference、scope、match result、mutation input/resultの型を定義し、`public.ts`だけから公開する。
   - 0件以上のsource、存在する唯一のprimary、primaryだけからの代表URL/price導出、価格欠損の非fallback、primary削除replacementを純粋policyとして移す。
   - foundation canonical candidate shapeを消費するが、root/schema version、backup format、migration、candidate draftをsource公開型として再定義または公開しない。
