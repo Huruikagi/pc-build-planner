@@ -1,0 +1,3 @@
+import type { CandidateSourceCatalogPort } from "../../../src/features/candidate-management/public.js";
+declare const catalog: CandidateSourceCatalogPort;
+void catalog;

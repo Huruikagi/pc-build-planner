@@ -1,0 +1,2 @@
+import * as candidateSources from "../../../src/candidate-sources/public.js";
+void candidateSources.identifyCandidateSourceUrl;

@@ -1,0 +1,2 @@
+import { normalizeSourcePageUrl } from "../../../src/features/source-price-refresh/public.js";
+void normalizeSourcePageUrl;

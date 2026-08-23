@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   candidateSourceConsumerScanRoots,
@@ -20,6 +20,38 @@ const negativeCases = [
     "candidate-source-deep-import.fixture.txt",
     "candidate-sources-public-entry-only",
   ],
+  [
+    "source-price-management-error.fixture.txt",
+    "source-price-consumer-no-management-error",
+  ],
+  [
+    "source-price-candidate-proxy.fixture.txt",
+    "source-price-consumer-no-candidate-source-proxy",
+  ],
+  [
+    "source-price-owned-identity.fixture.txt",
+    "source-price-consumer-no-owned-source-identity",
+  ],
+  [
+    "source-price-owned-identity-alias.fixture.txt",
+    "source-price-consumer-no-owned-source-identity",
+  ],
+  [
+    "source-price-owned-identity-namespace.fixture.txt",
+    "source-price-consumer-no-owned-source-identity",
+  ],
+  [
+    "source-price-owned-identity-computed.fixture.txt",
+    "source-price-consumer-no-owned-source-identity",
+  ],
+  [
+    "source-price-source-internals.fixture.txt",
+    "candidate-sources-public-entry-only",
+  ],
+  [
+    "source-price-foundation-mapper.fixture.txt",
+    "source-price-consumer-no-foundation-error-mapper",
+  ],
 ] as const;
 
 test("source consumer negative fixtureは一違反ずつfail closedで拒否される", async () => {
@@ -31,6 +63,31 @@ test("source consumer negative fixtureは一違反ずつfail closedで拒否さ�
       [{ path, rule: expected }],
     );
   }
+});
+
+test("source-price negative fixture registryはdirectoryと双方向に一致する", async () => {
+  const directory = "tests/tooling/candidate-source-consumer-negatives";
+  const files = (await readdir(directory))
+    .filter((file) => file.startsWith("source-price-"))
+    .sort();
+  const registered = negativeCases
+    .map(([file]) => file)
+    .filter((file) => file.startsWith("source-price-"))
+    .sort();
+  assert.deepEqual(registered, files);
+});
+
+test("循環するcomputed aliasも停止してfail closedになる", () => {
+  const path = "tests/tooling/candidate-source-consumer-negatives/cyclic.ts";
+  const source = [
+    'import * as sources from "../../../src/candidate-sources/public.js";',
+    "const first = second;",
+    "const second = first;",
+    "void sources[first];",
+  ].join("\n");
+  assert.deepEqual(findCandidateSourceConsumerViolations([{ path, source }]), [
+    { path, rule: "source-price-consumer-no-owned-source-identity" },
+  ]);
 });
 
 test("candidate sources coreはfeature/shellへ依存せずcandidate publicに再公開されない", async () => {

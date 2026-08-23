@@ -1,0 +1,2 @@
+import { identifyCandidateSourceUrl as normalizeForPrice } from "../../../src/candidate-sources/public.js";
+void normalizeForPrice;

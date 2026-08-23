@@ -5,12 +5,16 @@ import { SyntaxKind } from "typescript/unstable/ast";
 import {
   isBinaryExpression,
   isCallExpression,
+  isElementAccessExpression,
   isExportDeclaration,
   isIdentifier,
   isImportDeclaration,
   isImportTypeNode,
   isLiteralTypeNode,
+  isNamedImports,
+  isNamespaceImport,
   isNoSubstitutionTemplateLiteral,
+  isPropertyAccessExpression,
   isStringLiteral,
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
@@ -102,6 +106,90 @@ const moduleSpecifiers = (ast) => {
   return specifiers;
 };
 
+/** @param {string | undefined} value */
+const candidateSourcePublicModule = (value) =>
+  value !== undefined && /candidate-sources\/public(?:\.js|\.ts)?$/.test(value);
+
+/** @param {import("typescript/unstable/ast").SourceFile} ast */
+const usesCandidateSourceOwnedIdentity = (ast) => {
+  /** @type {Set<string>} */
+  const directImports = new Set();
+  /** @type {Set<string>} */
+  const namespaces = new Set();
+  /** @type {Map<string, import("typescript/unstable/ast").Expression>} */
+  const declarations = new Map();
+  walk(ast, (node) => {
+    if (
+      isVariableDeclaration(node) &&
+      isIdentifier(node.name) &&
+      node.initializer
+    )
+      declarations.set(node.name.text, node.initializer);
+    if (!isImportDeclaration(node)) return;
+    const module = isStringLiteral(node.moduleSpecifier)
+      ? node.moduleSpecifier.text.replaceAll("\\", "/")
+      : undefined;
+    if (!candidateSourcePublicModule(module)) return;
+    const bindings = node.importClause?.namedBindings;
+    if (bindings === undefined) return;
+    if (isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    else if (isNamedImports(bindings))
+      for (const element of bindings.elements) {
+        const imported = element.propertyName?.text ?? element.name.text;
+        if (imported === "identifyCandidateSourceUrl")
+          directImports.add(element.name.text);
+      }
+  });
+  if (directImports.size > 0) return true;
+
+  /** @param {import("typescript/unstable/ast").Node} node @param {Set<string>} [seen] */
+  const resolvesNamespace = (node, seen = new Set()) => {
+    if (!isIdentifier(node)) return false;
+    if (namespaces.has(node.text)) return true;
+    if (seen.has(node.text)) return false;
+    const initializer = declarations.get(node.text);
+    if (initializer === undefined) return false;
+    return resolvesNamespace(initializer, new Set([...seen, node.text]));
+  };
+  /** @param {import("typescript/unstable/ast").Node} node @param {Set<string>} [seen] @returns {string | undefined} */
+  const stringValue = (node, seen = new Set()) => {
+    if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node))
+      return node.text;
+    if (isIdentifier(node)) {
+      if (seen.has(node.text)) return undefined;
+      const initializer = declarations.get(node.text);
+      return initializer === undefined
+        ? undefined
+        : stringValue(initializer, new Set([...seen, node.text]));
+    }
+    if (
+      isBinaryExpression(node) &&
+      node.operatorToken.kind === SyntaxKind.PlusToken
+    ) {
+      const left = stringValue(node.left, seen);
+      const right = stringValue(node.right, seen);
+      return left === undefined || right === undefined
+        ? undefined
+        : left + right;
+    }
+  };
+  let violation = false;
+  walk(ast, (node) => {
+    if (
+      isPropertyAccessExpression(node) &&
+      resolvesNamespace(node.expression) &&
+      node.name.text === "identifyCandidateSourceUrl"
+    )
+      violation = true;
+    if (isElementAccessExpression(node) && resolvesNamespace(node.expression)) {
+      const member = stringValue(node.argumentExpression);
+      if (member === undefined || member === "identifyCandidateSourceUrl")
+        violation = true;
+    }
+  });
+  return violation;
+};
+
 /** @param {string} path @param {string | undefined} target @returns {string | undefined} */
 const ruleFor = (path, target) => {
   const source = path.replaceAll("\\", "/");
@@ -142,7 +230,7 @@ export const findCandidateSourceConsumerViolations = (sources) => {
   return withTypeScriptAsts(sources, (asts) => {
     /** @type {BoundaryViolation[]} */
     const violations = [];
-    sources.forEach(({ path }, index) => {
+    sources.forEach(({ path, source }, index) => {
       /** @type {Set<string>} */
       const rules = new Set();
       const specifiers = asts[index] ? moduleSpecifiers(asts[index]) : [];
@@ -150,6 +238,39 @@ export const findCandidateSourceConsumerViolations = (sources) => {
         const rule = ruleFor(path, value);
         if (rule !== undefined) rules.add(rule);
       }
+      if (asts[index] && usesCandidateSourceOwnedIdentity(asts[index]))
+        rules.add("source-price-consumer-no-owned-source-identity");
+      const importsCandidateProxy = specifiers.some(
+        ({ value }) =>
+          value !== undefined &&
+          /features\/candidate-management\/public(?:\.js|\.ts)?$/.test(value),
+      );
+      if (importsCandidateProxy) {
+        if (/\bManagementError\b/u.test(source))
+          rules.add("source-price-consumer-no-management-error");
+        else rules.add("source-price-consumer-no-candidate-source-proxy");
+      }
+      if (
+        specifiers.some(
+          ({ value }) =>
+            value !== undefined &&
+            /features\/source-price-refresh\/public(?:\.js|\.ts)?$/.test(value),
+        ) &&
+        /\b(?:normalizeSourcePageUrl|sameSourcePageUrl|createStoredSourceLocator)\b/u.test(
+          source,
+        )
+      ) {
+        rules.delete("source-consumer-no-price-workflow");
+        rules.add("source-price-consumer-no-owned-source-identity");
+      }
+      if (
+        specifiers.some(
+          ({ value }) =>
+            value !== undefined && /domain\/public(?:\.js|\.ts)?$/.test(value),
+        ) &&
+        /\b(?:mapFoundationError|FoundationError)\b/u.test(source)
+      )
+        rules.add("source-price-consumer-no-foundation-error-mapper");
       if (
         /features\/candidate-management\/public\.ts$/.test(
           path.replaceAll("\\", "/"),

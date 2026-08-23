@@ -206,7 +206,7 @@
 
 - [ ] 7. canonical source/error consumer境界へ移行する
 
-- [ ] 7.1 source match/conditional patchと共有errorのconsumer contractを固定する
+- [x] 7.1 source match/conditional patchと共有errorのconsumer contractを固定する
   - **実装開始条件**: `candidate-source-bookmarks` 10.4のcanonical match/conditional price patch public entryと`local-data-foundation` 11.1の`AppDataError`公開入口が利用可能であること。いずれか未完了なら旧ownerを先行削除せず待機する。
   - source ownerの公開match portへcatalog/candidate scopeとpage URLを渡し、unique target、ambiguity、eligibility、opaque preconditionを受け取るpositive consumer fixtureを追加する。
   - conditional patchへtarget、precondition、price、capturedAtだけを渡し、primary projectionと非対象field保持をsource ownerへ委譲する契約を固定する。
