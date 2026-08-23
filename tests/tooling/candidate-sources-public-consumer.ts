@@ -3,13 +3,16 @@ import {
   type CandidatePartId,
   type CandidateSourceId,
   type CandidateSourceKind,
+  type CandidateSourcePublicError,
   type CandidateSourceReference,
   type CandidateSourceScope,
   candidateSourcePolicy,
+  projectAppDataError,
   type RemoveCandidateSourceInput,
   type SourceMatchResult,
   type UpdateCandidateSourceInput,
 } from "../../src/candidate-sources/public.js";
+import type { AppDataError } from "../../src/domain/public.js";
 
 declare const candidateId: CandidatePartId;
 declare const sourceId: CandidateSourceId;
@@ -52,3 +55,20 @@ export const removeInput: RemoveCandidateSourceInput = {
 };
 
 export const policyConsumer = candidateSourcePolicy;
+
+declare const appDataError: AppDataError;
+export const projectedDataError: CandidateSourcePublicError =
+  projectAppDataError(appDataError);
+
+export const sourceErrors = [
+  {
+    kind: "source-validation",
+    path: "sources[0].pageUrl",
+    reason: "invalid-format",
+  },
+  { kind: "not-found", entity: "candidate" },
+  { kind: "not-found", entity: "source" },
+  { kind: "primary-required" },
+  { kind: "precondition-failed" },
+  { kind: "source-identity-failure", reason: "invalid-url" },
+] as const satisfies readonly CandidateSourcePublicError[];

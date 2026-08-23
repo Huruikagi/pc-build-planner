@@ -247,7 +247,7 @@
   - _Boundary: CandidateSourceModel, CandidateSourcePolicy, CandidateSourcesPublicApi_
   - _Depends: local-data-foundation 11.1_
 
-- [ ] 9.2 (P) AppDataError consumer projectionとsource固有errorを定義する
+- [x] 9.2 (P) AppDataError consumer projectionとsource固有errorを定義する
   - foundationのdomain公開入口から`AppDataError`だけを消費し、全variantのcode・payload・contextを一対一で保持するexhaustive projectionを追加する。
   - validation、candidate/source not-found、primary-required、conditional patch precondition、URL identity failureをsource固有errorとして区別し、`AppDataError`へ吸収しない。
   - `ManagementError`、candidate-owned alias/re-export、`FoundationError` mapping、message stringへの縮退、未知errorの推測をnegative fixtureで拒否する。

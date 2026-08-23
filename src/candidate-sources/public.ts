@@ -4,6 +4,16 @@ export type {
   CandidateSourceKind,
 } from "../domain/public.js";
 export type {
+  CandidateSourceDataError,
+  CandidateSourceNotFoundError,
+  CandidateSourcePublicError,
+  CandidateSourceValidationError,
+  PrimarySourceRequiredError,
+  SourceIdentityError,
+  SourcePatchPreconditionError,
+} from "./app-data-error-projection.js";
+export { projectAppDataError } from "./app-data-error-projection.js";
+export type {
   AddCandidateSourceInput,
   CandidateSourceEntity,
   CandidateSourceEntityInput,
