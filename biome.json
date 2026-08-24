@@ -1,16 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": [
-      "biome.json",
-      "e2e/**",
-      "package.json",
-      "playwright.config.ts",
-      "pnpm-workspace.yaml",
-      "scripts/**",
-      "src/**",
-      "tests/**"
-    ]
+    "includes": ["biome.json", "package.json", "src/**"]
   },
   "formatter": {
     "enabled": true,

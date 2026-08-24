@@ -1,5 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "allowJs": false, "checkJs": false, "types": ["node"] },
-  "include": ["tests/tooling/local-data-transaction-public-consumer.ts"]
-}

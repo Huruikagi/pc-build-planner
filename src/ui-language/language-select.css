@@ -1,4 +1,0 @@
-/* Settings画面の表示言語sectionに埋め込まれるswitch controlの局所style。 */
-[data-region="language-select"] {
-  font: inherit;
-}

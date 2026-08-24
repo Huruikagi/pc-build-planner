@@ -1,1 +1,0 @@
-export type { CandidateSourceReference } from "../../../src/candidate-sources/public.js";

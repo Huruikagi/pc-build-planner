@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, "Segoe UI", "Yu Gothic UI", sans-serif; }
+    a { color: #0b5cab; } a:hover { color: #073e73; }
+  </style>
+</helmet>
+<div style="width: 400px; min-height: 900px; box-sizing: border-box; background: #ffffff; color: #1b1f24; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column;">
+
+  <div style="display: flex; align-items: stretch; border-bottom: 1px solid #c8ccd1; background: #f3f4f6;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; background: #ffffff; border-right: 1px solid #c8ccd1; box-shadow: inset 0 2px 0 #0b5cab; font-size: 11px; font-weight: 600;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+      候補
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; border-right: 1px solid #c8ccd1; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
+      構成
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h5.4v1.4a1.8 1.8 0 0 0 3.6 0V3h.6v18h-.6v-1.4a1.8 1.8 0 0 0-3.6 0V21H3z"/><path d="M21 3h-5.4v1.4a1.8 1.8 0 0 1-3.6 0V3h-.6v18h.6v-1.4a1.8 1.8 0 0 1 3.6 0V21H21z" opacity="0.45"/></svg>
+      互換性
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid #d0d7de; background: #f6f8fa;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; font-size: 12px; font-weight: 600;">
+      <span>メインPC 2026</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#57606a" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#57606a"/><circle cx="12" cy="12" r="1.5" fill="#57606a"/><circle cx="12" cy="19" r="1.5" fill="#57606a"/></svg>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid #0b5cab; border-radius: 3px; background: #0b5cab; color: #ffffff; font-size: 11px; font-weight: 600; white-space: nowrap;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      追加
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 0; border-bottom: 1px solid #d0d7de; background: #ffffff; overflow: hidden;">
+    <div style="padding: 6px 9px; font-size: 11px; font-weight: 600; border-bottom: 2px solid #0b5cab; white-space: nowrap;">すべて<span style="color: #57606a; font-weight: 400;"> 8</span></div>
+    <div style="padding: 6px 9px; font-size: 11px; color: #57606a; white-space: nowrap;">CPU<span style="color: #8c959f;"> 1</span></div>
+    <div style="padding: 6px 9px; font-size: 11px; color: #57606a; white-space: nowrap;">M/B<span style="color: #8c959f;"> 2</span></div>
+    <div style="padding: 6px 9px; font-size: 11px; color: #57606a; white-space: nowrap;">メモリ<span style="color: #8c959f;"> 1</span></div>
+    <div style="padding: 6px 9px; font-size: 11px; color: #57606a; white-space: nowrap;">GPU<span style="color: #8c959f;"> 2</span></div>
+    <div style="padding: 6px 9px; font-size: 11px; color: #57606a; white-space: nowrap;">…</div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 4px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 10px; color: #57606a; letter-spacing: 0.03em;">
+    <span style="flex: 1;">商品名 / メーカー</span>
+    <span style="width: 88px;">規格</span>
+    <span style="width: 62px; text-align: right;">価格</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column;">
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Ryzen 7 9800X3D</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">AMD &nbsp;·&nbsp; CPU &nbsp;·&nbsp; 2 ソース</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #1b1f24;">AM5</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">78,800</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ROG STRIX B650E-F GAMING</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">ASUS &nbsp;·&nbsp; マザーボード</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #1b1f24; line-height: 1.35;">AM5 DDR5<br>ATX</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">36,480</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Crucial Pro DDR5-5600 32GB</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">Micron &nbsp;·&nbsp; メモリ</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #1b1f24;">DDR5</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">13,980</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">RTX 5080 SUPER 16GB</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">SYNVIDIA &nbsp;·&nbsp; GPU</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #8c959f;">—</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">189,800</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2; border-left: 3px solid #bf8700;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #3d444d;">玄人志向 KRPW-GA850W</div>
+        <div style="font-size: 10px; color: #bf8700; margin-top: 1px;">未分類 &nbsp;·&nbsp; 4 項目が未入力</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #8c959f;">—</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 11px; color: #8c959f;">—</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Fractal North XL</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">Fractal Design &nbsp;·&nbsp; ケース</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #1b1f24; line-height: 1.35;">E-ATX ATX<br>ATX SFX</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">24,800</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #eaeef2;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">DeepCool AK620 Digital</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">DeepCool &nbsp;·&nbsp; CPUクーラー</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #1b1f24; line-height: 1.35;">AM5 AM4<br>LGA1700</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">9,480</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #d0d7de; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">WD_BLACK SN850X 2TB</div>
+        <div style="font-size: 10px; color: #57606a; margin-top: 1px;">Western Digital &nbsp;·&nbsp; ストレージ</div>
+      </div>
+      <div style="width: 88px; font-family: ui-monospace, monospace; font-size: 10px; color: #8c959f;">—</div>
+      <div style="width: 62px; text-align: right; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;">21,980</div>
+    </div>
+
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 11px; color: #57606a;">
+    <span>8 件</span>
+    <span style="font-family: ui-monospace, monospace; color: #1b1f24; font-weight: 600;">合計 ¥375,320</span>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

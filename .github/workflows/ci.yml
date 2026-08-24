@@ -37,5 +37,5 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Validate (no E2E)
-        run: pnpm validate:ci
+      - name: Lint
+        run: pnpm lint

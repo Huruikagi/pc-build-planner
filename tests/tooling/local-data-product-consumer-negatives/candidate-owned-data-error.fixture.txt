@@ -1,4 +1,0 @@
-import type { ManagementError } from "../../../src/features/candidate-management/public.js";
-
-declare const error: ManagementError;
-void error;

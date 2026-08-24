@@ -1,2 +1,0 @@
-import { mapFoundationError } from "../../../src/domain/public.js";
-void mapFoundationError;

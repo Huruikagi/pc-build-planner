@@ -1,6 +1,0 @@
-import * as candidateSources from "../../../src/candidate-sources/public.js";
-const first = "identifyCandidate";
-const second = "SourceUrl";
-const identityMember = first + second;
-const alias = identityMember;
-void candidateSources[alias];

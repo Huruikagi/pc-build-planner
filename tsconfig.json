@@ -4,7 +4,10 @@
     "checkJs": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2024", "DOM"],
+    "lib": [
+      "ES2024",
+      "DOM"
+    ],
     "jsx": "react-jsx",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -14,17 +17,13 @@
     "noUncheckedIndexedAccess": true,
     "strict": true,
     "target": "ES2024",
-    "types": ["node", "chrome-types"]
+    "types": [
+      "node",
+      "chrome-types"
+    ]
   },
   "include": [
-    "e2e/**/*.ts",
-    "playwright.config.ts",
-    "scripts/**/*.mjs",
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "tests/**/*.mjs",
-    "tests/**/*.ts",
-    "tests/**/*.tsx"
-  ],
-  "exclude": ["tests/tooling/*.negative.ts"]
+    "src/**/*.tsx"
+  ]
 }

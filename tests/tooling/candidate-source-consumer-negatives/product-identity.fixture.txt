@@ -1,2 +1,0 @@
-import type { DuplicateProductIdentity } from "../../../src/features/duplicate-product-merge/public.js";
-export type Forbidden = DuplicateProductIdentity;

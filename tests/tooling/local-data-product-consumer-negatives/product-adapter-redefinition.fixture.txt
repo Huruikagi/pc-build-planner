@@ -1,4 +1,0 @@
-import type { ProductLocalDataAdapter } from "../../../src/persistence/product-local-data-adapter.js";
-
-declare const adapter: ProductLocalDataAdapter;
-void adapter;

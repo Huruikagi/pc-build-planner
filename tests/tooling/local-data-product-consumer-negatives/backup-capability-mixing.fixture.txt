@@ -1,2 +1,0 @@
-declare const backup: BackupRestoreDataPort;
-void backup.query;

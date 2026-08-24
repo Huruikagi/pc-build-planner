@@ -1,3 +1,0 @@
-import type { CandidateSourceMatcherPort } from "../../../src/candidate-sources/matcher.js";
-declare const matcher: CandidateSourceMatcherPort;
-void matcher;

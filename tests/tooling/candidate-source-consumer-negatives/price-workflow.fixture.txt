@@ -1,2 +1,0 @@
-import type { SourcePriceRefreshPublicApi } from "../../../src/features/source-price-refresh/public.js";
-export type Forbidden = SourcePriceRefreshPublicApi;

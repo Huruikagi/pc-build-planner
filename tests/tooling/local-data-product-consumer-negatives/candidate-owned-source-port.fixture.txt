@@ -1,4 +1,0 @@
-import type { CandidateSourceMutationPort } from "../../../src/features/candidate-management/public.js";
-
-declare const source: CandidateSourceMutationPort;
-void source;

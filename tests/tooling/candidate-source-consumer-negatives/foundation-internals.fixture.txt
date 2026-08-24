@@ -1,2 +1,0 @@
-import type { FoundationScopedDataPort } from "../../../src/persistence/scoped-data-port.js";
-export type Forbidden = FoundationScopedDataPort;

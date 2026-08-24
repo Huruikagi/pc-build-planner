@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, "Segoe UI", "Yu Gothic UI", sans-serif; }
+    a { color: #0b5cab; } a:hover { color: #073e73; }
+  </style>
+</helmet>
+<div style="width: 400px; min-height: 900px; box-sizing: border-box; background: #ffffff; color: #1b1f24; font-size: 12px; line-height: 1.45; display: flex; flex-direction: column;">
+
+  <div style="display: flex; align-items: stretch; border-bottom: 1px solid #c8ccd1; background: #f3f4f6;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; border-right: 1px solid #c8ccd1; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+      候補
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; border-right: 1px solid #c8ccd1; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
+      構成
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; background: #ffffff; box-shadow: inset 0 2px 0 #0b5cab; font-size: 11px; font-weight: 600;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h5.4v1.4a1.8 1.8 0 0 0 3.6 0V3h.6v18h-.6v-1.4a1.8 1.8 0 0 0-3.6 0V21H3z"/><path d="M21 3h-5.4v1.4a1.8 1.8 0 0 1-3.6 0V3h-.6v18h.6v-1.4a1.8 1.8 0 0 1 3.6 0V21H21z" opacity="0.45"/></svg>
+      互換性
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid #d0d7de; background: #f6f8fa;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; font-size: 12px; font-weight: 600;">
+      <span>メインPC 2026</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#57606a" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#57606a"/><circle cx="12" cy="12" r="1.5" fill="#57606a"/><circle cx="12" cy="19" r="1.5" fill="#57606a"/></svg>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 9px; padding: 11px 11px; background: #fff0ee; border-bottom: 1px solid #ffc1ba;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cf222e" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg>
+    <div style="min-width: 0;">
+      <div style="font-size: 14px; font-weight: 700; color: #a40e26;">互換性なし</div>
+      <div style="font-size: 11px; color: #6b3239; margin-top: 1px;">1 件が不適合、3 件は情報不足で判定できません</div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 10px; color: #57606a; letter-spacing: 0.03em;">
+    <span>個別判定</span>
+    <span>5 ルール</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column;">
+
+    <div style="display: flex; gap: 0; border-bottom: 1px solid #eaeef2; border-left: 3px solid #cf222e;">
+      <div style="flex: 1; min-width: 0; padding: 9px 10px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; font-weight: 700;">CPUソケット</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #cf222e; color: #ffffff;">不適合</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">CPU</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Ryzen 7 9800X3D</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600;">AM5</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">マザーボード</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ROG STRIX B650E-F</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; color: #cf222e;">LGA1700</span>
+          </div>
+        </div>
+        <div style="margin-top: 7px; font-size: 11px; color: #a40e26;">ソケット規格が一致していません。</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0; border-bottom: 1px solid #eaeef2; border-left: 3px solid #1a7f37; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0; padding: 9px 10px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; font-weight: 700;">メモリ規格</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #1a7f37; color: #ffffff;">適合</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">マザーボード</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ROG STRIX B650E-F</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600;">DDR5</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">メモリ</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Crucial Pro DDR5-5600</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600;">DDR5</span>
+          </div>
+        </div>
+        <div style="margin-top: 7px; font-size: 11px; color: #1a5c2c;">メモリ規格が一致しています。</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0; border-bottom: 1px solid #eaeef2; border-left: 3px solid #d0d7de;">
+      <div style="flex: 1; min-width: 0; padding: 9px 10px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #3d444d;">CPUクーラー対応ソケット</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #eaeef2; color: #57606a;">情報不足</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">CPU</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Ryzen 7 9800X3D</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600;">AM5</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">CPUクーラー</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; color: #8c959f;">未選択</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: #8c959f;">—</span>
+          </div>
+        </div>
+        <div style="margin-top: 7px; font-size: 11px; color: #57606a;">CPUクーラーが選択されていないため判定できません。</div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-top: 6px; color: #0b5cab; font-size: 11px; font-weight: 600;">
+          CPUクーラーを選ぶ
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0; border-bottom: 1px solid #eaeef2; border-left: 3px solid #d0d7de; background: #f6f8fa;">
+      <div style="flex: 1; min-width: 0; padding: 9px 10px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #3d444d;">ケース対応フォームファクタ</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #eaeef2; color: #57606a;">情報不足</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">マザーボード</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ROG STRIX B650E-F</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600;">ATX</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">ケース</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; color: #8c959f;">未選択</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: #8c959f;">—</span>
+          </div>
+        </div>
+        <div style="margin-top: 7px; font-size: 11px; color: #57606a;">ケースが選択されていないため判定できません。</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0; border-bottom: 1px solid #d0d7de; border-left: 3px solid #d0d7de;">
+      <div style="flex: 1; min-width: 0; padding: 9px 10px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #3d444d;">ケース対応電源規格</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #eaeef2; color: #57606a;">情報不足</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">電源</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #3d444d;">玄人志向 KRPW-GA850W</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: #bf8700;">未確認</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="width: 66px; font-size: 10px; color: #57606a; flex-shrink: 0;">ケース</span>
+            <span style="flex: 1; min-width: 0; font-size: 11px; color: #8c959f;">未選択</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: #8c959f;">—</span>
+          </div>
+        </div>
+        <div style="margin-top: 7px; font-size: 11px; color: #57606a;">電源のフォームファクタが未確認で、ケースも選択されていないため判定できません。</div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-top: 6px; color: #0b5cab; font-size: 11px; font-weight: 600;">
+          電源のフォームファクタを入力する
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="padding: 10px 11px; font-size: 10px; color: #8c959f; line-height: 1.6;">
+    判定には利用者が確認した値だけを使います。取り込んだままの未確認値は判定に使いません。情報不足は不適合ではありません。
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

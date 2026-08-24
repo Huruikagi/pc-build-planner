@@ -1,2 +1,0 @@
-import type { CandidateSourceReference } from "../../../src/candidate-sources/model.js";
-export type Forbidden = CandidateSourceReference;

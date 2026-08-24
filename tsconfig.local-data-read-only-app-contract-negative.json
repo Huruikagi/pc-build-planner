@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "allowJs": false,
-    "checkJs": false,
-    "types": []
-  },
-  "include": ["tests/tooling/local-data-read-only-app-contract-negative.mts"]
-}

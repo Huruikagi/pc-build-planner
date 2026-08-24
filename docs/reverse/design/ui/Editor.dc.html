@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, "Segoe UI", "Yu Gothic UI", sans-serif; }
+    a { color: #0b5cab; } a:hover { color: #073e73; }
+  </style>
+</helmet>
+<div style="width: 400px; min-height: 900px; box-sizing: border-box; background: #ffffff; color: #1b1f24; font-size: 12px; line-height: 1.45; display: flex; flex-direction: column;">
+
+  <div style="display: flex; align-items: stretch; border-bottom: 1px solid #c8ccd1; background: #f3f4f6;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; background: #ffffff; border-right: 1px solid #c8ccd1; box-shadow: inset 0 2px 0 #0b5cab; font-size: 11px; font-weight: 600;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+      候補
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; border-right: 1px solid #c8ccd1; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
+      構成
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 32px; color: #57606a; font-size: 11px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h5.4v1.4a1.8 1.8 0 0 0 3.6 0V3h.6v18h-.6v-1.4a1.8 1.8 0 0 0-3.6 0V21H3z"/><path d="M21 3h-5.4v1.4a1.8 1.8 0 0 1-3.6 0V3h-.6v18h.6v-1.4a1.8 1.8 0 0 1 3.6 0V21H21z" opacity="0.45"/></svg>
+      互換性
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid #d0d7de; background: #f6f8fa;">
+    <div style="display: flex; align-items: center; gap: 4px; color: #0b5cab; font-size: 11px; font-weight: 600;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 6 9 12 15 18"/></svg>
+      一覧
+    </div>
+    <div style="flex: 1; font-size: 12px; font-weight: 700; text-align: center;">パーツを編集</div>
+    <div style="font-size: 10px; color: #57606a;">メインPC 2026</div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 10px; color: #57606a; letter-spacing: 0.03em;">
+    <span>基本情報</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column;">
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-bottom: 1px solid #eaeef2;">
+      <span style="width: 58px; font-size: 10px; color: #57606a; flex-shrink: 0;">商品名 <span style="color: #cf222e;">*</span></span>
+      <div style="flex: 1; min-width: 0; height: 26px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; display: flex; align-items: center; font-size: 12px;">Ryzen 7 9800X3D BOX</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-bottom: 1px solid #eaeef2;">
+      <span style="width: 58px; font-size: 10px; color: #57606a; flex-shrink: 0;">メーカー</span>
+      <div style="flex: 1; min-width: 0; height: 26px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; display: flex; align-items: center; font-size: 12px;">AMD</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-bottom: 1px solid #eaeef2;">
+      <span style="width: 58px; font-size: 10px; color: #57606a; flex-shrink: 0;">型番</span>
+      <div style="flex: 1; min-width: 0; height: 26px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; display: flex; align-items: center; font-family: ui-monospace, monospace; font-size: 12px;">100-100001084WOF</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-bottom: 1px solid #d0d7de;">
+      <span style="width: 58px; font-size: 10px; color: #57606a; flex-shrink: 0;">カテゴリ</span>
+      <div style="flex: 1; min-width: 0; height: 26px; padding: 0 7px; border: 1px solid #d0d7de; border-radius: 3px; background: #ffffff; display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
+        <span>CPU</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#57606a" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <span style="font-size: 9px; padding: 1px 5px; border-radius: 2px; background: #fff3d4; color: #8a6d2f; font-weight: 600; flex-shrink: 0;">推定</span>
+    </div>
+
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 10px; color: #57606a; letter-spacing: 0.03em;">
+    <span>CPU の規格</span>
+    <span style="color: #8c959f;">互換性判定に使われます</span>
+  </div>
+
+  <div style="padding: 6px 9px; border-bottom: 1px solid #d0d7de;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="width: 58px; font-size: 10px; color: #57606a; flex-shrink: 0;">ソケット</span>
+      <div style="flex: 1; min-width: 0; height: 26px; padding: 0 7px; border: 1px solid #bf8700; border-radius: 3px; background: #fffbef; display: flex; align-items: center; font-family: ui-monospace, monospace; font-size: 12px; color: #8c959f;">未入力</div>
+    </div>
+    <div style="margin-top: 4px; padding-left: 66px; font-size: 10px; color: #8a6d2f;">未入力のままでも保存できます。空のままだと互換性は判定されません。</div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 9px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 10px; color: #57606a; letter-spacing: 0.03em;">
+    <span>ソース</span>
+    <span>2 件</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column;">
+
+    <div style="padding: 8px 9px; border-bottom: 1px solid #eaeef2; border-left: 3px solid #0b5cab;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 9px; padding: 1px 5px; border-radius: 2px; background: #0b5cab; color: #ffffff; font-weight: 700;">プライマリ</span>
+        <span style="font-size: 10px; color: #57606a;">販売ページ</span>
+        <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700;">¥78,800</span>
+      </div>
+      <div style="margin-top: 5px; font-family: ui-monospace, monospace; font-size: 10px; color: #0b5cab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">kakaku.example/item/K0001234567</div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px;">
+        <span style="font-size: 10px; color: #8c959f;">取得 2026-08-24 09:36</span>
+        <span style="margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; color: #0b5cab; font-weight: 600;">
+          開く
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+        </span>
+        <span style="font-size: 11px; color: #57606a;">削除</span>
+      </div>
+    </div>
+
+    <div style="padding: 8px 9px; border-bottom: 1px solid #eaeef2; border-left: 3px solid #eaeef2;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <div style="width: 12px; height: 12px; border: 1px solid #8c959f; border-radius: 50%; flex-shrink: 0;"></div>
+        <span style="font-size: 10px; color: #57606a;">メーカー商品紹介</span>
+        <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: #8c959f;">価格なし</span>
+      </div>
+      <div style="margin-top: 5px; font-family: ui-monospace, monospace; font-size: 10px; color: #0b5cab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">amd.example/products/ryzen-7-9800x3d</div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px;">
+        <span style="font-size: 10px; color: #8c959f;">取得 2026-08-22 21:10</span>
+        <span style="margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; color: #0b5cab; font-weight: 600;">
+          開く
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+        </span>
+        <span style="font-size: 11px; color: #57606a;">削除</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 9px; border-bottom: 1px solid #d0d7de; color: #0b5cab; font-size: 11px; font-weight: 600;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      ソースを追加
+    </div>
+
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 5px; padding: 7px 9px; border-bottom: 1px solid #d0d7de; background: #f6f8fa; color: #57606a; font-size: 10px;">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+    取り込み時の元表記を見る（読み取り専用）
+  </div>
+
+  <div style="display: flex; gap: 7px; padding: 12px 11px;">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; height: 34px; border-radius: 3px; background: #0b5cab; color: #ffffff; font-size: 12px; font-weight: 600;">保存</div>
+    <div style="width: 96px; display: flex; align-items: center; justify-content: center; height: 34px; border: 1px solid #d0d7de; border-radius: 3px; background: #f6f8fa; font-size: 12px; font-weight: 600;">キャンセル</div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
