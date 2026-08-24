@@ -33,6 +33,16 @@ export async function buildExtension(outputDirectory = "dist") {
     format: "esm",
     outdir: outputDirectory,
   });
+  /**
+   * `chrome.scripting.executeScript({ files })` は classic script として
+   * 注入するので、content script だけ IIFE で別ビルドする。
+   */
+  await build({
+    ...SHARED,
+    entryPoints: { "content-script": "src/capture/content-script.ts" },
+    format: "iife",
+    outdir: outputDirectory,
+  });
   await copyFile("manifest.json", `${outputDirectory}/manifest.json`);
   await copyFile("side-panel.html", `${outputDirectory}/side-panel.html`);
   await copyFile(

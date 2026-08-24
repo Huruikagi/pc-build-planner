@@ -6,6 +6,13 @@
  * contribution 機構は持たない (C-5)。
  */
 import { useCallback, useEffect, useState } from "react";
+import {
+  CAPTURE_STATE_KEY,
+  clearCaptureState,
+  readCaptureState,
+} from "./capture/protocol.js";
+import type { CaptureState } from "./capture/types.js";
+import { CaptureScreen } from "./capture-screen.js";
 import { t } from "./i18n.js";
 import {
   BuildIcon,
@@ -14,6 +21,7 @@ import {
   PartsIcon,
 } from "./icons.js";
 import type { LocalDataRoot } from "./model.js";
+import { draftFromCapture, type PartDraft } from "./parts.js";
 import { PartsScreen } from "./parts-screen.js";
 import { ProjectMenu } from "./project-menu.js";
 import {
@@ -47,6 +55,25 @@ export const App = ({ store }: { readonly store: Store }) => {
   const [failure, setFailure] = useState<StorageFailure | null>(null);
   const [screenId, setScreenId] = useState<ScreenId>("parts");
   const [menuOpen, setMenuOpen] = useState(false);
+  /** 一時表示面。拡張アイコンの操作で現れ、常設ナビには出ない。 */
+  const [capture, setCapture] = useState<CaptureState | null>(null);
+  /** 取り込みから引き渡された編集中の下書き。 */
+  const [handoff, setHandoff] = useState<PartDraft | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      void readCaptureState().then((state) => setCapture(state ?? null));
+    };
+    sync();
+    const onChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area === "session" && CAPTURE_STATE_KEY in changes) sync();
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
 
   const load = useCallback(async () => {
     const result = await store.read();
@@ -154,11 +181,25 @@ export const App = ({ store }: { readonly store: Store }) => {
         ) : null}
       </div>
 
-      <screen.View
-        apply={(mutate) => void apply(mutate)}
-        project={project}
-        root={root}
-      />
+      {capture === null ? (
+        <screen.View
+          apply={(mutate) => void apply(mutate)}
+          handoff={screenId === "parts" ? handoff : null}
+          onHandoffConsumed={() => setHandoff(null)}
+          project={project}
+          root={root}
+        />
+      ) : (
+        <CaptureScreen
+          onAccept={(result) => {
+            setHandoff(draftFromCapture(result));
+            setScreenId("parts");
+            void clearCaptureState();
+          }}
+          onDismiss={() => void clearCaptureState()}
+          state={capture}
+        />
+      )}
     </div>
   );
 };

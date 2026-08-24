@@ -323,5 +323,106 @@
         "content": "$1"
       }
     }
+  },
+  "captureExtracting": {
+    "message": "Reading the page…"
+  },
+  "captureDone": {
+    "message": "Captured"
+  },
+  "captureAccepted": {
+    "message": "Captured fields"
+  },
+  "captureRejected": {
+    "message": "Fields not captured"
+  },
+  "captureAccept": {
+    "message": "Review and save"
+  },
+  "captureDismiss": {
+    "message": "Dismiss"
+  },
+  "captureHint": {
+    "message": "Guess"
+  },
+  "captureCategoryUnknown": {
+    "message": "Uncategorized"
+  },
+  "captureCategoryHintNote": {
+    "message": "A guess. It becomes the editor default"
+  },
+  "captureCategoryUnknownNote": {
+    "message": "Could not be guessed. Choose it in the editor"
+  },
+  "editorOriginals": {
+    "message": "Show the captured original text (read only)"
+  },
+  "captureSource_json_ld": {
+    "message": "Structured data"
+  },
+  "captureSource_open_graph": {
+    "message": "Metadata"
+  },
+  "captureSource_twitter_card": {
+    "message": "Metadata"
+  },
+  "captureSource_product_meta": {
+    "message": "Metadata"
+  },
+  "captureSource_heading": {
+    "message": "Heading"
+  },
+  "captureSource_breadcrumb": {
+    "message": "Breadcrumb"
+  },
+  "captureSource_table": {
+    "message": "Table"
+  },
+  "captureSource_definition_list": {
+    "message": "Definition list"
+  },
+  "captureSource_domain_map": {
+    "message": "Manufacturer domain"
+  },
+  "captureReason_empty": {
+    "message": "The value is empty"
+  },
+  "captureReason_tooLong": {
+    "message": "The value is too long"
+  },
+  "captureReason_controlCharacters": {
+    "message": "It contains control characters"
+  },
+  "captureReason_invalidFormat": {
+    "message": "The format is not valid"
+  },
+  "captureReason_unresolvable": {
+    "message": "The value could not be resolved"
+  },
+  "captureError_restrictedPage": {
+    "message": "This page cannot be read by the extension, so it is out of scope for capture."
+  },
+  "captureError_injectionFailed": {
+    "message": "Reading the page failed. Try again."
+  },
+  "captureError_invalidPayload": {
+    "message": "The content taken from the page could not be interpreted. Try again."
+  },
+  "captureError_noCandidate": {
+    "message": "No product information could be captured from this page. You can add it by hand."
+  },
+  "captureError_tabChanged": {
+    "message": "The page moved or reloaded during capture. Run it again on the page you are viewing."
+  },
+  "fieldPrice": {
+    "message": "Price"
+  },
+  "captureOriginal": {
+    "message": "Original: $value$",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
   }
 }

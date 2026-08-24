@@ -323,5 +323,106 @@
         "content": "$1"
       }
     }
+  },
+  "captureExtracting": {
+    "message": "ページを取り込んでいます…"
+  },
+  "captureDone": {
+    "message": "取り込みました"
+  },
+  "captureAccepted": {
+    "message": "取得できた項目"
+  },
+  "captureRejected": {
+    "message": "取り込めなかった項目"
+  },
+  "captureAccept": {
+    "message": "内容を確認して保存"
+  },
+  "captureDismiss": {
+    "message": "閉じる"
+  },
+  "captureHint": {
+    "message": "推定"
+  },
+  "captureCategoryUnknown": {
+    "message": "未分類"
+  },
+  "captureCategoryHintNote": {
+    "message": "推定です。編集画面の初期選択になります"
+  },
+  "captureCategoryUnknownNote": {
+    "message": "推定できませんでした。編集画面で選択してください"
+  },
+  "editorOriginals": {
+    "message": "取り込み時の元表記を見る（読み取り専用）"
+  },
+  "captureSource_json_ld": {
+    "message": "構造化データ"
+  },
+  "captureSource_open_graph": {
+    "message": "メタ情報"
+  },
+  "captureSource_twitter_card": {
+    "message": "メタ情報"
+  },
+  "captureSource_product_meta": {
+    "message": "メタ情報"
+  },
+  "captureSource_heading": {
+    "message": "見出し"
+  },
+  "captureSource_breadcrumb": {
+    "message": "パンくず"
+  },
+  "captureSource_table": {
+    "message": "表"
+  },
+  "captureSource_definition_list": {
+    "message": "定義リスト"
+  },
+  "captureSource_domain_map": {
+    "message": "メーカー公式ドメイン"
+  },
+  "captureReason_empty": {
+    "message": "値が空です"
+  },
+  "captureReason_tooLong": {
+    "message": "値が長すぎます"
+  },
+  "captureReason_controlCharacters": {
+    "message": "制御文字が含まれます"
+  },
+  "captureReason_invalidFormat": {
+    "message": "形式が正しくありません"
+  },
+  "captureReason_unresolvable": {
+    "message": "値を解釈できません"
+  },
+  "captureError_restrictedPage": {
+    "message": "このページは拡張から読み取れないため取り込みの対象外です。"
+  },
+  "captureError_injectionFailed": {
+    "message": "ページの読み取りに失敗しました。もう一度実行してください。"
+  },
+  "captureError_invalidPayload": {
+    "message": "ページから取得した内容を解釈できませんでした。もう一度実行してください。"
+  },
+  "captureError_noCandidate": {
+    "message": "このページからは商品情報を自動取得できませんでした。手入力で追加できます。"
+  },
+  "captureError_tabChanged": {
+    "message": "取り込み中にページが移動または更新されました。表示中のページで再実行してください。"
+  },
+  "fieldPrice": {
+    "message": "価格"
+  },
+  "captureOriginal": {
+    "message": "元表記 $value$",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
   }
 }

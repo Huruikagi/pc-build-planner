@@ -15,12 +15,19 @@ import {
   type PartCategory,
   POWER_SUPPLY_FORM_FACTORS,
 } from "./model.js";
-import type { PartDraft } from "./parts.js";
+import type { IdentityField, PartDraft } from "./parts.js";
 
 const categoryLabel = (category: PartCategory): string =>
   t(`category_${category.replace("-", "_")}`);
 
 const attributeLabel = (key: string): string => t(`attribute_${key}`);
+
+const labelKeyFor = (field: IdentityField): string =>
+  field === "name"
+    ? "fieldName"
+    : field === "manufacturer"
+      ? "fieldManufacturer"
+      : "fieldModelNumber";
 
 /** 既知規格のある属性だけ入力候補を出す。選択肢の強制はしない。 */
 const suggestionsFor = (key: string): readonly string[] => {
@@ -46,8 +53,12 @@ export const PartEditor = ({
   onCancel,
 }: PartEditorProps) => {
   const [nameError, setNameError] = useState(false);
+  const [showOriginals, setShowOriginals] = useState(false);
 
   const attributes = CATEGORY_ATTRIBUTES[draft.category];
+  const originals = Object.entries(draft.originals).filter(
+    (entry): entry is [IdentityField, string] => entry[1] !== undefined,
+  );
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -254,10 +265,33 @@ export const PartEditor = ({
       )}
 
       {/*
-        取り込み時の元表記の読み取り専用表示 (`changes.md` C-2-2) は、
-        商品取り込みを実装して original が実際に入るようになってから足す。
-        いま置くと常に「未取得」を出すだけの見せかけになる。
+        取り込み時の元表記。**読み取り専用** (`changes.md` C-2-2)。
+        v0.4.0 は生 JSON のテキストエリアとして露出していた。
+        編集対象は確認済みの値だけで、元表記は参照するだけのもの。
       */}
+      {originals.length === 0 ? null : (
+        <>
+          <button
+            aria-expanded={showOriginals}
+            className="disclosure"
+            data-originals-toggle
+            onClick={() => setShowOriginals((open) => !open)}
+            type="button"
+          >
+            {t("editorOriginals")}
+          </button>
+          {showOriginals ? (
+            <dl className="originals">
+              {originals.map(([field, original]) => (
+                <div className="originals__row" key={field}>
+                  <dt>{t(labelKeyFor(field))}</dt>
+                  <dd>{original}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </>
+      )}
 
       <div className="editor-actions">
         <button className="button button--primary" type="submit">

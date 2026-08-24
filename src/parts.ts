@@ -3,6 +3,7 @@
  *
  * ルートの置換としてのみ表現する (`docs/reverse/features.md` 6.1)。
  */
+import type { CaptureResult } from "./capture/types.js";
 import {
   CATEGORY_ATTRIBUTES,
   type CandidatePart,
@@ -21,7 +22,15 @@ export interface PartDraft {
   readonly category: PartCategory;
   readonly attributes: Readonly<Record<string, string>>;
   readonly sources: readonly CandidateSource[];
+  /**
+   * 取り込み時の元表記。新規パーツを取り込みから作るときだけ意味を持ち、
+   * 既存パーツの編集では保存済みの original が優先される。
+   */
+  readonly originals: Readonly<Partial<Record<IdentityField, string>>>;
 }
+
+/** 元表記を持ちうる項目。カテゴリと規格値は利用者が確定させるもの。 */
+export type IdentityField = "name" | "manufacturer" | "modelNumber";
 
 export const emptyDraft = (): PartDraft => ({
   id: null,
@@ -31,6 +40,7 @@ export const emptyDraft = (): PartDraft => ({
   category: "uncategorized",
   attributes: {},
   sources: [],
+  originals: {},
 });
 
 /** 確定値だけをフォームへ出す。元表記は読み取り専用で別に見せる。 */
@@ -48,6 +58,14 @@ export const draftFromPart = (part: CandidatePart): PartDraft => ({
     }),
   ),
   sources: part.sources,
+  originals: {
+    ...(part.manufacturer?.original == null
+      ? {}
+      : { manufacturer: part.manufacturer.original }),
+    ...(part.modelNumber?.original == null
+      ? {}
+      : { modelNumber: part.modelNumber.original }),
+  },
 });
 
 export const partsOf = (
@@ -82,6 +100,12 @@ const withConfirmed = <T>(
 ) => {
   const base = { original: previous?.original ?? null };
   return confirmed === undefined ? base : { ...base, confirmed };
+};
+
+/** 新規作成時は下書きが持つ元表記を初期値にする。 */
+const originalOf = (draft: PartDraft, field: IdentityField) => {
+  const original = draft.originals[field];
+  return original === undefined ? null : { original };
 };
 
 const parseList = (raw: string): string[] =>
@@ -124,13 +148,13 @@ export const savePart =
       projectId: existing?.projectId ?? projectId,
       name: draft.name.trim(),
       manufacturer: withConfirmed(
-        existing?.manufacturer,
+        existing?.manufacturer ?? originalOf(draft, "manufacturer"),
         draft.manufacturer.trim() === ""
           ? undefined
           : draft.manufacturer.trim(),
       ),
       modelNumber: withConfirmed(
-        existing?.modelNumber,
+        existing?.modelNumber ?? originalOf(draft, "modelNumber"),
         draft.modelNumber.trim() === "" ? undefined : draft.modelNumber.trim(),
       ),
       category: draft.category,
@@ -148,3 +172,43 @@ export const savePart =
             ),
     };
   };
+
+/**
+ * 取り込み結果を編集用の下書きへ引き渡す。
+ *
+ * ここで保存はしない。抽出は補助であり、確定させるのは利用者
+ * (`docs/reverse/features.md` 2 章)。カテゴリは推定を初期選択に置くだけ。
+ */
+export const draftFromCapture = (result: CaptureResult): PartDraft => {
+  const sourceId = crypto.randomUUID();
+  return {
+    id: null,
+    name: result.fields.name?.value ?? "",
+    manufacturer: result.fields.manufacturer?.value ?? "",
+    modelNumber: result.fields.modelNumber?.value ?? "",
+    category: result.categoryHint ?? "uncategorized",
+    attributes: {},
+    sources: [
+      {
+        id: sourceId,
+        url: result.url,
+        kind: "retail",
+        capturedAt: result.capturedAt,
+        price: result.price?.money ?? null,
+        /** 最初のソースは必ずプライマリ。価格の基準になる。 */
+        primary: true,
+      },
+    ],
+    originals: {
+      ...(result.fields.name === undefined
+        ? {}
+        : { name: result.fields.name.original }),
+      ...(result.fields.manufacturer === undefined
+        ? {}
+        : { manufacturer: result.fields.manufacturer.original }),
+      ...(result.fields.modelNumber === undefined
+        ? {}
+        : { modelNumber: result.fields.modelNumber.original }),
+    },
+  };
+};

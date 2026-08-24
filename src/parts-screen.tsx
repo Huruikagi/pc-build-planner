@@ -7,7 +7,7 @@
  *
  * プロジェクトの CRUD はここに置かない (C-1)。ヘッダのポップオーバーが持つ。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { t } from "./i18n.js";
 import { DeleteIcon, PlusIcon } from "./icons.js";
@@ -46,10 +46,23 @@ const attributeSummary = (part: CandidatePart): readonly string[] => {
   return values;
 };
 
-export const PartsScreen = ({ root, project, apply }: ScreenProps) => {
+export const PartsScreen = ({
+  root,
+  project,
+  apply,
+  handoff,
+  onHandoffConsumed,
+}: ScreenProps) => {
   const [category, setCategory] = useState<PartCategory | "all">("all");
   const [draft, setDraft] = useState<PartDraft | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  /** 取り込みからの引き渡しは、届いた時点で編集面を開く。 */
+  useEffect(() => {
+    if (handoff === null) return;
+    setDraft(handoff);
+    onHandoffConsumed();
+  }, [handoff, onHandoffConsumed]);
 
   const parts = useMemo(
     () => partsOf(root, project?.id ?? null),

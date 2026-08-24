@@ -1,0 +1,161 @@
+/**
+ * 商品取り込みを、実拡張・実ページ・実 content script 注入で検証する。
+ *
+ * `docs/reverse/features.md` 2 章とデザインキャンバス「4. 取り込み」に対応。
+ * 起点は必ず拡張アイコンの操作で、権限はその都度の `activeTab` に限る。
+ */
+import { expect, test } from "@playwright/test";
+import {
+  type LoadedExtension,
+  loadExtension,
+  triggerExtensionAction,
+} from "./extension.js";
+import {
+  BLANK_PAGE_HTML,
+  BLANK_PAGE_URL,
+  PRODUCT_PAGE_HTML,
+  PRODUCT_PAGE_URL,
+} from "./fixtures/product-page.js";
+
+const serve = async (
+  extension: LoadedExtension,
+  body: string,
+): Promise<void> => {
+  await extension.context.route("http://pcbp.test/**", (route) =>
+    route.fulfill({
+      body,
+      contentType: "text/html; charset=utf-8",
+      status: 200,
+    }),
+  );
+};
+
+const createProject = async (
+  { page }: LoadedExtension,
+  name: string,
+): Promise<void> => {
+  await page.click("[data-project-menu-toggle]");
+  await page.fill('[name="project-name"]', name);
+  await page.click("[data-project-create] button[type=submit]");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".project-menu")).toHaveCount(0);
+};
+
+test.describe("商品取り込み", () => {
+  let extension: LoadedExtension;
+
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright は第1引数に分割代入パターンを要求する
+  test.beforeEach(async ({}, testInfo) => {
+    extension = await loadExtension("ja", testInfo.outputPath("profile"));
+  });
+
+  test.afterEach(async () => {
+    await extension.close();
+  });
+
+  test("構造化データから取り込み、確認して保存すると元表記と分離して残る", async () => {
+    const { page, context } = extension;
+    await serve(extension, PRODUCT_PAGE_HTML);
+    await createProject(extension, "SYN 取り込み検証");
+
+    const target = await context.newPage();
+    await target.goto(PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+
+    // --- 取り込み面は一時表示。常設ナビには現れない ---
+    await expect(
+      page.locator('[data-capture-status="captured"]'),
+    ).toBeVisible();
+    await expect(page.locator(".nav__item")).toHaveCount(3);
+
+    /** 取得できた項目には出典が添えられる (features.md 2.2)。 */
+    const captured = page.locator('[data-capture-status="captured"]');
+    await expect(captured).toContainText("SYN GeForce RTX 5080 SUPER 16GB");
+    await expect(captured).toContainText("SYNVIDIA");
+    await expect(captured).toContainText("SYN-5080S-16G");
+    await expect(captured).toContainText("189,800 JPY");
+    await expect(captured.locator(".badge--source").first()).toHaveText(
+      "構造化データ",
+    );
+    /** カテゴリは推定であって確定ではない (2.4)。 */
+    await expect(captured.locator(".badge--hint")).toHaveText("推定");
+
+    // --- 引き渡し。再取り込みは起きない ---
+    await page.click("[data-capture-accept]");
+    await expect(page.locator("[data-part-editor]")).toBeVisible();
+    await expect(page.locator('[name="part-name"]')).toHaveValue(
+      "SYN GeForce RTX 5080 SUPER 16GB",
+    );
+    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue(
+      "SYNVIDIA",
+    );
+    await expect(page.locator('[name="part-model-number"]')).toHaveValue(
+      "SYN-5080S-16G",
+    );
+    /** 推定カテゴリが初期選択になる。 */
+    await expect(page.locator('[name="part-category"]')).toHaveValue("gpu");
+
+    // --- 元表記は読み取り専用で見える (changes.md C-2-2) ---
+    await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).toContainText("SYNVIDIA");
+    await expect(page.locator(".originals input")).toHaveCount(0);
+
+    await page.click("[data-part-editor] button[type=submit]");
+    await expect(page.locator("[data-part-id]")).toHaveCount(1);
+
+    // --- 保存された形。確定値と元表記が分離している (features.md 1.2) ---
+    const stored = await extension.readStoredRoot();
+    const part = stored?.candidateParts[0];
+    expect(part?.category).toBe("gpu");
+    expect(part?.manufacturer).toEqual({
+      confirmed: "SYNVIDIA",
+      original: "SYNVIDIA",
+    });
+    /** プライマリソースが価格の基準になる (1.5)。 */
+    expect(part?.sources).toHaveLength(1);
+    expect(part?.sources[0]?.primary).toBe(true);
+    expect(part?.sources[0]?.price).toEqual({
+      amount: 189800,
+      currency: "JPY",
+    });
+    expect(part?.sources[0]?.url).toBe(PRODUCT_PAGE_URL);
+
+    expect(extension.diagnostics).toEqual([]);
+  });
+
+  test("商品情報を取得できないページは理由を示して手入力へ逃がす", async () => {
+    const { page, context } = extension;
+    await serve(extension, BLANK_PAGE_HTML);
+    await createProject(extension, "SYN 取り込み検証");
+
+    const target = await context.newPage();
+    await target.goto(BLANK_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+
+    const failed = page.locator('[data-capture-status="failed"]');
+    await expect(failed).toBeVisible();
+    await expect(failed.getByRole("alert")).toContainText("自動取得できません");
+
+    /** 面を閉じれば通常の画面へ戻り、手入力で追加できる。 */
+    await page.click("[data-capture-dismiss]");
+    await expect(page.locator("[data-create-part]")).toBeVisible();
+
+    const stored = await extension.readStoredRoot();
+    expect(stored?.candidateParts ?? []).toEqual([]);
+    expect(extension.diagnostics).toEqual([]);
+  });
+
+  test("拡張が読み取れないページは注入せず対象外として知らせる", async () => {
+    const { page, context } = extension;
+    await createProject(extension, "SYN 取り込み検証");
+
+    const target = await context.newPage();
+    await target.goto("chrome://version");
+    await triggerExtensionAction(extension, target, "chrome://version");
+
+    const failed = page.locator('[data-capture-status="failed"]');
+    await expect(failed).toBeVisible();
+    await expect(failed.getByRole("alert")).toContainText("読み取れない");
+    expect(extension.diagnostics).toEqual([]);
+  });
+});

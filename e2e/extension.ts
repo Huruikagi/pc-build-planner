@@ -38,6 +38,7 @@ export interface LoadedExtension {
   readonly context: BrowserContext;
   readonly page: Page;
   readonly worker: Worker;
+  readonly extensionId: string;
   /** boot から現在までに拾った console error と page error。 */
   readonly diagnostics: readonly string[];
   readStoredRoot(): Promise<StoredRoot | undefined>;
@@ -49,14 +50,33 @@ export interface StoredRoot {
   readonly revision: number;
   readonly selectedProjectId: string | null;
   readonly projects: readonly { readonly id: string; readonly name: string }[];
-  readonly candidateParts: readonly {
+  readonly candidateParts: readonly StoredPart[];
+}
+
+/** 保存された候補パーツ。UI を経由せず、実際の保存内容を突き合わせるための形。 */
+export interface StoredPart {
+  readonly id: string;
+  readonly name: string;
+  readonly category: string;
+  readonly manufacturer: StoredSourcedValue | null;
+  readonly modelNumber: StoredSourcedValue | null;
+  readonly attributes: Readonly<Record<string, StoredSourcedValue>>;
+  readonly sources: readonly {
     readonly id: string;
-    readonly name: string;
-    readonly category: string;
-    readonly attributes: Readonly<
-      Record<string, { readonly confirmed?: unknown }>
-    >;
+    readonly url: string;
+    readonly kind: string;
+    readonly capturedAt: string;
+    readonly price: {
+      readonly amount: number;
+      readonly currency: string;
+    } | null;
+    readonly primary: boolean;
   }[];
+}
+
+export interface StoredSourcedValue {
+  readonly original: string | null;
+  readonly confirmed?: unknown;
 }
 
 export const loadExtension = async (
@@ -96,6 +116,7 @@ export const loadExtension = async (
     context,
     page,
     worker,
+    extensionId,
     diagnostics,
     /** UI ではなく実際の保存内容を直接見る。 */
     readStoredRoot: () =>
@@ -107,4 +128,30 @@ export const loadExtension = async (
       ),
     close: () => context.close(),
   };
+};
+
+/**
+ * 拡張アイコンの操作を再現する。取り込みは利用者の明示操作でしか
+ * 始まらないので、E2E もその経路を通す。
+ */
+export const triggerExtensionAction = async (
+  extension: LoadedExtension,
+  targetPage: Page,
+  url: string,
+): Promise<void> => {
+  const browser = extension.context.browser();
+  if (browser === null) throw new Error("browser CDP session is unavailable");
+  const cdp = await browser.newBrowserCDPSession();
+  const { targetInfos } = await cdp.send("Target.getTargets", {
+    filter: [{ type: "tab", exclude: false }],
+  });
+  const tab = targetInfos.find(
+    (info) => info.type === "tab" && info.url.startsWith(url),
+  );
+  if (tab === undefined) throw new Error(`tab for ${url} is unavailable`);
+  await targetPage.bringToFront();
+  await cdp.send("Extensions.triggerAction", {
+    id: extension.extensionId,
+    targetId: tab.targetId,
+  });
 };

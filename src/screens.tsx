@@ -6,12 +6,16 @@
  */
 import { t } from "./i18n.js";
 import type { LocalDataRoot, Project } from "./model.js";
+import type { PartDraft } from "./parts.js";
 
 /** すべての画面が同じ形を受ける。`SCREENS` の表を一様に保つため。 */
 export interface ScreenProps {
   readonly root: LocalDataRoot;
   readonly project: Project | null;
   readonly apply: (mutate: (current: LocalDataRoot) => LocalDataRoot) => void;
+  /** 取り込みから引き渡された下書き。パーツ管理だけが受け取る。 */
+  readonly handoff: PartDraft | null;
+  readonly onHandoffConsumed: () => void;
 }
 
 const Placeholder = ({
