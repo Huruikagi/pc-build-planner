@@ -68,7 +68,7 @@ side-panel.html   サイドパネルのエントリ
 | `domain/` | カテゴリ別正規化属性、元表記と確認済み値の分離 |
 | `identity/` | URL正規化と商品同一性の照合 |
 | `e2e/` | Playwright E2E 16本（v0.4.0 が何をしたかの記述） |
-| `build/` | MV3ビルドとパッケージングのスクリプト |
+| `build/` | MV3ビルド、配布zip生成、リリースワークフローとversion整合チェック |
 
 詳細は [salvage/README.md](salvage/README.md)。
 
