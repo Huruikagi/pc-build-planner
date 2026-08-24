@@ -17,7 +17,7 @@ import {
   mergeSources,
 } from "./duplicates.js";
 import { t } from "./i18n.js";
-import { DeleteIcon, PlusIcon } from "./icons.js";
+import { DeleteIcon, ExtensionIcon, PlusIcon } from "./icons.js";
 import {
   type CandidatePart,
   formatMoney,
@@ -212,7 +212,23 @@ export const PartsScreen = ({
       </div>
 
       {visible.length === 0 ? (
-        <div className="placeholder">{t("partsEmpty")}</div>
+        /**
+         * プロジェクト全体が空のときだけ取り込みの説明を出す。取り込みは
+         * サイドパネルからは起動できず、拡張アイコンの操作しか起点が無い
+         * (`service-worker.ts`)。押せる導線を置けない以上、場所を教える (`changes.md` C-7)。
+         * カテゴリ絞り込みで 0 件なのは別の話なので混ぜない。
+         */
+        parts.length === 0 ? (
+          <div className="empty-capture" data-capture-howto>
+            <ExtensionIcon />
+            <div>
+              <div className="empty-capture__title">{t("partsEmptyAll")}</div>
+              <p className="empty-capture__body">{t("captureHowTo")}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="placeholder">{t("partsEmpty")}</div>
+        )
       ) : (
         <ul aria-label={t("partsTitle")} className="part-list">
           {visible.map((part) => {
@@ -304,9 +320,17 @@ export const PartsScreen = ({
         )}
       </div>
 
+      {/**
+       * 手入力は取り込みの控えにすぎない。空状態では上の説明が主役なので
+       * primary を外し、パーツがある画面でだけ短いヒントを添える (C-7)。
+       */}
       <div className="part-list__add">
         <button
-          className="button button--primary button--wide"
+          className={
+            parts.length === 0
+              ? "button button--wide"
+              : "button button--primary button--wide"
+          }
           data-create-part
           onClick={() => setDraft(emptyDraft())}
           type="button"
@@ -314,6 +338,12 @@ export const PartsScreen = ({
           <PlusIcon />
           {t("partAdd")}
         </button>
+        {parts.length === 0 ? null : (
+          <p className="part-list__hint" data-capture-hint>
+            <ExtensionIcon size={13} />
+            {t("captureHowToShort")}
+          </p>
+        )}
       </div>
     </>
   );

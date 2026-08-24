@@ -198,6 +198,15 @@
   "partsEmpty": {
     "message": "このカテゴリにパーツはありません。"
   },
+  "partsEmptyAll": {
+    "message": "まだパーツがありません。"
+  },
+  "captureHowTo": {
+    "message": "商品ページを開き、ツールバーの拡張機能アイコンからこの拡張をクリックすると、そのページのパーツを取り込めます。"
+  },
+  "captureHowToShort": {
+    "message": "商品ページでは、拡張機能アイコンのクリックで取り込めます。"
+  },
   "partAdd": {
     "message": "パーツを追加"
   },

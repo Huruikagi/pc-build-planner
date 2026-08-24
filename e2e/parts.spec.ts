@@ -93,6 +93,27 @@ for (const { lang, catalog } of LOCALES) {
       );
     });
 
+    /**
+     * 取り込みは拡張アイコンの操作しか起点が無く、パネル側には押せる導線を
+     * 置けない (`src/service-worker.ts`)。空状態で置き場所を教え、埋まったら
+     * 短いヒントへ退く、という出し分けを固定する。
+     */
+    test("取り込みの説明は空状態で出し、パーツが入ったら短いヒントへ退く", async () => {
+      const { page } = extension;
+      await createProject(extension, "SYN 空状態プロジェクト");
+
+      await expect(page.locator("[data-capture-howto]")).toBeVisible();
+      await expect(page.locator("[data-capture-hint]")).toHaveCount(0);
+
+      await addPart(extension, {
+        name: "SYN 何か 1 件",
+        category: "cpu",
+      });
+
+      await expect(page.locator("[data-capture-howto]")).toHaveCount(0);
+      await expect(page.locator("[data-capture-hint]")).toBeVisible();
+    });
+
     test("プロジェクトと候補パーツの一巡が実storageへ反映され再起動後も残る", async () => {
       const { page } = extension;
 

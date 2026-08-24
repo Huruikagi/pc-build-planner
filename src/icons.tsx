@@ -167,3 +167,21 @@ export const CloseIcon = () => (
     <line x1="6" x2="18" y1="6" y2="18" />
   </svg>
 );
+
+/**
+ * ツールバーの拡張機能メニュー（パズルピース）を指す図。取り込みの起点は
+ * サイドパネルの中に無いので、空状態では場所そのものを示す必要がある。
+ *
+ * 14px では凹凸が潰れるため塗りで、既定 20px で使う (`changes.md` C-2-5)。
+ */
+export const ExtensionIcon = ({ size = 20 }: IconProps) => (
+  <svg
+    aria-hidden="true"
+    fill="currentColor"
+    height={size}
+    viewBox="0 0 24 24"
+    width={size}
+  >
+    <path d="M6 6.6h3.6a2.4 2.4 0 0 1 4.8 0H18A1.4 1.4 0 0 1 19.4 8v2.6a2.4 2.4 0 0 0 0 4.8V18a1.4 1.4 0 0 1-1.4 1.4H6A1.4 1.4 0 0 1 4.6 18V8A1.4 1.4 0 0 1 6 6.6Z" />
+  </svg>
+);

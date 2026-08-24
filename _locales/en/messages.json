@@ -198,6 +198,15 @@
   "partsEmpty": {
     "message": "No parts in this category."
   },
+  "partsEmptyAll": {
+    "message": "No parts yet."
+  },
+  "captureHowTo": {
+    "message": "Open a product page and click this extension from the toolbar extensions icon to capture the part on that page."
+  },
+  "captureHowToShort": {
+    "message": "On a product page, click the extensions icon to capture."
+  },
   "partAdd": {
     "message": "Add part"
   },

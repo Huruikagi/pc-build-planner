@@ -494,6 +494,45 @@ button {
   padding: 11px 9px;
 }
 
+/* 取り込みは押せる導線を持てないので、ヒントはボタンにしない (`changes.md` C-7)。 */
+.part-list__hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.part-list__hint > svg {
+  flex-shrink: 0;
+}
+
+.empty-capture {
+  display: flex;
+  gap: 9px;
+  padding: 16px 11px;
+  color: var(--text-muted);
+}
+
+.empty-capture > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--text-faint);
+}
+
+.empty-capture__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-capture__body {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 .button--wide {
   display: flex;
   align-items: center;
