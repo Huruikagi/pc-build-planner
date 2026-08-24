@@ -424,5 +424,65 @@
         "content": "$1"
       }
     }
+  },
+  "buildAdopted": {
+    "message": "Adopted build"
+  },
+  "buildEmpty": {
+    "message": "No current build yet"
+  },
+  "buildUnselected": {
+    "message": "Not selected"
+  },
+  "buildAdopt": {
+    "message": "Adopt"
+  },
+  "buildAdoptedLabel": {
+    "message": "Adopted"
+  },
+  "buildAdoptFrom": {
+    "message": "Adopt from candidates"
+  },
+  "buildTotal": {
+    "message": "Build total"
+  },
+  "buildQuantity": {
+    "message": "Quantity"
+  },
+  "buildQuantityInvalid": {
+    "message": "Enter a positive whole number"
+  },
+  "buildHideUnselected": {
+    "message": "Hide unselected categories"
+  },
+  "buildMixedCurrency": {
+    "message": "Currencies are mixed. The total uses the first currency and is not converted."
+  },
+  "buildRelease": {
+    "message": "Remove $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "buildCategoryRatio": {
+    "message": "$filled$ / $total$ categories",
+    "placeholders": {
+      "filled": {
+        "content": "$1"
+      },
+      "total": {
+        "content": "$2"
+      }
+    }
+  },
+  "buildShowUnselected": {
+    "message": "Show $count$ unselected categories",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

@@ -85,9 +85,14 @@ export const countByCategory = (
   return counts;
 };
 
+/** 候補を削除すると現在構成からも解除される (`features.md` 4 章)。 */
 export const deletePart = (id: string) => (root: LocalDataRoot) => ({
   ...root,
   candidateParts: root.candidateParts.filter((part) => part.id !== id),
+  currentBuilds: root.currentBuilds.map((build) => ({
+    ...build,
+    items: build.items.filter((item) => item.partId !== id),
+  })),
 });
 
 /**

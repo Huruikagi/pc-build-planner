@@ -133,6 +133,24 @@ const candidatePart = z.object({
 
 export type CandidatePart = z.infer<typeof candidatePart>;
 
+/* --- 現在構成 (features.md 4 章) ------------------------------------------ */
+
+const buildItem = z.object({
+  partId: z.string().min(1),
+  /** 正整数のみ。不正値は保存しない。 */
+  quantity: z.number().int().positive(),
+});
+
+export type BuildItem = z.infer<typeof buildItem>;
+
+/** プロジェクトごとに 0 個または 1 個。 */
+const currentBuild = z.object({
+  projectId: z.string().min(1),
+  items: z.array(buildItem),
+});
+
+export type CurrentBuild = z.infer<typeof currentBuild>;
+
 const project = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -151,6 +169,7 @@ export const localDataRootSchema = z.object({
   selectedProjectId: z.string().nullable(),
   projects: z.array(project),
   candidateParts: z.array(candidatePart),
+  currentBuilds: z.array(currentBuild),
 });
 
 export type LocalDataRoot = z.infer<typeof localDataRootSchema>;
@@ -161,6 +180,7 @@ export const createInitialRoot = (): LocalDataRoot => ({
   selectedProjectId: null,
   projects: [],
   candidateParts: [],
+  currentBuilds: [],
 });
 
 /* --- 表示のための派生 ---------------------------------------------------- */

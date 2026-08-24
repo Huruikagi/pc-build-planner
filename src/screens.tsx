@@ -32,10 +32,6 @@ const Placeholder = ({
   </>
 );
 
-export const BuildScreen = ({ project }: ScreenProps) => (
-  <Placeholder project={project} titleKey="buildTitle" />
-);
-
 export const CompatibilityScreen = ({ project }: ScreenProps) => (
   <Placeholder project={project} titleKey="compatibilityTitle" />
 );

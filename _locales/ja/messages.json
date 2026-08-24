@@ -424,5 +424,65 @@
         "content": "$1"
       }
     }
+  },
+  "buildAdopted": {
+    "message": "採用中の構成"
+  },
+  "buildEmpty": {
+    "message": "現在構成がありません"
+  },
+  "buildUnselected": {
+    "message": "未選択"
+  },
+  "buildAdopt": {
+    "message": "採用"
+  },
+  "buildAdoptedLabel": {
+    "message": "採用中"
+  },
+  "buildAdoptFrom": {
+    "message": "候補から採用する"
+  },
+  "buildTotal": {
+    "message": "構成合計"
+  },
+  "buildQuantity": {
+    "message": "数量"
+  },
+  "buildQuantityInvalid": {
+    "message": "正整数を入力してください"
+  },
+  "buildHideUnselected": {
+    "message": "未選択のカテゴリを隠す"
+  },
+  "buildMixedCurrency": {
+    "message": "通貨が混在しています。合計は最初の通貨で表示していますが、換算はしていません。"
+  },
+  "buildRelease": {
+    "message": "$name$ を解除",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "buildCategoryRatio": {
+    "message": "$filled$ / $total$ カテゴリ",
+    "placeholders": {
+      "filled": {
+        "content": "$1"
+      },
+      "total": {
+        "content": "$2"
+      }
+    }
+  },
+  "buildShowUnselected": {
+    "message": "未選択の $count$ カテゴリを表示",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

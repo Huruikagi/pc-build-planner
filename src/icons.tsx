@@ -151,3 +151,19 @@ export const PlusIcon = () => (
     <line x1="5" x2="19" y1="12" y2="12" />
   </svg>
 );
+
+export const CloseIcon = () => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    height="14"
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeWidth="2"
+    viewBox="0 0 24 24"
+    width="14"
+  >
+    <line x1="18" x2="6" y1="6" y2="18" />
+    <line x1="6" x2="18" y1="6" y2="18" />
+  </svg>
+);

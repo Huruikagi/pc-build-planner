@@ -11,6 +11,7 @@
 
 import type { CaptureResult, CaptureState } from "./capture/types.js";
 import { t } from "./i18n.js";
+import { CloseIcon } from "./icons.js";
 import { formatMoney } from "./model.js";
 
 const sourceLabel = (source: string): string =>
@@ -168,7 +169,7 @@ export const CaptureScreen = ({
           onClick={onDismiss}
           type="button"
         >
-          ✕
+          <CloseIcon />
         </button>
       </div>
 

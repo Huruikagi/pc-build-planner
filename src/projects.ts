@@ -29,11 +29,14 @@ export const renameProject =
     ),
   });
 
+/** プロジェクトを削除すると、所属する候補と現在構成も消える。 */
 export const deleteProject = (id: string) => (root: LocalDataRoot) => {
   const projects = root.projects.filter((project) => project.id !== id);
   return {
     ...root,
     projects,
+    candidateParts: root.candidateParts.filter((part) => part.projectId !== id),
+    currentBuilds: root.currentBuilds.filter((build) => build.projectId !== id),
     selectedProjectId:
       root.selectedProjectId === id
         ? (projects[0]?.id ?? null)

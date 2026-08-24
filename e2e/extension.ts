@@ -51,6 +51,13 @@ export interface StoredRoot {
   readonly selectedProjectId: string | null;
   readonly projects: readonly { readonly id: string; readonly name: string }[];
   readonly candidateParts: readonly StoredPart[];
+  readonly currentBuilds: readonly {
+    readonly projectId: string;
+    readonly items: readonly {
+      readonly partId: string;
+      readonly quantity: number;
+    }[];
+  }[];
 }
 
 /** 保存された候補パーツ。UI を経由せず、実際の保存内容を突き合わせるための形。 */

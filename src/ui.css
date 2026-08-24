@@ -778,3 +778,113 @@ button {
   font-size: 11px;
   color: var(--text-faint);
 }
+
+/* --- current build ------------------------------------------------------ */
+
+.build-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.build-row:nth-child(even) {
+  background: var(--bg-alt);
+}
+
+.build-row__category {
+  flex-shrink: 0;
+  width: 62px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.build-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.build-row__name--empty {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.build-row__price {
+  flex-shrink: 0;
+  width: 74px;
+  text-align: end;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.quantity {
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.quantity--invalid {
+  border-color: var(--ng);
+  background: #fff0ee;
+}
+
+.quantity__error {
+  flex-basis: 100%;
+  order: 99;
+  font-size: 10px;
+  color: var(--ng);
+}
+
+.build-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-bg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.build-total__amount {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.disclosure--center {
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.section-header__select {
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font: inherit;
+  font-size: 10px;
+  color: var(--text);
+}

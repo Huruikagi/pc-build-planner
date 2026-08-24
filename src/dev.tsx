@@ -41,6 +41,9 @@ const seed: LocalDataRoot = {
       createdAt: "2026-08-10T00:00:00.000Z",
     },
   ],
+  currentBuilds: [
+    { projectId: "seed-main", items: [{ partId: "seed-cpu", quantity: 1 }] },
+  ],
   candidateParts: [
     {
       id: "seed-cpu",

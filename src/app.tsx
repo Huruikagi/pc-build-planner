@@ -6,6 +6,7 @@
  * contribution 機構は持たない (C-5)。
  */
 import { useCallback, useEffect, useState } from "react";
+import { BuildScreen } from "./build-screen.js";
 import {
   CAPTURE_STATE_KEY,
   clearCaptureState,
@@ -31,7 +32,7 @@ import {
   renameProject,
   selectProject,
 } from "./projects.js";
-import { BuildScreen, CompatibilityScreen } from "./screens.js";
+import { CompatibilityScreen } from "./screens.js";
 import type { StorageFailure, Store } from "./storage.js";
 
 const SCREENS = [
