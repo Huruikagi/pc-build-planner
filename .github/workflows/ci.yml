@@ -43,3 +43,18 @@ jobs:
 
       - name: Build (unpacked MV3 extension)
         run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 実拡張を未パッケージで読み込んで動かす。合成ハーネスは持たない。
+      - name: E2E (unpacked MV3 extension)
+        run: pnpm exec playwright test
+
+      - name: Upload E2E traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

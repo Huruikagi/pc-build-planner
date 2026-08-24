@@ -103,6 +103,7 @@ export const PartsScreen = ({ root, project, apply }: ScreenProps) => {
         <button
           aria-selected={category === "all"}
           className="filters__item"
+          data-category="all"
           onClick={() => setCategory("all")}
           role="tab"
           type="button"
@@ -150,6 +151,7 @@ export const PartsScreen = ({ root, project, apply }: ScreenProps) => {
                   <div className="project-menu__confirm-actions">
                     <button
                       className="button button--danger"
+                      data-confirm-delete
                       onClick={() => {
                         apply(deletePart(part.id));
                         setConfirmingId(null);
@@ -174,6 +176,7 @@ export const PartsScreen = ({ root, project, apply }: ScreenProps) => {
                 <button
                   aria-label={t("partEdit", part.name)}
                   className="part-row__main"
+                  data-edit-part
                   onClick={() => setDraft(draftFromPart(part))}
                   type="button"
                 >
@@ -204,6 +207,7 @@ export const PartsScreen = ({ root, project, apply }: ScreenProps) => {
                 <button
                   aria-label={t("partDelete", part.name)}
                   className="project-menu__icon-button"
+                  data-delete-part
                   onClick={() => setConfirmingId(part.id)}
                   type="button"
                 >

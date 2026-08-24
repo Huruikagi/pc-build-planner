@@ -192,7 +192,11 @@ export const ProjectMenu = ({
         );
       })}
 
-      <form className="project-menu__create" onSubmit={submitCreate}>
+      <form
+        className="project-menu__create"
+        data-project-create
+        onSubmit={submitCreate}
+      >
         <PlusIcon />
         <input
           aria-label={t("projectNamePlaceholder")}
