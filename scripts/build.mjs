@@ -5,7 +5,7 @@
  * validate-runtime-schema-csp / validate-worker-module-graph) を落とした形。
  * ゲートは必要が実証されてから足す (`docs/reverse/changes.md` C-5)。
  */
-import { copyFile, cp, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, rm } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { build, context } from "esbuild";
 
@@ -68,6 +68,8 @@ export async function serveDev(port = 5173) {
     sourcemap: true,
   });
   await ctx.watch();
+  /** watch() の初回書き出し完了を待たないので、outdir の存在は自前で保証する。 */
+  await mkdir("dist-dev", { recursive: true });
   await copyFile("dev.html", "dist-dev/index.html");
   const server = await ctx.serve({ port, servedir: "dist-dev" });
   console.log(`dev harness: http://localhost:${server.port}/`);
