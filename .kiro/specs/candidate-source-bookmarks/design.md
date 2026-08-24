@@ -311,9 +311,10 @@ candidate-managementが所有するstate/viewへcatalog/mutation/page-open resul
 3. catalog/mutation/conditional patchを独立coreへ移し、contract testを通す。
 4. `project-candidate-management` Task 13.3がeditor adapterを公開portへ接続するためのconsumer contractを固定する。
 5. `project-candidate-management` Task 14.3がeditor adapterと既存state/viewをcanonical portへ接続し、旧coreはまだ撤去しない。
-6. source-price-refresh 7.2、duplicate-product-merge 6.2、product-page-capture 12.1が各owner内のcanonical source consumer移行を完了する。
+6. source-price-refresh 7.2が`createCanonicalSourcePriceRefreshService` / `createCanonicalSourcePriceRefreshContribution`を加算的に公開し、duplicate-product-merge 6.2、product-page-capture 12.1が各owner内のcanonical source consumer shapeを確定する。
 7. application-shell 12.1がsource限定production seamとしてcanonical catalog、matcher、mutationの各portを構築・注入する。
-8. `project-candidate-management` Task 14.5が全consumer移行後に旧candidate-owned source facet/coreを撤去し、本specと隣接specの最終gateが二重ownerのない境界を検証する。
+8. source-price-refresh 7.3がproduction切替後に旧source依存とlegacy factoryを撤去する。
+9. `project-candidate-management` Task 14.5が全consumer移行後に旧candidate-owned source facet/coreを撤去し、本specと隣接specの最終gateが二重ownerのない境界を検証する。
 
 移行中も旧ownerを先行削除しないが、最終状態でfallbackや二重ownerを残さない。本specは下流実装やshell wiringを代行せず、各ownerが公開seamを消費する順序だけを開始条件で固定する。
 

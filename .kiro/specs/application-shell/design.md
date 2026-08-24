@@ -195,7 +195,7 @@ tests/
 
 #### v0.5 owner reconciliation composition
 
-candidate sourceは全owner最終compositionより先に、source-price、duplicate、captureのconsumer移行後の限定seamでproduction wiringする。`side-panel-contributions.ts`は`createCandidateSourceCatalog`、`createCandidateSourceMatcher`、`createCandidateSourceMutationService`を各1回だけ呼び、生成した各port instanceを必要なconsumer間で共有する。この先行seamはproject、identity、manufacturer、refreshの他proxyを撤去せず、candidate-owned source core撤去の開始条件だけを提供する。
+candidate sourceは全owner最終compositionより先に、source-price 7.2の`createCanonicalSourcePriceRefreshContribution`とduplicate/captureのconsumer shape確定後、source-price 7.3およびcandidate-owned source core撤去前の限定seamでproduction wiringする。`side-panel-contributions.ts`は`createCandidateSourceCatalog`、`createCandidateSourceMatcher`、`createCandidateSourceMutationService`を各1回だけ呼び、生成した各port instanceを必要なconsumer間で共有し、source-priceには`createCanonicalSourcePriceRefreshContribution`を明示的に呼んでmatcher/patchだけを渡す。移行中に型上残るlegacy `createSourcePriceRefreshContribution`やcandidate-owned source facetへ新wiringがfallbackしてはならない。この先行seamはproject、identity、manufacturer、refreshの他proxyや旧source facet/coreを撤去せず、source-price 7.3とcandidate-owned source core撤去の開始条件だけを提供する。
 
 `application-composition.ts`はowner公開entryからconfigured message resolver、現行product-local runtime contribution、既存backup section contribution、project lifecycle descriptor/catalogを初期化し、通常consumerへ通常用途capabilityだけ、backup sectionへ既存backup専用capabilityだけを渡す。candidate/source/identity/current-build/compatibility/price/duplicate/captureのfeature contributionへも必要なportだけを直接渡し、共有`AppDataError`は値・variantを検査せずconsumer間を型付きで接続する。package factoryへの全面移行、package内部のstorage/lock、generic maintenance/recovery/finalization seamはこのcompositionに追加しない。
 

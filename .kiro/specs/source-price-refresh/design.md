@@ -55,7 +55,7 @@
 
 - `application-shell/public.ts` 公開の `ActivationId`、`FeatureId`、`TargetTabId`、`parseTargetTabId`、`TransientActivationRequest`、`TransientSurfaceLifecyclePort`、`TransientGestureRegistrationPort`。
 - `application-shell/worker-public.ts` 公開のworker-safeなgesture registration契約。worker consumerはUI向け `application-shell/public.ts` をruntime importしない。
-- source owner公開入口の `SourceMatchPort` と `CandidateSourcePricePatchPort`。candidate-managementのsource proxyまたは内部moduleへ依存しない。
+- source owner公開入口の `CandidateSourceMatcherPort` と `SourcePricePatchContract`。candidate-managementのsource proxyまたは内部moduleへ依存しない。
 - `local-data-foundation`のdomain公開入口から提供される`AppDataError`。`ManagementError`、`FoundationError`、owner-local mapperへ依存しない。
 - `product-capture/public.ts` 公開の `ProductCapturePublicApi.pagePriceExtraction: PagePriceExtractionPort`。
 - canonical `Result<T, E>`、`CandidatePartId`、`CandidateSourceId`、`SourcedValue<MoneyValue>`、`UtcTimestamp`。
@@ -66,7 +66,7 @@
 
 下流consumer向けの3つのseamは各producer specで定義・承認済みであり、いずれのspecも `ready_for_implementation: true` である。本specはこれらを解決済み依存として扱う。純粋なURL照合・use case・stateは確定済み契約のtest doubleで着手でき、production統合だけをproducer側実装タスクの完了後に行う。
 
-1. source owner: catalog/candidate scopeを受ける公開`SourceMatchPort`がcanonical URL identity、一意性、ambiguity、retail eligibilityを判定してopaque precondition付きtargetを返し、`CandidateSourcePricePatchPort`がprice/capturedAtだけを条件付き更新する。本featureはcandidate-management proxy、source reference走査、URL正規化を所有しない。
+1. source owner: catalog/candidate scopeを受ける公開`CandidateSourceMatcherPort`がcanonical URL identityと0/1/manyを判定して任意source referenceを返し、`SourcePricePatchContract`がraw `pageUrl`と`kind: "retail"`をpreconditionとしてprice/capturedAtだけを条件付き更新する。本featureの`SourcePublicPortAdapter`はunique referenceのpageUrl存在とretail kindを明示narrowingし、欠損・非retailを`ineligible-source`へfail closedにする。production cutover後、本featureはcandidate-management proxy、source reference走査、URL正規化を所有しない。
 2. `transient-feature-surface`: `TransientGestureRegistrationPort.register(source)` と `TransientGestureSource.start(emit)` は同期 `Result<() => void, TransientGestureRegistrationError>` 契約であり、`parseTargetTabId` で検証した固定tabだけをemitする。store writer、sequence割当、panel openerは非公開である。
 3. `product-page-capture`: `ProductCapturePublicApi.pagePriceExtraction` が `PagePriceExtractionPort.extractPrice(TargetTabId)` を公開し、page-derived URL、canonical取得時点、任意のprice provenanceを `PagePriceObservation` として返す。既存extractor/ranker/normalizerはproducer内部に留まる。
 
@@ -217,7 +217,8 @@ sequenceDiagram
     Refresh->>Extractor: extractPrice fixed tab
     Extractor-->>Refresh: pageUrl capturedAt price
     Refresh->>Catalog: source owner公開portへURLとscope
-    Catalog-->>Refresh: unique targetとopaque precondition
+    Catalog-->>Refresh: unique reference（pageUrl/kindは任意）
+    Refresh->>Refresh: pageUrl存在・retail kindを明示narrowing
     Refresh->>Mutation: conditional price/capturedAt patch
     Mutation-->>Refresh: atomic ResultまたはAppDataError
     Refresh-->>Surface: 成功またはtyped failure表示
@@ -246,8 +247,8 @@ sequenceDiagram
 | 要件 | 要約 | コンポーネント | インターフェース | フロー |
 |---|---|---|---|---|
 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | 一回完結のgesture起動 | PriceRefreshContextMenuSource、SourcePriceRefreshRegistration、SourcePriceRefreshState、SourcePriceRefreshView | `TransientGestureRegistrationPort`、activation payload | context menu更新 |
-| 2.1, 2.2, 2.3, 2.4 | canonical URL受理と同一性の利用 | SourcePublicPortAdapter | `SourceMatchPort` | 両フロー |
-| 2.5, 2.6, 2.7, 2.8 | 一意source・retail制約の利用 | SourcePublicPortAdapter | `SourceMatchPort` | 両フロー |
+| 2.1, 2.2, 2.3, 2.4 | canonical URL受理と同一性の利用 | SourcePublicPortAdapter | `CandidateSourceMatcherPort` | 両フロー |
+| 2.5, 2.6, 2.7, 2.8 | 一意source・retail制約の利用 | SourcePublicPortAdapter | `CandidateSourceMatcherPort` | 両フロー |
 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | priceだけの抽出 | SourcePriceRefreshService | `PagePriceExtractionPort` | context menu更新 |
 | 4.1, 4.2, 4.3, 4.4, 4.5 | 原子的反映とprojection | SourcePriceRefreshService | `CandidateSourceMutationPort.patchSourcePrice`、`refreshCapturedPrice` | 両フロー |
 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | 保全と回復 | SourcePriceRefreshService、SourcePriceRefreshState、SourcePriceRefreshView | `SourcePriceRefreshError` | 両フロー |
@@ -271,7 +272,7 @@ sequenceDiagram
 
 ### Source Owner Public Seam（参照契約）
 
-以下のURL identityとsource reference型は過去に本featureが所有した設計記録であり、`v0.5.0-boundary-reconciliation`以後はsource ownerのpublic contractがcanonicalである。本featureはこれらを再定義・再公開せず、`SourceMatchPort.match({ scope, pageUrl })`の結果だけを受け取る。
+以下のURL identityとsource reference型は過去に本featureが所有した設計記録であり、`v0.5.0-boundary-reconciliation`以後はsource ownerのpublic contractがcanonicalである。本featureは7.3完了後にこれらを再定義・再公開せず、`CandidateSourceMatcherPort.matchByPageUrl({ scope, pageUrl })`の結果だけを受け取る。
 
 #### SourceUrlIdentity（source owner所有・本feature実装対象外）
 
@@ -304,7 +305,7 @@ export function sameSourcePageUrl(left: string, right: string): boolean;
 - 残るquery pairはvalueを変更せず、key、value、元indexの順で安定sortする。同じkeyの複数valueを保持する。
 - decode/re-encodeは標準 `URL` / `URLSearchParams` のserializationだけを使用し、独自percent decodeを行わない。
 
-#### StoredSourceLocator（source ownerのSourceMatchPortへ移管）
+#### StoredSourceLocator（source ownerのCandidateSourceMatcherPortへ移管）
 
 | 項目 | 詳細 |
 |---|---|
@@ -326,7 +327,8 @@ export interface MatchStoredSourceInput {
 export interface MatchedCandidateSource {
   readonly candidateId: CandidatePartId;
   readonly sourceId: CandidateSourceId;
-  readonly normalizedPageUrl: NormalizedSourcePageUrl;
+  readonly expectedPageUrl: string;
+  readonly expectedKind: "retail";
   readonly isPrimary: boolean;
 }
 
@@ -349,7 +351,7 @@ export interface HistoricalCandidateSourceCatalogPort {
 }
 ```
 
-このhistorical shapeはmigration確認専用であり、production/consumer contractへexportしない。source ownerの公開match portがpageUrl欠損、retail eligibility、0/1/複数一致をcanonicalに判定し、本featureは`no-match`、`ambiguous-match`、`ineligible-source`を既存UI結果へ写像する。data operation failureは共有`AppDataError`の意味を保持する。
+`HistoricalCandidateSourceCatalogPort`とfeature-owned locator/normalizerはmigration確認専用であり、7.3完了後のproduction/consumer contractへexportしない。`MatchedCandidateSource`はduplicate consumerを含む二段階public workflowの恒久契約であり、`SourcePublicPortAdapter`がunique referenceの`pageUrl !== undefined`と`kind === "retail"`を検査した後、そのraw文字列を`expectedPageUrl`、control-flow narrowing済みliteralを`expectedKind`として保持する。source ownerの公開match portは0/1/複数一致をcanonicalに判定し、本featureは`no-match`、`ambiguous-match`、pageUrl欠損、non-retailを既存UI結果へ写像する。data operation failureは共有`AppDataError`の意味を保持する。
 
 ### Feature Use Case
 
@@ -363,7 +365,7 @@ export interface HistoricalCandidateSourceCatalogPort {
 **依存**:
 
 - Inbound: transient state、duplicate-product-merge public consumer（P0）
-- Outbound: `PagePriceExtractionPort`、`SourceMatchPort`、`CandidateSourcePricePatchPort`、`TransientSurfaceLifecyclePort`（P0）
+- Outbound: `PagePriceExtractionPort`、`CandidateSourceMatcherPort`、`SourcePricePatchContract`、`TransientSurfaceLifecyclePort`（P0）
 
 **契約**: Service [x]
 
@@ -389,7 +391,10 @@ export interface PagePriceExtractionPort {
 }
 
 export interface RefreshCapturedPriceInput {
-  readonly target: Pick<MatchedCandidateSource, "candidateId" | "sourceId">;
+  readonly target: Pick<
+    MatchedCandidateSource,
+    "candidateId" | "sourceId" | "expectedPageUrl" | "expectedKind"
+  >;
   readonly observedPageUrl: string;
   readonly capturedAt: UtcTimestamp;
   readonly price?: SourcedValue<MoneyValue>;
@@ -419,24 +424,30 @@ export type SourcePriceRefreshError =
     >;
 
 export interface SourcePriceRefreshPort {
-  refreshPrice(
-    input: { readonly scope: SourceMatchScope; readonly observation: PagePriceObservation },
+  matchSource(
+    input: MatchStoredSourceInput,
+  ): Promise<Result<MatchedCandidateSource, SourcePriceRefreshError>>;
+  refreshCapturedPrice(
+    input: RefreshCapturedPriceInput,
   ): Promise<Result<SourcePriceRefreshReceipt, SourcePriceRefreshError>>;
 }
 ```
 
 `PagePriceObservation`、`PagePriceExtractionError`、`PagePriceExtractionPort` は `product-page-capture/design.md` の確定済み契約を参照し、`ProductCapturePublicApi.pagePriceExtraction` から受け取る。本featureの所有契約は `RefreshCapturedPriceInput` 以降であり、価格抽出型やerror unionを再定義しない。
 
-`refreshPrice` はsource ownerの`match`でopaque precondition付きtargetを受け取り、priceがconfirmed amount/currencyを持つ場合だけ`patchPrice`へtarget、precondition、price、capturedAtを渡す。URL再検証、retail eligibility、並行更新された非対象fieldの保持、precondition判定はsource ownerが所有する。本featureは`precondition-failed`を`stale-target`、共有`AppDataError`の各variantを同名の既存workflow errorへ意味を変えず写像する。
+`matchSource` はsource ownerの`matchByPageUrl`でunique referenceを受け取り、`SourcePublicPortAdapter`がpageUrl存在とretail kindを検査した後、narrowing済み`MatchedCandidateSource`を返す。`refreshCapturedPrice`はpriceがconfirmed amount/currencyを持つ場合だけ`patchSourcePrice`へcandidate/source ID、targetが保持するraw `expectedPageUrl`、`expectedKind: "retail"`、price、capturedAtを渡す。URL identity、0/1/many、並行更新された非対象fieldの保持、precondition判定はsource ownerが所有し、retail eligibilityとprice availabilityのworkflow判断は本featureが所有する。本featureは`precondition-failed`を`stale-target`、共有`AppDataError`の各variantを同名の既存workflow errorへ意味を変えず写像する。context-menuのextract→match→patch one-shot orchestrationは公開portへ追加せず、内部`createSourcePriceRefreshWorkflow`の`runRefresh`としてこの二段階portを順序付ける。
+
+7.2は既存production callerを各commitで型検査可能に保つため、legacy `createSourcePriceRefreshService` / `createSourcePriceRefreshContribution`を変更せず、`CandidateSourceMatcherPort` / `SourcePricePatchContract`だけを必須入力とする`createCanonicalSourcePriceRefreshService` / `createCanonicalSourcePriceRefreshContribution`を追加する。両service factoryは同じ`SourcePriceRefreshPort`（`matchSource` / `refreshCapturedPrice`）を返すが、canonical factoryはlegacy inputの有無を検査せず、旧branchへfallbackしない。二段階workflowが返す`MatchedCandidateSource`はnarrowing済み`expectedPageUrl`と`expectedKind: "retail"`を保持し、後段は観測URL、正規化値、再読込結果からpreconditionを再導出しない。application-shell 12.1が`createCanonicalSourcePriceRefreshContribution`をproductionへ接続した後、7.3でlegacy factory/inputとfeature-owned locator/identityだけを撤去し、canonical factory名と二段階public workflowは維持する。
 
 context menu内部commandは次の順序を守る。
 
 1. `isCurrent(activationId)` を確認する。
 2. `extractPrice(tabId)` を実行する。
 3. 完了後に再度 `isCurrent` を確認し、staleなら結果を破棄する。
-4. source public portへcatalog scopeで `match` を要求する。
-5. 返されたtarget/preconditionで `patchPrice` を要求する。
-6. mutation完了後に再度世代を確認し、旧世代なら表示だけを変更しない。commit済みの有効な更新は巻き戻さない。
+4. source public portへcatalog scopeで `matchByPageUrl` を要求する。
+5. unique referenceのpageUrl存在とretail kindを検査し、欠損・非retailなら`ineligible-source`で停止する。
+6. narrowing済みreferenceのcandidate/source ID、raw page URL、retail kind preconditionで `patchSourcePrice` を要求する。
+7. mutation完了後に再度世代を確認し、旧世代なら表示だけを変更しない。commit済みの有効な更新は巻き戻さない。
 
 ### State / UI
 
@@ -568,7 +579,7 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 ### Unit tests
 
 - source owner contract kitでHTTP/HTTPS、表記差、商品query差、0/1/複数一致、catalog/candidate scope、ineligible source、primary flagをcanonical match結果として検証し、本featureがURL規則を再実装しないことを確認する（2.1–2.8、7.1）。
-- SourcePriceRefreshServiceでprice欠損、source match、opaque precondition、price/capturedAt限定patch、`AppDataError` mappingを検証する（3.3–3.5、4.1–4.5、5.1–5.4、7.2–7.4）。
+- SourcePriceRefreshServiceでprice欠損、source match、owner-issued raw URL/retail kind precondition、price/capturedAt限定patch、`AppDataError` mappingを検証する（3.3–3.5、4.1–4.5、5.1–5.4、7.2–7.4）。
 - Stateでactivationごとの自動開始、新世代置換、旧抽出・旧mutation完了無視、unmountを検証する（1.1–1.5、5.5）。
 
 ### Contract / integration tests
@@ -607,12 +618,12 @@ menu sourceのproduction登録はworker-safeなcatalog項目として `productio
 ## 移行戦略
 
 1. source ownerのmatch/conditional patch、foundationの`AppDataError`、price extraction、transient gestureのowner・公開入口・exact signatureをpublic consumer contract testへ固定する。
-2. 旧URL identity/locatorと`ManagementError` importを撤去し、source public port adapterとprice refresh use caseを確定済み契約のin-memory portで更新する。
-3. `product-page-capture` 6.3完了後に公開price extraction portへ接続する。
-4. transient registration、state、viewを維持し、application-shell ownerへfeature contribution公開契約を引き渡す。
-5. `transient-feature-surface`のgesture contractへ接続可能なcontext menu worker registrationを`worker-public.ts`から公開し、production catalog接続はshell ownerへ委ねる。
-6. `manifest.json` とartifact permission gateを同時に更新する。
+2. canonical matcher/patchだけを必須入力とする`createCanonicalSourcePriceRefreshService` / `createCanonicalSourcePriceRefreshContribution`を加算的に公開し、adapterでpageUrl/kindを明示narrowingしてraw URL/retail kind preconditionを保持したままin-memory portで更新する。旧production caller用`createSourcePriceRefreshService` / `createSourcePriceRefreshContribution`は一時維持し、二段階public workflowは両factoryの恒久出力契約とする。
+3. `product-page-capture`の公開price extraction port、transient registration、state、view、worker-safe menu registrationの利用者結果を維持し、canonical input contractをapplication-shell ownerへ引き渡す。
+4. application-shell 12.1がcanonical catalog/matcher/mutationを一度だけ構築し、本featureのcanonical branchへproduction注入する。本specのtaskはshell composition fileを変更しない。
+5. production切替後に旧URL identity/locator、candidate-management catalog/mutation import、legacy service/contribution factory/input、`ManagementError` importを撤去する。二段階public workflowはduplicate consumer向けcanonical-backed契約として残す。
+6. `manifest.json` とartifact permission gateを同時に維持・検証する。
 7. source public seamと共有error consumerをcontract、runtime、DOM、E2E、full validationで検証する。
-8. production compositionはapplication-shell ownerへ委ね、本specのfeature contribution/worker public contractだけを引き渡す。
+8. 全ownerの最終production compositionはapplication-shell ownerへ委ね、本specのfeature contribution/worker public contractだけを引き渡す。
 
 永続schema migrationと既存価格のbackfillは不要である。rollout失敗時はside panel UI registration、worker menu registration、`contextMenus` permissionを同一変更単位で戻し、保存済みsource dataは変更しない。

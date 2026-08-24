@@ -387,11 +387,11 @@
   - _Boundary: CandidateIdentityConsumer_
 
 - [ ] 14.5 全consumer移行後にcandidate-owned source coreを撤去する
-  - **実装開始条件**: 14.3のcandidate editor接続、`source-price-refresh` 7.2、`duplicate-product-merge` 6.2、`product-page-capture` 12.1、`application-shell` 12.1のsource限定production wiringがすべて完了していること。
+  - **実装開始条件**: 14.3のcandidate editor接続、`source-price-refresh` 7.3の旧source依存撤去、`duplicate-product-merge` 6.2、`product-page-capture` 12.1、`application-shell` 12.1のsource限定production wiringがすべて完了していること。
   - candidate-owned source catalog、mutation、URL identity、data port、service実装、公開source facet/re-exportを撤去し、consumer adapterと既存source editor state/viewだけを残す。
   - source-price、duplicate、capture、shellの実装を本taskへ取り込まず、既に移行済みの公開consumer contractを再検証する。
   - 完了時、旧source export、deep import、暗黙fallback、二重ownerをnegative fixtureが拒否し、candidate公開APIがquery・create・typed editor intentに限定される。
-  - _Depends: 14.3; source-price-refresh 7.2; duplicate-product-merge 6.2; product-page-capture 12.1; application-shell 12.1_
+  - _Depends: 14.3; source-price-refresh 7.3; duplicate-product-merge 6.2; product-page-capture 12.1; application-shell 12.1_
   - _Requirements: 4.1, 4.3, 4.6, 6.3, 6.7, 6.8_
   - _Boundary: CandidateSourceEditorAdapter, CandidateManagementPublicApi_
 

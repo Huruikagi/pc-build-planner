@@ -410,14 +410,14 @@
 - [ ] 12. product-local contributionによるproduction compositionを完結する
 
 - [ ] 12.1 candidate source限定のcanonical production seamを先行接続する
-  - **実装開始条件**: `candidate-source-bookmarks` 10.4、`project-candidate-management` 14.3、`source-price-refresh` 7.2、`duplicate-product-merge` 6.2、`product-page-capture` 12.1が完了し、各source consumerのcanonical public shapeが利用可能であること。
-  - `side-panel-contributions.ts`で`createCandidateSourceCatalog`、`createCandidateSourceMatcher`、`createCandidateSourceMutationService`をcanonical public entryから各1回だけ呼び、生成した各port instanceをcandidate editor、source-price、duplicate consumer間で能力別に共有する。
-  - candidate-owned source factory/facet、late-bound proxy、deep import、欠落時の旧owner fallbackを使用せず、注入不能は既存startup/degraded startup規則へfail closedに投影する。
+  - **実装開始条件**: `candidate-source-bookmarks` 10.4、`project-candidate-management` 14.3、`source-price-refresh` 7.2の`createCanonicalSourcePriceRefreshContribution`、`duplicate-product-merge` 6.2、`product-page-capture` 12.1が完了し、各source consumerのcanonical public shapeが利用可能であること。
+  - `side-panel-contributions.ts`で`createCandidateSourceCatalog`、`createCandidateSourceMatcher`、`createCandidateSourceMutationService`をcanonical public entryから各1回だけ呼び、生成した各port instanceをcandidate editor、source-price、duplicate consumer間で最小能力別に共有する。source-priceには`createCanonicalSourcePriceRefreshContribution`を明示的に呼び、matcher/patchだけを注入する。
+  - 新しいsource port生成・注入経路ではcandidate-owned source factory/facet、late-bound proxy、deep import、欠落時の旧owner fallbackを使用せず、注入不能は既存startup/degraded startup規則へfail closedに投影する。14.5まで型上残る旧facetを本taskで撤去しない。
   - project、identity、manufacturer、refreshの他proxy撤去、root API全面整理、横断E2Eは12.3以降に残し、本taskをsource限定wiringに閉じる。
-  - 完了時、production-shaped fixtureが各source portの単一instance、consumer別の最小能力、逆依存順cleanupを観測し、application-shell production graph内のcandidate-owned source importが0件となる。
+  - 完了時、production-shaped fixtureが各factoryの一回構築、各source port instanceのidentity共有、consumer別の最小能力を観測し、`side-panel-contributions.ts`の新source生成・注入経路がcanonical public entryだけを直接importすることを固定する。port固有disposeを捏造せず、既存feature registration cleanupの非回帰だけを確認する。
   - _Depends: candidate-source-bookmarks 10.4; project-candidate-management 14.3; source-price-refresh 7.2; duplicate-product-merge 6.2; product-page-capture 12.1_
-  - _Requirements: 3.1, 3.3, 3.5, 3.7, 3.8, 3.9, 11.2, 11.4, 11.5, 11.7, 11.9_
-  - _Boundary: CandidateSourceProductionComposition, SidePanelContributions_
+  - _Requirements: 3.1, 3.3, 3.5, 3.8, 3.9, 11.2, 11.5, 11.7_
+  - _Boundary: CandidateSourceProductionComposition, SidePanelContributions, SourcePriceRefreshProductionInput_
 
 - [ ] 12.2 全owner public contractとroot composition inputを固定する
   - configured message resolver、現行product-local runtime contribution、既存backup section contributionとbackup専用capability、共有`AppDataError`、project lifecycle descriptor/catalogを各owner公開entryから組み立てるconsumer fixtureを追加する。
@@ -425,7 +425,7 @@
   - 旧ManagementError、project/source/identity/manufacturer/refresh proxy、内部module、空adapter、no-op resolverをnegative fixtureで拒否する。
   - package factory、package-backed product adapter、generic maintenance/recovery/finalization seamをconsumer fixture、runtime dependency、実装開始条件へ追加せず、2番目の実consumerまで汎用化を延期する。
   - `product-page-capture`を含む既存feature public contractに加え、`local-data-foundation` task 11.2と`backup-restore` task 7.6で確定する同Change Briefのproduct-local capability contractが利用可能なことを実装開始条件として検査する。
-  - _Depends: 12.1; ui-message-catalog 9.3, local-data-foundation 11.2, project-context 9, project-candidate-management 16.2, current-build-management 11.3, compatibility-checking 9.5, candidate-source-bookmarks 12.3, source-price-refresh 7.3, duplicate-product-merge 6.3, product-page-capture 14.3, settings-screen 4.4, backup-restore 7.6_
+  - _Depends: 12.1; ui-message-catalog 9.3, local-data-foundation 11.2, project-context 9, project-candidate-management 16.2, current-build-management 11.3, compatibility-checking 9.5, candidate-source-bookmarks 12.3, source-price-refresh 7.4, duplicate-product-merge 6.3, product-page-capture 14.3, settings-screen 4.4, backup-restore 7.6_
   - _Requirements: 3.1, 3.2, 3.5, 3.6, 3.7, 3.8, 11.1, 11.2, 11.3, 11.5, 11.6, 11.7, 11.9_
   - _Boundary: ProductionCompositionInputs, RootPublicApi consumer contracts_
 
@@ -472,6 +472,7 @@
 ## Implementation Notes
 
 - 2026-08-24のtask graph修正で、candidate-owned source core撤去が実consumer移行とshell production wiringより先行する循環を解消した。source限定のproduction seamを新12.1として先行させ、旧12.1〜12.6を12.2〜12.7へ繰り下げ、全ownerの最終compositionは従来どおり全upstream final gate後に維持する。
+- 2026-08-24のsource-price cutover修正で、source-price 7.2を加算的canonical input seam、7.3をproduction切替後の旧依存撤去へ分割した。本spec 12.1は7.2後・7.3前にcanonical instanceを配線し、旧facet/coreや全obsolete proxyの撤去をproject-candidate-management 14.5と本spec 12.3から先取りしない。
 
 - 2026-08-12 fresh independent task-graph sanity reviewでは、初回指摘の古いupstream readiness参照を各ownerの最終gate（`ui-message-catalog` 9.3、`project-context` 9、`current-build-management` 11.3、`candidate-source-bookmarks` 12.3）へ修正した。修正後の再reviewは、全77 AC、upstream → 12.1 → 12.2 → 12.3の非循環順序、composition-only境界、startup/recovery/settings/project lifecycleを含む非回帰を確認してPASS、残存指摘なしと判定した。
 

@@ -208,35 +208,46 @@
 
 - [x] 7.1 source match/conditional patchと共有errorのconsumer contractを固定する
   - **実装開始条件**: `candidate-source-bookmarks` 10.4のcanonical match/conditional price patch public entryと`local-data-foundation` 11.1の`AppDataError`公開入口が利用可能であること。いずれか未完了なら旧ownerを先行削除せず待機する。
-  - source ownerの公開match portへcatalog/candidate scopeとpage URLを渡し、unique target、ambiguity、eligibility、opaque preconditionを受け取るpositive consumer fixtureを追加する。
+  - source ownerの公開match portへcatalog/candidate scopeとpage URLを渡し、0/1/manyとunique referenceのoptional raw `pageUrl`/`kind`を受け取るpositive consumer fixtureを追加する。consumer adapterがpageUrl存在とretail kindをnarrowingし、欠損・非retailをfail closedにする契約を固定する。
   - conditional patchへtarget、precondition、price、capturedAtだけを渡し、primary projectionと非対象field保持をsource ownerへ委譲する契約を固定する。
   - foundation公開入口の`AppDataError`をexhaustiveに扱い、旧`ManagementError`、candidate-management source proxy、URL identity/locator、内部source mutation、FoundationError mapperへのimportをnegative gateで拒否する。
   - _Depends: local-data-foundation 11.1, candidate-source-bookmarks 10.4_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 4.1, 4.5, 6.3, 6.4, 7.1, 7.2, 7.5, 7.7_
   - _Boundary: SourcePublicPortAdapter, SourcePriceRefreshPublicApi consumer contract_
 
-- [ ] 7.2 price refresh workflow/state/UIをcanonical portへ接続する
-  - fixed-tab extraction後にsource public match→conditional patchを一度だけ呼び、旧URL normalization、catalog走査、source再読込、candidate mutationをfeature内から撤去する。
+- [ ] 7.2 canonical match/conditional patch workflowを加算的に公開する
+  - `CandidateSourceMatcherPort`と`SourcePricePatchContract`を受ける`createCanonicalSourcePriceRefreshService`と`createCanonicalSourcePriceRefreshContribution`を追加し、既存legacy factory `createSourcePriceRefreshService` / `createSourcePriceRefreshContribution`を呼ぶproduction callerと型・runtime選択を共有しない。application-shell 12.1はcanonical contribution factoryを明示的に選択する。
+  - fixed-tab extraction後にcatalog/candidate scopeと観測page URLでmatchし、unique referenceの`pageUrl !== undefined`と`kind === "retail"`をSourcePublicPortAdapterで明示検査する。成功時だけcandidate/source ID、narrowing済みraw `pageUrl`、`kind: "retail"`をcast・正規化・再導出せず一回のconditional patchへ渡し、欠損・非retailは`ineligible-source`へfail closedにする。
   - `AppDataError`のvalidation、conflict、maintenance、storage、quota、unsupported-dataを既存`SourcePriceRefreshError`、recoverability、messageへ意味・粒度を変えず写像する。
   - explicit context menu action、activeTab、世代gate、price-only patch、失敗時の旧price/capturedAt保持、primary/non-primary projection、unexpected throw containmentを維持する。
-  - feature contributionとworker-safe menu registrationだけを公開し、application-shell composition file、source owner、candidate-management、foundation実装を変更しない。
+  - production caller切替前も全体typecheckを緑に保つため、既存`catalog`/`mutations`入力を受けるlegacy factoryを一時維持する。`matchSource`→`refreshCapturedPrice`の二段階public workflowはcanonical matcher/patch-backedの恒久契約として維持し、canonical factory内でlegacy入力欠落を見て分岐・fallbackしない。application-shell composition file、source owner、candidate-management、foundation実装を変更しない。
   - _Depends: 7.1_
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.6, 7.2, 7.3, 7.4, 7.5, 7.6_
-  - _Boundary: SourcePriceRefreshService, State, View, FeatureContribution, WorkerPublic_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.6, 7.2, 7.3, 7.4, 7.5_
+  - _Boundary: SourcePublicPortAdapter, SourcePriceRefreshService, State, View, TransitionalFeatureContributionInput_
 
-- [ ] 7.3 contract・runtime・UI・E2Eとownership gateを完了する
+- [ ] 7.3 production切替後に旧source依存とlegacy factoryを撤去する
+  - **実装開始条件**: 7.2のcanonical input seamと`application-shell` 12.1のsource限定production wiringが完了し、production callerがcanonical matcher/patch instanceを注入していること。
+  - candidate-management source catalog/mutation import、旧`StoredSourceLocator`、feature-owned URL identity/normalizer、legacy `createSourcePriceRefreshService` / `createSourcePriceRefreshContribution`とそのinputだけを撤去する。`matchSource`→`refreshCapturedPrice`の恒久public workflowとcanonical factory名は維持する。
+  - source ownerやapplication-shell composition fileを本taskで変更せず、negative gateで旧proxy、locator/identity、deep import、暗黙fallbackが0件であることを固定する。
+  - state/UI、explicit gesture、activeTab、generation fence、price-only projection、失敗時保全、worker-safe registrationに加え、no-match、ambiguous-match、pageUrl欠損、non-retailのfail-closed結果をtask-local regressionで維持する。
+  - _Depends: 7.2; application-shell 12.1_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.3, 6.6, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
+  - _Boundary: SourcePriceRefreshService, FeatureContribution, LegacySourceFactoryRemoval, LegacySourceDependencyRemoval_
+
+- [ ] 7.4 contract・runtime・UI・E2Eとownership gateを完了する
   - source match/patch consumer contract、全`AppDataError` mapping、fixed-tab extraction、generation fence、context menu runtime、state/DOM、primary/non-primary、no-match/ambiguous/ineligible/conflict/storage failureを架空fixtureで回帰する。
   - production activation transport後段のPlaywrightと既存native menu証跡を再検証し、価格workflow移行後も明示操作からtransient結果までの利用者結果が一致することを確認する。
   - source owner、Foundation error owner、application-shell composition owner、本specのprice workflow/UI ownerが重複せず、循環proxy、deep import、旧`ManagementError`、production shell file変更がないことを監査する。
   - 45件のAcceptance Criteria、Change Brief In/Out、file/dependency boundaryが自動testまたは明示検証へtraceされ、blocked taskがなければ完了とする。
-  - _Depends: 7.2; project-candidate-management 14.5_
+  - _Depends: 7.3; project-candidate-management 14.5_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
   - _Boundary: Source price refresh final ownership and regression validation_
 
 ## Implementation Notes
 
 - `v0.5.0-boundary-reconciliation`以後、canonical URL identity/matcher/ambiguity/patchはsource owner、`AppDataError`はFoundation、production compositionはapplication-shellが所有し、本specはprice extraction workflow、state/UI、feature/worker public contributionだけを所有する。
-- **Fresh task-graph sanity review (2026-08-12)**: 独立reviewer dispatchを試みたが共有thread上限で作成できなかったため、update-batch fallbackに従ってRequirements/Designから独立した観点でtask 7を再監査した。7.1→7.2→7.3は一方向で循環せず、上流依存はFoundation共有errorと確定candidate/source public seamだけである。各taskはconsumer contract、workflow統合、最終回帰へ分離され、source core、canonical error、candidate mutation、shell compositionを変更対象に含めない。45 ACとChange Brief In/Out、explicit action・activeTab・固定世代・price-only・failure preservation・transient UIのtraceに欠落はなく、修正指摘なしでPASSとした。
+- **2026-08-24 source-price cutover repair**: 旧production callerを壊さず各commitを型検査可能にするため、旧7.2を別名canonical factoryの加算的seam（7.2）とshell wiring後のlegacy factory/依存撤去（7.3）へ分割し、最終gateを7.4へ繰り下げた。順序は7.2 → application-shell 12.1 → 7.3 → project-candidate-management 14.5 → 7.4である。matcher結果のpageUrl/kindはadapterで明示narrowingし、raw URL/retail kind preconditionを観測URLや正規化値から再導出しない。duplicate consumerが利用する二段階public workflowはcanonical-backedの恒久契約として維持する。
+- **Fresh task-graph sanity review (2026-08-12、2026-08-24に移行順を更新)**: 当時は7.1→7.2→7.3を一方向と判定したが、実装時にfeature contributionの破壊的変更とshell callerの更新を別commitで型検査できないことが判明した。2026-08-24の修正でcanonical workflow加算（7.2）→shell wiring→旧依存撤去（7.3）→最終gate（7.4）へ分割し、owner境界と利用者結果のtraceを維持した。
 
 - 6.3: 2026-08-02 15:45 JST、Windows 11 Home（NT 10.0.26200.0）・Playwright 1.61.1のheaded Chromiumで `SOURCE_PRICE_REFRESH_NATIVE_SMOKE=1 pnpm exec playwright test e2e/source-price-refresh.native-smoke.spec.ts --workers=1` を実行し、利用者がbrowser-native「価格を更新」を選択して1 passed（23.6秒、exit 0）。続けて `pnpm validate` はexit 0（Node 1,429/1,429、Playwright 26 passed・native gate 1 skipped）で、native選択証拠は前者、production activation transport後段と全機械gateは後者として分離記録した。要件38件は37件の自動証拠と要件6.5のheaded実選択証拠で全件充足し、関連contract・設計・境界の独立再監査に新たなNO-GO所見はない。
 
