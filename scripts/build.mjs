@@ -13,6 +13,8 @@ import { build, context } from "esbuild";
 const SHARED = {
   bundle: true,
   define: { "process.env.NODE_ENV": '"production"' },
+  /** 配布物なので縮める。content script は任意のページへ注入される。 */
+  minify: true,
   platform: "browser",
   sourcemap: false,
   target: "chrome116",

@@ -20,7 +20,6 @@ v0.4.0 / v0.5.0 のコードベースを削除するにあたり、**再取得�
 | `identity/` | 92 | URL 正規化と商品同一性の照合 | 重複判定の実装知識 |
 | `e2e/` | 3,614 | Playwright の E2E スペック 16 本 | 「v0.4.0 が実際に何をしたか」の最も忠実な記述 |
 | `fixtures/` | 81 | 架空の商品ページフィクスチャ | 実在サイトを使わない検証データの型 |
-| `build/` | 329 | MV3 の esbuild ビルド、配布 zip 生成、リリースワークフローとバージョン整合チェック | ビルド構成とリリースゲートの手順 |
 
 ## 意図的に外したもの
 
@@ -36,17 +35,17 @@ v0.4.0 / v0.5.0 のコードベースを削除するにあたり、**再取得�
 | `messages/` の `backup.ts` `settings.ts` | 廃止した機能の文言。残すと復活を誘う |
 | `e2e/support/` `e2e/models/` | 合成ハーネスと Page Object。実拡張を通さない検証は持たない（`changes.md` C-5） |
 
-## `build/` について
+## 退避を解いたもの
 
-再実装のビルドとリリースを組むときの参照。そのまま動かすものではない。
+`build/` にあったビルドとリリースの資産は、`scripts/` へ復帰させたため削除した。
 
-| ファイル | 内容 |
+| 元 | 現在 |
 |---|---|
-| `build.mjs` | esbuild による MV3 バンドル。ESM 6エントリ（side panel / service worker / index / foundation / build-contract / CSS）+ content script のみ IIFE で別ビルド（`chrome.scripting.executeScript` が classic script を注入するため） |
-| `package.mjs` | `dist/` から配布 zip を `release/` へ生成 |
-| `manifest.json.ref` | v0.4.0 の MV3 設定。権限は `activeTab` と `scripting` のみ |
-| `release.yml.ref` | リリースワークフロー。version 整合・タグ重複・マイルストーン状態を前提ゲートにしていた |
-| `release-version.mjs` | `manifest.json` と `package.json` の version 一致チェック |
+| `build.mjs` | `scripts/build.mjs`（検証ゲート群への依存を落として書き直し） |
+| `package.mjs` | `scripts/package.mjs` |
+| `release-version.mjs` | `scripts/release-version.mjs` |
+| `release.yml.ref` | `.github/workflows/release.yml` |
+| `manifest.json.ref` | `manifest.json`（権限を実際に使うものだけへ絞って更新） |
 
 ## 使い方
 

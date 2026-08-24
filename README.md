@@ -67,7 +67,6 @@ _locales/         chrome.i18n の文言置き場
 | `domain/` | カテゴリ別正規化属性、元表記と確認済み値の分離 |
 | `identity/` | URL正規化と商品同一性の照合 |
 | `e2e/` | Playwright E2E 16本（v0.4.0 が何をしたかの記述） |
-| `build/` | MV3ビルド、配布zip生成、リリースワークフローとversion整合チェック |
 
 詳細は [salvage/README.md](salvage/README.md)。
 
@@ -84,10 +83,20 @@ pnpm install
 | `pnpm typecheck` | 型検査 |
 | `pnpm lint` | Biome |
 | `pnpm test:e2e` | build 後に実拡張を読み込む E2E |
+| `pnpm validate` | lint + typecheck + build + E2E |
+| `pnpm package` | build 後、配布用 zip を `release/` へ生成 |
 
 `dist/` を Chrome の `chrome://extensions` から「パッケージ化されていない拡張機能を読み込む」で指定する。Chrome Web Store には公開していない。
 
 **検証の正は実拡張を通す E2E のみ。** コンポーネントを実アプリの外でマウントする合成ハーネスは持たない（[changes.md](docs/reverse/changes.md) C-5）。v0.4.0 ではハーネス上のテストが緑のまま、出荷ビルドでプロジェクトを 1 つも作れない状態が進行した。
+
+## リリース
+
+1. `manifest.json` と `package.json` の `version` を更新する（両者が一致しないとリリースが止まる）
+2. 対象バージョンのマイルストーンの issue をすべて閉じる
+3. GitHub Actions の Release ワークフローを手動起動する
+
+Release は前提ゲート（version 整合・タグ重複なし・マイルストーンが open で未完了 issue が 0）を通ってから `pnpm validate` を実行し、zip とリリースノートを作ってマイルストーンを閉じる。Chrome Web Store には公開していない。
 
 ## セキュリティ方針
 

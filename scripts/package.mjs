@@ -1,10 +1,15 @@
+/**
+ * 配布用 zip を release/ へ生成する。
+ *
+ * salvage/build/package.mjs を出発点に、削除した検証ゲート
+ * (validate-artifacts.mjs) への依存を落とした形。
+ */
 import { spawn } from "node:child_process";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolveReleaseVersion } from "./release-version.mjs";
-import { validateArtifactDirectory } from "./validate-artifacts.mjs";
 
 /** @param {string} directory @returns {Promise<string[]>} */
 async function listFilesRecursive(directory) {
@@ -39,13 +44,21 @@ async function createZipArchive(stagingDirectory, zipPath) {
   await mkdir(dirname(absoluteZip), { recursive: true });
 
   if (process.platform === "win32") {
+    /**
+     * Windows PowerShell 5.1 (.NET Framework) はエントリ名を
+     * `_locales\en\messages.json` のようにバックスラッシュで書く。
+     * ZIP の仕様はスラッシュなので Chrome が `_locales` を読めない。
+     * .NET Core を使う pwsh は正しく書くため、そちらを優先する。
+     */
     const script = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${absoluteStaging}', '${absoluteZip}', [System.IO.Compression.CompressionLevel]::Optimal, $false)`;
-    await runCommand("powershell", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      script,
-    ]);
+    const args = ["-NoProfile", "-NonInteractive", "-Command", script];
+    try {
+      await runCommand("pwsh", args);
+    } catch {
+      throw new Error(
+        "pwsh (PowerShell 7+) is required to package on Windows: Windows PowerShell 5.1 writes backslash separators that Chrome cannot read",
+      );
+    }
     return;
   }
 
@@ -76,8 +89,6 @@ export async function packageExtension({
       recursive: true,
       filter: (source) => !basename(source).startsWith("."),
     });
-
-    await validateArtifactDirectory(stagingDirectory);
 
     const includedFiles = (await listFilesRecursive(stagingDirectory)).map(
       (path) => relative(stagingDirectory, path),

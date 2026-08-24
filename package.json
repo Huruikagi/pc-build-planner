@@ -1,6 +1,6 @@
 {
   "name": "pc-build-planner",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Local-first PC build planner Chrome extension",
   "private": true,
   "packageManager": "pnpm@11.13.1",
@@ -13,8 +13,10 @@
     "dev": "node scripts/build.mjs --dev",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
+    "install:e2e-browser": "playwright install chromium",
     "test:e2e": "pnpm build && playwright test",
-    "install:e2e-browser": "playwright install chromium"
+    "validate": "pnpm lint && pnpm typecheck && pnpm build && playwright test",
+    "package": "pnpm build && node scripts/package.mjs"
   },
   "keywords": [],
   "author": "",

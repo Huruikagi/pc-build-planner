@@ -6,8 +6,9 @@
  *
  * ページ側で持つ責務は抽出だけ。検証も採否もここではしない。
  */
+
+import { CAPTURE_PAYLOAD_MESSAGE } from "./channel.js";
 import { extractFromDocument } from "./extract.js";
-import { CAPTURE_PAYLOAD_MESSAGE } from "./protocol.js";
 
 const payload = extractFromDocument(document, location.href);
 void chrome.runtime.sendMessage({ type: CAPTURE_PAYLOAD_MESSAGE, payload });

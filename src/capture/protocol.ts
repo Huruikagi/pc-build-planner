@@ -7,12 +7,10 @@
  */
 import { z } from "zod";
 
+import { CAPTURE_PAYLOAD_MESSAGE, CAPTURE_STATE_KEY } from "./channel.js";
 import type { CaptureState } from "./types.js";
 
-export const CAPTURE_PAYLOAD_MESSAGE = "capture-payload";
-
-/** 進行中の取り込みを置く session storage のキー。永続化はしない。 */
-export const CAPTURE_STATE_KEY = "captureState";
+export { CAPTURE_PAYLOAD_MESSAGE, CAPTURE_STATE_KEY };
 
 const rawCandidate = z.object({
   field: z.enum([
