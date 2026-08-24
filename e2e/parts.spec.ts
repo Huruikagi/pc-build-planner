@@ -9,12 +9,7 @@
 import { expect, test } from "@playwright/test";
 
 import { EXPECTED, type ExpectedLocale } from "./expected-text.js";
-import {
-  LOCALES,
-  type LoadedExtension,
-  loadExtension,
-  resolvedLocale,
-} from "./extension.js";
+import { LOCALES, type LoadedExtension, loadExtension } from "./extension.js";
 
 const addPart = async (
   { page }: LoadedExtension,
@@ -51,7 +46,7 @@ const createProject = async (
   await expect(page.locator(".project-menu")).toHaveCount(0);
 };
 
-for (const { lang, uiLocale, catalog } of LOCALES) {
+for (const { lang, catalog } of LOCALES) {
   const text = EXPECTED[catalog as ExpectedLocale];
 
   test.describe(`locale ${lang}`, () => {
@@ -66,9 +61,14 @@ for (const { lang, uiLocale, catalog } of LOCALES) {
       await extension.close();
     });
 
-    test("ブラウザのUI言語から _locales を解決する", async () => {
-      expect(await resolvedLocale(extension.worker)).toBe(uiLocale);
-      /** どのカタログが引かれたかは文言そのもので示す。 */
+    /**
+     * どのカタログが引かれたかは、描画された文言そのもので示す。
+     *
+     * `chrome.i18n.getMessage("@@ui_locale")` はアサートしない。Linux では
+     * `--lang` に追従せず `en_US` を返す一方で文言は `--lang` のカタログから
+     * 出る、というプラットフォーム差があり、製品の関心事でもない。
+     */
+    test("ブラウザのUI言語に対応する _locales の文言で描画される", async () => {
       await expect(extension.page.locator(".nav__item")).toHaveText(
         text.nav.map((label) => new RegExp(label)),
       );

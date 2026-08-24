@@ -27,12 +27,11 @@ export const EXTENSION_PATH = path.join(repositoryRoot, "dist");
  * 検証するロケール。
  *
  * - `lang`     : ブラウザ起動時の UI 言語
- * - `uiLocale` : `chrome.i18n` が報告する UI ロケール（そのままの粒度）
  * - `catalog`  : 実際に引かれる `_locales/<dir>`。文言そのもので証明する
  */
 export const LOCALES = [
-  { lang: "ja", uiLocale: "ja", catalog: "ja" },
-  { lang: "en-US", uiLocale: "en_US", catalog: "en" },
+  { lang: "ja", catalog: "ja" },
+  { lang: "en-US", catalog: "en" },
 ] as const;
 
 export interface LoadedExtension {
@@ -109,7 +108,3 @@ export const loadExtension = async (
     close: () => context.close(),
   };
 };
-
-/** 拡張が認識している UI ロケールを本人に聞く。カタログのディレクトリ名ではない。 */
-export const resolvedLocale = (worker: Worker): Promise<string> =>
-  worker.evaluate(() => chrome.i18n.getMessage("@@ui_locale"));
