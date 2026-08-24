@@ -5,13 +5,11 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - ".kiro/**"
       - "**/*.md"
   pull_request:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - ".kiro/**"
       - "**/*.md"
   workflow_dispatch: {}
 
@@ -39,3 +37,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build (unpacked MV3 extension)
+        run: pnpm build
