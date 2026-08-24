@@ -1,6 +1,0 @@
-interface:
-  display_name: "Discovery"
-  short_description: "Route and persist spec or direct roadmap work"
-
-policy:
-  allow_implicit_invocation: false

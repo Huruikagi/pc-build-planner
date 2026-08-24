@@ -1,6 +1,0 @@
-interface:
-  display_name: "Spec and Work Status"
-  short_description: "Show spec or direct roadmap item progress"
-
-policy:
-  allow_implicit_invocation: false

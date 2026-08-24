@@ -1,7 +1,0 @@
-interface:
-  display_name: "Validation Recorder"
-  short_description: "Record validated spec or direct work checkpoints"
-  default_prompt: "Use $kiro-record-validation to record the latest successful spec or direct-work validation in the roadmap."
-
-policy:
-  allow_implicit_invocation: false
