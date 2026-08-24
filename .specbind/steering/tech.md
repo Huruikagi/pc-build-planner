@@ -44,6 +44,9 @@ Chrome Manifest V3 拡張を TypeScript と React で構築する。service work
 
 ## 検証方法
 
+ローカルの標準検証は `pnpm validate` とする。初回は `pnpm install` で依存関係を導入し、
+`pnpm install:e2e-browser` で Playwright の Chromium を準備する。
+
 静的検証は lint、型検査、ビルドの順に行う。利用者フローの正は、ビルド済みの未パッケージ拡張を
 実ブラウザへ読み込む Playwright E2E とする。合成コンポーネント用のハーネスを、拡張実行境界を
 通る検証の代替にはしない。CI も同じ順序で実行し、E2E 失敗時は追跡可能な成果物を残す。
