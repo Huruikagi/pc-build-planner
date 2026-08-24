@@ -590,5 +590,38 @@
         "content": "$2"
       }
     }
+  },
+  "backToEditor": {
+    "message": "Back to editor"
+  },
+  "duplicateTitle": {
+    "message": "Check for an existing part"
+  },
+  "duplicateDescription": {
+    "message": "A part that looks like the same product is already saved. Choose whether to save this as a new part or merge it into the selected one."
+  },
+  "duplicateCandidates": {
+    "message": "Merge targets"
+  },
+  "duplicateMerge": {
+    "message": "Merge into the selected part"
+  },
+  "duplicateSaveNew": {
+    "message": "Save as a new part"
+  },
+  "duplicateMergeNote": {
+    "message": "Merging adds the captured source to the selected part. Its name, standards and primary source are left unchanged. A source with the same URL has its price updated."
+  },
+  "duplicateConfidence_high": {
+    "message": "High"
+  },
+  "duplicateConfidence_supporting": {
+    "message": "Supporting"
+  },
+  "duplicateEvidence_modelNumber": {
+    "message": "Model number matches"
+  },
+  "duplicateEvidence_manufacturerAndName": {
+    "message": "Manufacturer and product name match"
   }
 }

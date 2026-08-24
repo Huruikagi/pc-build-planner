@@ -8,7 +8,14 @@
  * プロジェクトの CRUD はここに置かない (C-1)。ヘッダのポップオーバーが持つ。
  */
 import { useEffect, useMemo, useState } from "react";
-
+import { DuplicateChoice } from "./duplicate-choice.js";
+import {
+  type DuplicateMatch,
+  findBySourceUrl,
+  findDuplicates,
+  mergeIntoPart,
+  mergeSources,
+} from "./duplicates.js";
 import { t } from "./i18n.js";
 import { DeleteIcon, PlusIcon } from "./icons.js";
 import {
@@ -56,13 +63,36 @@ export const PartsScreen = ({
   const [category, setCategory] = useState<PartCategory | "all">("all");
   const [draft, setDraft] = useState<PartDraft | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  /** 保存しようとしている下書きと、その一致候補。排他 2 択で解決する。 */
+  const [pending, setPending] = useState<{
+    readonly draft: PartDraft;
+    readonly matches: readonly DuplicateMatch[];
+  } | null>(null);
 
-  /** 取り込みからの引き渡しは、届いた時点で編集面を開く。 */
+  /**
+   * 取り込みからの引き渡しは、届いた時点で編集面を開く。
+   *
+   * 同一 URL のソースを既に持つパーツがあれば、新規作成ではなくその既存
+   * パーツを開き、ソースを重ねた状態にする (features.md 3 章)。
+   * URL の一致は曖昧さが無いので、利用者へ選択を出さずに解決してよい。
+   */
   useEffect(() => {
     if (handoff === null) return;
-    setDraft(handoff);
     onHandoffConsumed();
-  }, [handoff, onHandoffConsumed]);
+    const url = handoff.sources[0]?.url;
+    const existing =
+      project === null || url === undefined
+        ? null
+        : findBySourceUrl(root, project.id, url);
+    if (existing === null) {
+      setDraft(handoff);
+      return;
+    }
+    setDraft({
+      ...draftFromPart(existing),
+      sources: mergeSources(existing.sources, handoff.sources),
+    });
+  }, [handoff, onHandoffConsumed, project, root]);
 
   const parts = useMemo(
     () => partsOf(root, project?.id ?? null),
@@ -89,6 +119,31 @@ export const PartsScreen = ({
    * 編集は一覧の下ではなく一覧を置き換えて開く (`changes.md` C-2-3)。
    * v0.4.0 は候補 3 件で着地点が 1,100px 下 = 画面外だった。
    */
+  /**
+   * 一致候補がある新規保存は、排他 2 択で解決してから確定する
+   * (features.md 3 章)。勝手に統合しない。
+   */
+  if (pending !== null)
+    return (
+      <DuplicateChoice
+        matches={pending.matches}
+        onBack={() => {
+          setDraft(pending.draft);
+          setPending(null);
+        }}
+        onMerge={(targetId) => {
+          apply(mergeIntoPart(targetId, pending.draft));
+          setPending(null);
+          setDraft(null);
+        }}
+        onSaveNew={() => {
+          apply(savePart(pending.draft, project.id));
+          setPending(null);
+          setDraft(null);
+        }}
+      />
+    );
+
   if (draft !== null)
     return (
       <PartEditor
@@ -96,6 +151,13 @@ export const PartsScreen = ({
         onCancel={() => setDraft(null)}
         onChange={setDraft}
         onSave={(next) => {
+          const matches =
+            next.id === null ? findDuplicates(root, project.id, next) : [];
+          if (matches.length > 0) {
+            setPending({ draft: next, matches });
+            setDraft(null);
+            return;
+          }
           apply(savePart(next, project.id));
           setDraft(null);
         }}

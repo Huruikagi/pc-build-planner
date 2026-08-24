@@ -590,5 +590,38 @@
         "content": "$2"
       }
     }
+  },
+  "backToEditor": {
+    "message": "編集へ戻る"
+  },
+  "duplicateTitle": {
+    "message": "既存パーツとの一致を確認"
+  },
+  "duplicateDescription": {
+    "message": "同じ商品として保存されているパーツが見つかりました。新しいパーツとして保存するか、選択したパーツへ統合するかを選んでください。"
+  },
+  "duplicateCandidates": {
+    "message": "統合先の候補"
+  },
+  "duplicateMerge": {
+    "message": "選択したパーツへ統合"
+  },
+  "duplicateSaveNew": {
+    "message": "新しいパーツとして保存"
+  },
+  "duplicateMergeNote": {
+    "message": "統合すると、取り込んだソースが選択したパーツへ追加されます。統合先の商品名・規格・プライマリソースは変更されません。同じURLのソースは価格が更新されます。"
+  },
+  "duplicateConfidence_high": {
+    "message": "高"
+  },
+  "duplicateConfidence_supporting": {
+    "message": "補助"
+  },
+  "duplicateEvidence_modelNumber": {
+    "message": "型番が一致"
+  },
+  "duplicateEvidence_manufacturerAndName": {
+    "message": "メーカーと商品名が一致"
   }
 }

@@ -1056,3 +1056,66 @@ button {
   line-height: 1.6;
   color: var(--text-faint);
 }
+
+/* --- duplicate merge ---------------------------------------------------- */
+
+.duplicate-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.duplicate-row--selected {
+  background: var(--accent-bg);
+}
+
+.duplicate-row__radio {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.duplicate-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.duplicate-row__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.duplicate-row__meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.duplicate-row__evidence {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* 確信度の高さであって問題ではないので、不適合と同じ赤は使わない。 */
+.badge--high {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.badge--supporting {
+  background: var(--line-row);
+  color: var(--text-muted);
+}
+
+.editor-actions--stacked {
+  flex-direction: column;
+}
