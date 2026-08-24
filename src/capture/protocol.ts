@@ -57,3 +57,52 @@ export const writeCaptureState = (state: CaptureState): Promise<void> =>
 
 export const clearCaptureState = (): Promise<void> =>
   chrome.storage.session.remove(CAPTURE_STATE_KEY);
+
+/**
+ * side panel から見た取り込み状態の口。`StorageDriver` と同じ理由で
+ * 差し替え可能にしてある。拡張では chrome.storage.session、dev harness では
+ * メモリ。ここを直参照にすると `chrome` の無い harness で App が落ちる。
+ *
+ * 書き込みは service worker の側にしかないので、この口は読み取りと解除だけ。
+ */
+export interface CaptureDriver {
+  read(): Promise<CaptureState | undefined>;
+  clear(): Promise<void>;
+  /** 変更通知の購読。戻り値を呼ぶと解除する。 */
+  subscribe(onChange: () => void): () => void;
+}
+
+export const chromeCaptureDriver: CaptureDriver = {
+  read: readCaptureState,
+  clear: clearCaptureState,
+  subscribe(onChange) {
+    const listener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area === "session" && CAPTURE_STATE_KEY in changes) onChange();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  },
+};
+
+export const createMemoryCaptureDriver = (
+  seed?: CaptureState,
+): CaptureDriver => {
+  let current = seed;
+  const listeners = new Set<() => void>();
+  return {
+    async read() {
+      return current;
+    },
+    async clear() {
+      current = undefined;
+      for (const listener of listeners) listener();
+    },
+    subscribe(onChange) {
+      listeners.add(onChange);
+      return () => listeners.delete(onChange);
+    },
+  };
+};

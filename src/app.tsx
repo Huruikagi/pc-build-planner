@@ -7,11 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { BuildScreen } from "./build-screen.js";
-import {
-  CAPTURE_STATE_KEY,
-  clearCaptureState,
-  readCaptureState,
-} from "./capture/protocol.js";
+import type { CaptureDriver } from "./capture/protocol.js";
 import type { CaptureState } from "./capture/types.js";
 import { CaptureScreen } from "./capture-screen.js";
 import { CompatibilityScreen } from "./compatibility-screen.js";
@@ -50,7 +46,13 @@ const SCREENS = [
 const failureMessage = (failure: StorageFailure): string =>
   failure.kind === "corrupt" ? t("storageCorrupt") : t("storageUnavailable");
 
-export const App = ({ store }: { readonly store: Store }) => {
+export const App = ({
+  capture: captureDriver,
+  store,
+}: {
+  readonly capture: CaptureDriver;
+  readonly store: Store;
+}) => {
   const [root, setRoot] = useState<LocalDataRoot | null>(null);
   const [failure, setFailure] = useState<StorageFailure | null>(null);
   const [screenId, setScreenId] = useState<ScreenId>("parts");
@@ -62,18 +64,11 @@ export const App = ({ store }: { readonly store: Store }) => {
 
   useEffect(() => {
     const sync = () => {
-      void readCaptureState().then((state) => setCapture(state ?? null));
+      void captureDriver.read().then((state) => setCapture(state ?? null));
     };
     sync();
-    const onChanged = (
-      changes: Record<string, chrome.storage.StorageChange>,
-      area: string,
-    ) => {
-      if (area === "session" && CAPTURE_STATE_KEY in changes) sync();
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, []);
+    return captureDriver.subscribe(sync);
+  }, [captureDriver]);
 
   const load = useCallback(async () => {
     const result = await store.read();
@@ -195,9 +190,9 @@ export const App = ({ store }: { readonly store: Store }) => {
           onAccept={(result) => {
             setHandoff(draftFromCapture(result));
             setScreenId("parts");
-            void clearCaptureState();
+            void captureDriver.clear();
           }}
-          onDismiss={() => void clearCaptureState()}
+          onDismiss={() => void captureDriver.clear()}
           state={capture}
         />
       )}

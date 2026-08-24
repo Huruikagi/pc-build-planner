@@ -9,6 +9,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./app.js";
+import { chromeCaptureDriver } from "./capture/protocol.js";
 import { chromeStorageDriver, Store } from "./storage.js";
 
 const container = document.getElementById("application-shell");
@@ -17,6 +18,6 @@ if (container === null)
 
 createRoot(container).render(
   <StrictMode>
-    <App store={new Store(chromeStorageDriver)} />
+    <App capture={chromeCaptureDriver} store={new Store(chromeStorageDriver)} />
   </StrictMode>,
 );

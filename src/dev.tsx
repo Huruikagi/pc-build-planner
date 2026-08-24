@@ -15,6 +15,7 @@ import { createRoot } from "react-dom/client";
 
 import jaMessages from "../_locales/ja/messages.json" with { type: "json" };
 import { App } from "./app.js";
+import { createMemoryCaptureDriver } from "./capture/protocol.js";
 import { installMessageFallback, type MessageCatalog } from "./i18n.js";
 import { type LocalDataRoot, SCHEMA_VERSION } from "./model.js";
 import { createMemoryStorageDriver, Store } from "./storage.js";
@@ -100,11 +101,17 @@ const seed: LocalDataRoot = {
   ],
 };
 
+/** harness には取り込みを起こす経路が無いので、常に空の状態から始まる。 */
+const captureDriver = createMemoryCaptureDriver();
+
 const container = document.getElementById("application-shell");
 if (container === null) throw new Error("dev host element is unavailable");
 
 createRoot(container).render(
   <StrictMode>
-    <App store={new Store(createMemoryStorageDriver(seed))} />
+    <App
+      capture={captureDriver}
+      store={new Store(createMemoryStorageDriver(seed))}
+    />
   </StrictMode>,
 );
