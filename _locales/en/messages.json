@@ -177,6 +177,12 @@
   "attribute_supportedPowerSupplyFormFactors": {
     "message": "Supported PSU form factors"
   },
+  "attributeOther": {
+    "message": "Other"
+  },
+  "attributeOtherHint": {
+    "message": "Other, comma separated"
+  },
   "attributeListHint": {
     "message": "Comma separated"
   },
@@ -208,7 +214,7 @@
     "message": "Sources"
   },
   "editorSourcesEmpty": {
-    "message": "No sources yet. Capture adds them."
+    "message": "No sources yet. Add one manually or capture it."
   },
   "editorSpecsNote": {
     "message": "Used for compatibility checks"
@@ -225,8 +231,14 @@
   "fieldModelNumber": {
     "message": "Model number"
   },
+  "modelNumberAbsent": {
+    "message": "No model number"
+  },
   "fieldCategory": {
     "message": "Category"
+  },
+  "fieldCurrency": {
+    "message": "Currency"
   },
   "notEntered": {
     "message": "Not entered"
@@ -245,6 +257,27 @@
   },
   "sourceNoPrice": {
     "message": "No price"
+  },
+  "sourceAdd": {
+    "message": "Add source"
+  },
+  "sourceRemove": {
+    "message": "Remove"
+  },
+  "sourceOpen": {
+    "message": "Open page"
+  },
+  "sourceUrl": {
+    "message": "URL"
+  },
+  "sourceKind": {
+    "message": "Kind"
+  },
+  "sourceUrlRequired": {
+    "message": "Enter a source URL starting with http:// or https://"
+  },
+  "sourcePriceInvalid": {
+    "message": "Enter a price of zero or more and its currency"
   },
   "sourceKind_retail": {
     "message": "Retail page"
@@ -474,6 +507,14 @@
       },
       "total": {
         "content": "$2"
+      }
+    }
+  },
+  "buildShowCandidates": {
+    "message": "Show $category$ candidates",
+    "placeholders": {
+      "category": {
+        "content": "$1"
       }
     }
   },

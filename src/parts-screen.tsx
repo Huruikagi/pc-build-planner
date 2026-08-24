@@ -204,10 +204,11 @@ export const PartsScreen = ({
         )}
       </div>
 
-      <div className="section-header">
-        <span>{t("partsColumnName")}</span>
+      <div className="section-header part-list__header">
+        <span className="part-row__name-header">{t("partsColumnName")}</span>
         <span className="part-row__spec-header">{t("partsColumnSpec")}</span>
         <span className="part-row__price-header">{t("partsColumnPrice")}</span>
+        <span aria-hidden="true" className="part-row__action-spacer" />
       </div>
 
       {visible.length === 0 ? (

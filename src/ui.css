@@ -453,6 +453,26 @@ button {
   font-weight: inherit;
 }
 
+/*
+ * 見出しは行と同じ列構成にする。space-between 任せだと、規格が中途半端な
+ * 位置に置かれ、価格も削除ボタンの分だけ行より右へずれていた。
+ */
+.part-list__header {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.part-row__name-header {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 行末の削除ボタン (14px アイコン + 上下左右 2px) の分を空ける。 */
+.part-row__action-spacer {
+  flex-shrink: 0;
+  width: 18px;
+}
+
 .part-list__footer {
   display: flex;
   align-items: center;
@@ -542,6 +562,71 @@ button {
   background: var(--unconfirmed-bg);
 }
 
+/* 複数選ぶ規格。選択肢は並べて示し、手入力は「その他」に限る。 */
+.field-row--choices {
+  display: block;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-row);
+}
+
+/* legend は横並びに乗らないので、この行だけ見出しを上に置く。 */
+.field-row--choices .field-row__label {
+  width: auto;
+  padding: 0 0 5px;
+}
+
+.choices {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.choice {
+  position: relative;
+  display: inline-flex;
+}
+
+.choice__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.choice__box {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-alt);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.choice__input:checked + .choice__box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.choice__input:focus-visible + .choice__box {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 既知の一覧に無い規格の受け皿。行の残り幅を取る。 */
+.choices__extra {
+  flex: 1 1 96px;
+  height: 24px;
+  font-size: 11px;
+}
+
 /* この項目に対する警告ではなく方針の説明なので、警告色は使わない。 */
 .field-note {
   margin: 0;
@@ -585,6 +670,36 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.source-row__head .button {
+  margin-inline-start: auto;
+}
+
+.source-row__field {
+  padding: 5px 0;
+}
+
+.source-row__field .field-row__label {
+  width: 44px;
+}
+
+.field--currency {
+  flex: 0 0 48px;
+}
+
+.source-row__primary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.source-actions {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line);
 }
 
 .source-row__kind {
@@ -802,8 +917,25 @@ button {
 .build-row__category {
   flex-shrink: 0;
   width: 62px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 10px;
+  text-align: start;
   color: var(--text-muted);
+  cursor: pointer;
+}
+
+.build-row__category:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* 候補一覧に出ているカテゴリ。表とプルダウンの対応を目で追えるようにする。 */
+.build-row__category[aria-pressed="true"] {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .build-row__name {

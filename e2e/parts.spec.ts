@@ -9,15 +9,26 @@
 import { expect, test } from "@playwright/test";
 
 import { EXPECTED, type ExpectedLocale } from "./expected-text.js";
-import { LOCALES, type LoadedExtension, loadExtension } from "./extension.js";
+import {
+  fillAttribute,
+  LOCALES,
+  type LoadedExtension,
+  loadExtension,
+} from "./extension.js";
 
 const addPart = async (
   { page }: LoadedExtension,
   part: {
     readonly name: string;
     readonly manufacturer?: string;
+    readonly modelNumber?: string;
     readonly category: string;
     readonly attributes?: Readonly<Record<string, string>>;
+    readonly source?: {
+      readonly url: string;
+      readonly price: string;
+      readonly currency: string;
+    };
   },
 ): Promise<void> => {
   await page.click("[data-create-part]");
@@ -25,9 +36,17 @@ const addPart = async (
   await page.fill('[name="part-name"]', part.name);
   if (part.manufacturer !== undefined)
     await page.fill('[name="part-manufacturer"]', part.manufacturer);
+  if (part.modelNumber !== undefined)
+    await page.fill('[name="part-model-number"]', part.modelNumber);
   await page.selectOption('[name="part-category"]', part.category);
   for (const [key, value] of Object.entries(part.attributes ?? {}))
-    await page.fill(`[name="attribute-${key}"]`, value);
+    await fillAttribute(page, key, value);
+  if (part.source !== undefined) {
+    await page.click("[data-source-add]");
+    await page.fill('[name^="source-url-"]', part.source.url);
+    await page.fill('[name^="source-price-"]', part.source.price);
+    await page.fill('[name^="source-currency-"]', part.source.currency);
+  }
   await page.click("[data-part-editor] button[type=submit]");
   await expect(page.locator("[data-part-editor]")).toHaveCount(0);
 };
@@ -90,8 +109,14 @@ for (const { lang, catalog } of LOCALES) {
       await addPart(extension, {
         name: "SYN CPU 9800X3D",
         manufacturer: "SYNAMD",
+        modelNumber: "SYN-9800X3D",
         category: "cpu",
         attributes: { socket: "AM5" },
+        source: {
+          url: "https://pcbp.test/cpu/syn-9800x3d",
+          price: "52980",
+          currency: "JPY",
+        },
       });
       await addPart(extension, {
         name: "SYN M/B B650E-F",
@@ -108,6 +133,16 @@ for (const { lang, catalog } of LOCALES) {
         category: "uncategorized",
       });
       await expect(page.locator("[data-part-id]")).toHaveCount(3);
+      const cpuRow = page
+        .locator("[data-part-id]")
+        .filter({ hasText: "SYN CPU 9800X3D" });
+      await expect(cpuRow.locator(".part-row__missing")).toHaveCount(0);
+      await expect(cpuRow.locator(".part-row__price")).toHaveText("52,980 JPY");
+      await cpuRow.locator("[data-edit-part]").click();
+      await page.click("[data-source-remove]");
+      await page.click("[data-part-editor] button[type=submit]");
+      await expect(cpuRow.locator(".part-row__missing")).toHaveCount(0);
+      await expect(cpuRow.locator(".part-row__price")).toHaveText("—");
 
       // --- カテゴリ絞り込み ---
       await page.click('[data-category="cpu"]');
@@ -166,6 +201,83 @@ for (const { lang, catalog } of LOCALES) {
       await expect(page.locator(".project-bar__name")).toHaveText(
         "SYN 検証プロジェクト",
       );
+
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    /** 複数選ぶ規格は手入力を強いない。既知に無い値は捨てず「その他」に残る。 */
+    test("複数選ぶ規格は選択式で入力でき、既知に無い値は手入力で残る", async () => {
+      const { page } = extension;
+      await createProject(extension, "SYN 規格選択");
+      await addPart(extension, {
+        name: "SYN Case",
+        category: "case",
+        attributes: {
+          supportedMotherboardFormFactors: "ATX, Mini-ITX, SYN-Custom",
+        },
+      });
+
+      await page.locator("[data-edit-part]").first().click();
+      const chips = page.locator(
+        'input[name="attribute-supportedMotherboardFormFactors"]',
+      );
+      await expect(chips.and(page.locator(":checked"))).toHaveCount(2);
+      await expect(chips.and(page.locator('[value="ATX"]'))).toBeChecked();
+      await expect(chips.and(page.locator('[value="Mini-ITX"]'))).toBeChecked();
+      await expect(
+        chips.and(page.locator('[value="E-ATX"]')),
+      ).not.toBeChecked();
+      await expect(
+        page.locator(
+          '[name="attribute-supportedMotherboardFormFactors-extra"]',
+        ),
+      ).toHaveValue("SYN-Custom");
+
+      // --- 選択を外すと確定値からも消える ---
+      await page
+        .locator(
+          'label.choice:has(input[value="Mini-ITX"][name="attribute-supportedMotherboardFormFactors"]) .choice__box',
+        )
+        .click();
+      await page.click("[data-part-editor] button[type=submit]");
+      const stored = await extension.readStoredRoot();
+      expect(
+        stored?.candidateParts[0]?.attributes.supportedMotherboardFormFactors
+          ?.confirmed,
+      ).toEqual(["ATX", "SYN-Custom"]);
+
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    test("型番なしを確定すると欠損に数えず、再編集でも保たれる", async () => {
+      const { page } = extension;
+      await createProject(extension, "SYN 型番なし");
+      await addPart(extension, {
+        name: "SYN Thermal Paste",
+        manufacturer: "SYNCOOL",
+        category: "other",
+      });
+
+      const row = page.locator("[data-part-id]").first();
+      /** 型番が空欄のうちは「まだ調べていない」として欠損に数える。 */
+      await expect(row.locator(".part-row__missing")).toHaveCount(1);
+
+      await row.locator("[data-edit-part]").click();
+      await page
+        .locator('label.choice:has([name="part-model-number-absent"])')
+        .click();
+      await expect(page.locator('[name="part-model-number"]')).toBeDisabled();
+      await page.click("[data-part-editor] button[type=submit]");
+
+      await expect(row.locator(".part-row__missing")).toHaveCount(0);
+      const stored = await extension.readStoredRoot();
+      expect(stored?.candidateParts[0]?.modelNumber?.confirmed).toBe("");
+
+      // --- 再編集でも「型番なし」の表明として戻る ---
+      await row.locator("[data-edit-part]").click();
+      await expect(
+        page.locator('[name="part-model-number-absent"]'),
+      ).toBeChecked();
 
       expect(extension.diagnostics).toEqual([]);
     });

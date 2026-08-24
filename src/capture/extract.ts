@@ -8,6 +8,8 @@
  * 汎用のものだけで、結果として国・言語に依存しない
  * (`docs/reverse/features.md` 2.2)。
  */
+
+import { manufacturerDomainMatchForUrl } from "./manufacturer-domain-map.js";
 import {
   fieldForLabel,
   findMetadataRule,
@@ -262,6 +264,22 @@ const collectStructure = (document: Document, sink: Sink): void => {
 };
 
 /**
+ * メーカー公式サイトなら、構造化データが省略された場合の最後の候補を出す。
+ * この collector は他のすべての手掛かりの後に呼ぶため、通常の抽出結果を
+ * 上書きしない。
+ */
+const collectManufacturerDomain = (url: string, sink: Sink): void => {
+  const match = manufacturerDomainMatchForUrl(url);
+  if (match === undefined) return;
+  sink.push(
+    "manufacturer",
+    match.entry.manufacturer,
+    "domain-map",
+    match.domain,
+  );
+};
+
+/**
  * ページから取得可能な手掛かりを集める。ここでは何も確定させない。
  */
 export const extractFromDocument = (
@@ -272,6 +290,7 @@ export const extractFromDocument = (
   collectJsonLd(document, sink);
   collectMetadata(document, sink);
   collectStructure(document, sink);
+  collectManufacturerDomain(url, sink);
   return {
     url,
     title: document.title,

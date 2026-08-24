@@ -5,6 +5,7 @@
  * 起点は必ず拡張アイコンの操作で、権限はその都度の `activeTab` に限る。
  */
 import { expect, test } from "@playwright/test";
+import { manufacturerDomainEntryForUrl } from "../src/capture/manufacturer-domain-map.js";
 import {
   type LoadedExtension,
   loadExtension,
@@ -40,6 +41,11 @@ const createProject = async (
   await page.keyboard.press("Escape");
   await expect(page.locator(".project-menu")).toHaveCount(0);
 };
+
+const ASUS_PRODUCT_PAGE_URL = "http://rog.asus.com/jp/graphics-cards/syn-test";
+const ASUS_PRODUCT_PAGE_HTML = `<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><title>SYN graphics card</title>
+</head><body><h1>SYN graphics card</h1></body></html>`;
 
 test.describe("商品取り込み", () => {
   let extension: LoadedExtension;
@@ -114,6 +120,7 @@ test.describe("商品取り込み", () => {
     /** プライマリソースが価格の基準になる (1.5)。 */
     expect(part?.sources).toHaveLength(1);
     expect(part?.sources[0]?.primary).toBe(true);
+    expect(part?.sources[0]?.kind).toBe("retail");
     expect(part?.sources[0]?.price).toEqual({
       amount: 189800,
       currency: "JPY",
@@ -157,5 +164,52 @@ test.describe("商品取り込み", () => {
     await expect(failed).toBeVisible();
     await expect(failed.getByRole("alert")).toContainText("読み取れない");
     expect(extension.diagnostics).toEqual([]);
+  });
+
+  test("メーカー公式ドメインでは構造化データに brand がなくてもメーカー候補を補完する", async () => {
+    const { page, context } = extension;
+    await context.route("http://rog.asus.com/**", (route) =>
+      route.fulfill({
+        body: ASUS_PRODUCT_PAGE_HTML,
+        contentType: "text/html; charset=utf-8",
+        status: 200,
+      }),
+    );
+    await createProject(extension, "ドメイン補完の検証");
+
+    const target = await context.newPage();
+    await target.goto(ASUS_PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://rog.asus.com/");
+
+    const captured = page.locator('[data-capture-status="captured"]');
+    await expect(captured).toContainText("ASUS");
+    await expect(
+      captured.getByText("メーカー公式ドメイン", { exact: true }),
+    ).toBeVisible();
+    await page.click("[data-capture-accept]");
+    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue(
+      "ASUS",
+    );
+    await page.click('[data-part-editor] button[type="submit"]');
+    const stored = await extension.readStoredRoot();
+    expect(stored?.candidateParts[0]?.sources[0]?.kind).toBe("manufacturer");
+    expect(extension.diagnostics).toEqual([]);
+  });
+});
+
+test.describe("メーカー公式ドメインの登録簿", () => {
+  test("登録ドメインとそのサブドメインだけをメーカーに解決する", () => {
+    expect(
+      manufacturerDomainEntryForUrl("https://rog.asus.com/jp/graphics-cards/"),
+    ).toMatchObject({
+      manufacturer: "ASUS",
+      categories: expect.arrayContaining(["gpu", "motherboard"]),
+    });
+    expect(
+      manufacturerDomainEntryForUrl("https://store.asus.com/jp/"),
+    ).toMatchObject({ manufacturer: "ASUS" });
+    expect(
+      manufacturerDomainEntryForUrl("https://not-asus.com/products"),
+    ).toBeUndefined();
   });
 });

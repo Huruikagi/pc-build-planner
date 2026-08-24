@@ -34,6 +34,35 @@ export const LOCALES = [
   { lang: "en-US", catalog: "en" },
 ] as const;
 
+/**
+ * 規格の入力。選択式の項目はチップを押し、既知の選択肢に無い値だけ
+ * 「その他」へ手入力する。UI の形が変わってもテストの意図は変えない。
+ */
+export const fillAttribute = async (
+  page: Page,
+  key: string,
+  value: string,
+): Promise<void> => {
+  const chips = page.locator(`input[name="attribute-${key}"][type=checkbox]`);
+  if ((await chips.count()) === 0) {
+    await page.fill(`[name="attribute-${key}"]`, value);
+    return;
+  }
+  const extras: string[] = [];
+  for (const entry of value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")) {
+    const chip = page.locator(
+      `label.choice:has(input[name="attribute-${key}"][value="${entry}"]) .choice__box`,
+    );
+    if ((await chip.count()) === 0) extras.push(entry);
+    else await chip.click();
+  }
+  if (extras.length > 0)
+    await page.fill(`[name="attribute-${key}-extra"]`, extras.join(", "));
+};
+
 export interface LoadedExtension {
   readonly context: BrowserContext;
   readonly page: Page;

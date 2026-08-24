@@ -7,7 +7,7 @@
  * 持たない (`docs/reverse/changes.md` C-6)。「未保存の数量」という状態が
  * 無いので、切替時の確認も隔離保持も要らない。
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   adoptPart,
@@ -87,23 +87,54 @@ const QuantityField = ({ partId, quantity, onCommit }: QuantityFieldProps) => {
   );
 };
 
+/**
+ * 表のカテゴリ名は、下の候補一覧のカテゴリを切り替えるボタンでもある。
+ * 「未選択」の行から、そのカテゴリの候補へ直接降りられる導線が要る。
+ */
+const CategoryButton = ({
+  category,
+  selected,
+  onSelect,
+}: {
+  readonly category: PartCategory;
+  readonly selected: boolean;
+  readonly onSelect: (category: PartCategory) => void;
+}) => (
+  <button
+    aria-label={t("buildShowCandidates", categoryLabel(category))}
+    aria-pressed={selected}
+    className="build-row__category"
+    data-select-category={category}
+    onClick={() => onSelect(category)}
+    type="button"
+  >
+    {categoryLabel(category)}
+  </button>
+);
+
 const AdoptedRow = ({
   row,
+  selected,
   onQuantity,
   onRelease,
+  onSelect,
 }: {
   readonly row: BuildRow;
+  readonly selected: boolean;
   readonly onQuantity: (partId: string, quantity: number) => void;
   readonly onRelease: (partId: string) => void;
+  readonly onSelect: (category: PartCategory) => void;
 }) => (
   <>
     {row.entries.map(({ part, quantity }) => {
       const price = primarySource(part)?.price ?? null;
       return (
         <li className="build-row" data-adopted-id={part.id} key={part.id}>
-          <span className="build-row__category">
-            {categoryLabel(row.category)}
-          </span>
+          <CategoryButton
+            category={row.category}
+            onSelect={onSelect}
+            selected={selected}
+          />
           <span className="build-row__name">{part.name}</span>
           <QuantityField
             onCommit={(next) => onQuantity(part.id, next)}
@@ -136,6 +167,13 @@ const AdoptedRow = ({
 export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
   const [category, setCategory] = useState<PartCategory>("cpu");
   const [showEmpty, setShowEmpty] = useState(false);
+  const adoptRef = useRef<HTMLDivElement>(null);
+
+  /** 候補一覧は表より下にある。切り替えた結果が視界に入るまで送る。 */
+  const selectCategory = (next: PartCategory) => {
+    setCategory(next);
+    adoptRef.current?.scrollIntoView({ block: "nearest" });
+  };
 
   const rows = useMemo(
     () => buildRows(root, project?.id ?? null),
@@ -186,14 +224,18 @@ export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
               apply(setQuantity(projectId, partId, quantity))
             }
             onRelease={(partId) => apply(releasePart(projectId, partId))}
+            onSelect={selectCategory}
             row={row}
+            selected={row.category === category}
           />
         ))}
         {visibleEmpty.map((row) => (
           <li className="build-row build-row--empty" key={row.category}>
-            <span className="build-row__category">
-              {categoryLabel(row.category)}
-            </span>
+            <CategoryButton
+              category={row.category}
+              onSelect={selectCategory}
+              selected={row.category === category}
+            />
             <span className="build-row__name build-row__name--empty">
               {t("buildUnselected")}
             </span>
@@ -228,7 +270,7 @@ export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
         <p className="field-note">{t("buildMixedCurrency")}</p>
       ) : null}
 
-      <div className="section-header">
+      <div className="section-header" ref={adoptRef}>
         <span>{t("buildAdoptFrom")}</span>
         <select
           aria-label={t("fieldCategory")}

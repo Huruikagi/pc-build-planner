@@ -107,6 +107,28 @@ test.describe("現在構成", () => {
     expect(extension.diagnostics).toEqual([]);
   });
 
+  test("表のカテゴリ名から候補一覧のカテゴリを切り替えられる", async () => {
+    const { page } = extension;
+
+    await expect(page.locator("[data-adopt-category]")).toHaveValue("cpu");
+    await expect(page.locator("[data-adopt-part]")).toHaveCount(1);
+
+    /** 未選択の行からでも、そのカテゴリの候補へ降りられる。 */
+    await page.click('[data-select-category="memory"]');
+    await expect(page.locator("[data-adopt-category]")).toHaveValue("memory");
+    await expect(page.locator("[data-candidate-id]")).toContainText("DDR5");
+
+    await page.click("[data-adopt-part]");
+    await expect(page.locator("[data-adopted-id]")).toHaveCount(1);
+
+    /** 採用済みの行のカテゴリ名も同じく切替として働く。 */
+    await page.click('[data-select-category="cpu"]');
+    await expect(page.locator("[data-adopt-category]")).toHaveValue("cpu");
+    await expect(page.locator("[data-candidate-id]")).toContainText("9800X3D");
+
+    expect(extension.diagnostics).toEqual([]);
+  });
+
   test("候補を削除すると現在構成からも解除される", async () => {
     const { page } = extension;
     await page.click("[data-adopt-part]");

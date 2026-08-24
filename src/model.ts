@@ -195,7 +195,12 @@ export const primarySource = (part: CandidatePart): CandidateSource | null =>
 export const formatMoney = (value: Money): string =>
   `${value.amount.toLocaleString("en-US")} ${value.currency}`;
 
-/** 未入力の項目数。0 なら「揃っている」。 */
+/**
+ * 未入力の項目数。0 なら「揃っている」。
+ *
+ * 確定されていれば空文字でも数えない。型番のように「存在しないと確認した」
+ * ことを空文字の確定で表す項目があるため (`parts.ts` の modelNumberConfirmation)。
+ */
 export const missingFieldCount = (part: CandidatePart): number => {
   const confirmed = (value: SourcedAttribute | null): boolean =>
     value?.confirmed !== undefined;
@@ -203,7 +208,6 @@ export const missingFieldCount = (part: CandidatePart): number => {
   if (!confirmed(part.manufacturer)) missing += 1;
   if (!confirmed(part.modelNumber)) missing += 1;
   if (part.category === "uncategorized") missing += 1;
-  if (primarySource(part)?.price == null) missing += 1;
   for (const definition of CATEGORY_ATTRIBUTES[part.category])
     if (!confirmed(part.attributes[definition.key] ?? null)) missing += 1;
   return missing;

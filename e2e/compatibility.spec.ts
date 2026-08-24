@@ -10,7 +10,11 @@
  */
 import { expect, test } from "@playwright/test";
 
-import { type LoadedExtension, loadExtension } from "./extension.js";
+import {
+  fillAttribute,
+  type LoadedExtension,
+  loadExtension,
+} from "./extension.js";
 
 const createProject = async (
   { page }: LoadedExtension,
@@ -34,7 +38,7 @@ const addPart = async (
   await page.fill('[name="part-name"]', name);
   await page.selectOption('[name="part-category"]', category);
   for (const [key, value] of Object.entries(attributes))
-    await page.fill(`[name="attribute-${key}"]`, value);
+    await fillAttribute(page, key, value);
   await page.click("[data-part-editor] button[type=submit]");
   await expect(page.locator("[data-part-editor]")).toHaveCount(0);
 };

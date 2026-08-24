@@ -177,6 +177,12 @@
   "attribute_supportedPowerSupplyFormFactors": {
     "message": "対応電源規格"
   },
+  "attributeOther": {
+    "message": "その他"
+  },
+  "attributeOtherHint": {
+    "message": "その他をカンマ区切りで入力"
+  },
   "attributeListHint": {
     "message": "カンマ区切りで入力"
   },
@@ -208,7 +214,7 @@
     "message": "ソース"
   },
   "editorSourcesEmpty": {
-    "message": "ソースはまだありません。取り込みで追加されます。"
+    "message": "ソースはまだありません。手入力または取り込みで追加できます。"
   },
   "editorSpecsNote": {
     "message": "互換性判定に使われます"
@@ -225,8 +231,14 @@
   "fieldModelNumber": {
     "message": "型番"
   },
+  "modelNumberAbsent": {
+    "message": "型番なし"
+  },
   "fieldCategory": {
     "message": "カテゴリ"
+  },
+  "fieldCurrency": {
+    "message": "通貨"
   },
   "notEntered": {
     "message": "未入力"
@@ -245,6 +257,27 @@
   },
   "sourceNoPrice": {
     "message": "価格なし"
+  },
+  "sourceAdd": {
+    "message": "取得元を追加"
+  },
+  "sourceRemove": {
+    "message": "削除"
+  },
+  "sourceOpen": {
+    "message": "ページを開く"
+  },
+  "sourceUrl": {
+    "message": "URL"
+  },
+  "sourceKind": {
+    "message": "種別"
+  },
+  "sourceUrlRequired": {
+    "message": "取得元の URL を http:// または https:// で入力してください"
+  },
+  "sourcePriceInvalid": {
+    "message": "価格は 0 以上の数値と通貨を入力してください"
   },
   "sourceKind_retail": {
     "message": "販売ページ"
@@ -474,6 +507,14 @@
       },
       "total": {
         "content": "$2"
+      }
+    }
+  },
+  "buildShowCandidates": {
+    "message": "$category$ の候補を表示",
+    "placeholders": {
+      "category": {
+        "content": "$1"
       }
     }
   },

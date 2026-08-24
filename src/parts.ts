@@ -3,6 +3,7 @@
  *
  * ルートの置換としてのみ表現する (`docs/reverse/features.md` 6.1)。
  */
+import { manufacturerDomainEntryForUrl } from "./capture/manufacturer-domain-map.js";
 import type { CaptureResult } from "./capture/types.js";
 import {
   CATEGORY_ATTRIBUTES,
@@ -19,6 +20,11 @@ export interface PartDraft {
   readonly name: string;
   readonly manufacturer: string;
   readonly modelNumber: string;
+  /**
+   * 型番を持たない商品だと確認済みであることの表明。空欄のままの「まだ調べて
+   * いない」と区別するために持つ。真なら `modelNumber` は無視して空を確定する。
+   */
+  readonly modelNumberAbsent: boolean;
   readonly category: PartCategory;
   readonly attributes: Readonly<Record<string, string>>;
   readonly sources: readonly CandidateSource[];
@@ -37,6 +43,7 @@ export const emptyDraft = (): PartDraft => ({
   name: "",
   manufacturer: "",
   modelNumber: "",
+  modelNumberAbsent: false,
   category: "uncategorized",
   attributes: {},
   sources: [],
@@ -49,6 +56,7 @@ export const draftFromPart = (part: CandidatePart): PartDraft => ({
   name: part.name,
   manufacturer: part.manufacturer?.confirmed ?? "",
   modelNumber: part.modelNumber?.confirmed ?? "",
+  modelNumberAbsent: part.modelNumber?.confirmed === "",
   category: part.category,
   attributes: Object.fromEntries(
     Object.entries(part.attributes).map(([key, value]) => {
@@ -113,6 +121,16 @@ const originalOf = (draft: PartDraft, field: IdentityField) => {
   return original === undefined ? null : { original };
 };
 
+/**
+ * 型番だけは空文字の確定に意味がある。「型番なし」を確定させると
+ * `missingFieldCount` から外れ、重複判定でも比較対象にならない。
+ */
+const modelNumberConfirmation = (draft: PartDraft): string | undefined => {
+  if (draft.modelNumberAbsent) return "";
+  const trimmed = draft.modelNumber.trim();
+  return trimmed === "" ? undefined : trimmed;
+};
+
 const parseList = (raw: string): string[] =>
   raw
     .split(",")
@@ -160,11 +178,18 @@ export const savePart =
       ),
       modelNumber: withConfirmed(
         existing?.modelNumber ?? originalOf(draft, "modelNumber"),
-        draft.modelNumber.trim() === "" ? undefined : draft.modelNumber.trim(),
+        modelNumberConfirmation(draft),
       ),
       category: draft.category,
       attributes,
-      sources: [...draft.sources],
+      sources: draft.sources.map((source) => ({
+        ...source,
+        url: source.url.trim(),
+        price:
+          source.price === null
+            ? null
+            : { ...source.price, currency: source.price.currency.trim() },
+      })),
     };
 
     return {
@@ -191,13 +216,21 @@ export const draftFromCapture = (result: CaptureResult): PartDraft => {
     name: result.fields.name?.value ?? "",
     manufacturer: result.fields.manufacturer?.value ?? "",
     modelNumber: result.fields.modelNumber?.value ?? "",
+    modelNumberAbsent: false,
     category: result.categoryHint ?? "uncategorized",
     attributes: {},
     sources: [
       {
         id: sourceId,
         url: result.url,
-        kind: "retail",
+        /**
+         * メーカー公式ドメインは販売ページではなく商品紹介として記録する。
+         * この判定は manufacturer 抽出の成否ではなく、取り込み URL 自体で行う。
+         */
+        kind:
+          manufacturerDomainEntryForUrl(result.url) === undefined
+            ? "retail"
+            : "manufacturer",
         capturedAt: result.capturedAt,
         price: result.price?.money ?? null,
         /** 最初のソースは必ずプライマリ。価格の基準になる。 */

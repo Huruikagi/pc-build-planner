@@ -74,7 +74,8 @@ export const findDuplicates = (
   projectId: string,
   draft: PartDraft,
 ): readonly DuplicateMatch[] => {
-  const draftModel = draft.modelNumber.trim();
+  /** 「型番なし」の表明は比較の根拠にならない。 */
+  const draftModel = draft.modelNumberAbsent ? "" : draft.modelNumber.trim();
   const draftManufacturer = fold(draft.manufacturer.trim());
   const draftName = fold(draft.name.trim());
 
