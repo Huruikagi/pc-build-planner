@@ -484,5 +484,111 @@
         "content": "$1"
       }
     }
+  },
+  "compatResults": {
+    "message": "Individual checks"
+  },
+  "compatNotConfirmed": {
+    "message": "Unconfirmed"
+  },
+  "compatAggregate_compatible": {
+    "message": "Compatible"
+  },
+  "compatAggregate_incompatible": {
+    "message": "Not compatible"
+  },
+  "compatAggregate_unknown": {
+    "message": "Cannot be judged"
+  },
+  "compatVerdict_compatible": {
+    "message": "Fits"
+  },
+  "compatVerdict_incompatible": {
+    "message": "Does not fit"
+  },
+  "compatVerdict_unknown": {
+    "message": "Not enough info"
+  },
+  "compatReason_valueEqual": {
+    "message": "The standards match."
+  },
+  "compatReason_valueNotEqual": {
+    "message": "The standards do not match."
+  },
+  "compatReason_valueIncluded": {
+    "message": "It is within the supported range."
+  },
+  "compatReason_valueNotIncluded": {
+    "message": "It is not within the supported range."
+  },
+  "compatResolveSelect": {
+    "message": "Choose a part in the current build"
+  },
+  "compatResolveConfirm": {
+    "message": "Enter the standard in Parts"
+  },
+  "compatPolicyNote": {
+    "message": "Only values you have confirmed are used. Captured but unconfirmed values are not. Missing information is not a mismatch."
+  },
+  "rule_cpuMotherboardSocket": {
+    "message": "CPU socket"
+  },
+  "rule_motherboardMemoryStandard": {
+    "message": "Memory standard"
+  },
+  "rule_coolerCpuSocket": {
+    "message": "CPU cooler socket support"
+  },
+  "rule_caseMotherboardFormFactor": {
+    "message": "Case motherboard form factor"
+  },
+  "rule_casePowerSupplyFormFactor": {
+    "message": "Case PSU form factor"
+  },
+  "compatAggregateDetail": {
+    "message": "$ng$ do not fit, $unknown$ cannot be judged",
+    "placeholders": {
+      "ng": {
+        "content": "$1"
+      },
+      "unknown": {
+        "content": "$2"
+      }
+    }
+  },
+  "compatRuleCount": {
+    "message": "$count$ checks",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingNotSelected": {
+    "message": "This cannot be judged because no $side$ is selected.",
+    "placeholders": {
+      "side": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingNotConfirmed": {
+    "message": "This cannot be judged because the $side$ value is unconfirmed.",
+    "placeholders": {
+      "side": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingBoth": {
+    "message": "This cannot be judged because information is missing for both the $left$ and the $right$.",
+    "placeholders": {
+      "left": {
+        "content": "$1"
+      },
+      "right": {
+        "content": "$2"
+      }
+    }
   }
 }

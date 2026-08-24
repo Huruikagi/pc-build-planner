@@ -14,6 +14,7 @@ import {
 } from "./capture/protocol.js";
 import type { CaptureState } from "./capture/types.js";
 import { CaptureScreen } from "./capture-screen.js";
+import { CompatibilityScreen } from "./compatibility-screen.js";
 import { t } from "./i18n.js";
 import {
   BuildIcon,
@@ -32,7 +33,7 @@ import {
   renameProject,
   selectProject,
 } from "./projects.js";
-import { CompatibilityScreen } from "./screens.js";
+import type { ScreenId } from "./screen-props.js";
 import type { StorageFailure, Store } from "./storage.js";
 
 const SCREENS = [
@@ -45,8 +46,6 @@ const SCREENS = [
     View: CompatibilityScreen,
   },
 ] as const;
-
-type ScreenId = (typeof SCREENS)[number]["id"];
 
 const failureMessage = (failure: StorageFailure): string =>
   failure.kind === "corrupt" ? t("storageCorrupt") : t("storageUnavailable");
@@ -187,6 +186,7 @@ export const App = ({ store }: { readonly store: Store }) => {
           apply={(mutate) => void apply(mutate)}
           handoff={screenId === "parts" ? handoff : null}
           onHandoffConsumed={() => setHandoff(null)}
+          onNavigate={setScreenId}
           project={project}
           root={root}
         />

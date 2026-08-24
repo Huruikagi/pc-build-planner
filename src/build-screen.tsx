@@ -28,7 +28,7 @@ import {
   primarySource,
 } from "./model.js";
 import { partsOf } from "./parts.js";
-import type { ScreenProps } from "./screens.js";
+import type { ScreenProps } from "./screen-props.js";
 
 const categoryLabel = (category: PartCategory): string =>
   t(`category_${category.replace("-", "_")}`);

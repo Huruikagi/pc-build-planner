@@ -484,5 +484,111 @@
         "content": "$1"
       }
     }
+  },
+  "compatResults": {
+    "message": "個別判定"
+  },
+  "compatNotConfirmed": {
+    "message": "未確認"
+  },
+  "compatAggregate_compatible": {
+    "message": "互換性あり"
+  },
+  "compatAggregate_incompatible": {
+    "message": "互換性なし"
+  },
+  "compatAggregate_unknown": {
+    "message": "判定不能"
+  },
+  "compatVerdict_compatible": {
+    "message": "適合"
+  },
+  "compatVerdict_incompatible": {
+    "message": "不適合"
+  },
+  "compatVerdict_unknown": {
+    "message": "情報不足"
+  },
+  "compatReason_valueEqual": {
+    "message": "規格が一致しています。"
+  },
+  "compatReason_valueNotEqual": {
+    "message": "規格が一致していません。"
+  },
+  "compatReason_valueIncluded": {
+    "message": "対応範囲に含まれています。"
+  },
+  "compatReason_valueNotIncluded": {
+    "message": "対応範囲に含まれていません。"
+  },
+  "compatResolveSelect": {
+    "message": "現在構成でパーツを選ぶ"
+  },
+  "compatResolveConfirm": {
+    "message": "パーツ管理で規格を入力する"
+  },
+  "compatPolicyNote": {
+    "message": "判定には利用者が確認した値だけを使います。取り込んだままの未確認値は判定に使いません。情報不足は不適合ではありません。"
+  },
+  "rule_cpuMotherboardSocket": {
+    "message": "CPUソケット"
+  },
+  "rule_motherboardMemoryStandard": {
+    "message": "メモリ規格"
+  },
+  "rule_coolerCpuSocket": {
+    "message": "CPUクーラー対応ソケット"
+  },
+  "rule_caseMotherboardFormFactor": {
+    "message": "ケース対応フォームファクタ"
+  },
+  "rule_casePowerSupplyFormFactor": {
+    "message": "ケース対応電源規格"
+  },
+  "compatAggregateDetail": {
+    "message": "不適合 $ng$ 件、情報不足 $unknown$ 件",
+    "placeholders": {
+      "ng": {
+        "content": "$1"
+      },
+      "unknown": {
+        "content": "$2"
+      }
+    }
+  },
+  "compatRuleCount": {
+    "message": "$count$ 件",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingNotSelected": {
+    "message": "$side$が選択されていないため判定できません。",
+    "placeholders": {
+      "side": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingNotConfirmed": {
+    "message": "$side$の値が未確認のため判定できません。",
+    "placeholders": {
+      "side": {
+        "content": "$1"
+      }
+    }
+  },
+  "compatMissingBoth": {
+    "message": "$left$と$right$の両方で情報が不足しているため判定できません。",
+    "placeholders": {
+      "left": {
+        "content": "$1"
+      },
+      "right": {
+        "content": "$2"
+      }
+    }
   }
 }

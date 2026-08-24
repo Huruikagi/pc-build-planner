@@ -29,7 +29,7 @@ import {
   partsOf,
   savePart,
 } from "./parts.js";
-import type { ScreenProps } from "./screens.js";
+import type { ScreenProps } from "./screen-props.js";
 
 /** カテゴリの短い列見出し。等幅の規格列と揃うよう表記を切り詰める。 */
 const categoryLabel = (category: PartCategory): string =>

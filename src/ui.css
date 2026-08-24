@@ -888,3 +888,171 @@ button {
   font-size: 10px;
   color: var(--text);
 }
+
+/* --- compatibility ------------------------------------------------------ */
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px;
+  border-bottom: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+}
+
+.summary__verdict {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.summary__detail {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.summary.verdict--ok {
+  border-left-color: var(--ok);
+  border-bottom-color: #b7e0c2;
+  background: #eefaf1;
+}
+
+.summary.verdict--ok .summary__verdict {
+  color: #14602a;
+}
+
+.summary.verdict--ng {
+  border-left-color: var(--ng);
+  border-bottom-color: #ffc1ba;
+  background: #fff0ee;
+}
+
+.summary.verdict--ng .summary__verdict {
+  color: #a40e26;
+}
+
+.summary.verdict--unknown {
+  border-left-color: var(--line);
+  background: var(--bg-alt);
+}
+
+.verdict {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-row);
+  border-left: 3px solid var(--line);
+}
+
+.verdict:nth-of-type(even) {
+  background: var(--bg-alt);
+}
+
+.verdict.verdict--ok {
+  border-left-color: var(--ok);
+}
+
+.verdict.verdict--ng {
+  border-left-color: var(--ng);
+}
+
+.verdict__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verdict__name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 役割・パーツ名・値は必ず別の要素に分ける (changes.md C-2-1)。 */
+.verdict__side {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.verdict__role {
+  flex-shrink: 0;
+  width: 66px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.verdict__part {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+
+.verdict__part--empty,
+.verdict__value--empty {
+  color: var(--text-faint);
+}
+
+/* 値そのものではないので等幅にしない。日本語が等幅だと字間が開く。 */
+.verdict__value--empty {
+  font-family: var(--font-ui);
+  font-weight: 400;
+}
+
+.verdict__value {
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.verdict__reason {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.verdict--ng .verdict__reason {
+  color: #a40e26;
+}
+
+.verdict--ok .verdict__reason {
+  color: #14602a;
+}
+
+.verdict__action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge--compatible {
+  background: var(--ok);
+  color: #ffffff;
+}
+
+.badge--incompatible {
+  background: var(--ng);
+  color: #ffffff;
+}
+
+.badge--unknown {
+  background: var(--line-row);
+  color: var(--text-muted);
+}
+
+.field-note--wide {
+  padding-inline-start: 11px;
+  border-bottom: 0;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
