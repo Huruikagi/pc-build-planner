@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PC Build Planner (dev)</title>
+    <link rel="stylesheet" href="./styles.css">
+    <style>
+      /* サイドパネルの実寸を再現する。ここでしか使わないので dev だけに置く。 */
+      body {
+        margin: 0;
+        background: #55585c;
+      }
+      #application-shell {
+        width: 400px;
+        min-height: 100vh;
+        margin-inline: auto;
+        background: #ffffff;
+        box-shadow: 0 0 0 1px rgb(0 0 0 / 20%);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="application-shell" aria-label="PC Build Planner"></main>
+    <script type="module" src="./dev.js"></script>
+  </body>
+</html>

@@ -1,0 +1,332 @@
+/*
+ * 方向 D「データ密度」の設計トークン。値の出典はデザインキャンバス
+ * (docs/reverse/changes.md 冒頭の表)。ここが唯一の定義箇所。
+ */
+:root {
+  --font-ui: system-ui, "Segoe UI", "Yu Gothic UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text: #1b1f24;
+  --text-muted: #57606a;
+  --text-faint: #8c959f;
+
+  --bg: #ffffff;
+  --bg-alt: #f6f8fa;
+  --bg-chrome: #f3f4f6;
+
+  --line: #d0d7de;
+  --line-row: #eaeef2;
+  --line-chrome: #c8ccd1;
+
+  --accent: #0b5cab;
+  --accent-bg: #eef4fb;
+  --ok: #1a7f37;
+  --ng: #cf222e;
+  --unconfirmed: #bf8700;
+  --unconfirmed-bg: #fffbef;
+
+  --radius: 3px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* --- shell ------------------------------------------------------------- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.nav {
+  display: flex;
+  border-bottom: 1px solid var(--line-chrome);
+  background: var(--bg-chrome);
+}
+
+.nav__item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--line-chrome);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.nav__item:last-child {
+  border-right: 0;
+}
+
+.nav__item[aria-current="page"] {
+  background: var(--bg);
+  box-shadow: inset 0 2px 0 var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.nav__icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* --- project bar ------------------------------------------------------- */
+
+.project-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-alt);
+}
+
+.project-bar__current {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+}
+
+.project-bar__current[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.project-bar__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.project-bar__name--empty {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* --- project menu ------------------------------------------------------ */
+
+.project-menu {
+  position: absolute;
+  inset-inline: 8px;
+  top: calc(100% - 2px);
+  z-index: 2;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 6px 20px rgb(27 31 36 / 22%);
+  overflow: hidden;
+}
+
+.project-menu__heading {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-alt);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.project-menu__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.project-menu__row--current {
+  background: var(--accent-bg);
+}
+
+.project-menu__select {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
+
+/* 名前と要約は必ず別行にする。横に流すと連結して読めなくなる (changes.md C-2-1)。 */
+.project-menu__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.project-menu__row--current .project-menu__label {
+  font-weight: 700;
+}
+
+.project-menu__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/** 選択中の行とチェックの分だけ字下げを揃える。 */
+.project-menu__check-spacer {
+  flex-shrink: 0;
+  width: 14px;
+}
+
+.project-menu__summary {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.project-menu__icon-button {
+  flex-shrink: 0;
+  display: flex;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.project-menu__icon-button:hover {
+  background: var(--line-row);
+}
+
+.project-menu__create {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  background: var(--bg-alt);
+}
+
+.project-menu__rename-form {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.project-menu__confirm {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line-row);
+  background: var(--unconfirmed-bg);
+}
+
+.project-menu__confirm-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+/* --- controls ---------------------------------------------------------- */
+
+.field {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font: inherit;
+  color: inherit;
+}
+
+.button {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.button--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.button--danger {
+  border-color: var(--ng);
+  background: var(--ng);
+  color: #ffffff;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- screens ----------------------------------------------------------- */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-alt);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.placeholder {
+  padding: 14px 11px;
+  color: var(--text-faint);
+}
+
+.notice {
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notice--error {
+  border-bottom-color: #ffc1ba;
+  background: #fff0ee;
+  color: #a40e26;
+}
+
+.error-text {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ng);
+}

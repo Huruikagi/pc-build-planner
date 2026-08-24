@@ -4,5 +4,105 @@
   },
   "extensionDescription": {
     "message": "Organize PC parts you find online and check basic compatibility, locally."
+  },
+
+  "navigationLabel": {
+    "message": "Feature navigation"
+  },
+  "navParts": {
+    "message": "Parts"
+  },
+  "navBuild": {
+    "message": "Build"
+  },
+  "navCompatibility": {
+    "message": "Fit"
+  },
+
+  "shellLoading": {
+    "message": "Loading"
+  },
+  "shellErrorHeading": {
+    "message": "Something went wrong"
+  },
+  "shellStartupFailed": {
+    "message": "The application could not start"
+  },
+  "retry": {
+    "message": "Retry"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+
+  "projectLabel": {
+    "message": "Current project"
+  },
+  "projectEmpty": {
+    "message": "No projects yet"
+  },
+  "projectUnavailable": {
+    "message": "Project information is unavailable."
+  },
+  "projectMenuHeading": {
+    "message": "Switch project"
+  },
+  "projectMenuOpen": {
+    "message": "Manage projects"
+  },
+  "projectSummary": {
+    "message": "$candidates$ parts · $adopted$ adopted",
+    "placeholders": {
+      "candidates": { "content": "$1" },
+      "adopted": { "content": "$2" }
+    }
+  },
+  "projectNamePlaceholder": {
+    "message": "New project name"
+  },
+  "projectCreate": {
+    "message": "Create"
+  },
+  "projectRename": {
+    "message": "Rename $name$",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDelete": {
+    "message": "Delete $name$",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectSelect": {
+    "message": "Switch to $name$",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDeleteConfirm": {
+    "message": "This deletes the project \"$name$\" and every part in it.",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDeleteAction": {
+    "message": "Delete"
+  },
+  "projectNameRequired": {
+    "message": "Enter a project name"
+  },
+
+  "partsTitle": {
+    "message": "Parts"
+  },
+  "buildTitle": {
+    "message": "Current build"
+  },
+  "compatibilityTitle": {
+    "message": "Compatibility"
+  },
+  "notImplemented": {
+    "message": "This screen is not implemented yet."
+  },
+
+  "storageUnavailable": {
+    "message": "Storage is unavailable. Reopen the extension and try again."
+  },
+  "storageCorrupt": {
+    "message": "Saved data is corrupt or in an unsupported format. Existing data was left unchanged."
   }
 }

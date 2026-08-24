@@ -4,5 +4,105 @@
   },
   "extensionDescription": {
     "message": "Webで見つけたPCパーツを整理し、基本的な互換性をローカルで確認します。"
+  },
+
+  "navigationLabel": {
+    "message": "機能ナビゲーション"
+  },
+  "navParts": {
+    "message": "候補"
+  },
+  "navBuild": {
+    "message": "構成"
+  },
+  "navCompatibility": {
+    "message": "互換性"
+  },
+
+  "shellLoading": {
+    "message": "読み込み中です"
+  },
+  "shellErrorHeading": {
+    "message": "エラーが発生しました"
+  },
+  "shellStartupFailed": {
+    "message": "アプリケーションを開始できませんでした"
+  },
+  "retry": {
+    "message": "再試行"
+  },
+  "cancel": {
+    "message": "キャンセル"
+  },
+
+  "projectLabel": {
+    "message": "現在のプロジェクト"
+  },
+  "projectEmpty": {
+    "message": "プロジェクトがありません"
+  },
+  "projectUnavailable": {
+    "message": "プロジェクトの情報を利用できません。"
+  },
+  "projectMenuHeading": {
+    "message": "プロジェクトを切り替え"
+  },
+  "projectMenuOpen": {
+    "message": "プロジェクトを管理"
+  },
+  "projectSummary": {
+    "message": "候補 $candidates$ · 採用 $adopted$",
+    "placeholders": {
+      "candidates": { "content": "$1" },
+      "adopted": { "content": "$2" }
+    }
+  },
+  "projectNamePlaceholder": {
+    "message": "新しいプロジェクト名"
+  },
+  "projectCreate": {
+    "message": "作成"
+  },
+  "projectRename": {
+    "message": "$name$ の名前を変更",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDelete": {
+    "message": "$name$ を削除",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectSelect": {
+    "message": "$name$ に切り替え",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDeleteConfirm": {
+    "message": "プロジェクト「$name$」と所属するパーツも削除します。",
+    "placeholders": { "name": { "content": "$1" } }
+  },
+  "projectDeleteAction": {
+    "message": "削除する"
+  },
+  "projectNameRequired": {
+    "message": "プロジェクト名を入力してください"
+  },
+
+  "partsTitle": {
+    "message": "パーツ管理"
+  },
+  "buildTitle": {
+    "message": "現在構成"
+  },
+  "compatibilityTitle": {
+    "message": "互換性確認"
+  },
+  "notImplemented": {
+    "message": "この画面はまだ実装されていません。"
+  },
+
+  "storageUnavailable": {
+    "message": "保存領域を利用できません。拡張機能を開き直してからもう一度お試しください。"
+  },
+  "storageCorrupt": {
+    "message": "保存データが破損しているか、対応していない形式です。既存データは変更していません。"
   }
 }

@@ -7,10 +7,7 @@
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting",
-    "sidePanel",
-    "contextMenus"
+    "sidePanel"
   ],
   "action": {},
   "background": {
