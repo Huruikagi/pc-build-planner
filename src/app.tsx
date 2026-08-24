@@ -14,6 +14,7 @@ import {
   PartsIcon,
 } from "./icons.js";
 import type { LocalDataRoot } from "./model.js";
+import { PartsScreen } from "./parts-screen.js";
 import { ProjectMenu } from "./project-menu.js";
 import {
   createProject,
@@ -22,7 +23,7 @@ import {
   renameProject,
   selectProject,
 } from "./projects.js";
-import { BuildScreen, CompatibilityScreen, PartsScreen } from "./screens.js";
+import { BuildScreen, CompatibilityScreen } from "./screens.js";
 import type { StorageFailure, Store } from "./storage.js";
 
 const SCREENS = [
@@ -153,7 +154,11 @@ export const App = ({ store }: { readonly store: Store }) => {
         ) : null}
       </div>
 
-      <screen.View project={project} />
+      <screen.View
+        apply={(mutate) => void apply(mutate)}
+        project={project}
+        root={root}
+      />
     </div>
   );
 };

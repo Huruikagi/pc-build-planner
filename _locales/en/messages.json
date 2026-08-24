@@ -5,7 +5,6 @@
   "extensionDescription": {
     "message": "Organize PC parts you find online and check basic compatibility, locally."
   },
-
   "navigationLabel": {
     "message": "Feature navigation"
   },
@@ -18,7 +17,6 @@
   "navCompatibility": {
     "message": "Fit"
   },
-
   "shellLoading": {
     "message": "Loading"
   },
@@ -34,7 +32,6 @@
   "cancel": {
     "message": "Cancel"
   },
-
   "projectLabel": {
     "message": "Current project"
   },
@@ -53,8 +50,12 @@
   "projectSummary": {
     "message": "$candidates$ parts · $adopted$ adopted",
     "placeholders": {
-      "candidates": { "content": "$1" },
-      "adopted": { "content": "$2" }
+      "candidates": {
+        "content": "$1"
+      },
+      "adopted": {
+        "content": "$2"
+      }
     }
   },
   "projectNamePlaceholder": {
@@ -65,19 +66,35 @@
   },
   "projectRename": {
     "message": "Rename $name$",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDelete": {
     "message": "Delete $name$",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectSelect": {
     "message": "Switch to $name$",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDeleteConfirm": {
     "message": "This deletes the project \"$name$\" and every part in it.",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDeleteAction": {
     "message": "Delete"
@@ -85,7 +102,6 @@
   "projectNameRequired": {
     "message": "Enter a project name"
   },
-
   "partsTitle": {
     "message": "Parts"
   },
@@ -98,11 +114,214 @@
   "notImplemented": {
     "message": "This screen is not implemented yet."
   },
-
   "storageUnavailable": {
     "message": "Storage is unavailable. Reopen the extension and try again."
   },
   "storageCorrupt": {
     "message": "Saved data is corrupt or in an unsupported format. Existing data was left unchanged."
+  },
+  "categoryAll": {
+    "message": "All"
+  },
+  "category_cpu": {
+    "message": "CPU"
+  },
+  "category_cpu_cooler": {
+    "message": "CPU cooler"
+  },
+  "category_motherboard": {
+    "message": "Motherboard"
+  },
+  "category_memory": {
+    "message": "Memory"
+  },
+  "category_gpu": {
+    "message": "GPU"
+  },
+  "category_storage": {
+    "message": "Storage"
+  },
+  "category_power_supply": {
+    "message": "Power supply"
+  },
+  "category_case": {
+    "message": "Case"
+  },
+  "category_case_fan": {
+    "message": "Case fan"
+  },
+  "category_expansion_card": {
+    "message": "Expansion card"
+  },
+  "category_other": {
+    "message": "Other"
+  },
+  "category_uncategorized": {
+    "message": "Uncategorized"
+  },
+  "attribute_socket": {
+    "message": "Socket"
+  },
+  "attribute_supportedSockets": {
+    "message": "Supported sockets"
+  },
+  "attribute_memoryStandard": {
+    "message": "Memory standard"
+  },
+  "attribute_formFactor": {
+    "message": "Form factor"
+  },
+  "attribute_supportedMotherboardFormFactors": {
+    "message": "Supported motherboard form factors"
+  },
+  "attribute_supportedPowerSupplyFormFactors": {
+    "message": "Supported PSU form factors"
+  },
+  "attributeListHint": {
+    "message": "Comma separated"
+  },
+  "partsColumnName": {
+    "message": "Product / maker"
+  },
+  "partsColumnSpec": {
+    "message": "Spec"
+  },
+  "partsColumnPrice": {
+    "message": "Price"
+  },
+  "partsEmpty": {
+    "message": "No parts in this category."
+  },
+  "partAdd": {
+    "message": "Add part"
+  },
+  "partEditTitle": {
+    "message": "Edit part"
+  },
+  "backToList": {
+    "message": "List"
+  },
+  "editorBasics": {
+    "message": "Basics"
+  },
+  "editorSources": {
+    "message": "Sources"
+  },
+  "editorSourcesEmpty": {
+    "message": "No sources yet. Capture adds them."
+  },
+  "editorSpecsNote": {
+    "message": "Used for compatibility checks"
+  },
+  "editorSpecsOptional": {
+    "message": "You can save this blank. Compatibility is not judged while it is empty."
+  },
+  "fieldName": {
+    "message": "Product name"
+  },
+  "fieldManufacturer": {
+    "message": "Manufacturer"
+  },
+  "fieldModelNumber": {
+    "message": "Model number"
+  },
+  "fieldCategory": {
+    "message": "Category"
+  },
+  "notEntered": {
+    "message": "Not entered"
+  },
+  "notCaptured": {
+    "message": "Not captured"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "partNameRequired": {
+    "message": "Enter a product name"
+  },
+  "sourcePrimary": {
+    "message": "Primary"
+  },
+  "sourceNoPrice": {
+    "message": "No price"
+  },
+  "sourceKind_retail": {
+    "message": "Retail page"
+  },
+  "sourceKind_manufacturer": {
+    "message": "Manufacturer page"
+  },
+  "partMissingFields": {
+    "message": "$count$ fields missing",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partSourceCount": {
+    "message": "$count$ sources",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partsCount": {
+    "message": "$count$ parts",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partsTotal": {
+    "message": "Total $amount$",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      }
+    }
+  },
+  "partEdit": {
+    "message": "Edit $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "partDelete": {
+    "message": "Delete $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "partDeleteConfirm": {
+    "message": "This deletes the part \"$name$\".",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "editorSpecs": {
+    "message": "$category$ specs",
+    "placeholders": {
+      "category": {
+        "content": "$1"
+      }
+    }
+  },
+  "sourceCapturedAt": {
+    "message": "Captured $at$",
+    "placeholders": {
+      "at": {
+        "content": "$1"
+      }
+    }
   }
 }

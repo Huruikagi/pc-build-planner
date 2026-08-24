@@ -330,3 +330,299 @@ button {
   font-size: 11px;
   color: var(--ng);
 }
+
+/* --- category filters --------------------------------------------------- */
+
+.filters {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.filters__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.filters__item[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filters__count {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* --- part list ---------------------------------------------------------- */
+
+.part-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.part-row:nth-child(even) {
+  background: var(--bg-alt);
+}
+
+.part-row--confirm {
+  display: block;
+  background: var(--unconfirmed-bg);
+}
+
+.part-row__main {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
+
+.part-row__name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 名前・属性・未入力件数は必ず別行にする (changes.md C-2-1)。 */
+.part-row__meta {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.part-row__missing {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--unconfirmed);
+}
+
+.part-row__spec,
+.part-row__spec-header {
+  flex-shrink: 0;
+  width: 88px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.part-row__price,
+.part-row__price-header {
+  flex-shrink: 0;
+  width: 74px;
+  text-align: end;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.part-row__price-header,
+.part-row__spec-header {
+  font-family: inherit;
+  font-weight: inherit;
+}
+
+.part-list__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-alt);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.part-list__total {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.part-list__add {
+  padding: 11px 9px;
+}
+
+.button--wide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+}
+
+/* --- editor ------------------------------------------------------------- */
+
+.editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-alt);
+}
+
+.editor-bar__back {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.editor-bar__title {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.field-row--last {
+  border-bottom-color: var(--line);
+}
+
+.field-row__label {
+  flex-shrink: 0;
+  width: 58px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.field-row__required {
+  color: var(--ng);
+}
+
+.field--mono {
+  font-family: var(--font-mono);
+}
+
+.field--unconfirmed {
+  border-color: var(--unconfirmed);
+  background: var(--unconfirmed-bg);
+}
+
+/* この項目に対する警告ではなく方針の説明なので、警告色は使わない。 */
+.field-note {
+  margin: 0;
+  padding: 6px 9px 8px 67px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.section-header__note {
+  color: var(--text-faint);
+}
+
+.editor-actions {
+  display: flex;
+  gap: 7px;
+  padding: 12px 9px;
+}
+
+.editor-actions .button {
+  height: 32px;
+}
+
+.editor-actions .button--primary {
+  flex: 1;
+}
+
+/* --- sources ------------------------------------------------------------ */
+
+.source-row {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line-row);
+  border-left: 3px solid var(--line-row);
+}
+
+.source-row--primary {
+  border-left-color: var(--accent);
+}
+
+.source-row__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-row__kind {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.source-row__price {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-row__url {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.source-row__captured {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.badge {
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.badge--primary {
+  background: var(--accent);
+  color: #ffffff;
+}

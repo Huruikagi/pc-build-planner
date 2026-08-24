@@ -5,7 +5,6 @@
   "extensionDescription": {
     "message": "Webで見つけたPCパーツを整理し、基本的な互換性をローカルで確認します。"
   },
-
   "navigationLabel": {
     "message": "機能ナビゲーション"
   },
@@ -18,7 +17,6 @@
   "navCompatibility": {
     "message": "互換性"
   },
-
   "shellLoading": {
     "message": "読み込み中です"
   },
@@ -34,7 +32,6 @@
   "cancel": {
     "message": "キャンセル"
   },
-
   "projectLabel": {
     "message": "現在のプロジェクト"
   },
@@ -53,8 +50,12 @@
   "projectSummary": {
     "message": "候補 $candidates$ · 採用 $adopted$",
     "placeholders": {
-      "candidates": { "content": "$1" },
-      "adopted": { "content": "$2" }
+      "candidates": {
+        "content": "$1"
+      },
+      "adopted": {
+        "content": "$2"
+      }
     }
   },
   "projectNamePlaceholder": {
@@ -65,19 +66,35 @@
   },
   "projectRename": {
     "message": "$name$ の名前を変更",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDelete": {
     "message": "$name$ を削除",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectSelect": {
     "message": "$name$ に切り替え",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDeleteConfirm": {
     "message": "プロジェクト「$name$」と所属するパーツも削除します。",
-    "placeholders": { "name": { "content": "$1" } }
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
   },
   "projectDeleteAction": {
     "message": "削除する"
@@ -85,7 +102,6 @@
   "projectNameRequired": {
     "message": "プロジェクト名を入力してください"
   },
-
   "partsTitle": {
     "message": "パーツ管理"
   },
@@ -98,11 +114,214 @@
   "notImplemented": {
     "message": "この画面はまだ実装されていません。"
   },
-
   "storageUnavailable": {
     "message": "保存領域を利用できません。拡張機能を開き直してからもう一度お試しください。"
   },
   "storageCorrupt": {
     "message": "保存データが破損しているか、対応していない形式です。既存データは変更していません。"
+  },
+  "categoryAll": {
+    "message": "すべて"
+  },
+  "category_cpu": {
+    "message": "CPU"
+  },
+  "category_cpu_cooler": {
+    "message": "CPUクーラー"
+  },
+  "category_motherboard": {
+    "message": "マザーボード"
+  },
+  "category_memory": {
+    "message": "メモリ"
+  },
+  "category_gpu": {
+    "message": "GPU"
+  },
+  "category_storage": {
+    "message": "ストレージ"
+  },
+  "category_power_supply": {
+    "message": "電源"
+  },
+  "category_case": {
+    "message": "ケース"
+  },
+  "category_case_fan": {
+    "message": "ケースファン"
+  },
+  "category_expansion_card": {
+    "message": "拡張カード"
+  },
+  "category_other": {
+    "message": "その他"
+  },
+  "category_uncategorized": {
+    "message": "未分類"
+  },
+  "attribute_socket": {
+    "message": "ソケット"
+  },
+  "attribute_supportedSockets": {
+    "message": "対応ソケット"
+  },
+  "attribute_memoryStandard": {
+    "message": "メモリ規格"
+  },
+  "attribute_formFactor": {
+    "message": "フォームファクタ"
+  },
+  "attribute_supportedMotherboardFormFactors": {
+    "message": "対応マザーボード規格"
+  },
+  "attribute_supportedPowerSupplyFormFactors": {
+    "message": "対応電源規格"
+  },
+  "attributeListHint": {
+    "message": "カンマ区切りで入力"
+  },
+  "partsColumnName": {
+    "message": "商品名 / メーカー"
+  },
+  "partsColumnSpec": {
+    "message": "規格"
+  },
+  "partsColumnPrice": {
+    "message": "価格"
+  },
+  "partsEmpty": {
+    "message": "このカテゴリにパーツはありません。"
+  },
+  "partAdd": {
+    "message": "パーツを追加"
+  },
+  "partEditTitle": {
+    "message": "パーツを編集"
+  },
+  "backToList": {
+    "message": "一覧"
+  },
+  "editorBasics": {
+    "message": "基本情報"
+  },
+  "editorSources": {
+    "message": "ソース"
+  },
+  "editorSourcesEmpty": {
+    "message": "ソースはまだありません。取り込みで追加されます。"
+  },
+  "editorSpecsNote": {
+    "message": "互換性判定に使われます"
+  },
+  "editorSpecsOptional": {
+    "message": "未入力のままでも保存できます。空のままだと互換性は判定されません。"
+  },
+  "fieldName": {
+    "message": "商品名"
+  },
+  "fieldManufacturer": {
+    "message": "メーカー"
+  },
+  "fieldModelNumber": {
+    "message": "型番"
+  },
+  "fieldCategory": {
+    "message": "カテゴリ"
+  },
+  "notEntered": {
+    "message": "未入力"
+  },
+  "notCaptured": {
+    "message": "未取得"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "partNameRequired": {
+    "message": "商品名を入力してください"
+  },
+  "sourcePrimary": {
+    "message": "プライマリ"
+  },
+  "sourceNoPrice": {
+    "message": "価格なし"
+  },
+  "sourceKind_retail": {
+    "message": "販売ページ"
+  },
+  "sourceKind_manufacturer": {
+    "message": "メーカー商品紹介"
+  },
+  "partMissingFields": {
+    "message": "$count$ 項目が未入力",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partSourceCount": {
+    "message": "ソース $count$ 件",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partsCount": {
+    "message": "$count$ 件",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "partsTotal": {
+    "message": "合計 $amount$",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      }
+    }
+  },
+  "partEdit": {
+    "message": "$name$ を編集",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "partDelete": {
+    "message": "$name$ を削除",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "partDeleteConfirm": {
+    "message": "パーツ「$name$」を削除します。",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "editorSpecs": {
+    "message": "$category$ の規格",
+    "placeholders": {
+      "category": {
+        "content": "$1"
+      }
+    }
+  },
+  "sourceCapturedAt": {
+    "message": "取得 $at$",
+    "placeholders": {
+      "at": {
+        "content": "$1"
+      }
+    }
   }
 }

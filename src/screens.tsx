@@ -1,21 +1,23 @@
 /**
- * 3 つの常設画面。現時点では見出しと空状態だけを持つ。
+ * まだ実装していない画面の骨組み。
  *
  * 中身は `docs/reverse/features.md` の対応する章とデザインキャンバスの
- * アートボードを見ながら順に埋める。骨組みを先に置いているのは、シェルとの
- * 配線が実拡張で通ることを先に確かめるため。
+ * アートボードを見ながら順に埋める。
  */
 import { t } from "./i18n.js";
-import type { Project } from "./model.js";
+import type { LocalDataRoot, Project } from "./model.js";
 
+/** すべての画面が同じ形を受ける。`SCREENS` の表を一様に保つため。 */
 export interface ScreenProps {
+  readonly root: LocalDataRoot;
   readonly project: Project | null;
+  readonly apply: (mutate: (current: LocalDataRoot) => LocalDataRoot) => void;
 }
 
 const Placeholder = ({
   project,
   titleKey,
-}: ScreenProps & { readonly titleKey: string }) => (
+}: Pick<ScreenProps, "project"> & { readonly titleKey: string }) => (
   <>
     <div className="section-header">
       <span>{t(titleKey)}</span>
@@ -24,10 +26,6 @@ const Placeholder = ({
       {project === null ? t("projectEmpty") : t("notImplemented")}
     </div>
   </>
-);
-
-export const PartsScreen = ({ project }: ScreenProps) => (
-  <Placeholder project={project} titleKey="partsTitle" />
 );
 
 export const BuildScreen = ({ project }: ScreenProps) => (
