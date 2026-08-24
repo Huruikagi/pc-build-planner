@@ -95,20 +95,7 @@ export const CompatibilityScreen = ({
   project,
   onNavigate,
 }: ScreenProps) => {
-  const evaluation = useMemo(
-    () => evaluate(root, project?.id ?? null),
-    [root, project],
-  );
-
-  if (project === null)
-    return (
-      <>
-        <div className="section-header">
-          <span>{t("compatibilityTitle")}</span>
-        </div>
-        <div className="placeholder">{t("projectEmpty")}</div>
-      </>
-    );
+  const evaluation = useMemo(() => evaluate(root, project.id), [root, project]);
 
   const { aggregate, results, incompatibleCount, unknownCount } = evaluation;
 

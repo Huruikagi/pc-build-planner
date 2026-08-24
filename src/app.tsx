@@ -17,6 +17,7 @@ import {
   ChevronIcon,
   CompatibilityIcon,
   PartsIcon,
+  PlusIcon,
 } from "./icons.js";
 import type { LocalDataRoot } from "./model.js";
 import { draftFromCapture, type PartDraft } from "./parts.js";
@@ -45,6 +46,41 @@ const SCREENS = [
 
 const failureMessage = (failure: StorageFailure): string =>
   failure.kind === "corrupt" ? t("storageCorrupt") : t("storageUnavailable");
+
+/**
+ * プロジェクト未選択の空状態。3 画面が同じプレースホルダを各自で持っていた
+ * のをここへ引き上げた (`docs/reverse/changes.md` C-8)。
+ *
+ * プロジェクトの作成自体はポップオーバーが持つ (C-1)。ここが持つのはその
+ * 入口だけで、本文へ CRUD を戻さない。取り込みは起点をパネルへ置けない
+ * (C-7) が、こちらは置けるので押せるボタンにしてよい。
+ */
+const NoProject = ({
+  onCreate,
+  pendingHandoff,
+}: {
+  readonly onCreate: () => void;
+  readonly pendingHandoff: boolean;
+}) => (
+  <div className="empty-project">
+    {/* 見出しは置かない。「プロジェクトがありません」はヘッダが既に出している。 */}
+    <p className="empty-project__body">{t("projectEmptyBody")}</p>
+    {pendingHandoff ? (
+      <p className="empty-project__handoff" role="status">
+        {t("projectEmptyHandoff")}
+      </p>
+    ) : null}
+    <button
+      className="button button--primary button--wide empty-project__action"
+      data-create-project
+      onClick={onCreate}
+      type="button"
+    >
+      <PlusIcon />
+      {t("projectCreateAction")}
+    </button>
+  </div>
+);
 
 export const App = ({
   capture: captureDriver,
@@ -176,16 +212,11 @@ export const App = ({
         ) : null}
       </div>
 
-      {capture === null ? (
-        <screen.View
-          apply={(mutate) => void apply(mutate)}
-          handoff={screenId === "parts" ? handoff : null}
-          onHandoffConsumed={() => setHandoff(null)}
-          onNavigate={setScreenId}
-          project={project}
-          root={root}
-        />
-      ) : (
+      {/**
+       * 取り込み面が最優先。プロジェクトが無くても取り込みは成立し、
+       * 保存を押した時点の下書きは `handoff` が保持し続ける (C-8)。
+       */}
+      {capture !== null ? (
         <CaptureScreen
           onAccept={(result) => {
             setHandoff(draftFromCapture(result));
@@ -194,6 +225,20 @@ export const App = ({
           }}
           onDismiss={() => void captureDriver.clear()}
           state={capture}
+        />
+      ) : project === null ? (
+        <NoProject
+          onCreate={() => setMenuOpen(true)}
+          pendingHandoff={handoff !== null}
+        />
+      ) : (
+        <screen.View
+          apply={(mutate) => void apply(mutate)}
+          handoff={screenId === "parts" ? handoff : null}
+          onHandoffConsumed={() => setHandoff(null)}
+          onNavigate={setScreenId}
+          project={project}
+          root={root}
         />
       )}
     </div>

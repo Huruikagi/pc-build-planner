@@ -64,6 +64,18 @@
   "projectCreate": {
     "message": "Create"
   },
+  "projectCreateAction": {
+    "message": "Create a project"
+  },
+  "projectEmptyBody": {
+    "message": "Parts are collected per project. Create one to get started."
+  },
+  "projectEmptyHandoff": {
+    "message": "The captured content is kept. Create a project and it opens in the editor."
+  },
+  "projectMenuCreateHeading": {
+    "message": "Create your first project"
+  },
   "projectRename": {
     "message": "Rename $name$",
     "placeholders": {

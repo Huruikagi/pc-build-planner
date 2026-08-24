@@ -35,11 +35,22 @@ export const ProjectMenu = ({
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const createInputRef = useRef<HTMLInputElement>(null);
+  /** 切り替える先が無いなら、この面の用は作成しかない。 */
+  const firstRun = projects.length === 0;
 
   /** 改名は明示操作で開くので、開いた直後は入力へ進めてよい。 */
   useEffect(() => {
     if (editingId !== null) renameInputRef.current?.focus();
   }, [editingId]);
+
+  /**
+   * 初回だけ作成欄へフォーカスする (`changes.md` C-8)。1 件でもあるときの
+   * この面の主目的は切り替えなので、フォーカスを奪わない。
+   */
+  useEffect(() => {
+    if (firstRun) createInputRef.current?.focus();
+  }, [firstRun]);
 
   /** 外側クリックと Escape で閉じる。破壊的操作の確認中は閉じない。 */
   useEffect(() => {
@@ -89,7 +100,9 @@ export const ProjectMenu = ({
 
   return (
     <div className="project-menu" ref={containerRef}>
-      <div className="project-menu__heading">{t("projectMenuHeading")}</div>
+      <div className="project-menu__heading">
+        {t(firstRun ? "projectMenuCreateHeading" : "projectMenuHeading")}
+      </div>
 
       {projects.map((project) => {
         const isCurrent = project.id === selectedProjectId;
@@ -202,6 +215,7 @@ export const ProjectMenu = ({
           aria-label={t("projectNamePlaceholder")}
           className="field"
           name="project-name"
+          ref={createInputRef}
           onChange={(event) => {
             setNewName(event.target.value);
             setNameError(false);

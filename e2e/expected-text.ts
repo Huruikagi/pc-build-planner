@@ -9,6 +9,7 @@ export const EXPECTED = {
   ja: {
     nav: ["候補", "構成", "互換性"],
     projectMenuHeading: "プロジェクトを切り替え",
+    projectMenuCreateHeading: "最初のプロジェクトを作る",
     partNameRequired: "商品名を入力してください",
     /** カテゴリ表示名。属性欄の出し分けが効いているかの確認に使う。 */
     categoryCpu: "CPU",
@@ -17,6 +18,7 @@ export const EXPECTED = {
   en: {
     nav: ["Parts", "Build", "Fit"],
     projectMenuHeading: "Switch project",
+    projectMenuCreateHeading: "Create your first project",
     partNameRequired: "Enter a product name",
     categoryCpu: "CPU",
     attributeSocket: "Socket",

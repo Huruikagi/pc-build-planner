@@ -11,7 +11,8 @@ export type ScreenId = "parts" | "build" | "compatibility";
 
 export interface ScreenProps {
   readonly root: LocalDataRoot;
-  readonly project: Project | null;
+  /** 未選択の空状態は `app.tsx` が持つので、画面には常に選択済みが届く (C-8)。 */
+  readonly project: Project;
   readonly apply: (mutate: (current: LocalDataRoot) => LocalDataRoot) => void;
   /** 取り込みから引き渡された下書き。パーツ管理だけが受け取る。 */
   readonly handoff: PartDraft | null;

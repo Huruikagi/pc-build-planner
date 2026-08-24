@@ -81,9 +81,7 @@ export const PartsScreen = ({
     onHandoffConsumed();
     const url = handoff.sources[0]?.url;
     const existing =
-      project === null || url === undefined
-        ? null
-        : findBySourceUrl(root, project.id, url);
+      url === undefined ? null : findBySourceUrl(root, project.id, url);
     if (existing === null) {
       setDraft(handoff);
       return;
@@ -94,26 +92,13 @@ export const PartsScreen = ({
     });
   }, [handoff, onHandoffConsumed, project, root]);
 
-  const parts = useMemo(
-    () => partsOf(root, project?.id ?? null),
-    [root, project],
-  );
+  const parts = useMemo(() => partsOf(root, project.id), [root, project]);
   const counts = useMemo(() => countByCategory(parts), [parts]);
   const visible = useMemo(
     () =>
       category === "all" ? parts : parts.filter((p) => p.category === category),
     [parts, category],
   );
-
-  if (project === null)
-    return (
-      <>
-        <div className="section-header">
-          <span>{t("partsTitle")}</span>
-        </div>
-        <div className="placeholder">{t("projectEmpty")}</div>
-      </>
-    );
 
   /**
    * 編集は一覧の下ではなく一覧を置き換えて開く (`changes.md` C-2-3)。

@@ -64,6 +64,18 @@
   "projectCreate": {
     "message": "作成"
   },
+  "projectCreateAction": {
+    "message": "プロジェクトを作成"
+  },
+  "projectEmptyBody": {
+    "message": "パーツはプロジェクトごとに溜めます。まずプロジェクトを1つ作ってください。"
+  },
+  "projectEmptyHandoff": {
+    "message": "取り込んだ内容は保持しています。プロジェクトを作ると編集画面へ引き継ぎます。"
+  },
+  "projectMenuCreateHeading": {
+    "message": "最初のプロジェクトを作る"
+  },
   "projectRename": {
     "message": "$name$ の名前を変更",
     "placeholders": {

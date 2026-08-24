@@ -130,6 +130,44 @@ test.describe("商品取り込み", () => {
     expect(extension.diagnostics).toEqual([]);
   });
 
+  /**
+   * プロジェクトが 1 件も無い状態でも取り込みは成立する。保存を押した時点の
+   * 下書きを黙って捨てず、プロジェクトを作った時点で編集面へ渡す
+   * (`changes.md` C-8 / `features.md` の「黙って捨てない」)。
+   */
+  test("プロジェクトが無いまま取り込んでも下書きを保持し、作成後に引き渡す", async () => {
+    const { page, context } = extension;
+    await serve(extension, PRODUCT_PAGE_HTML);
+
+    const target = await context.newPage();
+    await target.goto(PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+
+    await expect(
+      page.locator('[data-capture-status="captured"]'),
+    ).toBeVisible();
+    await page.click("[data-capture-accept]");
+
+    // --- 着地点は未選択の空状態。保持していることを明示する ---
+    await expect(page.locator("[data-create-project]")).toBeVisible();
+    await expect(page.locator(".empty-project__handoff")).toContainText(
+      "保持しています",
+    );
+
+    /** 画面を移っても下書きは失われない (保持は app.tsx が持つ)。 */
+    await page.click('[data-screen="build"]');
+    await expect(page.locator(".empty-project__handoff")).toBeVisible();
+    await page.click('[data-screen="parts"]');
+
+    await createProject(extension, "SYN 後から作るプロジェクト");
+
+    await expect(page.locator("[data-part-editor]")).toBeVisible();
+    await expect(page.locator('[name="part-name"]')).toHaveValue(
+      "SYN GeForce RTX 5080 SUPER 16GB",
+    );
+    expect(extension.diagnostics).toEqual([]);
+  });
+
   test("商品情報を取得できないページは理由を示して手入力へ逃がす", async () => {
     const { page, context } = extension;
     await serve(extension, BLANK_PAGE_HTML);

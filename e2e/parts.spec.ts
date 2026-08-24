@@ -114,17 +114,44 @@ for (const { lang, catalog } of LOCALES) {
       await expect(page.locator("[data-capture-hint]")).toBeVisible();
     });
 
+    /**
+     * 初回はプロジェクトが 1 件も無い。事実を述べるだけの行き止まりにせず、
+     * 本文から作成へ入れること (`changes.md` C-8)。作成の実体はポップオーバー
+     * が持つので、本文が持つのは入口だけ (C-1)。
+     */
+    test("初回は本文から作成へ入れ、ポップオーバーも作成向けになる", async () => {
+      const { page } = extension;
+
+      await expect(page.locator("[data-create-project]")).toBeVisible();
+      await page.click("[data-create-project]");
+
+      await expect(page.locator(".project-menu__heading")).toHaveText(
+        text.projectMenuCreateHeading,
+      );
+      await expect(page.locator('[name="project-name"]')).toBeFocused();
+
+      await page.fill('[name="project-name"]', "SYN 初回プロジェクト");
+      await page.click("[data-project-create] button[type=submit]");
+      await page.keyboard.press("Escape");
+
+      await expect(page.locator("[data-create-project]")).toHaveCount(0);
+      await expect(page.locator("[data-capture-howto]")).toBeVisible();
+      expect(extension.diagnostics).toEqual([]);
+    });
+
     test("プロジェクトと候補パーツの一巡が実storageへ反映され再起動後も残る", async () => {
       const { page } = extension;
 
       // --- プロジェクトはヘッダのポップオーバーだけが持つ (changes.md C-1) ---
       await expect(page.locator("[data-project-menu-toggle]")).toBeVisible();
+      await createProject(extension, "SYN 検証プロジェクト");
+
+      /** 1 件でもあれば、この面の主目的は切り替えに戻る (C-8)。 */
       await page.click("[data-project-menu-toggle]");
       await expect(page.locator(".project-menu__heading")).toHaveText(
         text.projectMenuHeading,
       );
       await page.keyboard.press("Escape");
-      await createProject(extension, "SYN 検証プロジェクト");
 
       // --- 候補パーツ ---
       await addPart(extension, {

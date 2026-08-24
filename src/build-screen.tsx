@@ -175,26 +175,10 @@ export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
     adoptRef.current?.scrollIntoView({ block: "nearest" });
   };
 
-  const rows = useMemo(
-    () => buildRows(root, project?.id ?? null),
-    [root, project],
-  );
-  const parts = useMemo(
-    () => partsOf(root, project?.id ?? null),
-    [root, project],
-  );
-  const build = buildOf(root, project?.id ?? null);
+  const rows = useMemo(() => buildRows(root, project.id), [root, project]);
+  const parts = useMemo(() => partsOf(root, project.id), [root, project]);
+  const build = buildOf(root, project.id);
   const adoptedIds = new Set((build?.items ?? []).map((item) => item.partId));
-
-  if (project === null)
-    return (
-      <>
-        <div className="section-header">
-          <span>{t("buildTitle")}</span>
-        </div>
-        <div className="placeholder">{t("projectEmpty")}</div>
-      </>
-    );
 
   const projectId = project.id;
   const filled = rows.filter((row) => row.entries.length > 0);

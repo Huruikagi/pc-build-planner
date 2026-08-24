@@ -509,6 +509,32 @@ button {
   flex-shrink: 0;
 }
 
+/* プロジェクト未選択の空状態。作成はここから起動できるのでボタンを置く。 */
+.empty-project {
+  padding: 16px 11px;
+  color: var(--text-muted);
+}
+
+.empty-project__body {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.empty-project__handoff {
+  margin: 9px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-alt);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.empty-project__action {
+  margin-top: 11px;
+}
+
 .empty-capture {
   display: flex;
   gap: 9px;
