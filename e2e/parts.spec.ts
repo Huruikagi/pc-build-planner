@@ -57,6 +57,7 @@ for (const { lang, uiLocale, catalog } of LOCALES) {
   test.describe(`locale ${lang}`, () => {
     let extension: LoadedExtension;
 
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright は第1引数に分割代入パターンを要求する
     test.beforeEach(async ({}, testInfo) => {
       extension = await loadExtension(lang, testInfo.outputPath("profile"));
     });
