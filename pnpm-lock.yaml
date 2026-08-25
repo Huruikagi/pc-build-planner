@@ -233,8 +233,8 @@ importers:
         specifier: 19.2.4
         version: 19.2.4(@types/react@19.2.18)
       chrome-types:
-        specifier: ^0.1.436
-        version: 0.1.436
+        specifier: ^0.1.440
+        version: 0.1.440
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -599,8 +599,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  chrome-types@0.1.436:
-    resolution: {integrity: sha512-/GtvUUa9G9w2yZgfErvczpql5KjvaBsTEyJ+n47LPcGg8/8UiUeurYyrhdIFz5Uv0Gmim80eYco2oXU0r43kfw==}
+  chrome-types@0.1.440:
+    resolution: {integrity: sha512-aYSvNzGDBtkfLzDw2PkVKcLZKhy7smYtyJ3OJKzUf75yje5yuwKGssQFDDinT/Y7sSUfXwi2tbvp1emE+jRg8w==}
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
@@ -858,7 +858,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  chrome-types@0.1.436: {}
+  chrome-types@0.1.440: {}
 
   csstype@3.2.3: {}
 
