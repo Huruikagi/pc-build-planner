@@ -10,9 +10,22 @@ updates:
       # split update lands a build that crashes on load. Keeping the runtime
       # pair (and its type packages) in one pull request makes the versions
       # move together.
+      #
+      # This group stays above `dev-dependencies` on purpose: `@types/react`
+      # and `@types/react-dom` are devDependencies, and Dependabot assigns a
+      # dependency to the first group it matches. Reordering would split the
+      # type packages away from the runtime pair.
       react:
         patterns:
           - react
           - react-dom
           - "@types/react"
           - "@types/react-dom"
+      # Tooling updates land as one pull request per week so CI runs once for
+      # them instead of once per package. Majors stay ungrouped, where a
+      # breaking change is easy to isolate and revert on its own.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
