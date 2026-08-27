@@ -1,0 +1,62 @@
+schema_version: 1
+source_revision: dfc6d0cb5e65cd18ece495dfe08b7396fee4282c
+adoption_scope: リポジトリ全体
+stage: boundaries_confirmed
+boundary_candidates:
+  - spec: local-data-storage
+    responsibility: 単一ローカルデータ root のスキーマ、検証、原子的更新、破損・保存失敗の通知、再起動後の復元
+    evidence_paths:
+      - src/model.ts
+      - src/storage.ts
+      - e2e/parts.spec.ts
+    depends_on: []
+  - spec: project-management
+    responsibility: プロジェクトの作成、改名、選択、削除と、削除時の候補および現在構成の連動削除
+    evidence_paths:
+      - src/projects.ts
+      - src/project-menu.tsx
+      - src/app.tsx
+      - e2e/parts.spec.ts
+    depends_on:
+      - local-data-storage
+  - spec: candidate-parts
+    responsibility: 候補パーツの手入力、編集、削除、取得元と確認済み値の分離、欠損管理、重複判定と明示的統合
+    evidence_paths:
+      - src/parts.ts
+      - src/duplicates.ts
+      - src/parts-screen.tsx
+      - src/part-editor.tsx
+      - e2e/parts.spec.ts
+      - e2e/duplicates.spec.ts
+    depends_on:
+      - local-data-storage
+      - project-management
+  - spec: page-product-capture
+    responsibility: 利用者操作を起点とするページ抽出、未信頼入力の検証と正規化、失敗分類、一時状態、候補編集への引き渡し
+    evidence_paths:
+      - src/capture
+      - src/service-worker.ts
+      - src/capture-screen.tsx
+      - e2e/capture.spec.ts
+    depends_on:
+      - candidate-parts
+  - spec: current-build
+    responsibility: 候補パーツの採用、解除、数量管理と、候補削除時の構成整合性
+    evidence_paths:
+      - src/build.ts
+      - src/build-screen.tsx
+      - e2e/build.spec.ts
+    depends_on:
+      - local-data-storage
+      - project-management
+      - candidate-parts
+  - spec: compatibility-checking
+    responsibility: 現在構成の確認済み属性だけを使った互換性評価と、適合、不適合、情報不足の根拠表示
+    evidence_paths:
+      - src/compatibility.ts
+      - src/compatibility-screen.tsx
+      - e2e/compatibility.spec.ts
+    depends_on:
+      - candidate-parts
+      - current-build
+observations: []
