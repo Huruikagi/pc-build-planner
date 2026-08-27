@@ -1,4 +1,4 @@
 [tools]
-"github:Huruikagi/specbind" = "1.0.0-rc.1"
+"github:Huruikagi/specbind" = "1.0.0-rc.2"
 node = "26.5.0"
 pnpm = "11.13.1"
