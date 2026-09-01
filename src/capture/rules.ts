@@ -5,7 +5,7 @@
  * ここを広げることは取得範囲を広げることなので、ページの表示が崩れた程度の
  * 理由で足さない。追加はセキュリティ方針と併せて判断する。
  *
- * 値は v0.4.0 の実装 (`salvage/extraction/`) から引き継いだもので、
+ * 値は v0.4.0 の `src/features/product-capture/` から引き継いだもので、
  * 実サイトでの試行錯誤の結果を含む。
  */
 import type { CaptureField, ExtractionSource } from "./types.js";

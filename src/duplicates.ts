@@ -5,8 +5,9 @@
  * 判定するのは「一致の可能性」までで、どうするかは利用者が選ぶ。
  * 排他 2 択（新規保存 / 統合）を提示するだけで、勝手に統合しない。
  *
- * 正規化の規則は v0.4.0 (`salvage/extraction/product-identity-normalizer.ts`,
- * `salvage/identity/url-identity.ts`) から引き継いだ。
+ * 正規化の規則は v0.4.0 の
+ * `src/features/product-capture/product-identity-normalizer.ts` と
+ * `src/features/source-price-refresh/url-identity.ts` から引き継いだ。
  */
 import type {
   CandidatePart,

@@ -1,7 +1,7 @@
 /**
  * MV3 の未パッケージ拡張を `dist/` へ生成する。
  *
- * `salvage/build/build.mjs` を出発点に、検証ゲート群 (validate-artifacts /
+ * v0.4.0 の `scripts/build.mjs` を出発点に、検証ゲート群 (validate-artifacts /
  * validate-runtime-schema-csp / validate-worker-module-graph) を落とした形。
  * ゲートは必要が実証されてから足す (`docs/reverse/changes.md` C-5)。
  */

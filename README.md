@@ -63,7 +63,6 @@ src/              実装
   capture/        商品ページからの抽出（未信頼入力の境界）
 e2e/              実拡張を通すE2E
 docs/             仕様と設計記録
-salvage/          旧実装から退避した知識。参照用でありコンパイルは通らない
 _locales/         chrome.i18n の文言置き場
 scripts/          ビルド・パッケージング
 ```
@@ -77,8 +76,6 @@ scripts/          ビルド・パッケージング
 | [docs/reverse/changes.md](docs/reverse/changes.md) | 設計判断の記録（C-1〜C-6）。実装がなぜこの形なのかはここ |
 | [docs/reverse/screens.md](docs/reverse/screens.md) | v0.4.0 の画面構成の記録。**更新しない**（`changes.md` が優先する） |
 | [デザインキャンバス](https://claude.ai/code/artifact/2b9a2685-8300-4fb1-8d26-2b4a5e20c705) | 画面のレイアウト・配色・アイコン |
-
-`salvage/` は旧実装から退避した抽出ロジック・互換性ルール・日英文言などで、書き直すときの参照資料。詳細は [salvage/README.md](salvage/README.md)。
 
 ## リリース
 

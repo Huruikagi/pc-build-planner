@@ -81,7 +81,6 @@ Playwrightはビルド済みの展開済み拡張機能をChromiumへ読み込�
 - `dist/`と`dist-dev/`はビルド生成物であり、手で編集しない。本番ビルドと開発用ハーネスの出力を
   混在させない。
 - content scriptは任意ページで動く最小のclassic scriptとして保ち、UIや永続化へ依存させない。
-- `salvage/`は旧実装の参照資料であり、本番コードの参照元、検証基準、新しい責任の配置先にしない。
 - 対応実行環境、ツール版、依存版の正は`manifest.json`、`mise.toml`、`package.json`、lockfileとする。
 
 ## 標準的な検証

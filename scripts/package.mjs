@@ -1,7 +1,7 @@
 /**
  * 配布用 zip を release/ へ生成する。
  *
- * salvage/build/package.mjs を出発点に、削除した検証ゲート
+ * v0.4.0 の `scripts/package.mjs` を出発点に、削除した検証ゲート
  * (validate-artifacts.mjs) への依存を落とした形。
  */
 import { spawn } from "node:child_process";

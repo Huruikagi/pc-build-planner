@@ -11,8 +11,8 @@ import type { PartCategory } from "../model.js";
  * 順序は最も具体的なキーワードを先に置く（`category-hint.ts` の
  * `inferCategoryHint` がこの順で走査し、最初に一致したカテゴリを採用する）。
  *
- * v0.4.0 (`salvage/extraction/ja-category-keywords.ts`) から辞書をそのまま
- * 引き継いでいる。
+ * v0.4.0 の `src/features/product-capture/locale/ja-category-keywords.ts`
+ * から辞書をそのまま引き継いでいる。
  */
 export const JA_CATEGORY_KEYWORDS: readonly (readonly [
   PartCategory,
