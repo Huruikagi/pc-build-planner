@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "specDir": ".specbind",
+  "language": "ja",
+  "agents": ["claude-code", "codex"],
+  "projectInstructions": true
+}
