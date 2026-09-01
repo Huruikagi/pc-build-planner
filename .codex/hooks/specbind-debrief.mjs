@@ -47,14 +47,14 @@ process.stdout.write(
     reason: [
       "SpecBindのドッグフーディングをデブリーフしてください。これは完了したターンの事後評価であり、新しい実装作業ではありません。",
       "このターンですでに得た情報だけを使ってください。ローカルの追加調査、SpecBind CLIの再実行、ファイル変更は行わないでください。",
-      "SpecBind CLI、実行したspecbind-* Skill、Rule、テンプレート、プロトコルについて、具体的で再現可能な摩擦があれば抽出してください。",
+      "SpecBind CLI、実行したsb-*またはspecbind-* Skill、Rule、テンプレート、プロトコルについて、具体的で再現可能な摩擦があれば抽出してください。",
       "各所見を product_issue、agent_mistake、project_specific のいずれかに分類してください。agent_mistakeとproject_specificはGitHubへ送信しません。",
       `product_issueごとに ${SPEC_BIND_REPOSITORY} のopen/closed Issueを重複検索し、同じ問題があれば新規作成せずそのURLを報告してください。`,
-      `重複がなければ、1所見につき1件のIssueを ${SPEC_BIND_REPOSITORY} に作成してください。現行契約に反する再現可能な挙動は bug、それ以外の操作性・回復性の改善は enhancement とし、そのラベルと ${DOGFOODING_LABEL} ラベルの両方を付けます。`,
+      `重複がなければ、1所見につき1件の ${SPEC_BIND_REPOSITORY} Issue作成候補を示してください。現行契約に反する再現可能な挙動は bug、それ以外の操作性・回復性の改善は enhancement とし、そのラベルと ${DOGFOODING_LABEL} ラベルの両方を指定します。`,
       "Issue本文はSpecBindのBug reportまたはImprovement proposalと同等の見出しで、再現手順、期待結果、実際の結果、回避策、影響を含めてください。バージョンなど未取得の値は推測せずunknownとします。",
       "非公開情報、シークレット、pc-build-planner固有で再現に不要な内容を除去し、末尾に『Detected during maintainer-operated dogfooding in pc-build-planner.』と記載してください。",
-      "このデブリーフで許可される追加ツール実行は、GitHubでの重複検索とIssue作成だけです。Issueのコメント、編集、クローズ、その他の外部書き込みは行いません。",
-      "具体的なproduct_issueがなければ『SpecBindデブリーフ: 追加の所見なし。』とのみ報告してください。Issueを作成した場合は、最終報告に各URLを含めてください。",
+      "このデブリーフで許可される追加ツール実行は、GitHubでの重複検索だけです。Issueの作成、コメント、編集、クローズ、その他の外部書き込みは行いません。",
+      "具体的なproduct_issueがなければ『SpecBindデブリーフ: 追加の所見なし。』とのみ報告してください。作成候補がある場合は、各候補のタイトル、ラベル、本文を示した後、必ず『立てますか？』と質問して止めてください。ユーザーが次の通常ターンで明示的に作成を依頼した場合だけ、Issueを作成します。",
     ].join("\n"),
   }),
 );
@@ -91,7 +91,7 @@ function usedSpecBind(input) {
       command,
     );
   const readSkill =
-    /[\\/]\.agents[\\/]skills[\\/]specbind-[^\\/]+[\\/]SKILL\.md/iu.test(
+    /[\\/]\.agents[\\/]skills[\\/](?:sb|specbind)-[^\\/]+[\\/]SKILL\.md/iu.test(
       command,
     );
 
