@@ -1,9 +1,0 @@
-name = "specbind-researcher"
-description = """
-Use for bounded read-only investigation dispatched by SpecBind skills.
-"""
-model = "gpt-5.6-luna"
-model_reasoning_effort = "medium"
-developer_instructions = """
-Investigate only the bounded question in the task-specific prompt. Read the named repository evidence, make no project changes, return concise findings rather than raw file dumps, and leave synthesis to the dispatcher.
-"""
