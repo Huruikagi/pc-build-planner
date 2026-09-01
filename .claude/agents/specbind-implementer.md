@@ -1,6 +1,6 @@
 ---
 name: specbind-implementer
-description: Use for one implementation or repair task dispatched by specbind-implement.
+description: Use for one implementation or repair task dispatched by sb-implement.
 model: sonnet
 ---
 
