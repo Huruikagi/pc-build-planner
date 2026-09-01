@@ -23,8 +23,8 @@ artifact_id: tech
 マニフェストから分かる依存関係やバージョンの一覧にはしない。
 -->
 
-本体はTypeScriptとReactで実装するChrome Manifest V3拡張であり、Side Panel、ES moduleのservice
-worker、必要時だけ注入するcontent scriptで構成する。Node.jsとpnpmは開発・ビルド・検証に用い、
+本体はTypeScriptとReactで実装するChrome Manifest V3拡張であり、Side Panel、ES module形式の
+service worker、必要時だけ注入するcontent scriptで構成する。Node.jsとpnpmは開発・ビルド・検証に用い、
 実行時の製品機能へ持ち込まない。Zodは永続データと実行境界の入力検証を担当し、esbuildはChromeへ
 読み込む成果物を生成する。
 
@@ -37,7 +37,7 @@ worker、必要時だけ注入するcontent scriptで構成する。Node.jsとpn
 
 ### 利用者操作時だけページへアクセスする
 
-恒久的なhost permissionは持たず、利用者が拡張アイコンを操作したときだけ`activeTab`と
+恒久的なホスト権限は持たず、利用者が拡張アイコンを操作したときだけ`activeTab`と
 `scripting`を使う。閲覧内容を継続的に監視せず、ローカル完結という製品境界を権限構成でも守る。
 
 ### ページ由来データを未信頼入力として扱う
@@ -65,7 +65,7 @@ content scriptはDOMから候補を収集してメッセージを送るだけに
 
 ### 実際の拡張を通るE2Eを製品挙動の根拠にする
 
-Playwrightはビルド済みのunpacked extensionをChromiumへ読み込み、UI操作と実際の
+Playwrightはビルド済みの展開済み拡張機能をChromiumへ読み込み、UI操作と実際の
 `chrome.storage.local`を検証する。別の合成ハーネスで配線を再現すると、本番入口が壊れていても
 検証が通り得るため、機能の受け入れ根拠にはしない。
 
@@ -81,7 +81,7 @@ Playwrightはビルド済みのunpacked extensionをChromiumへ読み込み、UI
 - `dist/`と`dist-dev/`はビルド生成物であり、手で編集しない。本番ビルドと開発用ハーネスの出力を
   混在させない。
 - content scriptは任意ページで動く最小のclassic scriptとして保ち、UIや永続化へ依存させない。
-- `salvage/`は旧実装の参照資料であり、本番のimport元、検証基準、新しい責任の配置先にしない。
+- `salvage/`は旧実装の参照資料であり、本番コードの参照元、検証基準、新しい責任の配置先にしない。
 - 対応実行環境、ツール版、依存版の正は`manifest.json`、`mise.toml`、`package.json`、lockfileとする。
 
 ## 標準的な検証

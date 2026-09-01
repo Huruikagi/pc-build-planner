@@ -23,11 +23,11 @@ artifact_id: structure
 新しい場所にも適用できる原則として表す。
 -->
 
-コードは`model → feature logic → UI`の依存方向で分ける。共有する永続型と検証スキーマはモデルが
+コードは`model → feature logic → UI`（モデル、機能ロジック、画面表示）の依存方向で分ける。共有する永続型と検証スキーマはモデルが
 所有し、各機能は一領域の純粋な問い合わせまたはルート変換を所有する。UIはそれらを組み合わせて
 利用者操作を表現し、ドメイン判断やChrome APIの詳細を持たない。
 
-Chrome実行環境との接続はcomposition rootまたは専用の境界へ閉じる。Side Panel、service worker、
+Chrome実行環境との接続は、実装を組み立てる入口（composition root）または専用の境界へ閉じる。Side Panel、service worker、
 content scriptはそれぞれの実行文脈の入口であり、Captureはページ由来の未信頼入力を内部の型へ渡す
 境界として独立させる。
 
@@ -53,12 +53,12 @@ content scriptはそれぞれの実行文脈の入口であり、Captureはペ�
 -->
 
 1. 永続する共有概念なら`model.ts`の既存ルートとスキーマへ統合し、その機能だけの操作や問い合わせ
-   なら対応するfeature logicへ置く。
-2. Chrome APIが必要なら、既存のcomposition rootまたはadapterへ閉じ、機能コードへ直接持ち込まない。
-3. ページのDOM、message、URLなど外部入力に触れるならCapture境界で検証・正規化し、UIや永続化へ
+   なら対応する機能ロジックへ置く。
+2. Chrome APIが必要なら、既存のcomposition rootまたはアダプターへ閉じ、機能コードへ直接持ち込まない。
+3. ページのDOM、メッセージ、URLなど外部入力に触れるならCapture境界で検証・正規化し、UIや永続化へ
    未検証値を渡さない。
-4. 利用者操作を追加する場合はfeature logicを先に定め、画面登録と対応するUIを追加する。機能間の
-   共有はモデルまたは明示的なfeature APIを通し、他機能の内部実装へ依存しない。
+4. 利用者操作を追加する場合は機能ロジックを先に定め、画面登録と対応するUIを追加する。機能間の
+   共有はモデルまたは明示的な機能APIを通し、他機能の内部実装へ依存しない。
 5. 製品挙動の検証は、実拡張の入口を通る既存E2Eへ追加する。別の製品配線を模したハーネスを
    受け入れ根拠として増やさない。
 6. `salvage/`は参照専用とし、必要な知識は現在の`src/`または`e2e/`の責任へ書き直す。
@@ -71,6 +71,6 @@ content scriptはそれぞれの実行文脈の入口であり、Captureはペ�
 -->
 
 新しいパーツ属性を保存して画面で編集する場合、永続型とZodスキーマは`model.ts`、値の更新規則は
-該当するfeature logic、入力UIは対応する`*-editor.tsx`へ置く。保存は`Store.mutate`を通し、UIから
+該当する機能ロジック、入力UIは対応する`*-editor.tsx`へ置く。保存は`Store.mutate`を通し、UIから
 `chrome.storage.local`を直接呼ばない。実ブラウザで編集し、保存されたルートを確認するE2Eを
 `e2e/<feature>.spec.ts`へ追加する。
