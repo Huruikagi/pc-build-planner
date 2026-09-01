@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/specbind-debrief.mjs\"",
-            "commandWindows": "pwsh -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root '.codex/hooks/specbind-debrief.mjs')\"",
+            "commandWindows": "pwsh -NoProfile -Command \"node (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/specbind-debrief.mjs')\" 2>> \"$env:TEMP\\pc-build-planner-specbind-debrief-hook.log\"",
             "timeout": 5,
             "statusMessage": "SpecBindの利用を記録しています"
           }
@@ -21,7 +21,7 @@
           {
             "type": "command",
             "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/specbind-debrief.mjs\"",
-            "commandWindows": "pwsh -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root '.codex/hooks/specbind-debrief.mjs')\"",
+            "commandWindows": "pwsh -NoProfile -Command \"node (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/specbind-debrief.mjs')\" 2>> \"$env:TEMP\\pc-build-planner-specbind-debrief-hook.log\"",
             "timeout": 5,
             "statusMessage": "SpecBindの利用を振り返っています"
           }
