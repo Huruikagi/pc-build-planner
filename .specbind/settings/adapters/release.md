@@ -4,36 +4,44 @@ type: SpecBind Release Adapter
 
 # リリースアダプタ
 
-<!-- specbind:adapter-scaffold -->
-
-このプロジェクトのリリース手順を自分の言葉で書く。SpecBind はこの散文を読んで
-書かれたとおりに実行する。スクリプトではないので、ここに置いたコードブロックは
-SpecBind が勝手に実行するものではなく、従うべき例である。
-
-最初のリリース前にこのひな形を置き換える。Releaseワークフローはリポジトリを調べ、
-置き換える全文を提案し、承認後にチェックポイントを作成できる。その設定実行では公開
-せずに停止する。不要な節には「なし。」と書く。Front Matter以外の本文を空にすることは、
-リリース全体にプロジェクト固有の作業が不要だという明示的な表明になる。
-
-実行するコマンドだけでなく、何をもって完了とするかを書く。成功を確認できない
-手順は検証できない。
-
 ## 準備
 
-バージョンの同期、ビルドとパッケージング、このプロジェクトが公開前に必要とする
-チェック。
+1. リリース対象が `main` にあり、公開対象として意図したコミットであることを確認する。
+2. `manifest.json` と `package.json` の `version` を同じリリースバージョンへ更新する。
+   `node scripts/release-version.mjs` が成功し、`version`、`tag=v<version>`、
+   `zipFileName=pc-build-planner-v<version>.zip` を出力することを確認する。
+3. GitHubに、タグ名と同じタイトル `v<version>` のopenなMilestoneが存在することを
+   確認する。そのMilestoneにはclosed Issueが1件以上あり、open Issueが0件でなければ
+   ならない。リリースノートの分類に使うIssueには、必要に応じて `enhancement`、`bug`、
+   `documentation` のラベルを付ける。いずれにも該当しないIssueは「その他」に分類される。
+4. 同名のGitタグとGitHub Releaseがまだ存在しないことを確認する。
+5. `pnpm install --frozen-lockfile`、`pnpm install:e2e-browser`、`pnpm validate`、
+   `pnpm package` を実行する。`release/pc-build-planner-v<version>.zip` が生成されることを
+   確認し、公開対象外の作業ツリー変更を残したまま公開へ進まない。
 
 ## 公開
 
-タグ付け、デプロイ、リリースワークフロー、ストア申請など、このプロジェクトを
-公開する操作。
+1. GitHub Actionsの `Release` workflowを、公開対象の `main` から手動実行する。
+2. workflowはバージョン、同名タグとReleaseの不在、Milestone、およびIssue件数を再確認し、
+   `pnpm validate` と `pnpm package` を実行する。
+3. workflowが生成したzipと、Milestoneのclosed Issueから生成したリリースノートを添えて、
+   `v<version>` のGitHub Releaseを作成する。
+4. GitHub Releaseの作成後、対象Milestoneをcloseする。Chrome Web Storeへの申請や公開は
+   この手順に含めない。
 
 ## 検証
 
-意図したバージョンが実際に公開され、利用可能であることを示す新規のチェック。
-公開手順が報告した内容を読み直すことは検証ではない。
+公開workflowの出力だけに依存せず、GitHubから次を新しく取得して確認する。
+
+1. `Release` workflowが成功している。
+2. `v<version>` のGitHub Releaseが公開済みで、意図した `main` のコミットを指す同名タグに
+   結び付いている。
+3. Releaseに `pc-build-planner-v<version>.zip` が添付され、ダウンロードできる。
+4. ダウンロードしたzipを展開でき、ルートに `manifest.json` があり、その `version` が
+   公開バージョンと一致する。
+5. `v<version>` のMilestoneがclosedである。Releaseは公開済みだがMilestoneだけがopenの
+   場合、公開を巻き戻さずMilestoneを手動でcloseし、再確認する。
 
 ## 完了後
 
-SpecBind のリリース確定が成功した後にのみ走る任意の後片付け。ここでの失敗は
-報告されるだけで、リリースを巻き戻さない。
+なし。
