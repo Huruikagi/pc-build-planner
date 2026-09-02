@@ -1,0 +1,10 @@
+schema_version: 1
+establishment:
+  kind: reverse
+  source_revision: 7c5435306482a6df95045ebd5b3308d4b2e41f9b
+  baseline_version: 0.5.0
+  milestone_id: 01a062dc-3cf1-75b0-8894-8d58ae4d418b
+active_change:
+  milestone_id: 01a062dc-3cf1-75b0-8894-8d58ae4d418b
+  state: requirements
+  requirement_ids: null
