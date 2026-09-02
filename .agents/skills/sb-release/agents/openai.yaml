@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Release"
+  short_description: "Release and finalize an active milestone."
+  default_prompt: "Use $sb-release to release and finalize the active milestone."

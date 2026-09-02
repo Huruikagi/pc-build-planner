@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Drive"
+  short_description: "Drive safe milestone work to release readiness."
+  default_prompt: "Use $sb-drive to advance the active milestone through safe reachable work."

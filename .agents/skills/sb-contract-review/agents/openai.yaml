@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Contract Review"
+  short_description: "Review the milestone contract graph."
+  default_prompt: "Use $sb-contract-review to review the active milestone contract graph."

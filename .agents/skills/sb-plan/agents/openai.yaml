@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Plan"
+  short_description: "Plan Spec work through approval gates."
+  default_prompt: "Use $sb-plan to plan the active Spec work through its approval gates."

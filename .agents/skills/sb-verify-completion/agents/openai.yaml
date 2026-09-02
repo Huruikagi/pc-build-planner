@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Completion Verification"
+  short_description: "Verify an explicit completion claim."
+  default_prompt: "Use $sb-verify-completion to verify this explicit completion claim."

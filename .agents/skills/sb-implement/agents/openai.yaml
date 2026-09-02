@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Implement"
+  short_description: "Implement one planned milestone item."
+  default_prompt: "Use $sb-implement to implement one planned item from the active milestone."

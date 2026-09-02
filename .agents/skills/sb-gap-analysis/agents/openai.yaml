@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Gap Analysis"
+  short_description: "Compare planned work with the repository."
+  default_prompt: "Use $sb-gap-analysis to compare the intended work with this repository."

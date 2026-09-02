@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Debug"
+  short_description: "Diagnose why a SpecBind workflow stopped."
+  default_prompt: "Use $sb-debug to diagnose why the current SpecBind workflow stopped."

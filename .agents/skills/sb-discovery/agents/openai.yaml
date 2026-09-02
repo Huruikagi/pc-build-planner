@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Discovery"
+  short_description: "Discover and classify milestone work."
+  default_prompt: "Use $sb-discovery to discover and classify the requested milestone work."

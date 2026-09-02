@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Status"
+  short_description: "Explain lifecycle state and next steps."
+  default_prompt: "Use $sb-status to explain the current lifecycle state and next available action."

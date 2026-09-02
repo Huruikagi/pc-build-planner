@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Design Validation"
+  short_description: "Validate a SpecBind design independently."
+  default_prompt: "Use $sb-validate-design to independently validate the active Spec design."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Task Review"
+  short_description: "Review one implemented task independently."
+  default_prompt: "Use $sb-review-task to independently review one implemented task."

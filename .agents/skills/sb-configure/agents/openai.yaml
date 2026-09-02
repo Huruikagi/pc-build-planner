@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Configure"
+  short_description: "Configure a SpecBind project safely."
+  default_prompt: "Use $sb-configure to review and update this project's SpecBind configuration."

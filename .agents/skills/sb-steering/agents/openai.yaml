@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Steering"
+  short_description: "Maintain durable project steering."
+  default_prompt: "Use $sb-steering to establish or update this project's durable guidance."

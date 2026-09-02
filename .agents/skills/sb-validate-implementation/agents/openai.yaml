@@ -1,0 +1,4 @@
+interface:
+  display_name: "SpecBind Implementation Validation"
+  short_description: "Validate implementation against requirements."
+  default_prompt: "Use $sb-validate-implementation to validate the active Spec implementation."
