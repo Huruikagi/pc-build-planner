@@ -23,15 +23,15 @@
   "license": "UNLICENSED",
   "type": "module",
   "devDependencies": {
-    "@biomejs/biome": "2.5.10",
+    "@biomejs/biome": "2.5.11",
     "@playwright/test": "1.62.1",
-    "@types/node": "26.2.0",
+    "@types/node": "26.4.0",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
+    "@types/react-dom": "19.2.5",
     "chrome-types": "^0.1.440",
-    "esbuild": "0.28.1",
+    "esbuild": "0.28.2",
     "schema-dts": "^2.0.0",
-    "tsx": "4.23.1",
+    "tsx": "4.23.12",
     "typescript": "7.0.2"
   },
   "dependencies": {
