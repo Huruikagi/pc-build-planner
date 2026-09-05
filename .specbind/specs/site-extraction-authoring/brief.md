@@ -41,6 +41,8 @@ type: SpecBind Brief
 
 規約確認ポリシーはソースリセットで消えているため、本Specと一緒に策定する。許可・停止条件と判断不能時の扱いはRequirements、確認手順・判断記録・工程への組み込みはDesignで定める。製品の実行時機能はpage-captureが所有し、本Specは開発用Skillの継続責務を所有する。初回の適用例はIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPUで、商品名・メーカー・CPU分類・ソケットを基本とする。
 
+サンプル通過後は本Skillを用い、今回固定したマップの41メーカー・42ドメインと登録カテゴリの代表ページへ同じv1.1.0で展開する。SkillをCPU専用に限定せず、カテゴリ別に計画された取得項目を扱える生成・検証手順とする。メーカー別の製品実装と対応完了の検証はpage-captureが所有する。規約等により対応できない場合の判断・記録を、製品側で定める対応完了の条件と整合させる。
+
 ## 前提と依存
 
 <!-- specbind:instruction maintain
@@ -60,4 +62,6 @@ Issueが前提に挙げる既存ポリシーの存在には依存しない。本
 
 [Issue #15「開発ツール: ページ指定でサイト固有抽出ロジックを生成する  スキルを作る」](https://github.com/Huruikagi/pc-build-planner/issues/15)。Huruikagi/pc-build-planner（repository ID: 1303939675）、Milestone #8「v1.1.0」、観測状態open、updated_at=2026-09-05T21:50:13Z。生成・再生成の工程、規約確認、フィクスチャと回帰検証、生成物の登録という依頼の根拠。
 
-2026-09-06の会話で、削除済みポリシーを本Specに含め、許可・停止条件をRequirementsで、手順をDesignで定める案と作業範囲全体が承認された。以後の計画はこの取得済み文脈を使い、GitHubを再取得して承認を再解釈しない。
+追加のローカル入力は `src/capture/manufacturer-domain-map.ts`（取得リビジョン `dd3666a373e04dfe90e859e3fb9a130505b44a30`、Git blob `6c9f009f846a3aadb99a4733e990edb2a83cec0f`）。生成Skillを適用するメーカー・ドメイン・カテゴリの広がりを示す。固定対象とSpec横断の対応は[Roadmap](../../steering/roadmap.md)に記録する。後日のマップ変更によって今回の適用範囲を自動増減しない。
+
+2026-09-06の会話で、削除済みポリシーを本Specに含め、許可・停止条件をRequirementsで、手順をDesignで定める案が承認された。その後、CPUサンプルに続けて現在のマップのメーカーと登録カテゴリの代表ページへ展開する追加依頼が承認された。以後の計画はこの取得済み文脈を使い、GitHubを再取得して承認を再解釈しない。

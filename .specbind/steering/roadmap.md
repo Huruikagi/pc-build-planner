@@ -9,7 +9,7 @@ work_items:
     summary: 規約確認ポリシーを含むサイト固有抽出の生成・検証・登録・再生成Skill
   spec_updates:
   - spec: page-capture
-    summary: Intel Core Ultra・AMD Zen 5デスクトップCPUのメーカー固有抽出
+    summary: CPUサンプル検証後、登録済み41メーカー・42ドメインの各カテゴリへメーカー固有抽出を展開
     depends_on:
     - spec: site-extraction-authoring
 ---
@@ -59,7 +59,7 @@ GitHub Milestone #8「v1.1.0」の要求として、メーカーサイト固有�
 各Spec内の詳細な責任境界はRequirementsに置く。
 -->
 
-初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。具体的なSKUと代表ページはRequirementsで選定する。サーバー・モバイル向け製品や全メーカーへの対応は初回の対象に含めない。汎用抽出へのフォールバックと取得元表示を含める。価格やその他属性への拡大は今回の承認範囲に含めない。
+初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。サンプルは途中の検証地点とし、通過後は作成したSkillを使い、下記の固定済みメーカー・ドメイン・カテゴリ全体へ同じv1.1.0で展開する。各メーカーの登録カテゴリに対応する代表ページで抽出を整備し、全SKU・全ページの網羅は求めない。具体的なSKU・代表ページ、CPU以外を含むカテゴリ別の取得項目、対応完了の条件はRequirementsで定める。汎用抽出へのフォールバックと取得元表示を含める。
 
 ## 依存関係と順序の理由
 
@@ -68,7 +68,7 @@ Front Matterが示す依存関係や順序のうち、自明でない理由、�
 説明する。依存がなく順序にも判断がない場合はこの節を削除する。
 -->
 
-site-extraction-authoringの生成Skillを用いてpage-captureの対象サイトを追加する順序とする。生成側は製品側の抽出境界と整合させ、製品実行時の依存として開発用Skillを持ち込まない。
+site-extraction-authoringの生成Skillを用いてpage-captureの対象サイトを追加する順序とする。page-captureのTasksをサンプル検証とメーカー別展開の段階へ分け、サンプル通過後に対象一覧へ進む。メーカー別の新規SpecやDirect項目は増やさない。生成した抽出ロジックも通常の実装としてsb-implement内で作成したSkillを使い、レビューと検証を通す。対象一覧への対応後にpage-capture全体の実装検証を行う。生成側は製品側の抽出境界と整合させ、製品実行時の依存として開発用Skillを持ち込まない。
 
 ## 制約と未解決事項
 
@@ -77,7 +77,7 @@ site-extraction-authoringの生成Skillを用いてpage-captureの対象サイ�
 合致する制約や未解決事項がない場合はこの節を削除する。
 -->
 
-規約確認ポリシーは既存のIssue #14の成果物を前提にせず、生成の許可・停止条件と判断不能時の扱いを新規SpecのRequirementsで定め、確認手順・判断記録・生成工程への組み込み方をDesignで具体化する。対象ページや規約判断は後続の計画で確定し、現時点で特定サイトへの生成許可を意味しない。v1.1.0は出典Milestoneの名称であり、リリースバージョンの機械的なバインドはReleaseが所有する。
+規約確認ポリシーは既存のIssue #14の成果物を前提にせず、生成の許可・停止条件と判断不能時の扱いを新規SpecのRequirementsで定め、確認手順・判断記録・生成工程への組み込み方をDesignで具体化する。規約上の理由、アクセス不能、該当する代表ページの不在などで対応できない対象は理由を残し、完了扱いにできる条件をRequirementsで先に定める。未対応を黙って対象から落とさない。対象ページや規約判断は後続の計画で確定し、現時点で特定サイトへの生成許可を意味しない。v1.1.0は出典Milestoneの名称であり、リリースバージョンの機械的なバインドはReleaseが所有する。
 
 ## Source Collectionと振り分け
 
@@ -97,3 +97,54 @@ Collection: https://github.com/Huruikagi/pc-build-planner/milestone/8 、number=
 | [#16 メーカーサイト向けのサイト固有抽出ロジック（高優先度ドメイン別 collector）](https://github.com/Huruikagi/pc-build-planner/issues/16) | open / 2026-09-05T21:50:17Z | included / page-capture / メーカー固有抽出、汎用へのフォールバック、取得元表示を既存の取得責務へ追加する |
 
 2026-09-06の会話で、ポリシーを新規Spec内で策定すること、上記CPU世代と取得項目、2つの作業と依存関係を提案し、利用者が「OK」と承認した。Issue本文中の#8、#11、#14は関連情報であり、今回取得したSource Collectionや追加作業として扱わない。以後はBriefに捕捉した要求を使用し、GitHubの後日編集で承認済み範囲を再解釈しない。
+
+### 追加のローカル入力と固定した展開対象
+
+Provider: local-files。Collection locator: `src/capture/manufacturer-domain-map.ts`（全1件）。取得リビジョン: `dd3666a373e04dfe90e859e3fb9a130505b44a30`。
+Git blob: `6c9f009f846a3aadb99a4733e990edb2a83cec0f`。通常のGit追跡済みUTF-8ファイルであることと取得前後のクリーン状態を確認した。disposition=included、対応先はpage-capture（展開対象一覧）とsite-extraction-authoring（生成Skillを適用する対象の広がり）。除外・重複・未取得・未解決のSource Itemはない。
+
+利用者が現在のマップを展開範囲として指定し、サンプル後に登録カテゴリの代表ページへ展開する案を「そうしよう、よろしく」と承認した。登録コードそのものは仕様権威ではなく、この明示選択に基づいて以下を固定する。以後のマップ変更で今回の対象を自動増減しない。Requirementsはこの一覧と意味を自己完結した要件へ昇格させる。
+
+| メーカー | 登録ドメイン | 登録カテゴリ |
+| --- | --- | --- |
+| Intel | intel.com | cpu, gpu |
+| AMD | amd.com | cpu, gpu |
+| ASUS | asus.com | gpu, motherboard |
+| ASRock | asrock.com | gpu, motherboard |
+| MSI | msi.com | gpu, motherboard |
+| GIGABYTE | gigabyte.com | gpu, motherboard |
+| ZOTAC | zotac.com | gpu |
+| Palit | palit.com | gpu |
+| PNY | pny.com | gpu |
+| Sapphire | sapphiretech.com | gpu |
+| PowerColor | powercolor.com | gpu |
+| 玄人志向 | kuroutoshikou.com | gpu |
+| BIOSTAR | biostar.com.tw | motherboard |
+| Crucial | crucial.com | memory, storage |
+| Corsair | corsair.com | memory, power-supply, case, cpu-cooler, case-fan |
+| Kingston | kingston.com | memory, storage |
+| G.Skill | gskill.com | memory |
+| TeamGroup | teamgroupinc.com | memory, storage |
+| ADATA | adata.com | memory, storage |
+| CFD | cfd.co.jp | memory |
+| Samsung | samsung.com | storage |
+| Western Digital | westerndigital.com | storage |
+| Seagate | seagate.com | storage |
+| KIOXIA | kioxia.com | storage |
+| Solidigm | solidigm.com | storage |
+| SK hynix | skhynix.com | storage |
+| Seasonic | seasonic.com | power-supply |
+| Thermaltake | thermaltake.com | power-supply, case, cpu-cooler |
+| Cooler Master | coolermaster.com | power-supply, case, cpu-cooler, case-fan |
+| be quiet! | bequiet.com | power-supply, case, case-fan |
+| FSP | fsplifestyle.com | power-supply |
+| Super Flower | super-flower.com | power-supply |
+| Antec | antec.com | power-supply, case |
+| Fractal Design | fractal-design.com | case |
+| NZXT | nzxt.com | case, cpu-cooler |
+| Lian Li | lian-li.com | case, case-fan |
+| Noctua | noctua.at | cpu-cooler, case-fan |
+| DeepCool | deepcool.com | cpu-cooler |
+| Thermalright | thermalright.com | cpu-cooler |
+| Scythe | scythe.co.jp, scytheus.com | cpu-cooler, case-fan |
+| Arctic | arctic.de | case-fan |
