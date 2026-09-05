@@ -2,7 +2,7 @@
 type: SpecBind Roadmap
 milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
 baseline_revision: c092c64cb0983abf0be75eae2c3eeacb3285a9b0
-target_release: null
+target_release: v1.1.0
 work_items:
   new_specs:
   - spec: site-extraction-authoring
