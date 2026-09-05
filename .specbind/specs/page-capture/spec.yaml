@@ -6,5 +6,47 @@ establishment:
   milestone_id: 01a06f90-3083-7ae0-aa4d-5a8377aca49d
 active_change:
   milestone_id: 01a06f90-3083-7ae0-aa4d-5a8377aca49d
-  state: requirements
-  requirement_ids: null
+  state: design
+  requirement_ids:
+  - "1.1"
+  - "1.2"
+  - "1.3"
+  - "2.1"
+  - "2.2"
+  - "2.3"
+  - "2.4"
+  - "3.1"
+  - "3.2"
+  - "3.3"
+  - "4.1"
+  - "4.2"
+  - "4.3"
+  - "5.1"
+  - "5.2"
+  - "5.3"
+  - "5.4"
+  gate_evidence:
+    requirements:
+      passed_at: 2026-09-05T03:23:07.1682387Z
+      approval_mode: delegated
+      delegation_workflow: sb-discovery
+      approved_requirement_ids:
+      - "1.1"
+      - "1.2"
+      - "1.3"
+      - "2.1"
+      - "2.2"
+      - "2.3"
+      - "2.4"
+      - "3.1"
+      - "3.2"
+      - "3.3"
+      - "4.1"
+      - "4.2"
+      - "4.3"
+      - "5.1"
+      - "5.2"
+      - "5.3"
+      - "5.4"
+      input_revisions:
+        requirements: sha256:15a0071bbf5641c797c9875038cfb164fc3ed62ffd1df79705780a945e50b82f
