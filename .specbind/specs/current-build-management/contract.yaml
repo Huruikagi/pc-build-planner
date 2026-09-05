@@ -1,0 +1,40 @@
+schema_version: 1
+owns:
+  - id: current-build-lifecycle
+    description: プロジェクトごとの現在構成で候補を採用、解除し、候補IDと正整数数量を管理する責任
+exports:
+  - id: current-build-state
+    description: プロジェクトごとの候補ID参照と正整数数量からなる現在構成を利用する境界
+consumes:
+  - id: project-candidate-state
+    target:
+      spec: project-candidate-management
+      section: exports
+      id: project-candidate-state
+    description: プロジェクトに属する候補ID、表示値、カテゴリ、取得元を現在構成の採用と表示に利用する
+  - id: candidate-deletion-reference-cleanup
+    target:
+      spec: project-candidate-management
+      section: exports
+      id: candidate-deletion-reference-cleanup
+    description: 候補削除の前に候補IDごとの現在構成参照を除く純粋なルート変換を登録・適用する拡張点
+  - id: local-root-storage
+    target:
+      spec: local-data-storage
+      section: exports
+      id: local-root-storage
+    description: 現在構成を含む完全なルートの保存と再読込
+invariants:
+  - id: build-project-integrity
+    description: 各現在構成は一つの存在中プロジェクトに属し、項目は同じプロジェクトに属する存在中候補だけを一度ずつ参照する
+  - id: build-quantity-integrity
+    description: 現在構成の各項目の数量は正整数であり、無効な数量の確定は保存済み数量を変更しない
+file_ownership:
+  - id: current-build-logic
+    paths:
+      - src/build.ts
+  - id: current-build-ui-and-e2e
+    paths:
+      - src/build-screen.tsx
+      - src/ui.css
+      - e2e/build.spec.ts
