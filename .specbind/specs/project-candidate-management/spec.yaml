@@ -6,7 +6,7 @@ establishment:
   milestone_id: 01a06f90-3083-7ae0-aa4d-5a8377aca49d
 active_change:
   milestone_id: 01a06f90-3083-7ae0-aa4d-5a8377aca49d
-  state: design
+  state: adoption_ready
   requirement_ids:
   - "1.1"
   - "1.2"
@@ -62,3 +62,11 @@ active_change:
       - "5.5"
       input_revisions:
         requirements: sha256:7a336a09df668fe938d244bf9bb93aef9ff526b1a2af8411bef859410e8c5281
+    design:
+      passed_at: 2026-09-05T03:51:34.0563994Z
+      approval_mode: delegated
+      delegation_workflow: sb-discovery
+      input_revisions:
+        contract: sha256:3c50dfdf46ec231ff411c01a6ce2005a70c7e412a8b8148547ff5a25d59ee4b4
+        design/main: sha256:1afd0ef8541fcc215504a599fa5ba1adc3a7a2fb3873faf9607b2d182a0d1276
+        design/ui: sha256:ea536c1b393703dd1fa867184bf812768558ca7ed822d39e531e6b7cabe220d2

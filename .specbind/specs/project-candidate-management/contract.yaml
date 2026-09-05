@@ -1,0 +1,33 @@
+schema_version: 1
+owns:
+  - id: project-candidate-lifecycle
+    description: プロジェクトと、そのプロジェクトに属する検討途中の候補・取得元を作成、選択、補正、削除、利用者選択による統合として管理する責任
+exports:
+  - id: project-candidate-state
+    description: 選択中プロジェクトとプロジェクト別候補を、元表記と確認済み値を区別した有効な状態として利用する境界
+consumes:
+  - id: local-root-storage
+    target:
+      spec: local-data-storage
+      section: exports
+      id: local-root-storage
+    description: プロジェクト、候補、現在構成を含む保存可能な完全ルートの読込と保存
+invariants:
+  - id: selected-project-integrity
+    description: 選択中プロジェクトIDはnullまたは存在するプロジェクトを指す
+  - id: candidate-project-integrity
+    description: 各候補は存在する一つのプロジェクトに属し、プロジェクト削除時にはその候補も利用できない
+  - id: candidate-value-provenance
+    description: 自動取得された元表記と利用者が確認した値を区別し、候補の補正と重複統合で既存の確認済み値を自動的に置き換えない
+file_ownership:
+  - id: project-candidate-model-and-logic
+    paths:
+      - src/model.ts
+      - src/projects.ts
+      - src/parts.ts
+      - src/duplicates.ts
+  - id: project-candidate-ui
+    paths:
+      - src/project-menu.tsx
+      - src/parts-screen.tsx
+      - src/part-editor.tsx
