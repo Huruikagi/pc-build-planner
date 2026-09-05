@@ -1,0 +1,13 @@
+schema_version: 1
+owns:
+  - id: local-data-persistence
+    description: プロジェクト、候補、現在構成を端末内の永続データとして可用化する保存境界
+exports:
+  - id: local-root-storage
+    description: 有効なLocalDataRootを端末内へ保存し、保存済みの有効なルートまたは未保存・利用不能な保存値に対する初期ルートを返す境界
+consumes: []
+invariants: []
+file_ownership:
+  - id: storage-boundary
+    paths:
+      - src/storage.ts
