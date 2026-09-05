@@ -7,11 +7,15 @@ work_items:
   new_specs:
   - spec: site-extraction-authoring
     summary: 規約確認ポリシーを含むサイト固有抽出の生成・検証・登録・再生成Skill
+    depends_on:
+    - spec: project-candidate-management
   spec_updates:
   - spec: page-capture
-    summary: CPUサンプル検証後、登録済み41メーカー・42ドメインの各カテゴリへメーカー固有抽出を展開
+    summary: 既存項目だけを取得し、CPUサンプル後に固定67メーカー／カテゴリ組へ固有抽出を展開
     depends_on:
     - spec: site-extraction-authoring
+  - spec: project-candidate-management
+    summary: 既存カテゴリ属性の取得値を未確認の元表記として候補編集へ引き渡し保持する
 ---
 # ロードマップ
 
@@ -59,7 +63,7 @@ GitHub Milestone #8「v1.1.0」の要求として、メーカーサイト固有�
 各Spec内の詳細な責任境界はRequirementsに置く。
 -->
 
-初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。サンプルは途中の検証地点とし、通過後は作成したSkillを使い、下記の固定済みメーカー・ドメイン・カテゴリ全体へ同じv1.1.0で展開する。各メーカーの登録カテゴリに対応する代表ページで抽出を整備し、全SKU・全ページの網羅は求めない。具体的なSKU・代表ページ、CPU以外を含むカテゴリ別の取得項目、対応完了の条件はRequirementsで定める。汎用抽出へのフォールバックと取得元表示を含める。
+初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。サンプルは途中の検証地点とし、通過後は作成したSkillを使い、下記の固定済みメーカー・ドメイン・カテゴリ全体へ同じv1.1.0で展開する。各メーカーの登録カテゴリに対応する代表ページで抽出を整備し、全SKU・全ページの網羅は求めない。具体的なSKU・代表ページ、CPU以外を含むカテゴリ別の取得項目は、現在プロダクトが扱う項目だけに限定し、対応完了の条件とともにRequirementsで定める。汎用抽出へのフォールバックと取得元表示を含める。
 
 ## 依存関係と順序の理由
 
@@ -148,3 +152,11 @@ Git blob: `6c9f009f846a3aadb99a4733e990edb2a83cec0f`。通常のGit追跡済みU
 | Thermalright | thermalright.com | cpu-cooler |
 | Scythe | scythe.co.jp, scytheus.com | cpu-cooler, case-fan |
 | Arctic | arctic.de | case-fan |
+
+## 既存属性までの取得と候補編集への接続
+
+利用者は取得対象を現在プロダクトが扱う項目までに限定する方針を承認した。共通項目（商品名、メーカー、型番、カテゴリ、価格、URL）に加え、CPUのソケット、CPUクーラーの対応ソケット、マザーボードのソケット・メモリー規格・フォームファクター、メモリーの規格、電源のフォームファクター、ケースの対応マザーボード・電源フォームファクターを含める。GPU、ストレージ、ケースファンには新たなカテゴリ属性を追加しない。容量、定格出力、ファン寸法など、現在扱っていない情報は取得対象としない。
+
+既存属性を自動取得する経路と候補編集へ渡す経路は今回追加する。元表記と未確認性を保ち、取得だけで確認済みにしない。候補編集・保持の責務と共有モデルの所有者であるproject-candidate-managementを既存Spec更新として加える。これは新しい商品属性の追加ではない。Steeringのモデルと機能の所有境界、自動取得値と確認済み値の分離を維持する。
+
+依存順序はproject-candidate-management → site-extraction-authoring → page-captureとする。候補側が受け入れる既存属性と未確認値の境界を先に定め、生成側がその項目を扱い、ページ取得側が生成物を用いて固定対象へ展開する。既存のサンプル検証、固定メーカー一覧、Source Collectionの振り分けは維持する。今回の追加Specは会話で確認した引き渡し責務に基づき、GitHubから新たなSource Itemを取得したものではない。
