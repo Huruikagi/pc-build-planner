@@ -1,0 +1,45 @@
+schema_version: 1
+owns:
+  - id: user-initiated-page-capture
+    description: 利用者の拡張アイコン操作を起点に、表示中タブだけから候補情報を一時的に取得し、ページ由来入力を検証・正規化する責任
+exports:
+  - id: unconfirmed-capture-result
+    description: 取得元、元表記、出典、棄却理由を伴う検証済みの未確認CaptureResultを、候補編集の下書きへ引き渡せる境界
+consumes:
+  - id: candidate-edit-handoff
+    target:
+      spec: project-candidate-management
+      section: owns
+      id: project-candidate-lifecycle
+    description: 取り込み結果を候補編集用の下書きへ変換し、利用者確認後の候補化を担う境界
+invariants:
+  - id: capture-session-tab-lifetime
+    description: 取り込み状態は対象タブに結び付くsession状態であり、タブ遷移後は利用できず、タブ終了後は保持しない
+  - id: page-input-never-confirms-candidate
+    description: ページから自動取得した値は、候補編集で利用者が確認または補正するまで確認済みの候補値として扱わない
+file_ownership:
+  - id: capture-runtime-boundary
+    paths:
+      - src/service-worker.ts
+      - src/capture/channel.ts
+      - src/capture/content-script.ts
+      - src/capture/extract.ts
+      - src/capture/normalize.ts
+      - src/capture/protocol.ts
+      - src/capture/types.ts
+      - src/capture/rules.ts
+      - src/capture/category-keywords.ts
+      - src/capture/manufacturer-domain-map.ts
+  - id: capture-side-panel-integration
+    paths:
+      - src/app.tsx
+      - src/capture-screen.tsx
+  - id: capture-ui-assets
+    paths:
+      - src/capture.css
+      - side-panel.html
+      - scripts/build.mjs
+  - id: capture-e2e-evidence
+    paths:
+      - e2e/capture.spec.ts
+      - e2e/fixtures/product-page.ts
