@@ -1,0 +1,33 @@
+schema_version: 1
+owns:
+  - id: confirmed-basic-compatibility-evaluation
+    description: 現在構成に採用された候補の確認済み属性だけから五つの基本規格を根拠付き三値で評価し集約する責任
+exports: []
+consumes:
+  - id: current-build-state
+    target:
+      spec: current-build-management
+      section: exports
+      id: current-build-state
+    description: 選択中プロジェクトの候補ID参照、数量および候補状態を、採用候補に限定した基本規格評価へ利用する
+  - id: project-candidate-state
+    target:
+      spec: project-candidate-management
+      section: exports
+      id: project-candidate-state
+    description: 候補のカテゴリ、確認済み属性および元表記を、現在構成にある候補IDとの結合と基本規格評価へ利用する
+invariants:
+  - id: confirmed-values-only
+    description: 基本互換性評価は確認済み属性だけを比較し、自動取得値だけの属性、未採用役割、未確認属性を不適合へ変換しない
+  - id: fixed-basic-rule-scope
+    description: 評価対象はCPUとマザーボードのソケット、マザーボードとメモリの規格、CPUクーラー、ケース、電源の対応規格の五規則に限る
+file_ownership:
+  - id: compatibility-evaluation
+    paths:
+      - src/compatibility.ts
+  - id: compatibility-ui
+    paths:
+      - src/compatibility-screen.tsx
+      - _locales/en/messages.json
+      - _locales/ja/messages.json
+      - e2e/compatibility.spec.ts
