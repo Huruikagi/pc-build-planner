@@ -5,6 +5,8 @@ owns:
 exports:
   - id: project-candidate-state
     description: 選択中プロジェクトとプロジェクト別候補を、元表記と確認済み値を区別した有効な状態として利用する境界
+  - id: candidate-deletion-reference-cleanup
+    description: 候補削除の開始と、登録済みの候補IDごとの純粋なルート整理変換を候補除去より先に一度適用する最小の登録・適用拡張点。登録がない場合は候補削除だけを行い、登録変換の失敗時は候補を除かない
 consumes:
   - id: local-root-storage
     target:
@@ -19,6 +21,8 @@ invariants:
     description: 各候補は存在する一つのプロジェクトに属し、プロジェクト削除時にはその候補も利用できない
   - id: candidate-value-provenance
     description: 自動取得された元表記と利用者が確認した値を区別し、候補の補正と重複統合で既存の確認済み値を自動的に置き換えない
+  - id: candidate-deletion-cleanup-order
+    description: 候補または候補を含むプロジェクトを削除するときは、登録済みの候補ID整理変換を候補IDごとに一度適用してから候補を除き、変換が失敗した場合は候補を除かない
 file_ownership:
   - id: project-candidate-model-and-logic
     paths:

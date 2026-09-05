@@ -63,10 +63,10 @@ active_change:
       input_revisions:
         requirements: sha256:7a336a09df668fe938d244bf9bb93aef9ff526b1a2af8411bef859410e8c5281
     design:
-      passed_at: 2026-09-05T03:51:34.0563994Z
+      passed_at: 2026-09-05T11:58:56.2075285Z
       approval_mode: delegated
       delegation_workflow: sb-discovery
       input_revisions:
-        contract: sha256:3c50dfdf46ec231ff411c01a6ce2005a70c7e412a8b8148547ff5a25d59ee4b4
-        design/main: sha256:1afd0ef8541fcc215504a599fa5ba1adc3a7a2fb3873faf9607b2d182a0d1276
+        contract: sha256:5861d26029f4460c2ef366fa4abd6c69b8d019e6e0800af65b2242c31162f14d
+        design/main: sha256:5edf1c5479c0ef377314295a11c6b1ce04cf8da75ff0925237b823f1bbc8051b
         design/ui: sha256:ea536c1b393703dd1fa867184bf812768558ca7ed822d39e531e6b7cabe220d2
