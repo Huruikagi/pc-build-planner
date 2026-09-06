@@ -54,6 +54,18 @@ export const releasePart = (projectId: string, partId: string) =>
     items.filter((item) => item.partId !== partId),
   );
 
+/** 候補削除時に登録する、全プロジェクトの候補ID参照だけを除く純粋変換。 */
+export const removeCandidateReferences = (
+  root: LocalDataRoot,
+  candidateId: string,
+): LocalDataRoot => ({
+  ...root,
+  currentBuilds: root.currentBuilds.map((build) => ({
+    ...build,
+    items: build.items.filter((item) => item.partId !== candidateId),
+  })),
+});
+
 /**
  * 数量を確定する。正整数以外は呼ばれない前提で、ここでも弾く。
  * 不正値で保存済みデータを壊さない。

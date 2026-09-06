@@ -6,6 +6,7 @@
  * 落とすこと。
  */
 import type { LocalDataRoot, Project } from "./model.js";
+import { applyCandidateDeletionReferenceCleanup } from "./parts.js";
 
 export const createProject = (name: string) => (root: LocalDataRoot) => {
   const project: Project = {
@@ -29,14 +30,23 @@ export const renameProject =
     ),
   });
 
-/** プロジェクトを削除すると、所属する候補と現在構成も消える。 */
+/** 所属候補の参照整理を済ませてから、プロジェクトと候補を除く。 */
 export const deleteProject = (id: string) => (root: LocalDataRoot) => {
+  const candidateIds = root.candidateParts
+    .filter((part) => part.projectId === id)
+    .map((part) => part.id);
+  const cleaned = candidateIds.reduce(
+    (current, candidateId) =>
+      applyCandidateDeletionReferenceCleanup(current, candidateId),
+    root,
+  );
   const projects = root.projects.filter((project) => project.id !== id);
   return {
-    ...root,
+    ...cleaned,
     projects,
-    candidateParts: root.candidateParts.filter((part) => part.projectId !== id),
-    currentBuilds: root.currentBuilds.filter((build) => build.projectId !== id),
+    candidateParts: cleaned.candidateParts.filter(
+      (part) => part.projectId !== id,
+    ),
     selectedProjectId:
       root.selectedProjectId === id
         ? (projects[0]?.id ?? null)
@@ -44,10 +54,10 @@ export const deleteProject = (id: string) => (root: LocalDataRoot) => {
   };
 };
 
-export const selectProject = (id: string) => (root: LocalDataRoot) => ({
-  ...root,
-  selectedProjectId: id,
-});
+export const selectProject = (id: string) => (root: LocalDataRoot) =>
+  root.projects.some((project) => project.id === id)
+    ? { ...root, selectedProjectId: id }
+    : root;
 
 export const currentProject = (root: LocalDataRoot): Project | null =>
   root.projects.find((project) => project.id === root.selectedProjectId) ??

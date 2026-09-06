@@ -3,8 +3,6 @@
  *
  * ルートの置換としてのみ表現する (`docs/reverse/features.md` 6.1)。
  */
-import { manufacturerDomainEntryForUrl } from "./capture/manufacturer-domain-map.js";
-import type { CaptureResult } from "./capture/types.js";
 import {
   CATEGORY_ATTRIBUTES,
   type CandidatePart,
@@ -33,6 +31,11 @@ export interface PartDraft {
    * 既存パーツの編集では保存済みの original が優先される。
    */
   readonly originals: Readonly<Partial<Record<IdentityField, string>>>;
+  /** 取得時分類は確認済み分類とは別に保持する。 */
+  readonly originalCategory: string | null;
+  readonly capturedAttributeCategory: PartCategory | null;
+  /** 既存カテゴリに属する、取り込み由来の読み取り専用元表記。 */
+  readonly originalAttributes: Readonly<Record<string, string>>;
 }
 
 /** 元表記を持ちうる項目。カテゴリと規格値は利用者が確定させるもの。 */
@@ -48,12 +51,15 @@ export const emptyDraft = (): PartDraft => ({
   attributes: {},
   sources: [],
   originals: {},
+  originalCategory: null,
+  capturedAttributeCategory: null,
+  originalAttributes: {},
 });
 
 /** 確定値だけをフォームへ出す。元表記は読み取り専用で別に見せる。 */
 export const draftFromPart = (part: CandidatePart): PartDraft => ({
   id: part.id,
-  name: part.name,
+  name: part.name?.confirmed ?? "",
   manufacturer: part.manufacturer?.confirmed ?? "",
   modelNumber: part.modelNumber?.confirmed ?? "",
   modelNumberAbsent: part.modelNumber?.confirmed === "",
@@ -67,6 +73,7 @@ export const draftFromPart = (part: CandidatePart): PartDraft => ({
   ),
   sources: part.sources,
   originals: {
+    ...(part.name?.original == null ? {} : { name: part.name.original }),
     ...(part.manufacturer?.original == null
       ? {}
       : { manufacturer: part.manufacturer.original }),
@@ -74,6 +81,13 @@ export const draftFromPart = (part: CandidatePart): PartDraft => ({
       ? {}
       : { modelNumber: part.modelNumber.original }),
   },
+  originalCategory: part.originalCategory,
+  capturedAttributeCategory: part.capturedAttributeCategory,
+  originalAttributes: Object.fromEntries(
+    Object.entries(part.attributes).flatMap(([key, value]) =>
+      value.original === null ? [] : [[key, value.original]],
+    ),
+  ),
 });
 
 export const partsOf = (
@@ -93,15 +107,52 @@ export const countByCategory = (
   return counts;
 };
 
-/** 候補を削除すると現在構成からも解除される (`features.md` 4 章)。 */
-export const deletePart = (id: string) => (root: LocalDataRoot) => ({
-  ...root,
-  candidateParts: root.candidateParts.filter((part) => part.id !== id),
-  currentBuilds: root.currentBuilds.map((build) => ({
-    ...build,
-    items: build.items.filter((item) => item.partId !== id),
-  })),
-});
+/** 名称、確認済み分類、属性、取得元のいずれかがあれば保存対象になる。 */
+export const draftHasIdentifyingInformation = (draft: PartDraft): boolean =>
+  draft.name.trim() !== "" ||
+  draft.originals.name !== undefined ||
+  draft.category !== "uncategorized" ||
+  Object.values(draft.attributes).some((value) => value.trim() !== "") ||
+  Object.keys(draft.originalAttributes).length > 0 ||
+  draft.sources.length > 0;
+
+export type CandidateDeletionReferenceCleanup = (
+  root: LocalDataRoot,
+  candidateId: string,
+) => LocalDataRoot;
+
+const candidateDeletionReferenceCleanups: CandidateDeletionReferenceCleanup[] =
+  [];
+
+/** 候補参照の意味を所有する側が、純粋な整理変換を登録する。 */
+export const registerCandidateDeletionReferenceCleanup = (
+  cleanup: CandidateDeletionReferenceCleanup,
+): (() => void) => {
+  candidateDeletionReferenceCleanups.push(cleanup);
+  return () => {
+    const index = candidateDeletionReferenceCleanups.indexOf(cleanup);
+    if (index !== -1) candidateDeletionReferenceCleanups.splice(index, 1);
+  };
+};
+
+/** 登録順に各変換を一度ずつ適用する。例外時は呼出元へ失敗を返す。 */
+export const applyCandidateDeletionReferenceCleanup = (
+  root: LocalDataRoot,
+  candidateId: string,
+): LocalDataRoot =>
+  candidateDeletionReferenceCleanups.reduce(
+    (current, cleanup) => cleanup(current, candidateId),
+    root,
+  );
+
+/** 参照整理が全て成功したルートからだけ候補を除く。 */
+export const deletePart = (id: string) => (root: LocalDataRoot) => {
+  const cleaned = applyCandidateDeletionReferenceCleanup(root, id);
+  return {
+    ...cleaned,
+    candidateParts: cleaned.candidateParts.filter((part) => part.id !== id),
+  };
+};
 
 /**
  * 空文字は「未入力」であって空文字の確定ではない。`confirmed` を落として
@@ -110,8 +161,9 @@ export const deletePart = (id: string) => (root: LocalDataRoot) => ({
 const withConfirmed = <T>(
   previous: { readonly original: string | null } | null | undefined,
   confirmed: T | undefined,
-) => {
+): { readonly original: string | null; readonly confirmed?: T } | null => {
   const base = { original: previous?.original ?? null };
+  if (base.original === null && confirmed === undefined) return null;
   return confirmed === undefined ? base : { ...base, confirmed };
 };
 
@@ -147,29 +199,63 @@ export const savePart =
       draft.id === null
         ? null
         : (root.candidateParts.find((part) => part.id === draft.id) ?? null);
+    const targetProjectId = existing?.projectId ?? projectId;
+    if (!root.projects.some((project) => project.id === targetProjectId))
+      throw new Error("candidate project does not exist");
 
     const attributes: Record<string, SourcedAttribute> = {};
-    for (const definition of CATEGORY_ATTRIBUTES[draft.category]) {
+    const definitions = new Map(
+      [
+        ...CATEGORY_ATTRIBUTES[draft.category],
+        ...(draft.capturedAttributeCategory === null
+          ? []
+          : CATEGORY_ATTRIBUTES[draft.capturedAttributeCategory]),
+      ].map((definition) => [definition.key, definition]),
+    );
+    const confirmedKeys = new Set(
+      CATEGORY_ATTRIBUTES[draft.category].map(({ key }) => key),
+    );
+    for (const definition of definitions.values()) {
       const raw = (draft.attributes[definition.key] ?? "").trim();
       const previous = existing?.attributes[definition.key] ?? null;
-      if (definition.kind === "list") {
-        const parsed = parseList(raw);
-        attributes[definition.key] = withConfirmed(
-          previous,
-          parsed.length === 0 ? undefined : parsed,
-        );
+      const original =
+        draft.originalAttributes[definition.key] ?? previous?.original ?? null;
+      const previousWithOriginal = { original };
+      if (!confirmedKeys.has(definition.key)) {
+        if (original !== null)
+          attributes[definition.key] = previousWithOriginal;
         continue;
       }
-      attributes[definition.key] = withConfirmed(
-        previous,
+      if (definition.kind === "list") {
+        const parsed = parseList(raw);
+        const value = withConfirmed(
+          previousWithOriginal,
+          parsed.length === 0 ? undefined : parsed,
+        );
+        if (value !== null) attributes[definition.key] = value;
+        continue;
+      }
+      const value = withConfirmed(
+        previousWithOriginal,
         raw === "" ? undefined : raw,
       );
+      if (value !== null) attributes[definition.key] = value;
     }
+
+    const name = withConfirmed(
+      existing?.name ?? originalOf(draft, "name"),
+      draft.name.trim() === "" ? undefined : draft.name.trim(),
+    );
+
+    if (!draftHasIdentifyingInformation(draft))
+      throw new Error(
+        "candidate must contain a name, category, attribute, or source",
+      );
 
     const next: CandidatePart = {
       id: existing?.id ?? crypto.randomUUID(),
-      projectId: existing?.projectId ?? projectId,
-      name: draft.name.trim(),
+      projectId: targetProjectId,
+      name,
       manufacturer: withConfirmed(
         existing?.manufacturer ?? originalOf(draft, "manufacturer"),
         draft.manufacturer.trim() === ""
@@ -181,6 +267,8 @@ export const savePart =
         modelNumberConfirmation(draft),
       ),
       category: draft.category,
+      originalCategory: draft.originalCategory,
+      capturedAttributeCategory: draft.capturedAttributeCategory,
       attributes,
       sources: draft.sources.map((source) => ({
         ...source,
@@ -206,47 +294,70 @@ export const savePart =
 /**
  * 取り込み結果を編集用の下書きへ引き渡す。
  *
- * ここで保存はしない。抽出は補助であり、確定させるのは利用者
- * (`docs/reverse/features.md` 2 章)。カテゴリは推定を初期選択に置くだけ。
+ * ここで保存はしない。抽出は補助であり、元表記と取得時分類は利用者が
+ * 確認するまで確認済み入力や `category` へ昇格させない。
  */
-export const draftFromCapture = (result: CaptureResult): PartDraft => {
+export interface CandidateCaptureHandoff {
+  readonly originals: Readonly<{
+    name: string | null;
+    manufacturer: string | null;
+    modelNumber: string | null;
+    category: string | null;
+  }>;
+  readonly capturedAttributeCategory: PartCategory | null;
+  readonly attributes: Readonly<Record<string, string>>;
+  readonly source: Readonly<{
+    url: string;
+    kind: CandidateSource["kind"];
+    capturedAt: string;
+    price: CandidateSource["price"];
+  }>;
+}
+
+export const draftFromCaptureHandoff = (
+  handoff: CandidateCaptureHandoff,
+): PartDraft => {
   const sourceId = crypto.randomUUID();
+  const allowedAttributeKeys = new Set(
+    handoff.capturedAttributeCategory === null
+      ? []
+      : CATEGORY_ATTRIBUTES[handoff.capturedAttributeCategory].map(
+          ({ key }) => key,
+        ),
+  );
   return {
     id: null,
-    name: result.fields.name?.value ?? "",
-    manufacturer: result.fields.manufacturer?.value ?? "",
-    modelNumber: result.fields.modelNumber?.value ?? "",
+    name: "",
+    manufacturer: "",
+    modelNumber: "",
     modelNumberAbsent: false,
-    category: result.categoryHint ?? "uncategorized",
+    category: "uncategorized",
     attributes: {},
     sources: [
       {
         id: sourceId,
-        url: result.url,
-        /**
-         * メーカー公式ドメインは販売ページではなく商品紹介として記録する。
-         * この判定は manufacturer 抽出の成否ではなく、取り込み URL 自体で行う。
-         */
-        kind:
-          manufacturerDomainEntryForUrl(result.url) === undefined
-            ? "retail"
-            : "manufacturer",
-        capturedAt: result.capturedAt,
-        price: result.price?.money ?? null,
+        ...handoff.source,
         /** 最初のソースは必ずプライマリ。価格の基準になる。 */
         primary: true,
       },
     ],
     originals: {
-      ...(result.fields.name === undefined
+      ...(handoff.originals.name === null
         ? {}
-        : { name: result.fields.name.original }),
-      ...(result.fields.manufacturer === undefined
+        : { name: handoff.originals.name }),
+      ...(handoff.originals.manufacturer === null
         ? {}
-        : { manufacturer: result.fields.manufacturer.original }),
-      ...(result.fields.modelNumber === undefined
+        : { manufacturer: handoff.originals.manufacturer }),
+      ...(handoff.originals.modelNumber === null
         ? {}
-        : { modelNumber: result.fields.modelNumber.original }),
+        : { modelNumber: handoff.originals.modelNumber }),
     },
+    originalCategory: handoff.originals.category,
+    capturedAttributeCategory: handoff.capturedAttributeCategory,
+    originalAttributes: Object.fromEntries(
+      Object.entries(handoff.attributes).filter(([key]) =>
+        allowedAttributeKeys.has(key),
+      ),
+    ),
   };
 };

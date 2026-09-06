@@ -20,7 +20,7 @@ import {
   type Verdict,
 } from "./compatibility.js";
 import { t } from "./i18n.js";
-import type { PartCategory } from "./model.js";
+import { candidateDisplayName, type PartCategory } from "./model.js";
 import type { ScreenProps } from "./screen-props.js";
 
 const categoryLabel = (category: PartCategory): string =>
@@ -70,7 +70,9 @@ const SideRow = ({ side }: { readonly side: Side }) => (
           : "verdict__part"
       }
     >
-      {side.part?.name ?? t("buildUnselected")}
+      {side.part === null
+        ? t("buildUnselected")
+        : candidateDisplayName(side.part)}
     </span>
     <span
       className={

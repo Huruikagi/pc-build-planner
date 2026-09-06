@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { DuplicateMatch } from "./duplicates.js";
 import { t } from "./i18n.js";
 import type { PartCategory } from "./model.js";
+import { candidateDisplayName } from "./model.js";
 
 const categoryLabel = (category: PartCategory): string =>
   t(`category_${category.replace("-", "_")}`);
@@ -62,7 +63,9 @@ export const DuplicateChoice = ({
             type="radio"
           />
           <span className="duplicate-row__body">
-            <span className="duplicate-row__name">{match.part.name}</span>
+            <span className="duplicate-row__name">
+              {candidateDisplayName(match.part)}
+            </span>
             <span className="duplicate-row__meta">
               {[
                 match.part.manufacturer?.confirmed,

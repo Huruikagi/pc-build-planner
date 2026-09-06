@@ -234,10 +234,9 @@ for (const { lang, catalog } of LOCALES) {
       expect(stored?.projects.map((project) => project.name)).toEqual([
         "SYN 検証プロジェクト",
       ]);
-      expect(stored?.candidateParts.map((part) => part.name)).toEqual([
-        "SYN CPU 9800X3D 改",
-        "SYN M/B B650E-F",
-      ]);
+      expect(
+        stored?.candidateParts.map((part) => part.name?.confirmed),
+      ).toEqual(["SYN CPU 9800X3D 改", "SYN M/B B650E-F"]);
       expect(stored?.candidateParts[0]?.attributes.socket?.confirmed).toBe(
         "AM5",
       );

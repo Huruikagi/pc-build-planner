@@ -92,8 +92,10 @@ export interface StoredRoot {
 /** 保存された候補パーツ。UI を経由せず、実際の保存内容を突き合わせるための形。 */
 export interface StoredPart {
   readonly id: string;
-  readonly name: string;
+  readonly name: StoredSourcedValue | null;
   readonly category: string;
+  readonly originalCategory: string | null;
+  readonly capturedAttributeCategory: string | null;
   readonly manufacturer: StoredSourcedValue | null;
   readonly modelNumber: StoredSourcedValue | null;
   readonly attributes: Readonly<Record<string, StoredSourcedValue>>;

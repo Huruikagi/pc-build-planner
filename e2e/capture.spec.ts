@@ -59,7 +59,7 @@ test.describe("商品取り込み", () => {
     await extension.close();
   });
 
-  test("構造化データから取り込み、確認して保存すると元表記と分離して残る", async () => {
+  test("構造化データから取り込み、未確認のまま保存すると元表記として残る", async () => {
     const { page, context } = extension;
     await serve(extension, PRODUCT_PAGE_HTML);
     await createProject(extension, "SYN 取り込み検証");
@@ -89,20 +89,19 @@ test.describe("商品取り込み", () => {
     // --- 引き渡し。再取り込みは起きない ---
     await page.click("[data-capture-accept]");
     await expect(page.locator("[data-part-editor]")).toBeVisible();
-    await expect(page.locator('[name="part-name"]')).toHaveValue(
-      "SYN GeForce RTX 5080 SUPER 16GB",
+    await expect(page.locator('[name="part-name"]')).toHaveValue("");
+    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue("");
+    await expect(page.locator('[name="part-model-number"]')).toHaveValue("");
+    /** 取得時分類は、利用者が選ぶまで確認済み分類へ昇格しない。 */
+    await expect(page.locator('[name="part-category"]')).toHaveValue(
+      "uncategorized",
     );
-    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue(
-      "SYNVIDIA",
-    );
-    await expect(page.locator('[name="part-model-number"]')).toHaveValue(
-      "SYN-5080S-16G",
-    );
-    /** 推定カテゴリが初期選択になる。 */
-    await expect(page.locator('[name="part-category"]')).toHaveValue("gpu");
 
     // --- 元表記は読み取り専用で見える (changes.md C-2-2) ---
     await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).toContainText(
+      "SYN GeForce RTX 5080 SUPER 16GB",
+    );
     await expect(page.locator(".originals")).toContainText("SYNVIDIA");
     await expect(page.locator(".originals input")).toHaveCount(0);
 
@@ -112,9 +111,12 @@ test.describe("商品取り込み", () => {
     // --- 保存された形。確定値と元表記が分離している (features.md 1.2) ---
     const stored = await extension.readStoredRoot();
     const part = stored?.candidateParts[0];
-    expect(part?.category).toBe("gpu");
+    expect(part?.category).toBe("uncategorized");
+    expect(part?.capturedAttributeCategory).toBe("gpu");
+    expect(part?.name).toEqual({
+      original: "SYN GeForce RTX 5080 SUPER 16GB",
+    });
     expect(part?.manufacturer).toEqual({
-      confirmed: "SYNVIDIA",
       original: "SYNVIDIA",
     });
     /** プライマリソースが価格の基準になる (1.5)。 */
@@ -162,7 +164,9 @@ test.describe("商品取り込み", () => {
     await createProject(extension, "SYN 後から作るプロジェクト");
 
     await expect(page.locator("[data-part-editor]")).toBeVisible();
-    await expect(page.locator('[name="part-name"]')).toHaveValue(
+    await expect(page.locator('[name="part-name"]')).toHaveValue("");
+    await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).toContainText(
       "SYN GeForce RTX 5080 SUPER 16GB",
     );
     expect(extension.diagnostics).toEqual([]);
@@ -225,9 +229,9 @@ test.describe("商品取り込み", () => {
       captured.getByText("メーカー公式ドメイン", { exact: true }),
     ).toBeVisible();
     await page.click("[data-capture-accept]");
-    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue(
-      "ASUS",
-    );
+    await expect(page.locator('[name="part-manufacturer"]')).toHaveValue("");
+    await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).toContainText("ASUS");
     await page.click('[data-part-editor] button[type="submit"]');
     const stored = await extension.readStoredRoot();
     expect(stored?.candidateParts[0]?.sources[0]?.kind).toBe("manufacturer");

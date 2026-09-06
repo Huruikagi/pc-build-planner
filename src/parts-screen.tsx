@@ -20,6 +20,7 @@ import { t } from "./i18n.js";
 import { DeleteIcon, ExtensionIcon, PlusIcon } from "./icons.js";
 import {
   type CandidatePart,
+  candidateDisplayName,
   formatMoney,
   missingFieldCount,
   PART_CATEGORIES,
@@ -217,6 +218,7 @@ export const PartsScreen = ({
       ) : (
         <ul aria-label={t("partsTitle")} className="part-list">
           {visible.map((part) => {
+            const displayName = candidateDisplayName(part);
             const missing = missingFieldCount(part);
             const price = primarySource(part)?.price ?? null;
             const specs = attributeSummary(part);
@@ -224,7 +226,7 @@ export const PartsScreen = ({
             if (confirmingId === part.id)
               return (
                 <li className="part-row part-row--confirm" key={part.id}>
-                  <div>{t("partDeleteConfirm", part.name)}</div>
+                  <div>{t("partDeleteConfirm", displayName)}</div>
                   <div className="project-menu__confirm-actions">
                     <button
                       className="button button--danger"
@@ -251,13 +253,13 @@ export const PartsScreen = ({
             return (
               <li className="part-row" data-part-id={part.id} key={part.id}>
                 <button
-                  aria-label={t("partEdit", part.name)}
+                  aria-label={t("partEdit", displayName)}
                   className="part-row__main"
                   data-edit-part
                   onClick={() => setDraft(draftFromPart(part))}
                   type="button"
                 >
-                  <span className="part-row__name">{part.name}</span>
+                  <span className="part-row__name">{displayName}</span>
                   <span className="part-row__meta">
                     {[
                       part.manufacturer?.confirmed,
@@ -282,7 +284,7 @@ export const PartsScreen = ({
                   {price === null ? "—" : formatMoney(price)}
                 </span>
                 <button
-                  aria-label={t("partDelete", part.name)}
+                  aria-label={t("partDelete", displayName)}
                   className="project-menu__icon-button"
                   data-delete-part
                   onClick={() => setConfirmingId(part.id)}

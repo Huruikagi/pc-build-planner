@@ -6,9 +6,11 @@
  * contribution 機構は持たない (C-5)。
  */
 import { useCallback, useEffect, useState } from "react";
+import { removeCandidateReferences } from "./build.js";
 import { BuildScreen } from "./build-screen.js";
+import { manufacturerDomainEntryForUrl } from "./capture/manufacturer-domain-map.js";
 import type { CaptureDriver } from "./capture/protocol.js";
-import type { CaptureState } from "./capture/types.js";
+import type { CaptureResult, CaptureState } from "./capture/types.js";
 import { CaptureScreen } from "./capture-screen.js";
 import { CompatibilityScreen } from "./compatibility-screen.js";
 import { t } from "./i18n.js";
@@ -20,7 +22,12 @@ import {
   PlusIcon,
 } from "./icons.js";
 import type { LocalDataRoot } from "./model.js";
-import { draftFromCapture, type PartDraft } from "./parts.js";
+import {
+  type CandidateCaptureHandoff,
+  draftFromCaptureHandoff,
+  type PartDraft,
+  registerCandidateDeletionReferenceCleanup,
+} from "./parts.js";
 import { PartsScreen } from "./parts-screen.js";
 import { ProjectMenu } from "./project-menu.js";
 import {
@@ -46,6 +53,29 @@ const SCREENS = [
 
 const failureMessage = (failure: StorageFailure): string =>
   failure.kind === "corrupt" ? t("storageCorrupt") : t("storageUnavailable");
+
+/** ページ取得の内部型を、候補管理が所有する受入入力へ境界で写す。 */
+const candidateHandoffFromCapture = (
+  result: CaptureResult,
+): CandidateCaptureHandoff => ({
+  originals: {
+    name: result.fields.name?.original ?? null,
+    manufacturer: result.fields.manufacturer?.original ?? null,
+    modelNumber: result.fields.modelNumber?.original ?? null,
+    category: result.fields.category?.original ?? null,
+  },
+  capturedAttributeCategory: result.categoryHint,
+  attributes: {},
+  source: {
+    url: result.url,
+    kind:
+      manufacturerDomainEntryForUrl(result.url) === undefined
+        ? "retail"
+        : "manufacturer",
+    capturedAt: result.capturedAt,
+    price: result.price?.money ?? null,
+  },
+});
 
 /**
  * プロジェクト未選択の空状態。3 画面が同じプレースホルダを各自で持っていた
@@ -105,6 +135,14 @@ export const App = ({
     sync();
     return captureDriver.subscribe(sync);
   }, [captureDriver]);
+
+  useEffect(
+    () =>
+      registerCandidateDeletionReferenceCleanup((current, candidateId) =>
+        removeCandidateReferences(current, candidateId),
+      ),
+    [],
+  );
 
   const load = useCallback(async () => {
     const result = await store.read();
@@ -219,7 +257,9 @@ export const App = ({
       {capture !== null ? (
         <CaptureScreen
           onAccept={(result) => {
-            setHandoff(draftFromCapture(result));
+            setHandoff(
+              draftFromCaptureHandoff(candidateHandoffFromCapture(result)),
+            );
             setScreenId("parts");
             void captureDriver.clear();
           }}

@@ -90,7 +90,7 @@ test.describe("重複判定", () => {
     await page.click("[data-duplicate-save-new]");
     await expect(page.locator("[data-part-id]")).toHaveCount(2);
     stored = await extension.readStoredRoot();
-    expect(stored?.candidateParts.map((part) => part.name)).toEqual([
+    expect(stored?.candidateParts.map((part) => part.name?.confirmed)).toEqual([
       "SYN GPU A",
       "SYN GPU B",
     ]);
@@ -153,7 +153,10 @@ test.describe("重複判定", () => {
     expect(stored?.candidateParts).toHaveLength(1);
     const part = stored?.candidateParts[0];
     /** 既存の確定値は変わらない。 */
-    expect(part?.name).toBe("SYN 既存パーツ");
+    expect(part?.name).toEqual({
+      original: null,
+      confirmed: "SYN 既存パーツ",
+    });
     /** ソースだけが増える。既存にソースが無かったので最初の 1 件が基準になる。 */
     expect(part?.sources).toHaveLength(1);
     expect(part?.sources[0]?.url).toBe(PRODUCT_PAGE_URL);

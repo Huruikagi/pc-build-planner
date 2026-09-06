@@ -49,10 +49,12 @@ const seed: LocalDataRoot = {
     {
       id: "seed-cpu",
       projectId: "seed-main",
-      name: "SYN Ryzen 7 9800X3D",
+      name: { original: null, confirmed: "SYN Ryzen 7 9800X3D" },
       manufacturer: { original: "AMD", confirmed: "AMD" },
       modelNumber: { original: null, confirmed: "SYN-100-9800X3D" },
       category: "cpu",
+      originalCategory: null,
+      capturedAttributeCategory: null,
       attributes: { socket: { original: null, confirmed: "AM5" } },
       sources: [
         {
@@ -68,10 +70,12 @@ const seed: LocalDataRoot = {
     {
       id: "seed-mb",
       projectId: "seed-main",
-      name: "SYN STRIX B650E-F",
+      name: { original: null, confirmed: "SYN STRIX B650E-F" },
       manufacturer: { original: null, confirmed: "SYNSUS" },
       modelNumber: { original: null },
       category: "motherboard",
+      originalCategory: null,
+      capturedAttributeCategory: null,
       attributes: {
         socket: { original: null, confirmed: "AM5" },
         memoryStandard: { original: null, confirmed: "DDR5" },
@@ -91,10 +95,12 @@ const seed: LocalDataRoot = {
     {
       id: "seed-psu",
       projectId: "seed-main",
-      name: "SYN KRPW-GA850W",
+      name: { original: null, confirmed: "SYN KRPW-GA850W" },
       manufacturer: { original: null },
       modelNumber: { original: null },
       category: "uncategorized",
+      originalCategory: null,
+      capturedAttributeCategory: null,
       attributes: {},
       sources: [],
     },

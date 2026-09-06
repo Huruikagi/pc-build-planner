@@ -95,7 +95,7 @@ export type SourcedAttribute = SourcedText | SourcedList;
 /* --- 価格とソース (features.md 1.4 / 1.5) -------------------------------- */
 
 const money = z.object({
-  amount: z.number(),
+  amount: z.number().nonnegative(),
   /** 取得元ページの表記を尊重する。取得できなければ推測しない。 */
   currency: z.string().min(1),
 });
@@ -107,10 +107,13 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
 
 const candidateSource = z.object({
   id: z.string().min(1),
-  url: z.url(),
+  url: z.url().refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }),
   kind: z.enum(SOURCE_KINDS),
   /** UTC の ISO 8601。 */
-  capturedAt: z.string(),
+  capturedAt: z.iso.datetime(),
   price: money.nullable(),
   primary: z.boolean(),
 });
@@ -119,17 +122,68 @@ export type CandidateSource = z.infer<typeof candidateSource>;
 
 /* --- 候補パーツ ---------------------------------------------------------- */
 
-const candidatePart = z.object({
-  id: z.string().min(1),
-  projectId: z.string().min(1),
-  /** 唯一の必須項目。ほかは欠損したままで正常。 */
-  name: z.string().min(1),
-  manufacturer: sourcedText.nullable(),
-  modelNumber: sourcedText.nullable(),
-  category: z.enum(PART_CATEGORIES),
-  attributes: z.record(z.string(), z.union([sourcedText, sourcedList])),
-  sources: z.array(candidateSource),
-});
+const candidatePart = z
+  .object({
+    id: z.string().min(1),
+    projectId: z.string().min(1),
+    name: sourcedText.nullable(),
+    manufacturer: sourcedText.nullable(),
+    modelNumber: sourcedText.nullable(),
+    /** 利用者が確認した分類だけを投影する。取得時の分類は下の二項目へ分離する。 */
+    category: z.enum(PART_CATEGORIES),
+    originalCategory: z.string().nullable(),
+    capturedAttributeCategory: z.enum(PART_CATEGORIES).nullable(),
+    attributes: z.record(z.string(), z.union([sourcedText, sourcedList])),
+    sources: z.array(candidateSource),
+  })
+  .superRefine((part, context) => {
+    const confirmedKeys = new Set(
+      CATEGORY_ATTRIBUTES[part.category].map(({ key }) => key),
+    );
+    const capturedKeys = new Set(
+      part.capturedAttributeCategory === null
+        ? []
+        : CATEGORY_ATTRIBUTES[part.capturedAttributeCategory].map(
+            ({ key }) => key,
+          ),
+    );
+
+    for (const [key, value] of Object.entries(part.attributes)) {
+      if (!confirmedKeys.has(key) && !capturedKeys.has(key)) {
+        context.addIssue({
+          code: "custom",
+          message: `unknown candidate attribute: ${key}`,
+          path: ["attributes", key],
+        });
+      }
+      if (!confirmedKeys.has(key) && value.confirmed !== undefined) {
+        context.addIssue({
+          code: "custom",
+          message: `confirmed candidate attribute does not belong to category: ${key}`,
+          path: ["attributes", key, "confirmed"],
+        });
+      }
+      if (!capturedKeys.has(key) && value.original !== null) {
+        context.addIssue({
+          code: "custom",
+          message: `original candidate attribute does not belong to captured category: ${key}`,
+          path: ["attributes", key, "original"],
+        });
+      }
+    }
+
+    const hasIdentity =
+      part.name !== null ||
+      part.category !== "uncategorized" ||
+      Object.keys(part.attributes).length > 0 ||
+      part.sources.length > 0;
+    if (!hasIdentity)
+      context.addIssue({
+        code: "custom",
+        message:
+          "candidate must contain a name, category, attribute, or source",
+      });
+  });
 
 export type CandidatePart = z.infer<typeof candidatePart>;
 
@@ -163,14 +217,34 @@ export type Project = z.infer<typeof project>;
  * `chrome.storage.local` に単一キーで置くルート。書き込みはこの単位で
  * 原子的に置換する (`features.md` 6.1)。
  */
-export const localDataRootSchema = z.object({
-  schemaVersion: z.literal(SCHEMA_VERSION),
-  revision: z.number().int().nonnegative(),
-  selectedProjectId: z.string().nullable(),
-  projects: z.array(project),
-  candidateParts: z.array(candidatePart),
-  currentBuilds: z.array(currentBuild),
-});
+export const localDataRootSchema = z
+  .object({
+    schemaVersion: z.literal(SCHEMA_VERSION),
+    revision: z.number().int().nonnegative(),
+    selectedProjectId: z.string().nullable(),
+    projects: z.array(project),
+    candidateParts: z.array(candidatePart),
+    currentBuilds: z.array(currentBuild),
+  })
+  .superRefine((root, context) => {
+    const projectIds = new Set(root.projects.map(({ id }) => id));
+    if (
+      root.selectedProjectId !== null &&
+      !projectIds.has(root.selectedProjectId)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "selected project does not exist",
+        path: ["selectedProjectId"],
+      });
+    for (const [index, part] of root.candidateParts.entries())
+      if (!projectIds.has(part.projectId))
+        context.addIssue({
+          code: "custom",
+          message: "candidate project does not exist",
+          path: ["candidateParts", index, "projectId"],
+        });
+  });
 
 export type LocalDataRoot = z.infer<typeof localDataRootSchema>;
 
@@ -187,6 +261,13 @@ export const createInitialRoot = (): LocalDataRoot => ({
 
 export const primarySource = (part: CandidatePart): CandidateSource | null =>
   part.sources.find((source) => source.primary) ?? null;
+
+/** 一覧などで候補を識別するため、確認済み値、元表記、URLの順に選ぶ。 */
+export const candidateDisplayName = (part: CandidatePart): string =>
+  part.name?.confirmed ??
+  part.name?.original ??
+  primarySource(part)?.url ??
+  "—";
 
 /**
  * 通貨は取得したものをそのまま添える。ロケール別の書式は対象外なので

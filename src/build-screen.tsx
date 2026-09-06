@@ -22,6 +22,7 @@ import {
 import { t } from "./i18n.js";
 import { CloseIcon } from "./icons.js";
 import {
+  candidateDisplayName,
   formatMoney,
   PART_CATEGORIES,
   type PartCategory,
@@ -128,6 +129,7 @@ const AdoptedRow = ({
   <>
     {row.entries.map(({ part, quantity }) => {
       const price = primarySource(part)?.price ?? null;
+      const displayName = candidateDisplayName(part);
       return (
         <li className="build-row" data-adopted-id={part.id} key={part.id}>
           <CategoryButton
@@ -135,7 +137,7 @@ const AdoptedRow = ({
             onSelect={onSelect}
             selected={selected}
           />
-          <span className="build-row__name">{part.name}</span>
+          <span className="build-row__name">{displayName}</span>
           <QuantityField
             onCommit={(next) => onQuantity(part.id, next)}
             partId={part.id}
@@ -150,7 +152,7 @@ const AdoptedRow = ({
                 })}
           </span>
           <button
-            aria-label={t("buildRelease", part.name)}
+            aria-label={t("buildRelease", displayName)}
             className="project-menu__icon-button"
             data-release-part={part.id}
             onClick={() => onRelease(part.id)}
@@ -278,6 +280,7 @@ export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
           {candidates.map((part) => {
             const price = primarySource(part)?.price ?? null;
             const adopted = adoptedIds.has(part.id);
+            const displayName = candidateDisplayName(part);
             return (
               <li
                 className="part-row"
@@ -285,7 +288,7 @@ export const BuildScreen = ({ root, project, apply }: ScreenProps) => {
                 key={part.id}
               >
                 <span className="part-row__main">
-                  <span className="part-row__name">{part.name}</span>
+                  <span className="part-row__name">{displayName}</span>
                   <span className="part-row__meta">
                     {part.manufacturer?.confirmed ??
                       categoryLabel(part.category)}

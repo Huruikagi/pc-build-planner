@@ -76,9 +76,13 @@ export const findDuplicates = (
   draft: PartDraft,
 ): readonly DuplicateMatch[] => {
   /** 「型番なし」の表明は比較の根拠にならない。 */
-  const draftModel = draft.modelNumberAbsent ? "" : draft.modelNumber.trim();
-  const draftManufacturer = fold(draft.manufacturer.trim());
-  const draftName = fold(draft.name.trim());
+  const draftModel = draft.modelNumberAbsent
+    ? ""
+    : draft.modelNumber.trim() || (draft.originals.modelNumber ?? "");
+  const draftManufacturer = fold(
+    draft.manufacturer.trim() || (draft.originals.manufacturer ?? ""),
+  );
+  const draftName = fold(draft.name.trim() || (draft.originals.name ?? ""));
 
   const matches: DuplicateMatch[] = [];
   for (const part of root.candidateParts) {
@@ -101,7 +105,7 @@ export const findDuplicates = (
       draftManufacturer !== "" &&
       partManufacturer !== null &&
       partManufacturer === draftManufacturer &&
-      fold(part.name) === draftName
+      comparable(part.name) === draftName
     )
       matches.push({
         part,

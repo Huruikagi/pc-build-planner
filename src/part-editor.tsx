@@ -15,7 +15,11 @@ import {
   type PartCategory,
   POWER_SUPPLY_FORM_FACTORS,
 } from "./model.js";
-import type { IdentityField, PartDraft } from "./parts.js";
+import {
+  draftHasIdentifyingInformation,
+  type IdentityField,
+  type PartDraft,
+} from "./parts.js";
 
 const categoryLabel = (category: PartCategory): string =>
   t(`category_${category.replace("-", "_")}`);
@@ -156,7 +160,7 @@ export const PartEditor = ({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (draft.name.trim() === "") {
+    if (!draftHasIdentifyingInformation(draft)) {
       setNameError(true);
       return;
     }
@@ -232,7 +236,7 @@ export const PartEditor = ({
 
       <div className="field-row">
         <label className="field-row__label" htmlFor="part-name">
-          {t("fieldName")} <span className="field-row__required">*</span>
+          {t("fieldName")}
         </label>
         <input
           className="field"
