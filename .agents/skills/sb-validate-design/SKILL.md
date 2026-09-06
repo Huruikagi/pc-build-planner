@@ -52,14 +52,16 @@ unavailable Contract outside that exact waiting set, any other graph error, or
 an unproved status is a structural `NOT_READY`; the complete graph remains
 mandatory at milestone Contract Review.
 
-**Fix the review scope from the status output before reading prose.** The
-`Requirement coverage: design N/N` count is over the active Requirement IDs for
-this milestone. The Requirements document is a complete persistent contract and
+**Fix the review scope from CLI-owned lifecycle state before reading prose.**
+`specbind check traceability <spec>` reports the exact `Active requirement set`;
+that set, not any `requirement_ids` field in the Design being reviewed, is the
+scope for this judgment. The status `Requirement coverage: design N/N` count is
+over the same active Requirement IDs. The Requirements document is a complete persistent contract and
 may retain other IDs that this milestone does not deliver. Read those retained
 Requirements for context, but do not report the Design incomplete, expand its
 scope, or raise a finding merely because it does not realize an inactive ID.
-Validate only the active set represented by the Design traceability markers and
-the status coverage count.
+Validate only that CLI-reported active set. Compare Design traceability markers
+with it, but never derive the review scope from those markers.
 
 **They are not your review.** The CLI already verifies traceability markers,
 active requirement coverage, and contract structure — repeating them back is not
@@ -133,11 +135,16 @@ it must do.
 
 ## 4. Return the verdict
 
+Give every finding an ID scoped to this Spec's current Plan run. IDs make a
+fresh revalidation auditable; they do not make the finding identity mechanical.
+Identity follows the endangered Requirement or boundary and the missing or
+conflicting obligation, not incidental rewording or a moved location.
+
 ```text
 ## Design validation
 - VERDICT: READY | NOT_READY
 - FINDINGS:
-  - [BLOCKING|DEFERRED|RESOLVED] <requirement or boundary at risk> — <where in the design> — <consequence>
+  - [BLOCKING|DEFERRED|RESOLVED] <finding-id> — <requirement or boundary at risk> — <where in the design> — <consequence>
 ```
 
 Every finding carries a disposition. A finding with none is one nobody carries
@@ -161,6 +168,21 @@ determine which component owns retry, so tasks cannot be bounded" can.
 Rank by what would change the verdict, and say what the design does well when it
 is true.
 
+When the dispatch includes prior Design-validation findings, treat this as a
+revalidation. Read the complete current Design independently, then account for
+every prior `BLOCKING` finding ID exactly once in `FINDINGS`: reuse its ID and
+mark it `RESOLVED` or still `BLOCKING`. Assign a new ID only to a materially
+distinct finding. A changed description or document location does not create a
+new finding when the same Requirement or boundary remains endangered by the
+same missing or conflicting obligation.
+
+Do not accept the Design author's claim that its repair succeeded as evidence.
+If the supplied history is incomplete, an ID cannot be mapped confidently, or
+one prior ID would need contradictory dispositions, return `NOT_READY`, state
+that the comparison is incomplete or ambiguous, and do not manufacture a clean
+mapping. The Plan orchestrator owns the revision limit; report the evidence and
+do not recommend bypassing it.
+
 ## 5. Record deferred findings
 
 A deferred finding needs the destination this project names, or it is not
@@ -168,17 +190,15 @@ deferred — it is dropped, and the next review raises its successor as blocking
 to keep that from happening again.
 
 ```sh
-specbind adapter list
-specbind adapter read deferred
+specbind adapter read deferred --for consume
 ```
 
-The listing must report `state=active` for `deferred` before you follow it.
-`state=absent` or `NO_CHANGE ADAPTER_ABSENT` means the project has no
-destination. Say so in one line and record nothing. Do not invent a place to put
-it. Write only what an active adapter says to write. Read the destination only
-far enough to avoid recording the same finding twice; nothing in it is a source
-of work for you, and no entry there becomes work until a person puts it on the
-Roadmap.
+`NO_CHANGE ADAPTER_ABSENT` or `NO_CHANGE ADAPTER_SCAFFOLD` means the project has
+no destination. Say so in one line and record nothing. Do not invent a place to
+put it. Write only what the returned active guidance says to write. Read the
+destination only far enough to avoid recording the same finding twice; nothing
+in it is a source of work for you, and no entry there becomes work until a
+person puts it on the Roadmap.
 
 This adapter write happens only after the verdict. Report the exact
 project-relative destination and whether you changed it so an orchestrator can

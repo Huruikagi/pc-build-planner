@@ -1,6 +1,6 @@
 ---
 name: sb-validate-implementation
-description: Use when the user asks whether a named Spec with every Task complete is done. Validate its implementation against the active Requirement IDs, then record completion evidence when — and only when — the verdict is GO.
+description: Use only when every Task for a named Spec is complete and the user explicitly asks for lifecycle validation against the active Requirement IDs that records completion on GO. For a consequence-free claim check, use sb-verify-completion.
 ---
 
 # Validate one Spec's implementation
@@ -17,6 +17,11 @@ Apply returned policy only to natural-language prose. `NO_CHANGE RULE_ABSENT`
 means no additional project preference; any `ERROR` line stops the workflow.
 
 The gate between "every task is recorded complete" and "this Spec is done".
+
+Enter this workflow only with explicit authority to record completion on `GO`.
+When the request could instead be a consequence-free truth check, use
+`sb-verify-completion`; completed Tasks and words such as "done" do not resolve
+that ambiguity or authorize mutation.
 
 Your verdict writes durable evidence, so it has to be earned. **You validate;
 you never repair.**
@@ -42,6 +47,10 @@ it returns one thing you need:
 ```text
 Implementation revision: <full commit id>
 ```
+
+`READY` means only that this lifecycle and checkout state may now be validated.
+It does not inspect the project Validation adapter, identify required commands,
+or claim that any validation passed; those judgments begin in sections 2 and 3.
 
 That revision is what you validate against and what you will submit. If
 preflight fails, report the diagnostic and stop — it is naming a real
@@ -91,12 +100,12 @@ workflow.
 Read the project-specific validation procedure before fixing the required set:
 
 ```sh
-specbind adapter read validation
+specbind adapter read validation --for consume
 ```
 
-`NO_CHANGE ADAPTER_ABSENT`, an adapter whose whole body is classified as a
-scaffold, or an intentionally empty body adds no project-specific work. An
-active adapter adds every applicable procedure to this run. It supplements the
+`NO_CHANGE ADAPTER_ABSENT`, `NO_CHANGE ADAPTER_SCAFFOLD`, or an intentionally
+empty body adds no project-specific work. Returned active guidance adds every
+applicable procedure to this run. It supplements the
 mandatory protocol and canonical project checks; it never replaces, waives,
 narrows, or declares them passed.
 
@@ -237,7 +246,7 @@ report that the metadata set is uncommitted, rather than leaving the milestone
 in a state only you understand.
 
 ```sh
-specbind adapter read git
+specbind adapter read git --for consume
 ```
 
 ## When evidence needs clearing

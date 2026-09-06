@@ -61,9 +61,10 @@ happened to work.
 ## Classify with complete Issue coverage
 
 Treat each actual Issue as request context and apply the entry and ownership
-rules from the Discovery entrypoint. Several Issues may inform one work item;
-one Issue may inform several Specs. Do not create a Spec per Issue. A pull
-request or another non-Issue entry remains visible as excluded with its reason.
+rules from [ordinary change Discovery](ordinary.md). Several Issues may inform
+one work item; one Issue may inform several Specs. Do not create a Spec per
+Issue. A pull request or another non-Issue entry remains visible as excluded
+with its reason.
 
 The confirmation payload keeps the ordinary four fields and adds:
 
@@ -75,6 +76,62 @@ unresolved disposition; relevant work items; and one-line reason>
 
 An unresolved item means the proposal is not approvable. Ask the maintainer to
 settle it before changing state.
+
+## Bind a version-shaped Milestone title
+
+Use the acquired title as the default release label when the **whole title**
+matches both the portable label grammar (1–64 ASCII characters,
+`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`) and this conservative version shape:
+
+```regex
+^v?[0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$
+```
+
+Examples include `v1`, `1.4`, `v1.4.0`, `1.4.0-rc.1`, `1.4.0+build.7`,
+and `2026-09-06`. This is title recognition, not SemVer validation or ordering.
+Preserve the exact title: do not trim it, extract a version from prose, remove
+or add `v`, or change case. `Release v1.4.0`, `Backlog`, and `release_42`
+do not select a default; continue Discovery without asking for a version or
+changing the existing binding. A maintainer-supplied release label takes
+precedence over the title default and uses the ordinary portable label grammar.
+
+Include the proposed exact `target_release` and its title provenance in
+`Source coverage`, alongside the current binding when one exists. Initial
+binding needs no separate version question: the ordinary scope confirmation
+also confirms this visible default. An identical existing binding is a no-op.
+If a different non-null binding exists, show both values and obtain explicit
+agreement to replace it before using `--rebind`; scope approval alone does not
+authorize that replacement. Never silently overwrite a conflicting binding.
+
+After the confirmed scope succeeds (including unchanged scope), finish all
+Briefs and the ordinary step 8 checkpoint **before binding**. The CLI refuses
+to bind a dirty, staged, or untracked Roadmap. The complete scope and Brief
+capture is eligible for that checkpoint even while this confirmed binding is
+pending. Do not commit a partial capture merely to unblock binding.
+
+Then apply the confirmed label through the CLI:
+
+```sh
+specbind milestone bind-release <version>
+```
+
+Use `--rebind` only for the explicitly confirmed replacement above. Never write
+`target_release` directly or put it in the scope candidate. Stop on a binding
+error, preserve the successful scope mutation, and report the outstanding
+binding; do not invent another label or claim Discovery is complete. Read
+`specbind milestone status` back to verify and report the exact bound value.
+After a successful bind or rebind, follow the same Git adapter for a second
+narrow checkpoint containing only the Roadmap's binding change. An identical
+binding needs no extra checkpoint. "Stop after Discovery" includes both
+checkpoints when the adapter directs them; no additional permission is needed.
+
+If the adapter is absent, empty, scaffold-only, or forbids commits, do not
+invent checkpoint authority. If the Roadmap is dirty, report the completed
+capture and pending binding that needs a project checkpoint, then stop. If the
+Roadmap is already clean, binding may proceed; report any resulting uncommitted
+binding without claiming a checkpoint. Never commit unrelated changes or bypass
+the CLI's clean-target guard.
+This binds local release metadata only; it does not publish or mutate GitHub.
 
 ## Preserve the capture
 

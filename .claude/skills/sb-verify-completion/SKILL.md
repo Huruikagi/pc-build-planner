@@ -27,6 +27,9 @@ This is not the Spec completion gate. When the user asks whether a named Spec's
 completed implementation is done and a `GO` should record completion evidence,
 use `sb-validate-implementation` instead. Use this skill when the subject
 is the claim itself and the result must remain consequence-free.
+If both readings appear possible, stay in this consequence-free workflow unless
+the user explicitly authorized recording completion on `GO`; completed Tasks do
+not supply that authority.
 
 ```sh
 specbind protocol read completion-verification
@@ -38,6 +41,13 @@ A **claim**, not a Spec. Something someone is about to assert. State it back
 precisely in the narrowest form actually being made, because the most common
 false completion is not a lie — it is evidence for a part being accepted for the
 whole.
+
+When the claim is about the current work for a named Spec, run
+`specbind check traceability <spec>` and fix the claim's Requirement scope from
+its exact `Active requirement set`. Requirements outside that set describe the
+accepted baseline, not unfinished current work. Include them only when the user
+explicitly claims the whole subsystem or product behavior, and never infer the
+active set from Design prose or front matter.
 
 Then find what would prove *that* claim, and require evidence from the current
 state of the code.

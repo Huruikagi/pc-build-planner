@@ -1,29 +1,50 @@
 # Establish Specs from a fixed existing implementation
 
 Read this procedure completely only when the maintainer explicitly asks to
-establish Specs from existing code and tests. This is reverse establishment,
-not ordinary change Discovery and not a product release.
+establish Specs from existing code and tests or to resume an active reverse
+establishment. This is reverse establishment, not ordinary change Discovery
+and not a product release.
+
+Existing code and tests are **evidence**, never automatic authority for what
+the product ought to promise. Reverse establishment creates no Tasks and never
+changes implementation, tests, dependencies, configuration, or Steering.
 
 ## Fix the evidence and version
 
-The maintainer must name the selected area and the product version already
-represented by the code. If either is missing, ask only for the missing value
-before mutation. `baseline_version` names an existing version; never invent the
-next version or bind `target_release`.
-
-Run:
+Run the read-only route preflight first:
 
 ```sh
 specbind adoption preflight
+```
+
+It reports exactly one ready result:
+
+- `ADOPTION_PREFLIGHT_READY` starts a new reverse establishment. Record its
+  exact `source_revision` and continue with this section.
+- `ADOPTION_RESUME_READY` proves a clean, internally consistent active reverse
+  milestone, matching temporary record, and unchanged implementation source.
+  Go directly to [Resume an active reverse milestone](#resume-an-active-reverse-milestone).
+
+If it stops on missing Steering, report that `sb-steering` is a separate
+maintainer-gated workflow and stop this reverse run. Do not select or perform
+Steering repair inline.
+
+Only after preflight is ready, require the maintainer to name the selected area
+and the product version already represented by the code. If either is missing,
+ask only for the missing value before mutation. `baseline_version` names an
+existing version; never invent the next version or bind `target_release`.
+
+Then run:
+
+```sh
 specbind steering list
 specbind steering read <every-selector> --for consume
 ```
 
-The preflight must report `ADOPTION_PREFLIGHT_READY`. Record its exact
-`source_revision`. Steering must establish product purpose, technology and
-verification constraints, and responsibility placement. Missing or internally
-contradictory Steering stops and routes to `sb-steering`; do not repair it in
-this run. A difference between valid Steering and observed implementation is
+Steering must establish product purpose, technology and verification constraints,
+and responsibility placement. Internally contradictory Steering stops and routes
+to the same separate maintainer-gated `sb-steering` workflow; do not repair it
+in this run. A difference between valid Steering and observed implementation is
 not itself a reason to bypass the proposal: classify it below as a suspected
 defect or an unknown.
 
@@ -66,15 +87,12 @@ Discover the Deferred Findings Adapter rather than deriving a selector from its
 type name:
 
 ```sh
-specbind adapter list
-specbind adapter read deferred
+specbind adapter read deferred --for consume
 ```
 
-The listing must report selector `deferred`, type `SpecBind Deferred Findings
-Adapter`, and `state=active` before you follow it. `state=absent` or
-`NO_CHANGE ADAPTER_ABSENT` means the project has no destination. Any mismatch
-or `ERROR` stops adapter use; do not guess `deferred-findings` or another
-selector.
+`NO_CHANGE ADAPTER_ABSENT` or `NO_CHANGE ADAPTER_SCAFFOLD` means the project has
+no destination. Any `ERROR` stops adapter use; do not guess `deferred-findings`
+or another selector. Otherwise follow the returned active guidance.
 
 When the active adapter accepts an exact local destination, prepare a suspected
 defect with source revision, locator, and claim, and inspect the destination only
@@ -142,7 +160,7 @@ uses that checkpointed field to distinguish the adapter output from source
 drift.
 
 Only after milestone creation and provenance verification, rerun
-`specbind adapter list` and `specbind adapter read deferred`. If the same exact
+`specbind adapter read deferred --for consume`. If the same exact
 local destination is still active, append each pending suspected defect that is
 not already present. If it is absent or changed, record nothing and report the
 adapter mismatch; never invent or recover a destination. This post-creation
@@ -153,13 +171,52 @@ adoption record, and the verified deferred destination when written as one
 Discovery unit according to the active Git Adapter. Admit no other dirty path.
 Never infer push authority.
 
+## Resume an active reverse milestone
+
+Enter here only after `ADOPTION_RESUME_READY` and only when the maintainer
+explicitly asked to resume this reverse establishment. A generic request to
+drive an active milestone does not grant the remaining Requirements or Design
+Gate authority; return `HUMAN_DECISION` to `sb-drive` until the maintainer names
+reverse continuation.
+
+Do not rerun repository discovery, synthesize another proposal, change the
+confirmed reverse scope, dispatch the initial evidence readers again, or create
+another temporary record. The active
+Roadmap, Specs, Briefs, Research, and record are the checkpointed continuation
+inputs. Run:
+
+```sh
+specbind milestone status --json
+```
+
+The result must report `milestoneKind=reverse`, and every actionable entry must
+name `handler.kind=skill`, `handler.target=sb-discovery`, and
+`handler.mode=reverse_resume`. Any other handler, inconsistent health, source
+drift, or dirty checkout stops the run without repair.
+
+An explicit maintainer request to resume authorizes the remaining reverse
+orchestration under delegated workflow `sb-discovery`; it does not authorize a
+scope change, implementation change, release, external write, or destructive
+recovery. Continue only the phase-relative actions the fresh status exposes.
+Already approved phases remain accepted and are not repeated.
+
+When the action is `contract_review`, dispatch the installed
+`sb-contract-review` workflow with this reverse continuation authority and
+return here after its accepted checkpoint. `sb-discovery` remains the status
+handler because it owns the reverse continuation and subsequent finalization;
+it does not replace the phase owner's review procedure.
+The review's assessment and findings must still be presented before
+acceptance. Do not pause for another confirmation: the explicit reverse
+continuation authority permits acceptance after that presentation.
+
 ## Continue without routine pauses
 
 The confirmation above authorizes this establishment orchestration, including
 Requirements and Design gate acceptance under delegated workflow `sb-discovery`.
-For every reverse Spec, follow the installed `sb-plan` Requirements and Design
-procedures and their full checks. Run Design validation, then the milestone
-Contract Review. Do not select or author the Tasks procedure. Design approval
+For every actionable reverse Spec, follow the installed `sb-plan` Requirements
+and Design procedures and their full checks. Run Design validation after each
+new Design draft, then the milestone Contract Review when status exposes that
+global action. Do not select or author the Tasks procedure. Design approval
 must report `adoption_ready`.
 
 Keep progressing every independent Spec when one is blocked. Stop the affected
@@ -179,8 +236,15 @@ clean revision.
 ## Finalize as an adopted baseline
 
 When every reverse Spec is `adoption_ready` and the Contract Review is fresh,
-prepare exact one-line `log_entries` summaries for every participating Spec and
-run:
+prepare one strict JSON document with exactly one entry per participating Spec:
+
+```json
+{"log_entries":[{"spec":"<spec-id>","summary":"<one-line summary>"}]}
+```
+
+`spec` is the exact participating Spec ID, `summary` is a non-empty single
+line, and extra or duplicate entries are invalid. Pass its external path, or
+pass `-` and write that JSON to stdin:
 
 ```sh
 specbind milestone reverse finalize --log-entries <path-or->
