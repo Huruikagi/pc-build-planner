@@ -69,13 +69,23 @@ Skill は入力を固定順で確認し、規約判断が通るまでページ�
 
 ### `page-capture` への登録境界
 
-固有抽出定義は `src/capture/site-extractors.ts` の `SiteExtractor` 登録簿にだけ追加する。定義の collector は既存の `RawCandidate` を返し、`field` は既存の `CaptureField` だけ、`rawValue` は selector が返した未加工の文字列だけを使う。`source` は新設する固定列挙値 `site-specific`、`sourceLabel` は規則の安定した人間可読識別子にする。動的なサイト名や selector を `source` にしてはならない。
+固有抽出定義は `src/capture/site-extractors.ts` の `SiteExtractor` 登録簿にだけ追加する。定義の collector は `RawCandidate` を返し、`field` は `page-capture` が検証・正規化できる `CaptureField` だけ、`rawValue` は selector が返した未加工の文字列だけを使う。`source` は新設する固定列挙値 `site-specific`、`sourceLabel` は規則の安定した人間可読識別子にする。動的なサイト名や selector を `source` にしてはならない。
 
 `src/capture/types.ts` の `ExtractionSource`、`src/capture/protocol.ts` の Zod 列挙、`_locales/ja/messages.json` と `_locales/en/messages.json` の `captureSource_site_specific` を同じ変更で追加する。`CaptureScreen` は既存の `captureSource_${source}` 解決をそのまま使い、利用者には翻訳済みの「サイト固有抽出」由来を表示し、詳細な `sourceLabel` は既存の項目由来表示で識別できるようにする。これにより固有候補はメッセージ検証、正規化、未確認 `CaptureResult`、既存の表示経路をすべて通る。
 
 登録定義はサイトごとに局所化し、汎用規則、メーカー公式ドメイン登録簿、他サイトの定義を変更しない。`site-extractors.ts`、上記型・プロトコル・翻訳、サイト固有の E2E と実在データを含まない fixture は `page-capture` の実行時所有パスであり、Skill はそれらの変更を提案・検証するが所有を移さない。
 
 `page-capture` はこの Spec が公開する「規約確認済みで保存資料による検証を通った登録候補」を利用して実行時の固有抽出を追加する消費者である。実行時に利用条件を再評価したり、Skill のローカル資料や判断記録へアクセスしたりしない。
+
+### 既存カテゴリ属性を含む登録候補
+
+登録候補は、共通の名称、メーカー、型番、カテゴリ、価格、URLに加え、対象カテゴリに現在定義されている属性だけを要求項目にできる。許可する属性とキーは `CATEGORY_ATTRIBUTES` に固定し、CPUとマザーボードの `socket`、CPUクーラーの `supportedSockets`、マザーボードとメモリーの `memoryStandard`、マザーボードと電源の `formFactor`、ケースの `supportedMotherboardFormFactors` と `supportedPowerSupplyFormFactors` に限る。GPU、ストレージ、ケースファンの属性、容量、定格出力、ファン寸法、未知の属性は候補に含めない。
+
+Skill は指定カテゴリと要求属性キーの対応を先に確認する。対応しないキー、未分類の属性、ページに明記されない値、既存の `CaptureField` にまだない属性を共通6項目へ置き換えたり推測したりしない。最後の場合は、`page-capture` が所有する実行時入力型・Zod検証・正規化を、その属性キーを表せるよう拡張する変更を登録候補に含める。Skill 自身はそれらの実行時型や候補編集の型を所有せず、属性キー、元表記、由来ラベル、対象の既存 `PartCategory` を渡す出力だけを生成する。
+
+`page-capture` は検証済みの分類元表記と属性元表記を、`project-candidate-management` の `candidate-capture-handoff` へ渡す。候補管理が受け入れるのは対応する既存 `PartCategory` の `CATEGORY_ATTRIBUTES` にあるキーだけであり、分類・属性の元表記はいずれも未確認のままとする。Skill の登録候補は、この受入境界に従って、URL、取得元種別、取得時刻、任意の価格と共に各元表記を完全に引き渡せることを検証対象にする。利用者が確認するまで `category` や属性の `confirmed` を設定してはならない。
+
+_Requirements: 1.1, 1.2, 1.3, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3_
 
 _Requirements: 1.1, 1.2, 1.3, 2.3, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3_
 
@@ -96,12 +106,12 @@ Skill は `.agents/skills/site-extraction-authoring/references/verification.md` 
 | 規約禁止 | `prohibited` の規約判断、存在する保存資料のローカル locator | 保存資料を読まず、候補・検証・登録を出さない。記録は判断根拠、確認日、`stopped-before-material-read`、停止理由を含む。 |
 | 規約判断不能 | `unknown` の規約判断、存在する保存資料のローカル locator | 保存資料を読まず、候補・検証・登録を出さない。記録は判断不能の根拠、次に必要な確認、`stopped-before-material-read` を含む。 |
 | 入力不足または項目欠損 | URL、カテゴリ、要求項目、保存資料、記録先のいずれかを欠く、または資料に要求項目がない | 不足または欠損項目と理由を返し、登録可能な候補とコード変更を出さない。記録は停止段階と未登録結果を含む。 |
-| 初回登録 | 許可済み判断、完全な入力、指定項目を明記する保存資料 | selector、期待する `site-specific` 候補、固有欠損時の汎用フォールバック、E2E 追加を提案し、判断記録に検証結果と登録結果を残す。 |
+| 初回登録 | 許可済み判断、完全な入力、共通項目または対象カテゴリの既存属性を明記する保存資料 | selector、期待する `site-specific` 候補、対象カテゴリと属性キー・元表記の候補編集への引渡し、固有欠損時の汎用フォールバック、E2E 追加を提案し、判断記録に検証結果と登録結果を残す。 |
 | 再生成失敗 | 既存登録、許可済み判断、新しい資料、検証に失敗する候補 | 既存登録の差分を出さず、記録に旧登録を保持したこと、失敗段階、理由を追記する。 |
 
 Skill を実装または更新するときは、この表の全ケースを `references/verification.md` に従って実行し、各ケースの判断記録と Skill の出力を突き合わせる。この確認は Skill が所有する操作順とローカル資料の非読取を検証するものであり、`e2e/capture.spec.ts` で代用しない。
 
-登録候補ごとに、`e2e/capture.spec.ts` を既存の実拡張 E2E の入口として拡張する。実在データを含まない fixture からビルド済み拡張を起動し、拡張アイコン操作、`site-specific` の由来表示、`sourceLabel`、未確認結果、固有 selector が値を返さない場合の汎用フォールバック、未明記値の欠損、候補編集への引渡しを観測する。汎用抽出の既存シナリオも同じ `pnpm validate` で維持し、登録が既存の汎用結果を変えないことを確認する。検証コマンドと E2E の入口は既に存在するため、新しいテスト基盤は作らない。
+登録候補ごとに、`e2e/capture.spec.ts` を既存の実拡張 E2E の入口として拡張する。実在データを含まない fixture からビルド済み拡張を起動し、拡張アイコン操作、`site-specific` の由来表示、`sourceLabel`、未確認結果、固有 selector が値を返さない場合の汎用フォールバック、未明記値の欠損、候補編集への引渡しを観測する。既存属性を扱う登録では、対象カテゴリの許可キーだけが元表記として渡り、取得時分類と属性が確認済み値へ昇格しないことも同じ入口で確認する。汎用抽出の既存シナリオも同じ `pnpm validate` で維持し、登録が既存の汎用結果を変えないことを確認する。検証コマンドと E2E の入口は既に存在するため、新しいテスト基盤は作らない。
 
 _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3_
 
