@@ -19,6 +19,13 @@ requirement_ids:
   - "5.2"
   - "5.3"
   - "5.4"
+  - "6.1"
+  - "6.2"
+  - "6.3"
+  - "6.4"
+  - "6.5"
+  - "6.6"
+  - "6.7"
 ---
 
 # `page-capture` の設計 — `main`
@@ -41,9 +48,9 @@ requirement_ids:
 
 Chromeの実行文脈は、service worker、必要時だけ注入するcontent script、Side Panelの三つに分ける。content scriptはページDOMを読み、候補を収集してメッセージを送るだけに留める。service workerがメッセージ構造を検証し、正規化、状態遷移、注入失敗とタブ寿命の処理を担う。Side Panelは`CaptureDriver`を通じてsession状態を読むだけで、Chrome APIや永続化へ直接到達しない。
 
-取り込み結果は`chrome.storage.session`の`captureState`だけに置く。`LocalDataRoot`や候補へ書き込まず、タブの遷移または終了で当該結果を無効化または除去する。候補への変換は`project-candidate-management`が所有する`draftFromCapture`に渡し、利用者が候補編集を受け入れた後にだけ同Specの保存経路が扱う。
+取り込み結果は`chrome.storage.session`の`captureState`だけに置く。`LocalDataRoot`や候補へ書き込まず、タブの遷移または終了で当該結果を無効化または除去する。利用者が候補編集を受け入れたときだけ、Captureは候補管理が所有する `CandidateCaptureHandoff` を作り、同Specの保存経路が扱う。
 
-`page-capture`が公開するのは、検証済みで未確認の`CaptureResult`を候補編集に引き渡せることだけである。プロジェクトの存在、候補の作成、元表記と確認済み値の保存規則は公開境界の外側である。
+`CaptureResult` はCapture内部のsession状態であり、別Specへ公開しない。永続的なSpec間の境界は、Captureがconsumeする候補管理所有の `candidate-capture-handoff` だけである。プロジェクトの存在、候補の作成、元表記と確認済み値の保存規則はCaptureの外側にある。
 
 _Requirements: 1.1, 1.2, 1.3, 5.1, 5.2, 5.3, 5.4_
 
@@ -52,10 +59,28 @@ _Requirements: 1.1, 1.2, 1.3, 5.1, 5.2, 5.3, 5.4_
 1. 利用者の拡張アイコン操作を受けたservice workerは、Side Panelを開き、対象タブが読み取り不能なURLなら`restrictedPage`の失敗状態にする。読み取り可能なら、同じタブIDで`extracting`を記録してからcontent scriptを注入する。
 2. content scriptはページの構造化データ、メタデータ、見出し、表などから、出典ラベル付きの生候補だけを収集する。常設の監視、他タブの読取、サイト固有の常駐処理は行わない。
 3. service workerはcontent scriptからのメッセージを未信頼としてスキーマ検証する。構造不正、候補なし、注入失敗、または変換不能な入力は、候補編集へ渡さず、理由付きの失敗状態にする。固定リビジョンで不正メッセージが`extracting`のまま残り得る点は既存のdeferred findingであり、このDesignはそれを正常状態として認めない。
-4. 有効な候補は項目ごとの上限、制御文字、URL、価格、許可済み属性を検証する。採用値には元表記と出典を添え、棄却値には理由と出典ラベルを残す。カテゴリは編集の初期ヒントであり、確認済み値ではない。
-5. Side Panelは状態を表示し、利用者が受け入れたときだけ`CaptureResult`を候補編集用の下書きへ変換する。取り込み状態を消しても、プロジェクト未作成時を含め、その下書きは候補編集側が受け渡し先を得るまで保持する。
+4. 有効な候補は項目ごとの上限、制御文字、URL、価格、許可済み属性を検証する。採用値には元表記と出典を添え、棄却値には理由と出典ラベルを残す。カテゴリは編集の初期ヒントであり、確認済み値ではない。属性は取得時分類に対応する既存キーだけを未確認値として保持する。
+5. Side Panelは状態を表示し、利用者が受け入れたときだけ`CaptureResult`を候補管理所有の`CandidateCaptureHandoff`へ写す。取り込み状態を消しても、プロジェクト未作成時を含め、そのhandoffは候補編集側が受け渡し先を得るまで保持する。
 
 _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4_
+
+## メーカー固有抽出の実行時登録
+
+`site-extraction-authoring` が `validated-site-extraction-registration` として供給する登録だけを、`src/capture/site-extractors.ts` の `SiteExtractor` として利用する。登録は安定ID、許可ホスト、対象カテゴリ、ページ識別条件、共通項目または当該カテゴリの既存 `CATEGORY_ATTRIBUTES` キーの読取規則を持つ。CaptureはURLの小文字化したホストを登録済み公式ドメインと完全一致またはサブドメイン一致で照合し、登録メーカーを候補にする。未登録ホスト、対象カテゴリ外、ページ識別条件不一致、または規約確認ポリシーで許可されない登録は固有規則を実行しない。
+
+`extractFromDocument` は固有規則を既存の JSON-LD、meta、見出し、パンくず、定義リスト、表の collector より先に同じ `Sink` へ追加する。固有候補は `source: "site-specific"` と規則の安定した人間可読識別子である `sourceLabel` を持つため、先着の有効候補を採る正規化で同じ項目の汎用候補より優先される。`ExtractionSource`、Zodの列挙、`captureSource_site_specific` のロケールキー、画面の表示対応は同じ変更で揃える。selector不一致、読取失敗、例外、空値は候補を追加せず、後続の汎用collectorを必ず実行する。したがって固有抽出の失敗は当該項目を汎用結果へフォールバックさせ、他項目やページ全体の取り込みを失敗にしない。
+
+固有規則が扱えるのは名称、メーカー、型番、カテゴリ、価格、URLと、CPUのソケット、CPUクーラーの対応ソケット、マザーボードのソケット・メモリー規格・フォームファクター、メモリーのメモリー規格、電源のフォームファクター、ケースの対応マザーボード・電源フォームファクターだけである。GPU、ストレージ、ケースファンに属性を増やさず、容量、定格出力、ファン寸法、ページに明記されない値を候補にしない。
+
+_Requirements: 6.1, 6.2, 6.3, 6.5, 6.7_
+
+## 属性の検証と候補編集への引渡し
+
+`RawCandidate`、`CapturePayload`、`AcceptedField`、`CaptureResult` と `capturePayloadSchema` は、共通項目に加えて `{ category, key, rawValue, source, sourceLabel }` の属性候補を表せるようにする。`category` は属性の対応先を示す既存 `PartCategory` であり、確認済み分類ではない。`normalizeCapture` は共通項目の既存制限に加え、属性候補の長さ、空値、制御文字を検証し、対応カテゴリの `CATEGORY_ATTRIBUTES` に存在するキーだけを採用する。変換不能な値、対象外キー、分類のない属性は理由と `sourceLabel` を `rejected` に残し、候補編集へ渡さない。
+
+`page-capture` は `CaptureResult` を `parts.ts` の内部型へ直接渡さず、`project-candidate-management` がexportする `candidate-capture-handoff` をconsumeする。検証済みの名称・メーカー・型番の元表記、取得時分類の元表記と既存カテゴリ、当該カテゴリの許可済み属性元表記、URL、種別、取得時刻、任意の価格を完全な `CandidateCaptureHandoff` に写す。Captureは候補ID、プライマリ指定、保存用下書き、確認済み分類を作らない。候補管理がその入力にローカルIDとプライマリ指定を補い、分類と属性を未確認値として保持する。分類が得られない場合は属性を引き渡さない。
+
+_Requirements: 2.3, 3.1, 3.2, 3.3, 5.4, 6.4, 6.5_
 
 ## コンポーネントとインターフェース
 
@@ -63,19 +88,19 @@ _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 
 
 `src/capture/content-script.ts`と`src/capture/extract.ts`は、操作時だけ注入されるページ側の収集器である。DOMから`CapturePayload`の生候補を上限以内で作り、`CAPTURE_PAYLOAD_MESSAGE`で送信する。ここでは値の採否、候補の保存、利用者状態を判断しない。
 
-`src/capture/protocol.ts`はメッセージの許可属性、候補数、値型をZodで受理する唯一の構造検証口であり、session状態の読取・書込・消去を`CaptureDriver`としてSide Panelへ隠す。未定義属性や構造に合わない値は、この境界を通過しない。
+`src/capture/protocol.ts`は共通項目、既存カテゴリ属性、候補数、値型、出典種別をZodで受理する唯一の構造検証口であり、session状態の読取・書込・消去を`CaptureDriver`としてSide Panelへ隠す。未定義属性や構造に合わない値は、この境界を通過しない。
 
 ### 正規化と取り込み結果
 
 `src/capture/normalize.ts`は、構造を通った候補を、長さ、空値、制御文字、URLスキーム、価格表記で検査する。各項目は優先順で最初の有効値だけを採り、変換不能または対象外の値は`rejected`へ理由を伴って残す。値を補完して確定情報にしたり、カテゴリ推定を確定値として扱ったりしない。
 
-返す`CaptureResult`は、有効値の`value`、ページ上の`original`、`source`、`sourceLabel`、価格、カテゴリヒント、棄却一覧、取得URLと時刻を含む。これは`project-candidate-management`が候補編集の下書きへ変換するための未確認の引き渡し値であり、候補の永続モデルではない。
+返す`CaptureResult`は、有効値の`value`、ページ上の`original`、`source`、`sourceLabel`、価格、カテゴリヒント、取得時分類と対応カテゴリ、許可済み属性、棄却一覧、取得URLと時刻を含む。これはCapture内部の未確認session値であり、候補管理の `CandidateCaptureHandoff` を組み立てる入力である。候補の永続モデルでも、別Specが消費する公開型でもない。
 
 ### 操作と一時状態の調停
 
 `src/service-worker.ts`は利用者操作を唯一の開始条件にし、対象タブIDを全ての状態に結び付ける。新しい操作は前の状態を置き換える。タブ遷移はそのタブの結果を`tabChanged`失敗にし、タブ終了はsession値を消去する。注入、メッセージ、正規化の失敗は、Side Panelが理由と次の操作を示せる`CaptureFailureKind`へ収束させる。
 
-`src/app.tsx`は取得面を常設ナビより優先して表示し、`captured`結果の受け入れ時にだけ`draftFromCapture`を呼ぶ。受け渡し後の下書きはアプリ内状態として保持し、プロジェクト作成後に候補編集へ渡す。`page-capture`はその時点で保存を行わず、下書きの消費と候補化は`project-candidate-management`の責任である。
+`src/app.tsx`は取得面を常設ナビより優先して表示し、`captured`結果の受け入れ時にだけ候補管理所有の受入型へ`CandidateCaptureHandoff`を組み立てる。受け渡し後の未確認handoffはアプリ内状態として保持し、プロジェクト作成後に候補編集へ渡す。`page-capture`はその時点で保存を行わず、handoffの消費と候補化は`project-candidate-management`の責任である。
 
 ### 取り込み画面のスタイル資産
 
@@ -97,9 +122,19 @@ _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3_
 
 `pnpm validate`を全体の入口にする。`e2e/capture.spec.ts`では、ビルド済み拡張を実Chromiumへ読み込み、拡張アイコン操作からcontent script注入、Side Panelの取り込み面、候補編集への遷移、実際の`chrome.storage.local`の候補値までを観測する。
 
-E2Eは、構造化データからの出典・元表記・カテゴリヒントの表示、プロジェクト未作成時の下書き保持、候補なしと制限ページの理由提示と手入力への復帰、メーカー公式ドメインの補助を検証する。正規化の境界は必要に応じて`src/capture/normalize.ts`の純粋関数として個別に確認するが、利用者に届く取り込み経路の受け入れ根拠は実拡張E2Eにする。
+E2Eは、構造化データからの出典・元表記・カテゴリヒントの表示、既存カテゴリ属性の未確認handoff、プロジェクト未作成時のhandoff保持、候補なしと制限ページの理由提示と手入力への復帰、メーカー公式ドメインの補助を検証する。正規化の境界は必要に応じて`src/capture/normalize.ts`の純粋関数として個別に確認するが、利用者に届く取り込み経路の受け入れ根拠は実拡張E2Eにする。
 
 _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4_
+
+## 展開と回帰根拠
+
+初回はIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU代表ページを、保存HTMLで検証する。商品名、メーカー、型番、カテゴリ、価格、URL、ソケットの明記値について、項目別の由来、固有抽出の優先、汎用フォールバック、未推測の欠損を判定する。その後、固定41メーカー、42ドメイン、67メーカー／カテゴリ組の各組について、規約適合かつ取得可能な代表ページを同じ方法で検証する。
+
+Captureは `e2e/fixtures/site-extraction-coverage.ts` を固定67組の完了集約として所有する。この記録は各組をメーカー、公式ドメイン、既存 `PartCategory`、状態で一意に列挙する。`verified` の記録は安定した固有抽出ID、実在データを含まないfixture識別子、検証日、共通項目と既存属性の期待結果、項目別由来、汎用フォールバックと未推測欠損の判定を持つ。`unavailable` の記録は規約上の理由、アクセス不能、または代表ページ不在のいずれかの理由と確認日を持つ。実際のHTML、規約判断の根拠、ローカル資料のパスはこの記録へ含めない。
+
+各組の作業は `site-extraction-authoring` の単一ページ登録手順の出力を入力にする。Captureの実装タスクはその出力から一組の `verified` または `unavailable` 記録を追加し、実拡張E2Eを対応するfixtureへ追加する。集約記録の検証は固定67組と一致する重複なしの組数、各組がいずれか一状態を持つこと、`verified` と `unavailable` の必須項目を確認する。67組すべてに有効な記録があり、`verified` のE2Eが通るときだけ展開は完了する。保存HTML取得、規約確認、単一ページの登録・再生成は `site-extraction-authoring` が所有するが、67組の網羅性、状態集約、完了判定はCaptureが所有する。
+
+_Requirements: 6.4, 6.5, 6.6, 6.7_
 
 ## リスクと代替案
 
