@@ -1,10 +1,12 @@
 schema_version: 1
 owns:
   - id: project-candidate-lifecycle
-    description: プロジェクトと、そのプロジェクトに属する検討途中の候補・取得元を作成、選択、補正、削除、利用者選択による統合として管理する責任
+    description: プロジェクトと、そのプロジェクトに属する検討途中の候補・取得元を作成、選択、補正、削除、利用者選択による統合として管理し、候補管理所有の受入入力を通じてページ取得が渡す既存カテゴリ属性の元表記を候補編集へ未確認値として受け入れる責任
 exports:
+  - id: candidate-capture-handoff
+    description: ページ取得が検証済みの名称・メーカー・型番の各元表記、取得時分類の元表記と既存PartCategory、当該カテゴリに属する属性元表記、URL・種別・取得時刻・任意の価格を完全な入力として渡し、候補管理がローカルな取得元IDと最初のプライマリ指定を補った未確認PartDraftを返す境界。候補管理は対応カテゴリの既存属性キーだけを保持し、取得時分類を確認済みcategoryへ昇格させない
   - id: project-candidate-state
-    description: 選択中プロジェクトとプロジェクト別候補を、元表記と確認済み値を区別した有効な状態として利用する境界
+    description: 選択中プロジェクトとプロジェクト別候補を、元表記と確認済み値を区別した有効な状態として利用する境界。候補のcategoryは既存の確認済みPartCategory投影を維持し、未確認の取得時分類はoriginalCategoryと属性対応カテゴリにだけ保持する
   - id: candidate-deletion-reference-cleanup
     description: 候補削除の開始と、登録済みの候補IDごとの純粋なルート整理変換を候補除去より先に一度適用する最小の登録・適用拡張点。登録がない場合は候補削除だけを行い、登録変換の失敗時は候補を除かない
 consumes:
@@ -20,7 +22,7 @@ invariants:
   - id: candidate-project-integrity
     description: 各候補は存在する一つのプロジェクトに属し、プロジェクト削除時にはその候補も利用できない
   - id: candidate-value-provenance
-    description: 自動取得された元表記と利用者が確認した値を区別し、候補の補正と重複統合で既存の確認済み値を自動的に置き換えない
+    description: 自動取得された名称・分類・既存カテゴリ属性の元表記と利用者が確認した値を区別し、候補の保存、補正、同一URLの引渡し、重複統合で既存の確認済み値を自動的に置き換えない。未確認の取得時分類は既存categoryを変えず、対応する属性元表記を表示・保持できる。属性の異なる新しい元表記を統合したときは、その新しい表記を候補が参照するoriginalとして保持する
   - id: candidate-deletion-cleanup-order
     description: 候補または候補を含むプロジェクトを削除するときは、登録済みの候補ID整理変換を候補IDごとに一度適用してから候補を除き、変換が失敗した場合は候補を除かない
 file_ownership:
