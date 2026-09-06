@@ -1,7 +1,7 @@
 schema_version: 1
 active_change:
   milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
-  state: tasks
+  state: implementation
   requirement_ids:
   - "1.1"
   - "1.2"
@@ -44,3 +44,9 @@ active_change:
       input_revisions:
         contract: sha256:ad81547f3929b474d99b8e9712f72cbf38b3267e742f1acc3a45871182dbfc52
         design/main: sha256:fd00a1386f0528df80f7460d0f842389815edbabb4bdfb5bc723171981cac782
+    tasks:
+      passed_at: 2026-09-06T04:55:15.9727323Z
+      approval_mode: delegated
+      delegation_workflow: sb-plan
+      input_revisions:
+        "tasks.yaml#plan": sha256:50b4856a488ec0636add1024505770cacfa1a8587b0d900f09cb1be3657d4b96
