@@ -5,7 +5,7 @@
  * 画面をここへ足すときは `SCREENS` に 1 行足す。feature registry や
  * contribution 機構は持たない (C-5)。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { removeCandidateReferences } from "./build.js";
 import { BuildScreen } from "./build-screen.js";
 import { manufacturerDomainEntryForUrl } from "./capture/manufacturer-domain-map.js";
@@ -123,6 +123,7 @@ export const App = ({
   const [failure, setFailure] = useState<StorageFailure | null>(null);
   const [screenId, setScreenId] = useState<ScreenId>("parts");
   const [menuOpen, setMenuOpen] = useState(false);
+  const projectMenuToggleRef = useRef<HTMLButtonElement>(null);
   /** 一時表示面。拡張アイコンの操作で現れ、常設ナビには出ない。 */
   const [capture, setCapture] = useState<CaptureState | null>(null);
   /** 取り込みから引き渡された編集中の下書き。 */
@@ -164,14 +165,20 @@ export const App = ({
       if (result.ok) {
         setRoot(result.value);
         setFailure(null);
-        return;
+        return true;
       }
       setFailure(result.error);
+      return false;
     },
     [store],
   );
 
-  if (failure !== null)
+  const closeProjectMenu = useCallback(() => {
+    setMenuOpen(false);
+    projectMenuToggleRef.current?.focus();
+  }, []);
+
+  if (failure !== null && root === null)
     return (
       <div className="shell">
         <div className="notice notice--error" role="alert">
@@ -222,6 +229,7 @@ export const App = ({
           aria-label={t("projectMenuOpen")}
           className="project-bar__current"
           data-project-menu-toggle
+          ref={projectMenuToggleRef}
           onClick={() => setMenuOpen((open) => !open)}
           type="button"
         >
@@ -239,16 +247,25 @@ export const App = ({
 
         {menuOpen ? (
           <ProjectMenu
-            onClose={() => setMenuOpen(false)}
-            onCreate={(name) => void apply(createProject(name))}
-            onDelete={(id) => void apply(deleteProject(id))}
-            onRename={(id, name) => void apply(renameProject(id, name))}
-            onSelect={(id) => void apply(selectProject(id))}
+            onClose={closeProjectMenu}
+            onCreate={(name) => apply(createProject(name))}
+            onDelete={(id) => apply(deleteProject(id))}
+            onRename={(id, name) => apply(renameProject(id, name))}
+            onSelect={(id) => apply(selectProject(id))}
             projects={root.projects}
             selectedProjectId={root.selectedProjectId}
           />
         ) : null}
       </div>
+
+      {failure === null ? null : (
+        <div className="notice notice--error" role="alert">
+          {failureMessage(failure)}
+          <button className="button" onClick={() => void load()} type="button">
+            {t("retry")}
+          </button>
+        </div>
+      )}
 
       {/**
        * 取り込み面が最優先。プロジェクトが無くても取り込みは成立し、
@@ -273,7 +290,7 @@ export const App = ({
         />
       ) : (
         <screen.View
-          apply={(mutate) => void apply(mutate)}
+          apply={apply}
           handoff={screenId === "parts" ? handoff : null}
           onHandoffConsumed={() => setHandoff(null)}
           onNavigate={setScreenId}

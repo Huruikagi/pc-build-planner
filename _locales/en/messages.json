@@ -273,6 +273,15 @@
   "partNameRequired": {
     "message": "Enter a product name"
   },
+  "editorIdentifyingInformationRequired": {
+    "message": "Enter a product name, category, attribute, or source"
+  },
+  "editorIncomplete": {
+    "message": "Unconfirmed, uncategorized, and missing information can be saved as work in progress."
+  },
+  "editorCategoryChangeNotice": {
+    "message": "Saving after changing the category removes confirmed attributes specific to the previous category."
+  },
   "sourcePrimary": {
     "message": "Primary"
   },

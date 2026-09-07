@@ -148,20 +148,26 @@ export const PartEditor = ({
   onSave,
   onCancel,
 }: PartEditorProps) => {
-  const [nameError, setNameError] = useState(false);
+  const [draftError, setDraftError] = useState(false);
   const [sourceUrlError, setSourceUrlError] = useState(false);
   const [sourcePriceError, setSourcePriceError] = useState(false);
   const [showOriginals, setShowOriginals] = useState(false);
+  const [categoryChangeNotice, setCategoryChangeNotice] = useState(false);
 
   const attributes = CATEGORY_ATTRIBUTES[draft.category];
   const originals = Object.entries(draft.originals).filter(
     (entry): entry is [IdentityField, string] => entry[1] !== undefined,
   );
+  const originalAttributes = Object.entries(draft.originalAttributes);
+  const hasOriginals =
+    originals.length > 0 ||
+    draft.originalCategory !== null ||
+    originalAttributes.length > 0;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!draftHasIdentifyingInformation(draft)) {
-      setNameError(true);
+      setDraftError(true);
       return;
     }
     if (draft.sources.some((source) => !isHttpUrl(source.url.trim()))) {
@@ -244,14 +250,14 @@ export const PartEditor = ({
           name="part-name"
           onChange={(event) => {
             onChange({ ...draft, name: event.target.value });
-            setNameError(false);
+            setDraftError(false);
           }}
           value={draft.name}
         />
       </div>
-      {nameError ? (
+      {draftError ? (
         <div className="error-text" role="alert">
-          {t("partNameRequired")}
+          {t("editorIdentifyingInformationRequired")}
         </div>
       ) : null}
 
@@ -309,12 +315,16 @@ export const PartEditor = ({
           className="field"
           id="part-category"
           name="part-category"
-          onChange={(event) =>
-            onChange({
-              ...draft,
-              category: event.target.value as PartCategory,
-            })
-          }
+          onChange={(event) => {
+            const nextCategory = event.target.value as PartCategory;
+            const hasConfirmedAttributes = Object.values(draft.attributes).some(
+              (value) => value.trim() !== "",
+            );
+            setCategoryChangeNotice(
+              nextCategory !== draft.category && hasConfirmedAttributes,
+            );
+            onChange({ ...draft, category: nextCategory });
+          }}
           value={draft.category}
         >
           {PART_CATEGORIES.map((category) => (
@@ -324,6 +334,12 @@ export const PartEditor = ({
           ))}
         </select>
       </div>
+
+      {categoryChangeNotice ? (
+        <p className="field-note" role="status">
+          {t("editorCategoryChangeNotice")}
+        </p>
+      ) : null}
 
       {attributes.length > 0 ? (
         <>
@@ -390,6 +406,10 @@ export const PartEditor = ({
           <p className="field-note">{t("editorSpecsOptional")}</p>
         </>
       ) : null}
+
+      <p className="field-note" data-draft-incomplete>
+        {t("editorIncomplete")}
+      </p>
 
       <div className="section-header">
         <span>{t("editorSources")}</span>
@@ -585,7 +605,7 @@ export const PartEditor = ({
         v0.4.0 は生 JSON のテキストエリアとして露出していた。
         編集対象は確認済みの値だけで、元表記は参照するだけのもの。
       */}
-      {originals.length === 0 ? null : (
+      {hasOriginals ? (
         <>
           <button
             aria-expanded={showOriginals}
@@ -604,10 +624,26 @@ export const PartEditor = ({
                   <dd>{original}</dd>
                 </div>
               ))}
+              {draft.originalCategory === null ? null : (
+                <div className="originals__row" data-original-category>
+                  <dt>{t("fieldCategory")}</dt>
+                  <dd>{draft.originalCategory}</dd>
+                </div>
+              )}
+              {originalAttributes.map(([key, original]) => (
+                <div
+                  className="originals__row"
+                  data-original-attribute={key}
+                  key={key}
+                >
+                  <dt>{attributeLabel(key)}</dt>
+                  <dd>{original}</dd>
+                </div>
+              ))}
             </dl>
           ) : null}
         </>
-      )}
+      ) : null}
 
       <div className="editor-actions">
         <button className="button button--primary" type="submit">

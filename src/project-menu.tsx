@@ -13,10 +13,10 @@ import type { Project } from "./model.js";
 interface ProjectMenuProps {
   readonly projects: readonly Project[];
   readonly selectedProjectId: string | null;
-  readonly onSelect: (id: string) => void;
-  readonly onCreate: (name: string) => void;
-  readonly onRename: (id: string, name: string) => void;
-  readonly onDelete: (id: string) => void;
+  readonly onSelect: (id: string) => Promise<boolean>;
+  readonly onCreate: (name: string) => Promise<boolean>;
+  readonly onRename: (id: string, name: string) => Promise<boolean>;
+  readonly onDelete: (id: string) => Promise<boolean>;
   readonly onClose: () => void;
 }
 
@@ -77,25 +77,25 @@ export const ProjectMenu = ({
     };
   }, [confirmingId, onClose]);
 
-  const submitCreate = (event: React.FormEvent) => {
+  const submitCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     const name = newName.trim();
     if (name === "") {
       setNameError(true);
       return;
     }
-    onCreate(name);
-    setNewName("");
-    setNameError(false);
+    if (await onCreate(name)) {
+      setNewName("");
+      setNameError(false);
+    }
   };
 
-  const submitRename = (event: React.FormEvent, id: string) => {
+  const submitRename = async (event: React.FormEvent, id: string) => {
     event.preventDefault();
     const input = new FormData(event.target as HTMLFormElement).get("name");
     const name = typeof input === "string" ? input.trim() : "";
     if (name === "") return;
-    onRename(id, name);
-    setEditingId(null);
+    if (await onRename(id, name)) setEditingId(null);
   };
 
   return (
@@ -110,13 +110,14 @@ export const ProjectMenu = ({
         if (confirmingId === project.id)
           return (
             <div className="project-menu__confirm" key={project.id}>
-              <div>{t("projectDeleteConfirm", project.name)}</div>
+              <div role="alert">{t("projectDeleteConfirm", project.name)}</div>
               <div className="project-menu__confirm-actions">
                 <button
                   className="button button--danger"
                   onClick={() => {
-                    onDelete(project.id);
-                    setConfirmingId(null);
+                    void onDelete(project.id).then((saved) => {
+                      if (saved) setConfirmingId(null);
+                    });
                   }}
                   type="button"
                 >
@@ -167,8 +168,9 @@ export const ProjectMenu = ({
               aria-label={t("projectSelect", project.name)}
               className="project-menu__select"
               onClick={() => {
-                onSelect(project.id);
-                onClose();
+                void onSelect(project.id).then((saved) => {
+                  if (saved) onClose();
+                });
               }}
               type="button"
             >

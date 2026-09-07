@@ -115,14 +115,18 @@ export const PartsScreen = ({
           setPending(null);
         }}
         onMerge={(targetId) => {
-          apply(mergeIntoPart(targetId, pending.draft));
-          setPending(null);
-          setDraft(null);
+          void apply(mergeIntoPart(targetId, pending.draft)).then((saved) => {
+            if (!saved) return;
+            setPending(null);
+            setDraft(null);
+          });
         }}
         onSaveNew={() => {
-          apply(savePart(pending.draft, project.id));
-          setPending(null);
-          setDraft(null);
+          void apply(savePart(pending.draft, project.id)).then((saved) => {
+            if (!saved) return;
+            setPending(null);
+            setDraft(null);
+          });
         }}
       />
     );
@@ -141,8 +145,9 @@ export const PartsScreen = ({
             setDraft(null);
             return;
           }
-          apply(savePart(next, project.id));
-          setDraft(null);
+          void apply(savePart(next, project.id)).then((saved) => {
+            if (saved) setDraft(null);
+          });
         }}
       />
     );
@@ -223,14 +228,15 @@ export const PartsScreen = ({
             if (confirmingId === part.id)
               return (
                 <li className="part-row part-row--confirm" key={part.id}>
-                  <div>{t("partDeleteConfirm", displayName)}</div>
+                  <div role="alert">{t("partDeleteConfirm", displayName)}</div>
                   <div className="project-menu__confirm-actions">
                     <button
                       className="button button--danger"
                       data-confirm-delete
                       onClick={() => {
-                        apply(deletePart(part.id));
-                        setConfirmingId(null);
+                        void apply(deletePart(part.id)).then((saved) => {
+                          if (saved) setConfirmingId(null);
+                        });
                       }}
                       type="button"
                     >

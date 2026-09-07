@@ -273,6 +273,15 @@
   "partNameRequired": {
     "message": "商品名を入力してください"
   },
+  "editorIdentifyingInformationRequired": {
+    "message": "商品名、カテゴリ、属性、または取得元を入力してください"
+  },
+  "editorIncomplete": {
+    "message": "未確認・未分類・未入力の情報は検討途中として保存できます。"
+  },
+  "editorCategoryChangeNotice": {
+    "message": "カテゴリを変更して保存すると、以前のカテゴリ固有の確認済み属性は削除されます。"
+  },
   "sourcePrimary": {
     "message": "プライマリ"
   },

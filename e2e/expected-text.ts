@@ -11,6 +11,8 @@ export const EXPECTED = {
     projectMenuHeading: "プロジェクトを切り替え",
     projectMenuCreateHeading: "最初のプロジェクトを作る",
     partNameRequired: "商品名を入力してください",
+    editorIdentifyingInformationRequired:
+      "商品名、カテゴリ、属性、または取得元を入力してください",
     /** カテゴリ表示名。属性欄の出し分けが効いているかの確認に使う。 */
     categoryCpu: "CPU",
     attributeSocket: "ソケット",
@@ -20,6 +22,8 @@ export const EXPECTED = {
     projectMenuHeading: "Switch project",
     projectMenuCreateHeading: "Create your first project",
     partNameRequired: "Enter a product name",
+    editorIdentifyingInformationRequired:
+      "Enter a product name, category, attribute, or source",
     categoryCpu: "CPU",
     attributeSocket: "Socket",
   },

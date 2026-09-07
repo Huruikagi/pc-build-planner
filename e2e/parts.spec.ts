@@ -216,16 +216,19 @@ for (const { lang, catalog } of LOCALES) {
           .filter({ hasText: "SYN CPU 9800X3D 改" }),
       ).toBeVisible();
 
-      // --- 商品名だけは必須。保存せずエラーを出す ---
+      // --- 完全に空の下書きだけは保存せず、補う情報を示す ---
       await page.click("[data-create-part]");
       await page.click("[data-part-editor] button[type=submit]");
-      await expect(page.getByRole("alert")).toHaveText(text.partNameRequired);
+      await expect(page.getByRole("alert")).toHaveText(
+        text.editorIdentifyingInformationRequired,
+      );
       await expect(page.locator("[data-part-editor]")).toBeVisible();
       await page.click(".editor-bar__back");
       await expect(page.locator("[data-part-id]")).toHaveCount(3);
 
       // --- 削除は確認を挟む ---
       await page.locator("[data-delete-part]").last().click();
+      await expect(page.getByRole("alert")).toBeVisible();
       await page.click("[data-confirm-delete]");
       await expect(page.locator("[data-part-id]")).toHaveCount(2);
 
