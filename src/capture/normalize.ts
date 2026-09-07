@@ -4,10 +4,15 @@
  * **ページ由来のデータは未信頼入力**なので、ここが境界。通らなかった値は
  * 黙って捨てず、理由を残して利用者へ提示する (`docs/reverse/features.md` 2.3)。
  */
-import type { Money, PartCategory } from "../model.js";
+import {
+  CATEGORY_ATTRIBUTES,
+  type Money,
+  type PartCategory,
+} from "../model.js";
 import { JA_CATEGORY_KEYWORDS } from "./category-keywords.js";
 import { CURRENCY_SYMBOLS, LIMITS, YEN_SUFFIX_PATTERN } from "./rules.js";
 import type {
+  AcceptedAttribute,
   AcceptedField,
   CaptureField,
   CapturePayload,
@@ -98,8 +103,16 @@ type Verdict =
   | { readonly ok: true; readonly value: string }
   | { readonly ok: false; readonly reason: RejectionReason };
 
+const isFieldCandidate = (
+  candidate: RawCandidate,
+): candidate is Extract<RawCandidate, { readonly field: CaptureField }> =>
+  "field" in candidate;
+
 const verify = (candidate: RawCandidate): Verdict => {
-  if (candidate.rawValue.length > MAX_LENGTH[candidate.field])
+  const maximum = isFieldCandidate(candidate)
+    ? MAX_LENGTH[candidate.field]
+    : 300;
+  if (candidate.rawValue.length > maximum)
     return { ok: false, reason: "tooLong" };
 
   const { text, hadControlCharacters } = normalizeWhitespace(
@@ -109,7 +122,7 @@ const verify = (candidate: RawCandidate): Verdict => {
   /** 制御文字の混入は畳めば読めるが、意図された表記ではないので知らせる。 */
   if (hadControlCharacters) return { ok: false, reason: "controlCharacters" };
 
-  if (candidate.field === "url") {
+  if (isFieldCandidate(candidate) && candidate.field === "url") {
     let parsed: URL;
     try {
       parsed = new URL(text);
@@ -121,7 +134,7 @@ const verify = (candidate: RawCandidate): Verdict => {
     return { ok: true, value: parsed.href };
   }
 
-  if (candidate.field === "price") {
+  if (isFieldCandidate(candidate) && candidate.field === "price") {
     const money = parsePrice(text);
     if (money === null) return { ok: false, reason: "invalidFormat" };
     return { ok: true, value: text };
@@ -144,8 +157,10 @@ export const normalizeCapture = (
   const rejected: RejectedField[] = [];
   let price: CaptureResult["price"] = null;
   let categoryLabel: string | null = null;
+  const acceptedAttributes: AcceptedAttribute[] = [];
 
   for (const [index, candidate] of payload.candidates.entries()) {
+    if (!isFieldCandidate(candidate)) continue;
     const verdict = verify(candidate);
     if (!verdict.ok) {
       rejected.push({
@@ -183,6 +198,48 @@ export const normalizeCapture = (
     };
   }
 
+  const categoryHint =
+    categoryLabel === null ? null : inferCategoryHint(categoryLabel);
+  const allowed = new Set(
+    categoryHint === null
+      ? []
+      : CATEGORY_ATTRIBUTES[categoryHint].map(({ key }) => key),
+  );
+  for (const [index, candidate] of payload.candidates.entries()) {
+    if (isFieldCandidate(candidate)) continue;
+    if (
+      categoryHint === null ||
+      candidate.category !== categoryHint ||
+      !allowed.has(candidate.key)
+    ) {
+      rejected.push({
+        id: `attribute-${index}`,
+        field: "attribute",
+        reason: "invalidFormat",
+        sourceLabel: candidate.sourceLabel,
+      });
+      continue;
+    }
+    const verdict = verify(candidate);
+    if (!verdict.ok) {
+      rejected.push({
+        id: `attribute-${index}`,
+        field: "attribute",
+        reason: verdict.reason,
+        sourceLabel: candidate.sourceLabel,
+      });
+      continue;
+    }
+    if (acceptedAttributes.some(({ key }) => key === candidate.key)) continue;
+    acceptedAttributes.push({
+      key: candidate.key,
+      value: verdict.value,
+      original: candidate.rawValue,
+      source: candidate.source,
+      sourceLabel: candidate.sourceLabel,
+    });
+  }
+
   /** ページが `og:url` などを持たない場合、取得したページの URL を使う。 */
   const url = fields.url?.value ?? payload.url;
 
@@ -191,8 +248,8 @@ export const normalizeCapture = (
     capturedAt,
     fields,
     price,
-    categoryHint:
-      categoryLabel === null ? null : inferCategoryHint(categoryLabel),
+    categoryHint,
+    attributes: acceptedAttributes,
     rejected,
   };
 };

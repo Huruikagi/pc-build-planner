@@ -8,6 +8,7 @@
  * 値は v0.4.0 の `src/features/product-capture/` から引き継いだもので、
  * 実サイトでの試行錯誤の結果を含む。
  */
+import type { PartCategory } from "../model.js";
 import type { CaptureField, ExtractionSource } from "./types.js";
 
 /* --- 走査量の上限。悪意あるページで固まらないための歯止め ---------------- */
@@ -129,10 +130,20 @@ const MODEL_NUMBER_LABELS = new Set([
  * 取り込まない。正規化属性 (ソケット等) の自動判定はしない。
  * 規格値は利用者が確認して確定させるものなので、ここで推測しない。
  */
-export const fieldForLabel = (label: string): CaptureField | null => {
+export type LabelTarget =
+  | CaptureField
+  | { readonly category: PartCategory; readonly key: string };
+
+export const fieldForLabel = (label: string): LabelTarget | null => {
   const normalized = label.trim().normalize("NFKC").toLowerCase();
   if (MANUFACTURER_LABELS.has(normalized)) return "manufacturer";
   if (MODEL_NUMBER_LABELS.has(normalized)) return "modelNumber";
+  if (normalized === "cpu socket" || normalized === "cpuソケット")
+    return { category: "cpu", key: "socket" };
+  if (normalized === "memory standard" || normalized === "メモリー規格")
+    return { category: "memory", key: "memoryStandard" };
+  if (normalized === "form factor" || normalized === "フォームファクター")
+    return { category: "power-supply", key: "formFactor" };
   return null;
 };
 

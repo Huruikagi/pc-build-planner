@@ -65,7 +65,12 @@ const candidateHandoffFromCapture = (
     category: result.fields.category?.original ?? null,
   },
   capturedAttributeCategory: result.categoryHint,
-  attributes: {},
+  attributes:
+    result.categoryHint === null
+      ? {}
+      : Object.fromEntries(
+          result.attributes.map(({ key, original }) => [key, original]),
+        ),
   source: {
     url: result.url,
     kind:

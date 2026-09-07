@@ -47,6 +47,23 @@ const ASUS_PRODUCT_PAGE_HTML = `<!doctype html><html lang="ja"><head>
 <meta charset="utf-8"><title>SYN graphics card</title>
 </head><body><h1>SYN graphics card</h1></body></html>`;
 
+const CPU_PRODUCT_PAGE_URL = "http://pcbp.test/cpu-syn";
+const CPU_PRODUCT_PAGE_HTML = `<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><title>SYN CPU</title>
+<script type="application/ld+json">{
+  "@context":"https://schema.org","@type":"Product",
+  "name":"SYN CPU","category":"CPU","mpn":"SYN-CPU-1"
+}</script>
+</head><body><h1>SYN CPU</h1><table>
+<tr><th>CPU Socket</th><td>LGA1851</td></tr>
+<tr><th>Unrecognized attribute</th><td>must not be handed off</td></tr>
+</table></body></html>`;
+
+const INVALID_CPU_ATTRIBUTE_PAGE_HTML = CPU_PRODUCT_PAGE_HTML.replace(
+  "LGA1851",
+  "X".repeat(301),
+);
+
 test.describe("商品取り込み", () => {
   let extension: LoadedExtension;
 
@@ -172,6 +189,55 @@ test.describe("商品取り込み", () => {
     expect(extension.diagnostics).toEqual([]);
   });
 
+  test("既存カテゴリ属性だけを未確認handoffへ渡し、確認済み値にはしない", async () => {
+    const { page, context } = extension;
+    await serve(extension, CPU_PRODUCT_PAGE_HTML);
+    await createProject(extension, "CPU 属性の検証");
+
+    const target = await context.newPage();
+    await target.goto(CPU_PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+
+    const captured = page.locator('[data-capture-status="captured"]');
+    await expect(captured).toContainText("LGA1851");
+    await expect(captured).not.toContainText("must not be handed off");
+    await page.click("[data-capture-accept]");
+    await expect(page.locator("[data-part-editor]")).toBeVisible();
+    await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).toContainText("LGA1851");
+    await expect(page.locator('[name="attribute-socket"]')).toHaveCount(0);
+    await page.click('[data-part-editor] button[type="submit"]');
+
+    const stored = await extension.readStoredRoot();
+    const part = stored?.candidateParts[0];
+    expect(part?.category).toBe("uncategorized");
+    expect(part?.capturedAttributeCategory).toBe("cpu");
+    expect(part?.attributes).toEqual({ socket: { original: "LGA1851" } });
+    expect(extension.diagnostics).toEqual([]);
+  });
+
+  test("形式上限を超えるページ属性は棄却し、候補編集へ渡さない", async () => {
+    const { page, context } = extension;
+    await serve(extension, INVALID_CPU_ATTRIBUTE_PAGE_HTML);
+    await createProject(extension, "無効属性の検証");
+
+    const target = await context.newPage();
+    await target.goto(CPU_PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+
+    const captured = page.locator('[data-capture-status="captured"]');
+    await expect(captured).toContainText("CPU Socket");
+    await expect(captured).toContainText("値が長すぎます");
+    await page.click("[data-capture-accept]");
+    await page.click("[data-originals-toggle]");
+    await expect(page.locator(".originals")).not.toContainText("X".repeat(301));
+    await page.click('[data-part-editor] button[type="submit"]');
+
+    const stored = await extension.readStoredRoot();
+    expect(stored?.candidateParts[0]?.attributes).toEqual({});
+    expect(extension.diagnostics).toEqual([]);
+  });
+
   test("商品情報を取得できないページは理由を示して手入力へ逃がす", async () => {
     const { page, context } = extension;
     await serve(extension, BLANK_PAGE_HTML);
@@ -205,6 +271,26 @@ test.describe("商品取り込み", () => {
     const failed = page.locator('[data-capture-status="failed"]');
     await expect(failed).toBeVisible();
     await expect(failed.getByRole("alert")).toContainText("読み取れない");
+    expect(extension.diagnostics).toEqual([]);
+  });
+
+  test("取り込み元タブの遷移後は結果を引き渡さない", async () => {
+    const { page, context } = extension;
+    await serve(extension, PRODUCT_PAGE_HTML);
+    await createProject(extension, "タブ寿命の検証");
+
+    const target = await context.newPage();
+    await target.goto(PRODUCT_PAGE_URL);
+    await triggerExtensionAction(extension, target, "http://pcbp.test/");
+    await expect(
+      page.locator('[data-capture-status="captured"]'),
+    ).toBeVisible();
+    await target.goto(BLANK_PAGE_URL);
+
+    const failed = page.locator('[data-capture-status="failed"]');
+    await expect(failed).toBeVisible();
+    await expect(failed.getByRole("alert")).toContainText("ページが移動");
+    await expect(page.locator("[data-capture-accept]")).toHaveCount(0);
     expect(extension.diagnostics).toEqual([]);
   });
 

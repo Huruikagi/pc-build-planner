@@ -90,6 +90,21 @@ const CapturedFields = ({ result }: { readonly result: CaptureResult }) => {
             : t("captureCategoryHintNote")}
         </div>
       </div>
+
+      {result.attributes.map((attribute) => (
+        <div className="capture-row" key={attribute.key}>
+          <div className="capture-row__head">
+            <span className="capture-row__label">{attribute.key}</span>
+            <span className="capture-row__value">{attribute.value}</span>
+            <span className="badge badge--source">
+              {sourceLabel(attribute.source)}
+            </span>
+          </div>
+          <div className="capture-row__original">
+            {t("captureOriginal", attribute.original)}
+          </div>
+        </div>
+      ))}
     </>
   );
 };

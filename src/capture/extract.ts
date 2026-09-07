@@ -10,6 +10,7 @@
  */
 
 import { manufacturerDomainMatchForUrl } from "./manufacturer-domain-map.js";
+import type { LabelTarget } from "./rules.js";
 import {
   fieldForLabel,
   findMetadataRule,
@@ -41,21 +42,21 @@ class Sink {
   }
 
   push(
-    field: CaptureField | null,
+    target: CaptureField | LabelTarget | null,
     rawValue: string | null | undefined,
     source: RawCandidate["source"],
     sourceLabel: string,
   ): void {
-    if (this.full || field === null) return;
+    if (this.full || target === null) return;
     const trimmed = (rawValue ?? "").trim();
     if (trimmed === "") return;
     /** 極端に長い値はここで切る。検証は normalize 側で改めて行う。 */
-    this.candidates.push({
-      field,
-      rawValue: trimmed.slice(0, LIMITS.rawValueLength),
-      source,
-      sourceLabel,
-    });
+    const value = trimmed.slice(0, LIMITS.rawValueLength);
+    this.candidates.push(
+      typeof target === "string"
+        ? { field: target, rawValue: value, source, sourceLabel }
+        : { ...target, rawValue: value, source, sourceLabel },
+    );
   }
 }
 

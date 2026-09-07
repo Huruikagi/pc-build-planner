@@ -12,7 +12,7 @@ import type { CaptureState } from "./types.js";
 
 export { CAPTURE_PAYLOAD_MESSAGE, CAPTURE_STATE_KEY };
 
-const rawCandidate = z.object({
+const rawFieldCandidate = z.object({
   field: z.enum([
     "name",
     "manufacturer",
@@ -36,10 +36,43 @@ const rawCandidate = z.object({
   sourceLabel: z.string(),
 });
 
+const rawAttributeCandidate = z.object({
+  category: z.enum([
+    "cpu",
+    "cpu-cooler",
+    "motherboard",
+    "memory",
+    "gpu",
+    "storage",
+    "power-supply",
+    "case",
+    "case-fan",
+    "expansion-card",
+    "other",
+    "uncategorized",
+  ]),
+  key: z.string().max(120),
+  rawValue: z.string(),
+  source: z.enum([
+    "json-ld",
+    "open-graph",
+    "twitter-card",
+    "product-meta",
+    "heading",
+    "breadcrumb",
+    "table",
+    "definition-list",
+    "domain-map",
+  ]),
+  sourceLabel: z.string(),
+});
+
 export const capturePayloadSchema = z.object({
   url: z.string(),
   title: z.string(),
-  candidates: z.array(rawCandidate).max(200),
+  candidates: z
+    .array(z.union([rawFieldCandidate, rawAttributeCandidate]))
+    .max(200),
 });
 
 export const capturePayloadMessageSchema = z.object({

@@ -23,6 +23,15 @@ export type CaptureField =
   | "price"
   | "url";
 
+/** ページが示した既存カテゴリ属性の候補。分類は確認済みの値ではない。 */
+export interface RawAttributeCandidate {
+  readonly category: PartCategory;
+  readonly key: string;
+  readonly rawValue: string;
+  readonly source: ExtractionSource;
+  readonly sourceLabel: string;
+}
+
 /** 棄却の理由。黙って捨てず必ず提示する (`features.md` 2.3)。 */
 export type RejectionReason =
   | "empty"
@@ -32,13 +41,15 @@ export type RejectionReason =
   | "unresolvable";
 
 /** ページ側が返す生の候補。検証前なので信用しない。 */
-export interface RawCandidate {
+export interface RawFieldCandidate {
   readonly field: CaptureField;
   readonly rawValue: string;
   readonly source: ExtractionSource;
   /** 出典の中での位置。`JSON-LD name`、`og:title`、仕様表の行見出しなど。 */
   readonly sourceLabel: string;
 }
+
+export type RawCandidate = RawFieldCandidate | RawAttributeCandidate;
 
 /** content script がページから持ち帰るもの。未信頼入力として境界で検証する。 */
 export interface CapturePayload {
@@ -59,9 +70,14 @@ export interface AcceptedField {
 export interface RejectedField {
   /** 同じ項目・同じ見出しの棄却が複数出うるので、識別子を持たせる。 */
   readonly id: string;
-  readonly field: CaptureField;
+  readonly field: CaptureField | "attribute";
   readonly reason: RejectionReason;
   readonly sourceLabel: string;
+}
+
+/** 取得時分類に対応する、未確認の既存属性だけを保つ。 */
+export interface AcceptedAttribute extends AcceptedField {
+  readonly key: string;
 }
 
 /** 取り込み結果。利用者が確認して確定させるまでは何も確定しない。 */
@@ -76,6 +92,7 @@ export interface CaptureResult {
   } | null;
   /** 推定であって確定ではない。編集画面の初期選択になるだけ。 */
   readonly categoryHint: PartCategory | null;
+  readonly attributes: readonly AcceptedAttribute[];
   readonly rejected: readonly RejectedField[];
 }
 
