@@ -8,6 +8,12 @@
  */
 import { expect, test } from "@playwright/test";
 
+import type { LocalDataRoot } from "../src/model.js";
+import {
+  draftFromCaptureHandoff,
+  draftFromPart,
+  savePart,
+} from "../src/parts.js";
 import { EXPECTED, type ExpectedLocale } from "./expected-text.js";
 import {
   fillAttribute,
@@ -252,6 +258,121 @@ for (const { lang, catalog } of LOCALES) {
         "SYN 検証プロジェクト",
       );
 
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    test("URLだけの候補を保存し、実storageと再読込後の編集画面で確認できる", async () => {
+      const { page } = extension;
+      const url = "https://pcbp.test/url-only-candidate";
+      await createProject(extension, "SYN URL-only 検証");
+
+      await page.click("[data-create-part]");
+      await page.click("[data-source-add]");
+      await page.fill('[name^="source-url-"]', url);
+      await page.click("[data-part-editor] button[type=submit]");
+      await expect(page.locator("[data-part-id]")).toHaveCount(1);
+      await expect(page.locator(".part-row__name")).toHaveText(url);
+
+      /** 名称未取得でも、実際の保存ルートに候補と取得元が残る。 */
+      const stored = await extension.readStoredRoot();
+      expect(stored?.candidateParts).toHaveLength(1);
+      expect(stored?.candidateParts[0]?.name).toBeNull();
+      expect(stored?.candidateParts[0]?.category).toBe("uncategorized");
+      expect(stored?.candidateParts[0]?.sources).toMatchObject([
+        { url, kind: "retail", price: null, primary: true },
+      ]);
+
+      /** 取得元なしの未分類候補も、有効な保存対象として残せる。 */
+      await page.click(".editor-bar__back");
+      await addPart(extension, {
+        name: "SYN 取得元なし未分類候補",
+        category: "uncategorized",
+      });
+      const storedWithSourceLessCandidate = await extension.readStoredRoot();
+      expect(storedWithSourceLessCandidate?.candidateParts).toHaveLength(2);
+      expect(storedWithSourceLessCandidate?.candidateParts[1]).toMatchObject({
+        name: { confirmed: "SYN 取得元なし未分類候補" },
+        category: "uncategorized",
+        sources: [],
+      });
+
+      await page.reload();
+      await page.waitForSelector(".shell");
+      await expect(page.locator(".part-row__name")).toHaveText([
+        url,
+        "SYN 取得元なし未分類候補",
+      ]);
+      await page.locator("[data-edit-part]").click();
+      await expect(page.locator('[name^="source-url-"]')).toHaveValue(url);
+      await page.locator(".editor-bar__back").click();
+      const sourceLessRow = page
+        .locator("[data-part-id]")
+        .filter({ hasText: "SYN 取得元なし未分類候補" });
+      await sourceLessRow.locator("[data-edit-part]").click();
+      await expect(page.locator('[name="part-category"]')).toHaveValue(
+        "uncategorized",
+      );
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    test("分類元表記は確認済み分類を置き換えず、保存済みルートと再読込後に残る", async () => {
+      const { page, worker } = extension;
+      await createProject(extension, "SYN 分類元表記");
+
+      /**
+       * ページ取得の配線ではなく、候補管理が所有する完全な受入入力を使う。
+       * 分類の確認は別操作なので、元表記を保ったまま確認済み分類だけを選ぶ。
+       */
+      const beforeCapture = (await extension.readStoredRoot()) as LocalDataRoot;
+      const projectId = beforeCapture.selectedProjectId;
+      if (projectId === null) throw new Error("project is unavailable");
+      const captured = savePart(
+        draftFromCaptureHandoff({
+          originals: {
+            name: "SYN CPU Original",
+            manufacturer: "SYN Maker",
+            modelNumber: "SYN-CPU-1",
+            category: "Processors",
+          },
+          capturedAttributeCategory: "cpu",
+          attributes: { socket: "Socket AM5" },
+          source: {
+            url: "https://pcbp.test/cpu/syn-original",
+            kind: "retail",
+            capturedAt: "2026-09-07T00:00:00.000Z",
+            price: null,
+          },
+        }),
+        projectId,
+      )(beforeCapture);
+      const capturedPart = captured.candidateParts[0];
+      if (capturedPart === undefined)
+        throw new Error("captured part is unavailable");
+      const confirmed = savePart(
+        { ...draftFromPart(capturedPart), category: "cpu" },
+        projectId,
+      )(captured);
+
+      await worker.evaluate(async (root) => {
+        await chrome.storage.local.set({ localDataRoot: root });
+      }, confirmed);
+
+      /** 保存済みルートでは、取得時分類と確認済み分類を分離して保持する。 */
+      const stored = await extension.readStoredRoot();
+      expect(stored?.candidateParts[0]).toMatchObject({
+        category: "cpu",
+        originalCategory: "Processors",
+      });
+
+      await page.reload();
+      await page.waitForSelector(".shell");
+      await page.locator("[data-edit-part]").click();
+      await expect(page.locator('[name="part-category"]')).toHaveValue("cpu");
+      await page.click("[data-originals-toggle]");
+      await expect(page.locator("[data-original-category] dd")).toHaveText(
+        "Processors",
+      );
+      await expect(page.locator("[data-originals] input")).toHaveCount(0);
       expect(extension.diagnostics).toEqual([]);
     });
 
