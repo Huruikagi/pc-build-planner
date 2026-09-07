@@ -5,6 +5,13 @@ description: Plan active Spec work through Requirements, Design, Contract Review
 
 # Plan active Spec work
 
+For a Drive recovery dispatch carrying explicit `--replan` authority and named
+affected Specs, read [Replan during Drive](references/replan.md) first. That
+procedure owns the recovery scope and overrides the ordinary no-rewind
+delegation rule only for Design and Tasks. Do not repeat the scope or delegation
+question already settled by that dispatch. Ordinary Plan requests use the
+following entry rules unchanged.
+
 ## First action: fail closed on an unspecified scope
 
 Classify the maintainer's request **before reading phase procedures, Spec
@@ -119,11 +126,11 @@ Once scope is explicit, present before doing anything:
 - that every delegated acceptance records `sb-plan` in its durable
   gate evidence, visible afterwards through `specbind spec status`.
 
-Exception: when `sb-discovery` dispatches a confirmed reverse milestone, its
+Exception: when `sb-adopt` dispatches a confirmed reverse milestone, its
 visible reverse proposal already authorized Requirements and Design under
-workflow `sb-discovery`. Verify `baselineVersion`, `reverseSpecs`, and that
+workflow `sb-adopt`. Verify `baselineVersion`, `reverseSpecs`, and that
 `targetRelease` is absent from milestone scope. Do not ask again, do not claim
-Tasks authority, and record `sb-discovery` in those two gates.
+Tasks authority, and record `sb-adopt` in those two gates.
 
 Take **one confirmation** for the run. The request to run this skill is **not**
 that confirmation unless it explicitly authorizes those named gates for the
@@ -134,8 +141,8 @@ Declining delegation is legitimate and does not end orchestration. Sequence the
 same phases and pause at each gate for explicit approval. Explain that all scope
 can require many approval pauses.
 
-Delegation never covers invalidating an approved gate. If the run discovers a
-rewind is needed, stop and ask. It also does not accept the Contract Review:
+Ordinary Plan delegation never covers invalidating an approved gate. If the run
+discovers a rewind is needed, stop and ask. It also does not accept the Contract Review:
 that review requires no approval authority.
 
 ## 4. Follow the CLI's phase-relative scheduling
@@ -275,7 +282,7 @@ After the review is accepted:
 
 For a reverse milestone, stop this sequence after the accepted Contract Review.
 Design approval reports `adoption_ready`; Tasks are forbidden. Return control
-to `sb-discovery`, which owns `milestone reverse finalize`.
+to `sb-adopt`, which owns `milestone reverse finalize`.
 
 Gap analysis is not on this path. Run `sb-gap-analysis` first when
 brownfield uncertainty requires it; this Skill does not decide that for you.

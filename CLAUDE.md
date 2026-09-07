@@ -16,11 +16,8 @@ the only supported writer of machine state.
   select `sb-configure` directly before ordinary change-request routing. Its
   update procedure proves installation ownership and preserves the separate
   binary-selection and project-asset checkpoints.
-- Work through those installed `sb-*` Skills. Use `sb-discovery` to
-  turn a request into scope or to establish new Specs from an explicitly
-  selected existing implementation, and `sb-status` to see where work
-  stands. Existing code and tests are evidence rather than intended
-  specification; the adoption route requires committed Steering.
+- Work through those installed `sb-*` Skills. Use `sb-discovery` to turn a
+  change request into scope, and `sb-status` to see where work stands.
 - Use `sb-drive` when the user asks to drive, continue, or advance the
   active milestone as far as safely possible. It may cross planning,
   implementation, and validation while preserving each owning Skill. A request
@@ -46,6 +43,11 @@ the only supported writer of machine state.
 - Use `sb-gap-analysis` when the user explicitly asks to compare planned work
   with the existing repository. Use `sb-release` only for an explicit request
   to release and finalize the active milestone.
+- When the user asks to continue or recover a pending implementation and
+  supplies a returned review or diagnosis, use `sb-implement`. It remains the
+  owner through fresh review, Task progress, and the checkpoint. This
+  continuation route takes precedence over the direct review and diagnosis
+  routes below; a diagnosis-only request still does not start implementation.
 - When the user asks to review one implemented Task, use
   `sb-review-task`; the review must judge the actual diff without fixing
   it or recording Task state.
@@ -72,12 +74,6 @@ the only supported writer of machine state.
   an explicitly named file authorizes classification, not implementation. When
   the classification is genuinely unclear, enter the flow. Anything else is
   ordinary work: say in one line that it needs no Spec, and do it.
-- An explicit request to establish Specs from an existing implementation is
-  not a change request for that routing check. Select `sb-discovery` directly
-  The same Skill owns an explicit request to resume an active reverse
-  establishment. Let its reverse procedure run `specbind adoption preflight`
-  before any ordinary `specbind milestone status` or `specbind spec list` read;
-  that preflight distinguishes a new run from a verified continuation.
 - Never hand-edit `spec.yaml`, the active roadmap, or the execution state in
   `tasks.yaml`. Those are CLI-owned, and a hand edit produces state no command
   validated. The task plan itself is authored, by the skill that owns it.

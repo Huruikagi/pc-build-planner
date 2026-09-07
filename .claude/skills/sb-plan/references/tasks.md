@@ -1,5 +1,11 @@
 # Tasks phase
 
+Selected `_Retired_` Requirement IDs are retirement work, not promises to
+reimplement. Use the existing `requirement_ids` fields to cover their explained
+continuation or cessation. Define evidence for preserved obligations, removed
+behavior and affected consumers as applicable. Prose-only consolidation needs
+preservation and reference checks, not invented product code changes.
+
 ## Apply project language style
 
 Before authoring any artifact or user-facing prose, read this once unless this
@@ -178,6 +184,34 @@ absent, do not approve a plan that implements behavior first and creates that
 command later. Combine the behavior and its tests, or place genuine test
 scaffolding first, then rerun both CLI checks.
 
+For each completion check, also establish what it proves, the input or state it
+needs, how that will be supplied, and whether it is available when the task
+finishes. Inspect relevant existing checks or fixtures rather than assuming a
+named command can produce the required state. No separate inventory is needed.
+
+Compare these checks with the approved Design's verification obligations before
+presenting the plan as ready. Do not silently omit a stronger Design condition
+or replace required real-connection proof with boundary tests. Report that
+mismatch even when the draft passes the CLI checks; correcting it belongs to
+Design before this plan can be approved.
+
+Only when another Spec supplies a prerequisite, read its relevant Contract and
+Design and compare availability with `specbind milestone scope`. Read that
+Spec's Tasks only if they exist and their detail is needed. This targeted read
+does not authorize editing that Spec or require an audit of every Spec's Tasks.
+The Roadmap read checks execution order; it does not reopen product Steering.
+
+Distinguish boundary input that proves this task's responsibility from a later
+integration check of the real connection. Prefer an existing input path or a
+small test helper when sufficient; do not require a new public API, injection
+layer, or permanent abstraction solely to make Specs independently finishable.
+Correct the completion condition, verification placement, or work order within
+the approved scope, then rerun both CLI checks. Do not defer proof of this task's
+own responsibility or silently assign work to another Spec. If the correction
+requires changing Design, Contract, Roadmap, or another Spec's plan, report the
+concrete prerequisite and ordering mismatch, route to its owner, and stop this
+plan's approval. Existing approval and invalidation rules still apply.
+
 ## 5. Revising a plan that has recorded progress
 
 If the Spec is in `implementation`, tasks may already be completed or blocked,
@@ -193,7 +227,10 @@ So:
 - Rewrite the `execution.tasks` keys in the **same edit** that renumbers the
   plan. Never leave the two disagreeing.
 - **State the before-and-after mapping** for every renumbered task that has a
-  persisted entry, and get confirmation before writing.
+  persisted entry, and get confirmation before writing unless explicit Drive
+  replan authority covers it. In that recovery, report the mapping and proceed.
+  Preserve a completed record only when its obligation and evidence still
+  apply; changed work must return to implementation for fresh proof.
 - Prefer a revision that leaves completed tasks where they are — appending, or
   splitting a task that has not started — over one that renumbers finished work,
   when both express the same intent.
@@ -284,6 +321,10 @@ approved; report the work as uncommitted and continue.
 
 ## When the gate is already approved
 
+Exception: explicit Drive replan authority from [the recovery procedure](replan.md)
+covers this Tasks rewind and reapproval, including progress remapping. Report
+the cost and mapping, then continue without another confirmation.
+
 If `spec status` shows the tasks gate approved, do not edit. Editing underneath
 an approved gate leaves evidence describing a plan that no longer exists, and the
 CLI then refuses later work citing freshness rather than the edit that caused it.
@@ -303,8 +344,9 @@ recorded progress is affected, per the mapping rule above.
 specbind spec tasks invalidate <spec>
 ```
 
-Confirmation cannot be inferred, and delegated authority does not cover this.
-Delegation authorizes accepting gates, not discarding accepted work.
+Outside that explicit Drive recovery, confirmation cannot be inferred, and
+ordinary delegated authority does not cover this. Ordinary delegation
+authorizes accepting gates, not discarding accepted work.
 
 ## Boundaries
 
