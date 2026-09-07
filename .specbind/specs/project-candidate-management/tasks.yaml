@@ -151,3 +151,5 @@ execution:
   tasks:
     "1":
       status: completed
+    "2":
+      status: completed

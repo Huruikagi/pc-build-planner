@@ -152,9 +152,9 @@ test.describe("重複判定", () => {
     /** 増えていない。統合されている。 */
     expect(stored?.candidateParts).toHaveLength(1);
     const part = stored?.candidateParts[0];
-    /** 既存の確定値は変わらない。 */
+    /** 既存の確定値は変わらず、取り込み元表記だけが最新値になる。 */
     expect(part?.name).toEqual({
-      original: null,
+      original: "SYN GeForce RTX 5080 SUPER 16GB",
       confirmed: "SYN 既存パーツ",
     });
     /** ソースだけが増える。既存にソースが無かったので最初の 1 件が基準になる。 */

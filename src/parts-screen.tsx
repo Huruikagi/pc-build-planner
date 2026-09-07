@@ -14,7 +14,7 @@ import {
   findBySourceUrl,
   findDuplicates,
   mergeIntoPart,
-  mergeSources,
+  refreshedDraftForPart,
 } from "./duplicates.js";
 import { t } from "./i18n.js";
 import { DeleteIcon, ExtensionIcon, PlusIcon } from "./icons.js";
@@ -87,10 +87,7 @@ export const PartsScreen = ({
       setDraft(handoff);
       return;
     }
-    setDraft({
-      ...draftFromPart(existing),
-      sources: mergeSources(existing.sources, handoff.sources),
-    });
+    setDraft(refreshedDraftForPart(existing, handoff));
   }, [handoff, onHandoffConsumed, project, root]);
 
   const parts = useMemo(() => partsOf(root, project.id), [root, project]);

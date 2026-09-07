@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { removeCandidateReferences } from "../src/build.js";
+import { mergeIntoPart } from "../src/duplicates.js";
 import {
   createInitialRoot,
   type LocalDataRoot,
@@ -139,6 +140,103 @@ test("属性元表記を保存し、確認済み投影を自動変更しない",
     original: "Socket AM5",
     confirmed: "AM5",
   });
+});
+
+test("重複統合は確認済み値を保ち、最新の取得元表記と取得元を残す", () => {
+  const existing = savePart(
+    {
+      ...capturedCpuDraft(),
+      name: "確認済み CPU",
+      category: "cpu",
+      attributes: { socket: "AM5" },
+    },
+    "project-1",
+  )(withProject());
+  const target = existing.candidateParts[0];
+  if (target === undefined) throw new Error("saved candidate is unavailable");
+
+  const incoming = draftFromCaptureHandoff({
+    originals: {
+      name: "SYN CPU Latest",
+      manufacturer: "SYN Maker Latest",
+      modelNumber: "SYN-CPU-1",
+      category: "Processors",
+    },
+    capturedAttributeCategory: "cpu",
+    attributes: { socket: "Socket AM5 Latest" },
+    source: {
+      url: "https://pcbp.test/cpu/syn-latest",
+      kind: "retail",
+      capturedAt: "2026-09-06T01:00:00.000Z",
+      price: null,
+    },
+  });
+  const merged = mergeIntoPart(target.id, incoming)(existing);
+  const part = merged.candidateParts[0];
+
+  expect(part?.name).toEqual({
+    original: "SYN CPU Latest",
+    confirmed: "確認済み CPU",
+  });
+  expect(part?.attributes.socket).toEqual({
+    original: "Socket AM5 Latest",
+    confirmed: "AM5",
+  });
+  expect(part?.sources).toHaveLength(2);
+  expect(localDataRootSchema.safeParse(merged).success).toBe(true);
+});
+
+test("同一URLの再取り込みも確認済み値を保ち、元表記と取得元を更新する", () => {
+  const existing = savePart(
+    {
+      ...capturedCpuDraft(),
+      name: "確認済み CPU",
+      category: "cpu",
+      attributes: { socket: "AM5" },
+    },
+    "project-1",
+  )(withProject());
+  const target = existing.candidateParts[0];
+  if (target === undefined) throw new Error("saved candidate is unavailable");
+
+  const refreshed = mergeIntoPart(
+    target.id,
+    draftFromCaptureHandoff({
+      originals: {
+        name: "SYN CPU Refreshed",
+        manufacturer: "SYN Maker Refreshed",
+        modelNumber: "SYN-CPU-1",
+        category: "Processors",
+      },
+      capturedAttributeCategory: "cpu",
+      attributes: { socket: "Socket AM5 Refreshed" },
+      source: {
+        url: "https://pcbp.test/cpu/syn-1#new-fragment",
+        kind: "retail",
+        capturedAt: "2026-09-06T02:00:00.000Z",
+        price: { amount: 51000, currency: "JPY" },
+      },
+    }),
+  )(existing);
+  const part = refreshed.candidateParts[0];
+
+  expect(part?.name).toEqual({
+    original: "SYN CPU Refreshed",
+    confirmed: "確認済み CPU",
+  });
+  expect(part?.attributes.socket).toEqual({
+    original: "Socket AM5 Refreshed",
+    confirmed: "AM5",
+  });
+  expect(part?.sources).toHaveLength(1);
+  expect(part?.sources[0]).toMatchObject({
+    id: target.sources[0]?.id,
+    primary: true,
+    url: "https://pcbp.test/cpu/syn-1#new-fragment",
+    capturedAt: "2026-09-06T02:00:00.000Z",
+    price: { amount: 51000, currency: "JPY" },
+  });
+  expect(localDataRootSchema.safeParse(refreshed).success).toBe(true);
 });
 
 test("登録がない候補削除は候補だけを除く", () => {

@@ -36,6 +36,8 @@ export interface PartDraft {
   readonly capturedAttributeCategory: PartCategory | null;
   /** 既存カテゴリに属する、取り込み由来の読み取り専用元表記。 */
   readonly originalAttributes: Readonly<Record<string, string>>;
+  /** 再取り込みでは、利用者の確認済み値を保ったまま元表記だけを更新する。 */
+  readonly refreshOriginals: boolean;
 }
 
 /** 元表記を持ちうる項目。カテゴリと規格値は利用者が確定させるもの。 */
@@ -54,6 +56,7 @@ export const emptyDraft = (): PartDraft => ({
   originalCategory: null,
   capturedAttributeCategory: null,
   originalAttributes: {},
+  refreshOriginals: false,
 });
 
 /** 確定値だけをフォームへ出す。元表記は読み取り専用で別に見せる。 */
@@ -88,6 +91,7 @@ export const draftFromPart = (part: CandidatePart): PartDraft => ({
       value.original === null ? [] : [[key, value.original]],
     ),
   ),
+  refreshOriginals: false,
 });
 
 export const partsOf = (
@@ -243,7 +247,9 @@ export const savePart =
     }
 
     const name = withConfirmed(
-      existing?.name ?? originalOf(draft, "name"),
+      existing === null || !draft.refreshOriginals
+        ? (existing?.name ?? originalOf(draft, "name"))
+        : { original: draft.originals.name ?? existing.name?.original ?? null },
       draft.name.trim() === "" ? undefined : draft.name.trim(),
     );
 
@@ -257,18 +263,36 @@ export const savePart =
       projectId: targetProjectId,
       name,
       manufacturer: withConfirmed(
-        existing?.manufacturer ?? originalOf(draft, "manufacturer"),
+        existing === null || !draft.refreshOriginals
+          ? (existing?.manufacturer ?? originalOf(draft, "manufacturer"))
+          : {
+              original:
+                draft.originals.manufacturer ??
+                existing.manufacturer?.original ??
+                null,
+            },
         draft.manufacturer.trim() === ""
           ? undefined
           : draft.manufacturer.trim(),
       ),
       modelNumber: withConfirmed(
-        existing?.modelNumber ?? originalOf(draft, "modelNumber"),
+        existing === null || !draft.refreshOriginals
+          ? (existing?.modelNumber ?? originalOf(draft, "modelNumber"))
+          : {
+              original:
+                draft.originals.modelNumber ??
+                existing.modelNumber?.original ??
+                null,
+            },
         modelNumberConfirmation(draft),
       ),
       category: draft.category,
-      originalCategory: draft.originalCategory,
-      capturedAttributeCategory: draft.capturedAttributeCategory,
+      originalCategory:
+        draft.originalCategory ?? existing?.originalCategory ?? null,
+      capturedAttributeCategory:
+        draft.capturedAttributeCategory ??
+        existing?.capturedAttributeCategory ??
+        null,
       attributes,
       sources: draft.sources.map((source) => ({
         ...source,
@@ -359,5 +383,6 @@ export const draftFromCaptureHandoff = (
         allowedAttributeKeys.has(key),
       ),
     ),
+    refreshOriginals: true,
   };
 };

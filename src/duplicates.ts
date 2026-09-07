@@ -15,7 +15,7 @@ import type {
   LocalDataRoot,
   SourcedText,
 } from "./model.js";
-import type { PartDraft } from "./parts.js";
+import { draftFromPart, type PartDraft, savePart } from "./parts.js";
 
 /** 型番は区切り文字を落として比較する。`SYN-100 X` と `syn100x` は同じ。 */
 const MODEL_NUMBER_SEPARATORS = /[\s_-]+/gu;
@@ -174,16 +174,33 @@ export const mergeSources = (
 };
 
 /**
+ * 再取り込み・統合用の下書き。既存の確認済み値は編集値として残し、取り込みの
+ * 元表記だけを最新の入力へ差し替える。
+ */
+export const refreshedDraftForPart = (
+  existing: CandidatePart,
+  incoming: PartDraft,
+): PartDraft => ({
+  ...draftFromPart(existing),
+  sources: mergeSources(existing.sources, incoming.sources),
+  originals: incoming.originals,
+  originalCategory: incoming.originalCategory,
+  capturedAttributeCategory: incoming.capturedAttributeCategory,
+  originalAttributes: incoming.originalAttributes,
+  refreshOriginals: true,
+});
+
+/**
  * 下書きのソースを既存パーツへ統合する。既存の確定値は壊さない。
  * 統合するのはソースだけで、名前や規格は既存パーツのものが残る。
  */
 export const mergeIntoPart =
   (targetId: string, draft: PartDraft) =>
-  (root: LocalDataRoot): LocalDataRoot => ({
-    ...root,
-    candidateParts: root.candidateParts.map((part) =>
-      part.id === targetId
-        ? { ...part, sources: mergeSources(part.sources, draft.sources) }
-        : part,
-    ),
-  });
+  (root: LocalDataRoot): LocalDataRoot => {
+    const existing = root.candidateParts.find((part) => part.id === targetId);
+    if (existing === undefined) return root;
+    return savePart(
+      refreshedDraftForPart(existing, draft),
+      existing.projectId,
+    )(root);
+  };
