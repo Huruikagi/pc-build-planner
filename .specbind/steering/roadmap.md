@@ -6,7 +6,7 @@ target_release: v1.1.0
 work_items:
   new_specs:
   - spec: site-extraction-authoring
-    summary: 規約確認ポリシーを含むサイト固有抽出の生成・検証・登録・再生成Skill
+    summary: 規約確認後のライブページ取得とローカル保存を含む、サイト固有抽出の生成・検証・登録・再生成Skill
     depends_on:
     - spec: project-candidate-management
   spec_updates:
@@ -73,6 +73,12 @@ Front Matterが示す依存関係や順序のうち、自明でない理由、�
 -->
 
 site-extraction-authoringの生成Skillを用いてpage-captureの対象サイトを追加する順序とする。page-captureのTasksをサンプル検証とメーカー別展開の段階へ分け、サンプル通過後に対象一覧へ進む。メーカー別の新規SpecやDirect項目は増やさない。生成した抽出ロジックも通常の実装としてsb-implement内で作成したSkillを使い、レビューと検証を通す。対象一覧への対応後にpage-capture全体の実装検証を行う。生成側は製品側の抽出境界と整合させ、製品実行時の依存として開発用Skillを持ち込まない。
+
+## ローカル完結の保守環境
+
+site-extraction-authoringは、開発者が指定した対象URLについて利用条件を確認した後、この保守環境からライブページを取得し、リポジトリ内のGit管理対象外とする作業領域へ保存する。保存ページ、利用条件の根拠と確認日、判断記録、生成途中の候補、検証結果はこのローカル領域で管理し、登録済みの抽出コードなど製品へ反映する成果物だけをGit管理対象とする。
+
+保存資料と判断記録をCIや別環境へ持ち運び、同じ検証を再実行できることは保証しない。ローカル領域を失った場合は、利用条件を改めて確認してライブページから取得し直す。作業ディレクトリの名称、保存形式、命名、更新、削除、再取得の具体的な手順はDesignで定める。
 
 ## 制約と未解決事項
 
