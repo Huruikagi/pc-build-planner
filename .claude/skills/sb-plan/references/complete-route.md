@@ -188,14 +188,32 @@ do not infer it from a conventional filename or admit another adapter output.
 Pass the verified path to the validator and approval dispatch as a phase-owned
 path.
 
+A confirmed Design invalidation may also contribute one CLI-owned
+**Design-rewind delta**: `spec.yaml` for that same Spec and the accepted Contract
+Review removal when one existed. Admit it only when the owner that invoked
+`specbind spec design invalidate <spec>` recorded clean lifecycle paths before
+the command, then immediately captured the successful
+result, `specbind spec status <spec>`, the exact lifecycle changed-path set, and its Git
+diff. Reread the status, path set, and diff before validation; all must still
+match that capture for those lifecycle paths, with state `design`, Design not
+reached, and review absent. Separately account for the reported Design and
+Contract paths added after invalidation.
+Pass the exact paths and captured diff to the validator and approval dispatch as
+phase-owned lifecycle context. This is not permission to edit lifecycle state,
+and it creates no invalidation-only checkpoint. Missing provenance, a changed
+path set or diff, a pre-existing lifecycle change, another Spec's metadata, or
+any manually edited lifecycle state still blocks.
+
 The validator changes no Design, Contract, or lifecycle path. After its verdict,
 it may append a deferred finding only to that same verified destination and must
 report the write. After `READY`, the approval dispatch owns the checkpoint for
 the Design set, Contract, gate state, and verified deferred destination when
-present. The normal clean handoff remains mandatory before Contract Review. No
-unreported path, `spec.yaml` before approval, unrelated item, generated output,
-or earlier-phase artifact may be dirty. Never mix several Specs' drafts in one
-dirty validation handoff.
+present. The same checkpoint closes a proven Design-rewind delta by including
+the gate-updated `spec.yaml` and accepted-review removal when present. The
+normal clean handoff remains mandatory before Contract Review. No unreported
+path, unproven `spec.yaml`, unrelated item, generated output, or earlier-phase
+artifact may be dirty. Never mix several Specs' drafts in one dirty validation
+handoff.
 
 Once **every participating Spec**, not merely every item in named scope, holds
 current Design approval, dispatch the review even when delivery participants
@@ -203,6 +221,15 @@ retain task plans or remain in later delivery states. Contract Review does not
 read those plans and does not require unaffected progress to be rewound:
 
 5. `sb-contract-review` — once for the milestone
+
+If that review returns a Requirements remediation handoff, dispatch the explicit
+Requirements phase with its exact finding, command, rewind cost, and relayed
+operation-specific confirmation. The Requirements receiver invokes the rewind;
+Review does not. If review returns a scope-remediation proposal, return to
+`sb-discovery`; Review must not invoke `milestone update-scope`. Discovery owns
+confirmation, scope mutation, Briefs, and checkpoint, after which this complete
+Plan route is separately authorized again. Preserve the review finding ledger
+and remaining two-round budget across either route.
 
 After the review is accepted:
 
