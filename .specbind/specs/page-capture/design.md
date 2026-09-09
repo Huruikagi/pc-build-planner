@@ -66,9 +66,11 @@ _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 
 
 ## メーカー固有抽出の実行時登録
 
-`site-extraction-authoring` が `validated-site-extraction-registration` として供給する登録だけを、`src/capture/site-extractors.ts` の `SiteExtractor` として利用する。登録は安定ID、許可ホスト、対象カテゴリ、ページ識別条件、共通項目または当該カテゴリの既存 `CATEGORY_ATTRIBUTES` キーの読取規則を持つ。CaptureはURLの小文字化したホストを登録済み公式ドメインと完全一致またはサブドメイン一致で照合し、登録メーカーを候補にする。未登録ホスト、対象カテゴリ外、ページ識別条件不一致、または規約確認ポリシーで許可されない登録は固有規則を実行しない。
+`site-extraction-authoring` が `validated-site-extraction-registration` として供給する登録候補だけを、Captureの実装対象にする。`MANUFACTURER_DOMAIN_ENTRIES` は登録済みドメイン、カテゴリ、抽出元タイプ対応の唯一の正本である。各エントリは既存のメーカー・ドメイン・カテゴリに加えて、カテゴリごとの抽出元タイプを静的に記録する。別のドメイン表、カテゴリ表、タイプ対応表を作らない。Captureは小文字化したURLホストを登録ドメインと完全一致またはサブドメイン一致で照合する。一致時はカテゴリ、タイプ、固有規則の選択結果に関わらず、照合エントリのメーカーを `source: "domain-map"`、一致した登録ドメインを `sourceLabel` とするメーカー候補として`Sink`へ追加する。この候補は汎用のメーカー候補より先に正規化されるため、登録済み公式ドメインでは登録メーカーを取り込み結果へ提示する。得たエントリと取得時分類からタイプを選ぶ処理はこれと独立である。未登録ホスト、対象カテゴリ外、ページ識別条件不一致、または選択抑止中のタイプでは固有規則を実行しない。
 
-`extractFromDocument` は固有規則を既存の JSON-LD、meta、見出し、パンくず、定義リスト、表の collector より先に同じ `Sink` へ追加する。固有候補は `source: "site-specific"` と規則の安定した人間可読識別子である `sourceLabel` を持つため、先着の有効候補を採る正規化で同じ項目の汎用候補より優先される。`ExtractionSource`、Zodの列挙、`captureSource_site_specific` のロケールキー、画面の表示対応は同じ変更で揃える。selector不一致、読取失敗、例外、空値は候補を追加せず、後続の汎用collectorを必ず実行する。したがって固有抽出の失敗は当該項目を汎用結果へフォールバックさせ、他項目やページ全体の取り込みを失敗にしない。
+`src/capture/site-extractors.ts` はタイプごとに一つのサイト固有規則と架空fixtureの対応を持つ。タイプ識別子、fixture名、規則名にはサイト名、メーカー名、ドメインを含めない。ただし実装と保守はタイプごとに実サイト構造を扱う。`extractFromDocument` は選ばれた固有規則を既存の JSON-LD、meta、見出し、パンくず、定義リスト、表の collector より先に同じ `Sink` へ追加する。固有候補は `source: "site-specific"` とタイプに属する固定の利用者向けラベル `sourceLabel` を持つため、先着の有効候補を採る正規化で同じ項目の汎用候補より優先される。`sourceLabel` はCaptureのsession結果、棄却理由、取り込み画面で由来を説明する責任であり、`CandidateCaptureHandoff`や候補の永続状態へ渡さない。`ExtractionSource`、Zodの列挙、`captureSource_site_specific` のロケールキー、画面の表示対応は同じ変更で揃える。
+
+selector不一致、読取失敗、例外、空値は候補を追加せず、後続の汎用collectorを必ず実行する。したがって固有抽出の失敗は当該項目を汎用結果へフォールバックさせ、他項目やページ全体の取り込みを失敗にしない。`site-extraction-authoring` が今回の作業への明確な禁止根拠を記録したタイプは、既存の規則、fixture、過去の成功記録を削除せず、静的な選択状態を`suppressed`にして固有規則を選ばない。Captureは実行時に利用条件、作業領域、判断記録を読まず、汎用抽出を続ける。利用条件の未発見、不明、曖昧さだけで選択を抑止しない。
 
 固有規則が扱えるのは名称、メーカー、型番、カテゴリ、価格、URLと、CPUのソケット、CPUクーラーの対応ソケット、マザーボードのソケット・メモリー規格・フォームファクター、メモリーのメモリー規格、電源のフォームファクター、ケースの対応マザーボード・電源フォームファクターだけである。GPU、ストレージ、ケースファンに属性を増やさず、容量、定格出力、ファン寸法、ページに明記されない値を候補にしない。
 
@@ -78,7 +80,7 @@ _Requirements: 6.1, 6.2, 6.3, 6.5, 6.7_
 
 `RawCandidate`、`CapturePayload`、`AcceptedField`、`CaptureResult` と `capturePayloadSchema` は、共通項目に加えて `{ category, key, rawValue, source, sourceLabel }` の属性候補を表せるようにする。`category` は属性の対応先を示す既存 `PartCategory` であり、確認済み分類ではない。`normalizeCapture` は共通項目の既存制限に加え、属性候補の長さ、空値、制御文字を検証し、対応カテゴリの `CATEGORY_ATTRIBUTES` に存在するキーだけを採用する。変換不能な値、対象外キー、分類のない属性は理由と `sourceLabel` を `rejected` に残し、候補編集へ渡さない。
 
-`page-capture` は `CaptureResult` を `parts.ts` の内部型へ直接渡さず、`project-candidate-management` がexportする `candidate-capture-handoff` をconsumeする。検証済みの名称・メーカー・型番の元表記、取得時分類の元表記と既存カテゴリ、当該カテゴリの許可済み属性元表記、URL、種別、取得時刻、任意の価格を完全な `CandidateCaptureHandoff` に写す。Captureは候補ID、プライマリ指定、保存用下書き、確認済み分類を作らない。候補管理がその入力にローカルIDとプライマリ指定を補い、分類と属性を未確認値として保持する。分類が得られない場合は属性を引き渡さない。
+`page-capture` は `CaptureResult` を `parts.ts` の内部型へ直接渡さず、`project-candidate-management` がexportする `candidate-capture-handoff` をconsumeする。検証済みの名称・メーカー・型番の元表記、取得時分類の元表記と既存カテゴリ、当該カテゴリの許可済み属性元表記、URL、種別、取得時刻、任意の価格を完全な `CandidateCaptureHandoff` に写す。Captureは候補ID、プライマリ指定、保存用下書き、確認済み分類、抽出タイプ、`sourceLabel`を作らない。候補管理がその入力にローカルIDとプライマリ指定を補い、分類と属性を未確認値として保持する。分類が得られない場合は属性を引き渡さない。
 
 _Requirements: 2.3, 3.1, 3.2, 3.3, 5.4, 6.4, 6.5_
 
@@ -122,17 +124,17 @@ _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3_
 
 `pnpm validate`を全体の入口にする。`e2e/capture.spec.ts`では、ビルド済み拡張を実Chromiumへ読み込み、拡張アイコン操作からcontent script注入、Side Panelの取り込み面、候補編集への遷移、実際の`chrome.storage.local`の候補値までを観測する。
 
-E2Eは、構造化データからの出典・元表記・カテゴリヒントの表示、既存カテゴリ属性の未確認handoff、プロジェクト未作成時のhandoff保持、候補なしと制限ページの理由提示と手入力への復帰、メーカー公式ドメインの補助を検証する。正規化の境界は必要に応じて`src/capture/normalize.ts`の純粋関数として個別に確認するが、利用者に届く取り込み経路の受け入れ根拠は実拡張E2Eにする。
+E2Eは、構造化データからの出典・元表記・カテゴリヒントの表示、既存カテゴリ属性の未確認handoff、プロジェクト未作成時のhandoff保持、候補なしと制限ページの理由提示と手入力への復帰を検証する。登録済み公式ドメインのfixtureでは、固有規則を選べない場合または固有規則がメーカー値を返さない場合にも、`domain-map`由来の照合エントリのメーカーが取り込み結果と未確認handoffへ現れることを実拡張で確認する。正規化の境界は必要に応じて`src/capture/normalize.ts`の純粋関数として個別に確認するが、利用者に届く取り込み経路の受け入れ根拠は実拡張E2Eにする。
 
 _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4_
 
 ## 展開と回帰根拠
 
-初回はIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU代表ページを、保存HTMLで検証する。商品名、メーカー、型番、カテゴリ、価格、URL、ソケットの明記値について、項目別の由来、固有抽出の優先、汎用フォールバック、未推測の欠損を判定する。その後、固定41メーカー、42ドメイン、67メーカー／カテゴリ組の各組について、規約適合かつ取得可能な代表ページを同じ方法で検証する。
+初回はIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU代表ページで確認した構造を参考に、架空の値だけを含むタイプ別ダミーHTMLを作る。全67メーカー／カテゴリ組も同じ方法で、固定した41メーカー、42ドメイン、67組を増減させずに展開する。fixtureは実ページHTML、本文、画像、実在商品値を複製せず、実ページHTMLの保存は前提にしない。各fixtureでは共通項目と対象カテゴリの既存属性について、固有抽出の優先、項目ごとの由来、汎用フォールバック、未推測の欠損を判定する。
 
-Captureは `e2e/fixtures/site-extraction-coverage.ts` を固定67組の完了集約として所有する。この記録は各組をメーカー、公式ドメイン、既存 `PartCategory`、状態で一意に列挙する。`verified` の記録は安定した固有抽出ID、実在データを含まないfixture識別子、検証日、共通項目と既存属性の期待結果、項目別由来、汎用フォールバックと未推測欠損の判定を持つ。`unavailable` の記録は規約上の理由、アクセス不能、または代表ページ不在のいずれかの理由と確認日を持つ。実際のHTML、規約判断の根拠、ローカル資料のパスはこの記録へ含めない。
+Captureは `e2e/fixtures/site-extraction-coverage.ts` を固定67組の集約台帳として所有する。この台帳は各組をメーカー、公式ドメイン、既存 `PartCategory`、タイプ、代表URL、状態で一意に列挙する。`prepared` は架空fixtureの実拡張E2Eに合格し、確認用ビルドと、代表URL・確認項目・操作手順を含むリンク集を開発者へ渡した状態である。これは実サイト対応済みでも完了でもない。`verified` はその準備済み項目に対する実サイト手動確認の成功日と項目別結果を持つ。`unavailable` は今回の作業への明確な禁止根拠、アクセス不能、代表ページ不在のいずれかと確認日を持つ。実ページHTML、規約判断の本文、ローカル資料のパスは台帳に含めない。
 
-各組の作業は `site-extraction-authoring` の単一ページ登録手順の出力を入力にする。Captureの実装タスクはその出力から一組の `verified` または `unavailable` 記録を追加し、実拡張E2Eを対応するfixtureへ追加する。集約記録の検証は固定67組と一致する重複なしの組数、各組がいずれか一状態を持つこと、`verified` と `unavailable` の必須項目を確認する。67組すべてに有効な記録があり、`verified` のE2Eが通るときだけ展開は完了する。保存HTML取得、規約確認、単一ページの登録・再生成は `site-extraction-authoring` が所有するが、67組の網羅性、状態集約、完了判定はCaptureが所有する。
+各組の作業は `site-extraction-authoring` の登録候補を入力にする。Captureの実装タスクは候補から一組の`prepared`または`unavailable`記録を追加し、対応するダミーHTMLを実拡張E2Eへ追加する。`prepared`を作るTaskは、手動確認を待たずに確認用成果物を渡した時点で完了できる。集約検証は固定67組と一致する重複なしの組数、各組がいずれか一状態を持つこと、各状態の必須項目、`prepared`のE2Eを確認する。最終実装検証だけは、全67組が`verified`または`unavailable`であり、未実施の手動確認を未対応理由にしていないことを要求する。`prepared`が残る場合は通常の既存検証経路で`MANUAL_VERIFY_REQUIRED`を返し、完了を受理しない。実サイト手動確認の失敗は`NO-GO`であり、`MANUAL_VERIFY_REQUIRED`として扱わず、修正または再生成へ戻す。追加のValidation adapterは作らない。規約確認、単一ページの登録・再生成、手動確認記録は`site-extraction-authoring`が所有する。Captureは67組の網羅性、静的な実行時選択、架空fixture、実拡張E2E、確認用ビルドとリンク集、最終判定の集約を所有する。
 
 _Requirements: 6.4, 6.5, 6.6, 6.7_
 

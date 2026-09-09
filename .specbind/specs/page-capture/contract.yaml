@@ -15,7 +15,7 @@ consumes:
       spec: site-extraction-authoring
       section: exports
       id: validated-site-extraction-registration
-    description: 規約確認と保存資料・実拡張検証を通過したサイト固有抽出だけを登録し利用する境界
+    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本として、登録済みドメインとカテゴリから静的に選ぶ抽出元タイプ、架空fixture、サイト固有抽出規則、実拡張E2Eの合格結果、確認用ビルドとリンク集を伴う登録候補を利用する境界。実サイト手動確認の状態は候補と別に扱い、未確認を対応済みとして扱わない
 invariants:
   - id: capture-session-tab-lifetime
     description: 取り込み状態は対象タブに結び付くsession状態であり、タブ遷移後は利用できず、タブ終了後は保持しない
@@ -51,3 +51,4 @@ file_ownership:
       - e2e/capture.spec.ts
       - e2e/fixtures/product-page.ts
       - e2e/fixtures/site-extraction-coverage.ts
+      - e2e/fixtures/site-extraction-links.ts
