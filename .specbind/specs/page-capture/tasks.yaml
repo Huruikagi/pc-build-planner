@@ -288,3 +288,8 @@ execution:
   tasks:
     "1.1":
       status: completed
+    "1.2":
+      status: blocked
+      blocked_reason: >-
+        Intel Core UltraとAMD Zen
+        5の各代表ページについて、開発者指定の公式URL、cpuカテゴリ、明示的な取得項目、利用条件の根拠URLと確認日、対応する保存資料またはライブ取得結果、およびvalidated-site-extraction-registrationが未提供のため、サイト固有抽出の実装・fixture・実拡張E2E・pnpm validateを開始できない。
