@@ -1,16 +1,20 @@
 schema_version: 1
 owns:
   - id: site-extraction-authoring-procedure
-    description: 開発者が指定したページからサイト固有抽出を規約確認、保存資料の検証、登録、再生成の順で扱う開発用手順
+    description: 代表URLから必要情報と利用条件の根拠を収集し、サイト固有抽出候補の自動検証、手動確認用成果物、再生成を扱う開発用手順
 exports:
   - id: validated-site-extraction-registration
-    description: 規約確認済みで保存資料と実拡張検証を通過した、page-captureへ登録できるサイト固有抽出候補。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる。属性の由来ラベルは登録規則と実拡張検証の証跡であり、候補handoffまたは候補の永続データに保存する境界ではない
+    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本として、登録済みドメインとカテゴリから静的に選ぶ抽出元タイプ、架空データだけのfixture、サイト固有抽出規則、実拡張自動E2Eの合格結果、手動確認用ビルドとリンク集を伴う登録候補。実サイト手動確認の成功・失敗・未確認は候補と別に記録し、未確認の候補を実サイト対応済みとしては扱わない。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる
 consumes: []
 invariants:
-  - id: no-registration-before-permission-and-verification
-    description: 利用条件が禁止または判断不能である場合、あるいは保存資料による検証が失敗した場合、Skillはページ内容を用いた登録または既存登録の置換を行わない
+  - id: explicit-prohibition-stops-only-affected-work
+    description: 今回の対象作業への明確な禁止根拠がある場合だけ、その作業と依存する後続を停止する。利用条件の未発見または不明だけでは、確認範囲と不明点を記録して候補作成を停止しない
+  - id: synthetic-fixture-precedes-manual-verification
+    description: 実在ページのHTML、本文、画像、商品値を複製しない架空fixtureによる実拡張自動E2Eに合格した候補だけが、実サイト手動確認用ビルドとリンク集を得る
+  - id: manual-verification-is-required-for-completion
+    description: 必要な実サイト手動確認が未実施なら最終実装検証はMANUAL_VERIFY_REQUIREDとなり、実サイト対応の完了を認定しない
   - id: existing-registration-survives-regeneration-failure
-    description: 再生成の候補が検証に失敗しても、既存の検証済みサイト固有抽出は未確認候補で置換されない
+    description: 再生成の候補が自動検証または手動確認に失敗しても、既存の検証済みサイト固有抽出は未確認候補で置換または削除されない。明確な禁止根拠が当該規則の実行に適用される間は、既存登録を保持したまま選択せず、汎用抽出を利用する
 file_ownership:
   - id: site-extraction-authoring-skill
     paths:
