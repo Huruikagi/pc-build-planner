@@ -109,3 +109,5 @@ execution:
   tasks:
     "1.1":
       status: completed
+    "1.2":
+      status: completed
