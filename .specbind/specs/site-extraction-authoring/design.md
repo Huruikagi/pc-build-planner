@@ -66,6 +66,8 @@ _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.5, 4.4_
 
 `page-capture` はこのSpecの `validated-site-extraction-registration` をconsumeし、利用条件確認済みかつ保存資料と実拡張検証に合格した登録候補だけを実行時へ反映する。実行時は作業領域や判断記録を読まず、利用条件を再評価しない。候補編集への引渡しは既存の `candidate-capture-handoff` だけを使い、取得した分類と属性は利用者が確認するまで未確認値として保持する。
 
+属性の由来ラベルは登録規則の検証可能性のために `page-capture` の `AcceptedAttribute` に `{ key, original, source, sourceLabel }` として残し、固有規則では安定した人間可読の規則識別子を `sourceLabel` に入れる。Skillはそのラベルを `candidate.md` と実拡張E2Eの期待値へ記録して、保存資料で確認した規則が実行時に選ばれたことを確認する。一方、候補管理へ渡す永続seamは既存の `CandidateCaptureHandoff.attributes: Record<string, string>` のままとし、`app.tsx` は各属性の `original` だけをこのマップへ写す。`PartDraft.originalAttributes` と `SourcedAttribute` も既存の元表記だけを保持し、由来ラベルは候補の永続データ、確認済み値、または候補編集UIへ追加しない。これは、要件が求めるのが未確認の元表記と確認済み値の分離であり、属性ごとの由来ラベルを候補管理が保存・表示することではないためである。したがってこの登録に伴う `page-capture` 側の変更提案は、固有規則・`CaptureResult`・Capture画面・fixture/E2Eでの `sourceLabel` の一貫性を検証することに限り、`project-candidate-management` が所有するhandoffやモデルの型変更を要求しない。
+
 初回登録と再生成は、保存資料で指定項目を確認し、固有由来、固有規則が値を返さない場合の汎用フォールバック、未明記値を推測しないこと、既存の汎用シナリオを確認してから初めて登録候補を出す。いずれかが失敗した場合は登録または置換を行わない。再生成の失敗時は既存の検証済み登録を保持し、新しい作業単位に失敗理由と未登録結果を残す。
 
 _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3_
@@ -74,7 +76,7 @@ _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3_
 
 Skill自身の操作順は `.agents/skills/site-extraction-authoring/references/verification.md` の固定ケースで確認する。ケースには、利用条件の禁止・判断不能でページ取得も資料読取もしないこと、入力または項目の不足で登録候補を出さないこと、許可後にローカル資料を保存して登録候補を検証すること、再生成失敗時に既存登録を保持すること、作業領域消失後に再確認して再取得することを含める。
 
-各登録候補では `e2e/capture.spec.ts` を既存の実拡張入口として拡張し、`pnpm validate` を実行する。保存ページそのものはテスト資料に追加せず、実在データを含まないfixtureで配線、由来表示、未確認handoff、固有規則の失敗時フォールバック、既存の汎用抽出の維持を確認する。これらは登録時の検証であり、ローカル作業領域を失った後のCIまたは別環境での再現を約束するものではない。
+各登録候補では `e2e/capture.spec.ts` を既存の実拡張入口として拡張し、`pnpm validate` を実行する。保存ページそのものはテスト資料に追加せず、実在データを含まないfixtureで配線、Capture画面の `sourceLabel`、候補handoffへ渡る属性の `original`、未確認handoff、固有規則の失敗時フォールバック、既存の汎用抽出の維持を確認する。属性由来ラベルがhandoffや候補の永続値に現れないことも、候補管理の既存境界を維持する確認として扱う。これらは登録時の検証であり、ローカル作業領域を失った後のCIまたは別環境での再現を約束するものではない。
 
 _Requirements: 2.1, 2.2, 2.3, 2.4, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4_
 

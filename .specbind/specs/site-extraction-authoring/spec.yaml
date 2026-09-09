@@ -38,9 +38,9 @@ active_change:
       input_revisions:
         requirements: sha256:ccdc9dba9906bbb456c589912ae4d178add4b96ef4adb32589c426a7397eee6c
     design:
-      passed_at: 2026-09-08T12:05:11.8092527Z
+      passed_at: 2026-09-09T01:51:19.3449533Z
       approval_mode: delegated
       delegation_workflow: sb-plan
       input_revisions:
-        contract: sha256:ad81547f3929b474d99b8e9712f72cbf38b3267e742f1acc3a45871182dbfc52
-        design/main: sha256:d67fe030f100141c83dba5ebcd3461473e76f96e459411690b45e5f36ca52ec4
+        contract: sha256:2de39d15f23672d2393c3b842afa193dff97ccec7e5d5b41ae80107599032133
+        design/main: sha256:09cfb40209143397c531dd103350d6ffcde4ec929281483a686553308f700ae6

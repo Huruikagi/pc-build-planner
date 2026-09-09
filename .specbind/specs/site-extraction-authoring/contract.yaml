@@ -4,7 +4,7 @@ owns:
     description: 開発者が指定したページからサイト固有抽出を規約確認、保存資料の検証、登録、再生成の順で扱う開発用手順
 exports:
   - id: validated-site-extraction-registration
-    description: 規約確認済みで保存資料と実拡張検証を通過した、page-captureへ登録できるサイト固有抽出候補。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、由来ラベル、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる
+    description: 規約確認済みで保存資料と実拡張検証を通過した、page-captureへ登録できるサイト固有抽出候補。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる。属性の由来ラベルは登録規則と実拡張検証の証跡であり、候補handoffまたは候補の永続データに保存する境界ではない
 consumes: []
 invariants:
   - id: no-registration-before-permission-and-verification
@@ -16,3 +16,4 @@ file_ownership:
     paths:
       - .agents/skills/site-extraction-authoring/SKILL.md
       - .agents/skills/site-extraction-authoring/references
+      - .gitignore
