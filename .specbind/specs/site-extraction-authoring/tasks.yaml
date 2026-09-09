@@ -92,7 +92,7 @@ plan:
       - 保存資料での指定項目照合、実在データを含まないfixtureによる実拡張、固有由来、汎用フォールバック、既存汎用シナリオを同じ登録条件として検証する
       - 再生成は同じ確認を繰り返し、失敗時には既存の検証済み登録を保持する
       completion_criteria:
-      - '`e2e/capture.spec.ts` と `pnpm validate` で、登録候補の実行時境界と既存汎用抽出の維持を確認できる'
+      - "`e2e/capture.spec.ts` と `pnpm validate` で、登録候補の実行時境界と既存汎用抽出の維持を確認できる"
       - 再生成の検証失敗時に更新を提案せず、既存登録を保持できる
       requirement_ids:
       - "3.1"
@@ -105,3 +105,7 @@ plan:
       contracts:
       - no-registration-before-permission-and-verification
       - existing-registration-survives-regeneration-failure
+execution:
+  tasks:
+    "1.1":
+      status: completed
