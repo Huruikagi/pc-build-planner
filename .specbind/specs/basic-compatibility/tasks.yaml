@@ -1,0 +1,21 @@
+schema_version: 1
+plan:
+  items:
+    - id: "1"
+      kind: task
+      title: 日英の互換性確認文言を実拡張で検証する
+      details:
+        - e2e/compatibility.spec.ts で、共有資産 locale-messages から解決される全体判定、個別の根拠、不足解消操作、方針文言を日英それぞれの実拡張で観測できるようにする。
+        - 文言の意味と表示条件を維持し、他機能のメッセージ、互換性評価、現在構成や候補の更新は変更しない。
+      completion_criteria:
+        - 日英のどちらでも、不一致と情報不足が区別され、unknown のときだけ不足を解消する操作が適切な画面へ移ることを e2e/compatibility.spec.ts で確認できる。
+        - pnpm validate が成功する。
+      requirement_ids:
+        - "3.4"
+        - "3.5"
+        - "4.4"
+      boundaries:
+        - _locales/en/messages.json と _locales/ja/messages.json は共有資産 locale-messages として利用し、互換性確認に必要なキーとプレースホルダーの対応を維持する。
+        - e2e/compatibility.spec.ts
+      contracts:
+        - locale-messages
