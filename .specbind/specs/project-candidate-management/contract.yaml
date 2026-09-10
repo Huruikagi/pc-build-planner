@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 owns:
   - id: project-candidate-lifecycle
     description: プロジェクトと、そのプロジェクトに属する検討途中の候補・取得元を作成、選択、補正、削除、利用者選択による統合として管理し、候補管理所有の受入入力を通じてページ取得が渡す既存カテゴリ属性の元表記を候補編集へ未確認値として受け入れる責任
@@ -16,6 +16,12 @@ consumes:
       section: exports
       id: local-root-storage
     description: プロジェクト、候補、現在構成を含む保存可能な完全ルートの読込と保存
+  - id: locale-messages
+    target:
+      shared: true
+      section: resources
+      id: locale-messages
+    description: プロジェクト管理、候補の不完全さと元表記、取得元入力、重複候補の選択に関する画面文言を日英で表示するために利用する
 invariants:
   - id: selected-project-integrity
     description: 選択中プロジェクトIDはnullまたは存在するプロジェクトを指す
