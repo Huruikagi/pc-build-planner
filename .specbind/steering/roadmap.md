@@ -11,13 +11,15 @@ work_items:
     - spec: project-candidate-management
   spec_updates:
   - spec: page-capture
-    summary: 既存項目だけを取得し、CPUサンプル後に固定67メーカー／カテゴリ組へ固有抽出を展開
+    summary: 既存項目だけを取得し、CPUサンプル後に登録簿を正本とするメーカー・カテゴリへ固有抽出を展開
     depends_on:
     - spec: site-extraction-authoring
   - spec: project-candidate-management
     summary: 既存カテゴリ属性の取得値を未確認の元表記として候補編集へ引き渡し保持する
   - spec: basic-compatibility
     summary: 翻訳ファイルの単独所有を共有Contractの利用宣言へ移す
+  - spec: current-build-management
+    summary: 現在構成画面の文言の意味を保ち、共有翻訳資産の利用をDesignとContractへ宣言する
   direct_changes:
   - shared_contract_changes:
     - locale-messages
@@ -70,7 +72,7 @@ GitHub Milestone #8「v1.1.0」の要求として、メーカーサイト固有�
 各Spec内の詳細な責任境界はRequirementsに置く。
 -->
 
-初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。サンプルは途中の検証地点とし、通過後は作成したSkillを使い、下記の固定済みメーカー・ドメイン・カテゴリ全体へ同じv1.1.0で展開する。各メーカーの登録カテゴリに対応する代表ページで抽出を整備し、全SKU・全ページの網羅は求めない。具体的なSKU・代表ページ、CPU以外を含むカテゴリ別の取得項目は、現在プロダクトが扱う項目だけに限定し、対応完了の条件とともにRequirementsで定める。汎用抽出へのフォールバックと取得元表示を含める。
+初回サンプルはIntel Core UltraとAMD Zen 5世代のコンシューマー向けデスクトップCPU。基本の取得項目は商品名、メーカー、CPU分類、ソケットとし、ページに明記されない値は推測で埋めない。サンプルは途中の検証地点とし、通過後は作成したSkillを使い、ソースコードの登録簿を正本とするメーカー・ドメイン・カテゴリ全体へ同じv1.1.0で展開する。各メーカーの登録カテゴリに対応する代表ページで抽出を整備し、全SKU・全ページの網羅は求めない。具体的なSKU・代表ページ、CPU以外を含むカテゴリ別の取得項目は、現在プロダクトが扱う項目だけに限定し、対応完了の条件とともにRequirementsで定める。汎用抽出へのフォールバックと取得元表示を含める。
 
 ## 依存関係と順序の理由
 
@@ -115,12 +117,12 @@ Collection: https://github.com/Huruikagi/pc-build-planner/milestone/8 、number=
 
 2026-09-06の会話で、ポリシーを新規Spec内で策定すること、上記CPU世代と取得項目、2つの作業と依存関係を提案し、利用者が「OK」と承認した。Issue本文中の#8、#11、#14は関連情報であり、今回取得したSource Collectionや追加作業として扱わない。以後はBriefに捕捉した要求を使用し、GitHubの後日編集で承認済み範囲を再解釈しない。
 
-### 追加のローカル入力と固定した展開対象
+### 取得済みのローカル入力と展開対象の正本
 
 Provider: local-files。Collection locator: `src/capture/manufacturer-domain-map.ts`（全1件）。取得リビジョン: `dd3666a373e04dfe90e859e3fb9a130505b44a30`。
 Git blob: `6c9f009f846a3aadb99a4733e990edb2a83cec0f`。通常のGit追跡済みUTF-8ファイルであることと取得前後のクリーン状態を確認した。disposition=included、対応先はpage-capture（展開対象一覧）とsite-extraction-authoring（生成Skillを適用する対象の広がり）。除外・重複・未取得・未解決のSource Itemはない。
 
-利用者が現在のマップを展開範囲として指定し、サンプル後に登録カテゴリの代表ページへ展開する案を「そうしよう、よろしく」と承認した。登録コードそのものは仕様権威ではなく、この明示選択に基づいて以下を固定する。以後のマップ変更で今回の対象を自動増減しない。Requirementsはこの一覧と意味を自己完結した要件へ昇格させる。
+利用者が現在のマップを展開範囲として指定し、サンプル後に登録カテゴリの代表ページへ展開する案を「そうしよう、よろしく」と承認した。その後の利用者の決定により、対象メーカー・公式ドメイン・既存カテゴリの正本はソースコードの登録簿とする。site-extraction-authoringは、開発者が指定した対象に必要な最小限の登録簿追加・更新を検証したうえで反映できる。登録だけでは固有抽出の対応済みや実サイト検証済みを意味しない。以下は取得時点の入力スナップショットであり、現在の対象を固定する別の一覧として使わない。Requirementsはこの正本の役割と更新範囲を定める。
 
 | メーカー | 登録ドメイン | 登録カテゴリ |
 | --- | --- | --- |
@@ -172,12 +174,12 @@ Git blob: `6c9f009f846a3aadb99a4733e990edb2a83cec0f`。通常のGit追跡済みU
 
 既存属性を自動取得する経路と候補編集へ渡す経路は今回追加する。元表記と未確認性を保ち、取得だけで確認済みにしない。候補編集・保持の責務と共有モデルの所有者であるproject-candidate-managementを既存Spec更新として加える。これは新しい商品属性の追加ではない。Steeringのモデルと機能の所有境界、自動取得値と確認済み値の分離を維持する。
 
-依存順序はproject-candidate-management → site-extraction-authoring → page-captureとする。候補側が受け入れる既存属性と未確認値の境界を先に定め、生成側がその項目を扱い、ページ取得側が生成物を用いて固定対象へ展開する。既存のサンプル検証、固定メーカー一覧、Source Collectionの振り分けは維持する。今回の追加Specは会話で確認した引き渡し責務に基づき、GitHubから新たなSource Itemを取得したものではない。
+依存順序はproject-candidate-management → site-extraction-authoring → page-captureとする。候補側が受け入れる既存属性と未確認値の境界を先に定め、生成側がその項目を扱い、ページ取得側が生成物を用いて登録簿に基づく対象へ展開する。既存のサンプル検証とSource Collectionの振り分けは維持する。展開対象は登録簿を正本とする。今回の追加Specは会話で確認した引き渡し責務に基づき、GitHubから新たなSource Itemを取得したものではない。
 
 ## 翻訳資産の共有Contractへの移行
 
 日英の翻訳ファイル `_locales/en/messages.json` と `_locales/ja/messages.json` は特定の機能Specに所属する資産ではなく、プロジェクトの共有資産として扱う。shared-locale-contractをDirect項目として追加し、共有Contractのlocale-messagesに対象パス、各機能が自身の文言を追加・更新する条件、日英キーとプレースホルダーの整合性、無関係な文言を保護する不変条件を宣言する。各文言の意味と必要性は各機能のRequirementsとDesignが所有する。
 
-basic-compatibilityは既存Spec更新として翻訳ファイルの単独所有を外し、共有資産の利用宣言へ移す。page-captureとproject-candidate-managementは既存項目のDesignとContractに共有資産の利用を反映する。site-extraction-authoringの利用条件に関する停止理由は開発時の記録・報告であり、今回の共有化を理由に製品向け文言を増やさない。翻訳専用Specと共有資産に起因する実装順の依存は追加せず、既存の依存順序を維持する。
+basic-compatibilityは既存Spec更新として翻訳ファイルの単独所有を外し、共有資産の利用宣言へ移す。page-captureとproject-candidate-managementは既存項目のDesignとContractに共有資産の利用を反映する。現在構成画面も同じ翻訳資産を利用するため、current-build-managementを既存Spec更新として加え、文言の意味と表示条件を維持したまま共有資産の利用を宣言する。採用・解除・数量管理の振る舞いを変更する要求ではない。site-extraction-authoringの利用条件に関する停止理由は開発時の記録・報告であり、今回の共有化を理由に製品向け文言を増やさない。翻訳専用Specと共有資産に起因する実装順の依存は追加せず、既存の依存順序を維持する。
 
 Direct項目の検証では共有Contractのスキーマと参照グラフ、旧単独所有の解消、利用側の参照、日英キーとプレースホルダーの整合性、無関係な翻訳値に変更がないことを確認する。共有Contractを先に準備し、利用側Designを整えてからマイルストーン全体のContract Reviewを受ける。既存Taskの実行記録を新たな合意の完了証拠に読み替えない。
