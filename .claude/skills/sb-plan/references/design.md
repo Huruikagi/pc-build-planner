@@ -625,3 +625,41 @@ authorizes accepting gates, not discarding accepted work.
 - Report in the project's language: what the design decides, how it realizes each
   active requirement, what changed in the contract, whether the work was
   committed, and what runs next.
+
+## Shared resources
+
+Use `specbind contract shared read` when Design touches project shared resources.
+Declare persistent use through `contract/v2` consumes targets
+`{shared: true, section: resources, id: <resource-id>}`. Read
+`specbind schema read contract/v2` before upgrading that Spec's Contract; retain
+v1 for Specs that do not need shared references. A Task may change its feature's
+keys in a shared catalog without duplicating file_ownership. Shared resources
+are not implementation-order dependencies. If the shared agreement itself must
+change, return its scoped preparation to `sb-plan --shared`; keep independent
+behavior in its owning Spec. Existing project templates remain project-owned.
+
+## Durable responsibility descriptions
+
+Every newly authored Design has a non-empty single-line Front Matter
+`description` naming its lasting technical decision boundary. On template
+materialization, carry the template's literal description into the live Design;
+if an old project-owned template lacks one, establish the responsibility before
+materializing. For a Spec-local one-off Design, record the independently assessed
+responsibility as its description along with its artifact ID and Requirement
+coverage; do not add a project template or change `design-template-selection`.
+Update a live description with its body only when its responsibility changes.
+Existing descriptions need not change for ordinary design-detail edits, and
+missing descriptions in existing major-one artifacts remain readable.
+
+Before presenting a newly materialized Design draft, verify every new document
+against the exact selected scaffold:
+
+```sh
+specbind artifact check <spec> <design-selector> --template <template-selector>
+```
+
+For a one-off supplement, use its live selector and `--template design/main`.
+The check requires its own valid description while preserving durable scaffold
+instructions. For unchanged template identities, it also checks literal
+description inheritance. Repair reported creation faults before presenting the
+draft; do not use this creation check as a provenance claim for existing Designs.

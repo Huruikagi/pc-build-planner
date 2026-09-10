@@ -1,11 +1,17 @@
 ---
 name: sb-plan
-description: Plan active Spec work through Requirements, Design, Contract Review, and Tasks, or run one explicitly requested planning phase for one named Spec. Ordinary planning uses one named Spec or explicit all-Spec scope.
+description: Plan active Spec work through Requirements, Design, Contract Review, and Tasks, run one explicitly requested planning phase for one named Spec, or prepare explicitly scoped project shared Contracts. Ordinary Spec planning uses one named Spec or explicit all-Spec scope.
 ---
 
 # Plan active Spec work
 
 ## First action: fail closed on an unspecified scope
+
+An explicit request to plan the milestone's shared resources, `--shared`
+scope, or a Drive handler with mode `shared` selects
+[Shared Contract preparation](references/shared-contract.md); after applying
+project language style, read that procedure completely. It is a separate
+scope with no dedicated Spec and is exempt from the named/all-Spec choice below.
 
 Classify the maintainer's request **before reading phase procedures, Spec
 artifacts, templates, protocols, Steering, or implementation**. For a request

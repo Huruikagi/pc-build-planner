@@ -94,6 +94,19 @@ used as evidence for such a claim, or when omitting the distinction would make
 the answer misleading. Always report inconsistent health and its material
 diagnostics.
 
+When named-Spec status reports `Task plan authority: not current; reconcile in
+Tasks phase`, explain that the readable plan is not current implementation
+authority. It may be preserved recovery input or an unapproved draft; the CLI
+does not claim which. Never label the plan `retained`, `preserved`, or
+`premature` from this projection or from current files. Name the Tasks phase as
+the owner of reconciliation, but do not choose retain, revise-and-reset, or
+remove. The authority projection does not cancel `inconsistent` health or
+explain away any unrelated diagnostic.
+It also names a future owner, not the immediate next action. Preserve the CLI's
+`Next action` and the lifecycle order: complete the intervening Design and
+Contract Review work before the Tasks owner reconciles the plan. Never direct
+the user straight to Tasks merely because Tasks owns that later decision.
+
 Keep it proportionate. A healthy Spec needs a few lines. A milestone with
 blocked items must retain the recorded progress, Task identity, reason, and the
 condition that must be resolved before its owning workflow can resume.
