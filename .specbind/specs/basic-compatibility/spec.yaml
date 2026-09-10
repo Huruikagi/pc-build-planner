@@ -1,5 +1,19 @@
 schema_version: 1
 active_change:
   milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
-  state: requirements
-  requirement_ids: null
+  state: design
+  requirement_ids:
+  - "3.4"
+  - "3.5"
+  - "4.4"
+  gate_evidence:
+    requirements:
+      passed_at: 2026-09-10T21:55:45.1614697Z
+      approval_mode: delegated
+      delegation_workflow: sb-plan
+      approved_requirement_ids:
+      - "3.4"
+      - "3.5"
+      - "4.4"
+      input_revisions:
+        requirements: sha256:cdcf6b1e583b51e0c04ba4ee1655fe5a5b3b33f96972daca54685a8be7ab488c
