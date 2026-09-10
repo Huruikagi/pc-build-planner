@@ -46,11 +46,13 @@ plan:
       title: IntelとAMDのCPU代表URLから登録候補を作成し、Captureへ組み込む
       details:
       - >-
-        開発者が指定したIntel Core UltraとAMD Zen 5の各代表URLについて、このTask内でsite-extraction-authoringをURL起点で実行し、得られたvalidated-site-extraction-registrationをCaptureの静的な選択、固有規則、架空fixture、実拡張E2Eへ組み込む。
+        開発者が指定したIntel Core UltraとAMD Zen
+        5の各代表URLについて、このTask内でsite-extraction-authoringをURL起点で実行し、得られたvalidated-site-extraction-registrationをCaptureの静的な選択、固有規則、架空fixture、実拡張E2Eへ組み込む。
       - >-
         代表URLが未指定のまま、カテゴリ、取得項目、利用条件の根拠、確認日、保存HTMLを先に要求しない。URL起点の手順が登録候補を出せない、または明確な禁止・アクセス不能・代表ページ不在を記録した場合は、その結果に従い、実在データを含まないfixtureと既存の汎用抽出を保つ。
       completion_criteria:
-      - 各CPU組がpreparedまたはunavailableとして記録され、preparedでは商品名、メーカー、型番、カテゴリ、価格、URL、ソケットのうち明記値の由来、汎用フォールバック、未推測の欠損を架空fixtureの実拡張E2Eで確認できる。
+      - >-
+        各CPU組がpreparedまたはunavailableとして記録され、preparedでは商品名、メーカー、型番、カテゴリ、価格、URL、ソケットのうち明記値の由来、汎用フォールバック、未推測の欠損を架空fixtureの実拡張E2Eで確認できる。
       - 固有規則が値を返さないか失敗しても、同じ項目の汎用抽出を利用でき、ページ全体の取り込みを失敗させない。
       - pnpm validateが通る。
       requirement_ids:
@@ -171,7 +173,8 @@ plan:
       title: ストレージ後半5組をURL起点の登録候補として展開する
       details:
       - >-
-        Western Digital、Seagate、KIOXIA、Solidigm、SK hynixのストレージ組について、開発者指定の代表URLからsite-extraction-authoringを実行し、その登録候補を固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
+        Western Digital、Seagate、KIOXIA、Solidigm、SK
+        hynixのストレージ組について、開発者指定の代表URLからsite-extraction-authoringを実行し、その登録候補を固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
       completion_criteria:
       - 5組の各組がpreparedまたはunavailableのいずれか一方として記録され、preparedでは実拡張E2Eと確認用ビルド・リンク集が揃う。
       - pnpm validateが通る。
@@ -190,7 +193,8 @@ plan:
       title: 電源8組をURL起点の登録候補として展開する
       details:
       - >-
-        Corsair、Seasonic、Thermaltake、Cooler Master、be quiet!、FSP、Super Flower、Antecの電源組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
+        Corsair、Seasonic、Thermaltake、Cooler Master、be quiet!、FSP、Super
+        Flower、Antecの電源組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
       completion_criteria:
       - 8組の各組がpreparedまたはunavailableのいずれか一方として記録され、preparedでは実拡張E2Eと確認用ビルド・リンク集が揃う。
       - pnpm validateが通る。
@@ -209,7 +213,8 @@ plan:
       title: ケース8組をURL起点の登録候補として展開する
       details:
       - >-
-        Corsair、Thermaltake、Cooler Master、be quiet!、Antec、Fractal Design、NZXT、Lian Liのケース組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
+        Corsair、Thermaltake、Cooler Master、be quiet!、Antec、Fractal Design、NZXT、Lian
+        Liのケース組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
       completion_criteria:
       - 8組の各組がpreparedまたはunavailableのいずれか一方として記録され、preparedでは実拡張E2Eと確認用ビルド・リンク集が揃う。
       - pnpm validateが通る。
@@ -228,7 +233,8 @@ plan:
       title: CPUクーラー8組をURL起点の登録候補として展開する
       details:
       - >-
-        Corsair、Thermaltake、Cooler Master、NZXT、Noctua、DeepCool、Thermalright、ScytheのCPUクーラー組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
+        Corsair、Thermaltake、Cooler
+        Master、NZXT、Noctua、DeepCool、Thermalright、ScytheのCPUクーラー組について、開発者指定の代表URLからsite-extraction-authoringを実行し、既存属性だけを対象に登録候補、固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
       completion_criteria:
       - 8組の各組がpreparedまたはunavailableのいずれか一方として記録され、preparedでは実拡張E2Eと確認用ビルド・リンク集が揃う。
       - pnpm validateが通る。
@@ -247,7 +253,8 @@ plan:
       title: ケースファン7組をURL起点の登録候補として展開する
       details:
       - >-
-        Corsair、Cooler Master、be quiet!、Lian Li、Noctua、Scythe、Arcticのケースファン組について、開発者指定の代表URLからsite-extraction-authoringを実行し、その登録候補を固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
+        Corsair、Cooler Master、be quiet!、Lian
+        Li、Noctua、Scythe、Arcticのケースファン組について、開発者指定の代表URLからsite-extraction-authoringを実行し、その登録候補を固有抽出、架空fixture、実拡張E2E、確認用ビルドとリンク集へ組み込む。
       completion_criteria:
       - 7組の各組がpreparedまたはunavailableのいずれか一方として記録され、preparedでは実拡張E2Eと確認用ビルド・リンク集が揃う。
       - pnpm validateが通る。
@@ -266,10 +273,13 @@ plan:
       title: 固定67組の登録台帳と手動確認前の回帰根拠を集約する
       details:
       - site-extraction-coverageの集約検証で、固定41メーカー、42ドメイン、67メーカー／カテゴリ組を重複なく確認する。
-      - preparedまたはverified記録の固有抽出ID、fixture識別子、項目別由来、フォールバック、未推測欠損、確認用ビルド・リンク集と、unavailable記録の理由・確認日を検査する。
+      - >-
+        preparedまたはverified記録の固有抽出ID、fixture識別子、項目別由来、フォールバック、未推測欠損、確認用ビルド・リンク集と、unavailable記録の理由・確認日を検査する。
       completion_criteria:
-      - 67組すべてが有効なprepared、verifiedまたはunavailable記録を一つだけ持ち、preparedまたはverified組の実拡張E2Eが通る。
-      - preparedが残る最終実装検証はMANUAL_VERIFY_REQUIREDとなり、不一致の手動確認はNO-GOとして修正または再生成へ戻すことを確認できる。
+      - >-
+        67組すべてが有効なprepared、verifiedまたはunavailable記録を一つだけ持ち、preparedまたはverified組の実拡張E2Eが通る。
+      - >-
+        preparedが残る最終実装検証はMANUAL_VERIFY_REQUIREDとなり、不一致の手動確認はNO-GOとして修正または再生成へ戻すことを確認できる。
       - pnpm validateが通る。
       requirement_ids:
       - "6.5"
@@ -284,3 +294,6 @@ execution:
   tasks:
     "1.1":
       status: completed
+    "1.2":
+      status: blocked
+      blocked_reason: "EXTERNAL_BLOCK: 指定Intel代表URLのwww.intel.co.jpは承認済みRequirementsの固定42ドメインに含まれず、Intelの登録はintel.comのみ。intel.comまたはそのサブドメイン上の代表URLの明示指定、またはintel.co.jpを対象に含めるRequirements変更のスコープ決定が必要。AMD URLは受領済み。実装差分なし。"
