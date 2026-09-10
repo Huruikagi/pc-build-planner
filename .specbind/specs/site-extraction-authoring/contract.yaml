@@ -14,7 +14,7 @@ invariants:
   - id: manual-verification-is-required-for-completion
     description: 必要な実サイト手動確認が未実施なら最終実装検証はMANUAL_VERIFY_REQUIREDとなり、実サイト対応の完了を認定しない
   - id: existing-registration-survives-regeneration-failure
-    description: 再生成の候補が自動検証または手動確認に失敗しても、既存の検証済みサイト固有抽出は未確認候補で置換または削除されない。明確な禁止根拠が当該規則の実行に適用される間は、既存登録を保持したまま選択せず、汎用抽出を利用する
+    description: 再生成の候補が自動検証または手動確認に失敗しても、既存の検証済みサイト固有抽出は未確認候補で置換または削除されない。明確な禁止根拠が確認された場合は、新規候補の作成と登録簿更新を停止し、その判断を保守用Skillのローカル作業記録と報告に残す。利用条件の判断は製品の実行時選択へ持ち込まない
   - id: registry-update-is-bounded-and-not-support-claim
     description: 登録簿の追加または更新は、検証済み候補が必要とするメーカー・公式ドメイン・既存カテゴリだけに限り、既存登録または対象外の範囲を削除、変更、展開しない。登録簿の更新だけでは、サイト固有抽出の対応済みまたは実サイト検証済みを意味しない
 file_ownership:
