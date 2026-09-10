@@ -1,56 +1,25 @@
 schema_version: 1
 active_change:
   milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
-  state: implementation
+  state: design
   requirement_ids:
-  - "2.1"
-  - "2.2"
-  - "2.3"
-  - "2.4"
-  - "3.1"
-  - "3.2"
-  - "3.3"
-  - "5.4"
   - "6.1"
-  - "6.2"
-  - "6.3"
   - "6.4"
   - "6.5"
   - "6.6"
   - "6.7"
+  - "6.8"
   gate_evidence:
     requirements:
-      passed_at: 2026-09-09T22:16:09.7881471Z
-      approval_mode: explicit
+      passed_at: 2026-09-10T02:37:05.2550936Z
+      approval_mode: delegated
+      delegation_workflow: sb-plan
       approved_requirement_ids:
-      - "2.1"
-      - "2.2"
-      - "2.3"
-      - "2.4"
-      - "3.1"
-      - "3.2"
-      - "3.3"
-      - "5.4"
       - "6.1"
-      - "6.2"
-      - "6.3"
       - "6.4"
       - "6.5"
       - "6.6"
       - "6.7"
+      - "6.8"
       input_revisions:
-        requirements: sha256:9a5b218898f8cfa147b610284e483c308c193691b768dd88b40d131f3ce09c6e
-    design:
-      passed_at: 2026-09-09T22:54:46.9203003Z
-      approval_mode: delegated
-      delegation_workflow: sb-plan
-      input_revisions:
-        contract: sha256:de7c19ea70f98a6c44a3e37bca23de033bcd2552cf0cc64932166d66d79a3dc1
-        design/main: sha256:452a39e112c2b2e24f132b08037f3fd77003b06b0f85006527c73fe1ca208ff9
-        design/ui: sha256:ba93e5c68d6f18a8dc222b494ba1deb2f9a4f290aa3311387fe198de75f8bc91
-    tasks:
-      passed_at: 2026-09-09T23:05:30.1719274Z
-      approval_mode: delegated
-      delegation_workflow: sb-plan
-      input_revisions:
-        "tasks.yaml#plan": sha256:45e2ab0e939e4ba1fc322fc2e0db044858cd64a00e3a18ca2c0d7c1fa0cb4cfa
+        requirements: sha256:2a34299d576b4c2803ae9ad73a7a9983f37337a4474f5e7871d07d5f68a2b8ac
