@@ -1,7 +1,7 @@
 schema_version: 1
 active_change:
   milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
-  state: design
+  state: tasks
   requirement_ids:
   - "2.1"
   - "2.2"
@@ -43,3 +43,11 @@ active_change:
       - "6.8"
       input_revisions:
         requirements: sha256:15f6f708a0f09a7fc38ca9401da3a9160272bb76052d371e62619e11a07356dd
+    design:
+      passed_at: 2026-09-10T22:31:36.4753391Z
+      approval_mode: delegated
+      delegation_workflow: sb-drive
+      input_revisions:
+        contract: sha256:f960f0c4be9135095caaa80fb8fcf2b83082df71f72ad8727558752ebe688d1d
+        design/main: sha256:777ff9b53f630399eb0322bf4a350977b62b4b08bc9293da2aef2654c3d51de4
+        design/ui: sha256:041cbd4d183a2de7e69f364b34f7c1f66ba08069499e42c072d4df9c30a65e92

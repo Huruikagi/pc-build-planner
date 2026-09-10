@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 owns:
   - id: user-initiated-page-capture
     description: 利用者の拡張アイコン操作を起点に、表示中タブだけから候補情報を一時的に取得し、ページ由来入力を検証・正規化する責任
@@ -16,6 +16,12 @@ consumes:
       section: exports
       id: validated-site-extraction-registration
     description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本とする二段階の登録境界。指定メーカー・公式ドメイン・既存カテゴリの最小差分と抽出候補を、候補識別子付きの隔離コピーで既存実拡張E2Eとpnpm validateへ仮適用し、本番登録簿・実行時対象・既存登録を変更せずに同じ入力の合格結果を返す。初回は両方に合格した同一入力だけを静的な抽出元タイプ、架空fixture、サイト固有抽出規則、確認用ビルドとリンク集を伴うprepared登録として反映できる。既存verified登録の更新は同一候補の実サイト手動確認成功まで既存登録を保持する。未確認または登録だけを対応済みとして扱わない
+  - id: locale-messages
+    target:
+      shared: true
+      section: resources
+      id: locale-messages
+    description: 取り込み結果、失敗理由、出典種別を日英で表示するために利用する。文言の意味と表示条件はpage-captureが所有し、開発用の利用条件確認または停止報告を製品向け文言として追加しない
 invariants:
   - id: capture-session-tab-lifetime
     description: 取り込み状態は対象タブに結び付くsession状態であり、タブ遷移後は利用できず、タブ終了後は保持しない
@@ -23,6 +29,8 @@ invariants:
     description: ページから自動取得した値は、候補編集で利用者が確認または補正するまで確認済みの候補値として扱わない
   - id: capture-accepts-only-existing-category-attributes
     description: Captureは共通項目と、取得時分類に対応するCATEGORY_ATTRIBUTESの既存キーだけを未確認値として引き渡し、ページにない値やプロダクトが扱わない属性を推測・追加しない
+  - id: suppressed-site-extractor-preserves-generic-capture
+    description: 明確な禁止根拠を記録した開発時の保守で対象組の静的な固有規則選択をsuppressedにするとき、Captureは記録や利用条件を実行時に読まず、登録済みドメインのメーカー照合と汎用抽出を維持し、固有規則だけを選ばない
 file_ownership:
   - id: capture-runtime-boundary
     paths:
