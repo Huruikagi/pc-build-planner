@@ -15,7 +15,7 @@ consumes:
       spec: site-extraction-authoring
       section: exports
       id: validated-site-extraction-registration
-    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本として、登録済みドメインとカテゴリから静的に選ぶ抽出元タイプ、架空fixture、サイト固有抽出規則、実拡張E2Eの合格結果、確認用ビルドとリンク集を伴う登録候補を利用する境界。実サイト手動確認の状態は候補と別に扱い、未確認を対応済みとして扱わない
+    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本とする二段階の登録境界。指定メーカー・公式ドメイン・既存カテゴリの最小差分と抽出候補を、候補識別子付きの隔離コピーで既存実拡張E2Eとpnpm validateへ仮適用し、本番登録簿・実行時対象・既存登録を変更せずに同じ入力の合格結果を返す。初回は両方に合格した同一入力だけを静的な抽出元タイプ、架空fixture、サイト固有抽出規則、確認用ビルドとリンク集を伴うprepared登録として反映できる。既存verified登録の更新は同一候補の実サイト手動確認成功まで既存登録を保持する。未確認または登録だけを対応済みとして扱わない
 invariants:
   - id: capture-session-tab-lifetime
     description: 取り込み状態は対象タブに結び付くsession状態であり、タブ遷移後は利用できず、タブ終了後は保持しない
