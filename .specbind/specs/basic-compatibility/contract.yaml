@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 owns:
   - id: confirmed-basic-compatibility-evaluation
     description: 現在構成に採用された候補の確認済み属性だけから五つの基本規格を根拠付き三値で評価し集約する責任
@@ -16,6 +16,12 @@ consumes:
       section: exports
       id: project-candidate-state
     description: 候補のカテゴリ、確認済み属性および元表記を、現在構成にある候補IDとの結合と基本規格評価へ利用する
+  - id: locale-messages
+    target:
+      shared: true
+      section: resources
+      id: locale-messages
+    description: 互換性確認の規格名、判定、根拠、不足解消操作および方針を、日英で表示するために利用する
 invariants:
   - id: confirmed-values-only
     description: 基本互換性評価は確認済み属性だけを比較し、自動取得値だけの属性、未採用役割、未確認属性を不適合へ変換しない
@@ -28,6 +34,4 @@ file_ownership:
   - id: compatibility-ui
     paths:
       - src/compatibility-screen.tsx
-      - _locales/en/messages.json
-      - _locales/ja/messages.json
       - e2e/compatibility.spec.ts
