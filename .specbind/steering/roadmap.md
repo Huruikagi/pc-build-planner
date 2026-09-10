@@ -16,6 +16,13 @@ work_items:
     - spec: site-extraction-authoring
   - spec: project-candidate-management
     summary: 既存カテゴリ属性の取得値を未確認の元表記として候補編集へ引き渡し保持する
+  - spec: basic-compatibility
+    summary: 翻訳ファイルの単独所有を共有Contractの利用宣言へ移す
+  direct_changes:
+  - shared_contract_changes:
+    - locale-messages
+    id: shared-locale-contract
+    summary: 日英翻訳ファイルを共有資産として宣言し更新条件と整合性を定める
 ---
 # ロードマップ
 
@@ -166,3 +173,11 @@ Git blob: `6c9f009f846a3aadb99a4733e990edb2a83cec0f`。通常のGit追跡済みU
 既存属性を自動取得する経路と候補編集へ渡す経路は今回追加する。元表記と未確認性を保ち、取得だけで確認済みにしない。候補編集・保持の責務と共有モデルの所有者であるproject-candidate-managementを既存Spec更新として加える。これは新しい商品属性の追加ではない。Steeringのモデルと機能の所有境界、自動取得値と確認済み値の分離を維持する。
 
 依存順序はproject-candidate-management → site-extraction-authoring → page-captureとする。候補側が受け入れる既存属性と未確認値の境界を先に定め、生成側がその項目を扱い、ページ取得側が生成物を用いて固定対象へ展開する。既存のサンプル検証、固定メーカー一覧、Source Collectionの振り分けは維持する。今回の追加Specは会話で確認した引き渡し責務に基づき、GitHubから新たなSource Itemを取得したものではない。
+
+## 翻訳資産の共有Contractへの移行
+
+日英の翻訳ファイル `_locales/en/messages.json` と `_locales/ja/messages.json` は特定の機能Specに所属する資産ではなく、プロジェクトの共有資産として扱う。shared-locale-contractをDirect項目として追加し、共有Contractのlocale-messagesに対象パス、各機能が自身の文言を追加・更新する条件、日英キーとプレースホルダーの整合性、無関係な文言を保護する不変条件を宣言する。各文言の意味と必要性は各機能のRequirementsとDesignが所有する。
+
+basic-compatibilityは既存Spec更新として翻訳ファイルの単独所有を外し、共有資産の利用宣言へ移す。page-captureとproject-candidate-managementは既存項目のDesignとContractに共有資産の利用を反映する。site-extraction-authoringの利用条件に関する停止理由は開発時の記録・報告であり、今回の共有化を理由に製品向け文言を増やさない。翻訳専用Specと共有資産に起因する実装順の依存は追加せず、既存の依存順序を維持する。
+
+Direct項目の検証では共有Contractのスキーマと参照グラフ、旧単独所有の解消、利用側の参照、日英キーとプレースホルダーの整合性、無関係な翻訳値に変更がないことを確認する。共有Contractを先に準備し、利用側Designを整えてからマイルストーン全体のContract Reviewを受ける。既存Taskの実行記録を新たな合意の完了証拠に読み替えない。
