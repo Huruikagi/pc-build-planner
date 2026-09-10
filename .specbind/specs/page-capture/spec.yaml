@@ -3,7 +3,17 @@ active_change:
   milestone_id: 01a07399-7949-7dd2-82df-a537e736301a
   state: design
   requirement_ids:
+  - "2.1"
+  - "2.2"
+  - "2.3"
+  - "2.4"
+  - "3.1"
+  - "3.2"
+  - "3.3"
+  - "5.4"
   - "6.1"
+  - "6.2"
+  - "6.3"
   - "6.4"
   - "6.5"
   - "6.6"
@@ -11,11 +21,21 @@ active_change:
   - "6.8"
   gate_evidence:
     requirements:
-      passed_at: 2026-09-10T02:37:05.2550936Z
+      passed_at: 2026-09-10T02:38:34.4867196Z
       approval_mode: delegated
       delegation_workflow: sb-plan
       approved_requirement_ids:
+      - "2.1"
+      - "2.2"
+      - "2.3"
+      - "2.4"
+      - "3.1"
+      - "3.2"
+      - "3.3"
+      - "5.4"
       - "6.1"
+      - "6.2"
+      - "6.3"
       - "6.4"
       - "6.5"
       - "6.6"
