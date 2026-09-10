@@ -1,0 +1,41 @@
+schema_version: 1
+plan:
+  items:
+    - id: "1"
+      kind: task
+      title: 現在構成の採用・数量・プロジェクト分離を実拡張で検証する
+      details:
+        - 選択中プロジェクトだけに候補IDと数量が保存され、再読込後も採用・解除・正整数数量の結果が保たれることを確認する。
+        - 同一カテゴリの異なる候補を別々に採用し、一方の解除後も他方とその数量を保つことを確認する。
+      completion_criteria:
+        - e2e/build.spec.ts が異なるプロジェクト間で現在構成を表示・変更しないことを、実際の保存内容と再読込後の画面で観測する。
+        - e2e/build.spec.ts が同一カテゴリの複数候補の採用と対象限定の解除、正整数数量の保存を観測する。
+        - pnpm validate が成功する。
+      requirement_ids:
+        - "1.1"
+        - "1.2"
+        - "1.3"
+        - "2.2"
+        - "3.1"
+        - "3.2"
+      boundaries:
+        - e2e/build.spec.ts の実拡張検証を更新し、現在構成の変換、画面、保存境界の責任分担は変更しない。
+      contracts:
+        - current-build-state
+        - project-candidate-state
+    - id: "2"
+      kind: task
+      title: 候補削除時の現在構成参照整理を実拡張で検証する
+      details:
+        - 採用済み候補の削除で該当する候補IDだけを現在構成から除き、再読込後にも参照を残さないことを確認する。
+        - 未採用候補の削除で、残る採用候補と数量を変更しないことを確認する。
+      completion_criteria:
+        - e2e/build.spec.ts が候補削除後の保存内容と再読込後の画面を観測し、対象候補以外の現在構成が保たれることを確認する。
+        - pnpm validate が成功する。
+      requirement_ids:
+        - "4.1"
+        - "4.2"
+      boundaries:
+        - e2e/build.spec.ts の実拡張検証を更新し、候補削除の開始・登録・適用順序は project-candidate-management の責任に残す。
+      contracts:
+        - candidate-deletion-reference-cleanup
