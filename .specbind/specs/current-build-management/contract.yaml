@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 owns:
   - id: current-build-lifecycle
     description: プロジェクトごとの現在構成で候補を採用、解除し、候補IDと正整数数量を管理する責任
@@ -24,6 +24,12 @@ consumes:
       section: exports
       id: local-root-storage
     description: 現在構成を含む完全なルートの保存と再読込
+  - id: locale-messages
+    target:
+      shared: true
+      section: resources
+      id: locale-messages
+    description: 現在構成の採用、解除、数量、カテゴリ、空状態および入力フィードバックを日英で表示するために利用する
 invariants:
   - id: build-project-integrity
     description: 各現在構成は一つの存在中プロジェクトに属し、項目は同じプロジェクトに属する存在中候補だけを一度ずつ参照する
