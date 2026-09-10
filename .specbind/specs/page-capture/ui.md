@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 取り込み結果の元表記・出典・未確認属性と失敗理由を表示し、候補編集または通常画面へ戻る操作を定める。
 artifact_id: ui
 requirement_ids:
   - "2.1"

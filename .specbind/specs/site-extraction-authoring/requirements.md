@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: 代表URLから必要情報と利用条件を確認し、サイト固有抽出の生成・検証・登録・再生成と実サイト確認への引き渡しを支援する。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

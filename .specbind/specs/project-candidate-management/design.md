@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: プロジェクト・候補・取得元のモデルと変換、未確認値の受け入れ、重複統合および候補削除の拡張境界を定める。
 artifact_id: main
 requirement_ids:
   - "1.1"

@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 候補IDと正整数数量による現在構成の変換、プロジェクト分離と候補削除時の参照整理を定める。
 artifact_id: main
 requirement_ids:
   - "1.1"

@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 基本互換性の全体・個別結果、不一致と不足の表示、および不足を解消する画面への導線を定める。
 artifact_id: ui
 requirement_ids:
   - "3.1"

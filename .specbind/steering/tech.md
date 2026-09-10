@@ -1,5 +1,6 @@
 ---
 type: SpecBind Steering
+description: Chrome拡張の技術基盤、権限・未信頼入力・保存の境界と、実拡張E2Eを中心とする検証方針を定める。
 artifact_id: tech
 ---
 

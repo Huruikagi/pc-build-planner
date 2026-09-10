@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: プロジェクト・候補・現在構成を端末内へ保存して再読込し、利用不能な保存データは初期状態として扱う。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

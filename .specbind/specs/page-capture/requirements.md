@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: 利用者が指定した表示中ページから候補情報を未確認値として取り込み、登録済みメーカーの固有抽出と候補編集への引き渡しを扱う。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

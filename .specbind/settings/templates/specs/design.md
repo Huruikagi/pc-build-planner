@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: Specの要件を実現するアーキテクチャ、実行境界、データ、失敗時の振る舞いと検証方針を定める。
 artifact_id: main
 ---
 

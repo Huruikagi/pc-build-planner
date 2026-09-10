@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: プロジェクト内の不完全な候補と取得元を管理し、取得値と確認済み値を区別して補正・重複統合できるようにする。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

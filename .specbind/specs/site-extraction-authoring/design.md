@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: URL起点の情報収集、利用条件の判断、ローカル作業記録、段階的な登録候補と自動・手動検証を保守用Skillに編成する。
 artifact_id: main
 requirement_ids:
   - "1.1"

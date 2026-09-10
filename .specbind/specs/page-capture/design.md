@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: ページ入力の抽出・検証・一時状態、メーカー固有抽出の登録と検証、および候補編集への未確認値の引き渡しを定める。
 artifact_id: main
 requirement_ids:
   - "1.1"

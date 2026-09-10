@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: 現在構成の確認済み属性から五つの基本規格を判定し、根拠と情報不足を区別して提示する。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

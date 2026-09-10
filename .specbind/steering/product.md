@@ -1,5 +1,6 @@
 ---
 type: SpecBind Steering
+description: PCパーツの検討を端末内で支援する製品の目的、利用者、自動取得と利用者判断の境界および非目標を定める。
 artifact_id: product
 ---
 

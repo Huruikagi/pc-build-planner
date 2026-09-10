@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: LocalDataRootの端末内保存・読込、スキーマ検証と利用不能な保存値の初期化を保存境界へ閉じる。
 artifact_id: main
 requirement_ids:
   - "1.1"

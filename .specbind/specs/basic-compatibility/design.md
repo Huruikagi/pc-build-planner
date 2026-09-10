@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 採用候補の確認済み属性だけを使う五規格の純粋な評価処理と、根拠付き判定結果の生成を定める。
 artifact_id: main
 requirement_ids:
   - "1.1"

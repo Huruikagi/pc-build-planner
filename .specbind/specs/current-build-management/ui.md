@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 現在構成の採用候補・カテゴリ表示、採用・解除・数量入力とそのフィードバックを定める。
 artifact_id: ui
 requirement_ids:
   - "1.1"

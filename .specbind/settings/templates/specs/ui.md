@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: Specの画面、操作フロー、表示状態、入力フィードバックとアクセシビリティを定める。
 artifact_id: ui
 ---
 

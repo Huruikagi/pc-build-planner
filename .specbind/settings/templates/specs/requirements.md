@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: Specが利用者またはシステムに提供する振る舞いと、その責任境界・受け入れ基準を定める。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準

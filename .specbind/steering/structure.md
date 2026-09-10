@@ -1,5 +1,6 @@
 ---
 type: SpecBind Steering
+description: モデル・機能ロジック・UIの依存方向、Chrome接続境界と、コード・検証資産の配置および命名規則を定める。
 artifact_id: structure
 ---
 

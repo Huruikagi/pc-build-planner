@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: プロジェクト管理、候補一覧・編集、元表記と確認済み入力の区別、および重複候補の選択操作を定める。
 artifact_id: ui
 requirement_ids:
   - "1.1"

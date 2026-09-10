@@ -1,5 +1,6 @@
 ---
 type: SpecBind Design
+description: 保存値の読込後に通常画面または空の初期状態を表示し、保存機能の利用不能時には失敗と再試行を示す。
 artifact_id: ui
 requirement_ids:
   - "2.1"

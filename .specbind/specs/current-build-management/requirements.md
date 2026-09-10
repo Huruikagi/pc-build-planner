@@ -1,5 +1,6 @@
 ---
 type: SpecBind Requirements
+description: プロジェクトごとに候補の採用・解除と数量を管理し、候補削除後の現在構成の参照整合を保つ。
 heading_labels:
   requirement: 要件
   acceptance_criteria: 受け入れ基準
