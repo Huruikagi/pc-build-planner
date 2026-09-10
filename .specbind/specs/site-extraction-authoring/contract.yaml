@@ -4,7 +4,7 @@ owns:
     description: 代表URLから必要情報と利用条件の根拠を収集し、サイト固有抽出候補の自動検証、手動確認用成果物、再生成を扱う開発用手順
 exports:
   - id: validated-site-extraction-registration
-    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本として、登録済みドメインとカテゴリから静的に選ぶ抽出元タイプ、架空データだけのfixture、サイト固有抽出規則、実拡張自動E2Eの合格結果、手動確認用ビルドとリンク集を伴う登録候補。実サイト手動確認の成功・失敗・未確認は候補と別に記録し、未確認の候補を実サイト対応済みとしては扱わない。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる
+    description: MANUFACTURER_DOMAIN_ENTRIESを唯一の正本として扱う二段階の引き渡し。第一段階は、対象メーカー・公式ドメイン・既存カテゴリだけの最小の登録簿追加または更新差分、静的に選ぶ抽出元タイプ、架空データだけのfixture、サイト固有抽出規則からなる未検証の仮適用入力であり、page-captureは候補専用の実拡張E2Eでだけ使い、本番登録簿または実行時対象を変更せず、実拡張自動E2Eとpnpm validateの結果をauthoring手順へ返す。第二段階は両方に合格した同じ入力であり、手動確認用ビルドとリンク集を伴う登録可能な差分として本番登録簿へ反映できる。実サイト手動確認の成功・失敗・未確認は候補と別に記録し、未確認の候補を実サイト対応済みとしては扱わない。候補が要求できるのは共通の名称・メーカー・型番・カテゴリ・価格・URLと、対象の既存PartCategoryに属するCATEGORY_ATTRIBUTESの属性だけであり、属性はキー、元表記、対象カテゴリを伴ってcandidate-capture-handoffへ未確認値として渡せる
 consumes: []
 invariants:
   - id: explicit-prohibition-stops-only-affected-work
@@ -15,6 +15,8 @@ invariants:
     description: 必要な実サイト手動確認が未実施なら最終実装検証はMANUAL_VERIFY_REQUIREDとなり、実サイト対応の完了を認定しない
   - id: existing-registration-survives-regeneration-failure
     description: 再生成の候補が自動検証または手動確認に失敗しても、既存の検証済みサイト固有抽出は未確認候補で置換または削除されない。明確な禁止根拠が当該規則の実行に適用される間は、既存登録を保持したまま選択せず、汎用抽出を利用する
+  - id: registry-update-is-bounded-and-not-support-claim
+    description: 登録簿の追加または更新は、検証済み候補が必要とするメーカー・公式ドメイン・既存カテゴリだけに限り、既存登録または対象外の範囲を削除、変更、展開しない。登録簿の更新だけでは、サイト固有抽出の対応済みまたは実サイト検証済みを意味しない
 file_ownership:
   - id: site-extraction-authoring-skill
     paths:
