@@ -12,9 +12,41 @@ import { expect, test } from "@playwright/test";
 
 import {
   fillAttribute,
+  LOCALES,
   type LoadedExtension,
   loadExtension,
 } from "./extension.js";
+
+const COMPATIBILITY_TEXT = {
+  ja: {
+    aggregateIncompatible: "互換性なし",
+    aggregateUnknown: "判定不能",
+    aggregateIncompatibleDetail: "不適合 1 件、情報不足 4 件",
+    aggregateUnknownDetail: "不適合 0 件、情報不足 5 件",
+    mismatchReason: "規格が一致していません。",
+    unconfirmedReason: "CPUの値が未確認のため判定できません。",
+    notSelectedReason: "マザーボードが選択されていないため判定できません。",
+    resolveConfirm: "パーツ管理で規格を入力する",
+    resolveSelect: "現在構成でパーツを選ぶ",
+    policy:
+      "判定には利用者が確認した値だけを使います。取り込んだままの未確認値は判定に使いません。情報不足は不適合ではありません。",
+  },
+  en: {
+    aggregateIncompatible: "Not compatible",
+    aggregateUnknown: "Cannot be judged",
+    aggregateIncompatibleDetail: "1 do not fit, 4 cannot be judged",
+    aggregateUnknownDetail: "0 do not fit, 5 cannot be judged",
+    mismatchReason: "The standards do not match.",
+    unconfirmedReason:
+      "This cannot be judged because the CPU value is unconfirmed.",
+    notSelectedReason:
+      "This cannot be judged because no Motherboard is selected.",
+    resolveConfirm: "Enter the standard in Parts",
+    resolveSelect: "Choose a part in the current build",
+    policy:
+      "Only values you have confirmed are used. Captured but unconfirmed values are not. Missing information is not a mismatch.",
+  },
+} as const;
 
 const createProject = async (
   { page }: LoadedExtension,
@@ -217,3 +249,102 @@ test.describe("互換性確認", () => {
     expect(extension.diagnostics).toEqual([]);
   });
 });
+
+/**
+ * 文言は実際に起動した拡張のカタログから観測する。操作対象はロケールに
+ * 依存しないセレクタに固定し、不一致と情報不足を文言・表示条件の両方で分ける。
+ */
+for (const { lang, catalog } of LOCALES) {
+  const text = COMPATIBILITY_TEXT[catalog];
+
+  test.describe(`互換性確認 locale ${lang}`, () => {
+    let extension: LoadedExtension;
+
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright は第1引数に分割代入パターンを要求する
+    test.beforeEach(async ({}, testInfo) => {
+      extension = await loadExtension(lang, testInfo.outputPath("profile"));
+      await createProject(extension, "SYN compatibility locale");
+    });
+
+    test.afterEach(async () => {
+      await extension.close();
+    });
+
+    test("不一致の全体・個別根拠と方針を、そのロケールの実拡張で表示する", async () => {
+      const { page } = extension;
+      await addPart(extension, "SYN CPU AM5", "cpu", { socket: "AM5" });
+      await addPart(extension, "SYN M/B LGA1700", "motherboard", {
+        socket: "LGA1700",
+      });
+      await adopt(extension, "cpu");
+      await adopt(extension, "motherboard");
+      await page.click('[data-screen="compatibility"]');
+
+      await expect(page.locator("[data-aggregate]")).toHaveText(
+        text.aggregateIncompatible,
+      );
+      await expect(page.locator(".summary__detail")).toHaveText(
+        text.aggregateIncompatibleDetail,
+      );
+      const rule = page.locator('[data-rule="cpuMotherboardSocket"]');
+      await expect(rule).toHaveAttribute("data-verdict", "incompatible");
+      await expect(rule.locator(".verdict__reason")).toHaveText(
+        text.mismatchReason,
+      );
+      await expect(rule.locator("[data-resolve-missing]")).toHaveCount(0);
+      await expect(page.locator(".field-note")).toHaveText(text.policy);
+
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    test("未確認の unknown だけが候補管理への不足解消操作を表示する", async () => {
+      const { page } = extension;
+      await addPart(extension, "SYN CPU unconfirmed", "cpu");
+      await addPart(extension, "SYN M/B AM5", "motherboard", {
+        socket: "AM5",
+      });
+      await adopt(extension, "cpu");
+      await adopt(extension, "motherboard");
+      await page.click('[data-screen="compatibility"]');
+
+      await expect(page.locator("[data-aggregate]")).toHaveText(
+        text.aggregateUnknown,
+      );
+      await expect(page.locator(".summary__detail")).toHaveText(
+        text.aggregateUnknownDetail,
+      );
+      const rule = page.locator('[data-rule="cpuMotherboardSocket"]');
+      await expect(rule).toHaveAttribute("data-verdict", "unknown");
+      await expect(rule.locator(".verdict__reason")).toHaveText(
+        text.unconfirmedReason,
+      );
+      await expect(rule.locator("[data-resolve-missing]")).toHaveText(
+        text.resolveConfirm,
+      );
+      await rule.locator("[data-resolve-missing]").click();
+      await expect(page.locator("[data-create-part]")).toBeVisible();
+
+      expect(extension.diagnostics).toEqual([]);
+    });
+
+    test("未採用の unknown は現在構成への不足解消操作を表示する", async () => {
+      const { page } = extension;
+      await addPart(extension, "SYN CPU AM5", "cpu", { socket: "AM5" });
+      await adopt(extension, "cpu");
+      await page.click('[data-screen="compatibility"]');
+
+      const rule = page.locator('[data-rule="cpuMotherboardSocket"]');
+      await expect(rule).toHaveAttribute("data-verdict", "unknown");
+      await expect(rule.locator(".verdict__reason")).toHaveText(
+        text.notSelectedReason,
+      );
+      await expect(rule.locator("[data-resolve-missing]")).toHaveText(
+        text.resolveSelect,
+      );
+      await rule.locator("[data-resolve-missing]").click();
+      await expect(page.locator("[data-adopt-category]")).toBeVisible();
+
+      expect(extension.diagnostics).toEqual([]);
+    });
+  });
+}
