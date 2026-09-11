@@ -25,6 +25,7 @@ work_items:
     - locale-messages
     id: shared-locale-contract
     summary: 日英翻訳ファイルを共有資産として宣言し更新条件と整合性を定める
+    status: completed
 ---
 # ロードマップ
 
