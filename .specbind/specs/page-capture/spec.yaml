@@ -52,8 +52,8 @@ active_change:
         design/main: sha256:777ff9b53f630399eb0322bf4a350977b62b4b08bc9293da2aef2654c3d51de4
         design/ui: sha256:041cbd4d183a2de7e69f364b34f7c1f66ba08069499e42c072d4df9c30a65e92
     tasks:
-      passed_at: 2026-09-11T00:11:57.6860137Z
+      passed_at: 2026-09-11T00:18:35.9666756Z
       approval_mode: delegated
       delegation_workflow: sb-plan
       input_revisions:
-        "tasks.yaml#plan": sha256:ff9eb7a80aa0468736cf5594178a043b4b7703bda6aed8e835201257800bc296
+        "tasks.yaml#plan": sha256:dbd9d24cc40396e161e10deff4e46cd5b7ee77b2ad35d5897b58df0766fc122f
