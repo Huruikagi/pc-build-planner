@@ -283,7 +283,6 @@ for (const { lang, catalog } of LOCALES) {
       ]);
 
       /** 取得元なしの未分類候補も、有効な保存対象として残せる。 */
-      await page.click(".editor-bar__back");
       await addPart(extension, {
         name: "SYN 取得元なし未分類候補",
         category: "uncategorized",
@@ -302,7 +301,7 @@ for (const { lang, catalog } of LOCALES) {
         url,
         "SYN 取得元なし未分類候補",
       ]);
-      await page.locator("[data-edit-part]").click();
+      await page.locator("[data-edit-part]").first().click();
       await expect(page.locator('[name^="source-url-"]')).toHaveValue(url);
       await page.locator(".editor-bar__back").click();
       const sourceLessRow = page
